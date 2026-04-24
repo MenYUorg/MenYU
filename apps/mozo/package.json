@@ -2,9 +2,32 @@
   "name": "@menyu/mozo",
   "version": "0.0.1",
   "private": true,
+  "main": "expo-router/entry",
   "scripts": {
-    "build": "echo \"@menyu/mozo: build pendiente (Expo)\"",
-    "dev": "echo \"@menyu/mozo: dev pendiente\"",
-    "lint": "echo \"@menyu/mozo: lint pendiente\""
+    "dev": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "build": "expo export",
+    "lint": "eslint src --ext .ts,.tsx",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@menyu/types": "workspace:*",
+    "expo": "~53.0.0",
+    "expo-notifications": "~0.29.0",
+    "expo-router": "~5.0.0",
+    "expo-status-bar": "~2.2.0",
+    "react": "18.3.1",
+    "react-native": "0.79.2",
+    "socket.io-client": "^4.8.1",
+    "zustand": "^5.0.3"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.25.0",
+    "@menyu/config": "workspace:*",
+    "@types/react": "~18.3.0",
+    "@types/react-native": "~0.79.0",
+    "babel-preset-expo": "~13.0.0",
+    "typescript": "~5.8.0"
   }
 }
