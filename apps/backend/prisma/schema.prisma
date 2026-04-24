@@ -1,0 +1,366 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─────────────────────────────────────────────
+// MARCA Y SUCURSALES
+// ─────────────────────────────────────────────
+
+model Marca {
+  id         String       @id @default(uuid())
+  nombre     String
+  slug       String       @unique
+  createdAt  DateTime     @default(now()) @map("created_at")
+
+  restaurantes Restaurante[]
+  items        ItemMenu[]
+
+  @@map("marca")
+}
+
+model Restaurante {
+  id          String   @id @default(uuid())
+  marcaId     String   @map("marca_id")
+  nombre      String
+  direccion   String?
+  qrBaseUrl   String?  @map("qr_base_url")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  marca         Marca           @relation(fields: [marcaId], references: [id])
+  admins        Admin[]
+  mozos         Mozo[]
+  comandas      Comanda[]
+  categorias    CategoriaMenu[]
+  menus         Menu[]
+  mesas         Mesa[]
+  ingredientes  Ingrediente[]
+  itemSucursal  ItemSucursal[]
+
+  @@map("restaurante")
+}
+
+// ─────────────────────────────────────────────
+// USUARIOS DEL SISTEMA
+// ─────────────────────────────────────────────
+
+model Admin {
+  id            String  @id @default(uuid())
+  restauranteId String  @map("restaurante_id")
+  email         String  @unique
+  passwordHash  String  @map("password_hash")
+  rol           String
+
+  restaurante Restaurante @relation(fields: [restauranteId], references: [id])
+
+  @@map("admin")
+}
+
+model Mozo {
+  id            String   @id @default(uuid())
+  restauranteId String   @map("restaurante_id")
+  nombre        String
+  email         String?
+  telefono      String?
+  activo        Boolean  @default(true)
+  esJefeSalon   Boolean  @default(false) @map("es_jefe_salon")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  restaurante   Restaurante      @relation(fields: [restauranteId], references: [id])
+  asignaciones  AsignacionMesa[]
+  llamados      LlamadoMozo[]
+
+  @@map("mozo")
+}
+
+// ─────────────────────────────────────────────
+// MESAS Y SESIONES
+// ─────────────────────────────────────────────
+
+model Mesa {
+  id            String   @id @default(uuid())
+  restauranteId String   @map("restaurante_id")
+  numero        String
+  qrToken       String   @unique @map("qr_token")
+  estado        String   @default("libre")
+
+  restaurante  Restaurante      @relation(fields: [restauranteId], references: [id])
+  sesiones     SesionMesa[]
+  pedidos      Pedido[]
+  asignaciones AsignacionMesa[]
+
+  @@map("mesa")
+}
+
+model Cliente {
+  id        String   @id @default(uuid())
+  nombre    String
+  email     String?  @unique
+  telefono  String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  sesiones SesionMesa[]
+
+  @@map("cliente")
+}
+
+model SesionMesa {
+  id          String    @id @default(uuid())
+  mesaId      String    @map("mesa_id")
+  clienteId   String    @map("cliente_id")
+  iniciadaEn  DateTime  @default(now()) @map("iniciada_en")
+  cerradaEn   DateTime? @map("cerrada_en")
+  estado      String    @default("activa")
+
+  mesa         Mesa             @relation(fields: [mesaId], references: [id])
+  cliente      Cliente          @relation(fields: [clienteId], references: [id])
+  pedidos      Pedido[]
+  asignaciones AsignacionMesa[]
+  llamados     LlamadoMozo[]
+
+  @@map("sesion_mesa")
+}
+
+model AsignacionMesa {
+  id          String    @id @default(uuid())
+  mesaId      String    @map("mesa_id")
+  mozoId      String    @map("mozo_id")
+  sesionId    String    @map("sesion_id")
+  origen      String
+  asignadoEn  DateTime  @default(now()) @map("asignado_en")
+  liberadoEn  DateTime? @map("liberado_en")
+
+  mesa   Mesa       @relation(fields: [mesaId], references: [id])
+  mozo   Mozo       @relation(fields: [mozoId], references: [id])
+  sesion SesionMesa @relation(fields: [sesionId], references: [id])
+
+  @@map("asignacion_mesa")
+}
+
+// ─────────────────────────────────────────────
+// LLAMADOS (tiempo real, con persistencia mínima)
+// ─────────────────────────────────────────────
+
+model LlamadoMozo {
+  id        String   @id @default(uuid())
+  sesionId  String   @map("sesion_id")
+  mozoId    String?  @map("mozo_id")
+  estado    String   @default("pendiente")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  sesion SesionMesa @relation(fields: [sesionId], references: [id])
+  mozo   Mozo?      @relation(fields: [mozoId], references: [id])
+
+  @@map("llamado_mozo")
+}
+
+// ─────────────────────────────────────────────
+// MENÚ
+// ─────────────────────────────────────────────
+
+model Comanda {
+  id            String @id @default(uuid())
+  restauranteId String @map("restaurante_id")
+  nombre        String
+
+  restaurante Restaurante @relation(fields: [restauranteId], references: [id])
+  items       ItemMenu[]
+
+  @@map("comanda")
+}
+
+model CategoriaMenu {
+  id            String @id @default(uuid())
+  restauranteId String @map("restaurante_id")
+  nombre        String
+  orden         Int    @default(0)
+
+  restaurante   Restaurante      @relation(fields: [restauranteId], references: [id])
+  subcategorias SubcategoriaMenu[]
+
+  @@map("categoria_menu")
+}
+
+model SubcategoriaMenu {
+  id          String @id @default(uuid())
+  categoriaId String @map("categoria_id")
+  nombre      String
+  orden       Int    @default(0)
+
+  categoria CategoriaMenu @relation(fields: [categoriaId], references: [id])
+  items     ItemMenu[]
+
+  @@map("subcategoria_menu")
+}
+
+model ItemMenu {
+  id             String   @id @default(uuid())
+  marcaId        String   @map("marca_id")
+  subcategoriaId String?  @map("subcategoria_id")
+  comandaId      String?  @map("comanda_id")
+  nombre         String
+  descripcion    String?
+  precioBase     Decimal  @map("precio_base") @db.Decimal(10, 2)
+  disponible     Boolean  @default(true)
+  imagenUrl      String?  @map("imagen_url")
+
+  marca          Marca              @relation(fields: [marcaId], references: [id])
+  subcategoria   SubcategoriaMenu?  @relation(fields: [subcategoriaId], references: [id])
+  comanda        Comanda?           @relation(fields: [comandaId], references: [id])
+  sucursales     ItemSucursal[]
+  menus          MenuItem[]
+  ingredientes   ItemIngrediente[]
+  clasificaciones ItemClasificacion[]
+  pedidoItems    PedidoItem[]
+
+  @@map("item_menu")
+}
+
+model ItemSucursal {
+  itemId        String  @map("item_id")
+  restauranteId String  @map("restaurante_id")
+  disponible    Boolean @default(true)
+  precioOverride Decimal? @map("precio_override") @db.Decimal(10, 2)
+
+  item        ItemMenu    @relation(fields: [itemId], references: [id])
+  restaurante Restaurante @relation(fields: [restauranteId], references: [id])
+
+  @@id([itemId, restauranteId])
+  @@map("item_sucursal")
+}
+
+model Menu {
+  id            String  @id @default(uuid())
+  restauranteId String  @map("restaurante_id")
+  nombre        String
+  dias          String?
+  horaInicio    String? @map("hora_inicio")
+  horaFin       String? @map("hora_fin")
+  temporada     String?
+
+  restaurante Restaurante @relation(fields: [restauranteId], references: [id])
+  items       MenuItem[]
+
+  @@map("menu")
+}
+
+model MenuItem {
+  menuId String @map("menu_id")
+  itemId String @map("item_id")
+
+  menu Menu     @relation(fields: [menuId], references: [id])
+  item ItemMenu @relation(fields: [itemId], references: [id])
+
+  @@id([menuId, itemId])
+  @@map("menu_item")
+}
+
+model ClasificacionDieta {
+  id     String @id @default(uuid())
+  nombre String @unique
+
+  items ItemClasificacion[]
+
+  @@map("clasificacion_dieta")
+}
+
+model ItemClasificacion {
+  itemId           String @map("item_id")
+  clasificacionId  String @map("clasificacion_id")
+
+  item          ItemMenu           @relation(fields: [itemId], references: [id])
+  clasificacion ClasificacionDieta @relation(fields: [clasificacionId], references: [id])
+
+  @@id([itemId, clasificacionId])
+  @@map("item_clasificacion")
+}
+
+model Ingrediente {
+  id            String @id @default(uuid())
+  restauranteId String @map("restaurante_id")
+  nombre        String
+
+  restaurante Restaurante       @relation(fields: [restauranteId], references: [id])
+  items       ItemIngrediente[]
+
+  @@map("ingrediente")
+}
+
+model ItemIngrediente {
+  id            String  @id @default(uuid())
+  itemId        String  @map("item_id")
+  ingredienteId String  @map("ingrediente_id")
+  esOriginal    Boolean @map("es_original")
+  cantidad      Decimal @db.Decimal(10, 3)
+  removible     Boolean @default(false)
+
+  item        ItemMenu          @relation(fields: [itemId], references: [id])
+  ingrediente Ingrediente       @relation(fields: [ingredienteId], references: [id])
+  mods        PedidoItemMod[]
+
+  @@map("item_ingrediente")
+}
+
+// ─────────────────────────────────────────────
+// PEDIDOS Y PAGOS
+// ─────────────────────────────────────────────
+
+model Pedido {
+  id        String   @id @default(uuid())
+  sesionId  String   @map("sesion_id")
+  mesaId    String   @map("mesa_id")
+  estado    String   @default("pendiente")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  sesion SesionMesa  @relation(fields: [sesionId], references: [id])
+  mesa   Mesa        @relation(fields: [mesaId], references: [id])
+  items  PedidoItem[]
+  pago   Pago?
+
+  @@map("pedido")
+}
+
+model PedidoItem {
+  id            String  @id @default(uuid())
+  pedidoId      String  @map("pedido_id")
+  itemId        String  @map("item_id")
+  cantidad      Int
+  precioUnitario Decimal @map("precio_unitario") @db.Decimal(10, 2)
+  notas         String?
+
+  pedido Pedido          @relation(fields: [pedidoId], references: [id])
+  item   ItemMenu        @relation(fields: [itemId], references: [id])
+  mods   PedidoItemMod[]
+
+  @@map("pedido_item")
+}
+
+model PedidoItemMod {
+  pedidoItemId      String  @map("pedido_item_id")
+  itemIngredienteId String  @map("item_ingrediente_id")
+  accion            String
+  cantidad          Decimal @db.Decimal(10, 3)
+
+  pedidoItem     PedidoItem     @relation(fields: [pedidoItemId], references: [id])
+  itemIngrediente ItemIngrediente @relation(fields: [itemIngredienteId], references: [id])
+
+  @@id([pedidoItemId, itemIngredienteId])
+  @@map("pedido_item_mod")
+}
+
+model Pago {
+  id                String   @id @default(uuid())
+  pedidoId          String   @unique @map("pedido_id")
+  monto             Decimal  @db.Decimal(10, 2)
+  metodo            String
+  estado            String   @default("pendiente")
+  referenciaExterna String?  @map("referencia_externa")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  pedido Pedido @relation(fields: [pedidoId], references: [id])
+
+  @@map("pago")
+}
