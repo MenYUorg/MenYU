@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)",
+      "Bash(npx pnpm *)",
+      "Bash(node -e \"console.log\\(process.execPath\\)\")",
+      "Bash(command -v pnpm)",
+      "Read(//c/Users/COTYS/AppData/Roaming/npm/**)",
+      "Read(//c/Users/COTYS/AppData/Local/**)",
+      "Bash(curl -s http://localhost:3000/api)"
+    ]
+  }
+}
