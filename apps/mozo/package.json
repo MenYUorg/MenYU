@@ -1,0 +1,10 @@
+{
+  "name": "@menyu/mozo",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "build": "echo \"@menyu/mozo: build pendiente (Expo)\"",
+    "dev": "echo \"@menyu/mozo: dev pendiente\"",
+    "lint": "echo \"@menyu/mozo: lint pendiente\""
+  }
+}

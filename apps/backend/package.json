@@ -1,0 +1,10 @@
+{
+  "name": "@menyu/api",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "build": "echo \"@menyu/api: build pendiente (NestJS)\"",
+    "dev": "echo \"@menyu/api: dev pendiente\"",
+    "lint": "echo \"@menyu/api: lint pendiente\""
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "name": "@menyu/cliente",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "build": "echo \"@menyu/cliente: build pendiente (Expo)\"",
+    "dev": "echo \"@menyu/cliente: dev pendiente\"",
+    "lint": "echo \"@menyu/cliente: lint pendiente\""
+  }
+}

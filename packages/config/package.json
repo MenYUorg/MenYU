@@ -1,0 +1,11 @@
+{
+  "name": "@menyu/config",
+  "version": "0.0.1",
+  "private": true,
+  "exports": {
+    "./tsconfig/base": "./tsconfig.base.json",
+    "./tsconfig/nestjs": "./tsconfig.nestjs.json",
+    "./tsconfig/react": "./tsconfig.react.json",
+    "./tsconfig/expo": "./tsconfig.expo.json"
+  }
+}

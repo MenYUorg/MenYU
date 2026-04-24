@@ -1,0 +1,10 @@
+{
+  "name": "@menyu/cocina",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "build": "echo \"@menyu/cocina: build pendiente (Vite)\"",
+    "dev": "echo \"@menyu/cocina: dev pendiente\"",
+    "lint": "echo \"@menyu/cocina: lint pendiente\""
+  }
+}

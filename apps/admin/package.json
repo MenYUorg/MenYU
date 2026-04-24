@@ -1,0 +1,10 @@
+{
+  "name": "@menyu/admin",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "build": "echo \"@menyu/admin: build pendiente (Vite)\"",
+    "dev": "echo \"@menyu/admin: dev pendiente\"",
+    "lint": "echo \"@menyu/admin: lint pendiente\""
+  }
+}
