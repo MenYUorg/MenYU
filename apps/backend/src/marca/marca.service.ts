@@ -1,0 +1,100 @@
+import {
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common'
+import { PrismaService } from '../prisma/prisma.service'
+import { JwtPayload } from '../auth/auth.service'
+import { CreateMarcaDto } from './dto/create-marca.dto'
+import { UpdateMarcaDto } from './dto/update-marca.dto'
+
+const DETAIL_INCLUDE = {
+  restaurantes: {
+    where: { activo: true },
+    include: {
+      admins: { select: { id: true, email: true, rol: true } },
+      mozos: { where: { activo: true }, select: { id: true, nombre: true, email: true } },
+      mesas: true,
+    },
+  },
+  items: {
+    where: { disponible: true },
+    include: {
+      subcategoria: { include: { categoria: true } },
+      comanda: true,
+    },
+  },
+} as const
+
+@Injectable()
+export class MarcaService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  async create(dto: CreateMarcaDto) {
+    const existing = await this.prisma.marca.findUnique({ where: { slug: dto.slug } })
+    if (existing) throw new ConflictException('Ya existe una marca con ese slug')
+    return this.prisma.marca.create({ data: dto })
+  }
+
+  async findAll(user: JwtPayload) {
+    if (user.rol === 'ROOT') {
+      return this.prisma.marca.findMany({
+        where: { activo: true },
+        include: { restaurantes: { where: { activo: true } } },
+      })
+    }
+    const marcaId = await this.getMarcaIdForAdmin(user.sub)
+    return this.prisma.marca.findMany({
+      where: { id: marcaId, activo: true },
+      include: { restaurantes: { where: { activo: true } } },
+    })
+  }
+
+  async findOne(id: string, user: JwtPayload) {
+    if (user.rol === 'OWNER') {
+      const marcaId = await this.getMarcaIdForAdmin(user.sub)
+      if (marcaId !== id) throw new ForbiddenException('No tenés acceso a esta marca')
+    }
+    const marca = await this.prisma.marca.findUnique({
+      where: { id },
+      include: DETAIL_INCLUDE,
+    })
+    if (!marca || !marca.activo) throw new NotFoundException('Marca no encontrada')
+    return marca
+  }
+
+  async update(id: string, dto: UpdateMarcaDto, user: JwtPayload) {
+    if (user.rol === 'OWNER') {
+      const marcaId = await this.getMarcaIdForAdmin(user.sub)
+      if (marcaId !== id) throw new ForbiddenException('No tenés acceso a esta marca')
+    }
+    await this.assertExists(id)
+    if (dto.slug) {
+      const conflict = await this.prisma.marca.findFirst({
+        where: { slug: dto.slug, id: { not: id } },
+      })
+      if (conflict) throw new ConflictException('Ya existe una marca con ese slug')
+    }
+    return this.prisma.marca.update({ where: { id }, data: dto })
+  }
+
+  async remove(id: string) {
+    await this.assertExists(id)
+    return this.prisma.marca.update({ where: { id }, data: { activo: false } })
+  }
+
+  private async assertExists(id: string): Promise<void> {
+    const marca = await this.prisma.marca.findUnique({ where: { id } })
+    if (!marca || !marca.activo) throw new NotFoundException('Marca no encontrada')
+  }
+
+  private async getMarcaIdForAdmin(adminId: string): Promise<string> {
+    const admin = await this.prisma.admin.findUnique({
+      where: { id: adminId },
+      include: { restaurante: true },
+    })
+    if (!admin) throw new NotFoundException('Admin no encontrado')
+    return admin.restaurante.marcaId
+  }
+}
