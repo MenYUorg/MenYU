@@ -1,8 +1,14 @@
-import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common'
-import { AuthService, UserTipo } from './auth.service'
+import { Body, Controller, Get, HttpCode, HttpStatus, Post, Req, UseGuards } from '@nestjs/common'
+import { Request } from 'express'
+import { AuthService, JwtPayload, UserTipo } from './auth.service'
+import { JwtAuthGuard } from './guards/jwt-auth.guard'
 
 // TODO: proteger logout con JwtAuthGuard cuando se terminen las pruebas
 // TODO: eliminar todos los endpoints /dev antes de producción
+
+interface RequestWithUser extends Request {
+  user: JwtPayload
+}
 
 @Controller('auth')
 export class AuthController {
@@ -35,6 +41,12 @@ export class AuthController {
   @HttpCode(HttpStatus.NO_CONTENT)
   logout(@Body() body: { refreshToken: string }) {
     return this.auth.logout(body.refreshToken)
+  }
+
+  @Get('me')
+  @UseGuards(JwtAuthGuard)
+  me(@Req() req: RequestWithUser) {
+    return req.user
   }
 
   // ── Dev (solo para pruebas — eliminar antes de producción) ──
