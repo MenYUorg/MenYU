@@ -10,7 +10,9 @@
       "Bash(curl -s http://localhost:3000/api)",
       "Bash(pnpm --filter @menyu/api add @nestjs/jwt @nestjs/passport passport passport-jwt bcrypt)",
       "Bash(pnpm --filter @menyu/api exec prisma migrate dev --name add-refresh-token)",
-      "Bash(pnpm --filter @menyu/api exec tsc --noEmit)"
+      "Bash(pnpm --filter @menyu/api exec tsc --noEmit)",
+      "Bash(pnpm --filter @menyu/types build)",
+      "Bash(pnpm --filter @menyu/cliente exec tsc --noEmit)"
     ]
   }
 }
