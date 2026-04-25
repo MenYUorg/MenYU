@@ -1,0 +1,272 @@
+{
+  "info": {
+    "name": "MenYu — Auth",
+    "_postman_id": "menyu-auth-collection",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Endpoints de autenticación. Después de login/register/guest, el accessToken y refreshToken se guardan automáticamente en las variables de la colección."
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000/api",
+      "type": "string"
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "refreshToken",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Register (solo Cliente)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/auth/register",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "register"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"nombre\": \"Coty Test\",\n  \"email\": \"coty@test.com\",\n  \"password\": \"password123\",\n  \"telefono\": \"1234567890\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "description": "Crea una cuenta de Cliente. No necesita estar logueado."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 201) {",
+              "  const body = pm.response.json();",
+              "  pm.collectionVariables.set('accessToken', body.accessToken);",
+              "  pm.collectionVariables.set('refreshToken', body.refreshToken);",
+              "  console.log('Tokens guardados automáticamente.');",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Login — Cliente",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/auth/login",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "login"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"coty@test.com\",\n  \"password\": \"password123\",\n  \"tipo\": \"cliente\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "description": "Login de un Cliente registrado. tipo puede ser 'admin', 'mozo' o 'cliente'."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "  const body = pm.response.json();",
+              "  pm.collectionVariables.set('accessToken', body.accessToken);",
+              "  pm.collectionVariables.set('refreshToken', body.refreshToken);",
+              "  console.log('Tokens guardados automáticamente.');",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Login — Admin",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/auth/login",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "login"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"admin@restaurante.com\",\n  \"password\": \"password123\",\n  \"tipo\": \"admin\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "description": "Login de un Admin. El email debe existir en la tabla admin."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "  const body = pm.response.json();",
+              "  pm.collectionVariables.set('accessToken', body.accessToken);",
+              "  pm.collectionVariables.set('refreshToken', body.refreshToken);",
+              "  console.log('Tokens guardados automáticamente.');",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Login — Mozo",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/auth/login",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "login"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"mozo@restaurante.com\",\n  \"password\": \"password123\",\n  \"tipo\": \"mozo\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "description": "Login de un Mozo. El mozo debe haber sido creado por un Admin previamente."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "  const body = pm.response.json();",
+              "  pm.collectionVariables.set('accessToken', body.accessToken);",
+              "  pm.collectionVariables.set('refreshToken', body.refreshToken);",
+              "  console.log('Tokens guardados automáticamente.');",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Guest (Cliente invitado)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/auth/guest",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "guest"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"nombre\": \"Visitante\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "description": "Crea un Cliente sin contraseña y emite tokens. El campo nombre es opcional — si no se manda, queda como 'Invitado'."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "  const body = pm.response.json();",
+              "  pm.collectionVariables.set('accessToken', body.accessToken);",
+              "  pm.collectionVariables.set('refreshToken', body.refreshToken);",
+              "  console.log('Tokens de invitado guardados automáticamente.');",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Refresh token",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/auth/refresh",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "refresh"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "description": "Rota el refresh token: invalida el anterior y devuelve un par nuevo. Usar el refreshToken guardado en la variable de colección."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "  const body = pm.response.json();",
+              "  pm.collectionVariables.set('accessToken', body.accessToken);",
+              "  pm.collectionVariables.set('refreshToken', body.refreshToken);",
+              "  console.log('Tokens rotados y guardados.');",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Logout",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/auth/logout",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "logout"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "description": "Revoca el refresh token en la DB. Requiere access token válido en el header. Responde 204 sin body."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 204) {",
+              "  pm.collectionVariables.set('accessToken', '');",
+              "  pm.collectionVariables.set('refreshToken', '');",
+              "  console.log('Logout OK. Variables limpiadas.');",
+              "}"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

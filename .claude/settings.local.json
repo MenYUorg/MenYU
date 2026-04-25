@@ -7,7 +7,10 @@
       "Bash(command -v pnpm)",
       "Read(//c/Users/COTYS/AppData/Roaming/npm/**)",
       "Read(//c/Users/COTYS/AppData/Local/**)",
-      "Bash(curl -s http://localhost:3000/api)"
+      "Bash(curl -s http://localhost:3000/api)",
+      "Bash(pnpm --filter @menyu/api add @nestjs/jwt @nestjs/passport passport passport-jwt bcrypt)",
+      "Bash(pnpm --filter @menyu/api exec prisma migrate dev --name add-refresh-token)",
+      "Bash(pnpm --filter @menyu/api exec tsc --noEmit)"
     ]
   }
 }

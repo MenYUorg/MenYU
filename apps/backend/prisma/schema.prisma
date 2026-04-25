@@ -64,6 +64,7 @@ model Mozo {
   restauranteId String   @map("restaurante_id")
   nombre        String
   email         String?
+  passwordHash  String   @map("password_hash")
   telefono      String?
   activo        Boolean  @default(true)
   esJefeSalon   Boolean  @default(false) @map("es_jefe_salon")
@@ -96,11 +97,12 @@ model Mesa {
 }
 
 model Cliente {
-  id        String   @id @default(uuid())
-  nombre    String
-  email     String?  @unique
-  telefono  String?
-  createdAt DateTime @default(now()) @map("created_at")
+  id           String   @id @default(uuid())
+  nombre       String
+  email        String?  @unique
+  passwordHash String?  @map("password_hash")
+  telefono     String?
+  createdAt    DateTime @default(now()) @map("created_at")
 
   sesiones SesionMesa[]
 
@@ -363,4 +365,20 @@ model Pago {
   pedido Pedido @relation(fields: [pedidoId], references: [id])
 
   @@map("pago")
+}
+
+// ─────────────────────────────────────────────
+// AUTENTICACIÓN
+// ─────────────────────────────────────────────
+
+model RefreshToken {
+  id        String    @id @default(uuid())
+  tokenHash String    @unique @map("token_hash")
+  userId    String    @map("user_id")
+  userTipo  String    @map("user_tipo")
+  expiresAt DateTime  @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@map("refresh_token")
 }
