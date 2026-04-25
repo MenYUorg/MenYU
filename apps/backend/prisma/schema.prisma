@@ -4,6 +4,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 // ─────────────────────────────────────────────
@@ -14,6 +15,7 @@ model Marca {
   id         String       @id @default(uuid())
   nombre     String
   slug       String       @unique
+  activo     Boolean      @default(true)
   createdAt  DateTime     @default(now()) @map("created_at")
 
   restaurantes Restaurante[]
@@ -28,6 +30,7 @@ model Restaurante {
   nombre      String
   direccion   String?
   qrBaseUrl   String?  @map("qr_base_url")
+  activo      Boolean  @default(true)
   createdAt   DateTime @default(now()) @map("created_at")
 
   marca         Marca           @relation(fields: [marcaId], references: [id])
