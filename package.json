@@ -8,6 +8,8 @@
     "typecheck": "turbo run typecheck"
   },
   "devDependencies": {
+    "react": "19.0.0",
+    "react-dom": "19.0.0",
     "turbo": "^2.5.4"
   },
   "engines": {
@@ -16,6 +18,9 @@
   },
   "packageManager": "pnpm@10.33.2",
   "pnpm": {
-    "onlyBuiltDependencies": ["@prisma/engines", "prisma", "@nestjs/core"]
+    "onlyBuiltDependencies": ["@prisma/engines", "prisma", "@nestjs/core"],
+    "overrides": {
+      "react-native>@types/react": "~18.3.0"
+    }
   }
 }
