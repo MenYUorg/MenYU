@@ -90,6 +90,7 @@ model Mesa {
   numero        String
   qrToken       String   @unique @map("qr_token")
   estado        String   @default("libre")
+  activo        Boolean  @default(true)
 
   restaurante  Restaurante      @relation(fields: [restauranteId], references: [id])
   sesiones     SesionMesa[]
