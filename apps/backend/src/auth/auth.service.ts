@@ -14,6 +14,7 @@ export type UserTipo = 'admin' | 'mozo' | 'cliente'
 export interface JwtPayload {
   sub: string
   email?: string
+  nombre?: string
   tipo: UserTipo
   rol?: string
 }
@@ -49,7 +50,7 @@ export class AuthService {
       throw new UnauthorizedException('Credenciales inválidas')
     }
 
-    return this.issueTokens(user.id, email, tipo, (user as any).rol)
+    return this.issueTokens(user.id, email, tipo, (user as any).rol, (user as any).nombre)
   }
 
   // ── Register (solo Cliente) ────────────────────────────
@@ -68,14 +69,15 @@ export class AuthService {
     const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS)
     const cliente = await this.users.createCliente({ nombre, email, passwordHash, telefono })
 
-    return this.issueTokens(cliente.id, email, 'cliente')
+    return this.issueTokens(cliente.id, email, 'cliente', undefined, nombre)
   }
 
   // ── Guest ──────────────────────────────────────────────
 
   async loginAsGuest(nombre?: string): Promise<TokenPair> {
-    const cliente = await this.users.createCliente({ nombre: nombre ?? 'Invitado' })
-    return this.issueTokens(cliente.id, undefined, 'cliente')
+    const nombreFinal = nombre ?? 'Invitado'
+    const cliente = await this.users.createCliente({ nombre: nombreFinal })
+    return this.issueTokens(cliente.id, undefined, 'cliente', undefined, nombreFinal)
   }
 
   // ── Refresh ────────────────────────────────────────────
@@ -104,6 +106,7 @@ export class AuthService {
       (user as any).email,
       stored.userTipo as UserTipo,
       (user as any).rol,
+      (user as any).nombre,
     )
   }
 
@@ -188,8 +191,9 @@ export class AuthService {
     email: string | undefined,
     tipo: UserTipo,
     rol?: string,
+    nombre?: string,
   ): Promise<TokenPair> {
-    const payload: JwtPayload = { sub: userId, email, tipo, rol }
+    const payload: JwtPayload = { sub: userId, email, nombre, tipo, rol }
 
     const accessToken = this.jwt.sign(payload)
 
