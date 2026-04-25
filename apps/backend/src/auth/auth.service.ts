@@ -170,6 +170,20 @@ export class AuthService {
     }
   }
 
+  async devCreateRoot() {
+    const email = 'root@menyu.com'
+    const existing = await this.users.findAdminByEmail(email)
+    if (existing) {
+      const tokens = await this.issueTokens(existing.id, existing.email, 'admin', existing.rol)
+      return { mensaje: 'ROOT ya existe, tokens renovados.', ...tokens }
+    }
+
+    const passwordHash = await bcrypt.hash('root1234', BCRYPT_ROUNDS)
+    const root = await this.users.createAdmin({ email, passwordHash, rol: 'ROOT' })
+    const tokens = await this.issueTokens(root.id, root.email, 'admin', 'ROOT')
+    return { mensaje: 'Admin ROOT creado. Credenciales: root@menyu.com / root1234', ...tokens }
+  }
+
   async devCreateAdmin(email: string, password: string, rol: string, restauranteId: string) {
     const existing = await this.users.findAdminByEmail(email)
     if (existing) throw new ConflictException('El email ya está registrado')

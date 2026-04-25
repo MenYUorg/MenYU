@@ -72,4 +72,10 @@ export class AuthController {
   ) {
     return this.auth.devCreateMozo(body.nombre, body.email, body.password, body.restauranteId)
   }
+
+  @Post('dev/root')
+  @HttpCode(HttpStatus.OK)
+  devCreateRoot() {
+    return this.auth.devCreateRoot()
+  }
 }

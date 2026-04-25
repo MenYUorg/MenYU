@@ -19,7 +19,7 @@ export class UsersService {
     email: string
     passwordHash: string
     rol: string
-    restauranteId: string
+    restauranteId?: string
   }) {
     return this.prisma.admin.create({ data })
   }

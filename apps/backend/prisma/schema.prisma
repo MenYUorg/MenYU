@@ -51,13 +51,13 @@ model Restaurante {
 // ─────────────────────────────────────────────
 
 model Admin {
-  id            String  @id @default(uuid())
-  restauranteId String  @map("restaurante_id")
-  email         String  @unique
-  passwordHash  String  @map("password_hash")
+  id            String   @id @default(uuid())
+  restauranteId String?  @map("restaurante_id")
+  email         String   @unique
+  passwordHash  String   @map("password_hash")
   rol           String
 
-  restaurante Restaurante @relation(fields: [restauranteId], references: [id])
+  restaurante Restaurante? @relation(fields: [restauranteId], references: [id])
 
   @@map("admin")
 }

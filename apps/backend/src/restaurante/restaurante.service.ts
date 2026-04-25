@@ -76,7 +76,7 @@ export class RestauranteService {
 
   private async getRestauranteIdForAdmin(adminId: string): Promise<string> {
     const admin = await this.prisma.admin.findUnique({ where: { id: adminId } })
-    if (!admin) throw new NotFoundException('Admin no encontrado')
+    if (!admin || !admin.restauranteId) throw new NotFoundException('Admin sin restaurante asignado')
     return admin.restauranteId
   }
 }

@@ -94,7 +94,7 @@ export class MarcaService {
       where: { id: adminId },
       include: { restaurante: true },
     })
-    if (!admin) throw new NotFoundException('Admin no encontrado')
+    if (!admin || !admin.restaurante) throw new NotFoundException('Admin sin restaurante asignado')
     return admin.restaurante.marcaId
   }
 }
