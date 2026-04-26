@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MenYu — Gantt 24 Semanas</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
+
+  :root {
+    --bg:      #0d0f14;
+    --bg2:     #13161d;
+    --bg3:     #191d26;
+    --border:  #1f2535;
+    --border2: #2a3347;
+    --text:    #dde3f0;
+    --text2:   #7a8baa;
+    --text3:   #3d4d68;
+    --c-blue:   #3b82f6;
+    --c-teal:   #14b8a6;
+    --c-green:  #4ade80;
+    --c-amber:  #f59e0b;
+    --c-orange: #f97316;
+    --c-red:    #ef4444;
+    --c-purple: #a78bfa;
+    --c-pink:   #ec4899;
+    --c-gray:   #6b7280;
+    --c-cyan:   #22d3ee;
+    --mvp-line: #3b82f6;
+    --v2-line:  #14b8a6;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'IBM Plex Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 40px;
+  }
+
+  .header {
+    margin-bottom: 36px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 20px;
+  }
+
+  .header-left h1 {
+    font-size: 28px;
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    margin-bottom: 4px;
+  }
+
+  .header-left h1 span { color: var(--c-cyan); }
+
+  .header-left p {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--text2);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .phase-badges {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .badge {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 4px 12px;
+    border-radius: 4px;
+    border: 1px solid;
+  }
+
+  .badge-mvp  { color: var(--c-blue);   border-color: #1d3a7a; background: #0d1e3d; }
+  .badge-v2   { color: var(--c-teal);   border-color: #0c4040; background: #061f1f; }
+
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 20px;
+    margin-bottom: 28px;
+    padding: 14px 18px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 11px;
+    color: var(--text2);
+    font-family: 'IBM Plex Mono', monospace;
+  }
+
+  .legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+
+  .dep-line-legend {
+    width: 28px;
+    height: 2px;
+    background: repeating-linear-gradient(90deg, var(--text3) 0, var(--text3) 4px, transparent 4px, transparent 8px);
+    flex-shrink: 0;
+  }
+
+  .gantt-scroll {
+    overflow-x: auto;
+    overflow-y: visible;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--bg2);
+  }
+
+  table.gantt {
+    border-collapse: collapse;
+    font-size: 11px;
+    white-space: nowrap;
+    width: 100%;
+    min-width: 1300px;
+  }
+
+  .gantt thead tr.phase-row th {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 8px 4px;
+    text-align: center;
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 5;
+  }
+
+  .gantt thead tr.phase-row th.task-col {
+    background: var(--bg2);
+    text-align: left;
+    padding-left: 14px;
+    color: var(--text3);
+  }
+
+  .th-mvp {
+    background: #0a1428;
+    color: var(--c-blue) !important;
+    border-left: 1px solid #1d3a7a;
+    border-right: 1px solid #1d3a7a;
+  }
+
+  .th-v2 {
+    background: #061a1a;
+    color: var(--c-teal) !important;
+    border-left: 1px solid #0c4040;
+    border-right: 1px solid #0c4040;
+  }
+
+  .gantt thead tr.week-row th {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    font-weight: 400;
+    color: var(--text3);
+    padding: 5px 2px;
+    text-align: center;
+    border-bottom: 2px solid var(--border2);
+    background: var(--bg2);
+    position: sticky;
+    top: 33px;
+    z-index: 4;
+    min-width: 42px;
+    width: 42px;
+  }
+
+  .gantt thead tr.week-row th.task-col {
+    text-align: left;
+    padding-left: 14px;
+    min-width: 220px;
+    width: 220px;
+    color: var(--text3);
+    letter-spacing: 0.06em;
+  }
+
+  .gantt thead tr.week-row th.milestone-wk  { color: var(--c-blue); font-weight: 600; }
+  .gantt thead tr.week-row th.milestone-wk2 { color: var(--c-teal); font-weight: 600; }
+
+  .gantt tbody tr.group { background: var(--bg3); }
+
+  .gantt tbody tr.group td {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text3);
+    padding: 7px 14px;
+    border-top: 1px solid var(--border2);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .gantt tbody tr.task-row td.task-label {
+    font-size: 11px;
+    color: var(--text2);
+    padding: 3px 14px;
+    font-weight: 300;
+    position: sticky;
+    left: 0;
+    background: var(--bg2);
+    z-index: 2;
+    min-width: 220px;
+    max-width: 220px;
+    white-space: normal;
+    line-height: 1.35;
+    border-right: 1px solid var(--border);
+  }
+
+  .gantt tbody tr.task-row:hover td.task-label {
+    background: var(--bg3);
+    color: var(--text);
+  }
+
+  .gantt tbody tr.task-row:hover td.cell {
+    background: rgba(255,255,255,0.01);
+  }
+
+  .gantt tbody tr.task-row td.cell {
+    width: 42px;
+    min-width: 42px;
+    height: 28px;
+    padding: 4px 2px;
+    vertical-align: middle;
+    border-right: 1px solid var(--border);
+    position: relative;
+  }
+
+  .gantt tbody tr.task-row td.cell.mvp-zone { background: rgba(59,130,246,0.03); }
+  .gantt tbody tr.task-row td.cell.v2-zone  { background: rgba(20,184,166,0.02); }
+
+  .bar {
+    height: 20px;
+    border-radius: 0;
+    display: block;
+    width: 100%;
+  }
+
+  .bar-start { border-radius: 4px 0 0 4px; }
+  .bar-end   { border-radius: 0 4px 4px 0; }
+  .bar-solo  { border-radius: 4px; }
+  .bar-mid   { border-radius: 0; }
+
+  .bar-blue   { background: var(--c-blue);   opacity: 0.82; }
+  .bar-teal   { background: var(--c-teal);   opacity: 0.82; }
+  .bar-green  { background: var(--c-green);  opacity: 0.75; }
+  .bar-amber  { background: var(--c-amber);  opacity: 0.82; }
+  .bar-orange { background: var(--c-orange); opacity: 0.82; }
+  .bar-red    { background: var(--c-red);    opacity: 0.78; }
+  .bar-purple { background: var(--c-purple); opacity: 0.82; }
+  .bar-pink   { background: var(--c-pink);   opacity: 0.78; }
+  .bar-gray   { background: var(--c-gray);   opacity: 0.7;  }
+  .bar-cyan   { background: var(--c-cyan);   opacity: 0.75; }
+
+  .milestone-cell {
+    text-align: center;
+    vertical-align: middle;
+  }
+
+  .sprint-section { margin-top: 36px; }
+
+  .sprint-section h2 {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text3);
+    margin-bottom: 14px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .sprint-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 10px;
+  }
+
+  .sprint-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+  }
+
+  .sprint-card-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+
+  .sprint-num {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    padding: 3px 7px;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+
+  .sprint-num.s-mvp { background: #0d1e3d; color: var(--c-blue); border: 1px solid #1d3a7a; }
+  .sprint-num.s-v2  { background: #061f1f; color: var(--c-teal); border: 1px solid #0c4040; }
+
+  .sprint-title {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text);
+    line-height: 1.3;
+  }
+
+  .sprint-desc {
+    font-size: 11px;
+    color: var(--text2);
+    line-height: 1.55;
+    font-weight: 300;
+  }
+
+  .footer {
+    margin-top: 36px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .footer span {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    color: var(--text3);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <h1>MenYu — <span>Gantt 24 Semanas</span></h1>
+    <p>Sistema integral de autogestión gastronómica · De Marcos · Ojeda · Strumia Carrara</p>
+  </div>
+  <div class="phase-badges">
+    <span class="badge badge-mvp">MVP S1–S8</span>
+    <span class="badge badge-v2">v2.0 S9–S24</span>
+  </div>
+</div>
+
+<div class="legend">
+  <div class="legend-item"><span class="legend-dot" style="background:var(--c-blue)"></span>Infraestructura / Setup</div>
+  <div class="legend-item"><span class="legend-dot" style="background:var(--c-teal)"></span>Backend NestJS</div>
+  <div class="legend-item"><span class="legend-dot" style="background:var(--c-green)"></span>Frontend React + Vite</div>
+  <div class="legend-item"><span class="legend-dot" style="background:var(--c-orange)"></span>Pagos / Mercado Pago</div>
+  <div class="legend-item"><span class="legend-dot" style="background:var(--c-purple)"></span>Python / FastAPI</div>
+  <div class="legend-item"><span class="legend-dot" style="background:var(--c-amber)"></span>Testing / QA</div>
+  <div class="legend-item"><span class="legend-dot" style="background:var(--c-red)"></span>Bug Fixing</div>
+  <div class="legend-item"><span class="legend-dot" style="background:var(--c-pink)"></span>Deploy / DevOps</div>
+  <div class="legend-item"><span class="legend-dot" style="background:var(--c-gray)"></span>Documentación</div>
+  <div class="legend-item"><span class="legend-dot" style="background:var(--c-cyan)"></span>Tesis</div>
+</div>
+
+<div class="gantt-scroll">
+<table class="gantt">
+<thead>
+<tr class="phase-row">
+  <th class="task-col">Tarea</th>
+  <th colspan="8" class="th-mvp">MVP — Versión 1.0 (semanas 1 a 8)</th>
+  <th colspan="16" class="th-v2">v2.0 — Módulos Avanzados (semanas 9 a 24)</th>
+</tr>
+<tr class="week-row">
+  <th class="task-col">Actividad</th>
+  <th>S1</th><th>S2</th><th>S3</th><th>S4</th><th>S5</th><th>S6</th><th>S7</th><th class="milestone-wk">S8 ★</th>
+  <th>S9</th><th>S10</th><th>S11</th><th>S12</th><th>S13</th><th>S14</th><th>S15</th><th>S16</th><th>S17</th><th>S18</th><th>S19</th><th>S20</th><th>S21</th><th>S22</th><th>S23</th><th class="milestone-wk2">S24 ✓</th>
+</tr>
+</thead>
+<tbody>
+
+<!-- TESIS -->
+<tr class="group"><td colspan="25">REDACCIÓN DE TESIS</td></tr>
+<tr class="task-row">
+  <td class="task-label">Documento de Tesis (continuo)</td>
+  <td class="cell mvp-zone"><div class="bar bar-start bar-cyan"></div></td><td class="cell mvp-zone"><div class="bar bar-mid bar-cyan"></div></td><td class="cell mvp-zone"><div class="bar bar-mid bar-cyan"></div></td><td class="cell mvp-zone"><div class="bar bar-mid bar-cyan"></div></td><td class="cell mvp-zone"><div class="bar bar-mid bar-cyan"></div></td><td class="cell mvp-zone"><div class="bar bar-mid bar-cyan"></div></td><td class="cell mvp-zone"><div class="bar bar-mid bar-cyan"></div></td><td class="cell mvp-zone"><div class="bar bar-mid bar-cyan"></div></td>
+  <td class="cell v2-zone"><div class="bar bar-mid bar-cyan"></div></td><td class="cell v2-zone"><div class="bar bar-mid bar-cyan"></div></td><td class="cell v2-zone"><div class="bar bar-mid bar-cyan"></div></td><td class="cell v2-zone"><div class="bar bar-mid bar-cyan"></div></td><td class="cell v2-zone"><div class="bar bar-mid bar-cyan"></div></td><td class="cell v2-zone"><div class="bar bar-mid bar-cyan"></div></td><td class="cell v2-zone"><div class="bar bar-mid bar-cyan"></div></td><td class="cell v2-zone"><div class="bar bar-mid bar-cyan"></div></td><td class="cell v2-zone"><div class="bar bar-mid bar-cyan"></div></td><td class="cell v2-zone"><div class="bar bar-mid bar-cyan"></div></td><td class="cell v2-zone"><div class="bar bar-mid bar-cyan"></div></td><td class="cell v2-zone"><div class="bar bar-mid bar-cyan"></div></td><td class="cell v2-zone"><div class="bar bar-mid bar-cyan"></div></td><td class="cell v2-zone"><div class="bar bar-mid bar-cyan"></div></td><td class="cell v2-zone"><div class="bar bar-mid bar-cyan"></div></td><td class="cell v2-zone"><div class="bar bar-end bar-cyan"></div></td>
+</tr>
+
+<!-- INFRAESTRUCTURA -->
+<tr class="group"><td colspan="25">INFRAESTRUCTURA Y DEVOPS</td></tr>
+<tr class="task-row">
+  <td class="task-label">Monorepo Turborepo + pnpm</td>
+  <td class="cell mvp-zone"><div class="bar bar-solo bar-blue"></div></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td>
+  <td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td>
+</tr>
+<tr class="task-row">
+  <td class="task-label">GitHub + CI/CD Railway staging</td>
+  <td class="cell mvp-zone"><div class="bar bar-start bar-pink"></div></td><td class="cell mvp-zone"><div class="bar bar-end bar-pink"></div></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td>
+  <td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td>
+</tr>
+<tr class="task-row">
+  <td class="task-label">Cloudflare + dominio + SSL</td>
+  <td class="cell mvp-zone"><div class="bar bar-solo bar-pink"></div></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td>
+  <td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td>
+</tr>
+<tr class="task-row">
+  <td class="task-label">Deploy MVP en producción (Railway)</td>
+  <td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"><div class="bar bar-solo bar-pink"></div></td>
+  <td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td>
+</tr>
+<tr class="task-row">
+  <td class="task-label">Hardening: rate limit + CORS</td>
+  <td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td>
+  <td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"><div class="bar bar-start bar-pink"></div></td><td class="cell v2-zone"><div class="bar bar-end bar-pink"></div></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td>
+</tr>
+<tr class="task-row">
+  <td class="task-label">Monitoring + alertas Railway</td>
+  <td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td>
+  <td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"><div class="bar bar-solo bar-pink"></div></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td>
+</tr>
+<tr class="task-row">
+  <td class="task-label">Deploy v2.0 producción completo</td>
+  <td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td>
+  <td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"><div class="bar bar-start bar-pink"></div></td><td class="cell v2-zone"><div class="bar bar-end bar-pink"></div></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td>
+</tr>
+
+<!-- BASE DE DATOS -->
+<tr class="group"><td colspan="25">BASE DE DATOS</td></tr>
+<tr class="task-row">
+  <td class="task-label">Schema Prisma v1 + migración</td>
+  <td class="cell mvp-zone"><div class="bar bar-start bar-blue"></div></td><td class="cell mvp-zone"><div class="bar bar-end bar-blue"></div></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td>
+  <td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td>
+</tr>
+<tr class="task-row">
+  <td class="task-label">Tabla Recomendacion: item_id, vigencia, orden</td>
+  <td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td>
+  <td class="cell v2-zone"><div class="bar bar-solo bar-blue"></div></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td>
+</tr>
+<tr class="task-row">
+  <td class="task-label">Tablas v2: división + puntos + promos</td>
+  <td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td>
+  <td class="cell v2-zone"></td><td class="cell v2-zone"><div class="bar bar-solo bar-blue"></div></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td>
+</tr>
+<tr class="task-row">
+  <td class="task-label">Índices PostgreSQL + optimización</td>
+  <td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td>
+  <td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"><div class="bar bar-solo bar-blue"></div></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td>
+</tr>
+
+<!-- BACKEND NestJS -->
+<tr class="group"><td colspan="25">BACKEND — NestJS</td></tr>
+<tr class="task-row">
+  <td class="task-label">Auth: JWT + roles + guards</td>
+  <td class="cell mvp-zone"></td><td class="cell mvp-zone"><div class="bar bar-start bar-teal"></div></td><td class="cell mvp-zone"><div class="bar bar-end bar-teal"></div></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td>
+  <td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td>
+</tr>
+<tr class="task-row">
+  <td class="task-label">Restaurante + Mesa + qr_token</td>
+  <td class="cell mvp-zone"></td><td class="cell mvp-zone"><div class="bar bar-start bar-teal"></div></td><td class="cell mvp-zone"><div class="bar bar-end bar-teal"></div></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td>
+  <td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td>
+</tr>
+<tr class="task-row">
+  <td class="task-label">SesionMesa + validaciones</td>
+  <td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"><div class="bar bar-solo bar-teal"></div></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td>
+  <td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td>
+</tr>
+<tr class="task-row">
+  <td class="task-label">Menú: categorías + ítems + ingredientes</td>
+  <td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"><div class="bar bar-start bar-teal"></div></td><td class="cell mvp-zone"><div class="bar bar-end bar-teal"></div></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td>
+  <td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td>
+</tr>
+<tr class="task-row">
+  <td class="task-label">Pedido + carrito + modificaciones</td>
+  <td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"><div class="bar bar-start bar-teal"></div></td><td class="cell mvp-zone"><div class="bar bar-end bar-teal"></div></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td>
+  <td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td>
+</tr>
+<tr class="task-row">
+  <td class="task-label">Socket.io Gateway + salas</td>
+  <td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"><div class="bar bar-start bar-teal"></div></td><td class="cell mvp-zone"><div class="bar bar-end bar-teal"></div></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td>
+  <td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td>
+</tr>
+<tr class="task-row">
+  <td class="task-label">Mozo: asignación + llamados</td>
+  <td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"><div class="bar bar-solo bar-teal"></div></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td>
+  <td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td>
+</tr>
+<tr class="task-row">
+  <td class="task-label">Pago MP: webhook + cierre mesa</td>
+  <td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"><div class="bar bar-start bar-orange"></div></td><td class="cell mvp-zone"><div class="bar bar-end bar-orange"></div></td><td class="cell mvp-zone"></td>
+  <td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td>
+</tr>
+<tr class="task-row">
+  <td class="task-label">Recomend.: CRUD admin + endpoint menú</td>
+  <td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td>
+  <td class="cell v2-zone"><div class="bar bar-solo bar-teal"></div></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td>
+</tr>
+<tr class="task-row">
+  <td class="task-label">División de pagos por comensal</td>
+  <td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td>
+  <td class="cell v2-zone"></td><td class="cell v2-zone"><div class="bar bar-start bar-orange"></div></td><td class="cell v2-zone"><div class="bar bar-end bar-orange"></div></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td>
+</tr>
+<tr class="task-row">
+  <td class="task-label">Fidelización: puntos + ledger</td>
+  <td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td>
+  <td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"><div class="bar bar-start bar-teal"></div></td><td class="cell v2-zone"><div class="bar bar-end bar-teal"></div></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td>
+</tr>
+<tr class="task-row">
+  <td class="task-label">Promos de canje + reversiones</td>
+  <td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td>
+  <td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"><div class="bar bar-solo bar-teal"></div></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td>
+</tr>
+
+<!-- MICROSERVICIO FASTAPI -->
+<tr class="group"><td colspan="25">MICROSERVICIO — FastAPI (Python)</td></tr>
+<tr class="task-row">
+  <td class="task-label">FastAPI + SQLAlchemy setup Railway</td>
+  <td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td>
+  <td class="cell v2-zone"></td><td class="cell v2-zone"><div class="bar bar-solo bar-purple"></div></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td>
+</tr>
+<tr class="task-row">
+  <td class="task-label">FastAPI estable + documentada</td>
+  <td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td>
+  <td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"><div class="bar bar-solo bar-purple"></div></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td>
+</tr>
+<tr class="task-row">
+  <td class="task-label">Chatbot OpenAI + context injection</td>
+  <td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td>
+  <td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"><div class="bar bar-start bar-purple"></div></td><td class="cell v2-zone"><div class="bar bar-end bar-purple"></div></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td>
+</tr>
+
+<!-- FRONTEND -->
+<tr class="group"><td colspan="25">FRONTEND — React + Vite</td></tr>
+<tr class="task-row">
+  <td class="task-label">Inicializar apps: cliente, cocina, admin, mozo</td>
+  <td class="cell mvp-zone"><div class="bar bar-solo bar-green"></div></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td>
+  <td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td>
+</tr>
+<tr class="task-row">
+  <td class="task-label">App cliente: QR + menú visual</td>
+  <td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"><div class="bar bar-start bar-green"></div></td><td class="cell mvp-zone"><div class="bar bar-end bar-green"></div></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td>
+  <td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td>
+</tr>
+<tr class="task-row">
+  <td class="task-label">App cliente: carrito + modificaciones</td>
+  <td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"><div class="bar bar-solo bar-green"></div></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td>
+  <td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td>
+</tr>
+<tr class="task-row">
+  <td class="task-label">App cocina: panel Kanban comandas</td>
+  <td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"><div class="bar bar-solo bar-green"></div></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td>
+  <td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td>
+</tr>
+<tr class="task-row">
+  <td class="task-label">App mozo: pantalla pedidos + llamados</td>
+  <td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"><div class="bar bar-solo bar-green"></div></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td>
+  <td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td>
+</tr>
+<tr class="task-row">
+  <td class="task-label">Dashboard admin: mapa mesas + ventas</td>
+  <td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"><div class="bar bar-solo bar-green"></div></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td>
+  <td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td>
+</tr>
+<tr class="task-row">
+  <td class="task-label">App cliente: sección Recomendaciones</td>
+  <td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td>
+  <td class="cell v2-zone"><div class="bar bar-solo bar-green"></div></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td>
+</tr>
+<tr class="task-row">
+  <td class="task-label">App cliente: UI división de pagos</td>
+  <td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td>
+  <td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"><div class="bar bar-solo bar-green"></div></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td>
+</tr>
+<tr class="task-row">
+  <td class="task-label">App cliente: chatbot UI</td>
+  <td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td>
+  <td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"><div class="bar bar-solo bar-green"></div></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td>
+</tr>
+<tr class="task-row">
+  <td class="task-label">Panel admin v2: promos + puntos</td>
+  <td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td>
+  <td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"><div class="bar bar-solo bar-green"></div></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td>
+</tr>
+<tr class="task-row">
+  <td class="task-label">Pulido UX + animaciones finales</td>
+  <td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td>
+  <td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"><div class="bar bar-start bar-green"></div></td><td class="cell v2-zone"><div class="bar bar-end bar-green"></div></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td>
+</tr>
+
+<!-- TESTING -->
+<tr class="group"><td colspan="25">TESTING Y QA</td></tr>
+<tr class="task-row">
+  <td class="task-label">Tests auth + sesión</td>
+  <td class="cell mvp-zone"></td><td class="cell mvp-zone"><div class="bar bar-start bar-amber"></div></td><td class="cell mvp-zone"><div class="bar bar-end bar-amber"></div></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td>
+  <td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td>
+</tr>
+<tr class="task-row">
+  <td class="task-label">Tests menú + carrito</td>
+  <td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"><div class="bar bar-start bar-amber"></div></td><td class="cell mvp-zone"><div class="bar bar-end bar-amber"></div></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td>
+  <td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td>
+</tr>
+<tr class="task-row">
+  <td class="task-label">Tests pedido + socket</td>
+  <td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"><div class="bar bar-solo bar-amber"></div></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td>
+  <td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td>
+</tr>
+<tr class="task-row">
+  <td class="task-label">Tests pagos + webhook MP</td>
+  <td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"><div class="bar bar-solo bar-amber"></div></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td>
+  <td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td>
+</tr>
+<tr class="task-row">
+  <td class="task-label">Testing E2E browsers (Chrome, Safari, Firefox)</td>
+  <td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"><div class="bar bar-solo bar-amber"></div></td><td class="cell mvp-zone"></td>
+  <td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td>
+</tr>
+<tr class="task-row">
+  <td class="task-label">Bug fixing crítico</td>
+  <td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"><div class="bar bar-solo bar-red"></div></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"><div class="bar bar-solo bar-red"></div></td><td class="cell mvp-zone"></td>
+  <td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td>
+</tr>
+<tr class="task-row">
+  <td class="task-label">Tests recomendaciones</td>
+  <td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td>
+  <td class="cell v2-zone"><div class="bar bar-solo bar-amber"></div></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td>
+</tr>
+<tr class="task-row">
+  <td class="task-label">Tests división de pagos</td>
+  <td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td>
+  <td class="cell v2-zone"></td><td class="cell v2-zone"><div class="bar bar-start bar-amber"></div></td><td class="cell v2-zone"><div class="bar bar-end bar-amber"></div></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td>
+</tr>
+<tr class="task-row">
+  <td class="task-label">Tests fidelización + chatbot</td>
+  <td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td>
+  <td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"><div class="bar bar-start bar-amber"></div></td><td class="cell v2-zone"><div class="bar bar-end bar-amber"></div></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td>
+</tr>
+<tr class="task-row">
+  <td class="task-label">Pruebas k6: 200 usuarios + estrés WebSockets</td>
+  <td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td>
+  <td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"><div class="bar bar-solo bar-amber"></div></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td>
+</tr>
+<tr class="task-row">
+  <td class="task-label">Auditoría WCAG: VoiceOver + TalkBack</td>
+  <td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td>
+  <td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"><div class="bar bar-start bar-amber"></div></td><td class="cell v2-zone"><div class="bar bar-end bar-amber"></div></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td>
+</tr>
+<tr class="task-row">
+  <td class="task-label">Testing E2E v2.0 completo</td>
+  <td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td>
+  <td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"><div class="bar bar-start bar-amber"></div></td><td class="cell v2-zone"><div class="bar bar-end bar-amber"></div></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td>
+</tr>
+<tr class="task-row">
+  <td class="task-label">Bug fixing QA + carga</td>
+  <td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td>
+  <td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"><div class="bar bar-solo bar-red"></div></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td>
+</tr>
+
+<!-- DOCUMENTACIÓN -->
+<tr class="group"><td colspan="25">DOCUMENTACIÓN</td></tr>
+<tr class="task-row">
+  <td class="task-label">Schema DB + tipos @menyu/types</td>
+  <td class="cell mvp-zone"><div class="bar bar-start bar-gray"></div></td><td class="cell mvp-zone"><div class="bar bar-end bar-gray"></div></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td>
+  <td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td>
+</tr>
+<tr class="task-row">
+  <td class="task-label">Swagger: auth + menú + pedidos</td>
+  <td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"><div class="bar bar-start bar-gray"></div></td><td class="cell mvp-zone"><div class="bar bar-end bar-gray"></div></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td>
+  <td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td>
+</tr>
+<tr class="task-row">
+  <td class="task-label">Doc técnica: sistema recomendaciones</td>
+  <td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td>
+  <td class="cell v2-zone"><div class="bar bar-solo bar-gray"></div></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td>
+</tr>
+<tr class="task-row">
+  <td class="task-label">Doc técnica: microservicio FastAPI</td>
+  <td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td>
+  <td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"><div class="bar bar-solo bar-gray"></div></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td>
+</tr>
+<tr class="task-row">
+  <td class="task-label">Swagger endpoints v2 completos</td>
+  <td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td>
+  <td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"><div class="bar bar-solo bar-gray"></div></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td>
+</tr>
+<tr class="task-row">
+  <td class="task-label">Manual de usuario: admin + mozo</td>
+  <td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td>
+  <td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"><div class="bar bar-solo bar-gray"></div></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td>
+</tr>
+<tr class="task-row">
+  <td class="task-label">Informe final + video demo</td>
+  <td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td>
+  <td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"><div class="bar bar-start bar-gray"></div></td><td class="cell v2-zone"><div class="bar bar-mid bar-gray"></div></td><td class="cell v2-zone"><div class="bar bar-end bar-gray"></div></td><td class="cell v2-zone"></td>
+</tr>
+
+<!-- MILESTONES -->
+<tr class="group"><td colspan="25">MILESTONES</td></tr>
+<tr class="task-row">
+  <td class="task-label" style="font-size:10px;color:var(--text3)">MVP v1.0 en producción</td>
+  <td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td>
+  <td class="cell mvp-zone milestone-cell" style="background:rgba(59,130,246,0.08);font-family:'IBM Plex Mono',monospace;font-size:9px;font-weight:600;color:var(--c-blue);letter-spacing:0.06em;">v1.0</td>
+  <td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td>
+</tr>
+<tr class="task-row">
+  <td class="task-label" style="font-size:10px;color:var(--text3)">v2.0 completa entregada</td>
+  <td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td><td class="cell mvp-zone"></td>
+  <td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td><td class="cell v2-zone"></td>
+  <td class="cell v2-zone milestone-cell" style="background:rgba(20,184,166,0.08);font-family:'IBM Plex Mono',monospace;font-size:9px;font-weight:600;color:var(--c-teal);letter-spacing:0.06em;">v2.0</td>
+</tr>
+
+</tbody>
+</table>
+</div>
+
+<!-- DEPENDENCIAS -->
+<div class="sprint-section" style="margin-top:36px">
+  <h2>Dependencias principales identificadas</h2>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px">
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:12px 14px">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--c-blue);font-weight:600;letter-spacing:0.08em;margin-bottom:6px">INFRAESTRUCTURA</div>
+      <div style="font-size:11px;color:var(--text2);line-height:1.6;font-weight:300">Monorepo (S1) bloquea todos los demás grupos. El schema Prisma (S1-S2) bloquea a todos los módulos de backend.</div>
+    </div>
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:12px 14px">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--c-teal);font-weight:600;letter-spacing:0.08em;margin-bottom:6px">AUTH → TODO</div>
+      <div style="font-size:11px;color:var(--text2);line-height:1.6;font-weight:300">Auth con JWT y roles (S2-S3) bloquea SesionMesa, Menú, Pedido, Socket y Pagos. Ningún endpoint puede construirse sin guards de rol activos.</div>
+    </div>
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:12px 14px">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--c-teal);font-weight:600;letter-spacing:0.08em;margin-bottom:6px">MENÚ → CARRITO → PEDIDO</div>
+      <div style="font-size:11px;color:var(--text2);line-height:1.6;font-weight:300">El módulo de Menú (S3-S4) bloquea al Carrito (S4-S5). El Carrito bloquea al módulo de Pedido. Sin ítems no hay carrito ni pedido.</div>
+    </div>
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:12px 14px">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--c-teal);font-weight:600;letter-spacing:0.08em;margin-bottom:6px">PEDIDO → SOCKET → PAGO</div>
+      <div style="font-size:11px;color:var(--text2);line-height:1.6;font-weight:300">El módulo de Pedido (S4-S5) bloquea Socket.io (S5-S6), que genera eventos al confirmar. Socket bloquea a Pagos, ya que el webhook emite eventos al cerrar mesa.</div>
+    </div>
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:12px 14px">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--c-teal);font-weight:600;letter-spacing:0.08em;margin-bottom:6px">MENÚ → RECOMENDACIONES</div>
+      <div style="font-size:11px;color:var(--text2);line-height:1.6;font-weight:300">El sistema de recomendaciones (S9) depende del módulo de Menú estabilizado. El dueño solo puede recomendar ítems que ya existen en el catálogo.</div>
+    </div>
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:12px 14px">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--c-orange);font-weight:600;letter-spacing:0.08em;margin-bottom:6px">PAGO → DIVISIÓN + FIDELIZACIÓN</div>
+      <div style="font-size:11px;color:var(--text2);line-height:1.6;font-weight:300">División de pagos (S10-S11) y el sistema de puntos (S12-S13) extienden el módulo de Pago MVP. Requieren que webhook y cierre de mesa estén estabilizados.</div>
+    </div>
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:12px 14px">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--c-purple);font-weight:600;letter-spacing:0.08em;margin-bottom:6px">FASTAPI → CHATBOT</div>
+      <div style="font-size:11px;color:var(--text2);line-height:1.6;font-weight:300">El microservicio FastAPI (S10-S11) bloquea al Chatbot (S12-S13). El chatbot se despliega sobre el mismo servicio Python.</div>
+    </div>
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:12px 14px">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--c-amber);font-weight:600;letter-spacing:0.08em;margin-bottom:6px">QA CARGA → DEPLOY PROD.</div>
+      <div style="font-size:11px;color:var(--text2);line-height:1.6;font-weight:300">Las pruebas de carga y estrés (S15-S16) bloquean el deploy de producción v2.0 (S18-S19). No se lanza a producción antes de validar rendimiento bajo carga real.</div>
+    </div>
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:12px 14px">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--c-pink);font-weight:600;letter-spacing:0.08em;margin-bottom:6px">DEPLOY MVP → V2.0</div>
+      <div style="font-size:11px;color:var(--text2);line-height:1.6;font-weight:300">El deploy del MVP en producción (S8) es prerequisito para los módulos v2.0. Las nuevas funcionalidades se construyen sobre la base productiva del MVP.</div>
+    </div>
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:12px 14px">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--c-gray);font-weight:600;letter-spacing:0.08em;margin-bottom:6px">IMPLEMENTACIÓN → DOCUMENTACIÓN</div>
+      <div style="font-size:11px;color:var(--text2);line-height:1.6;font-weight:300">Cada módulo se documenta en la semana siguiente a su implementación. Swagger por endpoint sigue inmediatamente a su construcción.</div>
+    </div>
+  </div>
+</div>
+
+<!-- SPRINT CARDS -->
+<div class="sprint-section">
+  <h2>Descripción de sprints</h2>
+  <div class="sprint-grid">
+    <div class="sprint-card"><div class="sprint-card-head"><span class="sprint-num s-mvp">S1</span><span class="sprint-title">Fundaciones</span></div><p class="sprint-desc">Monorepo operativo. Schema Prisma migrado a Supabase. Apps React+Vite iniciadas. CI/CD a Railway. Documentación del schema. Inicio de la tesis.</p></div>
+    <div class="sprint-card"><div class="sprint-card-head"><span class="sprint-num s-mvp">S2</span><span class="sprint-title">Auth + Restaurante</span></div><p class="sprint-desc">JWT, roles y guards. CRUD restaurante y mesas con QR. Panel admin base. App cliente con login e invitado. Tests de auth.</p></div>
+    <div class="sprint-card"><div class="sprint-card-head"><span class="sprint-num s-mvp">S3</span><span class="sprint-title">QR + Menú</span></div><p class="sprint-desc">Escaneo QR con html5-qrcode abre sesión. Menú con categorías, fotos e ingredientes. Admin gestiona catálogo. Swagger de auth y menú.</p></div>
+    <div class="sprint-card"><div class="sprint-card-head"><span class="sprint-num s-mvp">S4</span><span class="sprint-title">Carrito</span></div><p class="sprint-desc">Carrito con modificación de ingredientes. Precio en tiempo real. Tests de menú y carrito. Corrección bugs auth y sesión.</p></div>
+    <div class="sprint-card"><div class="sprint-card-head"><span class="sprint-num s-mvp">S5</span><span class="sprint-title">Pedido + Socket</span></div><p class="sprint-desc">Pedido confirmado con snapshot de precio. Socket.io activo: pedido → cocina al instante. Panel Kanban cocina. App mozo.</p></div>
+    <div class="sprint-card"><div class="sprint-card-head"><span class="sprint-num s-mvp">S6</span><span class="sprint-title">Pagos + Dashboard</span></div><p class="sprint-desc">Pago con MP, cierre de mesa. Dashboard admin con mapa y ventas. Inicio WCAG. Validación webhook en staging.</p></div>
+    <div class="sprint-card"><div class="sprint-card-head"><span class="sprint-num s-mvp">S7</span><span class="sprint-title">Estabilización MVP</span></div><p class="sprint-desc">Testing E2E en browsers (Chrome, Safari, Firefox). Bug fixing crítico. README del monorepo. Revisión seguridad y CORS.</p></div>
+    <div class="sprint-card"><div class="sprint-card-head"><span class="sprint-num s-mvp">S8 ★</span><span class="sprint-title">MVP en producción</span></div><p class="sprint-desc">Deploy completo en Railway. MVP v1.0 funcional y accesible en producción. Inicio de v2.0.</p></div>
+    <div class="sprint-card"><div class="sprint-card-head"><span class="sprint-num s-v2">S9</span><span class="sprint-title">Método de recomendaciones</span></div><p class="sprint-desc">Sistema simple controlado por el dueño. Tabla Recomendacion con vigencia temporal. CRUD admin con filtros por ingrediente/categoría. Sección Recomendaciones al inicio del menú. Tests.</p></div>
+    <div class="sprint-card"><div class="sprint-card-head"><span class="sprint-num s-v2">S10</span><span class="sprint-title">División + Python</span></div><p class="sprint-desc">División de pagos en backend. Setup FastAPI + SQLAlchemy en Railway. Tablas v2 migradas. Tests de división de pagos.</p></div>
+    <div class="sprint-card"><div class="sprint-card-head"><span class="sprint-num s-v2">S11</span><span class="sprint-title">División UI + FastAPI</span></div><p class="sprint-desc">UI de división de pagos en la app. FastAPI estable y documentada. Doc técnica del microservicio Python.</p></div>
+    <div class="sprint-card"><div class="sprint-card-head"><span class="sprint-num s-v2">S12</span><span class="sprint-title">Fidelización + Chatbot</span></div><p class="sprint-desc">Puntos con patrón ledger. Chatbot OpenAI con context injection. UI puntos/promos. Tests fidelización.</p></div>
+    <div class="sprint-card"><div class="sprint-card-head"><span class="sprint-num s-v2">S13</span><span class="sprint-title">Promos + Chatbot UI</span></div><p class="sprint-desc">Promos de canje con reversión. UI chatbot en app cliente. Panel admin v2. Tests chatbot. Swagger endpoints v2 parciales.</p></div>
+    <div class="sprint-card"><div class="sprint-card-head"><span class="sprint-num s-v2">S14</span><span class="sprint-title">Índices + Swagger</span></div><p class="sprint-desc">Optimización de queries con EXPLAIN ANALYZE. Índices PostgreSQL. Swagger completo v2. WCAG continuo.</p></div>
+    <div class="sprint-card"><div class="sprint-card-head"><span class="sprint-num s-v2">S15</span><span class="sprint-title">Carga + Estrés + WCAG</span></div><p class="sprint-desc">Pruebas k6 con 200 usuarios. Estrés WebSockets 50 mesas simultáneas. Auditoría WCAG con VoiceOver/TalkBack. Manual admin y mozo.</p></div>
+    <div class="sprint-card"><div class="sprint-card-head"><span class="sprint-num s-v2">S16</span><span class="sprint-title">QA + Hardening</span></div><p class="sprint-desc">E2E flujo completo v2.0. Hardening: rate limit + CORS. Bug fixing QA y carga. Manual de usuario admin y mozo.</p></div>
+    <div class="sprint-card"><div class="sprint-card-head"><span class="sprint-num s-v2">S17</span><span class="sprint-title">Hardening + E2E II</span></div><p class="sprint-desc">E2E segunda ronda: escenarios edge case. Monitoring Railway activo. Revisión de logs estructurados. Inicio informe técnico.</p></div>
+    <div class="sprint-card"><div class="sprint-card-head"><span class="sprint-num s-v2">S18</span><span class="sprint-title">Deploy v2.0 producción</span></div><p class="sprint-desc">Deploy completo v2.0 en Railway. Smoke test en producción. Inicio prueba piloto con restaurante real.</p></div>
+    <div class="sprint-card"><div class="sprint-card-head"><span class="sprint-num s-v2">S19</span><span class="sprint-title">Piloto + Deuda técnica</span></div><p class="sprint-desc">Prueba piloto segunda semana. Resolución de deuda técnica crítica. Pulido UX. Avance informe técnico.</p></div>
+    <div class="sprint-card"><div class="sprint-card-head"><span class="sprint-num s-v2">S20</span><span class="sprint-title">Pulido + Informe</span></div><p class="sprint-desc">Deuda técnica y pulido UX continúan. Revisión de animaciones. Avance significativo del informe técnico.</p></div>
+    <div class="sprint-card"><div class="sprint-card-head"><span class="sprint-num s-v2">S21</span><span class="sprint-title">Informe + Demo</span></div><p class="sprint-desc">Completar informe técnico final. Grabación del video demo. Edición. Tesis en fase avanzada.</p></div>
+    <div class="sprint-card"><div class="sprint-card-head"><span class="sprint-num s-v2">S22</span><span class="sprint-title">Cierre documental</span></div><p class="sprint-desc">Entrega informe final. Video demo publicado. Repositorio ordenado. /docs completo. Preparación presentación tribunal.</p></div>
+    <div class="sprint-card"><div class="sprint-card-head"><span class="sprint-num s-v2">S23</span><span class="sprint-title">Preparación tribunal</span></div><p class="sprint-desc">Slides de presentación. Ensayo mínimo 2 rondas. Ajustes finales del repositorio. Tesis en revisión final.</p></div>
+    <div class="sprint-card"><div class="sprint-card-head"><span class="sprint-num s-v2">S24 ✓</span><span class="sprint-title">Entrega final</span></div><p class="sprint-desc">Presentación ante el tribunal. v2.0 completa en producción. Tesis finalizada y entregada. Proyecto cerrado. 🎉</p></div>
+  </div>
+</div>
+
+<div class="footer">
+  <span>MenYu · Gantt 24 semanas · 2026</span>
+  <span>De Marcos · Ojeda · Strumia Carrara</span>
+  <span>Actualizado el 25 de abril de 2026</span>
+</div>
+
+</body>
+</html>
