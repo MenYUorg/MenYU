@@ -1,0 +1,33 @@
+# Control de versiones
+.git
+.gitignore
+
+# Dependencias (se reinstalan en el build)
+**/node_modules
+
+# Outputs de build
+**/.turbo
+**/dist
+**/.expo
+**/web-build
+**/.next
+**/out
+**/build
+
+# Archivos de entorno (nunca van en la imagen)
+.env
+**/.env
+**/.env.local
+**/.env.*.local
+
+# Herramientas de desarrollo
+.vscode
+.idea
+**/*.log
+.DS_Store
+Thumbs.db
+
+# Tests
+**/coverage
+**/*.test.ts
+**/*.spec.ts
