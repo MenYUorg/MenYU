@@ -12,7 +12,10 @@
       "Bash(pnpm --filter @menyu/api exec prisma migrate dev --name add-refresh-token)",
       "Bash(pnpm --filter @menyu/api exec tsc --noEmit)",
       "Bash(pnpm --filter @menyu/types build)",
-      "Bash(pnpm --filter @menyu/cliente exec tsc --noEmit)"
+      "Bash(pnpm --filter @menyu/cliente exec tsc --noEmit)",
+      "Bash(git -C \"C:/Users/COTYS/Documents/Apuntes quinto/Tesis/MenYu\" log --oneline feat/menu)",
+      "Bash(pnpm --filter @menyu/api add @supabase/supabase-js)",
+      "Bash(pnpm --filter @menyu/api add -D @types/multer)"
     ]
   }
 }
