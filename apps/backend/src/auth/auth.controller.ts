@@ -1,6 +1,6 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Post, Req, UseGuards } from '@nestjs/common'
 import { Request } from 'express'
-import { AuthService, JwtPayload, UserTipo } from './auth.service'
+import { AuthService, JwtPayload } from './auth.service'
 import { JwtAuthGuard } from './guards/jwt-auth.guard'
 
 // TODO: proteger logout con JwtAuthGuard cuando se terminen las pruebas
@@ -16,8 +16,8 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  login(@Body() body: { email: string; password: string; tipo: UserTipo }) {
-    return this.auth.login(body.email, body.password, body.tipo)
+  login(@Body() body: { email: string; password: string }) {
+    return this.auth.login(body.email, body.password)
   }
 
   @Post('register')
@@ -60,9 +60,9 @@ export class AuthController {
   @Post('dev/admin')
   @HttpCode(HttpStatus.CREATED)
   devCreateAdmin(
-    @Body() body: { email: string; password: string; rol: string; restauranteId: string },
+    @Body() body: { email: string; password: string; rol: string; marcaId: string },
   ) {
-    return this.auth.devCreateAdmin(body.email, body.password, body.rol, body.restauranteId)
+    return this.auth.devCreateAdmin(body.email, body.password, body.rol, body.marcaId)
   }
 
   @Post('dev/mozo')

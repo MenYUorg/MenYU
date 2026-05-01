@@ -10,7 +10,6 @@ import { UpdateRestauranteDto } from './dto/update-restaurante.dto'
 
 const DETAIL_INCLUDE = {
   marca: true,
-  admins: { select: { id: true, email: true, rol: true } },
   mozos: { where: { activo: true } },
   comandas: true,
   categorias: { include: { subcategorias: true } },
@@ -35,17 +34,19 @@ export class RestauranteService {
         include: { marca: true },
       })
     }
-    const restauranteId = await this.getRestauranteIdForAdmin(user.sub)
+    const marcaId = await this.getMarcaIdForAdmin(user.sub)
     return this.prisma.restaurante.findMany({
-      where: { id: restauranteId, activo: true },
+      where: { marcaId, activo: true },
       include: { marca: true },
     })
   }
 
   async findOne(id: string, user: JwtPayload) {
     if (user.rol === 'OWNER') {
-      const restauranteId = await this.getRestauranteIdForAdmin(user.sub)
-      if (restauranteId !== id) throw new ForbiddenException('No tenés acceso a este restaurante')
+      const marcaId = await this.getMarcaIdForAdmin(user.sub)
+      const restaurante = await this.prisma.restaurante.findUnique({ where: { id } })
+      if (!restaurante || restaurante.marcaId !== marcaId)
+        throw new ForbiddenException('No tenés acceso a este restaurante')
     }
     const restaurante = await this.prisma.restaurante.findUnique({
       where: { id },
@@ -57,8 +58,10 @@ export class RestauranteService {
 
   async update(id: string, dto: UpdateRestauranteDto, user: JwtPayload) {
     if (user.rol === 'OWNER') {
-      const restauranteId = await this.getRestauranteIdForAdmin(user.sub)
-      if (restauranteId !== id) throw new ForbiddenException('No tenés acceso a este restaurante')
+      const marcaId = await this.getMarcaIdForAdmin(user.sub)
+      const restaurante = await this.prisma.restaurante.findUnique({ where: { id } })
+      if (!restaurante || restaurante.marcaId !== marcaId)
+        throw new ForbiddenException('No tenés acceso a este restaurante')
     }
     await this.assertExists(id)
     return this.prisma.restaurante.update({ where: { id }, data: dto })
@@ -74,9 +77,9 @@ export class RestauranteService {
     if (!r || !r.activo) throw new NotFoundException('Restaurante no encontrado')
   }
 
-  private async getRestauranteIdForAdmin(adminId: string): Promise<string> {
+  private async getMarcaIdForAdmin(adminId: string): Promise<string> {
     const admin = await this.prisma.admin.findUnique({ where: { id: adminId } })
-    if (!admin || !admin.restauranteId) throw new NotFoundException('Admin sin restaurante asignado')
-    return admin.restauranteId
+    if (!admin || !admin.marcaId) throw new NotFoundException('Admin sin marca asignada')
+    return admin.marcaId
   }
 }

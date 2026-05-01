@@ -75,7 +75,7 @@ describe('AuthService', () => {
       mockUsersService.findAdminByEmail.mockResolvedValue(ADMIN);
       (bcrypt.compare as jest.Mock).mockResolvedValue(true)
 
-      const result = await service.login('admin@test.com', 'password123', 'admin')
+      const result = await service.login('admin@test.com', 'password123')
 
       expect(result).toHaveProperty('accessToken')
       expect(result).toHaveProperty('refreshToken')
@@ -87,7 +87,10 @@ describe('AuthService', () => {
     it('lanza 401 si el usuario no existe', async () => {
       mockUsersService.findAdminByEmail.mockResolvedValue(null)
 
-      await expect(service.login('noexiste@test.com', 'pass', 'admin'))
+      mockUsersService.findMozoByEmail.mockResolvedValue(null)
+      mockUsersService.findClienteByEmail.mockResolvedValue(null)
+
+      await expect(service.login('noexiste@test.com', 'pass'))
         .rejects.toThrow(UnauthorizedException)
     })
 
@@ -95,7 +98,7 @@ describe('AuthService', () => {
       mockUsersService.findAdminByEmail.mockResolvedValue(ADMIN);
       (bcrypt.compare as jest.Mock).mockResolvedValue(false)
 
-      await expect(service.login('admin@test.com', 'mal_password', 'admin'))
+      await expect(service.login('admin@test.com', 'mal_password'))
         .rejects.toThrow(UnauthorizedException)
     })
 
@@ -103,7 +106,7 @@ describe('AuthService', () => {
       const guest = { ...CLIENTE, passwordHash: null }
       mockUsersService.findClienteByEmail.mockResolvedValue(guest)
 
-      await expect(service.login('coty@test.com', 'pass', 'cliente'))
+      await expect(service.login('coty@test.com', 'pass'))
         .rejects.toThrow(UnauthorizedException)
     })
 
@@ -111,7 +114,7 @@ describe('AuthService', () => {
       mockUsersService.findAdminByEmail.mockResolvedValue(ADMIN);
       (bcrypt.compare as jest.Mock).mockResolvedValue(true)
 
-      await service.login('admin@test.com', 'password', 'admin')
+      await service.login('admin@test.com', 'password')
 
       expect(mockPrisma.refreshToken.create).toHaveBeenCalledWith(
         expect.objectContaining({
