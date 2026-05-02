@@ -35,6 +35,9 @@ COPY --from=builder /app/apps/backend/prisma /standalone/prisma
 
 # ── 4. Imagen de producción mínima ─────────────────────────────────────────
 FROM node:20-alpine AS runner
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+RUN corepack enable
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=deployer /standalone ./
