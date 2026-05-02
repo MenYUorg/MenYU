@@ -23,8 +23,8 @@ WORKDIR /app
 COPY packages/ ./packages/
 COPY apps/backend/ ./apps/backend/
 WORKDIR /app/apps/backend
-RUN pnpm exec nest build
 RUN pnpm exec prisma generate
+RUN pnpm exec nest build
 
 # ── 3. Extraer deps de producción con pnpm deploy (node_modules plano, sin symlinks) ──
 FROM builder AS deployer
