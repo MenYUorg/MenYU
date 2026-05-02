@@ -1,5 +1,6 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Post, Req, UseGuards } from '@nestjs/common'
 import { Request } from 'express'
+import { ApiBody, ApiTags } from '@nestjs/swagger'
 import { AuthService, JwtPayload, UserTipo } from './auth.service'
 import { JwtAuthGuard } from './guards/jwt-auth.guard'
 import { RegisterDto } from './dto/register.dto'
@@ -11,6 +12,7 @@ interface RequestWithUser extends Request {
   user: JwtPayload
 }
 
+@ApiTags('auth')
 @Controller('auth')
 export class AuthController {
   constructor(private readonly auth: AuthService) {}
@@ -22,6 +24,7 @@ export class AuthController {
   }
 
   @Post('register')
+  @ApiBody({ type: RegisterDto })
   register(@Body() body: RegisterDto) {
     return this.auth.register(body.nombre, body.email, body.password, body.telefono)
   }
