@@ -2,6 +2,7 @@ import { Body, Controller, Get, HttpCode, HttpStatus, Post, Req, UseGuards } fro
 import { Request } from 'express'
 import { AuthService, JwtPayload, UserTipo } from './auth.service'
 import { JwtAuthGuard } from './guards/jwt-auth.guard'
+import { RegisterDto } from './dto/register.dto'
 
 // TODO: proteger logout con JwtAuthGuard cuando se terminen las pruebas
 // TODO: eliminar todos los endpoints /dev antes de producción
@@ -21,7 +22,7 @@ export class AuthController {
   }
 
   @Post('register')
-  register(@Body() body: { nombre: string; email: string; password: string; telefono?: string }) {
+  register(@Body() body: RegisterDto) {
     return this.auth.register(body.nombre, body.email, body.password, body.telefono)
   }
 
