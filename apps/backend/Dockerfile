@@ -29,7 +29,7 @@ RUN pnpm exec nest build
 # ── 3. Extraer deps de producción con pnpm deploy (node_modules plano, sin symlinks) ──
 FROM builder AS deployer
 WORKDIR /app
-RUN pnpm --filter @menyu/api deploy --prod /standalone
+RUN pnpm --filter @menyu/api deploy --prod --legacy /standalone
 COPY --from=builder /app/apps/backend/dist /standalone/dist
 COPY --from=builder /app/apps/backend/prisma /standalone/prisma
 
