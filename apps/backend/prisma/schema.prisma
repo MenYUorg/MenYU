@@ -3,8 +3,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // ─────────────────────────────────────────────
@@ -19,6 +20,7 @@ model Marca {
   createdAt  DateTime     @default(now()) @map("created_at")
 
   restaurantes Restaurante[]
+  admins       Admin[]
   items        ItemMenu[]
 
   @@map("marca")
@@ -34,7 +36,6 @@ model Restaurante {
   createdAt   DateTime @default(now()) @map("created_at")
 
   marca         Marca           @relation(fields: [marcaId], references: [id])
-  admins        Admin[]
   mozos         Mozo[]
   comandas      Comanda[]
   categorias    CategoriaMenu[]
@@ -51,13 +52,13 @@ model Restaurante {
 // ─────────────────────────────────────────────
 
 model Admin {
-  id            String   @id @default(uuid())
-  restauranteId String?  @map("restaurante_id")
-  email         String   @unique
-  passwordHash  String   @map("password_hash")
-  rol           String
+  id       String  @id @default(uuid())
+  marcaId  String? @map("marca_id")
+  email    String  @unique
+  passwordHash String @map("password_hash")
+  rol      String
 
-  restaurante Restaurante? @relation(fields: [restauranteId], references: [id])
+  marca Marca? @relation(fields: [marcaId], references: [id])
 
   @@map("admin")
 }

@@ -1,1 +1,1 @@
-export {}
+export { MenuPage } from './MenuPage'

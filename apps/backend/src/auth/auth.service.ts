@@ -38,18 +38,19 @@ export class AuthService {
 
   // ── Login ──────────────────────────────────────────────
 
-  async login(email: string, password: string, tipo: UserTipo): Promise<TokenPair> {
-    const user = await this.resolveUserByEmail(email, tipo)
+  async login(email: string, password: string): Promise<TokenPair> {
+    const resolved = await this.resolveUserByEmail(email)
 
-    if (!user || !user.passwordHash) {
+    if (!resolved || !resolved.user.passwordHash) {
       throw new UnauthorizedException('Credenciales inválidas')
     }
 
-    const valid = await bcrypt.compare(password, user.passwordHash)
+    const valid = await bcrypt.compare(password, resolved.user.passwordHash)
     if (!valid) {
       throw new UnauthorizedException('Credenciales inválidas')
     }
 
+    const { user, tipo } = resolved
     return this.issueTokens(user.id, email, tipo, (user as any).rol, (user as any).nombre)
   }
 
@@ -145,7 +146,7 @@ export class AuthService {
         email: adminEmail,
         passwordHash,
         rol: 'ADMIN',
-        restauranteId: restaurante.id,
+        marcaId: marca.id,
       })
     }
 
@@ -184,11 +185,11 @@ export class AuthService {
     return { mensaje: 'Admin ROOT creado. Credenciales: root@menyu.com / root1234', ...tokens }
   }
 
-  async devCreateAdmin(email: string, password: string, rol: string, restauranteId: string) {
+  async devCreateAdmin(email: string, password: string, rol: string, marcaId: string) {
     const existing = await this.users.findAdminByEmail(email)
     if (existing) throw new ConflictException('El email ya está registrado')
     const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS)
-    return this.users.createAdmin({ email, passwordHash, rol, restauranteId })
+    return this.users.createAdmin({ email, passwordHash, rol, marcaId })
   }
 
   async devCreateMozo(nombre: string, email: string, password: string, restauranteId: string) {
@@ -227,10 +228,14 @@ export class AuthService {
     return crypto.createHash('sha256').update(raw).digest('hex')
   }
 
-  private resolveUserByEmail(email: string, tipo: UserTipo) {
-    if (tipo === 'admin') return this.users.findAdminByEmail(email)
-    if (tipo === 'mozo') return this.users.findMozoByEmail(email)
-    return this.users.findClienteByEmail(email)
+  private async resolveUserByEmail(email: string): Promise<{ user: any; tipo: UserTipo } | null> {
+    const admin = await this.users.findAdminByEmail(email)
+    if (admin) return { user: admin, tipo: 'admin' }
+    const mozo = await this.users.findMozoByEmail(email)
+    if (mozo) return { user: mozo, tipo: 'mozo' }
+    const cliente = await this.users.findClienteByEmail(email)
+    if (cliente) return { user: cliente, tipo: 'cliente' }
+    return null
   }
 
   private resolveUserById(id: string, tipo: UserTipo) {
