@@ -1,7 +1,10 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Post, Req, UseGuards } from '@nestjs/common'
 import { Request } from 'express'
+import { ApiBody, ApiTags } from '@nestjs/swagger'
 import { AuthService, JwtPayload } from './auth.service'
 import { JwtAuthGuard } from './guards/jwt-auth.guard'
+import { LoginDto } from './dto/login.dto'
+import { RegisterDto } from './dto/register.dto'
 
 // TODO: proteger logout con JwtAuthGuard cuando se terminen las pruebas
 // TODO: eliminar todos los endpoints /dev antes de producción
@@ -10,18 +13,21 @@ interface RequestWithUser extends Request {
   user: JwtPayload
 }
 
+@ApiTags('auth')
 @Controller('auth')
 export class AuthController {
   constructor(private readonly auth: AuthService) {}
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  login(@Body() body: { email: string; password: string }) {
-    return this.auth.login(body.email, body.password)
+  @ApiBody({ type: LoginDto })
+  login(@Body() body: LoginDto) {
+    return this.auth.login(body.email, body.password, body.tipo)
   }
 
   @Post('register')
-  register(@Body() body: { nombre: string; email: string; password: string; telefono?: string }) {
+  @ApiBody({ type: RegisterDto })
+  register(@Body() body: RegisterDto) {
     return this.auth.register(body.nombre, body.email, body.password, body.telefono)
   }
 

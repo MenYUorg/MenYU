@@ -29,12 +29,15 @@ RUN pnpm exec nest build
 # ── 3. Extraer deps de producción con pnpm deploy (node_modules plano, sin symlinks) ──
 FROM builder AS deployer
 WORKDIR /app
-RUN pnpm --filter @menyu/api deploy --prod /standalone
+RUN pnpm --filter @menyu/api deploy --prod --legacy /standalone
 COPY --from=builder /app/apps/backend/dist /standalone/dist
 COPY --from=builder /app/apps/backend/prisma /standalone/prisma
 
 # ── 4. Imagen de producción mínima ─────────────────────────────────────────
 FROM node:20-alpine AS runner
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+RUN corepack enable
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=deployer /standalone ./
