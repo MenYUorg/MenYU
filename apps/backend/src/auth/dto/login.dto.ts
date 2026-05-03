@@ -1,6 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger'
-import { IsEmail, IsEnum, IsString } from 'class-validator'
-import { UserTipo } from '../auth.service'
+import { IsEmail, IsString } from 'class-validator'
 
 export class LoginDto {
   @ApiProperty({ example: 'juan@example.com' })
@@ -10,8 +9,4 @@ export class LoginDto {
   @ApiProperty({ example: 'MiPassword123!' })
   @IsString()
   password!: string
-
-  @ApiProperty({ enum: ['admin', 'mozo', 'cliente'], example: 'cliente' })
-  @IsEnum(['admin', 'mozo', 'cliente'])
-  tipo!: UserTipo
 }

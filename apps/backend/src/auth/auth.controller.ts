@@ -22,7 +22,7 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiBody({ type: LoginDto })
   login(@Body() body: LoginDto) {
-    return this.auth.login(body.email, body.password, body.tipo)
+    return this.auth.login(body.email, body.password)
   }
 
   @Post('register')
