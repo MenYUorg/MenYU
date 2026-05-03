@@ -4,16 +4,16 @@ import { IsEmail, IsOptional, IsString, MinLength } from 'class-validator'
 export class RegisterDto {
   @ApiProperty({ example: 'Juan Pérez' })
   @IsString()
-  nombre: string
+  nombre!: string
 
   @ApiProperty({ example: 'juan@example.com' })
   @IsEmail()
-  email: string
+  email!: string
 
   @ApiProperty({ example: 'MiPassword123!', minLength: 8 })
   @IsString()
   @MinLength(8)
-  password: string
+  password!: string
 
   @ApiPropertyOptional({ example: '+5491112345678' })
   @IsOptional()
