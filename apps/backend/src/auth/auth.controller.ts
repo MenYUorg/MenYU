@@ -1,8 +1,9 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Post, Req, UseGuards } from '@nestjs/common'
 import { Request } from 'express'
 import { ApiBody, ApiTags } from '@nestjs/swagger'
-import { AuthService, JwtPayload, UserTipo } from './auth.service'
+import { AuthService, JwtPayload } from './auth.service'
 import { JwtAuthGuard } from './guards/jwt-auth.guard'
+import { LoginDto } from './dto/login.dto'
 import { RegisterDto } from './dto/register.dto'
 
 // TODO: proteger logout con JwtAuthGuard cuando se terminen las pruebas
@@ -19,7 +20,8 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  login(@Body() body: { email: string; password: string; tipo: UserTipo }) {
+  @ApiBody({ type: LoginDto })
+  login(@Body() body: LoginDto) {
     return this.auth.login(body.email, body.password, body.tipo)
   }
 
