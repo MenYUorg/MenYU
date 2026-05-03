@@ -63,11 +63,7 @@ export const useUserStore = create<UserState & UserActions>((set, get) => ({
   login: async (email, password) => {
     set({ isLoading: true })
     try {
-      const { data } = await api.post<TokenPair>('/auth/login', {
-        email,
-        password,
-        tipo: 'cliente',
-      })
+      const { data } = await api.post<TokenPair>('/auth/login', { email, password })
       await saveTokens(data)
       set({ accessToken: data.accessToken, refreshToken: data.refreshToken, user: decodeJwt(data.accessToken), isLoading: false })
     } catch (error) {
