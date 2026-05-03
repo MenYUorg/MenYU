@@ -90,11 +90,8 @@ export class MarcaService {
   }
 
   private async getMarcaIdForAdmin(adminId: string): Promise<string> {
-    const admin = await this.prisma.admin.findUnique({
-      where: { id: adminId },
-      include: { restaurante: true },
-    })
-    if (!admin || !admin.restaurante) throw new NotFoundException('Admin sin restaurante asignado')
-    return admin.restaurante.marcaId
+    const admin = await this.prisma.admin.findUnique({ where: { id: adminId } })
+    if (!admin || !admin.marcaId) throw new NotFoundException('Admin sin marca asignada')
+    return admin.marcaId
   }
 }

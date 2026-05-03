@@ -85,13 +85,13 @@ describe('UsersService', () => {
 
     it('crea admin ROOT sin restauranteId', async () => {
       const data = { email: 'root@menyu.com', passwordHash: 'hash', rol: 'ROOT' }
-      const created = { id: 'root-id', ...data, restauranteId: null }
+      const created = { id: 'root-id', ...data, marcaId: null }
       mockPrisma.admin.create.mockResolvedValue(created)
 
       const result = await service.createAdmin(data)
 
       expect(mockPrisma.admin.create).toHaveBeenCalledWith({ data })
-      expect(result.restauranteId).toBeNull()
+      expect(result.marcaId).toBeNull()
     })
   })
 

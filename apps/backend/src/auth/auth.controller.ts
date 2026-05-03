@@ -22,7 +22,7 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiBody({ type: LoginDto })
   login(@Body() body: LoginDto) {
-    return this.auth.login(body.email, body.password, body.tipo)
+    return this.auth.login(body.email, body.password)
   }
 
   @Post('register')
@@ -66,9 +66,9 @@ export class AuthController {
   @Post('dev/admin')
   @HttpCode(HttpStatus.CREATED)
   devCreateAdmin(
-    @Body() body: { email: string; password: string; rol: string; restauranteId: string },
+    @Body() body: { email: string; password: string; rol: string; marcaId: string },
   ) {
-    return this.auth.devCreateAdmin(body.email, body.password, body.rol, body.restauranteId)
+    return this.auth.devCreateAdmin(body.email, body.password, body.rol, body.marcaId)
   }
 
   @Post('dev/mozo')
