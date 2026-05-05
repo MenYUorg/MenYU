@@ -18,7 +18,7 @@ interface SessionJwtPayload {
   restauranteId: string
 }
 
-interface OpenSessionResult {
+export interface OpenSessionResult {
   sesionId: string
   mesaId: string
   codigoSesion: string
