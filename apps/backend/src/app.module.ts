@@ -8,8 +8,9 @@ import { MesasModule } from './mesas/mesas.module'
 import { IngredientesModule } from './ingredientes/ingredientes.module'
 import { CategoriasModule } from './categorias/categorias.module'
 import { ItemsModule } from './items/items.module'
+import { SessionsModule } from './sessions/sessions.module'
 
 @Module({
-  imports: [PrismaModule, UsersModule, AuthModule, MarcaModule, RestauranteModule, MesasModule, IngredientesModule, CategoriasModule, ItemsModule],
+  imports: [PrismaModule, UsersModule, AuthModule, MarcaModule, RestauranteModule, MesasModule, IngredientesModule, CategoriasModule, ItemsModule, SessionsModule],
 })
 export class AppModule {}
