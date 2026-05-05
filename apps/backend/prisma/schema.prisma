@@ -32,6 +32,7 @@ model Restaurante {
   nombre      String
   direccion   String?
   qrBaseUrl   String?  @map("qr_base_url")
+  modoSesion  String   @default("abierto") @map("modo_sesion")
   activo      Boolean  @default(true)
   createdAt   DateTime @default(now()) @map("created_at")
 
@@ -90,6 +91,7 @@ model Mesa {
   restauranteId String   @map("restaurante_id")
   numero        String
   qrToken       String   @unique @map("qr_token")
+  pin           String
   estado        String   @default("libre")
   activo        Boolean  @default(true)
 
@@ -98,6 +100,7 @@ model Mesa {
   pedidos      Pedido[]
   asignaciones AsignacionMesa[]
 
+  @@unique([restauranteId, pin])
   @@map("mesa")
 }
 
@@ -109,26 +112,44 @@ model Cliente {
   telefono     String?
   createdAt    DateTime @default(now()) @map("created_at")
 
-  sesiones SesionMesa[]
+  sesiones       SesionMesa[]
+  sesionClientes SesionMesaCliente[]
+  pedidoItems    PedidoItem[]
 
   @@map("cliente")
 }
 
 model SesionMesa {
-  id          String    @id @default(uuid())
-  mesaId      String    @map("mesa_id")
-  clienteId   String    @map("cliente_id")
-  iniciadaEn  DateTime  @default(now()) @map("iniciada_en")
-  cerradaEn   DateTime? @map("cerrada_en")
-  estado      String    @default("activa")
+  id            String    @id @default(uuid())
+  mesaId        String    @map("mesa_id")
+  clienteId     String    @map("cliente_id")
+  codigoSesion  String    @map("codigo_sesion")
+  iniciadaEn    DateTime  @default(now()) @map("iniciada_en")
+  cerradaEn     DateTime? @map("cerrada_en")
+  estado        String    @default("activa")
 
-  mesa         Mesa             @relation(fields: [mesaId], references: [id])
-  cliente      Cliente          @relation(fields: [clienteId], references: [id])
-  pedidos      Pedido[]
-  asignaciones AsignacionMesa[]
-  llamados     LlamadoMozo[]
+  mesa          Mesa               @relation(fields: [mesaId], references: [id])
+  cliente       Cliente            @relation(fields: [clienteId], references: [id])
+  pedidos       Pedido[]
+  asignaciones  AsignacionMesa[]
+  llamados      LlamadoMozo[]
+  participantes SesionMesaCliente[]
 
   @@map("sesion_mesa")
+}
+
+model SesionMesaCliente {
+  id          String   @id @default(uuid())
+  sesionId    String   @map("sesion_id")
+  clienteId   String   @map("cliente_id")
+  orden       Int
+  ingresadoEn DateTime @default(now()) @map("ingresado_en")
+
+  sesion  SesionMesa @relation(fields: [sesionId], references: [id])
+  cliente Cliente    @relation(fields: [clienteId], references: [id])
+
+  @@unique([sesionId, clienteId])
+  @@map("sesion_mesa_cliente")
 }
 
 model AsignacionMesa {
@@ -331,16 +352,18 @@ model Pedido {
 }
 
 model PedidoItem {
-  id            String  @id @default(uuid())
-  pedidoId      String  @map("pedido_id")
-  itemId        String  @map("item_id")
-  cantidad      Int
-  precioUnitario Decimal @map("precio_unitario") @db.Decimal(10, 2)
-  notas         String?
+  id             String   @id @default(uuid())
+  pedidoId       String   @map("pedido_id")
+  itemId         String   @map("item_id")
+  clienteId      String?  @map("cliente_id")
+  cantidad       Int
+  precioUnitario Decimal  @map("precio_unitario") @db.Decimal(10, 2)
+  notas          String?
 
-  pedido Pedido          @relation(fields: [pedidoId], references: [id])
-  item   ItemMenu        @relation(fields: [itemId], references: [id])
-  mods   PedidoItemMod[]
+  pedido  Pedido          @relation(fields: [pedidoId], references: [id])
+  item    ItemMenu        @relation(fields: [itemId], references: [id])
+  cliente Cliente?        @relation(fields: [clienteId], references: [id])
+  mods    PedidoItemMod[]
 
   @@map("pedido_item")
 }

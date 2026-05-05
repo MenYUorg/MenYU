@@ -16,7 +16,7 @@ export class MesasService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(dto: CreateMesaDto) {
-    await this.assertRestauranteAccess(dto.restauranteId)
+    const restaurante = await this.assertRestauranteAccess(dto.restauranteId)
 
     const existing = await this.prisma.mesa.findFirst({
       where: { restauranteId: dto.restauranteId, numero: dto.numero, activo: true },
@@ -24,11 +24,12 @@ export class MesasService {
     if (existing) throw new ConflictException(`Ya existe una mesa con el número ${dto.numero}`)
 
     const qrToken = randomUUID()
+    const pin = await this.generatePin(dto.restauranteId)
     const mesa = await this.prisma.mesa.create({
-      data: { ...dto, qrToken },
+      data: { ...dto, qrToken, pin },
     })
 
-    return { ...mesa, qrImage: await this.generateQr(qrToken) }
+    return { ...mesa, qrImage: await this.generateQr(qrToken, restaurante.qrBaseUrl, dto.restauranteId) }
   }
 
   async findAll(restauranteId: string, user: JwtPayload) {
@@ -37,15 +38,18 @@ export class MesasService {
     const mesas = await this.prisma.mesa.findMany({
       where: { restauranteId, activo: true },
       orderBy: { numero: 'asc' },
+      include: { restaurante: { select: { qrBaseUrl: true } } },
     })
 
-    return Promise.all(mesas.map(async (m) => ({ ...m, qrImage: await this.generateQr(m.qrToken) })))
+    return Promise.all(
+      mesas.map(async (m) => ({ ...m, qrImage: await this.generateQr(m.qrToken, m.restaurante.qrBaseUrl, m.restauranteId) })),
+    )
   }
 
   async findOne(id: string, user: JwtPayload) {
     const mesa = await this.getMesaOrThrow(id)
     await this.assertRestauranteOwnership(mesa.restauranteId, user)
-    return { ...mesa, qrImage: await this.generateQr(mesa.qrToken) }
+    return { ...mesa, qrImage: await this.generateQr(mesa.qrToken, mesa.restaurante.qrBaseUrl, mesa.restauranteId) }
   }
 
   async update(id: string, dto: UpdateMesaDto, user: JwtPayload) {
@@ -60,7 +64,7 @@ export class MesasService {
     }
 
     const updated = await this.prisma.mesa.update({ where: { id }, data: dto })
-    return { ...updated, qrImage: await this.generateQr(updated.qrToken) }
+    return { ...updated, qrImage: await this.generateQr(updated.qrToken, mesa.restaurante.qrBaseUrl, updated.restauranteId) }
   }
 
   async remove(id: string, user: JwtPayload) {
@@ -75,13 +79,28 @@ export class MesasService {
 
     const qrToken = randomUUID()
     const updated = await this.prisma.mesa.update({ where: { id }, data: { qrToken } })
-    return { ...updated, qrImage: await this.generateQr(qrToken) }
+    return { ...updated, qrImage: await this.generateQr(qrToken, mesa.restaurante.qrBaseUrl, mesa.restauranteId) }
+  }
+
+  async cambiarPin(id: string, pin: string, user: JwtPayload) {
+    const mesa = await this.getMesaOrThrow(id)
+    await this.assertRestauranteOwnership(mesa.restauranteId, user)
+
+    const conflict = await this.prisma.mesa.findFirst({
+      where: { restauranteId: mesa.restauranteId, pin, id: { not: id } },
+    })
+    if (conflict) throw new ConflictException(`El PIN ${pin} ya está en uso en este restaurante`)
+
+    return this.prisma.mesa.update({ where: { id }, data: { pin } })
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────
 
   private async getMesaOrThrow(id: string) {
-    const mesa = await this.prisma.mesa.findUnique({ where: { id } })
+    const mesa = await this.prisma.mesa.findUnique({
+      where: { id },
+      include: { restaurante: { select: { qrBaseUrl: true } } },
+    })
     if (!mesa || !mesa.activo) throw new NotFoundException('Mesa no encontrada')
     return mesa
   }
@@ -98,9 +117,21 @@ export class MesasService {
   private async assertRestauranteAccess(restauranteId: string) {
     const restaurante = await this.prisma.restaurante.findUnique({ where: { id: restauranteId } })
     if (!restaurante || !restaurante.activo) throw new NotFoundException('Restaurante no encontrado')
+    return restaurante
   }
 
-  private generateQr(token: string): Promise<string> {
-    return QRCode.toDataURL(token, { errorCorrectionLevel: 'M', width: 300 })
+  private async generatePin(restauranteId: string): Promise<string> {
+    for (let attempt = 0; attempt < 100; attempt++) {
+      const pin = String(Math.floor(Math.random() * 9999) + 1).padStart(4, '0')
+      const exists = await this.prisma.mesa.findFirst({ where: { restauranteId, pin } })
+      if (!exists) return pin
+    }
+    throw new ConflictException('No se pudo generar un PIN único para este restaurante')
+  }
+
+  private generateQr(token: string, qrBaseUrl: string | null, restauranteId: string): Promise<string> {
+    const base = qrBaseUrl ?? 'https://menyu.app'
+    const url = `${base}/check-in?restaurantId=${restauranteId}&tableCode=${token}`
+    return QRCode.toDataURL(url, { errorCorrectionLevel: 'M', width: 300 })
   }
 }

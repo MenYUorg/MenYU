@@ -19,6 +19,7 @@ import { JwtPayload } from '../auth/auth.service'
 import { MesasService } from './mesas.service'
 import { CreateMesaDto } from './dto/create-mesa.dto'
 import { UpdateMesaDto } from './dto/update-mesa.dto'
+import { CambiarPinDto } from './dto/cambiar-pin.dto'
 
 @Controller('mesas')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -66,5 +67,15 @@ export class MesasController {
   @HttpCode(HttpStatus.OK)
   regenerarQr(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.mesas.regenerarQr(id, user)
+  }
+
+  @Patch(':id/pin')
+  @Roles('ROOT', 'OWNER')
+  cambiarPin(
+    @Param('id') id: string,
+    @Body() dto: CambiarPinDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.mesas.cambiarPin(id, dto.pin, user)
   }
 }
