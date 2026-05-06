@@ -30,6 +30,9 @@ RUN pnpm exec nest build
 # ── 3. Extraer deps de producción con pnpm deploy (node_modules plano, sin symlinks) ──
 FROM builder AS deployer
 WORKDIR /app
+# patchedDependencies is a cliente-only concern; remove it so pnpm deploy
+# doesn't fail with ERR_PNPM_UNUSED_PATCH when deploying the backend alone.
+RUN node -e "const fs=require('fs'); const p=JSON.parse(fs.readFileSync('package.json')); delete p.pnpm.patchedDependencies; fs.writeFileSync('package.json',JSON.stringify(p,null,2));"
 RUN pnpm --filter @menyu/api deploy --prod --legacy /standalone
 COPY --from=builder /app/apps/backend/dist /standalone/dist
 COPY --from=builder /app/apps/backend/prisma /standalone/prisma
