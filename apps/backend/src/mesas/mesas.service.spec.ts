@@ -16,9 +16,11 @@ jest.mock('crypto', () => ({
 const ROOT: JwtPayload = { sub: 'root-1', tipo: 'admin', rol: 'ROOT' }
 const OWNER: JwtPayload = { sub: 'admin-1', tipo: 'admin', rol: 'OWNER' }
 
-const RESTAURANTE = { id: 'rest-1', activo: true }
-const ADMIN = { id: 'admin-1', restauranteId: 'rest-1' }
-const MESA = { id: 'mesa-1', numero: '1', qrToken: 'token-abc', estado: 'libre', restauranteId: 'rest-1', activo: true }
+// marcaId necesario para que assertRestauranteOwnership compare admin.marcaId === restaurante.marcaId
+const RESTAURANTE = { id: 'rest-1', activo: true, marcaId: 'marca-1' }
+const ADMIN = { id: 'admin-1', marcaId: 'marca-1' }
+// restaurante necesario porque getMesaOrThrow incluye { restaurante: { select: { qrBaseUrl } } }
+const MESA = { id: 'mesa-1', numero: '1', qrToken: 'token-abc', estado: 'libre', restauranteId: 'rest-1', activo: true, restaurante: { qrBaseUrl: null } }
 
 const mockPrisma = {
   mesa: {
@@ -97,6 +99,7 @@ describe('MesasService', () => {
 
     it('OWNER solo puede listar mesas de su restaurante', async () => {
       mockPrisma.admin.findUnique.mockResolvedValue(ADMIN)
+      mockPrisma.restaurante.findUnique.mockResolvedValue(RESTAURANTE)
       mockPrisma.mesa.findMany.mockResolvedValue([MESA])
 
       const result = await service.findAll('rest-1', OWNER)
@@ -106,6 +109,8 @@ describe('MesasService', () => {
 
     it('OWNER lanza 403 si intenta listar mesas de otro restaurante', async () => {
       mockPrisma.admin.findUnique.mockResolvedValue(ADMIN)
+      // Restaurante de otra marca → admin.marcaId !== restaurante.marcaId → 403
+      mockPrisma.restaurante.findUnique.mockResolvedValue({ id: 'rest-otro', marcaId: 'marca-otra' })
 
       await expect(service.findAll('rest-otro', OWNER))
         .rejects.toThrow(ForbiddenException)
@@ -118,6 +123,7 @@ describe('MesasService', () => {
     it('devuelve la mesa con imagen QR', async () => {
       mockPrisma.mesa.findUnique.mockResolvedValue(MESA)
       mockPrisma.admin.findUnique.mockResolvedValue(ADMIN)
+      mockPrisma.restaurante.findUnique.mockResolvedValue(RESTAURANTE)
 
       const result = await service.findOne('mesa-1', OWNER)
 
@@ -146,6 +152,7 @@ describe('MesasService', () => {
     it('actualiza el número y devuelve imagen QR actualizada', async () => {
       mockPrisma.mesa.findUnique.mockResolvedValue(MESA)
       mockPrisma.admin.findUnique.mockResolvedValue(ADMIN)
+      mockPrisma.restaurante.findUnique.mockResolvedValue(RESTAURANTE)
       mockPrisma.mesa.findFirst.mockResolvedValue(null)
       mockPrisma.mesa.update.mockResolvedValue({ ...MESA, numero: '2' })
 
@@ -160,6 +167,7 @@ describe('MesasService', () => {
     it('lanza 409 si el nuevo número ya lo usa otra mesa del mismo restaurante', async () => {
       mockPrisma.mesa.findUnique.mockResolvedValue(MESA)
       mockPrisma.admin.findUnique.mockResolvedValue(ADMIN)
+      mockPrisma.restaurante.findUnique.mockResolvedValue(RESTAURANTE)
       mockPrisma.mesa.findFirst.mockResolvedValue({ ...MESA, id: 'mesa-otra' })
 
       await expect(service.update('mesa-1', { numero: '2' }, OWNER))
@@ -183,6 +191,7 @@ describe('MesasService', () => {
     it('hace soft delete (activo: false)', async () => {
       mockPrisma.mesa.findUnique.mockResolvedValue(MESA)
       mockPrisma.admin.findUnique.mockResolvedValue(ADMIN)
+      mockPrisma.restaurante.findUnique.mockResolvedValue(RESTAURANTE)
       mockPrisma.mesa.update.mockResolvedValue({ ...MESA, activo: false })
 
       await service.remove('mesa-1', OWNER)
@@ -201,12 +210,46 @@ describe('MesasService', () => {
     })
   })
 
+  // ── generatePin ────────────────────────────────────────────────────────
+
+  describe('generatePin', () => {
+    it('genera un string de exactamente 4 caracteres', async () => {
+      mockPrisma.mesa.findFirst.mockResolvedValue(null)
+      const pin = await (service as any).generatePin('rest-1')
+      expect(pin).toHaveLength(4)
+    })
+
+    it('el valor está entre "0001" y "9999"', async () => {
+      mockPrisma.mesa.findFirst.mockResolvedValue(null)
+      const pin = await (service as any).generatePin('rest-1')
+      const num = parseInt(pin, 10)
+      expect(num).toBeGreaterThanOrEqual(1)
+      expect(num).toBeLessThanOrEqual(9999)
+    })
+
+    it('tiene padding con ceros — "0001" no "1"', async () => {
+      // floor(0 * 9999) + 1 = 1 → padStart(4, '0') = '0001'
+      jest.spyOn(Math, 'random').mockReturnValue(0)
+      mockPrisma.mesa.findFirst.mockResolvedValue(null)
+      const pin = await (service as any).generatePin('rest-1')
+      expect(pin).toBe('0001')
+      jest.spyOn(Math, 'random').mockRestore()
+    })
+
+    it('lanza ConflictException si todos los PINs están ocupados (100 colisiones seguidas)', async () => {
+      mockPrisma.mesa.findFirst.mockResolvedValue({ id: 'mesa-existente' })
+      await expect((service as any).generatePin('rest-1')).rejects.toThrow(ConflictException)
+      expect(mockPrisma.mesa.findFirst).toHaveBeenCalledTimes(100)
+    })
+  })
+
   // ── regenerarQr ────────────────────────────────────────────────────────
 
   describe('regenerarQr', () => {
     it('genera un nuevo token UUID y devuelve nueva imagen QR', async () => {
       mockPrisma.mesa.findUnique.mockResolvedValue(MESA)
       mockPrisma.admin.findUnique.mockResolvedValue(ADMIN)
+      mockPrisma.restaurante.findUnique.mockResolvedValue(RESTAURANTE)
       mockPrisma.mesa.update.mockResolvedValue({ ...MESA, qrToken: 'nuevo-uuid-generado' })
 
       const result = await service.regenerarQr('mesa-1', OWNER)
@@ -222,6 +265,8 @@ describe('MesasService', () => {
     it('lanza 403 si OWNER intenta regenerar QR de mesa de otro restaurante', async () => {
       mockPrisma.mesa.findUnique.mockResolvedValue({ ...MESA, restauranteId: 'rest-otro' })
       mockPrisma.admin.findUnique.mockResolvedValue(ADMIN)
+      // Restaurante de otra marca → admin.marcaId !== restaurante.marcaId → 403
+      mockPrisma.restaurante.findUnique.mockResolvedValue({ id: 'rest-otro', marcaId: 'marca-otra' })
 
       await expect(service.regenerarQr('mesa-1', OWNER))
         .rejects.toThrow(ForbiddenException)

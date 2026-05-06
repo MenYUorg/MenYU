@@ -9,7 +9,8 @@ const OWNER: JwtPayload = { sub: 'admin-1', email: 'owner@test.com', tipo: 'admi
 
 const MARCA = { id: 'marca-1', nombre: 'La Parrilla', slug: 'la-parrilla', activo: true }
 const RESTAURANTE = { id: 'rest-1', marcaId: 'marca-1', nombre: 'Sucursal Norte' }
-const ADMIN_WITH_REST = { id: 'admin-1', restaurante: RESTAURANTE }
+// marcaId necesario para getMarcaIdForAdmin; restaurante es ignorado por el service actual
+const ADMIN_WITH_REST = { id: 'admin-1', marcaId: 'marca-1', restaurante: RESTAURANTE }
 
 const mockPrisma = {
   marca: {

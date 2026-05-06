@@ -16,7 +16,9 @@
       "Bash(git -C \"C:/Users/COTYS/Documents/Apuntes quinto/Tesis/MenYu\" log --oneline feat/menu)",
       "Bash(pnpm --filter @menyu/api add @supabase/supabase-js)",
       "Bash(pnpm --filter @menyu/api add -D @types/multer)",
-      "Bash(pnpm exec *)"
+      "Bash(pnpm exec *)",
+      "Bash(pnpm --filter @menyu/api test)",
+      "Bash(pnpm --filter @menyu/api test:e2e)"
     ]
   }
 }
