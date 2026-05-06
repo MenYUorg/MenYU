@@ -1,0 +1,22 @@
+diff --git a/build/serializer/fork/js.js b/build/serializer/fork/js.js
+index 77268e312c1965a0bfaa13a105b0d772e0f5d1c9..57125ee2d99c59c93d31e0becebef93d2148c3cd 100644
+--- a/build/serializer/fork/js.js
++++ b/build/serializer/fork/js.js
+@@ -53,7 +53,7 @@ function getModuleParams(module, options) {
+         // options.includeAsyncPaths &&
+         dependency.data.data.asyncType != null) {
+             if (options.includeAsyncPaths) {
+-                if (options.sourceUrl) {
++                if (options.sourceUrl && dependency.absolutePath != null) {
+                     hasPaths = true;
+                     // TODO: Only include path if the target is not in the bundle
+                     // Construct a server-relative URL for the split bundle, propagating
+@@ -99,7 +99,7 @@ function getModuleParams(module, options) {
+     if (options.dev) {
+         // Add the relative path of the module to make debugging easier.
+         // This is mapped to `module.verboseName` in `require.js`.
+-        params.push(path_1.default.relative(options.projectRoot, module.path));
++        if (module.path != null) params.push(path_1.default.relative(options.projectRoot, module.path));
+     }
+     return { params, paths };
+ }
