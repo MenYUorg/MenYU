@@ -90,6 +90,17 @@ export class AuthController {
   @Post('dev/admin')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: '[DEV] Crear usuario admin' })
+  @ApiBody({
+    schema: {
+      properties: {
+        email:    { type: 'string', example: 'admin@menyu.com' },
+        password: { type: 'string', example: 'Admin1234!' },
+        rol:      { type: 'string', example: 'ADMIN' },
+        marcaId:  { type: 'string', example: 'uuid-de-la-marca' },
+      },
+      required: ['email', 'password', 'rol', 'marcaId'],
+    },
+  })
   @ApiResponse({ status: 201, description: 'Admin creado' })
   @ApiResponse({ status: 409, description: 'Email ya registrado' })
   devCreateAdmin(
@@ -101,6 +112,17 @@ export class AuthController {
   @Post('dev/mozo')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: '[DEV] Crear usuario mozo' })
+  @ApiBody({
+    schema: {
+      properties: {
+        nombre:        { type: 'string', example: 'Carlos Mozo' },
+        email:         { type: 'string', example: 'mozo@menyu.com' },
+        password:      { type: 'string', example: 'Mozo1234!' },
+        restauranteId: { type: 'string', example: 'uuid-del-restaurante' },
+      },
+      required: ['nombre', 'email', 'password', 'restauranteId'],
+    },
+  })
   @ApiResponse({ status: 201, description: 'Mozo creado' })
   @ApiResponse({ status: 409, description: 'Email ya registrado' })
   devCreateMozo(
