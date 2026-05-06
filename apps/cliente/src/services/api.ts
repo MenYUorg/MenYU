@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-const API_URL = 'http://localhost:3000/api'
+const API_URL = 'https://menyuapi-production.up.railway.app/api'
 
 export const api = axios.create({
   baseURL: API_URL,

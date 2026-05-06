@@ -37,6 +37,9 @@ Thumbs.db
 # Coverage
 coverage
 
+# pnpm patch working dirs (temp, solo patches/ se commitea)
+.patches/
+
 #Documentos
 modulo-usuarios-y-autenticacion.md
 modulo-menu.md

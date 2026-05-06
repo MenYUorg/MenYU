@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsOptional, IsString } from 'class-validator'
+import { IsIn, IsNotEmpty, IsOptional, IsString } from 'class-validator'
 
 export class UpdateRestauranteDto {
   @IsString()
@@ -13,4 +13,8 @@ export class UpdateRestauranteDto {
   @IsString()
   @IsOptional()
   qrBaseUrl?: string
+
+  @IsIn(['abierto', 'seguro'])
+  @IsOptional()
+  modoSesion?: string
 }

@@ -1,5 +1,5 @@
 import { Body, Controller, Headers, HttpCode, HttpStatus, Post } from '@nestjs/common'
-import { SessionsService } from './sessions.service'
+import { SessionsService, OpenSessionResult } from './sessions.service'
 import { OpenSessionDto } from './dto/open-session.dto'
 
 @Controller('sessions')
@@ -11,7 +11,7 @@ export class SessionsController {
   open(
     @Body() dto: OpenSessionDto,
     @Headers('authorization') authHeader: string | undefined,
-  ) {
+  ): Promise<OpenSessionResult> {
     return this.sessions.open(dto, authHeader)
   }
 }
