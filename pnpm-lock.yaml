@@ -10,7 +10,7 @@ overrides:
 
 patchedDependencies:
   '@expo/metro-config@0.20.18':
-    hash: fdd23527b4deef6b0206e1b2b98d93415ba57f4cf08edb4eb37a2eecae6debad
+    hash: 72e23e680ea388875fa627af1235eceab2dac0bcb3ffa3fed4ea7df79f5fd6ff
     path: patches/@expo__metro-config@0.20.18.patch
 
 importers:
@@ -6836,7 +6836,7 @@ snapshots:
       '@expo/env': 1.0.7
       '@expo/image-utils': 0.7.6
       '@expo/json-file': 9.1.5
-      '@expo/metro-config': 0.20.18(patch_hash=fdd23527b4deef6b0206e1b2b98d93415ba57f4cf08edb4eb37a2eecae6debad)
+      '@expo/metro-config': 0.20.18(patch_hash=72e23e680ea388875fa627af1235eceab2dac0bcb3ffa3fed4ea7df79f5fd6ff)
       '@expo/osascript': 2.4.2
       '@expo/package-manager': 1.10.4
       '@expo/plist': 0.3.5
@@ -7094,7 +7094,7 @@ snapshots:
       stacktrace-parser: 0.1.11
     optional: true
 
-  '@expo/metro-config@0.20.18(patch_hash=fdd23527b4deef6b0206e1b2b98d93415ba57f4cf08edb4eb37a2eecae6debad)':
+  '@expo/metro-config@0.20.18(patch_hash=72e23e680ea388875fa627af1235eceab2dac0bcb3ffa3fed4ea7df79f5fd6ff)':
     dependencies:
       '@babel/core': 7.29.0
       '@babel/generator': 7.29.1
@@ -9979,7 +9979,7 @@ snapshots:
       '@expo/config': 11.0.13
       '@expo/config-plugins': 10.1.2
       '@expo/fingerprint': 0.13.4
-      '@expo/metro-config': 0.20.18(patch_hash=fdd23527b4deef6b0206e1b2b98d93415ba57f4cf08edb4eb37a2eecae6debad)
+      '@expo/metro-config': 0.20.18(patch_hash=72e23e680ea388875fa627af1235eceab2dac0bcb3ffa3fed4ea7df79f5fd6ff)
       '@expo/vector-icons': 14.1.0(expo-font@13.3.2(expo@53.0.27)(react@19.0.0))(react-native@0.79.6(@babel/core@7.29.0)(@types/react@19.0.14)(react@19.0.0))(react@19.0.0)
       babel-preset-expo: 13.2.5(@babel/core@7.29.0)
       expo-asset: 11.1.7(expo@53.0.27)(react-native@0.79.6(@babel/core@7.29.0)(@types/react@19.0.14)(react@19.0.0))(react@19.0.0)
@@ -10011,7 +10011,7 @@ snapshots:
       '@expo/config': 11.0.13
       '@expo/config-plugins': 10.1.2
       '@expo/fingerprint': 0.13.4
-      '@expo/metro-config': 0.20.18(patch_hash=fdd23527b4deef6b0206e1b2b98d93415ba57f4cf08edb4eb37a2eecae6debad)
+      '@expo/metro-config': 0.20.18(patch_hash=72e23e680ea388875fa627af1235eceab2dac0bcb3ffa3fed4ea7df79f5fd6ff)
       '@expo/vector-icons': 14.1.0(expo-font@13.3.2(expo@53.0.27)(react@18.3.1))(react-native@0.79.2(@babel/core@7.29.0)(@types/react@18.3.28)(react@18.3.1))(react@18.3.1)
       babel-preset-expo: 13.2.5(@babel/core@7.29.0)
       expo-asset: 11.1.7(expo@53.0.27)(react-native@0.79.2(@babel/core@7.29.0)(@types/react@18.3.28)(react@18.3.1))(react@18.3.1)
