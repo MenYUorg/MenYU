@@ -16,6 +16,7 @@
     "@expo/metro-runtime": "~5.0.5",
     "@menyu/types": "workspace:*",
     "axios": "^1.15.2",
+    "html5-qrcode": "^2.3.8",
     "expo": "~53.0.0",
     "expo-camera": "~16.1.11",
     "expo-router": "~5.0.0",
