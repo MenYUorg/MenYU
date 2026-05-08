@@ -27,3 +27,21 @@ export interface Pedido {
   createdAt: string
   items?: PedidoItem[]
 }
+
+export interface ModificacionIngrediente {
+  itemIngredienteId: string
+  ingredienteId: string
+  accion: AccionModificacion
+  cantidad: number
+  precioExtra: number
+}
+
+export interface ItemCarrito {
+  itemMenuId: string
+  varianteId?: string
+  cantidad: number
+  precioBase: number
+  modificaciones: ModificacionIngrediente[]
+  precioTotal: number
+  nota?: string
+}

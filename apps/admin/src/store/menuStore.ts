@@ -27,8 +27,8 @@ interface MenuStore {
   updateSubcategoria: (id: string, data: { nombre: string }) => Promise<void>
   deleteSubcategoria: (id: string) => Promise<void>
 
-  createIngrediente: (data: { nombre: string; restauranteId: string }) => Promise<void>
-  updateIngrediente: (id: string, data: { nombre: string }) => Promise<void>
+  createIngrediente: (data: { nombre: string; restauranteId: string; esAlergeno?: boolean }) => Promise<void>
+  updateIngrediente: (id: string, data: { nombre?: string; esAlergeno?: boolean }) => Promise<void>
   deleteIngrediente: (id: string) => Promise<void>
 
   clearError: () => void

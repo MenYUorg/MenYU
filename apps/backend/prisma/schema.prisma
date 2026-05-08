@@ -225,15 +225,17 @@ model SubcategoriaMenu {
 }
 
 model ItemMenu {
-  id             String   @id @default(uuid())
-  marcaId        String   @map("marca_id")
-  subcategoriaId String?  @map("subcategoria_id")
-  comandaId      String?  @map("comanda_id")
-  nombre         String
-  descripcion    String?
-  precioBase     Decimal  @map("precio_base") @db.Decimal(10, 2)
-  disponible     Boolean  @default(true)
-  imagenUrl      String?  @map("imagen_url")
+  id                String   @id @default(uuid())
+  marcaId           String   @map("marca_id")
+  subcategoriaId    String?  @map("subcategoria_id")
+  comandaId         String?  @map("comanda_id")
+  nombre            String
+  descripcion       String?
+  precioBase        Decimal  @map("precio_base") @db.Decimal(10, 2)
+  disponible        Boolean  @default(true)
+  imagenUrl         String?  @map("imagen_url")
+  tiempoPreparacion Int?     @map("tiempo_preparacion")
+  calorias          Int?
 
   marca          Marca              @relation(fields: [marcaId], references: [id])
   subcategoria   SubcategoriaMenu?  @relation(fields: [subcategoriaId], references: [id])
@@ -243,8 +245,21 @@ model ItemMenu {
   ingredientes   ItemIngrediente[]
   clasificaciones ItemClasificacion[]
   pedidoItems    PedidoItem[]
+  variantes      ItemVariante[]
 
   @@map("item_menu")
+}
+
+model ItemVariante {
+  id          String  @id @default(uuid())
+  itemId      String  @map("item_id")
+  nombre      String
+  precioExtra Decimal @default(0) @map("precio_extra") @db.Decimal(10, 2)
+  disponible  Boolean @default(true)
+
+  item ItemMenu @relation(fields: [itemId], references: [id])
+
+  @@map("item_variante")
 }
 
 model ItemSucursal {
@@ -306,10 +321,23 @@ model ItemClasificacion {
   @@map("item_clasificacion")
 }
 
+enum EtiquetaDieta {
+  VEGANO
+  VEGETARIANO
+  SIN_TACC
+  SIN_LACTOSA
+  SIN_MARISCOS
+  APTO_DIABETICO
+  KETO
+  BAJO_SODIO
+}
+
 model Ingrediente {
-  id            String @id @default(uuid())
-  restauranteId String @map("restaurante_id")
+  id            String          @id @default(uuid())
+  restauranteId String          @map("restaurante_id")
   nombre        String
+  esAlergeno    Boolean         @default(false) @map("es_alergeno")
+  etiquetas     EtiquetaDieta[]
 
   restaurante Restaurante       @relation(fields: [restauranteId], references: [id])
   items       ItemIngrediente[]
@@ -323,12 +351,17 @@ model ItemIngrediente {
   ingredienteId String  @map("ingrediente_id")
   esOriginal    Boolean @map("es_original")
   cantidad      Decimal @db.Decimal(10, 3)
-  removible     Boolean @default(false)
+  esRemovible   Boolean @default(false) @map("es_removible")
+  esAgregable   Boolean @default(false) @map("es_agregable")
+  precioExtra   Decimal @default(0) @map("precio_extra") @db.Decimal(10, 2)
+  cantidadMin   Int     @default(0) @map("cantidad_min")
+  cantidadMax   Int     @default(1) @map("cantidad_max")
 
   item        ItemMenu          @relation(fields: [itemId], references: [id])
   ingrediente Ingrediente       @relation(fields: [ingredienteId], references: [id])
   mods        PedidoItemMod[]
 
+  @@unique([itemId, ingredienteId])
   @@map("item_ingrediente")
 }
 

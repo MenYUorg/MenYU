@@ -17,6 +17,7 @@ export interface JwtPayload {
   nombre?: string
   tipo: UserTipo
   rol?: string
+  restauranteId?: string
 }
 
 export interface TokenPair {
@@ -51,7 +52,7 @@ export class AuthService {
     }
 
     const { user, tipo } = resolved
-    return this.issueTokens(user.id, email, tipo, (user as any).rol, (user as any).nombre)
+    return this.issueTokens(user.id, email, tipo, (user as any).rol, (user as any).nombre, (user as any).restauranteId)
   }
 
   // ── Register (solo Cliente) ────────────────────────────
@@ -207,8 +208,9 @@ export class AuthService {
     tipo: UserTipo,
     rol?: string,
     nombre?: string,
+    restauranteId?: string,
   ): Promise<TokenPair> {
-    const payload: JwtPayload = { sub: userId, email, nombre, tipo, rol }
+    const payload: JwtPayload = { sub: userId, email, nombre, tipo, rol, restauranteId }
 
     const accessToken = this.jwt.sign(payload)
 

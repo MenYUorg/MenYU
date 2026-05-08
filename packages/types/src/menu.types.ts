@@ -1,3 +1,14 @@
+export enum EtiquetaDieta {
+  VEGANO = 'VEGANO',
+  VEGETARIANO = 'VEGETARIANO',
+  SIN_TACC = 'SIN_TACC',
+  SIN_LACTOSA = 'SIN_LACTOSA',
+  SIN_MARISCOS = 'SIN_MARISCOS',
+  APTO_DIABETICO = 'APTO_DIABETICO',
+  KETO = 'KETO',
+  BAJO_SODIO = 'BAJO_SODIO',
+}
+
 export interface Marca {
   id: string
   nombre: string
@@ -36,12 +47,15 @@ export interface SubcategoriaMenu {
   categoriaId: string
   nombre: string
   orden: number
+  items?: ItemMenu[]
 }
 
 export interface Ingrediente {
   id: string
   restauranteId: string
   nombre: string
+  esAlergeno: boolean
+  etiquetas: EtiquetaDieta[]
 }
 
 export interface ItemIngrediente {
@@ -50,8 +64,20 @@ export interface ItemIngrediente {
   ingredienteId: string
   esOriginal: boolean
   cantidad: number
-  removible: boolean
+  esRemovible: boolean
+  esAgregable: boolean
+  precioExtra: number
+  cantidadMin: number
+  cantidadMax: number
   ingrediente?: Ingrediente
+}
+
+export interface ItemVariante {
+  id: string
+  itemId: string
+  nombre: string
+  precioExtra: number
+  disponible: boolean
 }
 
 export interface ItemMenu {
@@ -64,6 +90,8 @@ export interface ItemMenu {
   precioBase: number
   disponible: boolean
   imagenUrl: string | null
+  tiempoPreparacion: number | null
+  calorias: number | null
   subcategoria?: {
     id: string
     nombre: string
@@ -72,6 +100,7 @@ export interface ItemMenu {
     categoria?: CategoriaMenu
   }
   ingredientes?: ItemIngrediente[]
+  variantes?: ItemVariante[]
 }
 
 export interface ItemSucursal {
@@ -100,4 +129,35 @@ export interface MenuItem {
 export interface ClasificacionDieta {
   id: string
   nombre: string
+}
+
+export interface MenuPublicoItem {
+  id: string
+  nombre: string
+  descripcion: string | null
+  precioBase: number
+  imagenUrl: string | null
+  tiempoPreparacion: number | null
+  calorias: number | null
+  ingredientes: ItemIngrediente[]
+  variantes: ItemVariante[]
+}
+
+export interface MenuPublicoSubcategoria {
+  id: string
+  nombre: string
+  orden: number
+  items: MenuPublicoItem[]
+}
+
+export interface MenuPublicoCategoria {
+  id: string
+  nombre: string
+  orden: number
+  subcategorias: MenuPublicoSubcategoria[]
+}
+
+export interface MenuPublico {
+  restaurante: { id: string; nombre: string }
+  categorias: MenuPublicoCategoria[]
 }

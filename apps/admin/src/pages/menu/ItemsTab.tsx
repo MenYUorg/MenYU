@@ -10,6 +10,7 @@ import { Select } from '../../components/ui/Select'
 import { Badge } from '../../components/ui/Badge'
 import { Modal } from '../../components/ui/Modal'
 import { Spinner } from '../../components/ui/Spinner'
+import { ItemIngredientesPanel } from './ItemIngredientesPanel'
 
 interface ItemForm {
   nombre: string
@@ -49,6 +50,7 @@ export function ItemsTab() {
   const [submitting, setSubmitting] = useState(false)
   const [imageTarget, setImageTarget] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+  const [ingModal, setIngModal] = useState<{ id: string; nombre: string } | null>(null)
 
   const subcategoriaOptions = categorias.flatMap((cat) =>
     (cat.subcategorias ?? []).map((sub) => ({
@@ -243,6 +245,13 @@ export function ItemsTab() {
                           🗑
                         </Button>
                       )}
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => setIngModal({ id: item.id, nombre: item.nombre })}
+                      >
+                        Ingredientes
+                      </Button>
                       <Button variant="secondary" size="sm" onClick={() => openEdit(item)}>
                         Editar
                       </Button>
@@ -272,6 +281,17 @@ export function ItemsTab() {
         className="hidden"
         onChange={handleFileChange}
       />
+
+      <Modal
+        open={!!ingModal}
+        onClose={() => setIngModal(null)}
+        title={`Ingredientes — ${ingModal?.nombre ?? ''}`}
+        size="lg"
+      >
+        {ingModal && (
+          <ItemIngredientesPanel itemId={ingModal.id} itemNombre={ingModal.nombre} />
+        )}
+      </Modal>
 
       <Modal
         open={modalOpen}
