@@ -28,7 +28,9 @@ WORKDIR /app
 COPY packages/ ./packages/
 COPY apps/backend/ ./apps/backend/
 WORKDIR /app/apps/backend
-RUN pnpm exec prisma generate
+RUN DATABASE_URL="postgresql://x:x@x:5432/x" \
+    DIRECT_URL="postgresql://x:x@x:5432/x" \
+    pnpm exec prisma generate
 RUN pnpm exec nest build
 
 # ── 3. deployer ────────────────────────────────────────────────────────────────
@@ -44,7 +46,9 @@ RUN node -e " \
   delete pkg.pnpm.patchedDependencies; \
   fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2)); \
 "
-RUN pnpm --filter @menyu/api deploy --prod --legacy /standalone
+RUN DATABASE_URL="postgresql://x:x@x:5432/x" \
+    DIRECT_URL="postgresql://x:x@x:5432/x" \
+    pnpm --filter @menyu/api deploy --prod --legacy /standalone
 COPY --from=builder /app/apps/backend/dist /standalone/dist
 COPY --from=builder /app/apps/backend/prisma /standalone/prisma
 
@@ -55,7 +59,9 @@ FROM node:20-alpine AS runner
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=deployer /standalone ./
-RUN ./node_modules/.bin/prisma generate
+RUN DATABASE_URL="postgresql://x:x@x:5432/x" \
+    DIRECT_URL="postgresql://x:x@x:5432/x" \
+    ./node_modules/.bin/prisma generate
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
   CMD wget -qO- http://localhost:${PORT:-3000}/health || exit 1
 EXPOSE 3000
