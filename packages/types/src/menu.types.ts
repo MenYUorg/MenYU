@@ -2,12 +2,25 @@ export interface Marca {
   id: string
   nombre: string
   slug: string
+  activo: boolean
+  createdAt: string
 }
 
 export interface Restaurante {
   id: string
-  nombre: string
   marcaId: string
+  nombre: string
+  direccion: string | null
+  qrBaseUrl: string | null
+  modoSesion: string
+  activo: boolean
+  createdAt: string
+}
+
+export interface Comanda {
+  id: string
+  restauranteId: string
+  nombre: string
 }
 
 export interface CategoriaMenu {
@@ -59,4 +72,32 @@ export interface ItemMenu {
     categoria?: CategoriaMenu
   }
   ingredientes?: ItemIngrediente[]
+}
+
+export interface ItemSucursal {
+  itemId: string
+  restauranteId: string
+  disponible: boolean
+  precioOverride: number | null
+  item?: ItemMenu
+}
+
+export interface Menu {
+  id: string
+  restauranteId: string
+  nombre: string
+  dias: string | null
+  horaInicio: string | null
+  horaFin: string | null
+  temporada: string | null
+}
+
+export interface MenuItem {
+  menuId: string
+  itemId: string
+}
+
+export interface ClasificacionDieta {
+  id: string
+  nombre: string
 }
