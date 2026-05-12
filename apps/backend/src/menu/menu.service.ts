@@ -1,24 +1,25 @@
 import { Injectable, NotFoundException } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
-import { EtiquetaDieta } from '@prisma/client'
 
 export interface MenuFiltros {
   categoriaId?: string
   buscar?: string
-  dieta?: EtiquetaDieta[]
+  dieta?: string[]
   evitarAlergenos?: boolean
 }
 
 const ITEM_INCLUDE = {
   ingredientes: {
     include: { ingrediente: true },
-    orderBy: [{ esOriginal: 'desc' as const }, { ingrediente: { nombre: 'asc' as const } }],
+    orderBy: [
+      { esOriginal: 'desc' as const },
+      { ingrediente: { nombre: 'asc' as const } },
+    ] as { esOriginal?: 'asc' | 'desc'; ingrediente?: { nombre?: 'asc' | 'desc' } }[],
   },
-  variantes: {
-    where: { disponible: true },
-    orderBy: { precioExtra: 'asc' as const },
+  clasificaciones: {
+    include: { clasificacion: true as const },
   },
-} as const
+}
 
 @Injectable()
 export class MenuService {
@@ -86,12 +87,11 @@ export class MenuService {
     }
 
     if (filtros.dieta && filtros.dieta.length > 0) {
-      for (const tag of filtros.dieta) {
-        const todosLoIngredientesOriginalesTienenTag = item.ingredientes
-          .filter((ii: any) => ii.esOriginal)
-          .every((ii: any) => (ii.ingrediente.etiquetas as EtiquetaDieta[]).includes(tag))
-        if (!todosLoIngredientesOriginalesTienenTag) return false
-      }
+      const itemTags: string[] = item.clasificaciones.map((ic: any) =>
+        (ic.clasificacion.nombre as string).toLowerCase(),
+      )
+      const pasaTodos = filtros.dieta.every((tag) => itemTags.includes(tag.toLowerCase()))
+      if (!pasaTodos) return false
     }
 
     return true
@@ -104,8 +104,6 @@ export class MenuService {
       descripcion: item.descripcion,
       precioBase: Number(item.precioBase),
       imagenUrl: item.imagenUrl,
-      tiempoPreparacion: item.tiempoPreparacion,
-      calorias: item.calorias,
       ingredientes: item.ingredientes.map((ii: any) => ({
         id: ii.id,
         ingredienteId: ii.ingredienteId,
@@ -120,14 +118,11 @@ export class MenuService {
           id: ii.ingrediente.id,
           nombre: ii.ingrediente.nombre,
           esAlergeno: ii.ingrediente.esAlergeno,
-          etiquetas: ii.ingrediente.etiquetas,
         },
       })),
-      variantes: item.variantes.map((v: any) => ({
-        id: v.id,
-        nombre: v.nombre,
-        precioExtra: Number(v.precioExtra),
-        disponible: v.disponible,
+      clasificaciones: item.clasificaciones.map((ic: any) => ({
+        id: ic.clasificacion.id,
+        nombre: ic.clasificacion.nombre,
       })),
     }
   }

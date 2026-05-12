@@ -12,6 +12,7 @@ import { SessionsModule } from './sessions/sessions.module'
 import { MenuModule } from './menu/menu.module'
 import { GatewayModule } from './gateway/gateway.module'
 import { MozosModule } from './mozos/mozos.module'
+import { ClasificacionesModule } from './clasificaciones/clasificaciones.module'
 import { HealthController } from './health/health.controller'
 
 @Module({
@@ -29,6 +30,7 @@ import { HealthController } from './health/health.controller'
     MenuModule,
     GatewayModule,
     MozosModule,
+    ClasificacionesModule,
   ],
   controllers: [HealthController],
 })

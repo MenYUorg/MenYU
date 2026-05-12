@@ -1,7 +1,6 @@
 import { Controller, Get, Param, Query } from '@nestjs/common'
 import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger'
 import { MenuService } from './menu.service'
-import { EtiquetaDieta } from '@prisma/client'
 
 @ApiTags('menu')
 @Controller('menu')
@@ -17,7 +16,7 @@ export class MenuController {
   @ApiQuery({
     name: 'dieta',
     required: false,
-    description: 'Filtrar por etiquetas de dieta separadas por coma (VEGANO,SIN_TACC...)',
+    description: 'Filtrar por nombre de clasificación separados por coma (ej: Vegano,Sin TACC)',
   })
   @ApiQuery({
     name: 'evitarAlergenos',
@@ -32,7 +31,7 @@ export class MenuController {
     @Query('evitarAlergenos') evitarAlergenosRaw?: string,
   ) {
     const dieta = dietaRaw
-      ? (dietaRaw.split(',').filter((d) => d in EtiquetaDieta) as EtiquetaDieta[])
+      ? dietaRaw.split(',').map((d) => d.trim()).filter(Boolean)
       : undefined
 
     return this.menu.getMenuPublico(restauranteId, {

@@ -234,8 +234,6 @@ model ItemMenu {
   precioBase        Decimal  @map("precio_base") @db.Decimal(10, 2)
   disponible        Boolean  @default(true)
   imagenUrl         String?  @map("imagen_url")
-  tiempoPreparacion Int?     @map("tiempo_preparacion")
-  calorias          Int?
 
   marca          Marca              @relation(fields: [marcaId], references: [id])
   subcategoria   SubcategoriaMenu?  @relation(fields: [subcategoriaId], references: [id])
@@ -245,21 +243,8 @@ model ItemMenu {
   ingredientes   ItemIngrediente[]
   clasificaciones ItemClasificacion[]
   pedidoItems    PedidoItem[]
-  variantes      ItemVariante[]
 
   @@map("item_menu")
-}
-
-model ItemVariante {
-  id          String  @id @default(uuid())
-  itemId      String  @map("item_id")
-  nombre      String
-  precioExtra Decimal @default(0) @map("precio_extra") @db.Decimal(10, 2)
-  disponible  Boolean @default(true)
-
-  item ItemMenu @relation(fields: [itemId], references: [id])
-
-  @@map("item_variante")
 }
 
 model ItemSucursal {
@@ -321,23 +306,11 @@ model ItemClasificacion {
   @@map("item_clasificacion")
 }
 
-enum EtiquetaDieta {
-  VEGANO
-  VEGETARIANO
-  SIN_TACC
-  SIN_LACTOSA
-  SIN_MARISCOS
-  APTO_DIABETICO
-  KETO
-  BAJO_SODIO
-}
-
 model Ingrediente {
-  id            String          @id @default(uuid())
-  restauranteId String          @map("restaurante_id")
+  id            String  @id @default(uuid())
+  restauranteId String  @map("restaurante_id")
   nombre        String
-  esAlergeno    Boolean         @default(false) @map("es_alergeno")
-  etiquetas     EtiquetaDieta[]
+  esAlergeno    Boolean @default(false) @map("es_alergeno")
 
   restaurante Restaurante       @relation(fields: [restauranteId], references: [id])
   items       ItemIngrediente[]

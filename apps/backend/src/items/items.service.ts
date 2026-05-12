@@ -28,10 +28,6 @@ const DETAIL_INCLUDE = {
       { ingrediente: { nombre: 'asc' as const } },
     ],
   },
-  variantes: {
-    where: { disponible: true as const },
-    orderBy: { precioExtra: 'asc' as const },
-  },
   clasificaciones: { include: { clasificacion: true } },
 }
 
