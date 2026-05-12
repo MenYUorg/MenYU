@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { View, Text, ScrollView, TouchableOpacity, Image, StyleSheet } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useMenuStore } from '../../../store/menuStore'
-import type { ItemIngrediente, ItemVariante } from '@menyu/types'
+import type { ItemIngrediente } from '@menyu/types'
 
 export default function ItemDetailScreen() {
   const { itemId } = useLocalSearchParams<{ itemId: string }>()
@@ -10,7 +10,6 @@ export default function ItemDetailScreen() {
   const getItemById = useMenuStore((s) => s.getItemById)
   const item = getItemById(itemId ?? '')
 
-  const [varianteId, setVarianteId] = useState<string | null>(null)
   const [removidos, setRemovidos] = useState<Set<string>>(new Set())
   const [agregados, setAgregados] = useState<Map<string, number>>(new Map())
 
@@ -25,14 +24,11 @@ export default function ItemDetailScreen() {
     )
   }
 
-  const varianteSeleccionada: ItemVariante | undefined = item.variantes?.find((v) => v.id === varianteId)
-
-  const precioVariante = varianteSeleccionada ? Number(varianteSeleccionada.precioExtra) : 0
   const precioModificaciones = Array.from(agregados.entries()).reduce((acc, [id, qty]) => {
     const ing = item.ingredientes?.find((ii) => ii.id === id)
     return acc + (ing ? Number(ing.precioExtra) * qty : 0)
   }, 0)
-  const precioTotal = Number(item.precioBase) + precioVariante + precioModificaciones
+  const precioTotal = Number(item.precioBase) + precioModificaciones
 
   const toggleRemovido = (id: string) => {
     setRemovidos((prev) => {
@@ -83,33 +79,7 @@ export default function ItemDetailScreen() {
 
           <View style={styles.metaRow}>
             <Text style={styles.precioBase}>${Number(item.precioBase).toFixed(2)}</Text>
-            {item.tiempoPreparacion ? (
-              <Text style={styles.meta}>⏱ {item.tiempoPreparacion} min</Text>
-            ) : null}
-            {item.calorias ? (
-              <Text style={styles.meta}>🔥 {item.calorias} kcal</Text>
-            ) : null}
           </View>
-
-          {/* Variantes */}
-          {item.variantes && item.variantes.length > 0 && (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Tamaño / variante</Text>
-              {item.variantes.map((v) => (
-                <TouchableOpacity
-                  key={v.id}
-                  style={[styles.optionRow, varianteId === v.id && styles.optionRowActive]}
-                  onPress={() => setVarianteId(varianteId === v.id ? null : v.id)}
-                >
-                  <Text style={styles.optionLabel}>{v.nombre}</Text>
-                  {Number(v.precioExtra) > 0 && (
-                    <Text style={styles.optionPrice}>+${Number(v.precioExtra).toFixed(2)}</Text>
-                  )}
-                  <Text style={styles.optionCheck}>{varianteId === v.id ? '●' : '○'}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
 
           {/* Ingredientes incluidos (removibles) */}
           {ingredientesOriginales.length > 0 && (

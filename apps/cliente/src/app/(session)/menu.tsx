@@ -120,9 +120,6 @@ export default function MenuScreen() {
                   ) : null}
                   <View style={styles.itemFooter}>
                     <Text style={styles.itemPrecio}>${Number(item.precioBase).toFixed(2)}</Text>
-                    {item.tiempoPreparacion ? (
-                      <Text style={styles.itemTiempo}>⏱ {item.tiempoPreparacion} min</Text>
-                    ) : null}
                   </View>
                 </View>
               </TouchableOpacity>
