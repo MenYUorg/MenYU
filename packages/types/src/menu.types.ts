@@ -1,12 +1,6 @@
-export enum EtiquetaDieta {
-  VEGANO = 'VEGANO',
-  VEGETARIANO = 'VEGETARIANO',
-  SIN_TACC = 'SIN_TACC',
-  SIN_LACTOSA = 'SIN_LACTOSA',
-  SIN_MARISCOS = 'SIN_MARISCOS',
-  APTO_DIABETICO = 'APTO_DIABETICO',
-  KETO = 'KETO',
-  BAJO_SODIO = 'BAJO_SODIO',
+export interface ClasificacionDieta {
+  id: string
+  nombre: string
 }
 
 export interface Marca {
@@ -55,7 +49,6 @@ export interface Ingrediente {
   restauranteId: string
   nombre: string
   esAlergeno: boolean
-  etiquetas: EtiquetaDieta[]
 }
 
 export interface ItemIngrediente {
@@ -72,14 +65,6 @@ export interface ItemIngrediente {
   ingrediente?: Ingrediente
 }
 
-export interface ItemVariante {
-  id: string
-  itemId: string
-  nombre: string
-  precioExtra: number
-  disponible: boolean
-}
-
 export interface ItemMenu {
   id: string
   marcaId: string
@@ -90,8 +75,6 @@ export interface ItemMenu {
   precioBase: number
   disponible: boolean
   imagenUrl: string | null
-  tiempoPreparacion: number | null
-  calorias: number | null
   subcategoria?: {
     id: string
     nombre: string
@@ -100,7 +83,7 @@ export interface ItemMenu {
     categoria?: CategoriaMenu
   }
   ingredientes?: ItemIngrediente[]
-  variantes?: ItemVariante[]
+  clasificaciones?: { clasificacionId: string; clasificacion: ClasificacionDieta }[]
 }
 
 export interface ItemSucursal {
@@ -137,10 +120,8 @@ export interface MenuPublicoItem {
   descripcion: string | null
   precioBase: number
   imagenUrl: string | null
-  tiempoPreparacion: number | null
-  calorias: number | null
   ingredientes: ItemIngrediente[]
-  variantes: ItemVariante[]
+  clasificaciones: ClasificacionDieta[]
 }
 
 export interface MenuPublicoSubcategoria {
