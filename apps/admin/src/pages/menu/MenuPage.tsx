@@ -4,19 +4,21 @@ import { useMenuStore } from '../../store/menuStore'
 import { ItemsTab } from './ItemsTab'
 import { CategoriasTab } from './CategoriasTab'
 import { IngredientesTab } from './IngredientesTab'
+import { ClasificacionesTab } from './ClasificacionesTab'
 
-type Tab = 'items' | 'categorias' | 'ingredientes'
+type Tab = 'items' | 'categorias' | 'ingredientes' | 'clasificaciones'
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'items', label: 'Ítems del menú' },
   { id: 'categorias', label: 'Categorías' },
   { id: 'ingredientes', label: 'Ingredientes' },
+  { id: 'clasificaciones', label: 'Dieta / Restricciones' },
 ]
 
 export function MenuPage() {
   const [activeTab, setActiveTab] = useState<Tab>('items')
   const { selectedMarcaId, selectedRestauranteId } = useAuthStore()
-  const { fetchItems, fetchCategorias, fetchIngredientes, error, clearError } = useMenuStore()
+  const { fetchItems, fetchCategorias, fetchIngredientes, fetchClasificaciones, error, clearError } = useMenuStore()
 
   useEffect(() => {
     if (selectedMarcaId) {
@@ -28,6 +30,7 @@ export function MenuPage() {
     if (selectedRestauranteId) {
       fetchCategorias(selectedRestauranteId).catch(() => undefined)
       fetchIngredientes(selectedRestauranteId).catch(() => undefined)
+      fetchClasificaciones(selectedRestauranteId).catch(() => undefined)
     }
   }, [selectedRestauranteId]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -65,6 +68,7 @@ export function MenuPage() {
       {activeTab === 'items' && <ItemsTab />}
       {activeTab === 'categorias' && <CategoriasTab />}
       {activeTab === 'ingredientes' && <IngredientesTab />}
+      {activeTab === 'clasificaciones' && <ClasificacionesTab />}
     </div>
   )
 }

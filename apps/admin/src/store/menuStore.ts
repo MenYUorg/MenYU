@@ -1,18 +1,20 @@
 import { create } from 'zustand'
 import { api } from '../services/api'
-import type { ItemMenu, CategoriaMenu, Ingrediente } from '@menyu/types'
+import type { ItemMenu, CategoriaMenu, Ingrediente, ClasificacionDieta } from '@menyu/types'
 import type { CreateItemInput, UpdateItemInput } from '../services/api'
 
 interface MenuStore {
   items: ItemMenu[]
   categorias: CategoriaMenu[]
   ingredientes: Ingrediente[]
+  clasificaciones: ClasificacionDieta[]
   loading: boolean
   error: string | null
 
   fetchItems: (marcaId: string) => Promise<void>
   fetchCategorias: (restauranteId: string) => Promise<void>
   fetchIngredientes: (restauranteId: string) => Promise<void>
+  fetchClasificaciones: (restauranteId: string) => Promise<void>
 
   createItem: (data: CreateItemInput) => Promise<void>
   updateItem: (id: string, data: UpdateItemInput) => Promise<void>
@@ -31,6 +33,10 @@ interface MenuStore {
   updateIngrediente: (id: string, data: { nombre?: string; esAlergeno?: boolean }) => Promise<void>
   deleteIngrediente: (id: string) => Promise<void>
 
+  createClasificacion: (nombre: string) => Promise<void>
+  updateClasificacion: (id: string, nombre: string) => Promise<void>
+  deleteClasificacion: (id: string) => Promise<void>
+
   clearError: () => void
 }
 
@@ -38,6 +44,7 @@ export const useMenuStore = create<MenuStore>()((set) => ({
   items: [],
   categorias: [],
   ingredientes: [],
+  clasificaciones: [],
   loading: false,
   error: null,
 
@@ -72,6 +79,18 @@ export const useMenuStore = create<MenuStore>()((set) => ({
       set({ ingredientes })
     } catch (e) {
       set({ error: e instanceof Error ? e.message : 'Error al cargar ingredientes' })
+    } finally {
+      set({ loading: false })
+    }
+  },
+
+  fetchClasificaciones: async (restauranteId) => {
+    set({ loading: true, error: null })
+    try {
+      const clasificaciones = await api.clasificaciones.list(restauranteId)
+      set({ clasificaciones })
+    } catch (e) {
+      set({ error: e instanceof Error ? e.message : 'Error al cargar clasificaciones' })
     } finally {
       set({ loading: false })
     }
@@ -269,6 +288,49 @@ export const useMenuStore = create<MenuStore>()((set) => ({
       set((s) => ({ ingredientes: s.ingredientes.filter((i) => i.id !== id) }))
     } catch (e) {
       set({ error: e instanceof Error ? e.message : 'Error al eliminar ingrediente' })
+      throw e
+    } finally {
+      set({ loading: false })
+    }
+  },
+
+  createClasificacion: async (nombre) => {
+    set({ loading: true, error: null })
+    try {
+      const c = await api.clasificaciones.create({ nombre })
+      set((s) => ({ clasificaciones: [...s.clasificaciones, c].sort((a, b) => a.nombre.localeCompare(b.nombre)) }))
+    } catch (e) {
+      set({ error: e instanceof Error ? e.message : 'Error al crear clasificación' })
+      throw e
+    } finally {
+      set({ loading: false })
+    }
+  },
+
+  updateClasificacion: async (id, nombre) => {
+    set({ loading: true, error: null })
+    try {
+      const updated = await api.clasificaciones.update(id, { nombre })
+      set((s) => ({
+        clasificaciones: s.clasificaciones
+          .map((c) => (c.id === id ? updated : c))
+          .sort((a, b) => a.nombre.localeCompare(b.nombre)),
+      }))
+    } catch (e) {
+      set({ error: e instanceof Error ? e.message : 'Error al actualizar clasificación' })
+      throw e
+    } finally {
+      set({ loading: false })
+    }
+  },
+
+  deleteClasificacion: async (id) => {
+    set({ loading: true, error: null })
+    try {
+      await api.clasificaciones.delete(id)
+      set((s) => ({ clasificaciones: s.clasificaciones.filter((c) => c.id !== id) }))
+    } catch (e) {
+      set({ error: e instanceof Error ? e.message : 'Error al eliminar clasificación' })
       throw e
     } finally {
       set({ loading: false })

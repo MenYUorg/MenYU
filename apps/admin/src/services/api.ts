@@ -1,4 +1,4 @@
-import type { TokenPair, Marca, Restaurante, ItemMenu, CategoriaMenu, SubcategoriaMenu, Ingrediente } from '@menyu/types'
+import type { TokenPair, Marca, Restaurante, ItemMenu, CategoriaMenu, SubcategoriaMenu, Ingrediente, ClasificacionDieta } from '@menyu/types'
 
 const BASE = import.meta.env.VITE_API_URL ?? ''
 
@@ -168,5 +168,19 @@ export const api = {
       req<MesaConQr>('PATCH', `/mesas/${id}`, data),
     delete: (id: string) => req<void>('DELETE', `/mesas/${id}`),
     regenerarQr: (id: string) => req<MesaConQr>('POST', `/mesas/${id}/regenerar-qr`),
+  },
+
+  clasificaciones: {
+    list: (restauranteId: string) =>
+      req<ClasificacionDieta[]>('GET', `/clasificaciones?restauranteId=${encodeURIComponent(restauranteId)}`),
+    create: (data: { nombre: string }) =>
+      req<ClasificacionDieta>('POST', '/clasificaciones', data),
+    update: (id: string, data: { nombre: string }) =>
+      req<ClasificacionDieta>('PATCH', `/clasificaciones/${id}`, data),
+    delete: (id: string) => req<void>('DELETE', `/clasificaciones/${id}`),
+    addToItem: (itemId: string, clasificacionId: string) =>
+      req<ItemMenu>('POST', `/clasificaciones/items/${itemId}`, { clasificacionId }),
+    removeFromItem: (itemId: string, clasificacionId: string) =>
+      req<void>('DELETE', `/clasificaciones/items/${itemId}/${clasificacionId}`),
   },
 }
