@@ -18,7 +18,9 @@
       "Bash(pnpm --filter @menyu/api add -D @types/multer)",
       "Bash(pnpm exec *)",
       "Bash(pnpm --filter @menyu/api test)",
-      "Bash(pnpm --filter @menyu/api test:e2e)"
+      "Bash(pnpm --filter @menyu/api test:e2e)",
+      "Bash(pnpm --filter @menyu/cliente add -D jest-expo@~53.0.0 \"@testing-library/react-native@^13.0.0\" \"@types/jest@^29.5.0\")",
+      "Bash(pnpm --filter @menyu/cliente test)"
     ]
   }
 }

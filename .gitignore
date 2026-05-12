@@ -43,3 +43,6 @@ coverage
 #Documentos
 modulo-usuarios-y-autenticacion.md
 modulo-menu.md
+modulo-carrito-ui.md
+modulo-carrito-tests.md
+modulo-carrito.md
