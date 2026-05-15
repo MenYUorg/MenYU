@@ -1,24 +1,23 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
-import type { Ingrediente } from '@menyu/types'
+import type { ClasificacionDieta } from '@menyu/types'
 import { useAuthStore } from '../../store/authStore'
 import { useMenuStore } from '../../store/menuStore'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
 import { Spinner } from '../../components/ui/Spinner'
 
-function IngredienteRow({
-  ing,
+function ClasificacionRow({
+  c,
   onUpdate,
   onDelete,
 }: {
-  ing: Ingrediente
-  onUpdate: (id: string, data: { nombre: string; esAlergeno: boolean }) => Promise<void>
+  c: ClasificacionDieta
+  onUpdate: (id: string, nombre: string) => Promise<void>
   onDelete: (id: string) => Promise<void>
 }) {
   const [editing, setEditing] = useState(false)
-  const [editName, setEditName] = useState(ing.nombre)
-  const [editAlergeno, setEditAlergeno] = useState(ing.esAlergeno)
+  const [editName, setEditName] = useState(c.nombre)
   const [saving, setSaving] = useState(false)
 
   const handleSave = async (e: FormEvent) => {
@@ -26,7 +25,7 @@ function IngredienteRow({
     if (!editName.trim()) return
     setSaving(true)
     try {
-      await onUpdate(ing.id, { nombre: editName.trim(), esAlergeno: editAlergeno })
+      await onUpdate(c.id, editName.trim())
       setEditing(false)
     } finally {
       setSaving(false)
@@ -34,8 +33,7 @@ function IngredienteRow({
   }
 
   const handleCancel = () => {
-    setEditName(ing.nombre)
-    setEditAlergeno(ing.esAlergeno)
+    setEditName(c.nombre)
     setEditing(false)
   }
 
@@ -46,18 +44,9 @@ function IngredienteRow({
           <Input
             value={editName}
             onChange={(e) => setEditName(e.target.value)}
-            className="py-1 text-sm w-48"
+            className="py-1 text-sm w-56"
             autoFocus
           />
-          <label className="flex items-center gap-1.5 text-sm text-gray-600 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={editAlergeno}
-              onChange={(e) => setEditAlergeno(e.target.checked)}
-              className="cursor-pointer"
-            />
-            Alérgeno
-          </label>
           <Button type="submit" size="sm" loading={saving}>
             Guardar
           </Button>
@@ -67,14 +56,7 @@ function IngredienteRow({
         </form>
       ) : (
         <>
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-800">{ing.nombre}</span>
-            {ing.esAlergeno && (
-              <span className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-medium">
-                ⚠️ Alérgeno
-              </span>
-            )}
-          </div>
+          <span className="text-sm text-gray-800 font-medium">{c.nombre}</span>
           <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
             <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>
               Editar
@@ -82,12 +64,12 @@ function IngredienteRow({
             <Button
               variant="ghost"
               size="sm"
+              className="text-red-500 hover:text-red-600"
               onClick={() => {
-                if (window.confirm(`¿Eliminar ingrediente "${ing.nombre}"?`)) {
-                  onDelete(ing.id).catch(() => undefined)
+                if (window.confirm(`¿Eliminar la clasificación "${c.nombre}"?\nSolo es posible si no está asignada a ningún ítem.`)) {
+                  onDelete(c.id).catch(() => undefined)
                 }
               }}
-              className="text-red-500 hover:text-red-600"
             >
               Eliminar
             </Button>
@@ -98,13 +80,12 @@ function IngredienteRow({
   )
 }
 
-export function IngredientesTab() {
+export function ClasificacionesTab() {
   const { selectedRestauranteId } = useAuthStore()
-  const { ingredientes, loading, createIngrediente, updateIngrediente, deleteIngrediente, error } =
+  const { clasificaciones, loading, createClasificacion, updateClasificacion, deleteClasificacion, error } =
     useMenuStore()
 
   const [newName, setNewName] = useState('')
-  const [newAlergeno, setNewAlergeno] = useState(false)
   const [creating, setCreating] = useState(false)
 
   const handleCreate = async (e: FormEvent) => {
@@ -112,53 +93,36 @@ export function IngredientesTab() {
     if (!newName.trim() || !selectedRestauranteId) return
     setCreating(true)
     try {
-      await createIngrediente({
-        nombre: newName.trim(),
-        restauranteId: selectedRestauranteId,
-        esAlergeno: newAlergeno,
-      })
+      await createClasificacion(newName.trim())
       setNewName('')
-      setNewAlergeno(false)
     } finally {
       setCreating(false)
     }
   }
 
-  const handleUpdate = async (id: string, data: { nombre: string; esAlergeno: boolean }) => {
-    await updateIngrediente(id, data)
-  }
-
-  const handleDelete = async (id: string) => {
-    await deleteIngrediente(id)
-  }
-
   if (!selectedRestauranteId) {
     return (
       <div className="flex items-center justify-center h-48 text-gray-400 text-sm">
-        Seleccioná un restaurante para ver los ingredientes
+        Seleccioná un restaurante para gestionar las clasificaciones
       </div>
     )
   }
 
   return (
     <div>
+      <p className="text-sm text-gray-500 mb-4">
+        Las clasificaciones se asignan directamente a los ítems del menú. Usá texto libre:
+        "Vegano", "Sin TACC", "Apto celíaco", "Keto", etc.
+      </p>
+
       <form onSubmit={handleCreate} className="flex items-end gap-3 mb-6">
         <Input
-          label="Nuevo ingrediente"
+          label="Nueva clasificación"
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
-          placeholder="Ej: Tomate, Queso, Jamón"
-          className="w-64"
+          placeholder="Ej: Vegano, Sin TACC, Bajo sodio..."
+          className="w-72"
         />
-        <label className="flex items-center gap-1.5 text-sm text-gray-600 cursor-pointer pb-1">
-          <input
-            type="checkbox"
-            checked={newAlergeno}
-            onChange={(e) => setNewAlergeno(e.target.checked)}
-            className="cursor-pointer"
-          />
-          Es alérgeno
-        </label>
         <Button type="submit" loading={creating} disabled={!newName.trim()}>
           Agregar
         </Button>
@@ -178,26 +142,21 @@ export function IngredientesTab() {
         <div className="rounded-lg border border-gray-200 overflow-hidden bg-white">
           <div className="px-4 py-2.5 border-b border-gray-100 bg-gray-50">
             <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-              {ingredientes.length} ingrediente{ingredientes.length !== 1 ? 's' : ''}
-              {ingredientes.filter((i) => i.esAlergeno).length > 0 && (
-                <span className="ml-2 text-amber-600">
-                  · {ingredientes.filter((i) => i.esAlergeno).length} alérgeno{ingredientes.filter((i) => i.esAlergeno).length !== 1 ? 's' : ''}
-                </span>
-              )}
+              {clasificaciones.length} clasificación{clasificaciones.length !== 1 ? 'es' : ''}
             </span>
           </div>
           <div className="divide-y divide-gray-100">
-            {ingredientes.map((ing) => (
-              <IngredienteRow
-                key={ing.id}
-                ing={ing}
-                onUpdate={handleUpdate}
-                onDelete={handleDelete}
+            {clasificaciones.map((c) => (
+              <ClasificacionRow
+                key={c.id}
+                c={c}
+                onUpdate={updateClasificacion}
+                onDelete={deleteClasificacion}
               />
             ))}
-            {ingredientes.length === 0 && (
+            {clasificaciones.length === 0 && (
               <p className="text-sm text-gray-400 text-center py-12">
-                No hay ingredientes. Agregá el primero.
+                No hay clasificaciones. Agregá la primera.
               </p>
             )}
           </div>

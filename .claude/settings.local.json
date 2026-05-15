@@ -18,7 +18,9 @@
       "Bash(pnpm --filter @menyu/api add -D @types/multer)",
       "Bash(pnpm exec *)",
       "Bash(pnpm --filter @menyu/api test)",
-      "Bash(pnpm --filter @menyu/api test:e2e)"
+      "Bash(pnpm --filter @menyu/api test:e2e)",
+      "Bash(Get-ChildItem *)",
+      "Bash(Select-String -Pattern \"socket|websocket|@nestjs/websockets\")"
     ]
   }
 }

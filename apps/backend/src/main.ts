@@ -5,10 +5,21 @@ import { ValidationPipe, RequestMethod } from '@nestjs/common'
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger'
 import { AppModule } from './app.module'
 
+const CORS_ORIGINS = [
+  'http://localhost:8081',
+  'http://localhost:19006',
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'http://localhost:5175',
+  'http://localhost:4173',
+]
+
 async function bootstrap() {
   const app = await NestFactory.create(AppModule)
   app.enableCors({
-    origin: ['http://localhost:8081', 'http://localhost:19006'],
+    origin: process.env.CORS_ORIGINS
+      ? process.env.CORS_ORIGINS.split(',')
+      : CORS_ORIGINS,
     credentials: true,
   })
   app.setGlobalPrefix('api', { exclude: [{ path: 'health', method: RequestMethod.GET }] })

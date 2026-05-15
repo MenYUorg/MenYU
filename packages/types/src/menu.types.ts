@@ -1,3 +1,8 @@
+export interface ClasificacionDieta {
+  id: string
+  nombre: string
+}
+
 export interface Marca {
   id: string
   nombre: string
@@ -36,12 +41,14 @@ export interface SubcategoriaMenu {
   categoriaId: string
   nombre: string
   orden: number
+  items?: ItemMenu[]
 }
 
 export interface Ingrediente {
   id: string
   restauranteId: string
   nombre: string
+  esAlergeno: boolean
 }
 
 export interface ItemIngrediente {
@@ -50,7 +57,11 @@ export interface ItemIngrediente {
   ingredienteId: string
   esOriginal: boolean
   cantidad: number
-  removible: boolean
+  esRemovible: boolean
+  esAgregable: boolean
+  precioExtra: number
+  cantidadMin: number
+  cantidadMax: number
   ingrediente?: Ingrediente
 }
 
@@ -72,6 +83,7 @@ export interface ItemMenu {
     categoria?: CategoriaMenu
   }
   ingredientes?: ItemIngrediente[]
+  clasificaciones?: { clasificacionId: string; clasificacion: ClasificacionDieta }[]
 }
 
 export interface ItemSucursal {
@@ -100,4 +112,33 @@ export interface MenuItem {
 export interface ClasificacionDieta {
   id: string
   nombre: string
+}
+
+export interface MenuPublicoItem {
+  id: string
+  nombre: string
+  descripcion: string | null
+  precioBase: number
+  imagenUrl: string | null
+  ingredientes: ItemIngrediente[]
+  clasificaciones: ClasificacionDieta[]
+}
+
+export interface MenuPublicoSubcategoria {
+  id: string
+  nombre: string
+  orden: number
+  items: MenuPublicoItem[]
+}
+
+export interface MenuPublicoCategoria {
+  id: string
+  nombre: string
+  orden: number
+  subcategorias: MenuPublicoSubcategoria[]
+}
+
+export interface MenuPublico {
+  restaurante: { id: string; nombre: string }
+  categorias: MenuPublicoCategoria[]
 }
