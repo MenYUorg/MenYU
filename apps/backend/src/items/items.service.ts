@@ -20,6 +20,7 @@ const LIST_INCLUDE = {
 } as const
 
 const DETAIL_INCLUDE = {
+  categoria: true,
   subcategoria: true,
   ingredientes: {
     include: { ingrediente: true },

@@ -208,6 +208,7 @@ model CategoriaMenu {
 
   restaurante   Restaurante      @relation(fields: [restauranteId], references: [id])
   subcategorias SubcategoriaMenu[]
+  items         ItemMenu[]
 
   @@map("categoria_menu")
 }
@@ -227,6 +228,7 @@ model SubcategoriaMenu {
 model ItemMenu {
   id                String   @id @default(uuid())
   marcaId           String   @map("marca_id")
+  categoriaId       String?  @map("categoria_id")
   subcategoriaId    String?  @map("subcategoria_id")
   comandaId         String?  @map("comanda_id")
   nombre            String
@@ -236,6 +238,7 @@ model ItemMenu {
   imagenUrl         String?  @map("imagen_url")
 
   marca          Marca              @relation(fields: [marcaId], references: [id])
+  categoria      CategoriaMenu?     @relation(fields: [categoriaId], references: [id])
   subcategoria   SubcategoriaMenu?  @relation(fields: [subcategoriaId], references: [id])
   comanda        Comanda?           @relation(fields: [comandaId], references: [id])
   sucursales     ItemSucursal[]

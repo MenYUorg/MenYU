@@ -20,7 +20,16 @@
       "Bash(pnpm --filter @menyu/api test)",
       "Bash(pnpm --filter @menyu/api test:e2e)",
       "Bash(Get-ChildItem *)",
-      "Bash(Select-String -Pattern \"socket|websocket|@nestjs/websockets\")"
+      "Bash(Select-String -Pattern \"socket|websocket|@nestjs/websockets\")",
+      "Bash(pnpm --filter @menyu/api exec prisma migrate dev --name fix/dieta-clasificacion-en-item)",
+      "Bash(pnpm --filter @menyu/admin typecheck)",
+      "Bash(pnpm --filter @menyu/api exec prisma generate)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "Bash(pnpm --filter @menyu/web typecheck)",
+      "Bash(pnpm install *)",
+      "Bash(pnpm typecheck *)"
     ]
   }
 }

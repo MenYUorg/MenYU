@@ -68,6 +68,7 @@ export interface ItemIngrediente {
 export interface ItemMenu {
   id: string
   marcaId: string
+  categoriaId: string | null
   subcategoriaId: string | null
   comandaId: string | null
   nombre: string
@@ -135,6 +136,7 @@ export interface MenuPublicoCategoria {
   id: string
   nombre: string
   orden: number
+  itemsDirectos: MenuPublicoItem[]
   subcategorias: MenuPublicoSubcategoria[]
 }
 
