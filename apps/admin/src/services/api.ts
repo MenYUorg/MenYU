@@ -62,7 +62,7 @@ async function upload<T>(path: string, fieldName: string, file: File): Promise<T
 }
 
 export interface CreateItemInput {
-  marcaId: string
+  restauranteId: string
   nombre: string
   precioBase: number
   descripcion?: string
@@ -104,8 +104,8 @@ export const api = {
   },
 
   items: {
-    list: (marcaId: string) =>
-      req<ItemMenu[]>('GET', `/items?marcaId=${encodeURIComponent(marcaId)}`),
+    list: (restauranteId: string) =>
+      req<ItemMenu[]>('GET', `/items?restauranteId=${encodeURIComponent(restauranteId)}`),
     get: (id: string) => req<ItemMenu>('GET', `/items/${id}`),
     create: (data: CreateItemInput) => req<ItemMenu>('POST', '/items', data),
     update: (id: string, data: UpdateItemInput) => req<ItemMenu>('PATCH', `/items/${id}`, data),

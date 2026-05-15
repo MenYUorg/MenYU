@@ -32,6 +32,10 @@ export class MenuService {
     })
     if (!restaurante || !restaurante.activo) throw new NotFoundException('Restaurante no encontrado')
 
+    const buscarWhere = filtros.buscar
+      ? { nombre: { contains: filtros.buscar, mode: 'insensitive' as const } }
+      : {}
+
     const categorias = await this.prisma.categoriaMenu.findMany({
       where: {
         restauranteId,
@@ -39,16 +43,16 @@ export class MenuService {
       },
       orderBy: { orden: 'asc' },
       include: {
+        items: {
+          where: { disponible: true, subcategoriaId: null, ...buscarWhere },
+          include: ITEM_INCLUDE,
+          orderBy: { nombre: 'asc' },
+        },
         subcategorias: {
           orderBy: { orden: 'asc' },
           include: {
             items: {
-              where: {
-                disponible: true,
-                ...(filtros.buscar
-                  ? { nombre: { contains: filtros.buscar, mode: 'insensitive' } }
-                  : {}),
-              },
+              where: { disponible: true, ...buscarWhere },
               include: ITEM_INCLUDE,
             },
           },
@@ -61,6 +65,9 @@ export class MenuService {
         id: cat.id,
         nombre: cat.nombre,
         orden: cat.orden,
+        itemsDirectos: cat.items
+          .filter((item) => this.pasaFiltros(item, filtros))
+          .map((item) => this.serializeItem(item)),
         subcategorias: cat.subcategorias
           .map((sub) => ({
             id: sub.id,
@@ -72,7 +79,7 @@ export class MenuService {
           }))
           .filter((sub) => sub.items.length > 0),
       }))
-      .filter((cat) => cat.subcategorias.length > 0)
+      .filter((cat) => cat.subcategorias.length > 0 || cat.itemsDirectos.length > 0)
 
     return {
       restaurante: { id: restaurante.id, nombre: restaurante.nombre },

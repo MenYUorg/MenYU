@@ -11,9 +11,9 @@ import {
 } from 'class-validator'
 
 export class CreateItemDto {
-  @ApiProperty({ example: 'uuid-de-la-marca' })
+  @ApiProperty({ example: 'uuid-del-restaurante' })
   @IsUUID()
-  marcaId!: string
+  restauranteId!: string
 
   @ApiProperty({ example: 'Milanesa napolitana' })
   @IsString()
@@ -29,6 +29,11 @@ export class CreateItemDto {
   @IsOptional()
   @IsString()
   descripcion?: string
+
+  @ApiPropertyOptional({ example: 'uuid-de-la-categoria' })
+  @IsOptional()
+  @IsUUID()
+  categoriaId?: string
 
   @ApiPropertyOptional({ example: 'uuid-de-la-subcategoria' })
   @IsOptional()

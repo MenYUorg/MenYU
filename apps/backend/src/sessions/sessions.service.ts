@@ -38,8 +38,8 @@ export class SessionsService {
   ) {}
 
   async open(dto: OpenSessionDto, authHeader?: string): Promise<OpenSessionResult> {
-    if (!dto.tableCode && (!dto.restaurantId || !dto.pin)) {
-      throw new BadRequestException('Debe proveer tableCode o restaurantId + pin')
+    if (!dto.tableCode && (!dto.restauranteId || !dto.pin)) {
+      throw new BadRequestException('Debe proveer tableCode o restauranteId + pin')
     }
 
     const clienteId = await this.resolveClienteId(authHeader)
@@ -166,7 +166,7 @@ export class SessionsService {
   private async resolveMesa(dto: OpenSessionDto) {
     const where = dto.tableCode
       ? { qrToken: dto.tableCode, activo: true }
-      : { restauranteId: dto.restaurantId!, pin: dto.pin!, activo: true }
+      : { restauranteId: dto.restauranteId!, pin: dto.pin!, activo: true }
 
     const mesa = await this.prisma.mesa.findFirst({
       where,

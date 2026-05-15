@@ -67,7 +67,8 @@ export interface ItemIngrediente {
 
 export interface ItemMenu {
   id: string
-  marcaId: string
+  restauranteId: string
+  categoriaId: string | null
   subcategoriaId: string | null
   comandaId: string | null
   nombre: string
@@ -86,13 +87,6 @@ export interface ItemMenu {
   clasificaciones?: { clasificacionId: string; clasificacion: ClasificacionDieta }[]
 }
 
-export interface ItemSucursal {
-  itemId: string
-  restauranteId: string
-  disponible: boolean
-  precioOverride: number | null
-  item?: ItemMenu
-}
 
 export interface Menu {
   id: string
@@ -135,6 +129,7 @@ export interface MenuPublicoCategoria {
   id: string
   nombre: string
   orden: number
+  itemsDirectos: MenuPublicoItem[]
   subcategorias: MenuPublicoSubcategoria[]
 }
 

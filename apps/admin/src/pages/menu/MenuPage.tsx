@@ -17,17 +17,12 @@ const TABS: { id: Tab; label: string }[] = [
 
 export function MenuPage() {
   const [activeTab, setActiveTab] = useState<Tab>('items')
-  const { selectedMarcaId, selectedRestauranteId } = useAuthStore()
+  const { selectedRestauranteId } = useAuthStore()
   const { fetchItems, fetchCategorias, fetchIngredientes, fetchClasificaciones, error, clearError } = useMenuStore()
 
   useEffect(() => {
-    if (selectedMarcaId) {
-      fetchItems(selectedMarcaId).catch(() => undefined)
-    }
-  }, [selectedMarcaId]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
     if (selectedRestauranteId) {
+      fetchItems(selectedRestauranteId).catch(() => undefined)
       fetchCategorias(selectedRestauranteId).catch(() => undefined)
       fetchIngredientes(selectedRestauranteId).catch(() => undefined)
       fetchClasificaciones(selectedRestauranteId).catch(() => undefined)

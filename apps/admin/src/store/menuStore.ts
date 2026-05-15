@@ -11,7 +11,7 @@ interface MenuStore {
   loading: boolean
   error: string | null
 
-  fetchItems: (marcaId: string) => Promise<void>
+  fetchItems: (restauranteId: string) => Promise<void>
   fetchCategorias: (restauranteId: string) => Promise<void>
   fetchIngredientes: (restauranteId: string) => Promise<void>
   fetchClasificaciones: (restauranteId: string) => Promise<void>
@@ -48,10 +48,10 @@ export const useMenuStore = create<MenuStore>()((set) => ({
   loading: false,
   error: null,
 
-  fetchItems: async (marcaId) => {
+  fetchItems: async (restauranteId) => {
     set({ loading: true, error: null })
     try {
-      const items = await api.items.list(marcaId)
+      const items = await api.items.list(restauranteId)
       set({ items })
     } catch (e) {
       set({ error: e instanceof Error ? e.message : 'Error al cargar ítems' })

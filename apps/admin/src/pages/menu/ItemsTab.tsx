@@ -40,7 +40,7 @@ function itemToForm(item: ItemMenu): ItemForm {
 }
 
 export function ItemsTab() {
-  const { selectedMarcaId } = useAuthStore()
+  const { selectedRestauranteId } = useAuthStore()
   const { items, categorias, clasificaciones, loading, createItem, updateItem, deleteItem, uploadItemImage, deleteItemImage } =
     useMenuStore()
 
@@ -77,7 +77,7 @@ export function ItemsTab() {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
-    if (!selectedMarcaId) return
+    if (!selectedRestauranteId) return
 
     const precio = parseFloat(form.precioBase)
     if (isNaN(precio) || precio < 0) {
@@ -104,7 +104,7 @@ export function ItemsTab() {
         })
       } else {
         await createItem({
-          marcaId: selectedMarcaId,
+          restauranteId: selectedRestauranteId!,
           nombre,
           precioBase: precio,
           descripcion: form.descripcion.trim() || undefined,
@@ -194,10 +194,10 @@ export function ItemsTab() {
     }
   }
 
-  if (!selectedMarcaId) {
+  if (!selectedRestauranteId) {
     return (
       <div className="flex items-center justify-center h-48 text-gray-400 text-sm">
-        Seleccioná una marca para ver los ítems
+        Seleccioná un restaurante para ver los ítems
       </div>
     )
   }
