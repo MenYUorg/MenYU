@@ -64,7 +64,7 @@ export class ClasificacionesService {
     const item = await this.prisma.itemMenu.findUnique({ where: { id: itemId } })
     if (!item) throw new NotFoundException('Ítem no encontrado')
 
-    await this.assertMarcaOwnership(item.marcaId, user)
+    await this.assertRestauranteOwnership(item.restauranteId, user)
 
     await this.getOrThrow(clasificacionId)
 
@@ -85,7 +85,7 @@ export class ClasificacionesService {
     const item = await this.prisma.itemMenu.findUnique({ where: { id: itemId } })
     if (!item) throw new NotFoundException('Ítem no encontrado')
 
-    await this.assertMarcaOwnership(item.marcaId, user)
+    await this.assertRestauranteOwnership(item.restauranteId, user)
 
     const asignacion = await this.prisma.itemClasificacion.findUnique({
       where: { itemId_clasificacionId: { itemId, clasificacionId } },
@@ -105,11 +105,13 @@ export class ClasificacionesService {
     return c
   }
 
-  private async assertMarcaOwnership(marcaId: string, user: JwtPayload) {
+  private async assertRestauranteOwnership(restauranteId: string, user: JwtPayload) {
     if (user.rol === 'ROOT') return
     const admin = await this.prisma.admin.findUnique({ where: { id: user.sub } })
-    if (!admin || admin.marcaId !== marcaId) {
-      throw new ForbiddenException('No tenés acceso a esta marca')
+    if (!admin) throw new ForbiddenException('No tenés acceso')
+    const restaurante = await this.prisma.restaurante.findUnique({ where: { id: restauranteId } })
+    if (!restaurante || admin.marcaId !== restaurante.marcaId) {
+      throw new ForbiddenException('No tenés acceso a este restaurante')
     }
   }
 }

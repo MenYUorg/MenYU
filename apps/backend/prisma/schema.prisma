@@ -21,7 +21,6 @@ model Marca {
 
   restaurantes Restaurante[]
   admins       Admin[]
-  items        ItemMenu[]
 
   @@map("marca")
 }
@@ -43,7 +42,7 @@ model Restaurante {
   menus         Menu[]
   mesas         Mesa[]
   ingredientes  Ingrediente[]
-  itemSucursal  ItemSucursal[]
+  items         ItemMenu[]
 
   @@map("restaurante")
 }
@@ -227,7 +226,7 @@ model SubcategoriaMenu {
 
 model ItemMenu {
   id                String   @id @default(uuid())
-  marcaId           String   @map("marca_id")
+  restauranteId     String   @map("restaurante_id")
   categoriaId       String?  @map("categoria_id")
   subcategoriaId    String?  @map("subcategoria_id")
   comandaId         String?  @map("comanda_id")
@@ -237,11 +236,10 @@ model ItemMenu {
   disponible        Boolean  @default(true)
   imagenUrl         String?  @map("imagen_url")
 
-  marca          Marca              @relation(fields: [marcaId], references: [id])
+  restaurante    Restaurante        @relation(fields: [restauranteId], references: [id])
   categoria      CategoriaMenu?     @relation(fields: [categoriaId], references: [id])
   subcategoria   SubcategoriaMenu?  @relation(fields: [subcategoriaId], references: [id])
   comanda        Comanda?           @relation(fields: [comandaId], references: [id])
-  sucursales     ItemSucursal[]
   menus          MenuItem[]
   ingredientes   ItemIngrediente[]
   clasificaciones ItemClasificacion[]
@@ -250,18 +248,6 @@ model ItemMenu {
   @@map("item_menu")
 }
 
-model ItemSucursal {
-  itemId        String  @map("item_id")
-  restauranteId String  @map("restaurante_id")
-  disponible    Boolean @default(true)
-  precioOverride Decimal? @map("precio_override") @db.Decimal(10, 2)
-
-  item        ItemMenu    @relation(fields: [itemId], references: [id])
-  restaurante Restaurante @relation(fields: [restauranteId], references: [id])
-
-  @@id([itemId, restauranteId])
-  @@map("item_sucursal")
-}
 
 model Menu {
   id            String  @id @default(uuid())

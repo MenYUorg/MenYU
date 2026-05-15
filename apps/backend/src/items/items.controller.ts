@@ -58,17 +58,17 @@ export class ItemsController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Listar ítems de una marca' })
+  @ApiOperation({ summary: 'Listar ítems de un restaurante' })
   @ApiResponse({ status: 200, description: 'Lista de ítems' })
   findAll(
-    @Query('marcaId') marcaId: string,
+    @Query('restauranteId') restauranteId: string,
     @Query('subcategoriaId') subcategoriaId: string | undefined,
     @Query('disponible') disponibleRaw: string | undefined,
     @CurrentUser() user: JwtPayload,
   ) {
     const disponible =
       disponibleRaw === 'true' ? true : disponibleRaw === 'false' ? false : undefined
-    return this.items.findAll(marcaId, user, subcategoriaId, disponible)
+    return this.items.findAll(restauranteId, user, subcategoriaId, disponible)
   }
 
   @Get(':id')
