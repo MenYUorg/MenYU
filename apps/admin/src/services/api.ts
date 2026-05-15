@@ -82,6 +82,8 @@ export const api = {
   auth: {
     login: (email: string, password: string) =>
       req<TokenPair>('POST', '/auth/login', { email, password }),
+    logout: (refreshToken: string) =>
+      req<void>('POST', '/auth/logout', { refreshToken }),
   },
 
   marcas: {

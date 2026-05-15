@@ -10,7 +10,9 @@
     "web": "expo start --web",
     "build": "expo export --platform web",
     "lint": "eslint src --ext .ts,.tsx",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@expo/metro-runtime": "~5.0.5",
@@ -32,8 +34,11 @@
   "devDependencies": {
     "@babel/core": "^7.25.0",
     "@menyu/config": "workspace:*",
+    "@testing-library/jest-dom": "^6.6.3",
     "@types/react": "~19.0.14",
     "babel-preset-expo": "~13.0.0",
-    "typescript": "~5.8.0"
+    "jsdom": "^25.0.1",
+    "typescript": "~5.8.0",
+    "vitest": "^2.1.8"
   }
 }

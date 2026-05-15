@@ -110,6 +110,20 @@ describe('AuthService', () => {
         .rejects.toThrow(UnauthorizedException)
     })
 
+    it('devuelve tokens con tipo mozo cuando el mozo se loguea', async () => {
+      const MOZO = { id: 'mozo-1', email: 'mozo@test.com', passwordHash: 'hashed', nombre: 'Carlos' }
+      mockUsersService.findAdminByEmail.mockResolvedValue(null)
+      mockUsersService.findMozoByEmail.mockResolvedValue(MOZO);
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true)
+
+      const result = await service.login('mozo@test.com', 'password123')
+
+      expect(result).toHaveProperty('accessToken')
+      expect(mockJwtService.sign).toHaveBeenCalledWith(
+        expect.objectContaining({ sub: MOZO.id, tipo: 'mozo' }),
+      )
+    })
+
     it('guarda el refresh token en la DB después del login', async () => {
       mockUsersService.findAdminByEmail.mockResolvedValue(ADMIN);
       (bcrypt.compare as jest.Mock).mockResolvedValue(true)
@@ -217,6 +231,15 @@ describe('AuthService', () => {
       })
 
       await expect(service.refresh('token_revocado'))
+        .rejects.toThrow(UnauthorizedException)
+    })
+
+    it('lanza 401 si el usuario ya no existe en la DB', async () => {
+      mockPrisma.refreshToken.findUnique.mockResolvedValue(VALID_REFRESH)
+      mockPrisma.refreshToken.update.mockResolvedValue({})
+      mockUsersService.findClienteById.mockResolvedValue(null)
+
+      await expect(service.refresh('raw_token_value'))
         .rejects.toThrow(UnauthorizedException)
     })
 
