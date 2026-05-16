@@ -11,9 +11,11 @@
     "build": "expo export --platform web",
     "lint": "eslint src --ext .ts,.tsx",
     "typecheck": "tsc --noEmit",
+
     "test": "jest",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage"
+
   },
   "dependencies": {
     "@expo/metro-runtime": "~5.0.5",
@@ -41,5 +43,6 @@
     "babel-preset-expo": "~13.0.0",
     "jest-expo": "~53.0.14",
     "typescript": "~5.8.0"
+
   }
 }
