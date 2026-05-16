@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger'
-import { IsNotEmpty, IsOptional, IsString } from 'class-validator'
+import { IsBoolean, IsNotEmpty, IsOptional, IsString } from 'class-validator'
 
 export class UpdateIngredienteDto {
   @ApiPropertyOptional({ example: 'Cebolla' })
@@ -7,4 +7,9 @@ export class UpdateIngredienteDto {
   @IsString()
   @IsNotEmpty()
   nombre?: string
+
+  @ApiPropertyOptional({ example: true })
+  @IsOptional()
+  @IsBoolean()
+  esAlergeno?: boolean
 }

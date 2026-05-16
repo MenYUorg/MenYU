@@ -10,6 +10,8 @@ import { Select } from '../../components/ui/Select'
 import { Badge } from '../../components/ui/Badge'
 import { Modal } from '../../components/ui/Modal'
 import { Spinner } from '../../components/ui/Spinner'
+import { ItemIngredientesPanel } from './ItemIngredientesPanel'
+import { api } from '../../services/api'
 
 interface ItemForm {
   nombre: string
@@ -38,8 +40,8 @@ function itemToForm(item: ItemMenu): ItemForm {
 }
 
 export function ItemsTab() {
-  const { selectedMarcaId } = useAuthStore()
-  const { items, categorias, loading, createItem, updateItem, deleteItem, uploadItemImage, deleteItemImage } =
+  const { selectedRestauranteId } = useAuthStore()
+  const { items, categorias, clasificaciones, loading, createItem, updateItem, deleteItem, uploadItemImage, deleteItemImage } =
     useMenuStore()
 
   const [modalOpen, setModalOpen] = useState(false)
@@ -49,6 +51,8 @@ export function ItemsTab() {
   const [submitting, setSubmitting] = useState(false)
   const [imageTarget, setImageTarget] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+  const [ingModal, setIngModal] = useState<{ id: string; nombre: string } | null>(null)
+  const [clasifSaving, setClasifSaving] = useState<string | null>(null)
 
   const subcategoriaOptions = categorias.flatMap((cat) =>
     (cat.subcategorias ?? []).map((sub) => ({
@@ -73,7 +77,7 @@ export function ItemsTab() {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
-    if (!selectedMarcaId) return
+    if (!selectedRestauranteId) return
 
     const precio = parseFloat(form.precioBase)
     if (isNaN(precio) || precio < 0) {
@@ -100,7 +104,7 @@ export function ItemsTab() {
         })
       } else {
         await createItem({
-          marcaId: selectedMarcaId,
+          restauranteId: selectedRestauranteId!,
           nombre,
           precioBase: precio,
           descripcion: form.descripcion.trim() || undefined,
@@ -152,10 +156,48 @@ export function ItemsTab() {
     }
   }
 
-  if (!selectedMarcaId) {
+  const toggleClasificacion = async (clasificacionId: string) => {
+    if (!editing) return
+    setClasifSaving(clasificacionId)
+    const yaAsignada = (editing.clasificaciones ?? []).some(
+      (ic) => ic.clasificacionId === clasificacionId,
+    )
+    try {
+      const updated = yaAsignada
+        ? (await api.clasificaciones.removeFromItem(editing.id, clasificacionId), null)
+        : await api.clasificaciones.addToItem(editing.id, clasificacionId)
+
+      setEditing((prev) => {
+        if (!prev) return prev
+        if (yaAsignada) {
+          return {
+            ...prev,
+            clasificaciones: (prev.clasificaciones ?? []).filter(
+              (ic) => ic.clasificacionId !== clasificacionId,
+            ),
+          }
+        }
+        const nueva = clasificaciones.find((c) => c.id === clasificacionId)
+        if (!nueva) return updated ?? prev
+        return {
+          ...prev,
+          clasificaciones: [
+            ...(prev.clasificaciones ?? []),
+            { clasificacionId, clasificacion: nueva },
+          ],
+        }
+      })
+    } catch {
+      // no bloqueamos el flujo principal
+    } finally {
+      setClasifSaving(null)
+    }
+  }
+
+  if (!selectedRestauranteId) {
     return (
       <div className="flex items-center justify-center h-48 text-gray-400 text-sm">
-        Seleccioná una marca para ver los ítems
+        Seleccioná un restaurante para ver los ítems
       </div>
     )
   }
@@ -243,6 +285,13 @@ export function ItemsTab() {
                           🗑
                         </Button>
                       )}
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => setIngModal({ id: item.id, nombre: item.nombre })}
+                      >
+                        Ingredientes
+                      </Button>
                       <Button variant="secondary" size="sm" onClick={() => openEdit(item)}>
                         Editar
                       </Button>
@@ -272,6 +321,17 @@ export function ItemsTab() {
         className="hidden"
         onChange={handleFileChange}
       />
+
+      <Modal
+        open={!!ingModal}
+        onClose={() => setIngModal(null)}
+        title={`Ingredientes — ${ingModal?.nombre ?? ''}`}
+        size="lg"
+      >
+        {ingModal && (
+          <ItemIngredientesPanel itemId={ingModal.id} itemNombre={ingModal.nombre} />
+        )}
+      </Modal>
 
       <Modal
         open={modalOpen}
@@ -322,6 +382,35 @@ export function ItemsTab() {
             />
             <span className="text-sm font-medium text-gray-700">Disponible para el cliente</span>
           </label>
+
+          {editing && clasificaciones.length > 0 && (
+            <div>
+              <p className="text-sm font-medium text-gray-700 mb-2">Dieta / Restricciones</p>
+              <div className="flex flex-wrap gap-2">
+                {clasificaciones.map((c) => {
+                  const asignada = (editing.clasificaciones ?? []).some(
+                    (ic) => ic.clasificacionId === c.id,
+                  )
+                  const saving = clasifSaving === c.id
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      disabled={saving}
+                      onClick={() => toggleClasificacion(c.id)}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors disabled:opacity-50 ${
+                        asignada
+                          ? 'bg-indigo-600 text-white border-indigo-600'
+                          : 'bg-white text-gray-600 border-gray-300 hover:border-indigo-400 hover:text-indigo-600'
+                      }`}
+                    >
+                      {saving ? '…' : asignada ? '✓ ' : ''}{c.nombre}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
 
           {formError && (
             <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2">

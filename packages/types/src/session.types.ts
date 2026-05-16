@@ -42,6 +42,7 @@ export interface AsignacionMesa {
 export interface OpenSessionResult {
   sesionId: string
   mesaId: string
+  restauranteId: string
   codigoSesion: string
   clienteId: string
   jwt: string

@@ -20,6 +20,7 @@ const LIST_INCLUDE = {
 } as const
 
 const DETAIL_INCLUDE = {
+  categoria: true,
   subcategoria: true,
   ingredientes: {
     include: { ingrediente: true },
@@ -39,28 +40,28 @@ export class ItemsService {
   ) {}
 
   async create(dto: CreateItemDto, user: JwtPayload) {
-    await this.assertMarcaOwnership(dto.marcaId, user)
+    await this.assertRestauranteOwnership(dto.restauranteId, user)
 
     if (dto.subcategoriaId) {
-      await this.assertSubcategoriaPerteneceMarca(dto.subcategoriaId, dto.marcaId)
+      await this.assertSubcategoriaPertenece(dto.subcategoriaId, dto.restauranteId)
     }
 
-    await this.assertNombreUnico(dto.marcaId, dto.nombre)
+    await this.assertNombreUnico(dto.restauranteId, dto.nombre)
 
     return this.prisma.itemMenu.create({ data: dto, include: DETAIL_INCLUDE })
   }
 
   async findAll(
-    marcaId: string,
+    restauranteId: string,
     user: JwtPayload,
     subcategoriaId?: string,
     disponible?: boolean,
   ) {
-    await this.assertMarcaOwnership(marcaId, user)
+    await this.assertRestauranteOwnership(restauranteId, user)
 
     return this.prisma.itemMenu.findMany({
       where: {
-        marcaId,
+        restauranteId,
         ...(subcategoriaId !== undefined ? { subcategoriaId } : {}),
         ...(disponible !== undefined ? { disponible } : {}),
       },
@@ -71,20 +72,20 @@ export class ItemsService {
 
   async findOne(id: string, user: JwtPayload) {
     const item = await this.getOrThrow(id)
-    await this.assertMarcaOwnership(item.marcaId, user)
+    await this.assertRestauranteOwnership(item.restauranteId, user)
     return this.prisma.itemMenu.findUnique({ where: { id }, include: DETAIL_INCLUDE })
   }
 
   async update(id: string, dto: UpdateItemDto, user: JwtPayload) {
     const item = await this.getOrThrow(id)
-    await this.assertMarcaOwnership(item.marcaId, user)
+    await this.assertRestauranteOwnership(item.restauranteId, user)
 
     if (dto.subcategoriaId && dto.subcategoriaId !== item.subcategoriaId) {
-      await this.assertSubcategoriaPerteneceMarca(dto.subcategoriaId, item.marcaId)
+      await this.assertSubcategoriaPertenece(dto.subcategoriaId, item.restauranteId)
     }
 
     if (dto.nombre && dto.nombre !== item.nombre) {
-      await this.assertNombreUnico(item.marcaId, dto.nombre, id)
+      await this.assertNombreUnico(item.restauranteId, dto.nombre, id)
     }
 
     return this.prisma.itemMenu.update({ where: { id }, data: dto, include: DETAIL_INCLUDE })
@@ -92,9 +93,9 @@ export class ItemsService {
 
   async uploadImagen(id: string, file: Express.Multer.File, user: JwtPayload) {
     const item = await this.getOrThrow(id)
-    await this.assertMarcaOwnership(item.marcaId, user)
+    await this.assertRestauranteOwnership(item.restauranteId, user)
 
-    const path = `${item.marcaId}/${id}`
+    const path = `${item.restauranteId}/${id}`
     const url = await this.storage.uploadFile(IMAGEN_BUCKET, path, file.buffer, file.mimetype)
 
     return this.prisma.itemMenu.update({ where: { id }, data: { imagenUrl: url }, include: DETAIL_INCLUDE })
@@ -102,18 +103,18 @@ export class ItemsService {
 
   async removeImagen(id: string, user: JwtPayload) {
     const item = await this.getOrThrow(id)
-    await this.assertMarcaOwnership(item.marcaId, user)
+    await this.assertRestauranteOwnership(item.restauranteId, user)
 
     if (!item.imagenUrl) throw new NotFoundException('Este ítem no tiene imagen')
 
-    await this.storage.deleteFile(IMAGEN_BUCKET, `${item.marcaId}/${id}`)
+    await this.storage.deleteFile(IMAGEN_BUCKET, `${item.restauranteId}/${id}`)
 
     return this.prisma.itemMenu.update({ where: { id }, data: { imagenUrl: null }, include: DETAIL_INCLUDE })
   }
 
   async remove(id: string, user: JwtPayload) {
     const item = await this.getOrThrow(id)
-    await this.assertMarcaOwnership(item.marcaId, user)
+    await this.assertRestauranteOwnership(item.restauranteId, user)
 
     const totalPedidos = await this.prisma.pedidoItem.count({ where: { itemId: id } })
     if (totalPedidos > 0) {
@@ -129,8 +130,8 @@ export class ItemsService {
 
   async addIngrediente(itemId: string, dto: AddIngredienteDto, user: JwtPayload) {
     const item = await this.getOrThrow(itemId)
-    await this.assertMarcaOwnership(item.marcaId, user)
-    await this.assertIngredientePerteneceMarca(dto.ingredienteId, item.marcaId)
+    await this.assertRestauranteOwnership(item.restauranteId, user)
+    await this.assertIngredientePertenece(dto.ingredienteId, item.restauranteId)
 
     const yaAsociado = await this.prisma.itemIngrediente.findFirst({
       where: { itemId, ingredienteId: dto.ingredienteId },
@@ -144,7 +145,7 @@ export class ItemsService {
 
   async updateIngrediente(itemId: string, id: string, dto: UpdateIngredienteItemDto, user: JwtPayload) {
     const itemIngrediente = await this.getItemIngredienteOrThrow(id, itemId)
-    await this.assertMarcaOwnership(itemIngrediente.item.marcaId, user)
+    await this.assertRestauranteOwnership(itemIngrediente.item.restauranteId, user)
 
     await this.prisma.itemIngrediente.update({ where: { id }, data: dto })
 
@@ -153,7 +154,7 @@ export class ItemsService {
 
   async removeIngrediente(itemId: string, id: string, user: JwtPayload) {
     const itemIngrediente = await this.getItemIngredienteOrThrow(id, itemId)
-    await this.assertMarcaOwnership(itemIngrediente.item.marcaId, user)
+    await this.assertRestauranteOwnership(itemIngrediente.item.restauranteId, user)
 
     const tieneMods = await this.prisma.pedidoItemMod.count({ where: { itemIngredienteId: id } })
     if (tieneMods > 0) {
@@ -171,25 +172,25 @@ export class ItemsService {
     return item
   }
 
-  private async assertNombreUnico(marcaId: string, nombre: string, excludeId?: string) {
+  private async assertNombreUnico(restauranteId: string, nombre: string, excludeId?: string) {
     const existing = await this.prisma.itemMenu.findFirst({
       where: {
-        marcaId,
+        restauranteId,
         nombre: { equals: nombre, mode: 'insensitive' },
         ...(excludeId ? { id: { not: excludeId } } : {}),
       },
     })
-    if (existing) throw new ConflictException(`Ya existe un ítem con el nombre "${nombre}" en esta marca`)
+    if (existing) throw new ConflictException(`Ya existe un ítem con el nombre "${nombre}" en este restaurante`)
   }
 
-  private async assertSubcategoriaPerteneceMarca(subcategoriaId: string, marcaId: string) {
+  private async assertSubcategoriaPertenece(subcategoriaId: string, restauranteId: string) {
     const sub = await this.prisma.subcategoriaMenu.findUnique({
       where: { id: subcategoriaId },
-      include: { categoria: { include: { restaurante: true } } },
+      include: { categoria: true },
     })
     if (!sub) throw new NotFoundException('Subcategoría no encontrada')
-    if (sub.categoria.restaurante.marcaId !== marcaId) {
-      throw new BadRequestException('La subcategoría no pertenece a un restaurante de esta marca')
+    if (sub.categoria.restauranteId !== restauranteId) {
+      throw new BadRequestException('La subcategoría no pertenece a este restaurante')
     }
   }
 
@@ -202,22 +203,22 @@ export class ItemsService {
     return ii
   }
 
-  private async assertIngredientePerteneceMarca(ingredienteId: string, marcaId: string) {
-    const ing = await this.prisma.ingrediente.findUnique({
-      where: { id: ingredienteId },
-      include: { restaurante: true },
-    })
+  private async assertIngredientePertenece(ingredienteId: string, restauranteId: string) {
+    const ing = await this.prisma.ingrediente.findUnique({ where: { id: ingredienteId } })
     if (!ing) throw new NotFoundException('Ingrediente no encontrado')
-    if (ing.restaurante.marcaId !== marcaId) {
-      throw new BadRequestException('El ingrediente no pertenece a un restaurante de esta marca')
+    if (ing.restauranteId !== restauranteId) {
+      throw new BadRequestException('El ingrediente no pertenece a este restaurante')
     }
   }
 
-  private async assertMarcaOwnership(marcaId: string, user: JwtPayload) {
+  private async assertRestauranteOwnership(restauranteId: string, user: JwtPayload) {
     if (user.rol === 'ROOT') return
     const admin = await this.prisma.admin.findUnique({ where: { id: user.sub } })
-    if (!admin || admin.marcaId !== marcaId) {
-      throw new ForbiddenException('No tenés acceso a esta marca')
+    if (!admin) throw new ForbiddenException('No tenés acceso')
+
+    const restaurante = await this.prisma.restaurante.findUnique({ where: { id: restauranteId } })
+    if (!restaurante || admin.marcaId !== restaurante.marcaId) {
+      throw new ForbiddenException('No tenés acceso a este restaurante')
     }
   }
 }

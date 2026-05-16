@@ -7,7 +7,7 @@ export class OpenSessionDto {
 
   @IsOptional()
   @IsString()
-  restaurantId?: string
+  restauranteId?: string
 
   @IsOptional()
   @IsString()
