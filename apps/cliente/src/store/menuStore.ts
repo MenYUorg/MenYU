@@ -35,6 +35,8 @@ export const useMenuStore = create<MenuState>((set, get) => ({
     const menu = get().menu
     if (!menu) return null
     for (const cat of menu.categorias) {
+      const directo = cat.itemsDirectos.find((i) => i.id === itemId)
+      if (directo) return directo
       for (const sub of cat.subcategorias) {
         const item = sub.items.find((i) => i.id === itemId)
         if (item) return item

@@ -19,7 +19,9 @@
     "@nestjs/mapped-types": "^2.1.1",
     "@nestjs/passport": "^11.0.5",
     "@nestjs/platform-express": "^11.1.19",
+    "@nestjs/platform-socket.io": "^11.1.21",
     "@nestjs/swagger": "^11.4.2",
+    "@nestjs/websockets": "^11.1.21",
     "@prisma/adapter-pg": "^6.0.0",
     "@prisma/client": "^6.0.0",
     "@supabase/supabase-js": "^2.105.1",
@@ -35,9 +37,7 @@
     "qrcode": "^1.5.4",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
-    "@nestjs/websockets": "^11.1.19",
-    "@nestjs/platform-socket.io": "^11.1.19",
-    "socket.io": "^4.8.1"
+    "socket.io": "^4.8.3"
   },
   "devDependencies": {
     "@menyu/config": "workspace:*",

@@ -1,0 +1,37 @@
+# Dependencias
+node_modules/
+
+# Variables de entorno
+.env
+.env.local
+.env.*.local
+
+# Build outputs
+dist/
+build/
+.expo/
+.next/
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# IDEs
+.vscode/
+.idea/
+
+# Turbo cache
+.turbo/
+
+# Prisma
+apps/backend/prisma/migrations/*.sql.bak
+
+# Documentación (excepto archivos base del proyecto)
+Documentacion/*
+!Documentacion/Doc_DB.md
+!Documentacion/Gantt.html

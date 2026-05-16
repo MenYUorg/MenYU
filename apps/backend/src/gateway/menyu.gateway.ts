@@ -34,12 +34,12 @@ export class MenyuGateway implements OnGatewayConnection, OnGatewayDisconnect {
     return { ok: true }
   }
 
-  emitPedidoNuevo(restauranteId: string, pedido: unknown) {
-    this.server.to(`restaurante-${restauranteId}`).emit('pedido:nuevo', pedido)
+  emitOrderNew(restauranteId: string, pedido: unknown) {
+    this.server.to(`restaurante-${restauranteId}`).emit('order:new', pedido)
   }
 
-  emitPedidoEstado(restauranteId: string, pedido: unknown) {
-    this.server.to(`restaurante-${restauranteId}`).emit('pedido:estado', pedido)
+  emitOrderUpdated(restauranteId: string, pedido: unknown) {
+    this.server.to(`restaurante-${restauranteId}`).emit('order:updated', pedido)
   }
 
   emitMozoCalled(restauranteId: string, data: { sesionId: string; mesaNumero: string }) {
