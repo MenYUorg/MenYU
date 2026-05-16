@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common'
 import { JwtService } from '@nestjs/jwt'
 import { PrismaService } from '../prisma/prisma.service'
@@ -21,6 +22,7 @@ interface SessionJwtPayload {
 export interface OpenSessionResult {
   sesionId: string
   mesaId: string
+  restauranteId: string
   codigoSesion: string
   clienteId: string
   jwt: string
@@ -36,8 +38,8 @@ export class SessionsService {
   ) {}
 
   async open(dto: OpenSessionDto, authHeader?: string): Promise<OpenSessionResult> {
-    if (!dto.tableCode && (!dto.restaurantId || !dto.pin)) {
-      throw new BadRequestException('Debe proveer tableCode o restaurantId + pin')
+    if (!dto.tableCode && (!dto.restauranteId || !dto.pin)) {
+      throw new BadRequestException('Debe proveer tableCode o restauranteId + pin')
     }
 
     const clienteId = await this.resolveClienteId(authHeader)
@@ -82,9 +84,7 @@ export class SessionsService {
       })
 
       if (!yaParticipa) {
-        const count = await this.prisma.sesionMesaCliente.count({
-          where: { sesionId },
-        })
+        const count = await this.prisma.sesionMesaCliente.count({ where: { sesionId } })
         await this.prisma.sesionMesaCliente.create({
           data: { sesionId, clienteId, orden: count + 1 },
         })
@@ -102,11 +102,46 @@ export class SessionsService {
     return {
       sesionId,
       mesaId: mesa.id,
+      restauranteId: mesa.restauranteId,
       codigoSesion,
       clienteId,
       jwt: this.jwt.sign(payload),
       esAnfitrion,
     }
+  }
+
+  async close(authHeader?: string): Promise<{ ok: boolean }> {
+    if (!authHeader?.startsWith('Bearer ')) {
+      throw new UnauthorizedException('Session JWT requerido')
+    }
+
+    let payload: SessionJwtPayload
+    try {
+      payload = this.jwt.verify<SessionJwtPayload>(authHeader.slice(7))
+    } catch {
+      throw new UnauthorizedException('Session JWT inválido o expirado')
+    }
+
+    if (payload.tipo !== 'cliente') {
+      throw new UnauthorizedException('Solo clientes pueden cerrar sesiones de mesa')
+    }
+
+    const sesion = await this.prisma.sesionMesa.findUnique({ where: { id: payload.sesionId } })
+    if (!sesion) throw new NotFoundException('Sesión no encontrada')
+    if (sesion.estado !== 'activa') throw new BadRequestException('La sesión ya está cerrada')
+
+    await this.prisma.$transaction([
+      this.prisma.sesionMesa.update({
+        where: { id: payload.sesionId },
+        data: { estado: 'cerrada', cerradaEn: new Date() },
+      }),
+      this.prisma.mesa.update({
+        where: { id: payload.mesaId },
+        data: { estado: 'libre' },
+      }),
+    ])
+
+    return { ok: true }
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────
@@ -131,7 +166,7 @@ export class SessionsService {
   private async resolveMesa(dto: OpenSessionDto) {
     const where = dto.tableCode
       ? { qrToken: dto.tableCode, activo: true }
-      : { restauranteId: dto.restaurantId!, pin: dto.pin!, activo: true }
+      : { restauranteId: dto.restauranteId!, pin: dto.pin!, activo: true }
 
     const mesa = await this.prisma.mesa.findFirst({
       where,

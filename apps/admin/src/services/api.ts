@@ -1,4 +1,4 @@
-import type { TokenPair, Marca, Restaurante, ItemMenu, CategoriaMenu, SubcategoriaMenu, Ingrediente } from '@menyu/types'
+import type { TokenPair, Marca, Restaurante, ItemMenu, CategoriaMenu, SubcategoriaMenu, Ingrediente, ClasificacionDieta } from '@menyu/types'
 
 const BASE = import.meta.env.VITE_API_URL ?? ''
 
@@ -62,7 +62,7 @@ async function upload<T>(path: string, fieldName: string, file: File): Promise<T
 }
 
 export interface CreateItemInput {
-  marcaId: string
+  restauranteId: string
   nombre: string
   precioBase: number
   descripcion?: string
@@ -76,6 +76,17 @@ export interface UpdateItemInput {
   descripcion?: string
   subcategoriaId?: string | null
   disponible?: boolean
+}
+
+export interface MesaConQr {
+  id: string
+  restauranteId: string
+  numero: string
+  qrToken: string
+  pin: string
+  estado: string
+  activo: boolean
+  qrImage: string
 }
 
 export const api = {
@@ -95,8 +106,8 @@ export const api = {
   },
 
   items: {
-    list: (marcaId: string) =>
-      req<ItemMenu[]>('GET', `/items?marcaId=${encodeURIComponent(marcaId)}`),
+    list: (restauranteId: string) =>
+      req<ItemMenu[]>('GET', `/items?restauranteId=${encodeURIComponent(restauranteId)}`),
     get: (id: string) => req<ItemMenu>('GET', `/items/${id}`),
     create: (data: CreateItemInput) => req<ItemMenu>('POST', '/items', data),
     update: (id: string, data: UpdateItemInput) => req<ItemMenu>('PATCH', `/items/${id}`, data),
@@ -104,14 +115,30 @@ export const api = {
     uploadImage: (id: string, file: File) =>
       upload<ItemMenu>(`/items/${id}/imagen`, 'imagen', file),
     deleteImage: (id: string) => req<ItemMenu>('DELETE', `/items/${id}/imagen`),
+    addIngrediente: (itemId: string, data: {
+      ingredienteId: string
+      esOriginal: boolean
+      cantidad: number
+      esRemovible?: boolean
+      esAgregable?: boolean
+      precioExtra?: number
+      cantidadMin?: number
+      cantidadMax?: number
+    }) => req<ItemMenu>('POST', `/items/${itemId}/ingredientes`, data),
+    updateIngrediente: (itemId: string, id: string, data: {
+      esRemovible?: boolean
+      esAgregable?: boolean
+      precioExtra?: number
+      cantidadMin?: number
+      cantidadMax?: number
+    }) => req<ItemMenu>('PATCH', `/items/${itemId}/ingredientes/${id}`, data),
+    removeIngrediente: (itemId: string, id: string) =>
+      req<void>('DELETE', `/items/${itemId}/ingredientes/${id}`),
   },
 
   categorias: {
     list: (restauranteId: string) =>
-      req<CategoriaMenu[]>(
-        'GET',
-        `/categorias?restauranteId=${encodeURIComponent(restauranteId)}`,
-      ),
+      req<CategoriaMenu[]>('GET', `/categorias?restauranteId=${encodeURIComponent(restauranteId)}`),
     create: (data: { nombre: string; restauranteId: string; orden?: number }) =>
       req<CategoriaMenu>('POST', '/categorias', data),
     update: (id: string, data: { nombre?: string; orden?: number }) =>
@@ -127,10 +154,35 @@ export const api = {
   ingredientes: {
     list: (restauranteId: string) =>
       req<Ingrediente[]>('GET', `/ingredientes?restauranteId=${encodeURIComponent(restauranteId)}`),
-    create: (data: { nombre: string; restauranteId: string }) =>
+    create: (data: { nombre: string; restauranteId: string; esAlergeno?: boolean }) =>
       req<Ingrediente>('POST', '/ingredientes', data),
-    update: (id: string, data: { nombre: string }) =>
+    update: (id: string, data: { nombre?: string; esAlergeno?: boolean }) =>
       req<Ingrediente>('PATCH', `/ingredientes/${id}`, data),
     delete: (id: string) => req<void>('DELETE', `/ingredientes/${id}`),
+  },
+
+  mesas: {
+    list: (restauranteId: string) =>
+      req<MesaConQr[]>('GET', `/mesas?restauranteId=${encodeURIComponent(restauranteId)}`),
+    create: (data: { restauranteId: string; numero: string }) =>
+      req<MesaConQr>('POST', '/mesas', data),
+    update: (id: string, data: { numero?: string; activo?: boolean }) =>
+      req<MesaConQr>('PATCH', `/mesas/${id}`, data),
+    delete: (id: string) => req<void>('DELETE', `/mesas/${id}`),
+    regenerarQr: (id: string) => req<MesaConQr>('POST', `/mesas/${id}/regenerar-qr`),
+  },
+
+  clasificaciones: {
+    list: (restauranteId: string) =>
+      req<ClasificacionDieta[]>('GET', `/clasificaciones?restauranteId=${encodeURIComponent(restauranteId)}`),
+    create: (data: { nombre: string }) =>
+      req<ClasificacionDieta>('POST', '/clasificaciones', data),
+    update: (id: string, data: { nombre: string }) =>
+      req<ClasificacionDieta>('PATCH', `/clasificaciones/${id}`, data),
+    delete: (id: string) => req<void>('DELETE', `/clasificaciones/${id}`),
+    addToItem: (itemId: string, clasificacionId: string) =>
+      req<ItemMenu>('POST', `/clasificaciones/items/${itemId}`, { clasificacionId }),
+    removeFromItem: (itemId: string, clasificacionId: string) =>
+      req<void>('DELETE', `/clasificaciones/items/${itemId}/${clasificacionId}`),
   },
 }

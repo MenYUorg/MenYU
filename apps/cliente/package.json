@@ -11,19 +11,22 @@
     "build": "expo export --platform web",
     "lint": "eslint src --ext .ts,.tsx",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
-    "test:watch": "vitest"
+
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:cov": "jest --coverage"
+
   },
   "dependencies": {
     "@expo/metro-runtime": "~5.0.5",
     "@menyu/types": "workspace:*",
     "axios": "^1.15.2",
-    "html5-qrcode": "^2.3.8",
     "expo": "~53.0.0",
     "expo-camera": "~16.1.11",
     "expo-router": "~5.0.0",
     "expo-secure-store": "~14.2.4",
     "expo-status-bar": "~2.2.0",
+    "html5-qrcode": "^2.3.8",
     "react": "19.0.0",
     "react-dom": "19.0.0",
     "react-native": "0.79.6",
@@ -34,11 +37,12 @@
   "devDependencies": {
     "@babel/core": "^7.25.0",
     "@menyu/config": "workspace:*",
-    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react-native": "^13.3.3",
+    "@types/jest": "^29.5.14",
     "@types/react": "~19.0.14",
     "babel-preset-expo": "~13.0.0",
-    "jsdom": "^25.0.1",
-    "typescript": "~5.8.0",
-    "vitest": "^2.1.8"
+    "jest-expo": "~53.0.14",
+    "typescript": "~5.8.0"
+
   }
 }

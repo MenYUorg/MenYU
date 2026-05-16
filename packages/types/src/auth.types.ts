@@ -7,6 +7,7 @@ export interface JwtPayload {
   nombre?: string
   tipo: UserTipo
   rol?: string
+  restauranteId?: string
   iat: number
   exp: number
 }

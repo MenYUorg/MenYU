@@ -163,7 +163,7 @@ describe('SessionsService', () => {
     it('pin inexistente para ese restaurante → lanza NotFoundException', async () => {
       mockPrisma.mesa.findFirst.mockResolvedValue(null)
 
-      await expect(service.open({ restaurantId: 'rest-1', pin: '9999' }))
+      await expect(service.open({ restauranteId: 'rest-1', pin: '9999' }))
         .rejects.toThrow(NotFoundException)
     })
 

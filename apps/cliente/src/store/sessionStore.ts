@@ -1,20 +1,15 @@
 import { create } from 'zustand'
 import { storage } from '../services/storage'
+import type { OpenSessionResult } from '@menyu/types'
 
-export interface OpenSessionResult {
-  sesionId: string
-  mesaId: string
-  codigoSesion: string
-  clienteId: string
-  jwt: string
-  esAnfitrion: boolean
-}
+export type { OpenSessionResult }
 
 const SESSION_KEY = 'menyu_session'
 
 interface SessionState {
   sesionId: string | null
   mesaId: string | null
+  restauranteId: string | null
   codigoSesion: string | null
   clienteId: string | null
   esAnfitrion: boolean
@@ -28,6 +23,7 @@ interface SessionState {
 export const useSessionStore = create<SessionState>((set) => ({
   sesionId: null,
   mesaId: null,
+  restauranteId: null,
   codigoSesion: null,
   clienteId: null,
   esAnfitrion: false,
@@ -39,6 +35,7 @@ export const useSessionStore = create<SessionState>((set) => ({
     set({
       sesionId: data.sesionId,
       mesaId: data.mesaId,
+      restauranteId: data.restauranteId,
       codigoSesion: data.codigoSesion,
       clienteId: data.clienteId,
       esAnfitrion: data.esAnfitrion,
@@ -48,7 +45,15 @@ export const useSessionStore = create<SessionState>((set) => ({
 
   clearSession: () => {
     storage.deleteItem(SESSION_KEY).catch(() => {})
-    set({ sesionId: null, mesaId: null, codigoSesion: null, clienteId: null, esAnfitrion: false, jwt: null })
+    set({
+      sesionId: null,
+      mesaId: null,
+      restauranteId: null,
+      codigoSesion: null,
+      clienteId: null,
+      esAnfitrion: false,
+      jwt: null,
+    })
   },
 
   hydrate: async () => {
@@ -59,6 +64,7 @@ export const useSessionStore = create<SessionState>((set) => ({
         set({
           sesionId: data.sesionId,
           mesaId: data.mesaId,
+          restauranteId: data.restauranteId ?? null,
           codigoSesion: data.codigoSesion,
           clienteId: data.clienteId,
           esAnfitrion: data.esAnfitrion,
