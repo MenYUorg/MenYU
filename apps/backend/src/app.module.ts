@@ -13,6 +13,7 @@ import { MenuModule } from './menu/menu.module'
 import { GatewayModule } from './gateway/gateway.module'
 import { MozosModule } from './mozos/mozos.module'
 import { ClasificacionesModule } from './clasificaciones/clasificaciones.module'
+import { OrdersModule } from './orders/orders.module'
 import { HealthController } from './health/health.controller'
 
 @Module({
@@ -31,6 +32,7 @@ import { HealthController } from './health/health.controller'
     GatewayModule,
     MozosModule,
     ClasificacionesModule,
+    OrdersModule,
   ],
   controllers: [HealthController],
 })

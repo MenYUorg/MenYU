@@ -1,7 +1,6 @@
-export interface ItemCarrito {
-  id: string
+import type { ItemCarrito } from './order.types'
+
+export interface ItemCarritoUI extends ItemCarrito {
   nombre: string
-  precio: number
-  cantidad: number
-  imagenUrl?: string
+  imagenUrl?: string | null
 }

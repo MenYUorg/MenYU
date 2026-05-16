@@ -3,12 +3,14 @@ import { View, Text, ScrollView, TouchableOpacity, Image, StyleSheet, TextInput 
 import { useRouter } from 'expo-router'
 import { useMenuStore } from '../../store/menuStore'
 import { useSessionStore } from '../../store/sessionStore'
+import { useCartStore } from '../../store/cartStore'
 import type { MenuPublicoCategoria } from '@menyu/types'
 
 export default function MenuScreen() {
   const router = useRouter()
   const { restauranteId } = useSessionStore()
   const { menu, loading, error, fetchMenu } = useMenuStore()
+  const cantidadCarrito = useCartStore((s) => s.items.length)
   const [categoriaActiva, setCategoriaActiva] = useState<string | null>(null)
   const [buscar, setBuscar] = useState('')
 
@@ -47,13 +49,16 @@ export default function MenuScreen() {
 
   const categoriasFiltradas: MenuPublicoCategoria[] = menu.categorias.map((cat) => ({
     ...cat,
+    itemsDirectos: cat.itemsDirectos.filter((item) =>
+      buscarLower ? item.nombre.toLowerCase().includes(buscarLower) : true,
+    ),
     subcategorias: cat.subcategorias.map((sub) => ({
       ...sub,
       items: sub.items.filter((item) =>
         buscarLower ? item.nombre.toLowerCase().includes(buscarLower) : true,
       ),
     })).filter((sub) => sub.items.length > 0),
-  })).filter((cat) => cat.subcategorias.length > 0)
+  })).filter((cat) => cat.itemsDirectos.length > 0 || cat.subcategorias.length > 0)
 
   const categoriaVisible = categoriaActiva
     ? categoriasFiltradas.find((c) => c.id === categoriaActiva) ?? categoriasFiltradas[0]
@@ -67,6 +72,14 @@ export default function MenuScreen() {
           <Text style={styles.backText}>← Volver</Text>
         </TouchableOpacity>
         <Text style={styles.title}>{menu.restaurante.nombre}</Text>
+        <TouchableOpacity onPress={() => router.push('/(session)/carrito')} style={styles.cartBtn}>
+          <Text style={styles.cartIcon}>🛒</Text>
+          {cantidadCarrito > 0 && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{cantidadCarrito}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
       </View>
 
       {/* Buscador */}
@@ -97,6 +110,28 @@ export default function MenuScreen() {
 
       {/* Ítems */}
       <ScrollView style={styles.flex} contentContainerStyle={styles.itemsContainer}>
+        {categoriaVisible?.itemsDirectos.map((item) => (
+          <TouchableOpacity
+            key={item.id}
+            style={styles.itemCard}
+            onPress={() => router.push(`/(session)/menu/${item.id}`)}
+          >
+            {item.imagenUrl ? (
+              <Image source={{ uri: item.imagenUrl }} style={styles.itemImg} />
+            ) : (
+              <View style={[styles.itemImg, styles.itemImgPlaceholder]}>
+                <Text style={styles.itemImgPlaceholderText}>🍽</Text>
+              </View>
+            )}
+            <View style={styles.itemInfo}>
+              <Text style={styles.itemNombre}>{item.nombre}</Text>
+              {item.descripcion ? <Text style={styles.itemDesc} numberOfLines={2}>{item.descripcion}</Text> : null}
+              <View style={styles.itemFooter}>
+                <Text style={styles.itemPrecio}>${Number(item.precioBase).toFixed(2)}</Text>
+              </View>
+            </View>
+          </TouchableOpacity>
+        ))}
         {categoriaVisible?.subcategorias.map((sub) => (
           <View key={sub.id}>
             <Text style={styles.subcat}>{sub.nombre}</Text>
@@ -115,9 +150,7 @@ export default function MenuScreen() {
                 )}
                 <View style={styles.itemInfo}>
                   <Text style={styles.itemNombre}>{item.nombre}</Text>
-                  {item.descripcion ? (
-                    <Text style={styles.itemDesc} numberOfLines={2}>{item.descripcion}</Text>
-                  ) : null}
+                  {item.descripcion ? <Text style={styles.itemDesc} numberOfLines={2}>{item.descripcion}</Text> : null}
                   <View style={styles.itemFooter}>
                     <Text style={styles.itemPrecio}>${Number(item.precioBase).toFixed(2)}</Text>
                   </View>
@@ -150,6 +183,21 @@ const styles = StyleSheet.create({
   },
   backBtn: { padding: 4 },
   backText: { color: '#D4621A', fontSize: 15 },
+  cartBtn: { padding: 4, position: 'relative' },
+  cartIcon: { fontSize: 22 },
+  badge: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    backgroundColor: '#D4621A',
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+  },
+  badgeText: { color: '#FFFFFF', fontSize: 10, fontWeight: '700' },
   title: { fontSize: 17, fontWeight: '700', color: '#1A1A1A', flex: 1 },
   searchContainer: { paddingHorizontal: 16, paddingVertical: 8 },
   searchInput: {
