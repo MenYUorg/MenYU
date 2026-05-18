@@ -28,10 +28,15 @@ export class UpdateItemDto {
   @IsString()
   descripcion?: string
 
+  @ApiPropertyOptional({ example: 'uuid-de-la-categoria' })
+  @IsOptional()
+  @IsUUID()
+  categoriaId?: string | null
+
   @ApiPropertyOptional({ example: 'uuid-de-la-subcategoria' })
   @IsOptional()
   @IsUUID()
-  subcategoriaId?: string
+  subcategoriaId?: string | null
 
   @ApiPropertyOptional({ example: 'uuid-de-la-comanda' })
   @IsOptional()

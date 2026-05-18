@@ -13,11 +13,12 @@ function IngredienteRow({
   onDelete,
 }: {
   ing: Ingrediente
-  onUpdate: (id: string, nombre: string) => Promise<void>
+  onUpdate: (id: string, data: { nombre: string; esAlergeno: boolean }) => Promise<void>
   onDelete: (id: string) => Promise<void>
 }) {
   const [editing, setEditing] = useState(false)
   const [editName, setEditName] = useState(ing.nombre)
+  const [editAlergeno, setEditAlergeno] = useState(ing.esAlergeno)
   const [saving, setSaving] = useState(false)
 
   const handleSave = async (e: FormEvent) => {
@@ -25,7 +26,7 @@ function IngredienteRow({
     if (!editName.trim()) return
     setSaving(true)
     try {
-      await onUpdate(ing.id, editName.trim())
+      await onUpdate(ing.id, { nombre: editName.trim(), esAlergeno: editAlergeno })
       setEditing(false)
     } finally {
       setSaving(false)
@@ -34,19 +35,29 @@ function IngredienteRow({
 
   const handleCancel = () => {
     setEditName(ing.nombre)
+    setEditAlergeno(ing.esAlergeno)
     setEditing(false)
   }
 
   return (
     <div className="flex items-center justify-between px-4 py-2.5 hover:bg-gray-50 group transition-colors">
       {editing ? (
-        <form onSubmit={handleSave} className="flex items-center gap-2 flex-1">
+        <form onSubmit={handleSave} className="flex items-center gap-3 flex-1">
           <Input
             value={editName}
             onChange={(e) => setEditName(e.target.value)}
             className="py-1 text-sm w-48"
             autoFocus
           />
+          <label className="flex items-center gap-1.5 text-sm text-gray-600 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={editAlergeno}
+              onChange={(e) => setEditAlergeno(e.target.checked)}
+              className="cursor-pointer"
+            />
+            Alérgeno
+          </label>
           <Button type="submit" size="sm" loading={saving}>
             Guardar
           </Button>
@@ -56,7 +67,14 @@ function IngredienteRow({
         </form>
       ) : (
         <>
-          <span className="text-sm text-gray-800">{ing.nombre}</span>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-800">{ing.nombre}</span>
+            {ing.esAlergeno && (
+              <span className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-medium">
+                ⚠️ Alérgeno
+              </span>
+            )}
+          </div>
           <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
             <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>
               Editar
@@ -86,6 +104,7 @@ export function IngredientesTab() {
     useMenuStore()
 
   const [newName, setNewName] = useState('')
+  const [newAlergeno, setNewAlergeno] = useState(false)
   const [creating, setCreating] = useState(false)
 
   const handleCreate = async (e: FormEvent) => {
@@ -93,15 +112,20 @@ export function IngredientesTab() {
     if (!newName.trim() || !selectedRestauranteId) return
     setCreating(true)
     try {
-      await createIngrediente({ nombre: newName.trim(), restauranteId: selectedRestauranteId })
+      await createIngrediente({
+        nombre: newName.trim(),
+        restauranteId: selectedRestauranteId,
+        esAlergeno: newAlergeno,
+      })
       setNewName('')
+      setNewAlergeno(false)
     } finally {
       setCreating(false)
     }
   }
 
-  const handleUpdate = async (id: string, nombre: string) => {
-    await updateIngrediente(id, { nombre })
+  const handleUpdate = async (id: string, data: { nombre: string; esAlergeno: boolean }) => {
+    await updateIngrediente(id, data)
   }
 
   const handleDelete = async (id: string) => {
@@ -126,6 +150,15 @@ export function IngredientesTab() {
           placeholder="Ej: Tomate, Queso, Jamón"
           className="w-64"
         />
+        <label className="flex items-center gap-1.5 text-sm text-gray-600 cursor-pointer pb-1">
+          <input
+            type="checkbox"
+            checked={newAlergeno}
+            onChange={(e) => setNewAlergeno(e.target.checked)}
+            className="cursor-pointer"
+          />
+          Es alérgeno
+        </label>
         <Button type="submit" loading={creating} disabled={!newName.trim()}>
           Agregar
         </Button>
@@ -146,6 +179,11 @@ export function IngredientesTab() {
           <div className="px-4 py-2.5 border-b border-gray-100 bg-gray-50">
             <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">
               {ingredientes.length} ingrediente{ingredientes.length !== 1 ? 's' : ''}
+              {ingredientes.filter((i) => i.esAlergeno).length > 0 && (
+                <span className="ml-2 text-amber-600">
+                  · {ingredientes.filter((i) => i.esAlergeno).length} alérgeno{ingredientes.filter((i) => i.esAlergeno).length !== 1 ? 's' : ''}
+                </span>
+              )}
             </span>
           </div>
           <div className="divide-y divide-gray-100">

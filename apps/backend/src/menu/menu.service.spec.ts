@@ -1,0 +1,378 @@
+import { Test } from '@nestjs/testing'
+import { NotFoundException } from '@nestjs/common'
+import { MenuService } from './menu.service'
+import { PrismaService } from '../prisma/prisma.service'
+
+const mockPrisma = {
+  restaurante: {
+    findUnique: jest.fn(),
+  },
+  categoriaMenu: {
+    findMany: jest.fn(),
+  },
+}
+
+// ── Fixtures ──────────────────────────────────────────────────────────────────
+
+const RESTAURANTE = { id: 'rest-1', nombre: 'Restaurante Test', activo: true }
+
+const ING_REMOVIBLE = {
+  id: 'ii-pan',
+  ingredienteId: 'ing-pan',
+  esOriginal: true,
+  cantidad: 1,
+  esRemovible: true,
+  esAgregable: false,
+  precioExtra: 0,
+  cantidadMin: 0,
+  cantidadMax: 1,
+  ingrediente: { id: 'ing-pan', nombre: 'Pan', esAlergeno: false },
+}
+
+const ING_AGREGABLE = {
+  id: 'ii-queso',
+  ingredienteId: 'ing-queso',
+  esOriginal: false,
+  cantidad: 0,
+  esRemovible: false,
+  esAgregable: true,
+  precioExtra: 150,
+  cantidadMin: 0,
+  cantidadMax: 3,
+  ingrediente: { id: 'ing-queso', nombre: 'Queso extra', esAlergeno: false },
+}
+
+const ITEM_BASE = {
+  id: 'item-1',
+  nombre: 'Milanesa napolitana',
+  descripcion: 'Con salsa y queso',
+  precioBase: 1500,
+  disponible: true,
+  imagenUrl: 'https://storage/milanesa.jpg',
+  ingredientes: [],
+  clasificaciones: [],
+}
+
+const ITEM_VEGANO = {
+  ...ITEM_BASE,
+  id: 'item-vegano',
+  nombre: 'Ensalada vegana',
+  clasificaciones: [{ clasificacion: { id: 'clasif-1', nombre: 'VEGANO' } }],
+}
+
+const ITEM_NO_VEGANO = {
+  ...ITEM_BASE,
+  id: 'item-no-vegano',
+  nombre: 'Asado',
+  clasificaciones: [],
+}
+
+const ITEM_CON_INGREDIENTES = {
+  ...ITEM_BASE,
+  id: 'item-hamburguesa',
+  nombre: 'Hamburguesa completa',
+  precioBase: 2500,
+  ingredientes: [ING_REMOVIBLE, ING_AGREGABLE],
+}
+
+function makeCategoria(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'cat-1',
+    nombre: 'Principales',
+    orden: 1,
+    items: [],
+    subcategorias: [],
+    ...overrides,
+  }
+}
+
+// ── Suite ─────────────────────────────────────────────────────────────────────
+
+describe('MenuService', () => {
+  let service: MenuService
+
+  beforeEach(async () => {
+    const module = await Test.createTestingModule({
+      providers: [
+        MenuService,
+        { provide: PrismaService, useValue: mockPrisma },
+      ],
+    }).compile()
+
+    service = module.get(MenuService)
+    jest.clearAllMocks()
+    mockPrisma.restaurante.findUnique.mockResolvedValue(RESTAURANTE)
+    mockPrisma.categoriaMenu.findMany.mockResolvedValue([])
+  })
+
+  // ── getMenuPublico ─────────────────────────────────────────────────────────
+
+  describe('getMenuPublico', () => {
+
+    // 1. Restaurante sin categorías
+    it('restaurante sin categorías → devuelve restaurante + categorías: []', async () => {
+      mockPrisma.categoriaMenu.findMany.mockResolvedValue([])
+
+      const result = await service.getMenuPublico('rest-1', {})
+
+      expect(result.restaurante).toEqual({ id: 'rest-1', nombre: 'Restaurante Test' })
+      expect(result.categorias).toEqual([])
+    })
+
+    // 2. Ítems directos (categoriaId set, subcategoriaId null)
+    it('categoría con ítems directos → aparecen en itemsDirectos, subcategorias vacío', async () => {
+      mockPrisma.categoriaMenu.findMany.mockResolvedValue([
+        makeCategoria({ items: [ITEM_BASE], subcategorias: [] }),
+      ])
+
+      const result = await service.getMenuPublico('rest-1', {})
+
+      expect(result.categorias).toHaveLength(1)
+      expect(result.categorias[0].itemsDirectos).toHaveLength(1)
+      expect(result.categorias[0].itemsDirectos[0].id).toBe('item-1')
+      expect(result.categorias[0].itemsDirectos[0].nombre).toBe('Milanesa napolitana')
+      expect(result.categorias[0].subcategorias).toHaveLength(0)
+    })
+
+    // 3. Ítems bajo subcategoría
+    it('categoría con subcategoría → ítems aparecen en subcategorias[].items', async () => {
+      mockPrisma.categoriaMenu.findMany.mockResolvedValue([
+        makeCategoria({
+          items: [],
+          subcategorias: [
+            { id: 'sub-1', nombre: 'Especiales', orden: 1, items: [ITEM_BASE] },
+          ],
+        }),
+      ])
+
+      const result = await service.getMenuPublico('rest-1', {})
+
+      expect(result.categorias[0].itemsDirectos).toHaveLength(0)
+      expect(result.categorias[0].subcategorias).toHaveLength(1)
+      expect(result.categorias[0].subcategorias[0].nombre).toBe('Especiales')
+      expect(result.categorias[0].subcategorias[0].items[0].id).toBe('item-1')
+    })
+
+    // 4. Ítem disponible:false — Prisma filtra en la query; categoría queda vacía y se excluye
+    it('categoría sin ítems disponibles → queda excluida del resultado', async () => {
+      // El mock simula que Prisma ya aplicó where:{ disponible: true } → devuelve items vacío
+      mockPrisma.categoriaMenu.findMany.mockResolvedValue([
+        makeCategoria({ items: [], subcategorias: [] }),
+      ])
+
+      const result = await service.getMenuPublico('rest-1', {})
+
+      expect(result.categorias).toHaveLength(0)
+    })
+
+    it('la query a Prisma siempre incluye disponible:true en el where de ítems directos', async () => {
+      await service.getMenuPublico('rest-1', {})
+
+      expect(mockPrisma.categoriaMenu.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          include: expect.objectContaining({
+            items: expect.objectContaining({
+              where: expect.objectContaining({ disponible: true }),
+            }),
+          }),
+        }),
+      )
+    })
+
+    // 5. Filtro ?dieta=VEGANO
+    it('filtro dieta:VEGANO → solo pasan ítems con esa clasificación (filtro en memoria)', async () => {
+      mockPrisma.categoriaMenu.findMany.mockResolvedValue([
+        makeCategoria({ items: [ITEM_VEGANO, ITEM_NO_VEGANO], subcategorias: [] }),
+      ])
+
+      const result = await service.getMenuPublico('rest-1', { dieta: ['VEGANO'] })
+
+      expect(result.categorias[0].itemsDirectos).toHaveLength(1)
+      expect(result.categorias[0].itemsDirectos[0].id).toBe('item-vegano')
+    })
+
+    it('filtro dieta:VEGANO — categoría sin ítems que pasen queda excluida', async () => {
+      mockPrisma.categoriaMenu.findMany.mockResolvedValue([
+        makeCategoria({ items: [ITEM_NO_VEGANO], subcategorias: [] }),
+      ])
+
+      const result = await service.getMenuPublico('rest-1', { dieta: ['VEGANO'] })
+
+      expect(result.categorias).toHaveLength(0)
+    })
+
+    it('filtro dieta es case-insensitive → "vegano" matchea clasificación "VEGANO"', async () => {
+      mockPrisma.categoriaMenu.findMany.mockResolvedValue([
+        makeCategoria({ items: [ITEM_VEGANO], subcategorias: [] }),
+      ])
+
+      const result = await service.getMenuPublico('rest-1', { dieta: ['vegano'] })
+
+      expect(result.categorias[0].itemsDirectos[0].id).toBe('item-vegano')
+    })
+
+    // 6. Filtro ?buscar=milanesa
+    it('filtro buscar → categoriaMenu.findMany recibe contains + insensitive en ítems directos', async () => {
+      mockPrisma.categoriaMenu.findMany.mockResolvedValue([
+        makeCategoria({ items: [ITEM_BASE], subcategorias: [] }),
+      ])
+
+      await service.getMenuPublico('rest-1', { buscar: 'milanesa' })
+
+      expect(mockPrisma.categoriaMenu.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          include: expect.objectContaining({
+            items: expect.objectContaining({
+              where: expect.objectContaining({
+                nombre: { contains: 'milanesa', mode: 'insensitive' },
+              }),
+            }),
+            subcategorias: expect.objectContaining({
+              include: expect.objectContaining({
+                items: expect.objectContaining({
+                  where: expect.objectContaining({
+                    nombre: { contains: 'milanesa', mode: 'insensitive' },
+                  }),
+                }),
+              }),
+            }),
+          }),
+        }),
+      )
+    })
+
+    it('sin filtro buscar → la query no incluye filtro por nombre', async () => {
+      await service.getMenuPublico('rest-1', {})
+
+      const call = mockPrisma.categoriaMenu.findMany.mock.calls[0][0] as any
+      expect(call.include.items.where).not.toHaveProperty('nombre')
+    })
+
+    // 7. Filtro ?categoria=uuid
+    it('filtro categoriaId → categoriaMenu.findMany recibe id en el where', async () => {
+      mockPrisma.categoriaMenu.findMany.mockResolvedValue([
+        makeCategoria({ id: 'cat-especifica', items: [ITEM_BASE], subcategorias: [] }),
+      ])
+
+      await service.getMenuPublico('rest-1', { categoriaId: 'cat-especifica' })
+
+      expect(mockPrisma.categoriaMenu.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            restauranteId: 'rest-1',
+            id: 'cat-especifica',
+          }),
+        }),
+      )
+    })
+
+    it('sin filtro categoriaId → el where solo contiene restauranteId', async () => {
+      await service.getMenuPublico('rest-1', {})
+
+      expect(mockPrisma.categoriaMenu.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { restauranteId: 'rest-1' },
+        }),
+      )
+    })
+
+    // 8. Restaurante inexistente / inactivo
+    it('restaurante inexistente → lanza NotFoundException', async () => {
+      mockPrisma.restaurante.findUnique.mockResolvedValue(null)
+
+      await expect(service.getMenuPublico('no-existe', {}))
+        .rejects.toThrow(NotFoundException)
+    })
+
+    it('restaurante inactivo → lanza NotFoundException', async () => {
+      mockPrisma.restaurante.findUnique.mockResolvedValue({ ...RESTAURANTE, activo: false })
+
+      await expect(service.getMenuPublico('rest-inactivo', {}))
+        .rejects.toThrow(NotFoundException)
+    })
+
+    // 9. Ingredientes con esAgregable, esRemovible, precioExtra
+    it('ítem con ingredientes removibles y agregables → serializa todos los campos correctamente', async () => {
+      mockPrisma.categoriaMenu.findMany.mockResolvedValue([
+        makeCategoria({ items: [ITEM_CON_INGREDIENTES], subcategorias: [] }),
+      ])
+
+      const result = await service.getMenuPublico('rest-1', {})
+      const item = result.categorias[0].itemsDirectos[0]
+
+      expect(item.ingredientes).toHaveLength(2)
+
+      const removible = item.ingredientes.find((ii: any) => ii.esRemovible)
+      expect(removible).toMatchObject({
+        id: 'ii-pan',
+        ingredienteId: 'ing-pan',
+        esOriginal: true,
+        esRemovible: true,
+        esAgregable: false,
+        precioExtra: 0,
+        cantidadMin: 0,
+        cantidadMax: 1,
+        ingrediente: { id: 'ing-pan', nombre: 'Pan', esAlergeno: false },
+      })
+
+      const agregable = item.ingredientes.find((ii: any) => ii.esAgregable)
+      expect(agregable).toMatchObject({
+        id: 'ii-queso',
+        ingredienteId: 'ing-queso',
+        esOriginal: false,
+        esRemovible: false,
+        esAgregable: true,
+        precioExtra: 150,
+        cantidadMin: 0,
+        cantidadMax: 3,
+        ingrediente: { id: 'ing-queso', nombre: 'Queso extra', esAlergeno: false },
+      })
+    })
+
+    it('ítem con ingredientes — precioBase y precioExtra son number en el resultado', async () => {
+      mockPrisma.categoriaMenu.findMany.mockResolvedValue([
+        makeCategoria({ items: [ITEM_CON_INGREDIENTES], subcategorias: [] }),
+      ])
+
+      const result = await service.getMenuPublico('rest-1', {})
+      const item = result.categorias[0].itemsDirectos[0]
+
+      expect(typeof item.precioBase).toBe('number')
+      expect(typeof item.ingredientes[0].precioExtra).toBe('number')
+      expect(typeof item.ingredientes[0].cantidad).toBe('number')
+    })
+
+    it('ítems en subcategoría también pasan por serializeItem correctamente', async () => {
+      mockPrisma.categoriaMenu.findMany.mockResolvedValue([
+        makeCategoria({
+          items: [],
+          subcategorias: [
+            { id: 'sub-1', nombre: 'Especiales', orden: 1, items: [ITEM_CON_INGREDIENTES] },
+          ],
+        }),
+      ])
+
+      const result = await service.getMenuPublico('rest-1', {})
+      const item = result.categorias[0].subcategorias[0].items[0]
+
+      expect(item.id).toBe('item-hamburguesa')
+      expect(item.ingredientes).toHaveLength(2)
+    })
+
+    it('subcategoría sin ítems que pasen filtro dieta → queda excluida de la categoría', async () => {
+      mockPrisma.categoriaMenu.findMany.mockResolvedValue([
+        makeCategoria({
+          items: [],
+          subcategorias: [
+            { id: 'sub-1', nombre: 'Cárnicos', orden: 1, items: [ITEM_NO_VEGANO] },
+          ],
+        }),
+      ])
+
+      const result = await service.getMenuPublico('rest-1', { dieta: ['VEGANO'] })
+
+      // subcategoría queda vacía → categoría queda vacía → excluida
+      expect(result.categorias).toHaveLength(0)
+    })
+  })
+})

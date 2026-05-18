@@ -1,19 +1,25 @@
 import type { ReactNode } from 'react'
 import { useAuthStore } from '../../store/authStore'
 import { Select } from '../ui/Select'
+import type { PageKey } from '../../App'
 
 interface LayoutProps {
   children: ReactNode
+  currentPage: PageKey
+  onNavigate: (page: PageKey) => void
 }
 
-const NAV_ITEMS = [
-  { label: 'Catálogo', active: true },
-  { label: 'Mesas', active: false },
-  { label: 'Staff', active: false },
-  { label: 'Pagos', active: false },
+const NAV_ITEMS: { label: string; key: PageKey }[] = [
+  { label: 'Catálogo', key: 'menu' },
+  { label: 'Mesas', key: 'mesas' },
 ]
 
-export function Layout({ children }: LayoutProps) {
+const PAGE_TITLES: Record<PageKey, string> = {
+  menu: 'Gestión del Catálogo',
+  mesas: 'Gestión de Mesas',
+}
+
+export function Layout({ children, currentPage, onNavigate }: LayoutProps) {
   const {
     user,
     marcas,
@@ -36,19 +42,17 @@ export function Layout({ children }: LayoutProps) {
 
         <nav className="flex-1 px-3 py-4 space-y-0.5">
           {NAV_ITEMS.map((item) => (
-            <div
-              key={item.label}
-              className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                item.active
+            <button
+              key={item.key}
+              onClick={() => onNavigate(item.key)}
+              className={`w-full flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors text-left ${
+                currentPage === item.key
                   ? 'bg-indigo-50 text-indigo-700'
-                  : 'text-gray-400 cursor-not-allowed'
+                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
               }`}
             >
               {item.label}
-              {!item.active && (
-                <span className="ml-auto text-xs text-gray-300">pronto</span>
-              )}
-            </div>
+            </button>
           ))}
         </nav>
 
@@ -67,7 +71,7 @@ export function Layout({ children }: LayoutProps) {
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
         <header className="bg-white border-b border-gray-200 px-6 py-3 flex items-center gap-4">
-          <h1 className="text-sm font-semibold text-gray-800 mr-auto">Gestión del Catálogo</h1>
+          <h1 className="text-sm font-semibold text-gray-800 mr-auto">{PAGE_TITLES[currentPage]}</h1>
 
           {marcas.length > 1 && (
             <Select

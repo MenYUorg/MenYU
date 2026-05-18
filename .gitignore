@@ -1,45 +1,37 @@
-# Dependencies
-node_modules
+# Dependencias
+node_modules/
 
-# Build outputs
-dist
-.next
-build
-out
-
-# Turbo
-.turbo
-
-# Expo
-.expo
-web-build/
-
-# Env
+# Variables de entorno
 .env
 .env.local
 .env.*.local
 
+# Build outputs
+dist/
+build/
+.expo/
+.next/
+
 # Logs
 *.log
+npm-debug.log*
+pnpm-debug.log*
 
-# Editor
-.vscode
-.idea
-
-# OS
+# Sistema operativo
 .DS_Store
 Thumbs.db
 
+# IDEs
+.vscode/
+.idea/
+
+# Turbo cache
+.turbo/
+
 # Prisma
-*.db
-*.db-journal
+apps/backend/prisma/migrations/*.sql.bak
 
-# Coverage
-coverage
-
-# pnpm patch working dirs (temp, solo patches/ se commitea)
-.patches/
-
-#Documentos
-modulo-usuarios-y-autenticacion.md
-modulo-menu.md
+# Documentación (excepto archivos base del proyecto)
+Documentacion/*
+!Documentacion/Doc_DB.md
+!Documentacion/Gantt.html

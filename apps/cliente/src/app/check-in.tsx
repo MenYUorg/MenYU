@@ -155,7 +155,7 @@ export default function CheckInScreen() {
       setError('Ingresá el ID del restaurante')
       return
     }
-    void handleSubmit({ restaurantId: restaurantId.trim(), pin })
+    void handleSubmit({ restauranteId: restaurantId.trim(), pin })
   }
 
   // ── Secure mode: session code submit ─────────────────────────────────
