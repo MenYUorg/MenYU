@@ -1,4 +1,4 @@
-import type { TokenPair, Marca, Restaurante, ItemMenu, CategoriaMenu, SubcategoriaMenu, Ingrediente, ClasificacionDieta } from '@menyu/types'
+import type { TokenPair, Marca, Restaurante, ItemMenu, CategoriaMenu, SubcategoriaMenu, Ingrediente, ClasificacionDieta, Admin, RolAdmin } from '@menyu/types'
 
 const BASE = import.meta.env.VITE_API_URL ?? ''
 
@@ -168,6 +168,20 @@ export const api = {
       req<MesaConQr>('PATCH', `/mesas/${id}`, data),
     delete: (id: string) => req<void>('DELETE', `/mesas/${id}`),
     regenerarQr: (id: string) => req<MesaConQr>('POST', `/mesas/${id}/regenerar-qr`),
+  },
+
+  gerentes: {
+    list: (marcaId: string) =>
+      req<(Admin & { restaurantes: { restaurante: { id: string; nombre: string } }[] })[]>(
+        'GET',
+        `/admin-restaurante?marcaId=${encodeURIComponent(marcaId)}`,
+      ),
+    crear: (data: { email: string; password: string; marcaId: string }) =>
+      req<Admin>('POST', '/auth/dev/admin', { ...data, rol: 'GERENTE' as RolAdmin }),
+    asignar: (adminId: string, restauranteId: string) =>
+      req<{ id: string }>('POST', '/admin-restaurante', { adminId, restauranteId }),
+    desasignar: (adminId: string, restauranteId: string) =>
+      req<void>('DELETE', `/admin-restaurante/${adminId}/${restauranteId}`),
   },
 
   clasificaciones: {

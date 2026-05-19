@@ -95,7 +95,7 @@ export class AuthController {
       properties: {
         email:    { type: 'string', example: 'admin@menyu.com' },
         password: { type: 'string', example: 'Admin1234!' },
-        rol:      { type: 'string', example: 'ADMIN' },
+        rol:      { type: 'string', example: 'GERENTE', enum: ['ROOT', 'OWNER', 'GERENTE'] },
         marcaId:  { type: 'string', example: 'uuid-de-la-marca' },
       },
       required: ['email', 'password', 'rol', 'marcaId'],
@@ -106,7 +106,7 @@ export class AuthController {
   devCreateAdmin(
     @Body() body: { email: string; password: string; rol: string; marcaId: string },
   ) {
-    return this.auth.devCreateAdmin(body.email, body.password, body.rol, body.marcaId)
+    return this.auth.devCreateAdmin(body.email, body.password, body.rol as import('./auth.service').RolAdmin, body.marcaId)
   }
 
   @Post('dev/mozo')

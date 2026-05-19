@@ -25,7 +25,7 @@ import { UpdateMozoDto } from './dto/update-mozo.dto'
 @ApiBearerAuth()
 @Controller('mozos')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('ROOT', 'OWNER')
+@Roles('ROOT', 'OWNER', 'GERENTE')
 export class MozosController {
   constructor(private readonly mozos: MozosService) {}
 

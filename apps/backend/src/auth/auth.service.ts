@@ -10,13 +10,14 @@ import * as bcrypt from 'bcryptjs'
 import * as crypto from 'crypto'
 
 export type UserTipo = 'admin' | 'mozo' | 'cliente'
+export type RolAdmin = 'ROOT' | 'OWNER' | 'GERENTE'
 
 export interface JwtPayload {
   sub: string
   email?: string
   nombre?: string
   tipo: UserTipo
-  rol?: string
+  rol?: RolAdmin
   restauranteId?: string
 }
 
@@ -146,7 +147,7 @@ export class AuthService {
       admin = await this.users.createAdmin({
         email: adminEmail,
         passwordHash,
-        rol: 'ADMIN',
+        rol: 'GERENTE',
         marcaId: marca.id,
       })
     }
@@ -176,7 +177,7 @@ export class AuthService {
     const email = 'root@menyu.com'
     const existing = await this.users.findAdminByEmail(email)
     if (existing) {
-      const tokens = await this.issueTokens(existing.id, existing.email, 'admin', existing.rol)
+      const tokens = await this.issueTokens(existing.id, existing.email, 'admin', existing.rol as RolAdmin)
       return { mensaje: 'ROOT ya existe, tokens renovados.', ...tokens }
     }
 
@@ -186,7 +187,7 @@ export class AuthService {
     return { mensaje: 'Admin ROOT creado. Credenciales: root@menyu.com / root1234', ...tokens }
   }
 
-  async devCreateAdmin(email: string, password: string, rol: string, marcaId: string) {
+  async devCreateAdmin(email: string, password: string, rol: RolAdmin, marcaId: string) {
     const existing = await this.users.findAdminByEmail(email)
     if (existing) throw new ConflictException('El email ya está registrado')
     const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS)
@@ -206,7 +207,7 @@ export class AuthService {
     userId: string,
     email: string | undefined,
     tipo: UserTipo,
-    rol?: string,
+    rol?: RolAdmin,
     nombre?: string,
     restauranteId?: string,
   ): Promise<TokenPair> {

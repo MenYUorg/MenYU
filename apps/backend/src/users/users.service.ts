@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
+import { RolAdmin } from '../auth/auth.service'
 
 @Injectable()
 export class UsersService {
@@ -18,7 +19,7 @@ export class UsersService {
   createAdmin(data: {
     email: string
     passwordHash: string
-    rol: string
+    rol: RolAdmin
     marcaId?: string
   }) {
     return this.prisma.admin.create({ data })
