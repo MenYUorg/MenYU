@@ -73,7 +73,7 @@ describe('UsersService', () => {
 
   describe('createAdmin', () => {
     it('crea y devuelve el admin', async () => {
-      const data = { email: 'nuevo@test.com', passwordHash: 'hash', rol: 'ADMIN', restauranteId: 'rest-1' }
+      const data = { email: 'nuevo@test.com', passwordHash: 'hash', rol: 'GERENTE' as const, marcaId: 'rest-1' }
       const created = { id: 'new-id', ...data }
       mockPrisma.admin.create.mockResolvedValue(created)
 
@@ -84,7 +84,7 @@ describe('UsersService', () => {
     })
 
     it('crea admin ROOT sin restauranteId', async () => {
-      const data = { email: 'root@menyu.com', passwordHash: 'hash', rol: 'ROOT' }
+      const data = { email: 'root@menyu.com', passwordHash: 'hash', rol: 'ROOT' as const }
       const created = { id: 'root-id', ...data, marcaId: null }
       mockPrisma.admin.create.mockResolvedValue(created)
 

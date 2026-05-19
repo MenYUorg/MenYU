@@ -32,19 +32,19 @@ export class RestauranteController {
   }
 
   @Get()
-  @Roles('ROOT', 'OWNER')
+  @Roles('ROOT', 'OWNER', 'GERENTE')
   findAll(@CurrentUser() user: JwtPayload) {
     return this.restaurantes.findAll(user)
   }
 
   @Get(':id')
-  @Roles('ROOT', 'OWNER')
+  @Roles('ROOT', 'OWNER', 'GERENTE')
   findOne(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.restaurantes.findOne(id, user)
   }
 
   @Patch(':id')
-  @Roles('ROOT', 'OWNER')
+  @Roles('ROOT', 'OWNER', 'GERENTE')
   update(
     @Param('id') id: string,
     @Body() dto: UpdateRestauranteDto,

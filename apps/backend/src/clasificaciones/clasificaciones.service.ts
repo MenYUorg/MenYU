@@ -107,11 +107,21 @@ export class ClasificacionesService {
 
   private async assertRestauranteOwnership(restauranteId: string, user: JwtPayload) {
     if (user.rol === 'ROOT') return
-    const admin = await this.prisma.admin.findUnique({ where: { id: user.sub } })
-    if (!admin) throw new ForbiddenException('No tenés acceso')
-    const restaurante = await this.prisma.restaurante.findUnique({ where: { id: restauranteId } })
-    if (!restaurante || admin.marcaId !== restaurante.marcaId) {
-      throw new ForbiddenException('No tenés acceso a este restaurante')
+    if (user.rol === 'OWNER') {
+      const admin = await this.prisma.admin.findUnique({ where: { id: user.sub } })
+      const restaurante = await this.prisma.restaurante.findUnique({ where: { id: restauranteId } })
+      if (!admin || !restaurante || admin.marcaId !== restaurante.marcaId) {
+        throw new ForbiddenException('No tenés acceso a este restaurante')
+      }
+      return
     }
+    if (user.rol === 'GERENTE') {
+      const asignacion = await this.prisma.adminRestaurante.findUnique({
+        where: { adminId_restauranteId: { adminId: user.sub, restauranteId } },
+      })
+      if (!asignacion) throw new ForbiddenException('No tenés acceso a este restaurante')
+      return
+    }
+    throw new ForbiddenException('No tenés acceso a este restaurante')
   }
 }

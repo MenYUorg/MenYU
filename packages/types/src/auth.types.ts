@@ -1,12 +1,12 @@
 export type UserTipo = 'admin' | 'mozo' | 'cliente'
-export type RolAdmin = 'ROOT' | 'OWNER' | 'ADMIN'
+export type RolAdmin = 'ROOT' | 'OWNER' | 'GERENTE'
 
 export interface JwtPayload {
   sub: string
   email?: string
   nombre?: string
   tipo: UserTipo
-  rol?: string
+  rol?: RolAdmin
   restauranteId?: string
   iat: number
   exp: number
@@ -31,7 +31,7 @@ export interface Admin {
   id: string
   marcaId: string | null
   email: string
-  rol: string
+  rol: RolAdmin
 }
 
 export interface Mozo {

@@ -25,7 +25,7 @@ import { UpdateIngredienteDto } from './dto/update-ingrediente.dto'
 @ApiBearerAuth()
 @Controller('ingredientes')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('ROOT', 'OWNER')
+@Roles('ROOT', 'OWNER', 'GERENTE')
 export class IngredientesController {
   constructor(private readonly ingredientes: IngredientesService) {}
 

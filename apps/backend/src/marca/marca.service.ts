@@ -13,7 +13,7 @@ const DETAIL_INCLUDE = {
   restaurantes: {
     where: { activo: true },
     include: {
-      admins: { select: { id: true, email: true, rol: true } },
+      admins: { include: { admin: { select: { id: true, email: true, rol: true } } } },
       mozos: { where: { activo: true }, select: { id: true, nombre: true, email: true } },
       mesas: true,
     },
@@ -44,6 +44,19 @@ export class MarcaService {
         include: { restaurantes: { where: { activo: true } } },
       })
     }
+    if (user.rol === 'GERENTE') {
+      const restauranteIds = await this.getRestaurantesForGerente(user.sub)
+      const restaurantes = await this.prisma.restaurante.findMany({
+        where: { id: { in: restauranteIds } },
+        select: { marcaId: true },
+        distinct: ['marcaId'],
+      })
+      const marcaIds = restaurantes.map((r: { marcaId: string }) => r.marcaId)
+      return this.prisma.marca.findMany({
+        where: { id: { in: marcaIds }, activo: true },
+        include: { restaurantes: { where: { activo: true } } },
+      })
+    }
     const marcaId = await this.getMarcaIdForAdmin(user.sub)
     return this.prisma.marca.findMany({
       where: { id: marcaId, activo: true },
@@ -55,6 +68,9 @@ export class MarcaService {
     if (user.rol === 'OWNER') {
       const marcaId = await this.getMarcaIdForAdmin(user.sub)
       if (marcaId !== id) throw new ForbiddenException('No tenés acceso a esta marca')
+    }
+    if (user.rol === 'GERENTE') {
+      throw new ForbiddenException('Los gerentes no tienen acceso a marcas')
     }
     const marca = await this.prisma.marca.findUnique({
       where: { id },
@@ -68,6 +84,9 @@ export class MarcaService {
     if (user.rol === 'OWNER') {
       const marcaId = await this.getMarcaIdForAdmin(user.sub)
       if (marcaId !== id) throw new ForbiddenException('No tenés acceso a esta marca')
+    }
+    if (user.rol === 'GERENTE') {
+      throw new ForbiddenException('Los gerentes no pueden modificar marcas')
     }
     await this.assertExists(id)
     if (dto.slug) {
@@ -93,5 +112,10 @@ export class MarcaService {
     const admin = await this.prisma.admin.findUnique({ where: { id: adminId } })
     if (!admin || !admin.marcaId) throw new NotFoundException('Admin sin marca asignada')
     return admin.marcaId
+  }
+
+  private async getRestaurantesForGerente(adminId: string): Promise<string[]> {
+    const asignaciones = await this.prisma.adminRestaurante.findMany({ where: { adminId } })
+    return asignaciones.map((a: { restauranteId: string }) => a.restauranteId)
   }
 }

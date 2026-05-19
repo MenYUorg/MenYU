@@ -27,7 +27,7 @@ import { UpdateSubcategoriaDto } from './dto/update-subcategoria.dto'
 @ApiBearerAuth()
 @Controller('categorias')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('ROOT', 'OWNER')
+@Roles('ROOT', 'OWNER', 'GERENTE')
 export class CategoriasController {
   constructor(private readonly categorias: CategoriasService) {}
 

@@ -35,7 +35,7 @@ model Restaurante {
   activo      Boolean  @default(true)
   createdAt   DateTime @default(now()) @map("created_at")
 
-  marca         Marca           @relation(fields: [marcaId], references: [id])
+  marca         Marca              @relation(fields: [marcaId], references: [id])
   mozos         Mozo[]
   comandas      Comanda[]
   categorias    CategoriaMenu[]
@@ -43,8 +43,15 @@ model Restaurante {
   mesas         Mesa[]
   ingredientes  Ingrediente[]
   items         ItemMenu[]
+  admins        AdminRestaurante[]
 
   @@map("restaurante")
+}
+
+enum RolAdmin {
+  ROOT
+  OWNER
+  GERENTE
 }
 
 // ─────────────────────────────────────────────
@@ -52,15 +59,28 @@ model Restaurante {
 // ─────────────────────────────────────────────
 
 model Admin {
-  id       String  @id @default(uuid())
-  marcaId  String? @map("marca_id")
-  email    String  @unique
-  passwordHash String @map("password_hash")
-  rol      String
+  id           String    @id @default(uuid())
+  marcaId      String?   @map("marca_id")
+  email        String    @unique
+  passwordHash String    @map("password_hash")
+  rol          RolAdmin
 
-  marca Marca? @relation(fields: [marcaId], references: [id])
+  marca        Marca?             @relation(fields: [marcaId], references: [id])
+  restaurantes AdminRestaurante[]
 
   @@map("admin")
+}
+
+model AdminRestaurante {
+  id            String @id @default(uuid())
+  adminId       String @map("admin_id")
+  restauranteId String @map("restaurante_id")
+
+  admin       Admin       @relation(fields: [adminId], references: [id])
+  restaurante Restaurante @relation(fields: [restauranteId], references: [id])
+
+  @@unique([adminId, restauranteId])
+  @@map("admin_restaurante")
 }
 
 model Mozo {

@@ -34,6 +34,13 @@ export class RestauranteService {
         include: { marca: true },
       })
     }
+    if (user.rol === 'GERENTE') {
+      const restauranteIds = await this.getRestaurantesForGerente(user.sub)
+      return this.prisma.restaurante.findMany({
+        where: { id: { in: restauranteIds }, activo: true },
+        include: { marca: true },
+      })
+    }
     const marcaId = await this.getMarcaIdForAdmin(user.sub)
     return this.prisma.restaurante.findMany({
       where: { marcaId, activo: true },
@@ -47,6 +54,9 @@ export class RestauranteService {
       const restaurante = await this.prisma.restaurante.findUnique({ where: { id } })
       if (!restaurante || restaurante.marcaId !== marcaId)
         throw new ForbiddenException('No tenés acceso a este restaurante')
+    }
+    if (user.rol === 'GERENTE') {
+      await this.assertRestauranteOwnership(id, user)
     }
     const restaurante = await this.prisma.restaurante.findUnique({
       where: { id },
@@ -63,6 +73,9 @@ export class RestauranteService {
       if (!restaurante || restaurante.marcaId !== marcaId)
         throw new ForbiddenException('No tenés acceso a este restaurante')
     }
+    if (user.rol === 'GERENTE') {
+      await this.assertRestauranteOwnership(id, user)
+    }
     await this.assertExists(id)
     return this.prisma.restaurante.update({ where: { id }, data: dto })
   }
@@ -77,9 +90,34 @@ export class RestauranteService {
     if (!r || !r.activo) throw new NotFoundException('Restaurante no encontrado')
   }
 
+  private async assertRestauranteOwnership(restauranteId: string, user: JwtPayload) {
+    if (user.rol === 'ROOT') return
+    if (user.rol === 'OWNER') {
+      const admin = await this.prisma.admin.findUnique({ where: { id: user.sub } })
+      const restaurante = await this.prisma.restaurante.findUnique({ where: { id: restauranteId } })
+      if (!admin || !restaurante || admin.marcaId !== restaurante.marcaId) {
+        throw new ForbiddenException('No tenés acceso a este restaurante')
+      }
+      return
+    }
+    if (user.rol === 'GERENTE') {
+      const asignacion = await this.prisma.adminRestaurante.findUnique({
+        where: { adminId_restauranteId: { adminId: user.sub, restauranteId } },
+      })
+      if (!asignacion) throw new ForbiddenException('No tenés acceso a este restaurante')
+      return
+    }
+    throw new ForbiddenException('No tenés acceso a este restaurante')
+  }
+
   private async getMarcaIdForAdmin(adminId: string): Promise<string> {
     const admin = await this.prisma.admin.findUnique({ where: { id: adminId } })
     if (!admin || !admin.marcaId) throw new NotFoundException('Admin sin marca asignada')
     return admin.marcaId
+  }
+
+  private async getRestaurantesForGerente(adminId: string): Promise<string[]> {
+    const asignaciones = await this.prisma.adminRestaurante.findMany({ where: { adminId } })
+    return asignaciones.map((a: { restauranteId: string }) => a.restauranteId)
   }
 }

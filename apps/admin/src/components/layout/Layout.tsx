@@ -12,11 +12,13 @@ interface LayoutProps {
 const NAV_ITEMS: { label: string; key: PageKey }[] = [
   { label: 'Catálogo', key: 'menu' },
   { label: 'Mesas', key: 'mesas' },
+  { label: 'Gerentes', key: 'gerentes' },
 ]
 
 const PAGE_TITLES: Record<PageKey, string> = {
   menu: 'Gestión del Catálogo',
   mesas: 'Gestión de Mesas',
+  gerentes: 'Gestión de Gerentes',
 }
 
 export function Layout({ children, currentPage, onNavigate }: LayoutProps) {

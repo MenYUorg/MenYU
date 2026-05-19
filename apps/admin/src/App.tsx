@@ -4,8 +4,9 @@ import { LoginPage } from './pages/login/LoginPage'
 import { Layout } from './components/layout/Layout'
 import { MenuPage } from './pages/menu/MenuPage'
 import { TablesPage } from './pages/tables'
+import { GerentesPage } from './pages/gerentes/GerentesPage'
 
-export type PageKey = 'menu' | 'mesas'
+export type PageKey = 'menu' | 'mesas' | 'gerentes'
 
 export default function App() {
   const { isLoggedIn, user, logout, loadContext } = useAuthStore()
@@ -41,6 +42,7 @@ export default function App() {
     <Layout currentPage={currentPage} onNavigate={setCurrentPage}>
       {currentPage === 'menu' && <MenuPage />}
       {currentPage === 'mesas' && <TablesPage />}
+      {currentPage === 'gerentes' && <GerentesPage />}
     </Layout>
   )
 }
