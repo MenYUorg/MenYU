@@ -2,13 +2,16 @@ import { useState } from 'react'
 import { View, Text, ScrollView, TouchableOpacity, Image, StyleSheet } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useMenuStore } from '../../../store/menuStore'
-import type { ItemIngrediente } from '@menyu/types'
+import { useCartStore } from '../../../store/cartStore'
+import type { ItemIngrediente, ModificacionIngrediente } from '@menyu/types'
 
 export default function ItemDetailScreen() {
   const { itemId } = useLocalSearchParams<{ itemId: string }>()
   const router = useRouter()
   const getItemById = useMenuStore((s) => s.getItemById)
   const item = getItemById(itemId ?? '')
+
+  const agregarAlCarrito = useCartStore((s) => s.agregar)
 
   const [removidos, setRemovidos] = useState<Set<string>>(new Set())
   const [agregados, setAgregados] = useState<Map<string, number>>(new Map())
@@ -48,6 +51,46 @@ export default function ItemDetailScreen() {
       else next.set(ii.id, nuevo)
       return next
     })
+  }
+
+  const handleAgregarAlCarrito = () => {
+    const modificaciones: ModificacionIngrediente[] = []
+
+    for (const id of removidos) {
+      const ii = item.ingredientes?.find((i) => i.id === id)
+      if (!ii) continue
+      modificaciones.push({
+        itemIngredienteId: ii.id,
+        ingredienteId: ii.ingredienteId,
+        accion: 'quitar',
+        cantidad: Number(ii.cantidad),
+        precioExtra: 0,
+      })
+    }
+
+    for (const [id, qty] of agregados) {
+      const ii = item.ingredientes?.find((i) => i.id === id)
+      if (!ii) continue
+      modificaciones.push({
+        itemIngredienteId: ii.id,
+        ingredienteId: ii.ingredienteId,
+        accion: 'agregar',
+        cantidad: qty,
+        precioExtra: Number(ii.precioExtra),
+      })
+    }
+
+    agregarAlCarrito({
+      itemMenuId: item.id,
+      cantidad: 1,
+      precioBase: Number(item.precioBase),
+      modificaciones,
+      precioTotal,
+      nombre: item.nombre,
+      imagenUrl: item.imagenUrl,
+    })
+
+    router.back()
   }
 
   const ingredientesOriginales = (item.ingredientes ?? []).filter((ii) => ii.esOriginal)
@@ -151,7 +194,7 @@ export default function ItemDetailScreen() {
           <Text style={styles.totalLabel}>Total</Text>
           <Text style={styles.totalPrecio}>${precioTotal.toFixed(2)}</Text>
         </View>
-        <TouchableOpacity style={styles.addBtn}>
+        <TouchableOpacity style={styles.addBtn} onPress={handleAgregarAlCarrito}>
           <Text style={styles.addBtnText}>Agregar al carrito</Text>
         </TouchableOpacity>
       </View>

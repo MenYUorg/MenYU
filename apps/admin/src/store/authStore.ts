@@ -12,7 +12,7 @@ interface AuthStore {
   loading: boolean
   error: string | null
   login: (email: string, password: string) => Promise<void>
-  logout: () => void
+  logout: () => Promise<void>
   loadContext: () => Promise<void>
   setMarca: (id: string) => void
   setRestaurante: (id: string) => void
@@ -60,7 +60,11 @@ export const useAuthStore = create<AuthStore>()((set, get) => ({
     }
   },
 
-  logout: () => {
+  logout: async () => {
+    const refreshToken = localStorage.getItem(REFRESH_KEY)
+    if (refreshToken) {
+      await api.auth.logout(refreshToken).catch(() => undefined)
+    }
     localStorage.removeItem(TOKEN_KEY)
     localStorage.removeItem(REFRESH_KEY)
     set({
@@ -87,7 +91,7 @@ export const useAuthStore = create<AuthStore>()((set, get) => ({
       })
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) {
-        get().logout()
+        await get().logout()
       }
     }
   },
