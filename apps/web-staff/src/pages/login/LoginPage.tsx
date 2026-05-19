@@ -1,4 +1,5 @@
-import { Navigate } from 'react-router-dom'
+import { useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuth, LoginForm } from '@menyu/auth'
 
 const DEST: Record<string, string> = {
@@ -8,12 +9,14 @@ const DEST: Record<string, string> = {
 
 export function LoginPage() {
   const { isLoggedIn, user } = useAuth()
+  const navigate = useNavigate()
 
-  if (isLoggedIn && user) {
+  useEffect(() => {
+    if (!isLoggedIn || !user) return
     const dest = DEST[user.tipo]
-    if (!dest) return <Navigate to="/login" replace />
-    return <Navigate to={dest} replace />
-  }
+    if (!dest) return
+    navigate(dest, { replace: true })
+  }, [isLoggedIn]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">

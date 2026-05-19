@@ -1,22 +1,18 @@
 import { useEffect } from 'react'
-import { Navigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useAuth, LoginForm } from '@menyu/auth'
 import { useContextStore } from '../../store/contextStore'
 
 export function LoginPage() {
   const { isLoggedIn, user } = useAuth()
+  const navigate = useNavigate()
   const loadContext = useContextStore((s) => s.loadContext)
 
   useEffect(() => {
-    if (isLoggedIn && user?.tipo === 'admin') {
-      void loadContext()
-    }
-  }, [isLoggedIn, user]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  if (isLoggedIn && user) {
-    if (user.tipo !== 'admin') return <Navigate to="/login" replace />
-    return <Navigate to="/admin" replace />
-  }
+    if (!isLoggedIn || !user || user.tipo !== 'admin') return
+    void loadContext()
+    navigate('/admin', { replace: true })
+  }, [isLoggedIn]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
