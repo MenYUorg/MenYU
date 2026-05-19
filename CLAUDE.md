@@ -13,15 +13,17 @@ Equipo: De Marcos, Ojeda, Strumia Carrara (ODS390-2026). Stack sin experiencia p
 | Backend | Node.js + TypeScript + NestJS + Prisma ORM |
 | Base de datos | PostgreSQL via Supabase |
 | Tiempo real | Socket.io |
-| App cliente | Expo (React Native + Expo Web) |
+| App cliente (comensal) | Expo (React Native + Expo Web) |
 | App mozo | Expo (React Native) · push notifications |
-| Panel cocina | React + Vite + TailwindCSS · integración impresoras físicas |
-| Panel admin | React + Vite + TailwindCSS |
+| Panel web admin | React + Vite + TailwindCSS · apps/web-admin |
+| Panel web staff | React + Vite + TailwindCSS · apps/web-staff (cocina + mozo web) |
+| App web cliente | React + Vite + TailwindCSS · apps/web-cliente |
+| Infra frontend | Vercel (3 proyectos separados) |
 | Estado global | Zustand |
 | Monorepo | Turborepo + pnpm workspaces |
 | Tipos compartidos | `@menyu/types` |
 | Pagos | Mercado Pago (detrás de interfaz `PaymentProvider`) |
-| Infra | Railway + Supabase + Cloudflare |
+| Infra | Railway (backend) + Supabase (DB) + Vercel (frontends web) |
 | Recomendaciones (v2.0) | Python + FastAPI + pandas/numpy + OpenAI API |
 
 ---
@@ -34,8 +36,9 @@ MenYu/
 │   ├── backend/          → @menyu/api      (NestJS + Prisma)
 │   ├── cliente/          → @menyu/cliente  (Expo React Native + Expo Web)
 │   ├── mozo/             → @menyu/mozo     (Expo React Native · push notifications · panel completo)
-│   ├── cocina/           → @menyu/cocina   (React + Vite · web app lectura de comandas + integración impresoras físicas)
-│   └── admin/            → @menyu/admin    (React + Vite, desktop)
+│   ├── web-cliente/      → @menyu/web-cliente  (React + Vite · menú del comensal)
+│   ├── web-staff/        → @menyu/web-staff    (React + Vite · cocina + mozo web)
+│   └── web-admin/        → @menyu/web-admin    (React + Vite · panel administrador)
 ├── packages/
 │   ├── types/            → @menyu/types    (tipos TS compartidos)
 │   ├── ui/               → @menyu/ui       (componentes React compartidos)
@@ -45,6 +48,10 @@ MenYu/
 ├── pnpm-workspace.yaml
 └── .env.example
 ```
+
+> **apps/cocina, apps/admin y apps/web están ARCHIVADAS.**
+> Todo desarrollo web va en las tres apps nuevas.
+> No agregar código nuevo a esas carpetas.
 
 ### Interior de `apps/backend/`
 
@@ -83,24 +90,6 @@ apps/cliente/src/
 └── services/             (api.ts, socket.ts)
 ```
 
-### Interior de `apps/cocina/`
-
-Web app React + Vite de solo lectura de comandas, más integración con impresoras físicas (comanderas). No requiere login complejo — la tablet/PC de cocina siempre está logueada. Sin interacción compleja: cocina solo visualiza pedidos entrantes y dispara la impresión.
-
-```
-apps/cocina/src/
-├── pages/                (KitchenBoard.tsx)
-├── components/           (OrderCard.tsx, OrderList.tsx, StatusBadge.tsx)
-├── store/                (ordersStore.ts — Zustand)
-├── services/
-│   ├── api.ts
-│   ├── socket.ts
-│   └── printer.ts        (integración impresoras físicas — ESC/POS o similar)
-└── config/               (printerConfig.ts — IP/puerto de la impresora)
-```
-
-**Notas de impresoras:** la integración es con impresoras de red (ESC/POS sobre TCP/IP). A definir en el sprint correspondiente si la lógica de impresión vive en el frontend de cocina o en el backend.
-
 ### Interior de `apps/mozo/`
 
 App Expo React Native. El mozo se mueve por el salón — necesita push notifications nativas que lleguen con la pantalla bloqueada. Panel completo: estado de platos, llamados de mesa, pedidos listos para despacho.
@@ -112,16 +101,6 @@ apps/mozo/src/
 ├── components/           (ui/, layout/, order/)
 ├── store/                (mozoStore.ts, ordersStore.ts — Zustand)
 └── services/             (api.ts, socket.ts, notifications.ts)
-```
-
-### Interior de `apps/admin/`
-
-```
-apps/admin/src/
-├── pages/                (dashboard/, menu/, tables/, staff/, payments/)
-├── components/           (ui/, forms/, tables/, charts/)
-├── store/                (menuStore.ts, tablesStore.ts — Zustand)
-└── services/             (api.ts)
 ```
 
 ### Interior de `packages/types/`
@@ -138,6 +117,54 @@ packages/types/src/
 ├── socket/               (events.ts — eventos Socket.io tipados)
 └── api/                  (requests.ts, responses.ts — DTOs compartidos)
 ```
+
+---
+
+## Arquitectura de frontends web
+
+### Tres apps web independientes (Vercel)
+```
+apps/web-cliente/   → menu.menyu.com     (comensal)
+apps/web-staff/     → staff.menyu.com    (cocina + mozo web)
+apps/web-admin/     → admin.menyu.com    (dueño/administrador)
+```
+
+Cada una es un proyecto Vite independiente con su propio deploy en Vercel.
+Un cambio en web-admin no afecta ni rebuilda web-cliente.
+
+### Autenticación
+
+**Flujo normal (usuario + contraseña):**
+- Login compartido entre web-admin y web-staff vía `packages/auth`
+- Al recibir el JWT redirige según `user.tipo`:
+  admin → web-admin, mozo/cocina → web-staff
+- Cada app valida que el rol del JWT coincida con su dominio.
+  Si no coincide, redirige al login.
+
+**Flujo alternativo QR/PIN (solo web-cliente):**
+- Exclusivo de apps/web-cliente — nunca en web-admin ni web-staff
+- No usa usuario ni contraseña — autentica una mesa, no un usuario
+- Redirige directamente a la vista de menú de esa mesa
+- El comensal nunca pasa por el login común
+
+### Código compartido entre apps web
+
+Vive en packages/:
+- `packages/auth`  → LoginForm, useAuth, authService
+                     compartido entre web-admin y web-staff
+                     NO usar en web-cliente
+- `packages/ui`    → componentes visuales idénticos entre apps
+                     Button, Input, Modal, Avatar, hooks compartidos
+- `packages/types` → tipos TypeScript (sin cambios)
+
+**Regla para decidir si algo va a packages/:**
+Un componente va a packages/ solo si se comporta exactamente igual sin importar el rol.
+Si tiene lógica condicional por rol, vive en cada app por separado.
+
+### Seguridad por separación de bundles
+El código del admin no existe en el bundle del comensal.
+Aunque el comensal no pueda acceder al panel admin, en la arquitectura anterior
+el código JS era inspeccionable. Con las 3 apps separadas eso no es posible.
 
 ---
 
@@ -268,6 +295,11 @@ pnpm typecheck
 - Cada módulo de NestJS tiene su propio archivo `.module.ts`, `.controller.ts`, `.service.ts`.
 - El patrón de pagos es `PaymentProvider` — nunca llamar Mercado Pago directamente desde el controller.
 - El QR es un identificador interno de la app, **no** una URL directa a una ruta web.
+- apps/cocina, apps/admin y apps/web están archivadas — no agregar código nuevo.
+- Cada feature nueva de frontend va en la app correspondiente a su rol: web-cliente, web-staff o web-admin.
+- El login QR/PIN del comensal es independiente del login común — nunca mezclarlos ni importar packages/auth en web-cliente.
+- Componentes compartidos entre apps van en packages/ui o packages/auth. Nunca duplicar lógica idéntica en cada app.
+- Nunca agregar lógica de un rol en la app de otro rol. El comensal no debe tener acceso al código del admin ni siquiera en el bundle compilado.
 
 ---
 

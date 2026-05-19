@@ -20,7 +20,7 @@
       "Bash(pnpm --filter @menyu/api test)",
       "Bash(pnpm --filter @menyu/api test:e2e)",
       "Bash(pnpm --filter @menyu/cliente add -D jest-expo@~53.0.0 \"@testing-library/react-native@^13.0.0\" \"@types/jest@^29.5.0\")",
-      "Bash(pnpm --filter @menyu/cliente test)"
+      "Bash(pnpm --filter @menyu/cliente test)",
       "Bash(Get-ChildItem *)",
       "Bash(Select-String -Pattern \"socket|websocket|@nestjs/websockets\")",
       "Bash(pnpm --filter @menyu/api exec prisma migrate dev --name fix/dieta-clasificacion-en-item)",
