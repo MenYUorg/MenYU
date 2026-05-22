@@ -35,3 +35,7 @@ apps/backend/prisma/migrations/*.sql.bak
 Documentacion/*
 !Documentacion/Doc_DB.md
 !Documentacion/Gantt.html
+
+# Claude Code (generado por el entorno del SDK)
+.claude/skills/
+.patches/
