@@ -31,7 +31,8 @@
       "Bash(git push *)",
       "Bash(pnpm --filter @menyu/web typecheck)",
       "Bash(pnpm install *)",
-      "Bash(pnpm typecheck *)"
+      "Bash(pnpm typecheck *)",
+      "Bash(curl -s http://localhost:3000/health)"
     ]
   }
 }

@@ -7,7 +7,9 @@ import {
 import { JwtService } from '@nestjs/jwt'
 import { PrismaService } from '../prisma/prisma.service'
 import { MenyuGateway } from '../gateway/menyu.gateway'
+import { Request } from 'express'
 import { CreatePedidoDto } from './dto/create-pedido.dto'
+import { UpdateEstadoPedidoDto } from './dto/update-estado-pedido.dto'
 
 interface SessionJwt {
   sub: string
@@ -138,11 +140,16 @@ export class PedidosService {
           },
         },
         include: {
+          mesa: { select: { numero: true } },
           items: {
             include: {
-              item: true,
+              item: { select: { nombre: true } },
               mods: {
-                include: { itemIngrediente: true },
+                include: {
+                  itemIngrediente: {
+                    include: { ingrediente: { select: { nombre: true } } },
+                  },
+                },
               },
             },
           },
@@ -153,5 +160,84 @@ export class PedidosService {
     this.gateway.emitOrderNew(restauranteId, pedido)
 
     return pedido
+  }
+
+  async listarPorEstado(restauranteId: string, estado: string) {
+    return this.prisma.pedido.findMany({
+      where: { mesa: { restauranteId }, estado },
+      include: {
+        mesa: { select: { numero: true } },
+        items: {
+          include: {
+            item: { select: { nombre: true } },
+            mods: {
+              include: {
+                itemIngrediente: {
+                  include: { ingrediente: { select: { nombre: true } } },
+                },
+              },
+            },
+          },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+    })
+  }
+
+  async actualizarEstado(
+    id: string,
+    dto: UpdateEstadoPedidoDto,
+    req: Request,
+  ) {
+    // JwtAuthGuard ya verificó el token — req.user tiene el payload
+    const user = req.user as { tipo: string } | undefined
+    if (user?.tipo === 'cliente') {
+      throw new UnauthorizedException('Solo staff puede actualizar el estado de un pedido')
+    }
+
+    // a. Buscar pedido con mesa para obtener restauranteId
+    const pedido = await this.prisma.pedido.findUnique({
+      where: { id },
+      include: { mesa: true },
+    })
+    if (!pedido) throw new NotFoundException('Pedido no encontrado')
+
+    // b. Validar transición
+    const TRANSICIONES: Record<string, string> = {
+      pendiente: 'en_preparacion',
+      en_preparacion: 'listo',
+      listo: 'entregado',
+    }
+    if (TRANSICIONES[pedido.estado] !== dto.estado) {
+      throw new BadRequestException(
+        `Transición inválida: ${pedido.estado} → ${dto.estado}`,
+      )
+    }
+
+    // c. Actualizar estado
+    const actualizado = await this.prisma.pedido.update({
+      where: { id },
+      data: { estado: dto.estado },
+      include: {
+        mesa: { select: { numero: true } },
+        items: {
+          include: {
+            item: { select: { nombre: true } },
+            mods: {
+              include: {
+                itemIngrediente: {
+                  include: { ingrediente: { select: { nombre: true } } },
+                },
+              },
+            },
+          },
+        },
+      },
+    })
+
+    // d. Emitir a cocina/mozo
+    this.gateway.emitOrderUpdated(pedido.mesa.restauranteId, actualizado)
+
+    return actualizado
   }
 }

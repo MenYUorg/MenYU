@@ -34,6 +34,24 @@ export class MenyuGateway implements OnGatewayConnection, OnGatewayDisconnect {
     return { ok: true }
   }
 
+  @SubscribeMessage('cocina:join')
+  handleJoinCocina(
+    @MessageBody() data: { restauranteId: string },
+    @ConnectedSocket() client: Socket,
+  ) {
+    void client.join(`restaurante-${data.restauranteId}`)
+    return { ok: true }
+  }
+
+  @SubscribeMessage('mozo:join')
+  handleJoinMozo(
+    @MessageBody() data: { restauranteId: string },
+    @ConnectedSocket() client: Socket,
+  ) {
+    void client.join(`restaurante-${data.restauranteId}`)
+    return { ok: true }
+  }
+
   emitOrderNew(restauranteId: string, pedido: unknown) {
     this.server.to(`restaurante-${restauranteId}`).emit('order:new', pedido)
   }
@@ -43,7 +61,7 @@ export class MenyuGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   emitMozoCalled(restauranteId: string, data: { sesionId: string; mesaNumero: string }) {
-    this.server.to(`restaurante-${restauranteId}`).emit('mozo:llamado', data)
+    this.server.to(`restaurante-${restauranteId}`).emit('waiter:called', data)
   }
 
   emitSesionCerrada(restauranteId: string, sesionId: string) {

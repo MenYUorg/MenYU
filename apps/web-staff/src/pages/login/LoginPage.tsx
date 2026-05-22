@@ -4,6 +4,7 @@ import { useAuth, LoginForm } from '@menyu/auth'
 const DEST: Record<string, string> = {
   mozo: '/mozo',
   cocina: '/cocina',
+  admin: '/selector',
 }
 
 export function LoginPage() {
