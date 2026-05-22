@@ -118,6 +118,26 @@ packages/types/src/
 └── api/                  (requests.ts, responses.ts — DTOs compartidos)
 ```
 
+### Roles de administración (enum `RolAdmin` en DB)
+| Rol | Descripción |
+|---|---|
+| `ROOT` | Dueños del sistema MenYu — bypass total, acceso a todo |
+| `OWNER` | Dueño de una marca — acceso a toda su marca y sus restaurantes |
+| `GERENTE` | Gerente de restaurantes específicos, asignados via tabla `AdminRestaurante` |
+
+### Tipos de usuario adicionales (tablas separadas, NO son RolAdmin)
+| Tipo | Tabla | App |
+|---|---|---|
+| Mozo | `mozo` | apps/mozo + apps/web-staff |
+| Cocina | `cocina` | apps/web-staff |
+| Cliente/Comensal | `cliente` | apps/cliente + apps/web-cliente |
+
+### Guards NestJS
+- `@Roles(RolAdmin.ROOT)` — solo ROOT
+- `@Roles(RolAdmin.OWNER, RolAdmin.GERENTE)` — panel admin
+- Mozos y cocina usan sus propios guards separados del enum RolAdmin
+- El comensal no usa guards de admin — se autentica por sesión de mesa
+
 ---
 
 ## Arquitectura de frontends web
