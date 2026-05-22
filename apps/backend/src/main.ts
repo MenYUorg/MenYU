@@ -11,15 +11,21 @@ const CORS_ORIGINS = [
   'http://localhost:5173',
   'http://localhost:5174',
   'http://localhost:5175',
+  'http://localhost:5176',
   'http://localhost:4173',
 ]
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule)
   app.enableCors({
-    origin: process.env.CORS_ORIGINS
-      ? process.env.CORS_ORIGINS.split(',')
-      : CORS_ORIGINS,
+    origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+      // En dev permitimos cualquier localhost; en prod usamos la variable de entorno
+      if (!origin || origin.startsWith('http://localhost:')) {
+        return callback(null, true)
+      }
+      const allowed = process.env.CORS_ORIGINS?.split(',') ?? CORS_ORIGINS
+      callback(null, allowed.includes(origin))
+    },
     credentials: true,
   })
   app.setGlobalPrefix('api', { exclude: [{ path: 'health', method: RequestMethod.GET }] })

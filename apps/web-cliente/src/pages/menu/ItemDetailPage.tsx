@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { usePublicMenuStore } from '../../store/publicMenuStore'
+import { useCarritoStore } from '../../store/carritoStore'
 import type { MenuPublicoItem } from '@menyu/types'
 
 export function ItemDetailPage() {
@@ -11,6 +12,7 @@ export function ItemDetailPage() {
 
   const [removidos, setRemovidos] = useState<Set<string>>(new Set())
   const [agregados, setAgregados] = useState<Map<string, number>>(new Map())
+  const { agregar } = useCarritoStore()
 
   if (!item) {
     return (
@@ -79,6 +81,29 @@ export function ItemDetailPage() {
                       <button onClick={() => toggleRemovido(ii.id)} className="text-xs font-semibold text-orange-500 bg-orange-50 px-3 py-1 rounded-full">
                         {removidos.has(ii.id) ? 'Restaurar' : 'Quitar'}
                       </button>
+                    ) : ii.esAgregable ? (
+                      <div className="flex items-center gap-2">
+                        {Number(ii.precioExtra) > 0 && (
+                          <span className="text-xs text-orange-500 font-semibold">
+                            +${Number(ii.precioExtra).toFixed(2)} c/u extra
+                          </span>
+                        )}
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => cambiarCantidad(ii, -1)}
+                            disabled={(agregados.get(ii.id) ?? 0) <= 0}
+                            className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-gray-700 text-base font-medium disabled:opacity-30"
+                          >−</button>
+                          <span className="text-sm font-bold text-gray-900 w-4 text-center">
+                            {agregados.get(ii.id) ?? 0}
+                          </span>
+                          <button
+                            onClick={() => cambiarCantidad(ii, 1)}
+                            disabled={(agregados.get(ii.id) ?? 0) >= ii.cantidadMax}
+                            className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-gray-700 text-base font-medium disabled:opacity-30"
+                          >+</button>
+                        </div>
+                      </div>
                     ) : (
                       <span className="text-xs text-gray-300">Fijo</span>
                     )}
@@ -119,7 +144,31 @@ export function ItemDetailPage() {
           <p className="text-xs text-gray-400">Total</p>
           <p className="text-xl font-bold text-orange-500">${precioTotal.toFixed(2)}</p>
         </div>
-        <button className="px-6 py-3 bg-orange-500 text-white text-sm font-bold rounded-xl hover:bg-orange-600 transition-colors">
+        <button
+          onClick={() => {
+            const mods = [
+              ...Array.from(removidos).map((id) => ({
+                itemIngredienteId: id,
+                accion: 'QUITAR' as const,
+                cantidad: 1,
+              })),
+              ...Array.from(agregados.entries()).map(([id, qty]) => ({
+                itemIngredienteId: id,
+                accion: 'AGREGAR' as const,
+                cantidad: qty,
+              })),
+            ]
+            agregar({
+              itemId: item.id,
+              nombre: item.nombre,
+              precioUnitario: precioTotal,
+              cantidad: 1,
+              mods,
+            })
+            navigate('/carrito')
+          }}
+          className="px-6 py-3 bg-orange-500 text-white text-sm font-bold rounded-xl hover:bg-orange-600 transition-colors"
+        >
           Agregar al carrito
         </button>
       </div>

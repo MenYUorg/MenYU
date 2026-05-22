@@ -1,9 +1,53 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { usePublicMenuStore } from '../../store/publicMenuStore'
 import { useSessionStore } from '../../store/sessionStore'
+import { useCarritoStore } from '../../store/carritoStore'
 import { Spinner } from '@menyu/ui'
+import { api } from '../../services/api'
 import type { MenuPublicoCategoria, MenuPublicoItem } from '@menyu/types'
+
+type MozoStatus = 'idle' | 'loading' | 'ok' | 'error'
+
+function LlamarMozoBtn({ sesionId, jwt }: { sesionId: string; jwt: string }) {
+  const [status, setStatus] = useState<MozoStatus>('idle')
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  async function handleClick() {
+    if (status !== 'idle') return
+    setStatus('loading')
+    try {
+      await api.waiterCalls.llamar(sesionId, jwt)
+      setStatus('ok')
+    } catch {
+      setStatus('error')
+    }
+    timerRef.current = setTimeout(() => setStatus('idle'), 3000)
+  }
+
+  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current) }, [])
+
+  const label =
+    status === 'loading' ? 'Llamando…' :
+    status === 'ok'      ? '¡Mozo en camino!' :
+    status === 'error'   ? 'Error, intentá de nuevo' :
+                           'Llamar al mozo'
+
+  const color =
+    status === 'ok'    ? 'bg-green-500 border-green-500 text-white' :
+    status === 'error' ? 'bg-red-100 border-red-400 text-red-700' :
+                         'bg-white border-orange-400 text-orange-500 hover:bg-orange-50'
+
+  return (
+    <button
+      onClick={() => void handleClick()}
+      disabled={status !== 'idle'}
+      className={`w-full py-3 rounded-xl border font-semibold text-sm transition-colors disabled:cursor-not-allowed ${color}`}
+    >
+      {label}
+    </button>
+  )
+}
 
 function ItemCard({ item, onPress }: { item: MenuPublicoItem; onPress: () => void }) {
   return (
@@ -31,8 +75,9 @@ function ItemCard({ item, onPress }: { item: MenuPublicoItem; onPress: () => voi
 
 export function ClienteMenuPage() {
   const navigate = useNavigate()
-  const { restauranteId, openSession, loading: sessionLoading, error: sessionError } =
+  const { restauranteId, sesionId, jwt, openSession, loading: sessionLoading, error: sessionError } =
     useSessionStore()
+  const carritoCount = useCarritoStore((s) => s.items.length)
   const { menu, loading, error, fetchMenu } = usePublicMenuStore()
   const [categoriaActiva, setCategoriaActiva] = useState<string | null>(null)
   const [buscar, setBuscar] = useState('')
@@ -120,7 +165,20 @@ export function ClienteMenuPage() {
     <div className="flex flex-col h-screen bg-white">
       <header className="flex items-center px-4 py-3 border-b border-gray-100 bg-white">
         <span className="text-base font-bold text-gray-900 flex-1">{menu.restaurante.nombre}</span>
+        {carritoCount > 0 && (
+          <button
+            onClick={() => navigate('/carrito')}
+            className="relative flex items-center gap-1.5 px-3 py-1.5 bg-orange-500 text-white text-xs font-bold rounded-full hover:bg-orange-600 transition-colors"
+          >
+            🛒 {carritoCount}
+          </button>
+        )}
       </header>
+      {sesionId && jwt && (
+        <div className="px-4 pt-3 pb-1">
+          <LlamarMozoBtn sesionId={sesionId} jwt={jwt} />
+        </div>
+      )}
       <div className="px-4 py-2 border-b border-gray-100">
         <input type="text" value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder="Buscar en el menú…" className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-orange-300" />
       </div>

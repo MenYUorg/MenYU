@@ -2,9 +2,10 @@ import type { MenuPublico } from '@menyu/types'
 
 const BASE = import.meta.env.VITE_API_URL ?? ''
 
-async function req<T>(method: string, path: string, body?: unknown): Promise<T> {
+async function req<T>(method: string, path: string, body?: unknown, token?: string): Promise<T> {
   const headers: Record<string, string> = {}
   if (body !== undefined) headers['Content-Type'] = 'application/json'
+  if (token) headers['Authorization'] = `Bearer ${token}`
   const res = await fetch(`${BASE}${path}`, {
     method,
     headers,
@@ -48,10 +49,30 @@ export const api = {
       pin?: string
       codigoSesion?: string
     }) =>
-      req<{ sesionId: string; esAnfitrion: boolean; codigoSesion: string }>(
+      req<{ sesionId: string; mesaId: string; restauranteId: string; esAnfitrion: boolean; codigoSesion: string; jwt: string }>(
         'POST',
         '/sessions/open',
         data,
       ),
+  },
+
+  waiterCalls: {
+    llamar: (sesionId: string, jwt: string) =>
+      req<{ ok: boolean }>('POST', '/waiter-calls', { sesionId }, jwt),
+  },
+
+  pedidos: {
+    confirmar: (
+      sesionId: string,
+      mesaId: string,
+      items: Array<{
+        itemId: string
+        cantidad: number
+        notas?: string
+        mods: Array<{ itemIngredienteId: string; accion: 'AGREGAR' | 'QUITAR'; cantidad: number }>
+      }>,
+      jwt: string,
+    ) =>
+      req<unknown>('POST', '/pedidos', { sesionId, mesaId, items }, jwt),
   },
 }

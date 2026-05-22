@@ -12,27 +12,21 @@ export function getMozoSocket(): Socket {
 }
 
 export function joinRestauranteComoMozo(restauranteId: string) {
-  getMozoSocket().emit('session:join', { restauranteId })
+  getMozoSocket().emit('mozo:join', { restauranteId })
 }
 
 export function onMozoCalled(
   cb: (data: { sesionId: string; mesaNumero: string }) => void,
 ): () => void {
   const s = getMozoSocket()
-  s.on('mozo:llamado', cb)
-  return () => s.off('mozo:llamado', cb)
+  s.on('waiter:called', cb)
+  return () => s.off('waiter:called', cb)
 }
 
-export function onPedidoNuevo(cb: (pedido: unknown) => void): () => void {
+export function onPedidoActualizado(cb: (pedido: unknown) => void): () => void {
   const s = getMozoSocket()
-  s.on('pedido:nuevo', cb)
-  return () => s.off('pedido:nuevo', cb)
-}
-
-export function onPedidoEstado(cb: (pedido: unknown) => void): () => void {
-  const s = getMozoSocket()
-  s.on('pedido:estado', cb)
-  return () => s.off('pedido:estado', cb)
+  s.on('order:updated', cb)
+  return () => s.off('order:updated', cb)
 }
 
 export function disconnectMozoSocket() {
