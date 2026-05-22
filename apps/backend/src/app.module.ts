@@ -15,6 +15,7 @@ import { MozosModule } from './mozos/mozos.module'
 import { ClasificacionesModule } from './clasificaciones/clasificaciones.module'
 import { AdminRestauranteModule } from './admin-restaurante/admin-restaurante.module'
 import { OrdersModule } from './orders/orders.module'
+import { PedidosModule } from './pedidos/pedidos.module'
 import { HealthController } from './health/health.controller'
 
 @Module({
@@ -35,6 +36,7 @@ import { HealthController } from './health/health.controller'
     ClasificacionesModule,
     AdminRestauranteModule,
     OrdersModule,
+    PedidosModule,
   ],
   controllers: [HealthController],
 })
