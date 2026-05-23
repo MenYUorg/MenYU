@@ -17,7 +17,7 @@ Descripción del flujo de desarrollo, integración continua y despliegue para el
 
 ## 1. Ramas
 
-El repositorio posee una única rama protegida: `main`.
+El repositorio tiene una única rama protegida: `main`.
 
 | Tipo | Prefijo | Ejemplo |
 |---|---|---|
