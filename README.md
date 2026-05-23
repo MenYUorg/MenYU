@@ -6,3 +6,7 @@ Repositorio del proyecto integrador de la carrera de Ingeniería en Sistemas de 
 - Margarita De Marcos  
 - Dante Ojeda  
 - Constanza Strumia  
+
+---
+
+> CI/CD configurado con GitHub Actions.
