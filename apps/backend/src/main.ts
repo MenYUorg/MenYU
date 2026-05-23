@@ -17,14 +17,22 @@ const CORS_ORIGINS = [
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule)
+
+  const allowedOrigins = process.env.CORS_ORIGINS?.split(',').map(o => o.trim()) ?? CORS_ORIGINS
+  const originPatterns = (process.env.CORS_ORIGIN_PATTERNS ?? '')
+    .split(',')
+    .filter(Boolean)
+    .map(p => new RegExp(p.trim()))
+
   app.enableCors({
     origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
-      // En dev permitimos cualquier localhost; en prod usamos la variable de entorno
       if (!origin || origin.startsWith('http://localhost:')) {
         return callback(null, true)
       }
-      const allowed = process.env.CORS_ORIGINS?.split(',') ?? CORS_ORIGINS
-      callback(null, allowed.includes(origin))
+      const allowed =
+        allowedOrigins.includes(origin) ||
+        originPatterns.some(re => re.test(origin))
+      callback(null, allowed)
     },
     credentials: true,
   })
