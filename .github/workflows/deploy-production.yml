@@ -26,21 +26,36 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build active apps
+      - name: Build
         run: pnpm turbo build --filter=@menyu/api --filter=@menyu/web-admin --filter=@menyu/web-cliente --filter=@menyu/web-staff
 
-      - name: Deploy backend to Railway (production)
+      # ── Railway production ────────────────────────────────────
+      - name: Deploy backend to Railway production
         run: npx @railway/cli@latest up --service ${{ secrets.RAILWAY_SERVICE_ID_PROD }} --detach
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN_PROD }}
 
-      - name: Deploy frontends to Vercel (production)
+      # ── Vercel production (con --prod) ────────────────────────
+      - name: Deploy web-admin to Vercel production
         run: |
           npx vercel --token ${{ secrets.VERCEL_TOKEN }} --yes --prod \
-            apps/web-admin
-          npx vercel --token ${{ secrets.VERCEL_TOKEN }} --yes --prod \
-            apps/web-cliente
-          npx vercel --token ${{ secrets.VERCEL_TOKEN }} --yes --prod \
-            apps/web-staff
+            --cwd apps/web-admin
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_ADMIN }}
+
+      - name: Deploy web-cliente to Vercel production
+        run: |
+          npx vercel --token ${{ secrets.VERCEL_TOKEN }} --yes --prod \
+            --cwd apps/web-cliente
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_CLIENTE }}
+
+      - name: Deploy web-staff to Vercel production
+        run: |
+          npx vercel --token ${{ secrets.VERCEL_TOKEN }} --yes --prod \
+            --cwd apps/web-staff
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_STAFF }}
