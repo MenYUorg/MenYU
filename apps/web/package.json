@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "lint": "echo 'lint not configured'",
+    "test": "echo 'test not configured'"
   },
   "dependencies": {
     "@menyu/types": "workspace:*",

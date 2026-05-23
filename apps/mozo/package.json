@@ -9,7 +9,8 @@
     "ios": "expo start --ios",
     "build": "expo export",
     "lint": "eslint src --ext .ts,.tsx",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "echo 'test not configured'"
   },
   "dependencies": {
     "@menyu/types": "workspace:*",

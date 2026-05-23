@@ -1,0 +1,48 @@
+name: Deploy — Staging
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy-staging:
+    name: Deploy to staging
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build active apps
+        run: pnpm turbo build --filter=@menyu/api --filter=@menyu/web-admin --filter=@menyu/web-cliente --filter=@menyu/web-staff
+
+      - name: Deploy backend to Railway (staging)
+        run: npx @railway/cli@latest up --service ${{ secrets.RAILWAY_SERVICE_ID_STAGING }} --detach
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN_STAGING }}
+
+      - name: Deploy frontends to Vercel (staging)
+        run: |
+          npx vercel --token ${{ secrets.VERCEL_TOKEN }} --yes \
+            --env NODE_ENV=staging \
+            apps/web-admin
+          npx vercel --token ${{ secrets.VERCEL_TOKEN }} --yes \
+            apps/web-cliente
+          npx vercel --token ${{ secrets.VERCEL_TOKEN }} --yes \
+            apps/web-staff
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}

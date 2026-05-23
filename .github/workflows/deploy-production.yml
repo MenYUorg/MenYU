@@ -1,0 +1,48 @@
+name: Deploy — Production
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  deploy-production:
+    name: Deploy to production
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build active apps
+        run: pnpm turbo build --filter=@menyu/api --filter=@menyu/web-admin --filter=@menyu/web-cliente --filter=@menyu/web-staff
+
+      - name: Deploy backend to Railway (production)
+        run: npx @railway/cli@latest up --service ${{ secrets.RAILWAY_SERVICE_ID_PROD }} --detach
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN_PROD }}
+
+      - name: Deploy frontends to Vercel (production)
+        run: |
+          npx vercel --token ${{ secrets.VERCEL_TOKEN }} --yes --prod \
+            apps/web-admin
+          npx vercel --token ${{ secrets.VERCEL_TOKEN }} --yes --prod \
+            apps/web-cliente
+          npx vercel --token ${{ secrets.VERCEL_TOKEN }} --yes --prod \
+            apps/web-staff
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}

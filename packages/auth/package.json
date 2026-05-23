@@ -6,6 +6,11 @@
   "exports": {
     ".": "./src/index.ts"
   },
+  "scripts": {
+    "typecheck": "echo 'typecheck not configured'",
+    "lint": "echo 'lint not configured'",
+    "test": "echo 'test not configured'"
+  },
   "dependencies": {
     "@menyu/types": "workspace:*",
     "zustand": "^5.0.3"

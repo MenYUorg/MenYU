@@ -2,6 +2,11 @@
   "name": "@menyu/config",
   "version": "0.0.1",
   "private": true,
+  "scripts": {
+    "typecheck": "echo 'typecheck not configured'",
+    "lint": "echo 'lint not configured'",
+    "test": "echo 'test not configured'"
+  },
   "exports": {
     "./tsconfig/base": "./tsconfig.base.json",
     "./tsconfig/nestjs": "./tsconfig.nestjs.json",

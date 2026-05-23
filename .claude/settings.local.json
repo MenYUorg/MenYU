@@ -32,7 +32,8 @@
       "Bash(pnpm --filter @menyu/web typecheck)",
       "Bash(pnpm install *)",
       "Bash(pnpm typecheck *)",
-      "Bash(curl -s http://localhost:3000/health)"
+      "Bash(curl -s http://localhost:3000/health)",
+      "Bash(xargs -I{} sh -c 'echo \"=== {} ===\" && cat \"{}\"')"
     ]
   }
 }

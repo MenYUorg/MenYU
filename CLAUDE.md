@@ -49,7 +49,7 @@ MenYu/
 └── .env.example
 ```
 
-> **apps/cocina, apps/admin y apps/web están ARCHIVADAS.**
+> **apps/cocina, apps/admin, apps/cliente, apps/mozo y apps/web están ARCHIVADAS.**
 > Todo desarrollo web va en las tres apps nuevas.
 > No agregar código nuevo a esas carpetas.
 
