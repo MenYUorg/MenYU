@@ -146,24 +146,24 @@ export function ItemDetailPage() {
         </div>
         <button
           onClick={() => {
-            const mods = [
+            const modificaciones = [
               ...Array.from(removidos).map((id) => ({
                 itemIngredienteId: id,
-                accion: 'QUITAR' as const,
+                accion: 'quitar' as const,
                 cantidad: 1,
               })),
               ...Array.from(agregados.entries()).map(([id, qty]) => ({
                 itemIngredienteId: id,
-                accion: 'AGREGAR' as const,
+                accion: 'agregar' as const,
                 cantidad: qty,
               })),
             ]
             agregar({
-              itemId: item.id,
+              itemMenuId: item.id,
               nombre: item.nombre,
               precioUnitario: precioTotal,
               cantidad: 1,
-              mods,
+              modificaciones,
             })
             navigate('/carrito')
           }}
