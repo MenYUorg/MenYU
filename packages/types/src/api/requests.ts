@@ -89,16 +89,6 @@ export interface UpdateCategoriaRequest {
   orden?: number
 }
 
-export interface CreateSubcategoriaRequest {
-  nombre: string
-  orden?: number
-}
-
-export interface UpdateSubcategoriaRequest {
-  nombre?: string
-  orden?: number
-}
-
 // ── Items ─────────────────────────────────────────────────────────────────────
 
 export interface CreateItemRequest {
@@ -106,7 +96,6 @@ export interface CreateItemRequest {
   nombre: string
   precioBase: number
   descripcion?: string
-  subcategoriaId?: string
   comandaId?: string
   disponible?: boolean
   imagenUrl?: string
@@ -116,7 +105,6 @@ export interface UpdateItemRequest {
   nombre?: string
   precioBase?: number
   descripcion?: string
-  subcategoriaId?: string
   comandaId?: string
   disponible?: boolean
   imagenUrl?: string
