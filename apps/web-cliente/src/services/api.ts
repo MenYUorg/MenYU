@@ -1,4 +1,4 @@
-import type { MenuPublico } from '@menyu/types'
+import type { MenuPublico, ItemCarrito } from '@menyu/types'
 
 const BASE = import.meta.env.VITE_API_URL ?? ''
 
@@ -74,5 +74,26 @@ export const api = {
       jwt: string,
     ) =>
       req<unknown>('POST', '/pedidos', { sesionId, mesaId, items }, jwt),
+  },
+
+  orders: {
+    create: (jwt: string, items: ItemCarrito[]) =>
+      req<unknown>(
+        'POST',
+        '/orders',
+        {
+          items: items.map((i) => ({
+            itemMenuId: i.itemMenuId,
+            cantidad: i.cantidad,
+            modificaciones: i.modificaciones.map((m) => ({
+              itemIngredienteId: m.itemIngredienteId,
+              accion: m.accion,
+              cantidad: m.cantidad,
+            })),
+            nota: i.nota,
+          })),
+        },
+        jwt,
+      ),
   },
 }
