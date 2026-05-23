@@ -26,7 +26,7 @@ El repositorio tiene una única rama protegida: `main`.
 | Infraestructura / config | `chore/` | `chore/update-deps` |
 
 **Reglas de `main`:**
-- No se puede pushear directo — todo cambio entra por Pull Request.
+- No se puede pushear directo —> todo cambio entra por Pull Request.
 - El CI debe pasar en verde antes de poder mergear.
 - No se requiere aprobación de otro miembro (equipo pequeño con disponibilidad variable).
 
