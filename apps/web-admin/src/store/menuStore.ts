@@ -25,9 +25,6 @@ interface MenuStore {
   createCategoria: (data: { nombre: string; restauranteId: string }) => Promise<void>
   updateCategoria: (id: string, data: { nombre: string }) => Promise<void>
   deleteCategoria: (id: string) => Promise<void>
-  createSubcategoria: (categoriaId: string, data: { nombre: string }) => Promise<void>
-  updateSubcategoria: (id: string, data: { nombre: string }) => Promise<void>
-  deleteSubcategoria: (id: string) => Promise<void>
 
   createIngrediente: (data: { nombre: string; restauranteId: string; esAlergeno?: boolean }) => Promise<void>
   updateIngrediente: (id: string, data: { nombre?: string; esAlergeno?: boolean }) => Promise<void>
@@ -129,33 +126,6 @@ export const useMenuStore = create<MenuStore>()((set) => ({
     set({ loading: true, error: null })
     try { await api.categorias.delete(id); set((s) => ({ categorias: s.categorias.filter((c) => c.id !== id) })) }
     catch (e) { set({ error: e instanceof Error ? e.message : 'Error al eliminar categoría' }); throw e }
-    finally { set({ loading: false }) }
-  },
-
-  createSubcategoria: async (categoriaId, data) => {
-    set({ loading: true, error: null })
-    try {
-      const sub = await api.categorias.createSub(categoriaId, data)
-      set((s) => ({ categorias: s.categorias.map((c) => c.id === categoriaId ? { ...c, subcategorias: [...(c.subcategorias ?? []), sub] } : c) }))
-    } catch (e) { set({ error: e instanceof Error ? e.message : 'Error al crear subcategoría' }); throw e }
-    finally { set({ loading: false }) }
-  },
-
-  updateSubcategoria: async (id, data) => {
-    set({ loading: true, error: null })
-    try {
-      const u = await api.categorias.updateSub(id, data)
-      set((s) => ({ categorias: s.categorias.map((c) => ({ ...c, subcategorias: c.subcategorias?.map((sub) => (sub.id === id ? u : sub)) })) }))
-    } catch (e) { set({ error: e instanceof Error ? e.message : 'Error al actualizar subcategoría' }); throw e }
-    finally { set({ loading: false }) }
-  },
-
-  deleteSubcategoria: async (id) => {
-    set({ loading: true, error: null })
-    try {
-      await api.categorias.deleteSub(id)
-      set((s) => ({ categorias: s.categorias.map((c) => ({ ...c, subcategorias: c.subcategorias?.filter((sub) => sub.id !== id) })) }))
-    } catch (e) { set({ error: e instanceof Error ? e.message : 'Error al eliminar subcategoría' }); throw e }
     finally { set({ loading: false }) }
   },
 

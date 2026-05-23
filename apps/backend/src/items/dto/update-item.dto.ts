@@ -33,11 +33,6 @@ export class UpdateItemDto {
   @IsUUID()
   categoriaId?: string | null
 
-  @ApiPropertyOptional({ example: 'uuid-de-la-subcategoria' })
-  @IsOptional()
-  @IsUUID()
-  subcategoriaId?: string | null
-
   @ApiPropertyOptional({ example: 'uuid-de-la-comanda' })
   @IsOptional()
   @IsUUID()

@@ -62,13 +62,12 @@ export class ItemsController {
   @ApiResponse({ status: 200, description: 'Lista de ítems' })
   findAll(
     @Query('restauranteId') restauranteId: string,
-    @Query('subcategoriaId') subcategoriaId: string | undefined,
     @Query('disponible') disponibleRaw: string | undefined,
     @CurrentUser() user: JwtPayload,
   ) {
     const disponible =
       disponibleRaw === 'true' ? true : disponibleRaw === 'false' ? false : undefined
-    return this.items.findAll(restauranteId, user, subcategoriaId, disponible)
+    return this.items.findAll(restauranteId, user, disponible)
   }
 
   @Get(':id')

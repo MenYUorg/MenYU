@@ -15,13 +15,8 @@ import { UpdateIngredienteItemDto } from './dto/update-ingrediente-item.dto'
 
 const IMAGEN_BUCKET = 'menu-items'
 
-const LIST_INCLUDE = {
-  subcategoria: { select: { id: true, nombre: true, categoriaId: true } },
-} as const
-
 const DETAIL_INCLUDE = {
   categoria: true,
-  subcategoria: true,
   ingredientes: {
     include: { ingrediente: true },
     orderBy: [
@@ -41,32 +36,20 @@ export class ItemsService {
 
   async create(dto: CreateItemDto, user: JwtPayload) {
     await this.assertRestauranteOwnership(dto.restauranteId, user)
-
-    if (dto.subcategoriaId) {
-      await this.assertSubcategoriaPertenece(dto.subcategoriaId, dto.restauranteId)
-    }
-
     await this.assertNombreUnico(dto.restauranteId, dto.nombre)
 
     return this.prisma.itemMenu.create({ data: dto, include: DETAIL_INCLUDE })
   }
 
-  async findAll(
-    restauranteId: string,
-    user: JwtPayload,
-    subcategoriaId?: string,
-    disponible?: boolean,
-  ) {
+  async findAll(restauranteId: string, user: JwtPayload, disponible?: boolean) {
     await this.assertRestauranteOwnership(restauranteId, user)
 
     return this.prisma.itemMenu.findMany({
       where: {
         restauranteId,
-        ...(subcategoriaId !== undefined ? { subcategoriaId } : {}),
         ...(disponible !== undefined ? { disponible } : {}),
       },
       orderBy: { nombre: 'asc' },
-      include: LIST_INCLUDE,
     })
   }
 
@@ -79,10 +62,6 @@ export class ItemsService {
   async update(id: string, dto: UpdateItemDto, user: JwtPayload) {
     const item = await this.getOrThrow(id)
     await this.assertRestauranteOwnership(item.restauranteId, user)
-
-    if (dto.subcategoriaId && dto.subcategoriaId !== item.subcategoriaId) {
-      await this.assertSubcategoriaPertenece(dto.subcategoriaId, item.restauranteId)
-    }
 
     if (dto.nombre && dto.nombre !== item.nombre) {
       await this.assertNombreUnico(item.restauranteId, dto.nombre, id)
@@ -181,17 +160,6 @@ export class ItemsService {
       },
     })
     if (existing) throw new ConflictException(`Ya existe un ítem con el nombre "${nombre}" en este restaurante`)
-  }
-
-  private async assertSubcategoriaPertenece(subcategoriaId: string, restauranteId: string) {
-    const sub = await this.prisma.subcategoriaMenu.findUnique({
-      where: { id: subcategoriaId },
-      include: { categoria: true },
-    })
-    if (!sub) throw new NotFoundException('Subcategoría no encontrada')
-    if (sub.categoria.restauranteId !== restauranteId) {
-      throw new BadRequestException('La subcategoría no pertenece a este restaurante')
-    }
   }
 
   private async getItemIngredienteOrThrow(id: string, itemId: string) {
