@@ -21,7 +21,6 @@ const DETAIL_INCLUDE = {
   items: {
     where: { disponible: true },
     include: {
-      subcategoria: { include: { categoria: true } },
       comanda: true,
     },
   },

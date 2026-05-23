@@ -12,7 +12,7 @@ const DETAIL_INCLUDE = {
   marca: true,
   mozos: { where: { activo: true } },
   comandas: true,
-  categorias: { include: { subcategorias: true } },
+  categorias: true,
   menus: true,
   mesas: true,
   ingredientes: true,

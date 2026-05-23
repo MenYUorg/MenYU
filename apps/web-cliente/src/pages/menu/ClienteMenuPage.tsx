@@ -151,11 +151,8 @@ export function ClienteMenuPage() {
     .map((cat) => ({
       ...cat,
       itemsDirectos: cat.itemsDirectos.filter((item) => buscarLower ? item.nombre.toLowerCase().includes(buscarLower) : true),
-      subcategorias: cat.subcategorias
-        .map((sub) => ({ ...sub, items: sub.items.filter((item) => buscarLower ? item.nombre.toLowerCase().includes(buscarLower) : true) }))
-        .filter((sub) => sub.items.length > 0),
     }))
-    .filter((cat) => cat.subcategorias.length > 0 || cat.itemsDirectos.length > 0)
+    .filter((cat) => cat.itemsDirectos.length > 0)
 
   const categoriaVisible = categoriaActiva
     ? categoriasFiltradas.find((c) => c.id === categoriaActiva) ?? categoriasFiltradas[0]
@@ -189,24 +186,12 @@ export function ClienteMenuPage() {
           </button>
         ))}
       </div>
-      <div className="flex-1 overflow-y-auto p-4 space-y-6">
-        {(categoriaVisible?.itemsDirectos.length ?? 0) > 0 && (
-          <div className="space-y-2">
-            {categoriaVisible!.itemsDirectos.map((item) => (
-              <ItemCard key={item.id} item={item} onPress={() => navigate(`/menu/${item.id}`)} />
-            ))}
-          </div>
-        )}
-        {categoriaVisible?.subcategorias.map((sub) => (
-          <div key={sub.id}>
-            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">{sub.nombre}</p>
-            <div className="space-y-2">
-              {sub.items.map((item) => (
-                <ItemCard key={item.id} item={item} onPress={() => navigate(`/menu/${item.id}`)} />
-              ))}
-            </div>
-          </div>
-        ))}
+      <div className="flex-1 overflow-y-auto p-4">
+        <div className="space-y-2">
+          {categoriaVisible?.itemsDirectos.map((item) => (
+            <ItemCard key={item.id} item={item} onPress={() => navigate(`/menu/${item.id}`)} />
+          ))}
+        </div>
         {categoriasFiltradas.length === 0 && <p className="text-center text-gray-400 text-sm mt-12">No hay ítems que coincidan con la búsqueda.</p>}
       </div>
     </div>

@@ -44,18 +44,9 @@ export class MenuService {
       orderBy: { orden: 'asc' },
       include: {
         items: {
-          where: { disponible: true, subcategoriaId: null, ...buscarWhere },
+          where: { disponible: true, ...buscarWhere },
           include: ITEM_INCLUDE,
           orderBy: { nombre: 'asc' },
-        },
-        subcategorias: {
-          orderBy: { orden: 'asc' },
-          include: {
-            items: {
-              where: { disponible: true, ...buscarWhere },
-              include: ITEM_INCLUDE,
-            },
-          },
         },
       },
     })
@@ -68,18 +59,8 @@ export class MenuService {
         itemsDirectos: cat.items
           .filter((item) => this.pasaFiltros(item, filtros))
           .map((item) => this.serializeItem(item)),
-        subcategorias: cat.subcategorias
-          .map((sub) => ({
-            id: sub.id,
-            nombre: sub.nombre,
-            orden: sub.orden,
-            items: sub.items
-              .filter((item) => this.pasaFiltros(item, filtros))
-              .map((item) => this.serializeItem(item)),
-          }))
-          .filter((sub) => sub.items.length > 0),
       }))
-      .filter((cat) => cat.subcategorias.length > 0 || cat.itemsDirectos.length > 0)
+      .filter((cat) => cat.itemsDirectos.length > 0)
 
     return {
       restaurante: { id: restaurante.id, nombre: restaurante.nombre },

@@ -32,12 +32,8 @@ export const usePublicMenuStore = create<PublicMenuStore>()((set, get) => ({
     const menu = get().menu
     if (!menu) return undefined
     for (const cat of menu.categorias) {
-      const direct = cat.itemsDirectos.find((item) => item.id === id)
-      if (direct) return direct
-      for (const sub of cat.subcategorias) {
-        const found = sub.items.find((item) => item.id === id)
-        if (found) return found
-      }
+      const found = cat.itemsDirectos.find((item) => item.id === id)
+      if (found) return found
     }
     return undefined
   },
