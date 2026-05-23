@@ -6,21 +6,29 @@ import { api } from '../../services/api'
 
 export function CarritoPage() {
   const navigate = useNavigate()
-  const { items, quitarUno, vaciar, total } = useCarritoStore()
-  const { sesionId, mesaId, jwt } = useSessionStore()
+  const { items, quitar, vaciar, total } = useCarritoStore()
+  const jwt = useSessionStore((s) => s.jwt)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [exito, setExito] = useState(false)
 
   async function confirmarPedido() {
-    if (!sesionId || !mesaId || !jwt) {
+    if (!jwt) {
       setError('No hay sesión activa. Volvé al menú y abrí una mesa.')
       return
     }
     setLoading(true)
     setError(null)
     try {
-      await api.pedidos.confirmar(sesionId, mesaId, items, jwt)
+      await api.orders.create(
+        jwt,
+        items.map((i) => ({
+          itemMenuId: i.itemMenuId,
+          cantidad: i.cantidad,
+          nota: i.nota,
+          modificaciones: i.modificaciones,
+        })),
+      )
       vaciar()
       setExito(true)
       setTimeout(() => navigate('/menu'), 2500)
@@ -70,11 +78,11 @@ export function CarritoPage() {
             <div className="flex items-start justify-between gap-2">
               <div className="flex-1">
                 <p className="text-sm font-bold text-gray-900">{item.nombre}</p>
-                {item.mods.length > 0 && (
+                {item.modificaciones.length > 0 && (
                   <ul className="mt-1 space-y-0.5">
-                    {item.mods.map((m, i) => (
-                      <li key={i} className={`text-xs font-medium ${m.accion === 'AGREGAR' ? 'text-green-600' : 'text-red-500'}`}>
-                        {m.accion === 'AGREGAR' ? `+ extra ×${m.cantidad}` : '− sin ingrediente'}
+                    {item.modificaciones.map((m, i) => (
+                      <li key={i} className={`text-xs font-medium ${m.accion === 'agregar' ? 'text-green-600' : 'text-red-500'}`}>
+                        {m.accion === 'agregar' ? `+ extra ×${m.cantidad}` : '− sin ingrediente'}
                       </li>
                     ))}
                   </ul>
@@ -83,7 +91,7 @@ export function CarritoPage() {
               <div className="flex flex-col items-end gap-2">
                 <p className="text-sm font-bold text-orange-500">${item.precioUnitario.toFixed(2)}</p>
                 <button
-                  onClick={() => quitarUno(item.cartId)}
+                  onClick={() => quitar(item.cartId)}
                   className="text-xs text-gray-400 hover:text-red-500 transition-colors"
                 >
                   Quitar

@@ -95,7 +95,21 @@ export class OrdersService {
             }),
           },
         },
-        include: { items: { include: { mods: true } } },
+        include: {
+          mesa: { select: { numero: true } },
+          items: {
+            include: {
+              item: { select: { nombre: true } },
+              mods: {
+                include: {
+                  itemIngrediente: {
+                    include: { ingrediente: { select: { nombre: true } } },
+                  },
+                },
+              },
+            },
+          },
+        },
       })
 
       return created
