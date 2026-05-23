@@ -12,19 +12,17 @@ interface ItemForm {
   precioBase: string
   descripcion: string
   categoriaId: string
-  subcategoriaId: string
   disponible: boolean
 }
 
-const EMPTY_FORM: ItemForm = { nombre: '', precioBase: '', descripcion: '', categoriaId: '', subcategoriaId: '', disponible: true }
+const EMPTY_FORM: ItemForm = { nombre: '', precioBase: '', descripcion: '', categoriaId: '', disponible: true }
 
 function itemToForm(item: ItemMenu): ItemForm {
   return {
     nombre: item.nombre,
     precioBase: item.precioBase.toString(),
     descripcion: item.descripcion ?? '',
-    categoriaId: item.categoriaId ?? item.subcategoria?.categoriaId ?? '',
-    subcategoriaId: item.subcategoriaId ?? '',
+    categoriaId: item.categoriaId ?? '',
     disponible: item.disponible,
   }
 }
@@ -43,9 +41,6 @@ export function ItemsTab() {
   const [clasifSaving, setClasifSaving] = useState<string | null>(null)
 
   const categoriaOptions = categorias.map((cat) => ({ value: cat.id, label: cat.nombre }))
-  const subcategoriaOptions = form.categoriaId
-    ? (categorias.find((c) => c.id === form.categoriaId)?.subcategorias ?? []).map((sub) => ({ value: sub.id, label: sub.nombre }))
-    : []
 
   const openCreate = () => { setEditing(null); setForm(EMPTY_FORM); setFormError(null); setModalOpen(true) }
   const openEdit = (item: ItemMenu) => { setEditing(item); setForm(itemToForm(item)); setFormError(null); setModalOpen(true) }
@@ -60,9 +55,9 @@ export function ItemsTab() {
     setSubmitting(true); setFormError(null)
     try {
       if (editing) {
-        await updateItem(editing.id, { nombre, precioBase: precio, descripcion: form.descripcion.trim() || undefined, categoriaId: form.categoriaId || null, subcategoriaId: form.subcategoriaId || null, disponible: form.disponible })
+        await updateItem(editing.id, { nombre, precioBase: precio, descripcion: form.descripcion.trim() || undefined, categoriaId: form.categoriaId || null, disponible: form.disponible })
       } else {
-        await createItem({ restauranteId: selectedRestauranteId, nombre, precioBase: precio, descripcion: form.descripcion.trim() || undefined, categoriaId: form.categoriaId || undefined, subcategoriaId: form.subcategoriaId || undefined, disponible: form.disponible })
+        await createItem({ restauranteId: selectedRestauranteId, nombre, precioBase: precio, descripcion: form.descripcion.trim() || undefined, categoriaId: form.categoriaId || undefined, disponible: form.disponible })
       }
       setModalOpen(false)
     } catch (err) { setFormError(err instanceof Error ? err.message : 'Error inesperado') }
@@ -127,7 +122,7 @@ export function ItemsTab() {
                 <th className="px-4 py-3 text-left w-16">Imagen</th>
                 <th className="px-4 py-3 text-left">Nombre</th>
                 <th className="px-4 py-3 text-left">Precio</th>
-                <th className="px-4 py-3 text-left">Subcategoría</th>
+                <th className="px-4 py-3 text-left">Categoría</th>
                 <th className="px-4 py-3 text-left">Estado</th>
                 <th className="px-4 py-3 text-right">Acciones</th>
               </tr>
@@ -143,7 +138,7 @@ export function ItemsTab() {
                     {item.descripcion && <div className="text-gray-400 text-xs mt-0.5 truncate max-w-[220px]">{item.descripcion}</div>}
                   </td>
                   <td className="px-4 py-3 font-mono text-gray-700">${Number(item.precioBase).toFixed(2)}</td>
-                  <td className="px-4 py-3 text-gray-500">{item.subcategoria?.nombre ?? <span className="text-gray-300">—</span>}</td>
+                  <td className="px-4 py-3 text-gray-500">{categorias.find((c) => c.id === item.categoriaId)?.nombre ?? <span className="text-gray-300">—</span>}</td>
                   <td className="px-4 py-3"><Badge variant={item.disponible ? 'success' : 'error'}>{item.disponible ? 'Disponible' : 'No disponible'}</Badge></td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1.5">
@@ -176,10 +171,7 @@ export function ItemsTab() {
           <Input label="Precio base *" type="number" min="0" step="0.01" value={form.precioBase} onChange={(e) => setForm((f) => ({ ...f, precioBase: e.target.value }))} required placeholder="0.00" />
           <Textarea label="Descripción" value={form.descripcion} onChange={(e) => setForm((f) => ({ ...f, descripcion: e.target.value }))} rows={2} placeholder="Descripción opcional" />
           {categoriaOptions.length > 0 && (
-            <Select label="Categoría" value={form.categoriaId} onChange={(e) => setForm((f) => ({ ...f, categoriaId: e.target.value, subcategoriaId: '' }))} options={categoriaOptions} placeholder="Sin categoría" />
-          )}
-          {subcategoriaOptions.length > 0 && (
-            <Select label="Subcategoría (opcional)" value={form.subcategoriaId} onChange={(e) => setForm((f) => ({ ...f, subcategoriaId: e.target.value }))} options={subcategoriaOptions} placeholder="Sin subcategoría" />
+            <Select label="Categoría" value={form.categoriaId} onChange={(e) => setForm((f) => ({ ...f, categoriaId: e.target.value }))} options={categoriaOptions} placeholder="Sin categoría" />
           )}
           <label className="flex items-center gap-2 cursor-pointer select-none">
             <input type="checkbox" checked={form.disponible} onChange={(e) => setForm((f) => ({ ...f, disponible: e.target.checked }))} className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />

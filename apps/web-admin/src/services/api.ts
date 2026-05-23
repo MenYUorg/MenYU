@@ -4,7 +4,6 @@ import type {
   Restaurante,
   ItemMenu,
   CategoriaMenu,
-  SubcategoriaMenu,
   Ingrediente,
   ClasificacionDieta,
   TokenPair,
@@ -116,7 +115,6 @@ export interface CreateItemInput {
   precioBase: number
   descripcion?: string
   categoriaId?: string
-  subcategoriaId?: string
   disponible?: boolean
 }
 
@@ -125,7 +123,6 @@ export interface UpdateItemInput {
   precioBase?: number
   descripcion?: string
   categoriaId?: string | null
-  subcategoriaId?: string | null
   disponible?: boolean
 }
 
@@ -194,11 +191,6 @@ export const api = {
     update: (id: string, data: { nombre?: string; orden?: number }) =>
       req<CategoriaMenu>('PATCH', `/categorias/${id}`, data),
     delete: (id: string) => req<void>('DELETE', `/categorias/${id}`),
-    createSub: (categoriaId: string, data: { nombre: string; orden?: number }) =>
-      req<SubcategoriaMenu>('POST', `/categorias/${categoriaId}/subcategorias`, data),
-    updateSub: (id: string, data: { nombre?: string; orden?: number }) =>
-      req<SubcategoriaMenu>('PATCH', `/categorias/subcategorias/${id}`, data),
-    deleteSub: (id: string) => req<void>('DELETE', `/categorias/subcategorias/${id}`),
   },
 
   ingredientes: {

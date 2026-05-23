@@ -35,11 +35,6 @@ export class CreateItemDto {
   @IsUUID()
   categoriaId?: string
 
-  @ApiPropertyOptional({ example: 'uuid-de-la-subcategoria' })
-  @IsOptional()
-  @IsUUID()
-  subcategoriaId?: string
-
   @ApiPropertyOptional({ example: 'uuid-de-la-comanda' })
   @IsOptional()
   @IsUUID()
