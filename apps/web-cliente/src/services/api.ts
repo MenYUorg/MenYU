@@ -62,6 +62,7 @@ export const api = {
   },
 
   orders: {
+    list: (jwt: string) => req<unknown[]>('GET', '/orders', undefined, jwt),
     create: (
       jwt: string,
       items: Array<{

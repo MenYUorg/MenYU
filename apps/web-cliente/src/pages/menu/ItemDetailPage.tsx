@@ -25,6 +25,7 @@ export function ItemDetailPage() {
   const [removidos, setRemovidos] = useState<Set<string>>(new Set())
   const [agregados, setAgregados] = useState<Map<string, number>>(new Map())
   const [cantidad, setCantidad] = useState(1)
+  const [nota, setNota] = useState('')
   const { agregar } = useCarritoStore()
 
   if (!item) {
@@ -245,6 +246,42 @@ export function ItemDetailPage() {
               </div>
             )}
           </div>
+
+          {/* ── Nota para cocina ───────────────────────────────────────────── */}
+          <div style={{ padding: '0 20px 20px' }}>
+            <label style={{
+              display:      'block',
+              fontFamily:   'Montserrat, sans-serif',
+              fontWeight:   600,
+              fontSize:     12,
+              color:        '#6B7280',
+              marginBottom: 6,
+            }}>
+              📝 Nota para cocina
+            </label>
+            <textarea
+              value={nota}
+              onChange={(e) => setNota(e.target.value)}
+              placeholder="(opcional)"
+              rows={2}
+              style={{
+                width:        '100%',
+                boxSizing:    'border-box',
+                border:       '1px solid #E5E7EB',
+                borderRadius: 12,
+                padding:      '10px 14px',
+                fontSize:     13,
+                fontFamily:   'Inter, sans-serif',
+                resize:       'none',
+                background:   '#F7F7F8',
+                color:        '#1A1A2E',
+                outline:      'none',
+                transition:   'border-color 0.15s',
+              }}
+              onFocus={(e) => { e.currentTarget.style.borderColor = '#E8563A' }}
+              onBlur={(e)  => { e.currentTarget.style.borderColor = '#E5E7EB' }}
+            />
+          </div>
         </div>
 
         {/* ── Bottom bar ────────────────────────────────────────────────────── */}
@@ -277,22 +314,31 @@ export function ItemDetailPage() {
           <button
             onClick={() => {
               const modificaciones = [
-                ...Array.from(removidos).map((id) => ({
-                  itemIngredienteId: id,
-                  accion: 'quitar' as const,
-                  cantidad: 1,
-                })),
-                ...Array.from(agregados.entries()).map(([id, qty]) => ({
-                  itemIngredienteId: id,
-                  accion: 'agregar' as const,
-                  cantidad: qty,
-                })),
+                ...Array.from(removidos).map((id) => {
+                  const ing = item.ingredientes?.find((ii) => ii.id === id)
+                  return {
+                    itemIngredienteId: id,
+                    accion: 'quitar' as const,
+                    cantidad: 1,
+                    nombre: ing?.ingrediente?.nombre,
+                  }
+                }),
+                ...Array.from(agregados.entries()).map(([id, qty]) => {
+                  const ing = item.ingredientes?.find((ii) => ii.id === id)
+                  return {
+                    itemIngredienteId: id,
+                    accion: 'agregar' as const,
+                    cantidad: qty,
+                    nombre: ing?.ingrediente?.nombre,
+                  }
+                }),
               ]
               agregar({
-                itemMenuId: item.id,
-                nombre: item.nombre,
-                precioUnitario: precioTotal,
+                itemMenuId:     item.id,
+                nombre:         item.nombre,
+                precioUnitario: precioTotal * cantidad,
                 cantidad,
+                nota:           nota.trim() || undefined,
                 modificaciones,
               })
               navigate('/carrito')
