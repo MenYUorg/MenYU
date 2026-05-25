@@ -52,6 +52,8 @@ enum RolAdmin {
   ROOT
   OWNER
   GERENTE
+
+  @@map("rol_admin")
 }
 
 // ─────────────────────────────────────────────
