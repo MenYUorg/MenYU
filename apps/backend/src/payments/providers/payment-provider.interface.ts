@@ -5,6 +5,7 @@ export interface CreatePaymentDto {
   monto: number
   descripcion: string
   externalReference: string
+  accessToken: string
 }
 
 export interface PaymentPreference {

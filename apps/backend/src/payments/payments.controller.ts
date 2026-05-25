@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Headers, HttpCode, HttpStatus, Param, Post } from '@nestjs/common'
+import { Body, Controller, Get, Headers, HttpCode, HttpStatus, Param, Post, Query } from '@nestjs/common'
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger'
 import { PaymentsService } from './payments.service'
 import { InitiatePaymentDto } from './dto/initiate-payment.dto'
@@ -13,6 +13,7 @@ export class PaymentsController {
   @ApiOperation({ summary: 'Iniciar un pago para la sesión activa' })
   @ApiResponse({ status: 201, description: 'Preferencia de pago creada' })
   @ApiResponse({ status: 401, description: 'Session JWT requerido o inválido' })
+  @ApiResponse({ status: 400, description: 'Restaurante sin Mercado Pago configurado' })
   initiate(
     @Headers('authorization') authHeader: string | undefined,
     @Body() dto: InitiatePaymentDto,
@@ -33,5 +34,22 @@ export class PaymentsController {
   @ApiResponse({ status: 200, description: 'Estado del pago' })
   status(@Param('externalId') externalId: string) {
     return this.payments.getStatus(externalId)
+  }
+
+  @Get('connect/:restauranteId')
+  @ApiOperation({ summary: 'Obtener URL de autorización de Mercado Pago para un restaurante' })
+  @ApiResponse({ status: 200, description: 'URL de autorización' })
+  connect(@Param('restauranteId') restauranteId: string) {
+    return this.payments.getMpAuthUrl(restauranteId)
+  }
+
+  @Get('callback')
+  @ApiOperation({ summary: 'Callback OAuth de Mercado Pago' })
+  @ApiResponse({ status: 200, description: 'Cuenta conectada' })
+  callback(
+    @Query('code') code: string,
+    @Query('state') state: string,
+  ) {
+    return this.payments.handleMpCallback(code, state)
   }
 }

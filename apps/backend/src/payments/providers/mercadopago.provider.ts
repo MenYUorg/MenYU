@@ -19,7 +19,8 @@ export class MercadoPagoProvider implements PaymentProvider {
   }
 
   async createPreference(data: CreatePaymentDto): Promise<PaymentPreference> {
-    const result = await new Preference(this.client).create({
+    const localClient = new MercadoPagoConfig({ accessToken: data.accessToken })
+    const result = await new Preference(localClient).create({
       body: {
         external_reference: data.externalReference,
         items: [
