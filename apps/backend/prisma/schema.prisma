@@ -45,6 +45,10 @@ model Restaurante {
   items         ItemMenu[]
   admins        AdminRestaurante[]
 
+  mpAccessToken  String?  @map("mp_access_token")
+  mpRefreshToken String?  @map("mp_refresh_token")
+  mpUserId       String?  @map("mp_user_id")
+
   @@map("restaurante")
 }
 
