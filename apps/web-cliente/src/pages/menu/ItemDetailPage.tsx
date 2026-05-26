@@ -34,7 +34,7 @@ export function ItemDetailPage() {
     if (!menu && restauranteId) {
       void fetchMenu(restauranteId)
     }
-  }, [menu, restauranteId])
+  }, [menu, restauranteId, fetchMenu])
 
   if (loading) {
     return (
