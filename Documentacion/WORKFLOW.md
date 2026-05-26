@@ -116,7 +116,7 @@ Las variables de entorno de cada ambiente están configuradas en Railway y en Ve
 
 ## 5. Cómo deployar a producción
 
-El deploy a producción es **siempre intencional** — nunca ocurre de forma automática por un merge.
+El deploy a producción es **siempre intencional**, nunca ocurre de forma automática por un merge.
 
 ```bash
 # Asegurate de estar en main y tener los últimos cambios
