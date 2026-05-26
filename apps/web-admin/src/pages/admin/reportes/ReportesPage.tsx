@@ -56,13 +56,20 @@ const PERIODOS: PeriodoConfig[] = [
 ]
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+const toLocalDateString = (date: Date): string => {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
 function calcRange(periodo: Periodo): { desde: string; hasta: string } {
   const cfg = PERIODOS.find((p) => p.key === periodo)!
   const hoy = new Date()
-  const hasta = hoy.toISOString().split('T')[0]
+  const hasta = toLocalDateString(hoy)
   const inicio = new Date()
   inicio.setDate(inicio.getDate() - cfg.offset)
-  const desde = inicio.toISOString().split('T')[0]
+  const desde = toLocalDateString(inicio)
   return { desde, hasta }
 }
 
