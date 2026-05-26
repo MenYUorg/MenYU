@@ -147,6 +147,13 @@ export interface MesaConQr {
   qrImage: string
 }
 
+export interface SesionActiva {
+  sesionId: string
+  creadaEn: string
+  cantidadClientes: number
+  totalAcumulado: number
+}
+
 export const api = {
   marcas: {
     list: () => req<Marca[]>('GET', '/marcas'),
@@ -154,6 +161,8 @@ export const api = {
 
   restaurantes: {
     list: () => req<Restaurante[]>('GET', '/restaurantes'),
+    update: (id: string, data: { modoSesion?: string }) =>
+      req<Restaurante>('PATCH', `/restaurantes/${id}`, data),
   },
 
   items: {
@@ -183,6 +192,7 @@ export const api = {
       itemId: string,
       id: string,
       data: {
+        esOriginal?: boolean
         esRemovible?: boolean
         esAgregable?: boolean
         precioExtra?: number
@@ -227,13 +237,43 @@ export const api = {
     regenerarQr: (id: string) => req<MesaConQr>('POST', `/mesas/${id}/regenerar-qr`),
   },
 
-  pagos: {
-    listSesiones: (restauranteId: string) =>
-      req<SesionResumen[]>('GET', `/payments/sesiones?restauranteId=${encodeURIComponent(restauranteId)}`),
-    confirmarEfectivo: (sesionId: string) =>
-      req<{ sesionId: string; estado: string }>('POST', '/payments/confirmar-efectivo', { sesionId }),
-  },
+    pagos: {
+      listSesiones: (restauranteId: string) =>
+        req<SesionResumen[]>('GET', `/payments/sesiones?restauranteId=${encodeURIComponent(restauranteId)}`),
+      confirmarEfectivo: (sesionId: string) =>
+        req<{ sesionId: string; estado: string }>('POST', '/payments/confirmar-efectivo', { sesionId }),
+    },
 
+    sessions: {
+      mesaActiva: (mesaId: string) =>
+        req<SesionActiva | null>('GET', `/sessions/mesa/${mesaId}/activa`),
+      cerrarMesa: (mesaId: string) =>
+        req<{ ok: boolean }>('POST', `/sessions/mesa/${mesaId}/cerrar`),
+    },
+
+    reportes: {
+      ventasHoy: (restauranteId: string, desde?: string, hasta?: string) =>
+        req<{ total: number; cantidadPedidos: number; ticketPromedio: number; cantidadSesiones: number }>(
+          'GET',
+          `/reportes/ventas-hoy?restauranteId=${encodeURIComponent(restauranteId)}${desde ? '&desde=' + desde : ''}${hasta ? '&hasta=' + hasta : ''}`,
+        ),
+      ventasPorHora: (restauranteId: string, desde?: string, hasta?: string) =>
+        req<{ hora: number; total: number }[]>(
+          'GET',
+          `/reportes/ventas-por-hora?restauranteId=${encodeURIComponent(restauranteId)}${desde ? '&desde=' + desde : ''}${hasta ? '&hasta=' + hasta : ''}`,
+        ),
+      topItems: (restauranteId: string, limit = 5, desde?: string, hasta?: string) =>
+        req<{ itemId: string; nombre: string; cantidad: number; total: number; categoriaId: string | null; categoriaNombre: string | null }[]>(
+          'GET',
+          `/reportes/top-items?restauranteId=${encodeURIComponent(restauranteId)}&limit=${limit}${desde ? '&desde=' + desde : ''}${hasta ? '&hasta=' + hasta : ''}`,
+        ),
+      ventasPorDia: (restauranteId: string, desde?: string, hasta?: string) =>
+        req<{ fecha: string; total: number; pedidos: number }[]>(
+          'GET',
+          `/reportes/ventas-por-dia?restauranteId=${encodeURIComponent(restauranteId)}${desde ? '&desde=' + desde : ''}${hasta ? '&hasta=' + hasta : ''}`,
+        ),
+    },
+      
   clasificaciones: {
     list: (restauranteId: string) =>
       req<ClasificacionDieta[]>(

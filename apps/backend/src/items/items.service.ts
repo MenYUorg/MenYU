@@ -50,6 +50,7 @@ export class ItemsService {
         ...(disponible !== undefined ? { disponible } : {}),
       },
       orderBy: { nombre: 'asc' },
+      include: DETAIL_INCLUDE,
     })
   }
 

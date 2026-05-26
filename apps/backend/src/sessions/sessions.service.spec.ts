@@ -8,20 +8,38 @@ import { JwtService } from '@nestjs/jwt'
 import { SessionsService } from './sessions.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { UsersService } from '../users/users.service'
+import { MenyuGateway } from '../gateway/menyu.gateway'
 
 const mockPrisma = {
   sesionMesa: {
-    findFirst: jest.fn(),
-    create: jest.fn(),
+    findFirst:  jest.fn(),
+    findUnique: jest.fn(),
+    create:     jest.fn(),
+    update:     jest.fn(),
   },
   sesionMesaCliente: {
     findUnique: jest.fn(),
-    count: jest.fn(),
-    create: jest.fn(),
+    count:      jest.fn(),
+    create:     jest.fn(),
   },
   mesa: {
-    findFirst: jest.fn(),
+    findFirst:  jest.fn(),
+    findUnique: jest.fn(),
+    update:     jest.fn(),
   },
+  pedidoItem: {
+    findMany: jest.fn(),
+  },
+  admin: {
+    findUnique: jest.fn(),
+  },
+  restaurante: {
+    findUnique: jest.fn(),
+  },
+  adminRestaurante: {
+    findUnique: jest.fn(),
+  },
+  $transaction: jest.fn(),
 }
 
 const mockUsers = {
@@ -32,6 +50,10 @@ const mockUsers = {
 const mockJwt = {
   verify: jest.fn(),
   sign: jest.fn(),
+}
+
+const mockGateway = {
+  emitSesionCerrada: jest.fn(),
 }
 
 const MESA_ABIERTA = {
@@ -61,7 +83,8 @@ describe('SessionsService', () => {
         SessionsService,
         { provide: PrismaService, useValue: mockPrisma },
         { provide: UsersService, useValue: mockUsers },
-        { provide: JwtService, useValue: mockJwt },
+        { provide: JwtService,   useValue: mockJwt     },
+        { provide: MenyuGateway, useValue: mockGateway },
       ],
     }).compile()
 
@@ -171,6 +194,10 @@ describe('SessionsService', () => {
       mockPrisma.mesa.findFirst.mockResolvedValue(MESA_ABIERTA)
       mockPrisma.sesionMesa.findFirst.mockResolvedValue(null)
       mockPrisma.sesionMesa.create.mockResolvedValue({ id: 'nueva-sesion', codigoSesion: '007' })
+      mockPrisma.$transaction.mockResolvedValue([
+        { id: 'nueva-sesion', codigoSesion: '007' },
+        { id: 'mesa-1', estado: 'ocupada' },
+      ])
 
       const result = await service.open({ tableCode: 'qr-abc' })
 
@@ -244,6 +271,10 @@ describe('SessionsService', () => {
       mockPrisma.mesa.findFirst.mockResolvedValue(MESA_ABIERTA)
       mockPrisma.sesionMesa.findFirst.mockResolvedValue(null)
       mockPrisma.sesionMesa.create.mockResolvedValue({ id: 'nueva-sesion', codigoSesion: '042' })
+      mockPrisma.$transaction.mockResolvedValue([
+        { id: 'nueva-sesion', codigoSesion: '042' },
+        { id: 'mesa-1', estado: 'ocupada' },
+      ])
 
       const result = await service.open({ tableCode: 'qr-abc' }, 'Bearer valid.jwt.token')
 

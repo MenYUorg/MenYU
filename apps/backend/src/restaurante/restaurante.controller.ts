@@ -10,6 +10,7 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common'
+import { ApiBearerAuth } from '@nestjs/swagger'
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'
 import { RolesGuard } from '../common/guards/roles.guard'
 import { Roles } from '../common/decorators/roles.decorator'
@@ -19,6 +20,7 @@ import { RestauranteService } from './restaurante.service'
 import { CreateRestauranteDto } from './dto/create-restaurante.dto'
 import { UpdateRestauranteDto } from './dto/update-restaurante.dto'
 
+@ApiBearerAuth()
 @Controller('restaurantes')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class RestauranteController {
