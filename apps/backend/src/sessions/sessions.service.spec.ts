@@ -12,17 +12,34 @@ import { MenyuGateway } from '../gateway/menyu.gateway'
 
 const mockPrisma = {
   sesionMesa: {
-    findFirst: jest.fn(),
-    create: jest.fn(),
+    findFirst:  jest.fn(),
+    findUnique: jest.fn(),
+    create:     jest.fn(),
+    update:     jest.fn(),
   },
   sesionMesaCliente: {
     findUnique: jest.fn(),
-    count: jest.fn(),
-    create: jest.fn(),
+    count:      jest.fn(),
+    create:     jest.fn(),
   },
   mesa: {
-    findFirst: jest.fn(),
+    findFirst:  jest.fn(),
+    findUnique: jest.fn(),
+    update:     jest.fn(),
   },
+  pedidoItem: {
+    findMany: jest.fn(),
+  },
+  admin: {
+    findUnique: jest.fn(),
+  },
+  restaurante: {
+    findUnique: jest.fn(),
+  },
+  adminRestaurante: {
+    findUnique: jest.fn(),
+  },
+  $transaction: jest.fn(),
 }
 
 const mockUsers = {
