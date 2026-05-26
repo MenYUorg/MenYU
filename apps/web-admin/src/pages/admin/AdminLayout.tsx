@@ -1,18 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
-  import { NavLink, Outlet, useLocation } from 'react-router-dom'
-  import { useAuth } from '@menyu/auth'
-  import { Select } from '@menyu/ui'
-  import { useContextStore } from '../../store/contextStore'
-  import {
-    LayoutDashboard,
-    Grid2x2,
-    UtensilsCrossed,
-    Users,
-    BarChart2,
-    ChevronDown,
-    Wallet,
-    type LucideIcon,
-  } from 'lucide-react'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { useAuth } from '@menyu/auth'
+import { useContextStore } from '../../store/contextStore'
+import {
+  LayoutDashboard,
+  Grid2x2,
+  UtensilsCrossed,
+  Users,
+  BarChart2,
+  ChevronDown,
+  Wallet,
+  type LucideIcon,
+} from 'lucide-react'
 /* ── nav structure ─────────────────────────────────────────────────────────── */
 const NAV_SECTIONS = [
     {

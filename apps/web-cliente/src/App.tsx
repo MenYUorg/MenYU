@@ -105,17 +105,18 @@ function SessionGuard({ children }: { children: React.ReactNode }) {
 export function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/menu" element={<ClienteMenuPage />} />
-        <Route path="/menu/:itemId" element={<ItemDetailPage />} />
-        <Route path="/carrito" element={<CarritoPage />} />
-        <Route path="/pago" element={<PagoPage />} />
-        <Route path="/pago-exitoso" element={<PagoExitosoPage />} />
-        <Route path="/pedidos" element={<MisPedidosPage />} />
-        <Route path="/pagar" element={<PagarPage />} />
-        <Route path="*" element={<Navigate to="/menu" replace />} />
-      </Routes>
-    </SessionGuard>
+      <SessionGuard>
+        <Routes>
+          <Route path="/menu" element={<ClienteMenuPage />} />
+          <Route path="/menu/:itemId" element={<ItemDetailPage />} />
+          <Route path="/carrito" element={<CarritoPage />} />
+          <Route path="/pago" element={<PagoPage />} />
+          <Route path="/pago-exitoso" element={<PagoExitosoPage />} />
+          <Route path="/pedidos" element={<MisPedidosPage />} />
+          <Route path="/pagar" element={<PagarPage />} />
+          <Route path="*" element={<Navigate to="/menu" replace />} />
+        </Routes>
+      </SessionGuard>
     </BrowserRouter>
   )
 }
