@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pnpm --filter @menyu/web-cliente dev)",
+      "Bash(curl -s http://localhost:5176)",
+      "Bash(curl -s http://localhost:3000/api/tables?restauranteId=f3c59e02-af6b-467e-aa97-29b82b20f07d -H 'Authorization: Bearer dummy')",
+      "Bash(node verify-carrito.mjs)",
+      "Bash(npx playwright *)",
+      "Bash(ls node_modules/playwright)",
+      "Bash(ls node_modules/@playwright)",
+      "Bash(npx --yes playwright@1.60.0 --version)",
+      "Bash(node -e \"require.resolve\\('playwright'\\)\")",
+      "Bash(pnpm list *)",
+      "Bash(npm list *)",
+      "Bash(node -e \"const p = require\\('c:/Users/marga/AppData/Roaming/npm/node_modules/playwright'\\); console.log\\('found'\\)\")",
+      "Read(//c/Users/marga/AppData/Local/**)",
+      "Bash(pnpm --filter @menyu/web-cliente exec tsc --noEmit)"
+    ]
+  }
+}

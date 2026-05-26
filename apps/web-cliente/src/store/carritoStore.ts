@@ -5,6 +5,7 @@ export interface CartMod {
   itemIngredienteId: string
   accion: 'agregar' | 'quitar'
   cantidad: number
+  nombre?: string
 }
 
 export interface CartItem {
