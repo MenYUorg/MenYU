@@ -80,7 +80,7 @@ export function DashboardPage() {
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current)
     }
-  }, [selectedRestauranteId]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectedRestauranteId])
 
   /* ── derived ── */
   const mesasOcupadas = mesas.filter((m) => m.estado === 'ocupada').length

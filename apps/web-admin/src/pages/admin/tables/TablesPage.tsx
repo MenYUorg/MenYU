@@ -713,7 +713,7 @@ export function TablesPage() {
   useEffect(() => {
     setSesiones(new Map())
     void cargarMesas()
-  }, [selectedRestauranteId]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectedRestauranteId])
 
   useEffect(() => {
     if (!selectedRestauranteId) return
@@ -722,7 +722,7 @@ export function TablesPage() {
       if (ocupadas.length > 0) void cargarSesiones(ocupadas)
     }, 30000)
     return () => clearInterval(interval)
-  }, [selectedRestauranteId]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectedRestauranteId])
 
   if (!selectedRestauranteId) {
     return (
