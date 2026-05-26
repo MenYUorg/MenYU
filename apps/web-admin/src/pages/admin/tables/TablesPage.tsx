@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { AlertTriangle, Check, Clock, DollarSign, QrCode, Settings, Users, X } from 'lucide-react'
 import type { Restaurante } from '@menyu/types'
 import { useContextStore } from '../../../store/contextStore'
@@ -685,7 +685,7 @@ export function TablesPage() {
     })
   }
 
-  const cargarMesas = async () => {
+  const cargarMesas = useCallback(async () => {
     if (!selectedRestauranteId) return
     setLoading(true); setError(null)
     try {
@@ -698,7 +698,7 @@ export function TablesPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [selectedRestauranteId])
 
   const handleCerrarMesa = async (mesa: MesaConQr) => {
     await api.sessions.cerrarMesa(mesa.id)
@@ -713,7 +713,7 @@ export function TablesPage() {
   useEffect(() => {
     setSesiones(new Map())
     void cargarMesas()
-  }, [selectedRestauranteId])
+  }, [cargarMesas])
 
   useEffect(() => {
     if (!selectedRestauranteId) return
