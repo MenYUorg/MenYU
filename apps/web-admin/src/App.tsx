@@ -4,6 +4,7 @@ import { LoginPage } from './pages/login/LoginPage'
 import { AdminLayout } from './pages/admin/AdminLayout'
 import { AdminMenuPage } from './pages/admin/menu/AdminMenuPage'
 import { TablesPage } from './pages/admin/tables/TablesPage'
+import { PagosPage } from './pages/admin/pagos/PagosPage'
 
 export function App() {
   return (
@@ -15,6 +16,7 @@ export function App() {
             <Route path="/admin" element={<Navigate to="/admin/menu" replace />} />
             <Route path="/admin/menu" element={<AdminMenuPage />} />
             <Route path="/admin/tables" element={<TablesPage />} />
+            <Route path="/admin/pagos" element={<PagosPage />} />
           </Route>
         </Route>
         <Route path="*" element={<Navigate to="/login" replace />} />

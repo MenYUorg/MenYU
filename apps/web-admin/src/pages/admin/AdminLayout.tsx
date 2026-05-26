@@ -6,6 +6,7 @@ import { useContextStore } from '../../store/contextStore'
 const NAV = [
   { to: '/admin/menu', label: 'Catálogo' },
   { to: '/admin/tables', label: 'Mesas' },
+  { to: '/admin/pagos', label: 'Caja' },
 ]
 
 export function AdminLayout() {

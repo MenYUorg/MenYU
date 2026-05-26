@@ -126,6 +126,16 @@ export interface UpdateItemInput {
   disponible?: boolean
 }
 
+export interface SesionResumen {
+  sesionId: string
+  mesaNumero: string
+  estado: 'activa' | 'efectivo_solicitado' | 'mp_pendiente' | 'cerrada'
+  total: number
+  pedidos: { id: string; total: number; estado: string }[]
+  pago?: { id: string; metodo: string; estado: string }
+  cerradaEn?: string
+}
+
 export interface MesaConQr {
   id: string
   restauranteId: string
@@ -215,6 +225,13 @@ export const api = {
       req<MesaConQr>('PATCH', `/mesas/${id}`, data),
     delete: (id: string) => req<void>('DELETE', `/mesas/${id}`),
     regenerarQr: (id: string) => req<MesaConQr>('POST', `/mesas/${id}/regenerar-qr`),
+  },
+
+  pagos: {
+    listSesiones: (restauranteId: string) =>
+      req<SesionResumen[]>('GET', `/payments/sesiones?restauranteId=${encodeURIComponent(restauranteId)}`),
+    confirmarEfectivo: (sesionId: string) =>
+      req<{ sesionId: string; estado: string }>('POST', '/payments/confirmar-efectivo', { sesionId }),
   },
 
   clasificaciones: {

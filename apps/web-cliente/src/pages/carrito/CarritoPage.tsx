@@ -11,6 +11,8 @@ export function CarritoPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [exito, setExito] = useState(false)
+  const [pedidoId, setPedidoId] = useState<string | null>(null)
+  const [totalFinal, setTotalFinal] = useState(0)
 
   async function confirmarPedido() {
     if (!jwt) {
@@ -20,7 +22,8 @@ export function CarritoPage() {
     setLoading(true)
     setError(null)
     try {
-      await api.orders.create(
+      const montoTotal = total()
+      const result = await api.orders.create(
         jwt,
         items.map((i) => ({
           itemMenuId: i.itemMenuId,
@@ -29,9 +32,10 @@ export function CarritoPage() {
           modificaciones: i.modificaciones,
         })),
       )
+      setTotalFinal(montoTotal)
+      setPedidoId(result.id)
       vaciar()
       setExito(true)
-      setTimeout(() => navigate('/menu'), 2500)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error al enviar el pedido')
     } finally {
@@ -44,7 +48,21 @@ export function CarritoPage() {
       <div className="flex flex-col items-center justify-center h-screen bg-white gap-4 p-6 text-center">
         <p className="text-5xl">✅</p>
         <p className="text-xl font-bold text-gray-900">¡Pedido enviado!</p>
-        <p className="text-sm text-gray-500">La cocina ya lo recibió. Volvés al menú en un momento…</p>
+        <p className="text-sm text-gray-500">La cocina ya lo recibió.</p>
+        <div className="w-full max-w-xs flex flex-col gap-3 mt-4">
+          <button
+            onClick={() => navigate(`/pago?pedidoId=${pedidoId ?? ''}&monto=${totalFinal}`)}
+            className="w-full py-3.5 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-xl transition-colors"
+          >
+            Pedir la cuenta
+          </button>
+          <button
+            onClick={() => navigate('/menu')}
+            className="w-full py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl transition-colors"
+          >
+            Seguir pidiendo
+          </button>
+        </div>
       </div>
     )
   }

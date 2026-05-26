@@ -70,6 +70,6 @@ export const api = {
         nota?: string
         modificaciones: Array<{ itemIngredienteId: string; accion: 'agregar' | 'quitar'; cantidad: number }>
       }>,
-    ) => req<unknown>('POST', '/orders', { items }, jwt),
+    ) => req<{ id: string }>('POST', '/orders', { items }, jwt),
   },
 }
