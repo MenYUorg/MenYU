@@ -8,6 +8,7 @@ import { JwtService } from '@nestjs/jwt'
 import { SessionsService } from './sessions.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { UsersService } from '../users/users.service'
+import { MenyuGateway } from '../gateway/menyu.gateway'
 
 const mockPrisma = {
   sesionMesa: {
@@ -32,6 +33,10 @@ const mockUsers = {
 const mockJwt = {
   verify: jest.fn(),
   sign: jest.fn(),
+}
+
+const mockGateway = {
+  emitSesionCerrada: jest.fn(),
 }
 
 const MESA_ABIERTA = {
@@ -61,7 +66,8 @@ describe('SessionsService', () => {
         SessionsService,
         { provide: PrismaService, useValue: mockPrisma },
         { provide: UsersService, useValue: mockUsers },
-        { provide: JwtService, useValue: mockJwt },
+        { provide: JwtService,   useValue: mockJwt     },
+        { provide: MenyuGateway, useValue: mockGateway },
       ],
     }).compile()
 
