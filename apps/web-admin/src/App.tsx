@@ -5,6 +5,7 @@ import { AdminLayout } from './pages/admin/AdminLayout'
 import { AdminMenuPage } from './pages/admin/menu/AdminMenuPage'
 import { TablesPage } from './pages/admin/tables/TablesPage'
 import { DashboardPage } from './pages/admin/dashboard/DashboardPage'
+import { ReportesPage } from './pages/admin/reportes/ReportesPage'
 
 export function App() {
   return (
@@ -17,6 +18,7 @@ export function App() {
             <Route path="/admin/dashboard" element={<DashboardPage />} />
             <Route path="/admin/menu" element={<AdminMenuPage />} />
             <Route path="/admin/tables" element={<TablesPage />} />
+            <Route path="/admin/reportes" element={<ReportesPage />} />
           </Route>
         </Route>
         <Route path="*" element={<Navigate to="/login" replace />} />

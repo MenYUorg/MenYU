@@ -36,7 +36,7 @@ const NAV_SECTIONS = [
   {
     label: 'ANÁLISIS',
     items: [
-      { to: null, label: 'Reportes', Icon: BarChart2 },
+      { to: '/admin/reportes', label: 'Reportes', Icon: BarChart2 },
     ],
   },
 ] as const
@@ -45,6 +45,7 @@ const SECTION_TITLES: Record<string, string> = {
   '/admin/dashboard': 'Dashboard',
   '/admin/menu':      'Catálogo',
   '/admin/tables':    'Mesas',
+  '/admin/reportes':  'Reportes',
 }
 
 /* ── nav items ─────────────────────────────────────────────────────────────── */
