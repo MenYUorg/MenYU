@@ -30,7 +30,8 @@ const C = {
 export function CarritoPage() {
   const navigate = useNavigate()
   const { items, quitar, cambiarCantidad, vaciar, total } = useCarritoStore()
-  const jwt = useSessionStore((s) => s.jwt)
+  const jwt        = useSessionStore((s) => s.jwt)
+  const numeroMesa = useSessionStore((s) => s.numeroMesa)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [exito, setExito] = useState(false)
@@ -109,7 +110,7 @@ export function CarritoPage() {
         borderRadius: 20,
         whiteSpace:   'nowrap',
       }}>
-        Mesa
+        Mesa {numeroMesa ?? ''}
       </span>
     </header>
   )
