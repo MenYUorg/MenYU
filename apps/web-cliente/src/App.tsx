@@ -4,6 +4,8 @@ import { io } from 'socket.io-client'
 import { ClienteMenuPage } from './pages/menu/ClienteMenuPage'
 import { ItemDetailPage } from './pages/menu/ItemDetailPage'
 import { CarritoPage } from './pages/carrito/CarritoPage'
+import { PagoPage } from './pages/pago/PagoPage'
+import { PagoExitosoPage } from './pages/pago/PagoExitosoPage'
 import { MisPedidosPage } from './pages/pedidos/MisPedidosPage'
 import { PagarPage } from './pages/pago/PagarPage'
 import { useSessionStore } from './store/sessionStore'
@@ -108,6 +110,8 @@ export function App() {
           <Route path="/menu" element={<ClienteMenuPage />} />
           <Route path="/menu/:itemId" element={<ItemDetailPage />} />
           <Route path="/carrito" element={<CarritoPage />} />
+          <Route path="/pago" element={<PagoPage />} />
+          <Route path="/pago-exitoso" element={<PagoExitosoPage />} />
           <Route path="/pedidos" element={<MisPedidosPage />} />
           <Route path="/pagar" element={<PagarPage />} />
           <Route path="*" element={<Navigate to="/menu" replace />} />
