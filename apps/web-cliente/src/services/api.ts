@@ -49,7 +49,7 @@ export const api = {
       pin?: string
       codigoSesion?: string
     }) =>
-      req<{ sesionId: string; mesaId: string; restauranteId: string; esAnfitrion: boolean; codigoSesion: string; jwt: string }>(
+      req<{ sesionId: string; mesaId: string; restauranteId: string; esAnfitrion: boolean; codigoSesion: string; jwt: string; numeroMesa: string; modoSesion: string }>(
         'POST',
         '/sessions/open',
         data,

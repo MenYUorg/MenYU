@@ -4,15 +4,17 @@ import { LoginPage } from './pages/login/LoginPage'
 import { AdminLayout } from './pages/admin/AdminLayout'
 import { AdminMenuPage } from './pages/admin/menu/AdminMenuPage'
 import { TablesPage } from './pages/admin/tables/TablesPage'
+import { DashboardPage } from './pages/admin/dashboard/DashboardPage'
 
 export function App() {
   return (
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
-        <Route element={<ProtectedRoute roles={['admin']} />}>
+        <Route element={<ProtectedRoute roles={['OWNER', 'ROOT', 'GERENTE']} />}>
           <Route element={<AdminLayout />}>
-            <Route path="/admin" element={<Navigate to="/admin/menu" replace />} />
+            <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
+            <Route path="/admin/dashboard" element={<DashboardPage />} />
             <Route path="/admin/menu" element={<AdminMenuPage />} />
             <Route path="/admin/tables" element={<TablesPage />} />
           </Route>

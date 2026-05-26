@@ -17,6 +17,7 @@ export const usePublicMenuStore = create<PublicMenuStore>()((set, get) => ({
   error: null,
 
   fetchMenu: async (restauranteId) => {
+    if (get().loading) return
     set({ loading: true, error: null })
     try {
       const menu = await api.menu.publico(restauranteId)

@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { usePublicMenuStore } from '../../store/publicMenuStore'
+import { useSessionStore } from '../../store/sessionStore'
 import { useCarritoStore } from '../../store/carritoStore'
 import type { MenuPublicoItem } from '@menyu/types'
 
@@ -18,7 +19,8 @@ const C = {
 export function ItemDetailPage() {
   const { itemId } = useParams<{ itemId: string }>()
   const navigate = useNavigate()
-  const getItemById = usePublicMenuStore((s) => s.getItemById)
+  const { menu, loading, error, fetchMenu, getItemById } = usePublicMenuStore()
+  const { restauranteId } = useSessionStore()
   const item = getItemById(itemId ?? '') as MenuPublicoItem | undefined
 
   // ── State — lógica sin cambios ─────────────────────────────────────────────
@@ -28,7 +30,38 @@ export function ItemDetailPage() {
   const [nota, setNota] = useState('')
   const { agregar } = useCarritoStore()
 
-  if (!item) {
+  useEffect(() => {
+    if (!menu && restauranteId) {
+      void fetchMenu(restauranteId)
+    }
+  }, [menu, restauranteId])
+
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100svh', background: 'white' }}>
+        <div style={{ width: 36, height: 36, borderRadius: '50%', border: `3px solid ${C.orangeSoft}`, borderTopColor: C.orange, animation: 'spin 0.8s linear infinite' }} />
+        <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+      </div>
+    )
+  }
+
+  if (!restauranteId) {
+    navigate('/menu')
+    return null
+  }
+
+  if (!loading && error) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100svh', gap: 16, padding: 24, background: 'white' }}>
+        <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 14, color: C.orange, margin: 0 }}>No se pudo cargar el menú</p>
+        <button onClick={() => navigate('/menu')} style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 600, fontSize: 13, color: C.navy, background: 'none', border: 'none', cursor: 'pointer' }}>
+          ← Volver al menú
+        </button>
+      </div>
+    )
+  }
+
+  if (!loading && menu && !item) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100svh', gap: 16, padding: 24, background: 'white' }}>
         <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 14, color: C.orange, margin: 0 }}>Ítem no encontrado</p>
@@ -38,6 +71,8 @@ export function ItemDetailPage() {
       </div>
     )
   }
+
+  if (!item) return null
 
   // ── Lógica sin cambios ─────────────────────────────────────────────────────
   const precioModificaciones = Array.from(agregados.entries()).reduce((acc, [id, qty]) => {
