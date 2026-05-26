@@ -25,6 +25,16 @@ interface MpTokenResponse {
   user_id: number | string
 }
 
+export interface SesionResumen {
+  sesionId: string
+  mesaNumero: string
+  estado: 'activa' | 'efectivo_solicitado' | 'mp_pendiente' | 'cerrada'
+  total: number
+  pedidos: { id: string; total: number; estado: string }[]
+  pago?: { id: string; metodo: string; estado: string }
+  cerradaEn?: string
+}
+
 @Injectable()
 export class PaymentsService {
   constructor(
@@ -164,5 +174,139 @@ export class PaymentsService {
     })
 
     return { restauranteId, mpUserId: String(tokenData.user_id), conectado: true }
+  }
+
+  async getSesiones(restauranteId: string): Promise<SesionResumen[]> {
+    const sesiones = await this.prisma.sesionMesa.findMany({
+      where: { mesa: { restauranteId } },
+      include: {
+        mesa: { select: { numero: true } },
+        pedidos: {
+          include: {
+            pago: true,
+            items: true,
+          },
+        },
+      },
+      orderBy: { iniciadaEn: 'desc' },
+      take: 100,
+    })
+
+    return sesiones.map((sesion) => {
+      const total = sesion.pedidos.reduce(
+        (acc, pedido) =>
+          acc +
+          pedido.items.reduce(
+            (s, item) => s + Number(item.precioUnitario) * item.cantidad,
+            0,
+          ),
+        0,
+      )
+
+      const pago = sesion.pedidos.flatMap((p) => (p.pago ? [p.pago] : []))[0]
+
+      let estado: SesionResumen['estado']
+      if (sesion.estado === 'cerrada') {
+        estado = 'cerrada'
+      } else if (pago && pago.estado === 'pendiente' && pago.metodo === 'mercadopago') {
+        estado = 'mp_pendiente'
+      } else if (pago && pago.metodo === 'efectivo') {
+        estado = 'efectivo_solicitado'
+      } else {
+        estado = 'activa'
+      }
+
+      return {
+        sesionId: sesion.id,
+        mesaNumero: sesion.mesa.numero,
+        estado,
+        total,
+        pedidos: sesion.pedidos.map((p) => ({
+          id: p.id,
+          total: p.items.reduce(
+            (s, i) => s + Number(i.precioUnitario) * i.cantidad,
+            0,
+          ),
+          estado: p.estado,
+        })),
+        pago: pago ? { id: pago.id, metodo: pago.metodo, estado: pago.estado } : undefined,
+        cerradaEn: sesion.cerradaEn?.toISOString(),
+      }
+    })
+  }
+
+  async solicitarEfectivo(sesionId: string, pedidoId: string, monto: number) {
+    const existing = await this.prisma.pago.findFirst({
+      where: { pedidoId, metodo: 'efectivo' },
+    })
+    if (existing) {
+      return { pagoId: existing.id, sesionId, estado: 'efectivo_solicitado' }
+    }
+
+    const pago = await this.prisma.pago.create({
+      data: {
+        pedidoId,
+        monto,
+        metodo: 'efectivo',
+        estado: 'pendiente',
+      },
+    })
+
+    return { pagoId: pago.id, sesionId, estado: 'efectivo_solicitado' }
+  }
+
+  async confirmarEfectivo(sesionId: string) {
+    const pedidoConEfectivo = await this.prisma.pedido.findFirst({
+      where: { sesionId, pago: { metodo: 'efectivo' } },
+      include: { pago: true },
+      orderBy: { createdAt: 'desc' },
+    })
+
+    if (pedidoConEfectivo?.pago) {
+      await this.prisma.$transaction([
+        this.prisma.pago.update({
+          where: { id: pedidoConEfectivo.pago.id },
+          data: { estado: 'aprobado' },
+        }),
+        this.prisma.sesionMesa.update({
+          where: { id: sesionId },
+          data: { estado: 'cerrada', cerradaEn: new Date() },
+        }),
+      ])
+      return { sesionId, estado: 'cerrada' }
+    }
+
+    // No hay registro de pago en efectivo — crear uno al confirmar
+    const pedidos = await this.prisma.pedido.findMany({
+      where: { sesionId },
+      include: { items: true },
+      orderBy: { createdAt: 'desc' },
+    })
+
+    const ultimo = pedidos[0]
+    if (!ultimo) throw new NotFoundException('No se encontraron pedidos para esta sesión')
+
+    const monto = pedidos.reduce(
+      (acc, p) =>
+        acc + p.items.reduce((s, i) => s + Number(i.precioUnitario) * i.cantidad, 0),
+      0,
+    )
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.pago.create({
+        data: {
+          pedidoId: ultimo.id,
+          monto,
+          metodo: 'efectivo',
+          estado: 'aprobado',
+        },
+      })
+      await tx.sesionMesa.update({
+        where: { id: sesionId },
+        data: { estado: 'cerrada', cerradaEn: new Date() },
+      })
+    })
+
+    return { sesionId, estado: 'cerrada' }
   }
 }

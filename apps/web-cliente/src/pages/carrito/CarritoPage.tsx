@@ -91,24 +91,24 @@ export function CarritoPage() {
         ←
       </button>
       <span style={{
-        flex:        1,
-        fontFamily:  'Montserrat, sans-serif',
-        fontWeight:  700,
-        fontSize:    17,
-        color:       'white',
-        textAlign:   'center',
+        flex:       1,
+        fontFamily: 'Montserrat, sans-serif',
+        fontWeight: 700,
+        fontSize:   17,
+        color:      'white',
+        textAlign:  'center',
       }}>
         Carrito
       </span>
       <span style={{
-        background:  C.orange,
-        color:       'white',
-        fontFamily:  'Inter, sans-serif',
-        fontWeight:  600,
-        fontSize:    12,
-        padding:     '4px 10px',
+        background:   C.orange,
+        color:        'white',
+        fontFamily:   'Inter, sans-serif',
+        fontWeight:   600,
+        fontSize:     12,
+        padding:      '4px 10px',
         borderRadius: 20,
-        whiteSpace:  'nowrap',
+        whiteSpace:   'nowrap',
       }}>
         Mesa {numeroMesa ?? ''}
       </span>
@@ -141,7 +141,6 @@ export function CarritoPage() {
           textAlign:     'center',
           gap:           16,
         }}>
-          {/* Círculo naranja con ✓ */}
           <div style={{
             width:          80,
             height:         80,
@@ -155,7 +154,6 @@ export function CarritoPage() {
             <span style={{ color: 'white', fontSize: 36, lineHeight: 1 }}>✓</span>
           </div>
 
-          {/* Título */}
           <p style={{
             fontFamily: 'Montserrat, sans-serif',
             fontWeight: 800,
@@ -166,7 +164,6 @@ export function CarritoPage() {
             ¡Pedido enviado a cocina!
           </p>
 
-          {/* ID corto */}
           <p style={{
             fontFamily: 'Inter, sans-serif',
             fontSize:   14,
@@ -179,7 +176,6 @@ export function CarritoPage() {
             </span>
           </p>
 
-          {/* Card resumen */}
           <div style={{
             width:        '100%',
             border:       `1px solid ${C.border}`,
@@ -206,11 +202,7 @@ export function CarritoPage() {
                 alignItems:     'baseline',
                 marginBottom:   8,
               }}>
-                <span style={{
-                  fontFamily: 'Inter, sans-serif',
-                  fontSize:   13,
-                  color:      C.text,
-                }}>
+                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: C.text }}>
                   {item.cantidad}× {item.item.nombre}
                 </span>
                 <span style={{
@@ -226,42 +218,22 @@ export function CarritoPage() {
               </div>
             ))}
 
-            {/* Separador */}
             <div style={{ borderTop: `1px solid #E5E7EB`, margin: '10px 0' }} />
 
-            {/* Subtotal */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-              <span style={{
-                fontFamily: 'Montserrat, sans-serif',
-                fontWeight: 700,
-                fontSize:   14,
-                color:      C.text,
-              }}>
+              <span style={{ fontFamily: 'Montserrat, sans-serif', fontWeight: 700, fontSize: 14, color: C.text }}>
                 Subtotal
               </span>
-              <span style={{
-                fontFamily: 'Montserrat, sans-serif',
-                fontWeight: 800,
-                fontSize:   16,
-                color:      C.navy,
-              }}>
+              <span style={{ fontFamily: 'Montserrat, sans-serif', fontWeight: 800, fontSize: 16, color: C.navy }}>
                 ${subtotal.toFixed(2)}
               </span>
             </div>
           </div>
 
-          {/* Botones */}
-          <div style={{
-            display:   'flex',
-            flexWrap:  'wrap',
-            gap:       10,
-            width:     '100%',
-            flexDirection: 'column-reverse',
-          }}>
+          <div style={{ display: 'flex', flexDirection: 'column-reverse', gap: 10, width: '100%' }}>
             <button
               onClick={() => navigate('/menu')}
               style={{
-                flex:         1,
                 padding:      '13px 16px',
                 background:   'white',
                 color:        C.navy,
@@ -276,9 +248,8 @@ export function CarritoPage() {
               Volver al menú
             </button>
             <button
-              onClick={() => navigate('/pedidos')}
+              onClick={() => navigate(`/pago?pedidoId=${pedidoConfirmado.id}&monto=${subtotal.toFixed(2)}`)}
               style={{
-                flex:         1,
                 padding:      '13px 16px',
                 background:   C.orange,
                 color:        'white',
@@ -290,7 +261,7 @@ export function CarritoPage() {
                 cursor:       'pointer',
               }}
             >
-              Ver mis pedidos
+              Pedir la cuenta
             </button>
           </div>
         </div>
@@ -335,16 +306,16 @@ export function CarritoPage() {
             <button
               onClick={() => navigate('/menu')}
               style={{
-                background:  C.orange,
-                color:       'white',
-                border:      'none',
+                background:   C.orange,
+                color:        'white',
+                border:       'none',
                 borderRadius: 12,
-                padding:     '12px 24px',
-                fontFamily:  'Montserrat, sans-serif',
-                fontWeight:  700,
-                fontSize:    14,
-                cursor:      'pointer',
-                marginTop:   8,
+                padding:      '12px 24px',
+                fontFamily:   'Montserrat, sans-serif',
+                fontWeight:   700,
+                fontSize:     14,
+                cursor:       'pointer',
+                marginTop:    8,
               }}
             >
               Ver el menú
@@ -370,7 +341,6 @@ export function CarritoPage() {
       }}>
         {header}
 
-        {/* lista de ítems */}
         <div style={{
           flex:          1,
           overflowY:     'auto',
@@ -399,36 +369,35 @@ export function CarritoPage() {
                 padding:      '12px 14px',
                 boxShadow:    '0 1px 4px rgba(0,0,0,0.06)',
               }}>
-                {/* fila superior: imagen + nombre + precio */}
                 <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
                   <div style={{
-                    width:       64,
-                    height:      64,
+                    width:        64,
+                    height:       64,
                     borderRadius: 10,
-                    background:  C.bg,
-                    flexShrink:  0,
+                    background:   C.bg,
+                    flexShrink:   0,
                   }} />
 
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{
-                      fontFamily:  'Montserrat, sans-serif',
-                      fontWeight:  700,
-                      fontSize:    14,
-                      color:       C.text,
-                      margin:      0,
+                      fontFamily:   'Montserrat, sans-serif',
+                      fontWeight:   700,
+                      fontSize:     14,
+                      color:        C.text,
+                      margin:       0,
                       marginBottom: modsText ? 3 : 0,
                     }}>
                       {item.nombre}
                     </p>
                     {modsText && (
                       <p style={{
-                        fontFamily:    'Inter, sans-serif',
-                        fontSize:      11,
-                        color:         C.gray,
-                        margin:        0,
-                        overflow:      'hidden',
-                        textOverflow:  'ellipsis',
-                        whiteSpace:    'nowrap',
+                        fontFamily:   'Inter, sans-serif',
+                        fontSize:     11,
+                        color:        C.gray,
+                        margin:       0,
+                        overflow:     'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace:   'nowrap',
                       }}>
                         {modsText}
                       </p>
@@ -447,7 +416,6 @@ export function CarritoPage() {
                   </p>
                 </div>
 
-                {/* fila inferior: stepper + quitar */}
                 <div style={{
                   display:        'flex',
                   alignItems:     'center',
@@ -528,7 +496,6 @@ export function CarritoPage() {
           })}
         </div>
 
-        {/* panel inferior fijo */}
         <div style={{
           position:   'fixed',
           bottom:     0,
@@ -547,11 +514,7 @@ export function CarritoPage() {
             justifyContent: 'space-between',
             marginBottom:   14,
           }}>
-            <span style={{
-              fontFamily: 'Inter, sans-serif',
-              fontSize:   13,
-              color:      C.gray,
-            }}>
+            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: C.gray }}>
               Total
             </span>
             <span style={{

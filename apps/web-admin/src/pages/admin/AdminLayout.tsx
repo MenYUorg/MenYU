@@ -9,37 +9,51 @@ import {
   Users,
   BarChart2,
   ChevronDown,
+  Wallet,
   type LucideIcon,
 } from 'lucide-react'
-
 /* ── nav structure ─────────────────────────────────────────────────────────── */
 const NAV_SECTIONS = [
-  {
-    label: 'OPERACIÓN',
-    items: [
-      { to: '/admin/dashboard', label: 'Dashboard', Icon: LayoutDashboard },
-      { to: '/admin/tables',    label: 'Mesas',     Icon: Grid2x2         },
-    ],
-  },
-  {
-    label: 'CATÁLOGO',
-    items: [
-      { to: '/admin/menu', label: 'Menú', Icon: UtensilsCrossed },
-    ],
-  },
-  {
-    label: 'PERSONAL',
-    items: [
-      { to: null, label: 'Mozos', Icon: Users },
-    ],
-  },
-  {
-    label: 'ANÁLISIS',
-    items: [
-      { to: '/admin/reportes', label: 'Reportes', Icon: BarChart2 },
-    ],
-  },
-] as const
+    {
+      label: 'OPERACIÓN',
+      items: [
+        { to: '/admin/dashboard',
+  label: 'Dashboard', Icon:
+  LayoutDashboard },
+        { to: '/admin/tables',
+  label: 'Mesas',     Icon: Grid2x2
+       },
+      ],
+    },
+    {
+      label: 'CATÁLOGO',
+      items: [
+        { to: '/admin/menu', label:
+  'Menú', Icon: UtensilsCrossed },
+      ],
+    },
+    {
+      label: 'PERSONAL',
+      items: [
+        { to: null, label: 'Mozos',
+  Icon: Users },
+      ],
+    },
+    {
+      label: 'ANÁLISIS',
+      items: [
+        { to: '/admin/reportes', label:
+   'Reportes', Icon: BarChart2 },
+      ],
+    },
+    {
+      label: 'FINANZAS',
+      items: [
+        { to: '/admin/pagos', label:
+  'Caja', Icon: Wallet },
+      ],
+    },
+  ] as const
 
 const SECTION_TITLES: Record<string, string> = {
   '/admin/dashboard': 'Dashboard',
