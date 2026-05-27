@@ -30,6 +30,7 @@ export function PagarPage() {
   const navigate    = useNavigate()
   const jwt         = useSessionStore((s) => s.jwt)
   const sesionId    = useSessionStore((s) => s.sesionId)
+  const numeroMesa  = useSessionStore((s) => s.numeroMesa)
 
   const [pedidos,      setPedidos]      = useState<PedidoSesion[]>([])
   const [loading,      setLoading]      = useState(true)
@@ -124,7 +125,7 @@ export function PagarPage() {
         fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: 12,
         padding: '4px 10px', borderRadius: 20, whiteSpace: 'nowrap',
       }}>
-        Mesa
+        Mesa {numeroMesa ?? ''}
       </span>
     </header>
   )

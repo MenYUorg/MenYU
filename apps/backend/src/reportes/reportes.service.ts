@@ -12,6 +12,10 @@ interface VentasPorDiaRow {
   pedidos: number
 }
 
+interface TicketPromedioRow {
+  ticket_promedio: string | null
+}
+
 interface TopItemRow {
   item_id: string
   nombre: string
@@ -46,7 +50,7 @@ export class ReportesService {
   async ventasHoy(restauranteId: string, desde?: string, hasta?: string) {
     const { inicio, fin } = this.parseRange(desde, hasta)
 
-    const [rows, cantidadSesiones] = await Promise.all([
+    const [rows, cantidadSesiones, ticketRows] = await Promise.all([
       this.prisma.pedidoItem.findMany({
         where: {
           pedido: {
@@ -67,11 +71,28 @@ export class ReportesService {
           mesa: { restauranteId },
         },
       }),
+      this.prisma.$queryRaw<TicketPromedioRow[]>`
+        SELECT AVG(total_sesion) AS ticket_promedio
+        FROM (
+          SELECT sm.id, SUM(pi.precio_unitario * pi.cantidad) AS total_sesion
+          FROM sesion_mesa sm
+          JOIN pedido p ON p.sesion_id = sm.id
+          JOIN pedido_item pi ON pi.pedido_id = p.id
+          JOIN mesa m ON m.id = sm.mesa_id
+          WHERE m.restaurante_id = ${restauranteId}
+            AND sm.cerrada_en >= ${inicio}
+            AND sm.cerrada_en <= ${fin}
+            AND sm.estado = 'cerrada'
+          GROUP BY sm.id
+        ) sub
+      `,
     ])
 
     const total = rows.reduce((sum, r) => sum + Number(r.precioUnitario) * r.cantidad, 0)
     const cantidadPedidos = new Set(rows.map((r) => r.pedidoId)).size
-    const ticketPromedio = cantidadPedidos === 0 ? 0 : total / cantidadPedidos
+    const ticketPromedio = ticketRows[0]?.ticket_promedio != null
+      ? Number(ticketRows[0].ticket_promedio)
+      : 0
 
     return {
       total: Math.round(total * 100) / 100,
@@ -86,7 +107,7 @@ export class ReportesService {
 
     const rows = await this.prisma.$queryRaw<VentasPorHoraRow[]>`
       SELECT
-        EXTRACT(HOUR FROM p.created_at)::int AS hora,
+        EXTRACT(HOUR FROM (p.created_at::timestamptz AT TIME ZONE 'America/Argentina/Buenos_Aires'))::int AS hora,
         SUM(pi.precio_unitario * pi.cantidad) AS total
       FROM pedido_item pi
       JOIN pedido p ON p.id = pi.pedido_id
@@ -143,7 +164,7 @@ export class ReportesService {
 
     const rows = await this.prisma.$queryRaw<VentasPorDiaRow[]>`
       SELECT
-        TO_CHAR(DATE(p.created_at), 'YYYY-MM-DD') AS fecha,
+        TO_CHAR(DATE(p.created_at::timestamptz AT TIME ZONE 'America/Argentina/Buenos_Aires'), 'YYYY-MM-DD') AS fecha,
         SUM(pi.precio_unitario * pi.cantidad) AS total,
         COUNT(DISTINCT p.id)::int AS pedidos
       FROM pedido p
@@ -152,7 +173,7 @@ export class ReportesService {
       WHERE m.restaurante_id = ${restauranteId}
         AND p.created_at >= ${inicio}
         AND p.created_at <= ${fin}
-      GROUP BY DATE(p.created_at)
+      GROUP BY DATE(p.created_at::timestamptz AT TIME ZONE 'America/Argentina/Buenos_Aires')
       ORDER BY fecha ASC
     `
 

@@ -32,12 +32,14 @@ export class MercadoPagoProvider implements PaymentProvider {
             currency_id: 'ARS',
           },
         ],
-        back_urls: {
-          success: process.env.MP_SUCCESS_URL ?? 'http://localhost:3000',
-          failure: process.env.MP_FAILURE_URL ?? 'http://localhost:3000',
-          pending: process.env.MP_PENDING_URL ?? 'http://localhost:3000',
-        },
-        auto_return: 'approved',
+        ...(process.env.MP_SUCCESS_URL && !process.env.MP_SUCCESS_URL.includes('localhost') && {
+          back_urls: {
+            success: process.env.MP_SUCCESS_URL,
+            failure: process.env.MP_FAILURE_URL ?? process.env.MP_SUCCESS_URL,
+            pending: process.env.MP_PENDING_URL ?? process.env.MP_SUCCESS_URL,
+          },
+          auto_return: 'approved' as const,
+        }),
         notification_url: process.env.MP_WEBHOOK_URL ?? undefined,
       },
     })
