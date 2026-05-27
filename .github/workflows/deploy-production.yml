@@ -31,7 +31,12 @@ jobs:
 
       # ── Railway production ────────────────────────────────────
       - name: Deploy backend to Railway production
-        run: npx @railway/cli@latest up --service ${{ secrets.RAILWAY_SERVICE_ID_PROD }} --detach
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: npx @railway/cli@latest up --service ${{ secrets.RAILWAY_SERVICE_ID_PROD }} --detach
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN_PROD }}
 
