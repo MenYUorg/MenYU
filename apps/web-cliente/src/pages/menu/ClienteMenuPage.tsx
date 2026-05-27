@@ -27,7 +27,35 @@ function initials(name: string) {
   return name.split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('')
 }
 
+function matchesBusqueda(nombre: string, buscar: string): boolean {
+  if (!buscar.trim()) return true
+  const query = buscar.toLowerCase().trim()
+  return nombre.toLowerCase().split(/\s+/).some((palabra) => palabra.startsWith(query))
+}
+
 // ── Sub-components ────────────────────────────────────────────────────────────
+
+function EmptyState({ buscar, activeDiets, onClear }: { buscar: string; activeDiets: Set<string>; onClear: () => void }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 200, gap: 10, paddingTop: 40 }}>
+      <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 14, color: C.textMuted, textAlign: 'center', margin: 0 }}>
+        {buscar
+          ? `No hay platos que coincidan con "${buscar}"`
+          : activeDiets.size > 0
+            ? 'Ningún plato cumple todos los filtros de dieta'
+            : 'No hay ítems en esta categoría'}
+      </p>
+      {(buscar || activeDiets.size > 0) && (
+        <button
+          onClick={onClear}
+          style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 600, fontSize: 13, color: C.orange, background: 'none', border: 'none', cursor: 'pointer' }}
+        >
+          Limpiar filtros
+        </button>
+      )}
+    </div>
+  )
+}
 
 function HamburgerBadge() {
   return (
@@ -401,13 +429,15 @@ export function ClienteMenuPage() {
   // UI state
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [buscar, setBuscar] = useState('')
-  const [categoriaActiva, setCategoriaActiva] = useState<string>('__all__')
+  const [categoriaActiva, setCategoriaActiva] = useState<string>('')
   const [dietOpen, setDietOpen] = useState(false)
   const [pendingDiets, setPendingDiets] = useState<Set<string>>(new Set())
   const [activeDiets, setActiveDiets] = useState<Set<string>>(new Set())
   const [mozoStatus, setMozoStatus] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle')
   const mozoTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const dietRef = useRef<HTMLDivElement>(null)
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({})
 
   // Check-in state
   const [checkInPin,    setCheckInPin]    = useState('')
@@ -425,7 +455,7 @@ export function ClienteMenuPage() {
   }, [restauranteId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (menu) setCategoriaActiva('__all__')
+    if (menu?.categorias[0]?.id) setCategoriaActiva(menu.categorias[0].id)
   }, [menu])
 
   // Click outside diet dropdown
@@ -458,27 +488,68 @@ export function ClienteMenuPage() {
     return Array.from(map.values()).sort((a, b) => b.count - a.count)
   }, [menu])
 
-  // Combined filtered items
-  const itemsVisibles = useMemo(() => {
-    if (!menu) return [] as MenuPublicoItem[]
-    const searchLow = buscar.toLowerCase().trim()
+  // Grouped categories with filtering applied (for scroll-spy mode)
+  const categoriasFiltradas = useMemo(() => {
+    if (!menu) return []
+    return menu.categorias.map((cat) => ({
+      ...cat,
+      itemsDirectos: cat.itemsDirectos.filter((item) => {
+        if (!matchesBusqueda(item.nombre, buscar)) return false
+        if (activeDiets.size > 0) {
+          const ids = new Set(item.clasificaciones.map((c) => c.id))
+          for (const d of activeDiets) if (!ids.has(d)) return false
+        }
+        return true
+      }),
+    })).filter((cat) => cat.itemsDirectos.length > 0)
+  }, [menu, buscar, activeDiets])
 
-    const source: MenuPublicoItem[] =
-      categoriaActiva === '__all__'
-        ? menu.categorias.flatMap((c) => c.itemsDirectos)
-        : (menu.categorias.find((c) => c.id === categoriaActiva)?.itemsDirectos ?? [])
-
-    return source.filter((item) => {
-      if (searchLow && !item.nombre.toLowerCase().includes(searchLow)) return false
-      if (activeDiets.size > 0) {
-        const ids = new Set(item.clasificaciones.map((c) => c.id))
-        for (const d of activeDiets) if (!ids.has(d)) return false
-      }
-      return true
+  // Scroll-spy: update active chip based on which section is visible
+  useEffect(() => {
+    // Purge refs for categories no longer in the DOM
+    const activeIds = new Set(categoriasFiltradas.map((c) => c.id))
+    Object.keys(sectionRefs.current).forEach((id) => {
+      if (!activeIds.has(id)) delete sectionRefs.current[id]
     })
-  }, [menu, categoriaActiva, buscar, activeDiets])
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            const id = entry.target.getAttribute('data-categoria-id')
+            if (id) setCategoriaActiva(id)
+          }
+        })
+      },
+      { threshold: 0.3 },
+    )
+
+    Object.values(sectionRefs.current).forEach((ref) => {
+      if (ref) observer.observe(ref)
+    })
+
+    return () => observer.disconnect()
+  }, [categoriasFiltradas])
+
+  // Scroll listener: highlight "Todo" chip when scrolled to top
+  useEffect(() => {
+    const container = scrollContainerRef.current
+    if (!container) return
+    const handleScroll = () => {
+      if (container.scrollTop === 0) {
+        const firstId = categoriasFiltradas[0]?.id
+        if (firstId) setCategoriaActiva(firstId)
+      }
+    }
+    container.addEventListener('scroll', handleScroll)
+    return () => container.removeEventListener('scroll', handleScroll)
+  }, [categoriasFiltradas])
 
   // Handlers
+  const handleCategoriaClick = (catId: string) => {
+    sectionRefs.current[catId]?.scrollIntoView({ behavior: 'smooth' })
+  }
+
   const handleCheckIn = async (e: React.FormEvent) => {
     e.preventDefault()
     const rid = checkInRid.trim() || undefined
@@ -603,7 +674,7 @@ export function ClienteMenuPage() {
                                'Mozo'
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100svh', overflow: 'hidden', background: C.bg }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', overflow: 'hidden', background: C.bg }}>
 
       {/* ── Drawer scrim */}
       <div
@@ -766,7 +837,7 @@ export function ClienteMenuPage() {
               placeholder="Buscar platos..."
               style={{
                 width: '100%', height: 40, boxSizing: 'border-box',
-                paddingLeft: 34, paddingRight: 14, borderRadius: 999,
+                paddingLeft: 34, paddingRight: buscar ? 32 : 14, borderRadius: 999,
                 border: `1px solid ${C.border}`, background: C.bg,
                 fontFamily: 'Inter,sans-serif', fontSize: 13, color: C.text,
                 outline: 'none', transition: 'border-color .15s, background .15s',
@@ -774,6 +845,18 @@ export function ClienteMenuPage() {
               onFocus={(e) => { e.target.style.borderColor = C.orange; e.target.style.background = 'white' }}
               onBlur={(e) => { e.target.style.borderColor = C.border; e.target.style.background = C.bg }}
             />
+            {buscar && (
+              <button
+                onClick={() => setBuscar('')}
+                style={{
+                  position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  color: '#9CA3AF', fontSize: 16, lineHeight: 1, padding: 0,
+                }}
+              >
+                ×
+              </button>
+            )}
           </div>
 
           {/* Diet filter button + dropdown */}
@@ -870,13 +953,12 @@ export function ClienteMenuPage() {
       {/* ── Category chips */}
       <div style={{ background: 'white', borderBottom: `1px solid ${C.border}`, flexShrink: 0, overflowX: 'auto', scrollbarWidth: 'none' }}>
         <div style={{ display: 'flex', padding: '8px 14px', gap: 6, width: 'max-content' }}>
-          {(['__all__', ...menu.categorias.map((c) => c.id)] as string[]).map((catId) => {
-            const label = catId === '__all__' ? 'Todo' : (menu.categorias.find((c) => c.id === catId)?.nombre ?? catId)
-            const active = categoriaActiva === catId
+          {categoriasFiltradas.map((cat) => {
+            const active = categoriaActiva === cat.id
             return (
               <button
-                key={catId}
-                onClick={() => setCategoriaActiva(catId)}
+                key={cat.id}
+                onClick={() => handleCategoriaClick(cat.id)}
                 style={{
                   padding: '6px 14px', borderRadius: 999,
                   background: active ? C.navy : 'white',
@@ -886,7 +968,7 @@ export function ClienteMenuPage() {
                   cursor: 'pointer', whiteSpace: 'nowrap', transition: 'all .15s',
                 }}
               >
-                {label}
+                {cat.nombre}
               </button>
             )
           })}
@@ -894,31 +976,38 @@ export function ClienteMenuPage() {
       </div>
 
       {/* ── Items grid */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: 14 }}>
-        {itemsVisibles.length > 0 ? (
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-2.5">
-            {itemsVisibles.map((item) => (
-              <ItemCard key={item.id} item={item} onPress={() => navigate(`/menu/${item.id}`)} />
-            ))}
-          </div>
+      <div ref={scrollContainerRef} style={{ flex: 1, overflowY: 'auto', padding: 14 }}>
+        {categoriasFiltradas.length > 0 ? (
+          categoriasFiltradas.map((cat) => (
+            <div
+              key={cat.id}
+              ref={(el) => { sectionRefs.current[cat.id] = el }}
+              data-categoria-id={cat.id}
+              style={{ marginBottom: 28 }}
+            >
+              <h2 style={{
+                fontFamily: 'Montserrat,sans-serif',
+                fontWeight: 800,
+                fontSize: 13,
+                letterSpacing: '0.1em',
+                textTransform: 'uppercase',
+                color: C.navy,
+                margin: '0 0 12px',
+                paddingBottom: 8,
+                borderBottom: `2px solid ${C.orange}`,
+                display: 'inline-block',
+              }}>
+                {cat.nombre}
+              </h2>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+                {cat.itemsDirectos.map((item) => (
+                  <ItemCard key={item.id} item={item} onPress={() => navigate(`/menu/${item.id}`)} />
+                ))}
+              </div>
+            </div>
+          ))
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 200, gap: 10, paddingTop: 40 }}>
-            <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 14, color: C.textMuted, textAlign: 'center', margin: 0 }}>
-              {buscar
-                ? `No hay platos que coincidan con "${buscar}"`
-                : activeDiets.size > 0
-                  ? 'Ningún plato cumple todos los filtros de dieta'
-                  : 'No hay ítems en esta categoría'}
-            </p>
-            {(buscar || activeDiets.size > 0) && (
-              <button
-                onClick={() => { setBuscar(''); setActiveDiets(new Set()) }}
-                style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 600, fontSize: 13, color: C.orange, background: 'none', border: 'none', cursor: 'pointer' }}
-              >
-                Limpiar filtros
-              </button>
-            )}
-          </div>
+          <EmptyState buscar={buscar} activeDiets={activeDiets} onClear={() => { setBuscar(''); setActiveDiets(new Set()) }} />
         )}
       </div>
 
