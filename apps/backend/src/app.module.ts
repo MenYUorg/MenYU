@@ -47,3 +47,5 @@ import { HealthController } from './health/health.controller'
   controllers: [HealthController],
 })
 export class AppModule {}
+
+const x: number = "esto es un error de typescript"
