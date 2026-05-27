@@ -25,6 +25,12 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Generate Prisma Client
+        run: pnpm --filter @menyu/api exec prisma generate
+        env:
+          DATABASE_URL: "postgresql://x:x@x:5432/x"
+          DIRECT_URL: "postgresql://x:x@x:5432/x"
+
       - name: Typecheck
         run: pnpm turbo typecheck --filter=@menyu/api --filter=@menyu/web-admin --filter=@menyu/web-cliente --filter=@menyu/web-staff
 

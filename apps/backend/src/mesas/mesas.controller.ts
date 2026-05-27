@@ -11,6 +11,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common'
+import { ApiBearerAuth } from '@nestjs/swagger'
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'
 import { RolesGuard } from '../common/guards/roles.guard'
 import { Roles } from '../common/decorators/roles.decorator'
@@ -21,6 +22,7 @@ import { CreateMesaDto } from './dto/create-mesa.dto'
 import { UpdateMesaDto } from './dto/update-mesa.dto'
 import { CambiarPinDto } from './dto/cambiar-pin.dto'
 
+@ApiBearerAuth()
 @Controller('mesas')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class MesasController {

@@ -1,4 +1,4 @@
-import type { MenuPublico, ItemCarrito } from '@menyu/types'
+import type { MenuPublico } from '@menyu/types'
 
 const BASE = import.meta.env.VITE_API_URL ?? ''
 
@@ -49,7 +49,7 @@ export const api = {
       pin?: string
       codigoSesion?: string
     }) =>
-      req<{ sesionId: string; mesaId: string; restauranteId: string; esAnfitrion: boolean; codigoSesion: string; jwt: string }>(
+      req<{ sesionId: string; mesaId: string; restauranteId: string; esAnfitrion: boolean; codigoSesion: string; jwt: string; numeroMesa: string; modoSesion: string }>(
         'POST',
         '/sessions/open',
         data,
@@ -61,39 +61,16 @@ export const api = {
       req<{ ok: boolean }>('POST', '/waiter-calls', { sesionId }, jwt),
   },
 
-  pedidos: {
-    confirmar: (
-      sesionId: string,
-      mesaId: string,
-      items: Array<{
-        itemId: string
-        cantidad: number
-        notas?: string
-        mods: Array<{ itemIngredienteId: string; accion: 'AGREGAR' | 'QUITAR'; cantidad: number }>
-      }>,
-      jwt: string,
-    ) =>
-      req<unknown>('POST', '/pedidos', { sesionId, mesaId, items }, jwt),
-  },
-
   orders: {
-    create: (jwt: string, items: ItemCarrito[]) =>
-      req<unknown>(
-        'POST',
-        '/orders',
-        {
-          items: items.map((i) => ({
-            itemMenuId: i.itemMenuId,
-            cantidad: i.cantidad,
-            modificaciones: i.modificaciones.map((m) => ({
-              itemIngredienteId: m.itemIngredienteId,
-              accion: m.accion,
-              cantidad: m.cantidad,
-            })),
-            nota: i.nota,
-          })),
-        },
-        jwt,
-      ),
+    list: (jwt: string) => req<unknown[]>('GET', '/orders', undefined, jwt),
+    create: (
+      jwt: string,
+      items: Array<{
+        itemMenuId: string
+        cantidad: number
+        nota?: string
+        modificaciones: Array<{ itemIngredienteId: string; accion: 'agregar' | 'quitar'; cantidad: number }>
+      }>,
+    ) => req<{ id: string }>('POST', '/orders', { items }, jwt),
   },
 }

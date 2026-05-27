@@ -4,26 +4,59 @@ import { useCarritoStore } from '../../store/carritoStore'
 import { useSessionStore } from '../../store/sessionStore'
 import { api } from '../../services/api'
 
+interface PedidoConfirmado {
+  id: string
+  items: Array<{
+    id: string
+    cantidad: number
+    precioUnitario: number
+    item: { nombre: string }
+  }>
+}
+
+const C = {
+  orange:      '#E8563A',
+  navy:        '#2D3561',
+  orangeSoft:  '#FDE5DF',
+  bg:          '#F7F7F8',
+  text:        '#1A1A2E',
+  gray:        '#9CA3AF',
+  border:      '#F0F0F2',
+  errorBg:     '#FEF2F2',
+  errorBorder: '#FECACA',
+  errorText:   '#DC2626',
+}
+
 export function CarritoPage() {
   const navigate = useNavigate()
-  const { items, quitarUno, vaciar, total } = useCarritoStore()
-  const { sesionId, mesaId, jwt } = useSessionStore()
+  const { items, quitar, cambiarCantidad, vaciar, total } = useCarritoStore()
+  const jwt        = useSessionStore((s) => s.jwt)
+  const numeroMesa = useSessionStore((s) => s.numeroMesa)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [exito, setExito] = useState(false)
+  const [pedidoConfirmado, setPedidoConfirmado] = useState<PedidoConfirmado | null>(null)
 
   async function confirmarPedido() {
-    if (!sesionId || !mesaId || !jwt) {
+    if (!jwt) {
       setError('No hay sesión activa. Volvé al menú y abrí una mesa.')
       return
     }
     setLoading(true)
     setError(null)
     try {
-      await api.pedidos.confirmar(sesionId, mesaId, items, jwt)
+      const resultado = await api.orders.create(
+        jwt,
+        items.map((i) => ({
+          itemMenuId:     i.itemMenuId,
+          cantidad:       i.cantidad,
+          nota:           i.nota,
+          modificaciones: i.modificaciones,
+        })),
+      )
       vaciar()
+      setPedidoConfirmado(resultado as PedidoConfirmado)
       setExito(true)
-      setTimeout(() => navigate('/menu'), 2500)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error al enviar el pedido')
     } finally {
@@ -31,86 +64,515 @@ export function CarritoPage() {
     }
   }
 
-  if (exito) {
-    return (
-      <div className="flex flex-col items-center justify-center h-screen bg-white gap-4 p-6 text-center">
-        <p className="text-5xl">✅</p>
-        <p className="text-xl font-bold text-gray-900">¡Pedido enviado!</p>
-        <p className="text-sm text-gray-500">La cocina ya lo recibió. Volvés al menú en un momento…</p>
-      </div>
+  const header = (
+    <header style={{
+      background:    C.navy,
+      display:       'flex',
+      alignItems:    'center',
+      padding:       '14px 16px',
+      gap:           12,
+      flexShrink:    0,
+    }}>
+      <button
+        onClick={() => navigate('/menu')}
+        style={{
+          background: 'none',
+          border:     'none',
+          cursor:     'pointer',
+          color:      'white',
+          fontSize:   22,
+          lineHeight: 1,
+          padding:    '2px 8px 2px 0',
+          display:    'flex',
+          alignItems: 'center',
+        }}
+        aria-label="Volver al menú"
+      >
+        ←
+      </button>
+      <span style={{
+        flex:       1,
+        fontFamily: 'Montserrat, sans-serif',
+        fontWeight: 700,
+        fontSize:   17,
+        color:      'white',
+        textAlign:  'center',
+      }}>
+        Carrito
+      </span>
+      <span style={{
+        background:   C.orange,
+        color:        'white',
+        fontFamily:   'Inter, sans-serif',
+        fontWeight:   600,
+        fontSize:     12,
+        padding:      '4px 10px',
+        borderRadius: 20,
+        whiteSpace:   'nowrap',
+      }}>
+        Mesa {numeroMesa ?? ''}
+      </span>
+    </header>
+  )
+
+  /* ── éxito ── */
+  if (exito && pedidoConfirmado) {
+    const subtotal = pedidoConfirmado.items.reduce(
+      (acc, i) => acc + Number(i.precioUnitario) * i.cantidad,
+      0,
     )
-  }
 
-  if (items.length === 0) {
     return (
-      <div className="flex flex-col h-screen bg-white">
-        <header className="flex items-center px-4 py-3 border-b border-gray-100">
-          <button onClick={() => navigate('/menu')} className="text-orange-500 text-sm font-semibold">← Volver</button>
-          <span className="flex-1 text-center text-sm font-bold text-gray-900">Mi pedido</span>
-        </header>
-        <div className="flex-1 flex flex-col items-center justify-center gap-3 p-6 text-center">
-          <p className="text-4xl">🛒</p>
-          <p className="text-gray-400 text-sm">El carrito está vacío</p>
-          <button onClick={() => navigate('/menu')} className="text-orange-500 text-sm font-semibold">Ver el menú</button>
-        </div>
-      </div>
-    )
-  }
+      <div style={{
+        minHeight:      '100vh',
+        background:     'white',
+        display:        'flex',
+        alignItems:     'center',
+        justifyContent: 'center',
+      }}>
+        <div style={{
+          maxWidth:      480,
+          width:         '100%',
+          margin:        '0 auto',
+          display:       'flex',
+          flexDirection: 'column',
+          alignItems:    'center',
+          padding:       '32px 24px',
+          textAlign:     'center',
+          gap:           16,
+        }}>
+          <div style={{
+            width:          80,
+            height:         80,
+            borderRadius:   '50%',
+            background:     C.orange,
+            display:        'flex',
+            alignItems:     'center',
+            justifyContent: 'center',
+            flexShrink:     0,
+          }}>
+            <span style={{ color: 'white', fontSize: 36, lineHeight: 1 }}>✓</span>
+          </div>
 
-  return (
-    <div className="flex flex-col h-screen bg-white">
-      <header className="flex items-center px-4 py-3 border-b border-gray-100">
-        <button onClick={() => navigate('/menu')} className="text-orange-500 text-sm font-semibold">← Volver</button>
-        <span className="flex-1 text-center text-sm font-bold text-gray-900">Mi pedido</span>
-      </header>
+          <p style={{
+            fontFamily: 'Montserrat, sans-serif',
+            fontWeight: 800,
+            fontSize:   22,
+            color:      C.navy,
+            margin:     0,
+          }}>
+            ¡Pedido enviado a cocina!
+          </p>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
-        {items.map((item) => (
-          <div key={item.cartId} className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm">
-            <div className="flex items-start justify-between gap-2">
-              <div className="flex-1">
-                <p className="text-sm font-bold text-gray-900">{item.nombre}</p>
-                {item.mods.length > 0 && (
-                  <ul className="mt-1 space-y-0.5">
-                    {item.mods.map((m, i) => (
-                      <li key={i} className={`text-xs font-medium ${m.accion === 'AGREGAR' ? 'text-green-600' : 'text-red-500'}`}>
-                        {m.accion === 'AGREGAR' ? `+ extra ×${m.cantidad}` : '− sin ingrediente'}
-                      </li>
-                    ))}
-                  </ul>
-                )}
+          <p style={{
+            fontFamily: 'Inter, sans-serif',
+            fontSize:   14,
+            color:      C.gray,
+            margin:     0,
+          }}>
+            Pedido{' '}
+            <span style={{ fontWeight: 700, color: C.navy }}>
+              #{pedidoConfirmado.id.slice(0, 6).toUpperCase()}
+            </span>
+          </p>
+
+          <div style={{
+            width:        '100%',
+            border:       `1px solid ${C.border}`,
+            borderRadius: 12,
+            padding:      16,
+            textAlign:    'left',
+          }}>
+            <p style={{
+              fontFamily:    'Montserrat, sans-serif',
+              fontWeight:    700,
+              fontSize:      11,
+              color:         C.gray,
+              letterSpacing: '0.08em',
+              margin:        '0 0 12px',
+              textTransform: 'uppercase',
+            }}>
+              Resumen
+            </p>
+
+            {pedidoConfirmado.items.map((item) => (
+              <div key={item.id} style={{
+                display:        'flex',
+                justifyContent: 'space-between',
+                alignItems:     'baseline',
+                marginBottom:   8,
+              }}>
+                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: C.text }}>
+                  {item.cantidad}× {item.item.nombre}
+                </span>
+                <span style={{
+                  fontFamily: 'Montserrat, sans-serif',
+                  fontWeight: 600,
+                  fontSize:   13,
+                  color:      C.text,
+                  flexShrink: 0,
+                  marginLeft: 12,
+                }}>
+                  ${(Number(item.precioUnitario) * item.cantidad).toFixed(2)}
+                </span>
               </div>
-              <div className="flex flex-col items-end gap-2">
-                <p className="text-sm font-bold text-orange-500">${item.precioUnitario.toFixed(2)}</p>
-                <button
-                  onClick={() => quitarUno(item.cartId)}
-                  className="text-xs text-gray-400 hover:text-red-500 transition-colors"
-                >
-                  Quitar
-                </button>
-              </div>
+            ))}
+
+            <div style={{ borderTop: `1px solid #E5E7EB`, margin: '10px 0' }} />
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+              <span style={{ fontFamily: 'Montserrat, sans-serif', fontWeight: 700, fontSize: 14, color: C.text }}>
+                Subtotal
+              </span>
+              <span style={{ fontFamily: 'Montserrat, sans-serif', fontWeight: 800, fontSize: 16, color: C.navy }}>
+                ${subtotal.toFixed(2)}
+              </span>
             </div>
           </div>
-        ))}
-      </div>
 
-      <div className="px-4 py-4 border-t border-gray-100 space-y-3 bg-white">
-        {error && (
-          <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2 text-center">
-            {error}
-          </p>
-        )}
-        <div className="flex items-center justify-between">
-          <span className="text-sm text-gray-500">Total</span>
-          <span className="text-xl font-bold text-orange-500">${total().toFixed(2)}</span>
+          <div style={{ display: 'flex', flexDirection: 'column-reverse', gap: 10, width: '100%' }}>
+            <button
+              onClick={() => navigate('/menu')}
+              style={{
+                padding:      '13px 16px',
+                background:   'white',
+                color:        C.navy,
+                border:       `2px solid ${C.navy}`,
+                borderRadius: 12,
+                fontFamily:   'Montserrat, sans-serif',
+                fontWeight:   700,
+                fontSize:     14,
+                cursor:       'pointer',
+              }}
+            >
+              Volver al menú
+            </button>
+            <button
+              onClick={() => navigate(`/pago?pedidoId=${pedidoConfirmado.id}&monto=${subtotal.toFixed(2)}`)}
+              style={{
+                padding:      '13px 16px',
+                background:   C.orange,
+                color:        'white',
+                border:       'none',
+                borderRadius: 12,
+                fontFamily:   'Montserrat, sans-serif',
+                fontWeight:   700,
+                fontSize:     14,
+                cursor:       'pointer',
+              }}
+            >
+              Pedir la cuenta
+            </button>
+          </div>
         </div>
-        <button
-          onClick={() => void confirmarPedido()}
-          disabled={loading}
-          className="w-full py-3.5 bg-orange-500 hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-colors"
-        >
-          {loading ? 'Enviando pedido…' : 'Confirmar pedido'}
-        </button>
+      </div>
+    )
+  }
+
+  /* ── vacío ── */
+  if (items.length === 0) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: C.bg }}>
+        <div style={{
+          maxWidth:      480,
+          width:         '100%',
+          margin:        '0 auto',
+          display:       'flex',
+          flexDirection: 'column',
+          flex:          1,
+          background:    'white',
+        }}>
+          {header}
+          <div style={{
+            flex:           1,
+            display:        'flex',
+            flexDirection:  'column',
+            alignItems:     'center',
+            justifyContent: 'center',
+            gap:            12,
+            padding:        24,
+            textAlign:      'center',
+          }}>
+            <p style={{ fontSize: 56, margin: 0 }}>🛒</p>
+            <p style={{
+              fontFamily: 'Montserrat, sans-serif',
+              fontWeight: 700,
+              fontSize:   16,
+              color:      C.text,
+              margin:     0,
+            }}>
+              Tu carrito está vacío
+            </p>
+            <button
+              onClick={() => navigate('/menu')}
+              style={{
+                background:   C.orange,
+                color:        'white',
+                border:       'none',
+                borderRadius: 12,
+                padding:      '12px 24px',
+                fontFamily:   'Montserrat, sans-serif',
+                fontWeight:   700,
+                fontSize:     14,
+                cursor:       'pointer',
+                marginTop:    8,
+              }}
+            >
+              Ver el menú
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  /* ── lista ── */
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: C.bg }}>
+      <div style={{
+        maxWidth:      480,
+        width:         '100%',
+        margin:        '0 auto',
+        display:       'flex',
+        flexDirection: 'column',
+        minHeight:     '100vh',
+        background:    'white',
+        position:      'relative',
+      }}>
+        {header}
+
+        <div style={{
+          flex:          1,
+          overflowY:     'auto',
+          padding:       '12px 16px',
+          paddingBottom: 180,
+          display:       'flex',
+          flexDirection: 'column',
+          gap:           10,
+        }}>
+          {items.map((item) => {
+            const modsText = item.modificaciones.length > 0
+              ? item.modificaciones
+                  .map((m) =>
+                    m.accion === 'quitar'
+                      ? `Sin ${m.nombre ?? 'ingrediente'}`
+                      : `+ ${m.nombre ?? 'extra'} ×${m.cantidad}`,
+                  )
+                  .join(' · ')
+              : null
+
+            return (
+              <div key={item.cartId} style={{
+                background:   'white',
+                border:       `1px solid ${C.border}`,
+                borderRadius: 14,
+                padding:      '12px 14px',
+                boxShadow:    '0 1px 4px rgba(0,0,0,0.06)',
+              }}>
+                <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                  <div style={{
+                    width:        64,
+                    height:       64,
+                    borderRadius: 10,
+                    background:   C.bg,
+                    flexShrink:   0,
+                  }} />
+
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{
+                      fontFamily:   'Montserrat, sans-serif',
+                      fontWeight:   700,
+                      fontSize:     14,
+                      color:        C.text,
+                      margin:       0,
+                      marginBottom: modsText ? 3 : 0,
+                    }}>
+                      {item.nombre}
+                    </p>
+                    {modsText && (
+                      <p style={{
+                        fontFamily:   'Inter, sans-serif',
+                        fontSize:     11,
+                        color:        C.gray,
+                        margin:       0,
+                        overflow:     'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace:   'nowrap',
+                      }}>
+                        {modsText}
+                      </p>
+                    )}
+                  </div>
+
+                  <p style={{
+                    fontFamily: 'Montserrat, sans-serif',
+                    fontWeight: 700,
+                    fontSize:   14,
+                    color:      C.orange,
+                    margin:     0,
+                    flexShrink: 0,
+                  }}>
+                    ${(item.precioUnitario * item.cantidad).toFixed(2)}
+                  </p>
+                </div>
+
+                <div style={{
+                  display:        'flex',
+                  alignItems:     'center',
+                  justifyContent: 'space-between',
+                  marginTop:      10,
+                }}>
+                  <div style={{
+                    display:      'inline-flex',
+                    alignItems:   'center',
+                    border:       '1.5px solid #E5E7EB',
+                    borderRadius: 20,
+                    overflow:     'hidden',
+                  }}>
+                    <button
+                      onClick={() => cambiarCantidad(item.cartId, item.cantidad - 1)}
+                      disabled={item.cantidad <= 1}
+                      style={{
+                        width:          32,
+                        height:         32,
+                        background:     'none',
+                        border:         'none',
+                        cursor:         item.cantidad <= 1 ? 'not-allowed' : 'pointer',
+                        fontSize:       18,
+                        color:          item.cantidad <= 1 ? '#D1D5DB' : C.navy,
+                        display:        'flex',
+                        alignItems:     'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      −
+                    </button>
+                    <span style={{
+                      minWidth:   28,
+                      textAlign:  'center',
+                      fontFamily: 'Montserrat, sans-serif',
+                      fontWeight: 700,
+                      fontSize:   14,
+                      color:      C.navy,
+                    }}>
+                      {item.cantidad}
+                    </span>
+                    <button
+                      onClick={() => cambiarCantidad(item.cartId, item.cantidad + 1)}
+                      style={{
+                        width:          32,
+                        height:         32,
+                        background:     'none',
+                        border:         'none',
+                        cursor:         'pointer',
+                        fontSize:       18,
+                        color:          C.navy,
+                        display:        'flex',
+                        alignItems:     'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      +
+                    </button>
+                  </div>
+
+                  <button
+                    onClick={() => quitar(item.cartId)}
+                    style={{
+                      background: 'none',
+                      border:     'none',
+                      cursor:     'pointer',
+                      fontFamily: 'Inter, sans-serif',
+                      fontSize:   12,
+                      fontWeight: 500,
+                      color:      '#EF4444',
+                    }}
+                  >
+                    Quitar
+                  </button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+
+        <div style={{
+          position:   'fixed',
+          bottom:     0,
+          left:       '50%',
+          transform:  'translateX(-50%)',
+          width:      '100%',
+          maxWidth:   480,
+          background: 'white',
+          borderTop:  `1px solid ${C.border}`,
+          padding:    '16px 16px 24px',
+          boxShadow:  '0 -4px 20px rgba(0,0,0,0.08)',
+        }}>
+          <div style={{
+            display:        'flex',
+            alignItems:     'baseline',
+            justifyContent: 'space-between',
+            marginBottom:   14,
+          }}>
+            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: C.gray }}>
+              Total
+            </span>
+            <span style={{
+              fontFamily: 'Montserrat, sans-serif',
+              fontWeight: 800,
+              fontSize:   28,
+              color:      C.navy,
+            }}>
+              ${total().toFixed(2)}
+            </span>
+          </div>
+
+          {error && (
+            <p style={{
+              background:   C.errorBg,
+              border:       `1px solid ${C.errorBorder}`,
+              color:        C.errorText,
+              borderRadius: 10,
+              padding:      '10px 12px',
+              fontFamily:   'Inter, sans-serif',
+              fontSize:     13,
+              textAlign:    'center',
+              marginBottom: 12,
+            }}>
+              {error}
+            </p>
+          )}
+
+          <button
+            onClick={() => void confirmarPedido()}
+            disabled={loading}
+            style={{
+              width:        '100%',
+              padding:      16,
+              background:   loading ? '#F4A494' : C.orange,
+              color:        'white',
+              border:       'none',
+              borderRadius: 14,
+              fontFamily:   'Montserrat, sans-serif',
+              fontWeight:   700,
+              fontSize:     16,
+              cursor:       loading ? 'not-allowed' : 'pointer',
+              transition:   'background 0.2s',
+            }}
+          >
+            {loading ? 'Enviando pedido…' : 'Confirmar pedido'}
+          </button>
+
+          <p style={{
+            fontFamily: 'Inter, sans-serif',
+            fontSize:   11,
+            color:      C.gray,
+            textAlign:  'center',
+            margin:     '10px 0 0',
+          }}>
+            El cobro se realizará al finalizar tu visita.
+          </p>
+        </div>
       </div>
     </div>
   )

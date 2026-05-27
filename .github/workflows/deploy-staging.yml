@@ -37,24 +37,27 @@ jobs:
       # ── Vercel staging (preview, sin --prod) ─────────────────
       - name: Deploy web-admin to Vercel staging
         run: |
-          npx vercel --token ${{ secrets.VERCEL_TOKEN }} --yes \
-            --cwd apps/web-admin
+          npx vercel pull --yes --environment=preview --token ${{ secrets.VERCEL_TOKEN }}
+          npx vercel build --token ${{ secrets.VERCEL_TOKEN }}
+          npx vercel deploy --prebuilt --token ${{ secrets.VERCEL_TOKEN }}
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_ADMIN }}
 
       - name: Deploy web-cliente to Vercel staging
         run: |
-          npx vercel --token ${{ secrets.VERCEL_TOKEN }} --yes \
-            --cwd apps/web-cliente
+          npx vercel pull --yes --environment=preview --token ${{ secrets.VERCEL_TOKEN }}
+          npx vercel build --token ${{ secrets.VERCEL_TOKEN }}
+          npx vercel deploy --prebuilt --token ${{ secrets.VERCEL_TOKEN }}
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_CLIENTE }}
 
       - name: Deploy web-staff to Vercel staging
         run: |
-          npx vercel --token ${{ secrets.VERCEL_TOKEN }} --yes \
-            --cwd apps/web-staff
+          npx vercel pull --yes --environment=preview --token ${{ secrets.VERCEL_TOKEN }}
+          npx vercel build --token ${{ secrets.VERCEL_TOKEN }}
+          npx vercel deploy --prebuilt --token ${{ secrets.VERCEL_TOKEN }}
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_STAFF }}

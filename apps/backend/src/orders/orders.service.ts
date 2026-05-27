@@ -95,7 +95,21 @@ export class OrdersService {
             }),
           },
         },
-        include: { items: { include: { mods: true } } },
+        include: {
+          mesa: { select: { numero: true } },
+          items: {
+            include: {
+              item: { select: { nombre: true } },
+              mods: {
+                include: {
+                  itemIngrediente: {
+                    include: { ingrediente: { select: { nombre: true } } },
+                  },
+                },
+              },
+            },
+          },
+        },
       })
 
       return created
@@ -104,5 +118,41 @@ export class OrdersService {
     this.gateway.emitOrderNew(restauranteId, pedido)
 
     return pedido
+  }
+
+  async findBySesion(authHeader: string | undefined) {
+    if (!authHeader?.startsWith('Bearer ')) {
+      throw new UnauthorizedException('Session JWT requerido')
+    }
+
+    let payload: SessionJwt
+    try {
+      payload = this.jwt.verify<SessionJwt>(authHeader.slice(7))
+    } catch {
+      throw new UnauthorizedException('Session JWT inválido o expirado')
+    }
+
+    if (payload.tipo !== 'cliente') {
+      throw new UnauthorizedException('Solo clientes pueden consultar sus pedidos')
+    }
+
+    return this.prisma.pedido.findMany({
+      where: { sesionId: payload.sesionId },
+      orderBy: { createdAt: 'asc' },
+      include: {
+        items: {
+          include: {
+            item: { select: { nombre: true } },
+            mods: {
+              include: {
+                itemIngrediente: {
+                  include: { ingrediente: { select: { nombre: true } } },
+                },
+              },
+            },
+          },
+        },
+      },
+    })
   }
 }

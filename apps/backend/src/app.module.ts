@@ -15,8 +15,10 @@ import { MozosModule } from './mozos/mozos.module'
 import { ClasificacionesModule } from './clasificaciones/clasificaciones.module'
 import { AdminRestauranteModule } from './admin-restaurante/admin-restaurante.module'
 import { OrdersModule } from './orders/orders.module'
+import { PaymentsModule } from './payments/payments.module'
 import { PedidosModule } from './pedidos/pedidos.module'
 import { WaiterCallsModule } from './waiter-calls/waiter-calls.module'
+import { ReportesModule } from './reportes/reportes.module'
 import { HealthController } from './health/health.controller'
 
 @Module({
@@ -37,8 +39,10 @@ import { HealthController } from './health/health.controller'
     ClasificacionesModule,
     AdminRestauranteModule,
     OrdersModule,
+    PaymentsModule,
     PedidosModule,
     WaiterCallsModule,
+    ReportesModule,
   ],
   controllers: [HealthController],
 })

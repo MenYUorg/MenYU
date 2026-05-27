@@ -10,6 +10,7 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common'
+import { ApiBearerAuth } from '@nestjs/swagger'
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'
 import { RolesGuard } from '../common/guards/roles.guard'
 import { Roles } from '../common/decorators/roles.decorator'
@@ -19,6 +20,7 @@ import { MarcaService } from './marca.service'
 import { CreateMarcaDto } from './dto/create-marca.dto'
 import { UpdateMarcaDto } from './dto/update-marca.dto'
 
+@ApiBearerAuth()
 @Controller('marcas')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class MarcaController {

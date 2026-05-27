@@ -1,4 +1,4 @@
-import { Body, Controller, Headers, HttpCode, HttpStatus, Post } from '@nestjs/common'
+import { Body, Controller, Get, Headers, HttpCode, HttpStatus, Post } from '@nestjs/common'
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger'
 import { OrdersService } from './orders.service'
 import { CreateOrderDto } from './dto/create-order.dto'
@@ -7,6 +7,14 @@ import { CreateOrderDto } from './dto/create-order.dto'
 @Controller('orders')
 export class OrdersController {
   constructor(private readonly orders: OrdersService) {}
+
+  @Get()
+  @ApiOperation({ summary: 'Listar pedidos de la sesión activa del cliente' })
+  @ApiResponse({ status: 200, description: 'Lista de pedidos' })
+  @ApiResponse({ status: 401, description: 'Session JWT requerido o inválido' })
+  findMySesion(@Headers('authorization') authHeader: string | undefined) {
+    return this.orders.findBySesion(authHeader)
+  }
 
   @Post()
   @HttpCode(HttpStatus.CREATED)

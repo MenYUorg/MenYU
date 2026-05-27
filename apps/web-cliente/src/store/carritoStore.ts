@@ -1,41 +1,81 @@
 import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
 
 export interface CartMod {
   itemIngredienteId: string
-  accion: 'AGREGAR' | 'QUITAR'
+  accion: 'agregar' | 'quitar'
   cantidad: number
+  nombre?: string
 }
 
 export interface CartItem {
-  cartId: string        // id único dentro del carrito (no el itemId del menú)
-  itemId: string
+  cartId: string
+  itemMenuId: string
   nombre: string
   precioUnitario: number
   cantidad: number
-  notas?: string
-  mods: CartMod[]
+  nota?: string
+  modificaciones: CartMod[]
 }
 
 interface CarritoStore {
   items: CartItem[]
   agregar: (item: Omit<CartItem, 'cartId'>) => void
-  quitarUno: (cartId: string) => void
+  quitar: (cartId: string) => void
+  cambiarCantidad: (cartId: string, cantidad: number) => void
   vaciar: () => void
   total: () => number
 }
 
-export const useCarritoStore = create<CarritoStore>()((set, get) => ({
-  items: [],
+export const useCarritoStore = create<CarritoStore>()(
+  persist(
+    (set, get) => ({
+      items: [],
 
-  agregar: (item) =>
-    set((s) => ({
-      items: [...s.items, { ...item, cartId: crypto.randomUUID() }],
-    })),
+      agregar: (item) =>
+        set((s) => {
+          const modsKey = (mods: CartMod[]) =>
+            [...mods]
+              .sort((a, b) => a.itemIngredienteId.localeCompare(b.itemIngredienteId))
+              .map((m) => `${m.itemIngredienteId}:${m.accion}:${m.cantidad}`)
+              .join('|')
 
-  quitarUno: (cartId) =>
-    set((s) => ({ items: s.items.filter((i) => i.cartId !== cartId) })),
+          const existente = s.items.find(
+            (i) =>
+              i.itemMenuId === item.itemMenuId &&
+              i.nota === item.nota &&
+              modsKey(i.modificaciones) === modsKey(item.modificaciones),
+          )
 
-  vaciar: () => set({ items: [] }),
+          if (existente) {
+            return {
+              items: s.items.map((i) =>
+                i.cartId === existente.cartId
+                  ? { ...i, cantidad: i.cantidad + item.cantidad, precioUnitario: item.precioUnitario }
+                  : i,
+              ),
+            }
+          }
 
-  total: () => get().items.reduce((acc, i) => acc + i.precioUnitario * i.cantidad, 0),
-}))
+          return {
+            items: [...s.items, { ...item, cartId: crypto.randomUUID() }],
+          }
+        }),
+
+      quitar: (cartId) =>
+        set((s) => ({ items: s.items.filter((i) => i.cartId !== cartId) })),
+
+      cambiarCantidad: (cartId, cantidad) =>
+        set((s) => ({
+          items: s.items
+            .map((i) => (i.cartId === cartId ? { ...i, cantidad } : i))
+            .filter((i) => i.cantidad > 0),
+        })),
+
+      vaciar: () => set({ items: [] }),
+
+      total: () => get().items.reduce((acc, i) => acc + i.precioUnitario * i.cantidad, 0),
+    }),
+    { name: 'menyu_carrito' },
+  ),
+)

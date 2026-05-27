@@ -16,17 +16,17 @@ interface MenuStore {
   fetchIngredientes: (restauranteId: string) => Promise<void>
   fetchClasificaciones: (restauranteId: string) => Promise<void>
 
-  createItem: (data: CreateItemInput) => Promise<void>
+  createItem: (data: CreateItemInput) => Promise<ItemMenu>
   updateItem: (id: string, data: UpdateItemInput) => Promise<void>
   deleteItem: (id: string) => Promise<void>
   uploadItemImage: (id: string, file: File) => Promise<void>
   deleteItemImage: (id: string) => Promise<void>
 
   createCategoria: (data: { nombre: string; restauranteId: string }) => Promise<void>
-  updateCategoria: (id: string, data: { nombre: string }) => Promise<void>
+  updateCategoria: (id: string, data: { nombre?: string; orden?: number }) => Promise<void>
   deleteCategoria: (id: string) => Promise<void>
 
-  createIngrediente: (data: { nombre: string; restauranteId: string; esAlergeno?: boolean }) => Promise<void>
+  createIngrediente: (data: { nombre: string; restauranteId: string; esAlergeno?: boolean }) => Promise<Ingrediente>
   updateIngrediente: (id: string, data: { nombre?: string; esAlergeno?: boolean }) => Promise<void>
   deleteIngrediente: (id: string) => Promise<void>
 
@@ -75,7 +75,11 @@ export const useMenuStore = create<MenuStore>()((set) => ({
 
   createItem: async (data) => {
     set({ loading: true, error: null })
-    try { const item = await api.items.create(data); set((s) => ({ items: [...s.items, item] })) }
+    try {
+      const item = await api.items.create(data)
+      set((s) => ({ items: [...s.items, item] }))
+      return item
+    }
     catch (e) { set({ error: e instanceof Error ? e.message : 'Error al crear ítem' }); throw e }
     finally { set({ loading: false }) }
   },
@@ -131,7 +135,11 @@ export const useMenuStore = create<MenuStore>()((set) => ({
 
   createIngrediente: async (data) => {
     set({ loading: true, error: null })
-    try { const ing = await api.ingredientes.create(data); set((s) => ({ ingredientes: [...s.ingredientes, ing] })) }
+    try {
+      const ing = await api.ingredientes.create(data)
+      set((s) => ({ ingredientes: [...s.ingredientes, ing] }))
+      return ing
+    }
     catch (e) { set({ error: e instanceof Error ? e.message : 'Error al crear ingrediente' }); throw e }
     finally { set({ loading: false }) }
   },
