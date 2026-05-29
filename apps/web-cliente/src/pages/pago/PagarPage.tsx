@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Spinner } from '@menyu/ui'
 import { useSessionStore } from '../../store/sessionStore'
+import { usePagoStore } from '../../store/pagoStore'
 import { api } from '../../services/api'
 
 const C = {
@@ -24,17 +25,19 @@ interface PedidoSesion {
   }>
 }
 
-type MozoEstado = 'idle' | 'loading' | 'ok' | 'error'
-
 export function PagarPage() {
-  const navigate    = useNavigate()
-  const jwt         = useSessionStore((s) => s.jwt)
-  const sesionId    = useSessionStore((s) => s.sesionId)
+  const navigate      = useNavigate()
+  const jwt           = useSessionStore((s) => s.jwt)
+  const sesionId      = useSessionStore((s) => s.sesionId)
+  const numeroMesa    = useSessionStore((s) => s.numeroMesa)
+  const restauranteId = useSessionStore((s) => s.restauranteId)
+  const { estado: estadoPago, error: errorPago, initiarPagoMP, solicitarEfectivo, reset: resetPago } = usePagoStore()
 
-  const [pedidos,      setPedidos]      = useState<PedidoSesion[]>([])
-  const [loading,      setLoading]      = useState(true)
-  const [error,        setError]        = useState<string | null>(null)
-  const [llamandoMozo, setLlamandoMozo] = useState<MozoEstado>('idle')
+  const [pedidos, setPedidos] = useState<PedidoSesion[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error,   setError]   = useState<string | null>(null)
+
+  useEffect(() => { resetPago() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   function cargar() {
     if (!jwt) { setLoading(false); setError('No hay sesión activa'); return }
@@ -51,22 +54,11 @@ export function PagarPage() {
 
   useEffect(() => { cargar() }, [jwt]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function llamarMozo() {
-    if (!sesionId || !jwt) return
-    setLlamandoMozo('loading')
-    try {
-      await api.waiterCalls.llamar(sesionId, jwt)
-      setLlamandoMozo('ok')
-    } catch {
-      setLlamandoMozo('error')
-    } finally {
-      setTimeout(() => setLlamandoMozo('idle'), 3000)
-    }
-  }
-
   const total = pedidos
     .flatMap((p) => p.items)
     .reduce((acc, i) => acc + Number(i.precioUnitario) * i.cantidad, 0)
+
+  const pedidoId = pedidos[pedidos.length - 1]?.id ?? ''
 
   const itemsAgrupados = Object.values(
     pedidos.flatMap((p) => p.items).reduce<Record<string, { nombre: string; precioUnitario: number; cantidad: number }>>(
@@ -80,17 +72,14 @@ export function PagarPage() {
     ),
   )
 
-  const mozoLabel: Record<MozoEstado, string> = {
-    idle:    'Llamar al mozo para pagar',
-    loading: 'Llamando…',
-    ok:      '✓ Mozo en camino',
-    error:   'Error, intentá de nuevo',
+  function handleMP() {
+    if (!jwt || !sesionId || !restauranteId || !pedidoId) return
+    void initiarPagoMP(jwt, sesionId, restauranteId, pedidoId, total)
   }
-  const mozoBg: Record<MozoEstado, string> = {
-    idle:    C.navy,
-    loading: C.navy,
-    ok:      '#10B981',
-    error:   '#EF4444',
+
+  function handleEfectivo() {
+    if (!jwt || !sesionId || !pedidoId) return
+    void solicitarEfectivo(jwt, sesionId, pedidoId, total)
   }
 
   const header = (
@@ -124,88 +113,103 @@ export function PagarPage() {
         fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: 12,
         padding: '4px 10px', borderRadius: 20, whiteSpace: 'nowrap',
       }}>
-        Mesa
+        Mesa {numeroMesa ?? ''}
       </span>
     </header>
   )
 
+  let bottomContent: React.ReactNode
+
+  if (estadoPago === 'efectivo_solicitado') {
+    bottomContent = (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+        <span style={{ fontSize: 32 }}>✅</span>
+        <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: C.text, margin: 0, textAlign: 'center' }}>
+          El mozo se acercará a tu mesa en breve.
+        </p>
+      </div>
+    )
+  } else if (estadoPago === 'error') {
+    bottomContent = (
+      <>
+        <p style={{
+          fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#DC2626',
+          background: '#FEF2F2', border: '1px solid #FECACA',
+          borderRadius: 10, padding: '10px 12px', textAlign: 'center', margin: 0,
+        }}>
+          {errorPago}
+        </p>
+        <button
+          onClick={resetPago}
+          style={{
+            width: '100%', padding: '14px 16px',
+            background: C.orange, color: 'white', border: 'none',
+            borderRadius: 14, fontFamily: 'Montserrat, sans-serif',
+            fontWeight: 700, fontSize: 15, cursor: 'pointer',
+          }}
+        >
+          Reintentar
+        </button>
+      </>
+    )
+  } else if (estadoPago === 'loading' || estadoPago === 'mp_redirect') {
+    bottomContent = (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+        <Spinner size="md" />
+        <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: C.gray, margin: 0 }}>
+          Conectando con Mercado Pago...
+        </p>
+      </div>
+    )
+  } else {
+    bottomContent = (
+      <>
+        <button
+          onClick={handleMP}
+          style={{
+            width: '100%', padding: '14px 16px',
+            background: '#009EE3', color: 'white', border: 'none',
+            borderRadius: 14, fontFamily: 'Montserrat, sans-serif',
+            fontWeight: 700, fontSize: 15, cursor: 'pointer',
+            transition: 'background 0.2s',
+          }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = '#0088c7' }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = '#009EE3' }}
+        >
+          Pagar con Mercado Pago
+        </button>
+        <button
+          onClick={handleEfectivo}
+          style={{
+            width: '100%', padding: '14px 16px',
+            background: C.navy, color: 'white', border: 'none',
+            borderRadius: 14, fontFamily: 'Montserrat, sans-serif',
+            fontWeight: 700, fontSize: 15, cursor: 'pointer',
+          }}
+        >
+          Pagar en efectivo
+        </button>
+      </>
+    )
+  }
+
   const bottomPanel = (
     <div style={{
-      position:   'fixed',
-      bottom:     0,
-      left:       '50%',
-      transform:  'translateX(-50%)',
-      width:      '100%',
-      maxWidth:   520,
-      background: 'white',
-      borderTop:  `1px solid ${C.border}`,
-      padding:    '14px 16px 24px',
-      boxShadow:  '0 -4px 20px rgba(0,0,0,0.08)',
-      display:    'flex',
+      position:      'fixed',
+      bottom:        0,
+      left:          '50%',
+      transform:     'translateX(-50%)',
+      width:         '100%',
+      maxWidth:      520,
+      background:    'white',
+      borderTop:     `1px solid ${C.border}`,
+      padding:       '14px 16px 24px',
+      boxShadow:     '0 -4px 20px rgba(0,0,0,0.08)',
+      display:       'flex',
       flexDirection: 'column',
-      gap:        10,
+      gap:           10,
     }}>
-      {/* Mercado Pago — próximamente */}
-      <div style={{
-        display:        'flex',
-        alignItems:     'center',
-        justifyContent: 'space-between',
-        background:     '#F3F4F6',
-        borderRadius:   14,
-        padding:        '14px 16px',
-        cursor:         'not-allowed',
-      }}>
-        <span style={{
-          fontFamily: 'Montserrat, sans-serif',
-          fontWeight: 700, fontSize: 15,
-          color: C.gray,
-        }}>
-          Pagar con Mercado Pago
-        </span>
-        <span style={{
-          background:   C.orangeSoft,
-          color:        C.orange,
-          fontFamily:   'Inter, sans-serif',
-          fontWeight:   600,
-          fontSize:     11,
-          padding:      '3px 9px',
-          borderRadius: 20,
-          whiteSpace:   'nowrap',
-        }}>
-          Próximamente
-        </span>
-      </div>
-
-      {/* Llamar al mozo */}
-      <button
-        onClick={() => void llamarMozo()}
-        disabled={llamandoMozo === 'loading' || llamandoMozo === 'ok'}
-        style={{
-          width:        '100%',
-          padding:      '14px 16px',
-          background:   mozoBg[llamandoMozo],
-          color:        'white',
-          border:       'none',
-          borderRadius: 14,
-          fontFamily:   'Montserrat, sans-serif',
-          fontWeight:   700,
-          fontSize:     15,
-          cursor:       llamandoMozo === 'loading' || llamandoMozo === 'ok' ? 'not-allowed' : 'pointer',
-          transition:   'background 0.2s',
-        }}
-      >
-        {mozoLabel[llamandoMozo]}
-      </button>
-
-      <p style={{
-        fontFamily: 'Inter, sans-serif',
-        fontSize:   11,
-        color:      C.gray,
-        textAlign:  'center',
-        margin:     0,
-      }}>
-        El mozo se acercará a tu mesa para procesar el pago.
-      </p>
+      {bottomContent}
     </div>
   )
 

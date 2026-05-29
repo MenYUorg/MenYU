@@ -247,7 +247,7 @@ export function CarritoPage() {
               Volver al menú
             </button>
             <button
-              onClick={() => navigate(`/pago?pedidoId=${pedidoConfirmado.id}&monto=${subtotal.toFixed(2)}`)}
+              onClick={() => navigate('/pagar')}
               style={{
                 padding:      '13px 16px',
                 background:   C.orange,
