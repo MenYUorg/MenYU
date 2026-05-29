@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import type { FormEvent } from 'react'
 import type { ItemMenu } from '@menyu/types'
 import { Search, Trash2, Pencil, GripVertical } from 'lucide-react'
@@ -7,6 +7,12 @@ import { useMenuStore } from '../../../store/menuStore'
 import { ItemFormModal } from './ItemFormModal'
 
 type CatalogTab = 'categorias' | 'ingredientes' | 'dietas'
+
+const matchesBusqueda = (nombre: string, buscar: string): boolean => {
+  if (!buscar.trim()) return true
+  const query = buscar.toLowerCase().trim()
+  return nombre.toLowerCase().split(/\s+/).some((palabra) => palabra.startsWith(query))
+}
 
 /* ─── ToggleSwitch ──────────────────────────────────────────────────────── */
 function ToggleSwitch({ value, onChange }: { value: boolean; onChange: () => void }) {
@@ -537,7 +543,7 @@ function CatalogModal({ open, onClose }: { open: boolean; onClose: () => void })
 
   const sortedIngredientes = [...ingredientes]
     .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
-    .filter((i) => i.nombre.toLowerCase().includes(ingBusqueda.toLowerCase()))
+    .filter((i) => matchesBusqueda(i.nombre, ingBusqueda))
 
   const sortedClasificaciones = [...clasificaciones]
     .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
@@ -691,23 +697,36 @@ function CatalogModal({ open, onClose }: { open: boolean; onClose: () => void })
           )}
           {tab === 'ingredientes' && (
             <>
-              <input
-                value={ingBusqueda}
-                onChange={(e) => setIngBusqueda(e.target.value)}
-                placeholder="Buscar ingrediente..."
-                style={{
-                  width:        '100%',
-                  boxSizing:    'border-box',
-                  border:       '1px solid #e5e7eb',
-                  borderRadius: 8,
-                  padding:      '8px 12px',
-                  fontFamily:   'Inter, sans-serif',
-                  fontSize:     13,
-                  color:        '#111827',
-                  outline:      'none',
-                  marginBottom: 12,
-                }}
-              />
+              <div style={{ position: 'relative', marginBottom: 12 }}>
+                <input
+                  value={ingBusqueda}
+                  onChange={(e) => setIngBusqueda(e.target.value)}
+                  placeholder="Buscar ingrediente..."
+                  style={{
+                    width:        '100%',
+                    boxSizing:    'border-box',
+                    border:       '1px solid #e5e7eb',
+                    borderRadius: 8,
+                    padding:      `8px ${ingBusqueda ? 32 : 12}px 8px 12px`,
+                    fontFamily:   'Inter, sans-serif',
+                    fontSize:     13,
+                    color:        '#111827',
+                    outline:      'none',
+                  }}
+                />
+                {ingBusqueda && (
+                  <button
+                    onClick={() => setIngBusqueda('')}
+                    style={{
+                      position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
+                      background: 'none', border: 'none', cursor: 'pointer',
+                      color: '#9CA3AF', fontSize: 16, lineHeight: 1, padding: 0,
+                    }}
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
               <TabList
                 items={sortedIngredientes}
                 onDelete={handleDeleteIng}
@@ -747,11 +766,14 @@ export function AdminMenuPage() {
     updateItem, error, clearError,
   } = useMenuStore()
 
-  const [busqueda, setBusqueda]         = useState('')
-  const [categoriaSel, setCategoriaSel] = useState<string | null>(null)
-  const [catalogOpen, setCatalogOpen]   = useState(false)
-  const [optimistic, setOptimistic]     = useState<Record<string, boolean>>({})
-  const [itemModal, setItemModal]       = useState<{ open: boolean; item: ItemMenu | null }>({ open: false, item: null })
+  const [busqueda, setBusqueda]   = useState('')
+  const [catalogOpen, setCatalogOpen] = useState(false)
+  const [optimistic, setOptimistic]   = useState<Record<string, boolean>>({})
+  const [itemModal, setItemModal]     = useState<{ open: boolean; item: ItemMenu | null }>({ open: false, item: null })
+  const [categoriaActiva, setCategoriaActiva] = useState<string | null>(null)
+
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const sectionRefs        = useRef<Map<string, HTMLDivElement>>(new Map())
 
   useEffect(() => {
     if (selectedRestauranteId) {
@@ -762,15 +784,55 @@ export function AdminMenuPage() {
     }
   }, [selectedRestauranteId]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  /* ── Derived ── */
-  const categoriasConItems = categorias
-    .filter((cat) => items.some((item) => item.categoriaId === cat.id))
-    .sort((a, b) => ((a as { orden?: number }).orden ?? 0) - ((b as { orden?: number }).orden ?? 0))
+  /* ── Grouped + filtered data ── */
+  const categoriasFiltradas = useMemo(() => {
+    const cats = [...categorias].sort((a, b) =>
+      ((a as { orden?: number }).orden ?? 0) - ((b as { orden?: number }).orden ?? 0),
+    )
+    const grupos = cats.map((cat) => ({
+      categoria: cat,
+      items: items.filter(
+        (item) => item.categoriaId === cat.id && matchesBusqueda(item.nombre, busqueda),
+      ),
+    })).filter((g) => g.items.length > 0)
 
-  const itemsFiltrados = items
-    .filter((item) => categoriaSel === null || item.categoriaId === categoriaSel)
-    .filter((item) => item.nombre.toLowerCase().includes(busqueda.toLowerCase()))
+    const sinCategoria = items.filter(
+      (item) => !item.categoriaId && matchesBusqueda(item.nombre, busqueda),
+    )
+    if (sinCategoria.length > 0) {
+      grupos.push({
+        categoria: { id: '__sin_categoria__', nombre: 'Sin categoría', orden: 9999 } as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+        items: sinCategoria,
+      })
+    }
+    return grupos
+  }, [items, categorias, busqueda])
 
+  /* ── Scroll spy ── */
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            setCategoriaActiva(entry.target.getAttribute('data-categoria-id'))
+          }
+        })
+      },
+      { root: scrollContainerRef.current, rootMargin: '-10% 0px -80% 0px', threshold: 0 },
+    )
+    sectionRefs.current.forEach((el) => observer.observe(el))
+    return () => observer.disconnect()
+  }, [categoriasFiltradas])
+
+  const handleCategoriaClick = (categoriaId: string) => {
+    const el = sectionRefs.current.get(categoriaId)
+    if (el && scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTo({ top: el.offsetTop - 16, behavior: 'smooth' })
+    }
+    setCategoriaActiva(categoriaId)
+  }
+
+  /* ── Toggle disponible ── */
   function getDisponible(item: ItemMenu): boolean {
     return item.id in optimistic ? optimistic[item.id] : item.disponible
   }
@@ -793,275 +855,268 @@ export function AdminMenuPage() {
   }
 
   return (
-    <div style={{ padding: '24px 28px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
 
-      {/* ── Error banner ── */}
-      {error && (
-        <div style={{
-          display:         'flex',
-          alignItems:      'center',
-          justifyContent:  'space-between',
-          background:      '#fef2f2',
-          border:          '1px solid #fecaca',
-          borderRadius:    10,
-          padding:         '10px 16px',
-          marginBottom:    16,
-        }}>
-          <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#dc2626', margin: 0 }}>
-            {error}
-          </p>
-          <button
-            onClick={clearError}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626', fontSize: 18 }}
-          >
-            ×
-          </button>
-        </div>
-      )}
+      {/* ── Fixed header block ── */}
+      <div style={{ flexShrink: 0, padding: '24px 28px 0' }}>
 
-      {/* ── Topbar ── */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-        <h1 style={{
-          fontFamily: 'Montserrat, sans-serif',
-          fontWeight: 700,
-          fontSize:   22,
-          color:      '#2D3561',
-          margin:     0,
-        }}>
-          Menú
-        </h1>
-        <div style={{ display: 'flex', gap: 10 }}>
-          <button
-            onClick={() => setCatalogOpen(true)}
-            style={{
-              background:   'white',
-              color:        '#2D3561',
-              border:       '1px solid #2D3561',
-              borderRadius: 10,
-              padding:      '9px 16px',
-              cursor:       'pointer',
-              fontFamily:   'Inter, sans-serif',
-              fontSize:     13,
-              fontWeight:   500,
-              transition:   'background 150ms',
-            }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = '#E5E7F0' }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'white' }}
-          >
-            ⚙ Gestionar catálogo
-          </button>
-          <button
-            onClick={() => setItemModal({ open: true, item: null })}
-            style={{
-              background:   '#E8563A',
-              color:        'white',
-              border:       'none',
-              borderRadius: 10,
-              padding:      '9px 16px',
-              cursor:       'pointer',
-              fontFamily:   'Montserrat, sans-serif',
-              fontSize:     13,
-              fontWeight:   700,
-              transition:   'background 150ms',
-            }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = '#d44a2e' }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = '#E8563A' }}
-          >
-            + Agregar plato
-          </button>
-        </div>
-      </div>
-
-      {/* ── Search ── */}
-      <div style={{ position: 'relative', marginBottom: 14 }}>
-        <Search
-          size={16}
-          color="#9CA3AF"
-          style={{
-            position:       'absolute',
-            left:           14,
-            top:            '50%',
-            transform:      'translateY(-50%)',
-            pointerEvents:  'none',
-          }}
-        />
-        <input
-          value={busqueda}
-          onChange={(e) => setBusqueda(e.target.value)}
-          placeholder="Buscar plato..."
-          style={{
-            width:        '100%',
-            boxSizing:    'border-box',
-            border:       '1px solid #e5e7eb',
-            borderRadius: 12,
-            padding:      '12px 16px 12px 42px',
-            fontFamily:   'Inter, sans-serif',
-            fontSize:     14,
-            color:        '#111827',
-            outline:      'none',
-          }}
-        />
-      </div>
-
-      {/* ── Category pills (sorted by orden) ── */}
-      <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4, paddingTop: 4 }}>
-        {[{ id: null as string | null, label: `Todo (${items.length})` },
-          ...categoriasConItems.map((c) => ({ id: c.id, label: c.nombre })),
-        ].map((pill) => {
-          const active = categoriaSel === pill.id
-          return (
+        {/* Error banner */}
+        {error && (
+          <div style={{
+            display:        'flex',
+            alignItems:     'center',
+            justifyContent: 'space-between',
+            background:     '#fef2f2',
+            border:         '1px solid #fecaca',
+            borderRadius:   10,
+            padding:        '10px 16px',
+            marginBottom:   16,
+          }}>
+            <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#dc2626', margin: 0 }}>
+              {error}
+            </p>
             <button
-              key={pill.id ?? '__all__'}
-              onClick={() => setCategoriaSel(pill.id)}
+              onClick={clearError}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626', fontSize: 18 }}
+            >
+              ×
+            </button>
+          </div>
+        )}
+
+        {/* Topbar */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+          <h1 style={{
+            fontFamily: 'Montserrat, sans-serif',
+            fontWeight: 700,
+            fontSize:   22,
+            color:      '#2D3561',
+            margin:     0,
+          }}>
+            Menú
+          </h1>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button
+              onClick={() => setCatalogOpen(true)}
               style={{
-                background:   active ? '#2D3561' : 'white',
-                color:        active ? 'white' : '#374151',
-                border:       `1px solid ${active ? '#2D3561' : '#e5e7eb'}`,
-                borderRadius: 999,
-                padding:      '8px 18px',
-                fontFamily:   active ? 'Montserrat, sans-serif' : 'Inter, sans-serif',
-                fontWeight:   active ? 700 : 400,
-                fontSize:     14,
+                background:   'white',
+                color:        '#2D3561',
+                border:       '1px solid #2D3561',
+                borderRadius: 10,
+                padding:      '9px 16px',
                 cursor:       'pointer',
-                whiteSpace:   'nowrap',
-                transition:   'all 150ms',
-                flexShrink:   0,
+                fontFamily:   'Inter, sans-serif',
+                fontSize:     13,
+                fontWeight:   500,
+                transition:   'background 150ms',
+              }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = '#E5E7F0' }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'white' }}
+            >
+              ⚙ Gestionar catálogo
+            </button>
+            <button
+              onClick={() => setItemModal({ open: true, item: null })}
+              style={{
+                background:   '#E8563A',
+                color:        'white',
+                border:       'none',
+                borderRadius: 10,
+                padding:      '9px 16px',
+                cursor:       'pointer',
+                fontFamily:   'Montserrat, sans-serif',
+                fontSize:     13,
+                fontWeight:   700,
+                transition:   'background 150ms',
+              }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = '#d44a2e' }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = '#E8563A' }}
+            >
+              + Agregar plato
+            </button>
+          </div>
+        </div>
+
+        {/* Search */}
+        <div style={{ position: 'relative', marginBottom: 14 }}>
+          <Search
+            size={16}
+            color="#9CA3AF"
+            style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}
+          />
+          <input
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+            placeholder="Buscar plato..."
+            style={{
+              width:        '100%',
+              boxSizing:    'border-box',
+              border:       '1px solid #e5e7eb',
+              borderRadius: 12,
+              padding:      `12px ${busqueda ? 36 : 16}px 12px 42px`,
+              fontFamily:   'Inter, sans-serif',
+              fontSize:     14,
+              color:        '#111827',
+              outline:      'none',
+            }}
+          />
+          {busqueda && (
+            <button
+              onClick={() => setBusqueda('')}
+              style={{
+                position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
+                background: 'none', border: 'none', cursor: 'pointer',
+                color: '#9CA3AF', fontSize: 16, lineHeight: 1, padding: 0,
               }}
             >
-              {pill.label}
+              ×
             </button>
-          )
-        })}
+          )}
+        </div>
+
+        {/* Category pills */}
+        <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 12, paddingTop: 4, scrollbarWidth: 'none' }}>
+          {categoriasFiltradas.map(({ categoria }) => {
+            const active = categoriaActiva === categoria.id
+            return (
+              <button
+                key={categoria.id}
+                onClick={() => handleCategoriaClick(categoria.id)}
+                style={{
+                  background:   active ? '#2D3561' : 'white',
+                  color:        active ? 'white' : '#374151',
+                  border:       `1px solid ${active ? '#2D3561' : '#e5e7eb'}`,
+                  borderRadius: 999,
+                  padding:      '8px 18px',
+                  fontFamily:   active ? 'Montserrat, sans-serif' : 'Inter, sans-serif',
+                  fontWeight:   active ? 700 : 400,
+                  fontSize:     14,
+                  cursor:       'pointer',
+                  whiteSpace:   'nowrap',
+                  transition:   'all 150ms',
+                  flexShrink:   0,
+                }}
+              >
+                {categoria.nombre}
+              </button>
+            )
+          })}
+        </div>
       </div>
 
-      {/* ── Item list ── */}
+      {/* ── Scrollable content ── */}
       {loading ? (
         <div style={{
-          display:        'flex',
-          justifyContent: 'center',
-          padding:        '64px 0',
-          fontFamily:     'Inter, sans-serif',
-          fontSize:       14,
-          color:          '#9CA3AF',
+          flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#9CA3AF',
         }}>
           Cargando…
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 16 }}>
-          {itemsFiltrados.map((item) => {
-            const disponible = getDisponible(item)
-            const cat = categorias.find((c) => c.id === item.categoriaId)
-            return (
+        <div ref={scrollContainerRef} style={{ flex: 1, overflowY: 'auto', padding: '0 28px 24px' }}>
+          {categoriasFiltradas.length === 0 ? (
+            <p style={{ textAlign: 'center', fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#9CA3AF', padding: '48px 0', margin: 0 }}>
+              {busqueda ? `Sin resultados para "${busqueda}"` : 'No hay platos en el catálogo.'}
+            </p>
+          ) : (
+            categoriasFiltradas.map(({ categoria, items: grupoItems }) => (
               <div
-                key={item.id}
-                style={{
-                  background:  'white',
-                  border:      '1px solid #e5e7eb',
-                  borderRadius: 12,
-                  padding:     '12px 16px',
-                  display:     'flex',
-                  alignItems:  'center',
-                  gap:         16,
-                  opacity:     disponible ? 1 : 0.55,
-                  transition:  'opacity 200ms',
-                }}
+                key={categoria.id}
+                ref={(el) => { if (el) sectionRefs.current.set(categoria.id, el) }}
+                data-categoria-id={categoria.id}
+                style={{ marginBottom: 32 }}
               >
-                {/* Image */}
-                {item.imagenUrl ? (
-                  <img
-                    src={item.imagenUrl}
-                    alt={item.nombre}
-                    style={{
-                      width:        64,
-                      height:       64,
-                      borderRadius: 10,
-                      objectFit:    'cover',
-                      flexShrink:   0,
-                    }}
-                  />
-                ) : (
-                  <div style={{
-                    width:        64,
-                    height:       64,
-                    borderRadius: 10,
-                    background:   '#f3f4f6',
-                    flexShrink:   0,
-                  }} />
-                )}
-
-                {/* Info */}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{
-                    fontFamily:   'Inter, sans-serif',
-                    fontWeight:   600,
-                    fontSize:     15,
-                    color:        '#111827',
-                    margin:       '0 0 3px',
-                    whiteSpace:   'nowrap',
-                    overflow:     'hidden',
-                    textOverflow: 'ellipsis',
+                {/* Section header */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, paddingTop: 16 }}>
+                  <span style={{
+                    fontFamily:    'Montserrat, sans-serif',
+                    fontWeight:    800,
+                    fontSize:      13,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.08em',
+                    color:         '#2D3561',
+                    whiteSpace:    'nowrap',
                   }}>
-                    {item.nombre}
-                  </p>
-                  <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#6b7280', margin: 0 }}>
-                    ${Number(item.precioBase).toLocaleString('es-AR')}
-                    {!disponible
-                      ? <span style={{ color: '#dc2626' }}> · Sin stock</span>
-                      : cat
-                        ? <span> · {cat.nombre}</span>
-                        : null
-                    }
-                  </p>
+                    {categoria.nombre}
+                  </span>
+                  <div style={{ flex: 1, height: 2, background: 'linear-gradient(90deg, #E8563A, transparent)' }} />
+                  <span style={{ fontSize: 12, color: '#9ca3af', whiteSpace: 'nowrap' }}>
+                    {(() => {
+                      const total = grupoItems.length
+                      const inactivos = total - grupoItems.filter((i) => i.disponible).length
+                      return inactivos > 0
+                        ? `${total} platos · ${inactivos} inactivo${inactivos > 1 ? 's' : ''}`
+                        : `${total} platos`
+                    })()}
+                  </span>
                 </div>
 
-                {/* Actions */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
-                  <button
-                    onClick={() => setItemModal({ open: true, item })}
-                    style={{
-                      background:   'white',
-                      color:        '#374151',
-                      border:       '1px solid #e5e7eb',
-                      borderRadius: 8,
-                      padding:      '6px 14px',
-                      cursor:       'pointer',
-                      fontFamily:   'Inter, sans-serif',
-                      fontSize:     13,
-                      transition:   'border-color 150ms, color 150ms',
-                    }}
-                    onMouseEnter={(e) => {
-                      const el = e.currentTarget as HTMLButtonElement
-                      el.style.borderColor = '#2D3561'
-                      el.style.color = '#2D3561'
-                    }}
-                    onMouseLeave={(e) => {
-                      const el = e.currentTarget as HTMLButtonElement
-                      el.style.borderColor = '#e5e7eb'
-                      el.style.color = '#374151'
-                    }}
-                  >
-                    Editar
-                  </button>
-                  <ToggleSwitch value={disponible} onChange={() => handleToggle(item)} />
+                {/* Item rows */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {grupoItems.map((item) => {
+                    const disponible = getDisponible(item)
+                    return (
+                      <div
+                        key={item.id}
+                        style={{
+                          background:   'white',
+                          border:       '1px solid #e5e7eb',
+                          borderRadius: 12,
+                          padding:      '12px 16px',
+                          display:      'flex',
+                          alignItems:   'center',
+                          gap:          16,
+                          opacity:      disponible ? 1 : 0.55,
+                          transition:   'opacity 200ms',
+                        }}
+                      >
+                        {item.imagenUrl ? (
+                          <img
+                            src={item.imagenUrl}
+                            alt={item.nombre}
+                            style={{ width: 64, height: 64, borderRadius: 10, objectFit: 'cover', flexShrink: 0 }}
+                          />
+                        ) : (
+                          <div style={{ width: 64, height: 64, borderRadius: 10, background: '#f3f4f6', flexShrink: 0 }} />
+                        )}
+
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{
+                            fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: 15,
+                            color: '#111827', margin: '0 0 3px',
+                            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                          }}>
+                            {item.nombre}
+                          </p>
+                          <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#6b7280', margin: 0 }}>
+                            ${Number(item.precioBase).toLocaleString('es-AR')}
+                            {!disponible && <span style={{ color: '#dc2626' }}> · Sin stock</span>}
+                          </p>
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+                          <button
+                            onClick={() => setItemModal({ open: true, item })}
+                            style={{
+                              background: 'white', color: '#374151',
+                              border: '1px solid #e5e7eb', borderRadius: 8,
+                              padding: '6px 14px', cursor: 'pointer',
+                              fontFamily: 'Inter, sans-serif', fontSize: 13,
+                              transition: 'border-color 150ms, color 150ms',
+                            }}
+                            onMouseEnter={(e) => { const b = e.currentTarget as HTMLButtonElement; b.style.borderColor = '#2D3561'; b.style.color = '#2D3561' }}
+                            onMouseLeave={(e) => { const b = e.currentTarget as HTMLButtonElement; b.style.borderColor = '#e5e7eb'; b.style.color = '#374151' }}
+                          >
+                            Editar
+                          </button>
+                          <ToggleSwitch value={disponible} onChange={() => handleToggle(item)} />
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
-            )
-          })}
-
-          {itemsFiltrados.length === 0 && (
-            <p style={{
-              textAlign:  'center',
-              fontFamily: 'Inter, sans-serif',
-              fontSize:   14,
-              color:      '#9CA3AF',
-              padding:    '48px 0',
-              margin:     0,
-            }}>
-              {busqueda
-                ? `Sin resultados para "${busqueda}"`
-                : 'No hay platos en el catálogo.'
-              }
-            </p>
+            ))
           )}
         </div>
       )}
