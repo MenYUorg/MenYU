@@ -578,7 +578,7 @@ function DetailContent({
 /* ── GerenteDetailContent ───────────────────────────────────────────────────── */
 
 function GerenteDetailContent({
-  gerente: _gerente, restaurantesAsignados, restaurantesDisponibles,
+  restaurantesAsignados, restaurantesDisponibles,
   editExpanded, setEditExpanded,
   editEmail, setEditEmail,
   editPassword, setEditPassword,
@@ -842,7 +842,7 @@ export function MozosPage() {
     if (activeTab === 'gerentes' && isOwner) {
       void loadGerentes()
     }
-  }, [activeTab])
+  }, [activeTab, isOwner])
 
   async function loadData(rid: string) {
     setLoading(true)
