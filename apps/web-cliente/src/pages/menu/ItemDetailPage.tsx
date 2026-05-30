@@ -229,14 +229,14 @@ export function ItemDetailPage() {
                         aria-label={quitado ? 'Restaurar' : 'Quitar'}
                         style={{
                           width: 44, height: 24, borderRadius: 999, flexShrink: 0,
-                          background: quitado ? C.orange : '#D1D5DB',
+                          background: quitado ? '#E5E7EB' : C.orange,
                           border: 'none', cursor: 'pointer', position: 'relative',
                           transition: 'background 0.2s',
                         }}
                       >
                         <span style={{
                           position: 'absolute', top: 3,
-                          left: quitado ? 23 : 3,
+                          left: quitado ? 3 : 23,
                           width: 18, height: 18, borderRadius: '50%',
                           background: 'white',
                           boxShadow: '0 1px 3px rgba(0,0,0,0.2)',

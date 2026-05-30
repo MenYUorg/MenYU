@@ -162,6 +162,24 @@ export interface EdicionAdmin {
   }[]
 }
 
+export interface EdicionAuditoria {
+  id: string
+  pedidoId: string
+  mesaNumero: string
+  pedidoEstado: string
+  esAnulacion: boolean
+  justificacion: string
+  creadoEn: string
+  editor: { nombre: string; tipo: string }
+  itemsEliminados: {
+    id: string
+    itemNombre: string
+    cantidadAntes: number
+    cantidadDespues: number
+    precioUnitario: number
+  }[]
+}
+
 export interface ModificacionAdmin {
   accion: 'agregar' | 'quitar' | 'AGREGAR' | 'QUITAR'
   cantidad?: number | null
@@ -392,6 +410,11 @@ export const api = {
       mesaId: string
       items: { itemId: string; cantidad: number; notas?: string; mods?: { itemIngredienteId: string; accion: string; cantidad: number }[] }[]
     }) => req<PedidoAdmin>('POST', '/pedidos/staff', data),
+    auditoria: (restauranteId: string, desde?: string, hasta?: string) =>
+      req<EdicionAuditoria[]>(
+        'GET',
+        `/pedidos/auditoria?restauranteId=${encodeURIComponent(restauranteId)}${desde ? '&desde=' + desde : ''}${hasta ? '&hasta=' + hasta : ''}&_t=${Date.now()}`,
+      ),
   },
 
   clasificaciones: {

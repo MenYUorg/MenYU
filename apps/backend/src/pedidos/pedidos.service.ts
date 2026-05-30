@@ -460,6 +460,61 @@ export class PedidosService {
     return this.getPedidoConEdiciones(id)
   }
 
+  async auditoriaEdiciones(restauranteId: string, desde?: string, hasta?: string) {
+    if (!restauranteId) throw new BadRequestException('restauranteId es requerido')
+
+    const hoy = new Date().toISOString().split('T')[0]
+    const desdeDate = new Date(`${desde ?? hoy}T00:00:00.000Z`)
+    const hastaDate = new Date(`${hasta ?? hoy}T23:59:59.999Z`)
+
+    // Paso 1: mesas del restaurante
+    const mesas = await this.prisma.mesa.findMany({
+      where: { restauranteId },
+      select: { id: true },
+    })
+    const mesaIds = mesas.map((m) => m.id)
+    if (mesaIds.length === 0) return []
+
+    // Paso 2: pedidos en esas mesas
+    const pedidos = await this.prisma.pedido.findMany({
+      where: { mesaId: { in: mesaIds } },
+      select: { id: true },
+    })
+    const pedidoIds = pedidos.map((p) => p.id)
+    if (pedidoIds.length === 0) return []
+
+    // Paso 3: ediciones de esos pedidos en el rango de fechas
+    const ediciones = await this.prisma.pedidoEdicion.findMany({
+      where: {
+        pedidoId: { in: pedidoIds },
+        creadoEn: { gte: desdeDate, lte: hastaDate },
+      },
+      include: {
+        admin: { select: { email: true } },
+        mozo: { select: { nombre: true } },
+        pedido: {
+          include: {
+            mesa: { select: { numero: true } },
+          },
+        },
+        itemsEliminados: true,
+      },
+      orderBy: { creadoEn: 'desc' },
+    })
+
+    return ediciones.map((e) => {
+      const base = this.formatEdicion(e)
+      const esAnulacion = e.itemsEliminados.length > 0 && e.itemsEliminados.every((i) => i.cantidadDespues === 0)
+      return {
+        ...base,
+        pedidoId: e.pedido.id,
+        mesaNumero: e.pedido.mesa.numero,
+        pedidoEstado: e.pedido.estado,
+        esAnulacion,
+      }
+    })
+  }
+
   async getEdiciones(id: string, req: Request) {
     const user = req.user as { tipo: string }
     if (user.tipo !== 'admin') {

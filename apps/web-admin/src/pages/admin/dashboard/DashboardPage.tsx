@@ -149,7 +149,7 @@ export function DashboardPage() {
       )}
 
       {/* ── KPIs ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
+      <div className="grid grid-cols-2 lg:grid-cols-4" style={{ gap: 14, marginTop: 24 }}>
         {kpis.map((kpi) => (
           <div
             key={kpi.label}

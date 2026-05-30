@@ -15,6 +15,7 @@ import {
   Wallet,
   History,
   ShoppingBag,
+  Shield as ShieldIcon,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -53,7 +54,8 @@ const NAV_BY_ROL: Record<string, NavSection[]> = {
     {
       label: 'ANÁLISIS',
       items: [
-        { to: '/admin/reportes', label: 'Reportes', Icon: BarChart2 },
+        { to: '/admin/reportes',  label: 'Reportes',  Icon: BarChart2 },
+        { to: '/admin/auditoria', label: 'Auditoría', Icon: ShieldIcon },
       ],
     },
   ],
@@ -88,6 +90,7 @@ const SECTION_TITLES: Record<string, string> = {
   '/admin/menu':          'Catálogo',
   '/admin/tables':        'Mesas',
   '/admin/reportes':      'Reportes',
+  '/admin/auditoria':     'Auditoría',
   '/admin/mozos':         'Mozos',
   '/admin/pedidos':       'Pedidos',
   '/admin/historial':     'Historial',
