@@ -16,8 +16,9 @@ const C = {
 const BADGE: Record<PedidoCliente['estado'], { label: string; bg: string; color: string }> = {
   pendiente:      { label: 'Enviado',            bg: '#F3F4F6', color: '#6B7280' },
   en_preparacion: { label: 'En preparación',     bg: '#FDE5DF', color: C.orange  },
-  listo:          { label: 'Listo para retirar', bg: '#DCFCE7', color: '#16A34A' },
+  listo:          { label: 'En preparación',     bg: '#FDE5DF', color: C.orange  },
   entregado:      { label: 'Entregado',          bg: '#EFF6FF', color: '#2563EB' },
+  anulado:        { label: 'Anulado',            bg: '#FEF2F2', color: '#DC2626' },
 }
 
 const PROGRESS: Record<PedidoCliente['estado'], number | null> = {
@@ -25,13 +26,15 @@ const PROGRESS: Record<PedidoCliente['estado'], number | null> = {
   en_preparacion: 60,
   listo:          100,
   entregado:      null,
+  anulado:        null,
 }
 
 const PROGRESS_COLOR: Record<PedidoCliente['estado'], string> = {
   pendiente:      C.orange,
   en_preparacion: C.orange,
-  listo:          '#16A34A',
+  listo:          C.orange,
   entregado:      'transparent',
+  anulado:        'transparent',
 }
 
 function PedidoCard({ pedido }: { pedido: PedidoCliente }) {

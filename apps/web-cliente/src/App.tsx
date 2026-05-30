@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import { io } from 'socket.io-client'
 import { ClienteMenuPage } from './pages/menu/ClienteMenuPage'
@@ -8,6 +8,7 @@ import { PagoExitosoPage } from './pages/pago/PagoExitosoPage'
 import { MisPedidosPage } from './pages/pedidos/MisPedidosPage'
 import { PagarPage } from './pages/pago/PagarPage'
 import { useSessionStore } from './store/sessionStore'
+import { usePublicMenuStore } from './store/publicMenuStore'
 
 const WS_BASE = (import.meta.env.VITE_WS_URL as string) ??
   ((import.meta.env.VITE_API_URL as string) ?? '').replace('/api', '')
@@ -19,15 +20,26 @@ function SessionGuard({ children }: { children: React.ReactNode }) {
   const navigate      = useNavigate()
   const [sesionCerrada, setSesionCerrada] = useState(false)
 
+  // Ref para siempre tener el sesionId actual dentro del handler del socket
+  // sin necesidad de recrear el socket cada vez que cambia.
+  const sesionIdRef = useRef(sesionId)
+  useEffect(() => { sesionIdRef.current = sesionId }, [sesionId])
+
   useEffect(() => {
     if (!restauranteId) return
     const socket = io(`${WS_BASE}/ws`, { transports: ['websocket'] })
     socket.on('connect', () => socket.emit('session:join', { restauranteId }))
     socket.on('sesion:cerrada', ({ sesionId: sid }: { sesionId: string }) => {
-      if (sid === sesionId) setSesionCerrada(true)
+      if (sesionIdRef.current && sid === sesionIdRef.current) setSesionCerrada(true)
+    })
+    socket.on('menu:updated', ({ restauranteId: rid }: { restauranteId: string }) => {
+      if (rid !== restauranteId) return
+      const { clear: clearMenu, fetchMenu } = usePublicMenuStore.getState()
+      clearMenu()
+      void fetchMenu(rid)
     })
     return () => { socket.disconnect() }
-  }, [restauranteId, sesionId])
+  }, [restauranteId])
 
   const handleAceptar = () => {
     clear()

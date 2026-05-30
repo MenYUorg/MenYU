@@ -6,7 +6,7 @@ import { useSessionStore } from '../store/sessionStore'
 export interface PedidoCliente {
   id: string
   sesionId: string
-  estado: 'pendiente' | 'en_preparacion' | 'listo' | 'entregado'
+  estado: 'pendiente' | 'en_preparacion' | 'listo' | 'entregado' | 'anulado'
   createdAt: string
   items: Array<{
     id: string

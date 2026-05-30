@@ -57,16 +57,44 @@ export class WaiterCallsService {
     await this.prisma.llamadoMozo.deleteMany({
       where: { sesionId: dto.sesionId, estado: 'pendiente' },
     })
-    await this.prisma.llamadoMozo.create({
-      data: { sesionId: dto.sesionId },
+    const llamado = await this.prisma.llamadoMozo.create({
+      data: { sesionId: dto.sesionId, motivo: dto.motivo ?? 'general' },
     })
 
     // c. Emitir evento al mozo
     this.gateway.emitMozoCalled(restauranteId, {
+      llamadoId: llamado.id,
       sesionId: dto.sesionId,
       mesaNumero: sesion.mesa.numero,
+      motivo: llamado.motivo ?? 'general',
     })
 
     return { ok: true }
+  }
+
+  async atender(id: string, authHeader: string | undefined) {
+    if (!authHeader?.startsWith('Bearer ')) {
+      throw new UnauthorizedException('JWT de mozo requerido')
+    }
+
+    let payload: { sub: string; tipo: string }
+    try {
+      payload = this.jwt.verify<{ sub: string; tipo: string }>(authHeader.slice(7))
+    } catch {
+      throw new UnauthorizedException('JWT inválido o expirado')
+    }
+
+    if (payload.tipo !== 'mozo') {
+      throw new UnauthorizedException('Solo mozos pueden atender llamados')
+    }
+
+    const llamado = await this.prisma.llamadoMozo.findUnique({ where: { id } })
+    if (!llamado) throw new NotFoundException('Llamado no encontrado')
+    if (llamado.estado !== 'pendiente') throw new BadRequestException('Este llamado ya fue atendido')
+
+    return this.prisma.llamadoMozo.update({
+      where: { id },
+      data: { estado: 'atendido', mozoId: payload.sub },
+    })
   }
 }

@@ -345,7 +345,7 @@ export function CarritoPage() {
           flex:          1,
           overflowY:     'auto',
           padding:       '12px 16px',
-          paddingBottom: 180,
+          paddingBottom: 200,
           display:       'flex',
           flexDirection: 'column',
           gap:           10,
@@ -379,14 +379,20 @@ export function CarritoPage() {
                   }} />
 
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{
-                      fontFamily:   'Montserrat, sans-serif',
-                      fontWeight:   700,
-                      fontSize:     14,
-                      color:        C.text,
-                      margin:       0,
-                      marginBottom: modsText ? 3 : 0,
-                    }}>
+                    <p
+                      onClick={() => navigate(`/menu/${item.itemMenuId}`, { state: { cartId: item.cartId } })}
+                      onMouseEnter={(e) => { e.currentTarget.style.textDecoration = 'underline' }}
+                      onMouseLeave={(e) => { e.currentTarget.style.textDecoration = 'none' }}
+                      style={{
+                        fontFamily:   'Montserrat, sans-serif',
+                        fontWeight:   700,
+                        fontSize:     14,
+                        color:        C.text,
+                        margin:       0,
+                        marginBottom: (modsText || item.nota) ? 3 : 0,
+                        cursor:       'pointer',
+                      }}
+                    >
                       {item.nombre}
                     </p>
                     {modsText && (
@@ -395,11 +401,26 @@ export function CarritoPage() {
                         fontSize:     11,
                         color:        C.gray,
                         margin:       0,
+                        marginBottom: item.nota ? 3 : 0,
                         overflow:     'hidden',
                         textOverflow: 'ellipsis',
                         whiteSpace:   'nowrap',
                       }}>
                         {modsText}
+                      </p>
+                    )}
+                    {item.nota && (
+                      <p style={{
+                        fontFamily: 'Inter, sans-serif',
+                        fontSize:   11,
+                        color:      '#92400E',
+                        background: '#FEF3C7',
+                        borderRadius: 6,
+                        padding:    '2px 6px',
+                        margin:     0,
+                        display:    'inline-block',
+                      }}>
+                        📝 {item.nota}
                       </p>
                     )}
                   </div>
@@ -505,22 +526,22 @@ export function CarritoPage() {
           maxWidth:   480,
           background: 'white',
           borderTop:  `1px solid ${C.border}`,
-          padding:    '16px 16px 24px',
+          padding:    '10px 16px 16px',
           boxShadow:  '0 -4px 20px rgba(0,0,0,0.08)',
         }}>
           <div style={{
             display:        'flex',
             alignItems:     'baseline',
             justifyContent: 'space-between',
-            marginBottom:   14,
+            marginBottom:   8,
           }}>
-            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: C.gray }}>
+            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, color: C.gray }}>
               Total
             </span>
             <span style={{
               fontFamily: 'Montserrat, sans-serif',
               fontWeight: 800,
-              fontSize:   28,
+              fontSize:   20,
               color:      C.navy,
             }}>
               ${total().toFixed(2)}
@@ -533,29 +554,48 @@ export function CarritoPage() {
               border:       `1px solid ${C.errorBorder}`,
               color:        C.errorText,
               borderRadius: 10,
-              padding:      '10px 12px',
+              padding:      '8px 12px',
               fontFamily:   'Inter, sans-serif',
-              fontSize:     13,
+              fontSize:     12,
               textAlign:    'center',
-              marginBottom: 12,
+              marginBottom: 8,
             }}>
               {error}
             </p>
           )}
 
           <button
+            onClick={() => navigate('/menu')}
+            style={{
+              width:        '100%',
+              padding:      '10px 16px',
+              background:   'transparent',
+              color:        C.navy,
+              border:       `2px solid ${C.navy}`,
+              borderRadius: 12,
+              fontFamily:   'Montserrat, sans-serif',
+              fontWeight:   700,
+              fontSize:     14,
+              cursor:       'pointer',
+              marginBottom: 8,
+            }}
+          >
+            Seguir pidiendo
+          </button>
+
+          <button
             onClick={() => void confirmarPedido()}
             disabled={loading}
             style={{
               width:        '100%',
-              padding:      16,
+              padding:      '10px 16px',
               background:   loading ? '#F4A494' : C.orange,
               color:        'white',
               border:       'none',
-              borderRadius: 14,
+              borderRadius: 12,
               fontFamily:   'Montserrat, sans-serif',
               fontWeight:   700,
-              fontSize:     16,
+              fontSize:     14,
               cursor:       loading ? 'not-allowed' : 'pointer',
               transition:   'background 0.2s',
             }}
@@ -565,10 +605,10 @@ export function CarritoPage() {
 
           <p style={{
             fontFamily: 'Inter, sans-serif',
-            fontSize:   11,
+            fontSize:   10,
             color:      C.gray,
             textAlign:  'center',
-            margin:     '10px 0 0',
+            margin:     '6px 0 0',
           }}>
             El cobro se realizará al finalizar tu visita.
           </p>

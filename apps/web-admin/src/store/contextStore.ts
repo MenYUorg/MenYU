@@ -1,8 +1,20 @@
 import { create } from 'zustand'
+import { TOKEN_KEY } from '@menyu/auth'
 import { api } from '../services/api'
 import type { Marca, Restaurante } from '@menyu/types'
 
 const RESTAURANTE_KEY = 'menyu-admin-restaurante-id'
+
+function getJwtRol(): string | null {
+  try {
+    const token = localStorage.getItem(TOKEN_KEY)
+    if (!token) return null
+    const payload = JSON.parse(atob(token.split('.')[1])) as { rol?: string }
+    return payload.rol ?? null
+  } catch {
+    return null
+  }
+}
 
 interface ContextStore {
   marcas: Marca[]
@@ -21,20 +33,23 @@ export const useContextStore = create<ContextStore>()((set) => ({
   selectedRestauranteId: localStorage.getItem(RESTAURANTE_KEY),
 
   loadContext: async () => {
+    const rol = getJwtRol()
     try {
-      const [marcas, restaurantes] = await Promise.all([
-        api.marcas.list(),
-        api.restaurantes.list(),
-      ])
       const saved = localStorage.getItem(RESTAURANTE_KEY)
-      const existe = saved && restaurantes.some((r) => r.id === saved)
-      const selectedRestauranteId = existe ? saved : (restaurantes[0]?.id ?? null)
-      set({
-        marcas,
-        restaurantes,
-        selectedMarcaId: marcas[0]?.id ?? null,
-        selectedRestauranteId,
-      })
+      if (rol === 'GERENTE') {
+        const restaurantes = await api.restaurantes.list()
+        const existe = saved && restaurantes.some((r) => r.id === saved)
+        const selectedRestauranteId = existe ? saved : (restaurantes[0]?.id ?? null)
+        set({ marcas: [], restaurantes, selectedMarcaId: null, selectedRestauranteId })
+      } else {
+        const [marcas, restaurantes] = await Promise.all([
+          api.marcas.list(),
+          api.restaurantes.list(),
+        ])
+        const existe = saved && restaurantes.some((r) => r.id === saved)
+        const selectedRestauranteId = existe ? saved : (restaurantes[0]?.id ?? null)
+        set({ marcas, restaurantes, selectedMarcaId: marcas[0]?.id ?? null, selectedRestauranteId })
+      }
     } catch {
       // api.ts redirige a /login en caso de 401
     }

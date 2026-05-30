@@ -3,12 +3,19 @@ import type { Pedido, EstadoPedido } from '@menyu/types'
 
 interface CocinaStore {
   pedidos: Pedido[]
+  cargarPedidosIniciales: (pedidos: Pedido[]) => void
   agregarPedido: (pedido: Pedido) => void
   actualizarEstado: (pedidoId: string, estado: EstadoPedido) => void
 }
 
 export const useCocinaStore = create<CocinaStore>()((set) => ({
   pedidos: [],
+  cargarPedidosIniciales: (iniciales) =>
+    set((s) => {
+      const existentes = new Set(s.pedidos.map((p) => p.id))
+      const nuevos = iniciales.filter((p) => !existentes.has(p.id))
+      return { pedidos: [...s.pedidos, ...nuevos] }
+    }),
   agregarPedido: (pedido) =>
     set((s) => ({
       pedidos: [pedido, ...s.pedidos],

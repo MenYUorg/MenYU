@@ -14,7 +14,26 @@
       "Bash(npm list *)",
       "Bash(node -e \"const p = require\\('c:/Users/marga/AppData/Roaming/npm/node_modules/playwright'\\); console.log\\('found'\\)\")",
       "Read(//c/Users/marga/AppData/Local/**)",
-      "Bash(pnpm --filter @menyu/web-cliente exec tsc --noEmit)"
+      "Bash(pnpm --filter @menyu/web-cliente exec tsc --noEmit)",
+      "PowerShell(New-Item -ItemType Directory -Force \"c:\\\\Users\\\\marga\\\\OneDrive\\\\Escritorio\\\\TESIS\\\\MenYU\\\\apps\\\\backend\\\\prisma\\\\migrations\\\\20260526120000_add_mozo_mesa\")",
+      "PowerShell(\"ok\")",
+      "PowerShell(New-Item -ItemType Directory -Force \"c:\\\\Users\\\\marga\\\\OneDrive\\\\Escritorio\\\\TESIS\\\\MenYU\\\\apps\\\\backend\\\\src\\\\admins\\\\dto\")",
+      "Bash(pnpm --filter @menyu/api exec prisma migrate dev --name add-motivo-llamado)",
+      "Bash(pnpm --filter @menyu/api exec prisma db push)",
+      "Bash(pnpm --filter @menyu/web-admin typecheck)",
+      "PowerShell(Get-Process node, node.exe -ErrorAction SilentlyContinue)",
+      "PowerShell(Get-Process node -ErrorAction SilentlyContinue | ForEach-Object { $id = $_.Id; $cmd = \\(Get-CimInstance Win32_Process -Filter \"ProcessId=$id\" -ErrorAction SilentlyContinue\\).CommandLine; [PSCustomObject]@{PID=$id; CMD=$cmd} } | Format-List)",
+      "Bash(pnpm --filter @menyu/api exec prisma migrate dev --name add-pedido-edicion)",
+      "Bash(pnpm --filter @menyu/api exec prisma db execute --file prisma/add_pedido_edicion.sql --schema prisma/schema.prisma)",
+      "Bash(pnpm --filter @menyu/api exec prisma db execute --file prisma/fix_pedido_edicion_item.sql --schema prisma/schema.prisma)",
+      "Bash(pnpm --filter @menyu/web-admin exec tsc --noEmit)",
+      "Bash(pnpm --filter @menyu/api exec prisma migrate diff --from-migrations prisma/migrations --to-schema-datamodel prisma/schema.prisma --script)",
+      "Bash(pnpm --filter @menyu/api exec prisma migrate resolve --applied 20260528000000_baseline_edicion_cantidad_editada)",
+      "Bash(pnpm --filter @menyu/api exec prisma migrate status)",
+      "PowerShell(Stop-Process -Name \"node\" -Force -ErrorAction SilentlyContinue)",
+      "Bash(pnpm --filter @menyu/api exec prisma migrate dev --name nullable_sesion_cliente_id --skip-seed)",
+      "Bash(xargs grep -l \"Restaurante\")",
+      "Bash(git log *)"
     ]
   }
 }

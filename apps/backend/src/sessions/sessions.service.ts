@@ -20,6 +20,15 @@ interface SessionJwtPayload {
   restauranteId: string
 }
 
+export interface OpenStaffSessionResult {
+  sesionId: string
+  mesaId: string
+  restauranteId: string
+  codigoSesion: string
+  numeroMesa: string
+  esNueva: boolean
+}
+
 export interface OpenSessionResult {
   sesionId: string
   mesaId: string
@@ -37,6 +46,19 @@ export interface SessionActivaResult {
   creadaEn: string
   cantidadClientes: number
   totalAcumulado: number
+  llamadoActivo: { id: string; motivo: string } | null
+  pedidos: {
+    id: string
+    estado: string
+    createdAt: string
+    items: {
+      id: string
+      cantidad: number
+      precioUnitario: number
+      itemNombre: string
+      modificaciones: { ingredienteNombre: string; tipo: string }[]
+    }[]
+  }[]
 }
 
 @Injectable()
@@ -47,6 +69,51 @@ export class SessionsService {
     private readonly jwt: JwtService,
     private readonly gateway: MenyuGateway,
   ) {}
+
+  async openStaff(dto: { mesaId: string }, user: JwtPayload): Promise<OpenStaffSessionResult> {
+    const mesa = await this.prisma.mesa.findUnique({
+      where: { id: dto.mesaId },
+      select: { id: true, numero: true, restauranteId: true, activo: true },
+    })
+    if (!mesa || !mesa.activo) throw new NotFoundException('Mesa no encontrada')
+
+    await this.assertStaffAccess(mesa.restauranteId, user)
+
+    const sesionActiva = await this.prisma.sesionMesa.findFirst({
+      where: { mesaId: mesa.id, estado: 'activa' },
+    })
+
+    if (sesionActiva) {
+      return {
+        sesionId: sesionActiva.id,
+        mesaId: mesa.id,
+        restauranteId: mesa.restauranteId,
+        codigoSesion: sesionActiva.codigoSesion,
+        numeroMesa: mesa.numero,
+        esNueva: false,
+      }
+    }
+
+    const codigoSesion = this.generateCodigoSesion()
+    const [sesion] = await this.prisma.$transaction([
+      this.prisma.sesionMesa.create({
+        data: { mesaId: mesa.id, clienteId: null, codigoSesion },
+      }),
+      this.prisma.mesa.update({
+        where: { id: mesa.id },
+        data: { estado: 'ocupada' },
+      }),
+    ])
+
+    return {
+      sesionId: sesion.id,
+      mesaId: mesa.id,
+      restauranteId: mesa.restauranteId,
+      codigoSesion,
+      numeroMesa: mesa.numero,
+      esNueva: true,
+    }
+  }
 
   async open(dto: OpenSessionDto, authHeader?: string): Promise<OpenSessionResult> {
     if (!dto.tableCode && (!dto.restauranteId || !dto.pin)) {
@@ -83,11 +150,20 @@ export class SessionsService {
       sesionId = sesion.id
       esAnfitrion = true
     } else {
-      sesionId = sesionActiva.id
+      sesionId     = sesionActiva.id
       codigoSesion = sesionActiva.codigoSesion
-      esAnfitrion = false
 
-      if (mesa.restaurante.modoSesion === 'seguro') {
+      // Si la sesión fue abierta por staff (clienteId = null),
+      // el primer cliente real se convierte en anfitrión sin PIN.
+      const esSesionStaff = sesionActiva.clienteId === null
+      const yaHayParticipantes = await this.prisma.sesionMesaCliente.count({
+        where: { sesionId: sesionActiva.id },
+      }) > 0
+
+      const esAnfitrionDeStaff = esSesionStaff && !yaHayParticipantes
+      esAnfitrion = esAnfitrionDeStaff
+
+      if (!esAnfitrionDeStaff && mesa.restaurante.modoSesion === 'seguro') {
         if (!dto.codigoSesion) {
           throw new ForbiddenException('Esta mesa requiere código de sesión para unirse')
         }
@@ -201,20 +277,37 @@ export class SessionsService {
     })
     if (!sesion) return null
 
-    const cantidadClientes = await this.prisma.sesionMesaCliente.count({
-      where: { sesionId: sesion.id },
-    })
-
-    const items = await this.prisma.pedidoItem.findMany({
-      where: {
-        pedido: {
-          sesionId: sesion.id,
-          estado: { not: 'cancelado' },
+    const [cantidadClientes, itemsParaTotal, llamadoActivoDb, pedidosDb] = await Promise.all([
+      this.prisma.sesionMesaCliente.count({ where: { sesionId: sesion.id } }),
+      this.prisma.pedidoItem.findMany({
+        where: { pedido: { sesionId: sesion.id, estado: { not: 'cancelado' } } },
+        select: { precioUnitario: true, cantidad: true },
+      }),
+      this.prisma.llamadoMozo.findFirst({
+        where: { sesionId: sesion.id, estado: 'pendiente' },
+        select: { id: true, motivo: true },
+      }),
+      this.prisma.pedido.findMany({
+        where: { sesionId: sesion.id },
+        orderBy: { createdAt: 'desc' },
+        include: {
+          items: {
+            include: {
+              item: { select: { nombre: true } },
+              mods: {
+                include: {
+                  itemIngrediente: {
+                    include: { ingrediente: { select: { nombre: true } } },
+                  },
+                },
+              },
+            },
+          },
         },
-      },
-      select: { precioUnitario: true, cantidad: true },
-    })
-    const totalAcumulado = items.reduce(
+      }),
+    ])
+
+    const totalAcumulado = itemsParaTotal.reduce(
       (acc, item) => acc + Number(item.precioUnitario) * item.cantidad,
       0,
     )
@@ -224,6 +317,24 @@ export class SessionsService {
       creadaEn: sesion.iniciadaEn.toISOString(),
       cantidadClientes,
       totalAcumulado,
+      llamadoActivo: llamadoActivoDb
+        ? { id: llamadoActivoDb.id, motivo: llamadoActivoDb.motivo ?? 'general' }
+        : null,
+      pedidos: pedidosDb.map((p) => ({
+        id: p.id,
+        estado: p.estado,
+        createdAt: p.createdAt.toISOString(),
+        items: p.items.map((pi) => ({
+          id: pi.id,
+          cantidad: pi.cantidad,
+          precioUnitario: Number(pi.precioUnitario),
+          itemNombre: pi.item.nombre,
+          modificaciones: pi.mods.map((mod) => ({
+            ingredienteNombre: mod.itemIngrediente.ingrediente.nombre,
+            tipo: mod.accion,
+          })),
+        })),
+      })),
     }
   }
 
@@ -262,6 +373,16 @@ export class SessionsService {
 
   private generateCodigoSesion(): string {
     return String(Math.floor(Math.random() * 999) + 1).padStart(3, '0')
+  }
+
+  private async assertStaffAccess(restauranteId: string, user: JwtPayload): Promise<void> {
+    if (user.tipo === 'mozo') {
+      if (user.restauranteId !== restauranteId) {
+        throw new ForbiddenException('No tenés acceso a este restaurante')
+      }
+      return
+    }
+    await this.assertAdminAccess(restauranteId, user)
   }
 
   private async assertAdminAccess(restauranteId: string, user: JwtPayload): Promise<void> {

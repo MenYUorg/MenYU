@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import type { FormEvent } from 'react'
 import type { ItemMenu } from '@menyu/types'
 import { Search, Trash2, Pencil, GripVertical } from 'lucide-react'
+import { useAuth } from '@menyu/auth'
 import { useContextStore } from '../../../store/contextStore'
 import { useMenuStore } from '../../../store/menuStore'
 import { ItemFormModal } from './ItemFormModal'
@@ -270,6 +271,7 @@ function CategoriasTabContent({
   newName,
   onNewNameChange,
   creating,
+  canDelete = true,
 }: {
   categorias:      { id: string; nombre: string; orden?: number }[]
   onDelete:        (id: string, nombre: string) => void
@@ -278,6 +280,7 @@ function CategoriasTabContent({
   newName:         string
   onNewNameChange: (v: string) => void
   creating:        boolean
+  canDelete?:      boolean
 }) {
   const { updateCategoria } = useMenuStore()
   const sortByOrden = (cats: typeof propCats) =>
@@ -486,22 +489,24 @@ function CategoriasTabContent({
                     >
                       <Pencil size={14} />
                     </button>
-                    <button
-                      onClick={() => onDelete(cat.id, cat.nombre)}
-                      title="Eliminar"
-                      style={{
-                        background:   'none',
-                        border:       'none',
-                        cursor:       'pointer',
-                        color:        '#9CA3AF',
-                        padding:      4,
-                        display:      'flex',
-                        alignItems:   'center',
-                        borderRadius: 4,
-                      }}
-                    >
-                      <Trash2 size={15} />
-                    </button>
+                    {canDelete && (
+                      <button
+                        onClick={() => onDelete(cat.id, cat.nombre)}
+                        title="Eliminar"
+                        style={{
+                          background:   'none',
+                          border:       'none',
+                          cursor:       'pointer',
+                          color:        '#9CA3AF',
+                          padding:      4,
+                          display:      'flex',
+                          alignItems:   'center',
+                          borderRadius: 4,
+                        }}
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    )}
                   </>
                 )}
               </div>
@@ -515,6 +520,8 @@ function CategoriasTabContent({
 
 /* ─── CatalogModal ──────────────────────────────────────────────────────── */
 function CatalogModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { user } = useAuth()
+  const isOwner = user?.rol === 'OWNER' || user?.rol === 'ROOT'
   const { selectedRestauranteId } = useContextStore()
   const {
     categorias, ingredientes, clasificaciones,
@@ -693,6 +700,7 @@ function CatalogModal({ open, onClose }: { open: boolean; onClose: () => void })
               newName={catName}
               onNewNameChange={setCatName}
               creating={catCreating}
+              canDelete={isOwner}
             />
           )}
           {tab === 'ingredientes' && (
@@ -759,6 +767,8 @@ function CatalogModal({ open, onClose }: { open: boolean; onClose: () => void })
 
 /* ─── AdminMenuPage ─────────────────────────────────────────────────────── */
 export function AdminMenuPage() {
+  const { user } = useAuth()
+  const isOwner = user?.rol === 'OWNER' || user?.rol === 'ROOT'
   const { selectedRestauranteId } = useContextStore()
   const {
     items, categorias, loading,
@@ -1125,6 +1135,7 @@ export function AdminMenuPage() {
         open={itemModal.open}
         onClose={() => setItemModal({ open: false, item: null })}
         item={itemModal.item}
+        canDelete={isOwner}
       />
       <CatalogModal open={catalogOpen} onClose={() => setCatalogOpen(false)} />
     </div>

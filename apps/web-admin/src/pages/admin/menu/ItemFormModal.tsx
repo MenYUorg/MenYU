@@ -13,9 +13,10 @@ const matchesBusqueda = (nombre: string, buscar: string): boolean => {
 }
 
 interface Props {
-  open:    boolean
-  onClose: () => void
-  item:    ItemMenu | null
+  open:      boolean
+  onClose:   () => void
+  item:      ItemMenu | null
+  canDelete: boolean
 }
 
 /* ── local ingredient model ─────────────────────────────────────────────── */
@@ -54,7 +55,7 @@ const inputSt: React.CSSProperties = {
 }
 
 /* ── component ──────────────────────────────────────────────────────────── */
-export function ItemFormModal({ open, onClose, item }: Props) {
+export function ItemFormModal({ open, onClose, item, canDelete }: Props) {
   const { selectedRestauranteId } = useContextStore()
   const {
     categorias, clasificaciones,
@@ -818,7 +819,7 @@ export function ItemFormModal({ open, onClose, item }: Props) {
             </p>
           )}
 
-          {isEdit && (
+          {isEdit && canDelete && (
             <button
               type="button"
               onClick={() => { void handleEliminar() }}
