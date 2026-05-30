@@ -5,13 +5,28 @@ import { RolesGuard } from '../common/guards/roles.guard'
 import { Roles } from '../common/decorators/roles.decorator'
 import { CurrentUser } from '../common/decorators/current-user.decorator'
 import { JwtPayload } from '../auth/auth.service'
-import { SessionsService, OpenSessionResult } from './sessions.service'
+import { SessionsService, OpenSessionResult, OpenStaffSessionResult } from './sessions.service'
 import { OpenSessionDto } from './dto/open-session.dto'
+import { OpenStaffSessionDto } from './dto/open-staff-session.dto'
 
 @ApiTags('sessions')
 @Controller('sessions')
 export class SessionsController {
   constructor(private readonly sessions: SessionsService) {}
+
+  @Post('open-staff')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Abrir o recuperar sesión de mesa desde el staff (admin o mozo)' })
+  @ApiResponse({ status: 200, description: 'Sesión activa o nueva creada' })
+  @ApiResponse({ status: 403, description: 'Sin acceso a este restaurante' })
+  @ApiResponse({ status: 404, description: 'Mesa no encontrada' })
+  openStaff(
+    @Body() dto: OpenStaffSessionDto,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<OpenStaffSessionResult> {
+    return this.sessions.openStaff(dto, user)
+  }
 
   @Post('open')
   @HttpCode(HttpStatus.OK)

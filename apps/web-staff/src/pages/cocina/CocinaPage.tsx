@@ -183,12 +183,29 @@ function PedidoCard({ pedido, nextEstado, nextLabel, token, onEstadoActualizado 
 
 export function CocinaPage() {
   const { user, logout, getToken } = useAuth()
-  const { pedidos, agregarPedido, actualizarEstado } = useCocinaStore()
+  const { pedidos, cargarPedidosIniciales, agregarPedido, actualizarEstado } = useCocinaStore()
   const restauranteIdStore = useMozoStore((s) => s.restauranteId)
 
   useEffect(() => {
     const restauranteId = user?.restauranteId ?? restauranteIdStore
     if (!restauranteId) return
+
+    const token = getToken()
+    if (token) {
+      void Promise.allSettled([
+        fetch(`${API}/pedidos?restauranteId=${restauranteId}&estado=pendiente`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }).then((r) => r.json()),
+        fetch(`${API}/pedidos?restauranteId=${restauranteId}&estado=en_preparacion`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }).then((r) => r.json()),
+      ]).then((results) => {
+        const pedidosCargados = results.flatMap((r) =>
+          r.status === 'fulfilled' && Array.isArray(r.value) ? (r.value as Pedido[]) : [],
+        )
+        cargarPedidosIniciales(pedidosCargados)
+      })
+    }
 
     socketService.joinRestauranteComoCocina(restauranteId)
 

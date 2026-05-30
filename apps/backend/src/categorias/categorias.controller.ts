@@ -70,6 +70,7 @@ export class CategoriasController {
   }
 
   @Delete(':id')
+  @Roles('ROOT', 'OWNER')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Eliminar una categoría' })
   @ApiResponse({ status: 204, description: 'Categoría eliminada' })

@@ -57,8 +57,8 @@ export const api = {
   },
 
   waiterCalls: {
-    llamar: (sesionId: string, jwt: string) =>
-      req<{ ok: boolean }>('POST', '/waiter-calls', { sesionId }, jwt),
+    llamar: (sesionId: string, jwt: string, motivo?: string) =>
+      req<{ ok: boolean }>('POST', '/waiter-calls', { sesionId, motivo }, jwt),
   },
 
   orders: {

@@ -4,6 +4,7 @@ import { Badge } from '@menyu/ui'
 import type { Pedido } from '@menyu/types'
 import { useMozoStore } from '../../store/mozoStore'
 import * as socketService from '../../services/socket'
+import { api } from '../../services/api'
 
 // Tipos locales para el payload rico del socket (igual que CocinaPage)
 interface ItemRico {
@@ -96,7 +97,7 @@ export function MozoPanel() {
 
     socketService.joinRestauranteComoMozo(restauranteId)
 
-    const unsubLlamado = socketService.onMozoCalled((data) => {
+    const unsubLlamado = socketService.onMozoCalled((data: { llamadoId: string; sesionId: string; mesaNumero: string; motivo: string }) => {
       addLlamado(data)
     })
 
@@ -188,9 +189,27 @@ export function MozoPanel() {
                     <p className="text-xs text-gray-400 mt-0.5">
                       {l.recibitoEn.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
                     </p>
+                    <span style={{
+                      display: 'inline-block',
+                      marginTop: 6,
+                      background: l.motivo === 'pedir_cuenta' ? '#FDE5DF' : '#f3f4f6',
+                      color: l.motivo === 'pedir_cuenta' ? '#E8563A' : '#6b7280',
+                      fontSize: 11,
+                      fontWeight: 700,
+                      padding: '2px 8px',
+                      borderRadius: 999,
+                    }}>
+                      {l.motivo === 'pedir_cuenta' ? '🧾 Pedir cuenta' : '🔔 Asistencia'}
+                    </span>
                   </div>
                   <button
-                    onClick={() => marcarAtendido(l.sesionId)}
+                    onClick={() => {
+                      api.waiterCalls.atender(l.llamadoId).catch((e) => {
+                        console.error('Error al marcar llamado como atendido:', e)
+                      }).finally(() => {
+                        marcarAtendido(l.sesionId)
+                      })
+                    }}
                     className="px-4 py-1.5 bg-indigo-600 text-white text-xs font-semibold rounded-lg hover:bg-indigo-700 transition-colors"
                   >
                     Atendido

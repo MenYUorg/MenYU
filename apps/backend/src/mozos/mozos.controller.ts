@@ -30,6 +30,7 @@ export class MozosController {
   constructor(private readonly mozos: MozosService) {}
 
   @Post()
+  @Roles('ROOT', 'OWNER')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Crear mozo' })
   @ApiResponse({ status: 201, description: 'Mozo creado' })
@@ -53,6 +54,7 @@ export class MozosController {
   }
 
   @Patch(':id')
+  @Roles('ROOT', 'OWNER')
   @ApiOperation({ summary: 'Actualizar mozo' })
   @ApiResponse({ status: 200 })
   @ApiResponse({ status: 404 })
@@ -65,10 +67,52 @@ export class MozosController {
   }
 
   @Delete(':id')
+  @Roles('ROOT', 'OWNER')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Desactivar mozo (soft delete)' })
   @ApiResponse({ status: 204 })
   async remove(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     await this.mozos.remove(id, user)
+  }
+
+  @Post(':mozoId/mesas')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Asignar mesa permanente al mozo' })
+  @ApiResponse({ status: 201 })
+  @ApiResponse({ status: 404, description: 'Mozo o mesa no encontrado' })
+  @ApiResponse({ status: 409, description: 'Mesa ya asignada al mozo' })
+  assignMesa(
+    @Param('mozoId') mozoId: string,
+    @Body() body: { mesaId: string },
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.mozos.assignMesa(mozoId, body.mesaId, user)
+  }
+
+  @Delete(':mozoId/mesas/:mesaId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Eliminar asignación permanente de mesa al mozo' })
+  @ApiResponse({ status: 204 })
+  @ApiResponse({ status: 404 })
+  async unassignMesa(
+    @Param('mozoId') mozoId: string,
+    @Param('mesaId') mesaId: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    await this.mozos.unassignMesa(mozoId, mesaId, user)
+  }
+
+  @Get(':mozoId/mesas')
+  @ApiOperation({ summary: 'Listar mesas permanentes asignadas al mozo' })
+  @ApiResponse({ status: 200 })
+  getMesas(@Param('mozoId') mozoId: string, @CurrentUser() user: JwtPayload) {
+    return this.mozos.getMesas(mozoId, user)
+  }
+
+  @Get(':mozoId/llamados-hoy')
+  @ApiOperation({ summary: 'Contador de llamados atendidos hoy por el mozo' })
+  @ApiResponse({ status: 200 })
+  llamadosHoy(@Param('mozoId') mozoId: string, @CurrentUser() user: JwtPayload) {
+    return this.mozos.llamadosHoy(mozoId, user)
   }
 }

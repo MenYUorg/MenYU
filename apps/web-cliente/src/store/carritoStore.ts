@@ -23,6 +23,7 @@ interface CarritoStore {
   agregar: (item: Omit<CartItem, 'cartId'>) => void
   quitar: (cartId: string) => void
   cambiarCantidad: (cartId: string, cantidad: number) => void
+  reemplazar: (cartId: string, item: Omit<CartItem, 'cartId'>) => void
   vaciar: () => void
   total: () => number
 }
@@ -70,6 +71,11 @@ export const useCarritoStore = create<CarritoStore>()(
           items: s.items
             .map((i) => (i.cartId === cartId ? { ...i, cantidad } : i))
             .filter((i) => i.cantidad > 0),
+        })),
+
+      reemplazar: (cartId, item) =>
+        set((s) => ({
+          items: s.items.map((i) => (i.cartId === cartId ? { ...item, cartId } : i)),
         })),
 
       vaciar: () => set({ items: [] }),

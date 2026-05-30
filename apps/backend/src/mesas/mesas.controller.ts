@@ -58,7 +58,7 @@ export class MesasController {
   }
 
   @Delete(':id')
-  @Roles('ROOT', 'OWNER', 'GERENTE')
+  @Roles('ROOT', 'OWNER')
   @HttpCode(HttpStatus.NO_CONTENT)
   async remove(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     await this.mesas.remove(id, user)

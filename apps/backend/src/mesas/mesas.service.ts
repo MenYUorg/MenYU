@@ -38,7 +38,10 @@ export class MesasService {
     const mesas = await this.prisma.mesa.findMany({
       where: { restauranteId, activo: true },
       orderBy: { numero: 'asc' },
-      include: { restaurante: { select: { qrBaseUrl: true } } },
+      include: {
+        restaurante: { select: { qrBaseUrl: true } },
+        mozoMesas: { include: { mozo: { select: { id: true, nombre: true } } } },
+      },
     })
 
     return Promise.all(

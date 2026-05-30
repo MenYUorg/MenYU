@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
 import { StorageService } from '../storage/storage.service'
+import { MenyuGateway } from '../gateway/menyu.gateway'
 import { JwtPayload } from '../auth/auth.service'
 import { CreateItemDto } from './dto/create-item.dto'
 import { UpdateItemDto } from './dto/update-item.dto'
@@ -32,6 +33,7 @@ export class ItemsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
+    private readonly gateway: MenyuGateway,
   ) {}
 
   async create(dto: CreateItemDto, user: JwtPayload) {
@@ -68,7 +70,9 @@ export class ItemsService {
       await this.assertNombreUnico(item.restauranteId, dto.nombre, id)
     }
 
-    return this.prisma.itemMenu.update({ where: { id }, data: dto, include: DETAIL_INCLUDE })
+    const updated = await this.prisma.itemMenu.update({ where: { id }, data: dto, include: DETAIL_INCLUDE })
+    this.gateway.emitMenuUpdated(item.restauranteId)
+    return updated
   }
 
   async uploadImagen(id: string, file: Express.Multer.File, user: JwtPayload) {

@@ -145,6 +145,48 @@ export interface MesaConQr {
   estado: string
   activo: boolean
   qrImage: string
+  mozoMesas?: { id: string; mozoId: string; mozo: { id: string; nombre: string } }[]
+}
+
+export interface EdicionAdmin {
+  id: string
+  justificacion: string
+  creadoEn: string
+  editor: { nombre: string; tipo: string }
+  itemsEliminados: {
+    id: string
+    itemNombre: string
+    cantidadAntes: number
+    cantidadDespues: number
+    precioUnitario: number
+  }[]
+}
+
+export interface ModificacionAdmin {
+  accion: 'agregar' | 'quitar' | 'AGREGAR' | 'QUITAR'
+  cantidad?: number | null
+  itemIngrediente: { ingrediente: { nombre: string } }
+}
+
+export interface ItemPedidoAdmin {
+  id: string
+  cantidad: number
+  cantidadEditada: number | null
+  precioUnitario: number
+  notas: string | null
+  item: { nombre: string }
+  mods: ModificacionAdmin[]
+}
+
+export interface PedidoAdmin {
+  id: string
+  sesionId: string
+  estado: string
+  createdAt: string
+  updatedAt: string
+  mesa: { numero: string }
+  pago?: { estado: string } | null
+  items: ItemPedidoAdmin[]
 }
 
 export interface SesionActiva {
@@ -152,6 +194,19 @@ export interface SesionActiva {
   creadaEn: string
   cantidadClientes: number
   totalAcumulado: number
+  llamadoActivo: { id: string; motivo: string } | null
+  pedidos: {
+    id: string
+    estado: string
+    createdAt: string
+    items: {
+      id: string
+      cantidad: number
+      precioUnitario: number
+      itemNombre: string
+      modificaciones: { ingredienteNombre: string; tipo: string }[]
+    }[]
+  }[]
 }
 
 export const api = {
@@ -249,6 +304,10 @@ export const api = {
         req<SesionActiva | null>('GET', `/sessions/mesa/${mesaId}/activa`),
       cerrarMesa: (mesaId: string) =>
         req<{ ok: boolean }>('POST', `/sessions/mesa/${mesaId}/cerrar`),
+      openStaff: (mesaId: string) =>
+        req<{ sesionId: string; mesaId: string; restauranteId: string; codigoSesion: string; numeroMesa: string; esNueva: boolean }>(
+          'POST', '/sessions/open-staff', { mesaId },
+        ),
     },
 
     reportes: {
@@ -274,6 +333,67 @@ export const api = {
         ),
     },
       
+  mozos: {
+    list: (restauranteId: string) =>
+      req<{ id: string; nombre: string; email: string | null; telefono: string | null; activo: boolean; esJefeSalon: boolean; createdAt: string }[]>(
+        'GET', `/mozos?restauranteId=${encodeURIComponent(restauranteId)}`,
+      ),
+    create: (data: { restauranteId: string; nombre: string; email: string; password: string; esJefeSalon?: boolean }) =>
+      req<{ id: string; nombre: string; email: string | null; telefono: string | null; activo: boolean; esJefeSalon: boolean; createdAt: string }>(
+        'POST', '/mozos', data,
+      ),
+    update: (id: string, data: { nombre?: string; email?: string; password?: string; esJefeSalon?: boolean; activo?: boolean }) =>
+      req<{ id: string; nombre: string; email: string | null; telefono: string | null; activo: boolean; esJefeSalon: boolean; createdAt: string }>(
+        'PATCH', `/mozos/${id}`, data,
+      ),
+    delete: (id: string) => req<void>('DELETE', `/mozos/${id}`),
+    getMesas: (mozoId: string) =>
+      req<{ id: string; numero: string; estado: string }[]>('GET', `/mozos/${mozoId}/mesas`),
+    assignMesa: (mozoId: string, mesaId: string) =>
+      req<{ id: string; mesaId: string; mozoId: string }>('POST', `/mozos/${mozoId}/mesas`, { mesaId }),
+    unassignMesa: (mozoId: string, mesaId: string) =>
+      req<void>('DELETE', `/mozos/${mozoId}/mesas/${mesaId}`),
+    llamadosHoy: (mozoId: string) =>
+      req<{ total: number }>('GET', `/mozos/${mozoId}/llamados-hoy`),
+  },
+
+  admins: {
+    create: (data: { nombre: string; email: string; password: string; restauranteId: string }) =>
+      req<{ id: string; email: string; rol: string }>('POST', '/admins', data),
+    list: () =>
+      req<{ id: string; email: string; rol: string; marcaId: string | null }[]>('GET', '/admins'),
+    update: (id: string, data: { email?: string; password?: string }) =>
+      req<{ id: string; email: string; rol: string; marcaId: string | null }>('PATCH', `/admins/${id}`, data),
+    delete: (id: string) => req<void>('DELETE', `/admins/${id}`),
+  },
+
+  adminRestaurante: {
+    asignar: (adminId: string, restauranteId: string) =>
+      req<{ id: string }>('POST', '/admin-restaurante', { adminId, restauranteId }),
+    desasignar: (adminId: string, restauranteId: string) =>
+      req<void>('DELETE', `/admin-restaurante/${adminId}/${restauranteId}`),
+    porAdmin: (adminId: string) =>
+      req<{ restauranteId: string; restaurante: { id: string; nombre: string } }[]>(
+        'GET', `/admin-restaurante/${adminId}`,
+      ),
+  },
+
+  pedidos: {
+    list: (restauranteId: string, estado: string) =>
+      req<PedidoAdmin[]>('GET', `/pedidos?restauranteId=${encodeURIComponent(restauranteId)}&estado=${estado}`),
+    cambiarEstado: (id: string, estado: string) =>
+      req<PedidoAdmin>('PATCH', `/pedidos/${id}/estado`, { estado }),
+    editar: (id: string, data: { justificacion: string; ediciones: { pedidoItemId: string; cantidadNueva: number }[] }) =>
+      req<PedidoAdmin>('PATCH', `/pedidos/${id}/editar`, data),
+    ediciones: (id: string) =>
+      req<EdicionAdmin[]>('GET', `/pedidos/${id}/ediciones`),
+    crearStaff: (data: {
+      sesionId: string
+      mesaId: string
+      items: { itemId: string; cantidad: number; notas?: string; mods?: { itemIngredienteId: string; accion: string; cantidad: number }[] }[]
+    }) => req<PedidoAdmin>('POST', '/pedidos/staff', data),
+  },
+
   clasificaciones: {
     list: (restauranteId: string) =>
       req<ClasificacionDieta[]>(

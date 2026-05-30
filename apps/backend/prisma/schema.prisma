@@ -73,6 +73,7 @@ model Admin {
 
   marca        Marca?             @relation(fields: [marcaId], references: [id])
   restaurantes AdminRestaurante[]
+  ediciones    PedidoEdicion[]
 
   @@map("admin")
 }
@@ -103,6 +104,8 @@ model Mozo {
   restaurante   Restaurante      @relation(fields: [restauranteId], references: [id])
   asignaciones  AsignacionMesa[]
   llamados      LlamadoMozo[]
+  mozoMesas     MozoMesa[]
+  ediciones     PedidoEdicion[]
 
   @@map("mozo")
 }
@@ -124,9 +127,23 @@ model Mesa {
   sesiones     SesionMesa[]
   pedidos      Pedido[]
   asignaciones AsignacionMesa[]
+  mozoMesas    MozoMesa[]
 
   @@unique([restauranteId, pin])
   @@map("mesa")
+}
+
+model MozoMesa {
+  id       String   @id @default(uuid())
+  mesaId   String   @map("mesa_id")
+  mozoId   String   @map("mozo_id")
+  creadoEn DateTime @default(now()) @map("creado_en")
+
+  mesa Mesa @relation(fields: [mesaId], references: [id], onDelete: Cascade)
+  mozo Mozo @relation(fields: [mozoId], references: [id], onDelete: Cascade)
+
+  @@unique([mesaId, mozoId])
+  @@map("mozo_mesa")
 }
 
 model Cliente {
@@ -147,14 +164,14 @@ model Cliente {
 model SesionMesa {
   id            String    @id @default(uuid())
   mesaId        String    @map("mesa_id")
-  clienteId     String    @map("cliente_id")
+  clienteId     String?   @map("cliente_id")
   codigoSesion  String    @map("codigo_sesion")
   iniciadaEn    DateTime  @default(now()) @map("iniciada_en")
   cerradaEn     DateTime? @map("cerrada_en")
   estado        String    @default("activa")
 
   mesa          Mesa               @relation(fields: [mesaId], references: [id])
-  cliente       Cliente            @relation(fields: [clienteId], references: [id])
+  cliente       Cliente?           @relation(fields: [clienteId], references: [id])
   pedidos       Pedido[]
   asignaciones  AsignacionMesa[]
   llamados      LlamadoMozo[]
@@ -202,6 +219,7 @@ model LlamadoMozo {
   sesionId  String   @map("sesion_id")
   mozoId    String?  @map("mozo_id")
   estado    String   @default("pendiente")
+  motivo    String?  @default("general")  @map("motivo")
   createdAt DateTime @default(now()) @map("created_at")
 
   sesion SesionMesa @relation(fields: [sesionId], references: [id])
@@ -363,23 +381,26 @@ model Pedido {
   mesaId    String   @map("mesa_id")
   estado    String   @default("pendiente")
   createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  sesion SesionMesa  @relation(fields: [sesionId], references: [id])
-  mesa   Mesa        @relation(fields: [mesaId], references: [id])
-  items  PedidoItem[]
-  pago   Pago?
+  sesion    SesionMesa     @relation(fields: [sesionId], references: [id])
+  mesa      Mesa           @relation(fields: [mesaId], references: [id])
+  items     PedidoItem[]
+  pago      Pago?
+  ediciones PedidoEdicion[]
 
   @@map("pedido")
 }
 
 model PedidoItem {
-  id             String   @id @default(uuid())
-  pedidoId       String   @map("pedido_id")
-  itemId         String   @map("item_id")
-  clienteId      String?  @map("cliente_id")
-  cantidad       Int
-  precioUnitario Decimal  @map("precio_unitario") @db.Decimal(10, 2)
-  notas          String?
+  id              String   @id @default(uuid())
+  pedidoId        String   @map("pedido_id")
+  itemId          String   @map("item_id")
+  clienteId       String?  @map("cliente_id")
+  cantidad        Int
+  cantidadEditada Int?     @map("cantidad_editada")
+  precioUnitario  Decimal  @map("precio_unitario") @db.Decimal(10, 2)
+  notas           String?
 
   pedido  Pedido          @relation(fields: [pedidoId], references: [id])
   item    ItemMenu        @relation(fields: [itemId], references: [id])
@@ -400,6 +421,36 @@ model PedidoItemMod {
 
   @@id([pedidoItemId, itemIngredienteId])
   @@map("pedido_item_mod")
+}
+
+model PedidoEdicion {
+  id            String   @id @default(uuid())
+  pedidoId      String   @map("pedido_id")
+  adminId       String?  @map("admin_id")
+  mozoId        String?  @map("mozo_id")
+  justificacion String
+  creadoEn      DateTime @default(now()) @map("creado_en")
+
+  itemsEliminados PedidoEdicionItem[]
+  pedido          Pedido  @relation(fields: [pedidoId], references: [id])
+  admin           Admin?  @relation(fields: [adminId], references: [id])
+  mozo            Mozo?   @relation(fields: [mozoId], references: [id])
+
+  @@map("pedido_edicion")
+}
+
+model PedidoEdicionItem {
+  id              String  @id @default(uuid())
+  edicionId       String  @map("edicion_id")
+  pedidoItemId    String  @map("pedido_item_id")
+  itemNombre      String  @map("item_nombre")
+  cantidadAntes   Int     @map("cantidad_antes")
+  cantidadDespues Int     @map("cantidad_despues")
+  precioUnitario  Decimal @db.Decimal(10,2) @map("precio_unitario")
+
+  edicion PedidoEdicion @relation(fields: [edicionId], references: [id])
+
+  @@map("pedido_edicion_item")
 }
 
 model Pago {

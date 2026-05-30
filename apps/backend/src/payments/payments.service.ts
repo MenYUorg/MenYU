@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common'
 import { JwtService } from '@nestjs/jwt'
 import { PrismaService } from '../prisma/prisma.service'
+import { MenyuGateway } from '../gateway/menyu.gateway'
 import { PaymentProvider } from './providers/payment-provider.interface'
 import { InitiatePaymentDto } from './dto/initiate-payment.dto'
 
@@ -41,6 +42,7 @@ export class PaymentsService {
     @Inject('PAYMENT_PROVIDER') private readonly provider: PaymentProvider,
     private readonly jwt: JwtService,
     private readonly prisma: PrismaService,
+    private readonly gateway: MenyuGateway,
   ) {}
 
   async initiatePayment(authHeader: string | undefined, dto: InitiatePaymentDto) {
@@ -243,6 +245,12 @@ export class PaymentsService {
       return { pagoId: existing.id, sesionId, estado: 'efectivo_solicitado' }
     }
 
+    const sesion = await this.prisma.sesionMesa.findUnique({
+      where: { id: sesionId },
+      include: { mesa: { select: { numero: true, restauranteId: true } } },
+    })
+    if (!sesion) throw new NotFoundException('Sesión no encontrada')
+
     const pago = await this.prisma.pago.create({
       data: {
         pedidoId,
@@ -250,6 +258,21 @@ export class PaymentsService {
         metodo: 'efectivo',
         estado: 'pendiente',
       },
+    })
+
+    // Reemplazar cualquier llamado pendiente y crear uno con motivo pedir_cuenta
+    await this.prisma.llamadoMozo.deleteMany({
+      where: { sesionId, estado: 'pendiente' },
+    })
+    const llamado = await this.prisma.llamadoMozo.create({
+      data: { sesionId, motivo: 'pedir_cuenta' },
+    })
+
+    this.gateway.emitMozoCalled(sesion.mesa.restauranteId, {
+      llamadoId: llamado.id,
+      sesionId,
+      mesaNumero: sesion.mesa.numero,
+      motivo: 'pedir_cuenta',
     })
 
     return { pagoId: pago.id, sesionId, estado: 'efectivo_solicitado' }
