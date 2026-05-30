@@ -12,6 +12,7 @@ import { GerenceMesasPage } from './pages/admin/gerente/GerenceMesasPage'
 import { PedidosPage } from './pages/admin/gerente/PedidosPage'
 import { HistorialPage } from './pages/admin/gerente/HistorialPage'
 import { TomaPedidosPage } from './pages/admin/gerente/TomaPedidosPage'
+import { AuditoriaPage } from './pages/admin/auditoria/AuditoriaPage'
 
 function RoleGuard({ roles, children }: { roles: string[]; children: React.ReactNode }) {
   const { user } = useAuth()
@@ -63,6 +64,11 @@ export function App() {
             <Route path="/admin/pagos" element={
               <RoleGuard roles={['OWNER', 'ROOT']}>
                 <PagosPage />
+              </RoleGuard>
+            } />
+            <Route path="/admin/auditoria" element={
+              <RoleGuard roles={['OWNER', 'ROOT']}>
+                <AuditoriaPage />
               </RoleGuard>
             } />
 

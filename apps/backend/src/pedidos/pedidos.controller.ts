@@ -2,6 +2,8 @@ import { Body, Controller, Get, Headers, HttpCode, HttpStatus, Param, Patch, Pos
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger'
 import { Request } from 'express'
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'
+import { RolesGuard } from '../common/guards/roles.guard'
+import { Roles } from '../common/decorators/roles.decorator'
 import { CurrentUser } from '../common/decorators/current-user.decorator'
 import { JwtPayload } from '../auth/auth.service'
 import { PedidosService } from './pedidos.service'
@@ -23,6 +25,23 @@ export class PedidosController {
     @Query('estado') estado: string,
   ) {
     return this.pedidos.listarPorEstado(restauranteId, estado)
+  }
+
+  @Get('auditoria')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('OWNER')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Auditoría global de ediciones por restaurante (solo OWNER)' })
+  @ApiResponse({ status: 200, description: 'Lista de ediciones de todos los pedidos del restaurante' })
+  @ApiResponse({ status: 400, description: 'restauranteId requerido' })
+  @ApiResponse({ status: 401, description: 'JWT requerido' })
+  @ApiResponse({ status: 403, description: 'Solo OWNER' })
+  getAuditoria(
+    @Query('restauranteId') restauranteId: string,
+    @Query('desde') desde?: string,
+    @Query('hasta') hasta?: string,
+  ) {
+    return this.pedidos.auditoriaEdiciones(restauranteId, desde, hasta)
   }
 
   @Post()

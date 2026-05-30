@@ -212,7 +212,7 @@ export function ReportesPage() {
       </div>
 
       {/* ── KPI cards ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
+      <div className="grid grid-cols-2 lg:grid-cols-4" style={{ gap: 14, marginTop: 24 }}>
         {(
           [
             { label: 'VENTAS TOTALES',  value: loading ? '–' : formatARS(resumen?.total ?? 0),           Icon: DollarSign,   iconBg: '#FDE5DF', iconColor: C.orange },

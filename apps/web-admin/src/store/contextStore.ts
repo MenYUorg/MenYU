@@ -40,7 +40,11 @@ export const useContextStore = create<ContextStore>()((set) => ({
         const restaurantes = await api.restaurantes.list()
         const existe = saved && restaurantes.some((r) => r.id === saved)
         const selectedRestauranteId = existe ? saved : (restaurantes[0]?.id ?? null)
-        set({ marcas: [], restaurantes, selectedMarcaId: null, selectedRestauranteId })
+        const marcasMap = new Map<string, Marca>()
+        restaurantes.forEach((r) => { if (r.marca) marcasMap.set(r.marca.id, r.marca) })
+        const marcas = Array.from(marcasMap.values())
+        const selectedMarcaId = restaurantes.find((r) => r.id === selectedRestauranteId)?.marca?.id ?? null
+        set({ marcas, restaurantes, selectedMarcaId, selectedRestauranteId })
       } else {
         const [marcas, restaurantes] = await Promise.all([
           api.marcas.list(),
