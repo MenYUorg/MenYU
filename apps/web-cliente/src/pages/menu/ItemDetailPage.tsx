@@ -54,7 +54,7 @@ export function ItemDetailPage() {
     ))
     setNota(itemEnCarrito.nota ?? '')
     setCantidad(itemEnCarrito.cantidad)
-  }, []) // solo al montar
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) {
     return (

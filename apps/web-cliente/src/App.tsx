@@ -39,7 +39,7 @@ function SessionGuard({ children }: { children: React.ReactNode }) {
       void fetchMenu(rid)
     })
     return () => { socket.disconnect() }
-  }, [restauranteId]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [restauranteId])
 
   const handleAceptar = () => {
     clear()
