@@ -164,7 +164,7 @@ function ItemModal({
   const toggleRemover = (id: string) => {
     setRemovidos((prev) => {
       const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
+      if (next.has(id)) { next.delete(id) } else { next.add(id) }
       return next
     })
   }
@@ -173,7 +173,7 @@ function ItemModal({
     setAgregados((prev) => {
       const next = new Map(prev)
       const nv = Math.min(max, Math.max(0, (next.get(id) ?? 0) + delta))
-      nv === 0 ? next.delete(id) : next.set(id, nv)
+      if (nv === 0) { next.delete(id) } else { next.set(id, nv) }
       return next
     })
   }

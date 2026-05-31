@@ -246,10 +246,11 @@ export function CocinaPage() {
       })
     })
 
+    const timers = anuladosTimers.current
     return () => {
       unsubNuevo()
       unsubActualizado()
-      anuladosTimers.current.forEach((t) => clearTimeout(t))
+      timers.forEach((t) => clearTimeout(t))
     }
   }, [restauranteId])
 
