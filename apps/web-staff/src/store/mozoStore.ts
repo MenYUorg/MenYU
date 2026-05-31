@@ -1,5 +1,17 @@
 import { create } from 'zustand'
+import { TOKEN_KEY } from '@menyu/auth'
 import type { Pedido } from '@menyu/types'
+
+function restauranteIdFromJwt(): string | null {
+  try {
+    const token = localStorage.getItem(TOKEN_KEY)
+    if (!token) return null
+    const payload = JSON.parse(atob(token.split('.')[1])) as { restauranteId?: string }
+    return payload.restauranteId ?? null
+  } catch {
+    return null
+  }
+}
 
 export interface Llamado {
   llamadoId: string
@@ -24,7 +36,7 @@ interface MozoStore {
 }
 
 export const useMozoStore = create<MozoStore>()((set) => ({
-  restauranteId: null,
+  restauranteId: restauranteIdFromJwt(),
   llamados: [],
   pedidosListos: [],
 

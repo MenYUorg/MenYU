@@ -109,6 +109,12 @@ export class MesasService {
   }
 
   private async assertRestauranteOwnership(restauranteId: string, user: JwtPayload) {
+    if (user.tipo === 'mozo') {
+      if (user.restauranteId !== restauranteId) {
+        throw new ForbiddenException('No tenés acceso a este restaurante')
+      }
+      return
+    }
     if (user.rol === 'ROOT') return
     if (user.rol === 'OWNER') {
       const admin = await this.prisma.admin.findUnique({ where: { id: user.sub } })

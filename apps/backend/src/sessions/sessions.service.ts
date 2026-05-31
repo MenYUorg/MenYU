@@ -244,7 +244,7 @@ export class SessionsService {
   async cerrarMesaAdmin(mesaId: string, user: JwtPayload): Promise<{ ok: boolean }> {
     const mesa = await this.prisma.mesa.findUnique({ where: { id: mesaId } })
     if (!mesa) throw new NotFoundException('Mesa no encontrada')
-    await this.assertAdminAccess(mesa.restauranteId, user)
+    await this.assertStaffAccess(mesa.restauranteId, user)
 
     const sesion = await this.prisma.sesionMesa.findFirst({
       where: { mesaId, estado: 'activa' },
@@ -270,7 +270,7 @@ export class SessionsService {
   async getSessionActiva(mesaId: string, user: JwtPayload): Promise<SessionActivaResult | null> {
     const mesa = await this.prisma.mesa.findUnique({ where: { id: mesaId } })
     if (!mesa) throw new NotFoundException('Mesa no encontrada')
-    await this.assertAdminAccess(mesa.restauranteId, user)
+    await this.assertStaffAccess(mesa.restauranteId, user)
 
     const sesion = await this.prisma.sesionMesa.findFirst({
       where: { mesaId, estado: 'activa' },
