@@ -379,7 +379,10 @@ export class PedidosService {
     // 1. Buscar pedido
     const pedido = await this.prisma.pedido.findUnique({
       where: { id },
-      include: { items: { include: { item: { select: { nombre: true } } } } },
+      include: {
+        mesa: { select: { restauranteId: true } },
+        items: { include: { item: { select: { nombre: true } } } },
+      },
     })
     if (!pedido) throw new NotFoundException('Pedido no encontrado')
     if (pedido.estado === 'anulado') {
@@ -457,7 +460,9 @@ export class PedidosService {
       })
     })
 
-    return this.getPedidoConEdiciones(id)
+    const resultado = await this.getPedidoConEdiciones(id)
+    this.gateway.emitOrderEdited(pedido.mesa.restauranteId, resultado)
+    return resultado
   }
 
   async auditoriaEdiciones(restauranteId: string, desde?: string, hasta?: string) {
