@@ -63,6 +63,37 @@ function cantActual(item: PedidoRico['items'][number]): number {
   return item.cantidadEditada ?? item.cantidad
 }
 
+// ── Audio ─────────────────────────────────────────────────────────────────────
+function playSound(type: 'nuevo' | 'editado' | 'anulado') {
+  try {
+    const ctx = new AudioContext()
+    const tone = (freq: number, start: number, dur: number) => {
+      const osc = ctx.createOscillator()
+      const g   = ctx.createGain()
+      osc.type = 'sine'
+      osc.frequency.value = freq
+      g.gain.setValueAtTime(0.28, ctx.currentTime + start)
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + dur)
+      osc.connect(g)
+      g.connect(ctx.destination)
+      osc.start(ctx.currentTime + start)
+      osc.stop(ctx.currentTime + start + dur)
+    }
+    if (type === 'nuevo') {
+      tone(523, 0,    0.15)   // C5 — ding
+      tone(659, 0.18, 0.22)   // E5 — dong
+    } else if (type === 'editado') {
+      tone(440, 0,    0.10)   // A4
+      tone(440, 0.18, 0.10)   // A4 — doble beep
+    } else {
+      tone(659, 0,    0.12)   // E5
+      tone(523, 0.16, 0.12)   // C5 — descending
+      tone(392, 0.32, 0.22)   // G4
+    }
+    setTimeout(() => void ctx.close(), 1200)
+  } catch { /* navegador sin AudioContext */ }
+}
+
 // ── PedidoCard ────────────────────────────────────────────────────────────────
 function PedidoCard({
   pedido, onAvanzar, loading,
@@ -220,12 +251,28 @@ export function CocinaPage() {
     const unsubNuevo = socketService.onPedidoNuevo((pedido: Pedido) => {
       const rico = pedido as unknown as PedidoRico
       if (!ESTADOS_COCINA.includes(rico.estado as EstadoPedido)) return
+      playSound('nuevo')
       setPedidos((prev) => prev.some((p) => p.id === rico.id) ? prev : [rico, ...prev])
     })
 
     const unsubActualizado = socketService.onPedidoActualizado((pedido: Pedido) => {
       const rico = pedido as unknown as PedidoRico
+      setPedidos((prev) => {
+        const estado = rico.estado as string
+        if (!ESTADOS_COCINA.includes(estado as EstadoPedido)) return prev.filter((p) => p.id !== rico.id)
+        const idx = prev.findIndex((p) => p.id === rico.id)
+        if (idx === -1) {
+          playSound('nuevo')   // mozo avanzó pendiente → en_preparacion
+          return [rico, ...prev]
+        }
+        const next = [...prev]; next[idx] = rico; return next
+      })
+    })
+
+    const unsubEditado = socketService.onPedidoEditado((pedido: Pedido) => {
+      const rico = pedido as unknown as PedidoRico
       if (rico.estado === 'anulado') {
+        playSound('anulado')
         setPedidos((prev) => prev.filter((p) => p.id !== rico.id))
         setAnulados((prev) => new Map(prev).set(rico.id, rico))
         const existing = anuladosTimers.current.get(rico.id)
@@ -237,11 +284,10 @@ export function CocinaPage() {
         anuladosTimers.current.set(rico.id, timer)
         return
       }
+      playSound('editado')
       setPedidos((prev) => {
-        const estado = rico.estado as string
-        if (!ESTADOS_COCINA.includes(estado as EstadoPedido)) return prev.filter((p) => p.id !== rico.id)
         const idx = prev.findIndex((p) => p.id === rico.id)
-        if (idx === -1) return [rico, ...prev]
+        if (idx === -1) return prev
         const next = [...prev]; next[idx] = rico; return next
       })
     })
@@ -250,6 +296,7 @@ export function CocinaPage() {
     return () => {
       unsubNuevo()
       unsubActualizado()
+      unsubEditado()
       timers.forEach((t) => clearTimeout(t))
     }
   }, [restauranteId])

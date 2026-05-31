@@ -56,3 +56,9 @@ export function onPedidoActualizado(cb: (pedido: Pedido) => void) {
   s.on('order:updated', cb)
   return () => s.off('order:updated', cb)
 }
+
+export function onPedidoEditado(cb: (pedido: Pedido) => void) {
+  const s = getSocket()
+  s.on('order:edited', cb)
+  return () => s.off('order:edited', cb)
+}
