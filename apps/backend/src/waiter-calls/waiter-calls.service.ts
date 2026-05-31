@@ -25,6 +25,36 @@ export class WaiterCallsService {
     private readonly gateway: MenyuGateway,
   ) {}
 
+  async findByRestaurante(restauranteId: string) {
+    // Paso 1: mesas del restaurante
+    const mesas = await this.prisma.mesa.findMany({
+      where: { restauranteId },
+      select: { id: true },
+    })
+    const mesaIds = mesas.map((m) => m.id)
+    if (mesaIds.length === 0) return []
+
+    // Paso 2: sesiones activas de esas mesas
+    const sesiones = await this.prisma.sesionMesa.findMany({
+      where: { mesaId: { in: mesaIds }, estado: 'activa' },
+      select: { id: true, mesa: { select: { numero: true } } },
+    })
+    const sesionIds = sesiones.map((s) => s.id)
+    const mesaNumPorSesion = new Map(sesiones.map((s) => [s.id, s.mesa.numero]))
+    if (sesionIds.length === 0) return []
+
+    // Paso 3: llamados pendientes de esas sesiones
+    const llamados = await this.prisma.llamadoMozo.findMany({
+      where: { sesionId: { in: sesionIds }, estado: 'pendiente' },
+      orderBy: { createdAt: 'asc' },
+    })
+
+    return llamados.map((l) => ({
+      ...l,
+      sesion: { mesa: { numero: mesaNumPorSesion.get(l.sesionId) ?? '' } },
+    }))
+  }
+
   async llamar(dto: CreateWaiterCallDto, authHeader: string | undefined) {
     if (!authHeader?.startsWith('Bearer ')) {
       throw new UnauthorizedException('Session JWT requerido')
@@ -53,10 +83,7 @@ export class WaiterCallsService {
       throw new BadRequestException('La sesión no está activa')
     }
 
-    // b. Persistir llamado (un pendiente por sesión a la vez)
-    await this.prisma.llamadoMozo.deleteMany({
-      where: { sesionId: dto.sesionId, estado: 'pendiente' },
-    })
+    // b. Persistir llamado (se acumulan todos)
     const llamado = await this.prisma.llamadoMozo.create({
       data: { sesionId: dto.sesionId, motivo: dto.motivo ?? 'general' },
     })

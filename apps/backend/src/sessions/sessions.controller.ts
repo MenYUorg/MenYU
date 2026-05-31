@@ -3,6 +3,8 @@ import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger'
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'
 import { RolesGuard } from '../common/guards/roles.guard'
 import { Roles } from '../common/decorators/roles.decorator'
+import { TipoGuard } from '../auth/guards/tipo.guard'
+import { RequiresTipo } from '../auth/decorators/requires-tipo.decorator'
 import { CurrentUser } from '../common/decorators/current-user.decorator'
 import { JwtPayload } from '../auth/auth.service'
 import { SessionsService, OpenSessionResult, OpenStaffSessionResult } from './sessions.service'
@@ -43,9 +45,9 @@ export class SessionsController {
 
   @Post('mesa/:mesaId/cerrar')
   @HttpCode(HttpStatus.OK)
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ROOT', 'OWNER', 'GERENTE')
-  @ApiOperation({ summary: 'Cerrar la sesión activa de una mesa (acción admin)' })
+  @UseGuards(JwtAuthGuard, TipoGuard)
+  @RequiresTipo('admin', 'mozo')
+  @ApiOperation({ summary: 'Cerrar la sesión activa de una mesa (admin o mozo)' })
   @ApiResponse({ status: 200, description: 'Sesión cerrada' })
   @ApiResponse({ status: 404, description: 'Mesa no encontrada o sin sesión activa' })
   @ApiResponse({ status: 403, description: 'Sin acceso a este restaurante' })
@@ -57,11 +59,11 @@ export class SessionsController {
   }
 
   @Get('mesa/:mesaId/activa')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ROOT', 'OWNER', 'GERENTE')
+  @UseGuards(JwtAuthGuard, TipoGuard)
+  @RequiresTipo('admin', 'mozo')
   @ApiOperation({ summary: 'Obtener datos de la sesión activa de una mesa' })
   @ApiResponse({ status: 200, description: 'Datos de la sesión activa, o null si no hay sesión' })
-  @ApiResponse({ status: 403, description: 'Sin acceso a este restaurante' })
+  @ApiResponse({ status: 403, description: 'Sin acceso a este recurso' })
   @ApiResponse({ status: 404, description: 'Mesa no encontrada' })
   getSessionActiva(
     @Param('mesaId') mesaId: string,

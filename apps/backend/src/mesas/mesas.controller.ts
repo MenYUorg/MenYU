@@ -15,6 +15,8 @@ import { ApiBearerAuth } from '@nestjs/swagger'
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'
 import { RolesGuard } from '../common/guards/roles.guard'
 import { Roles } from '../common/decorators/roles.decorator'
+import { TipoGuard } from '../auth/guards/tipo.guard'
+import { RequiresTipo } from '../auth/decorators/requires-tipo.decorator'
 import { CurrentUser } from '../common/decorators/current-user.decorator'
 import { JwtPayload } from '../auth/auth.service'
 import { MesasService } from './mesas.service'
@@ -36,7 +38,8 @@ export class MesasController {
   }
 
   @Get()
-  @Roles('ROOT', 'OWNER', 'GERENTE')
+  @UseGuards(JwtAuthGuard, TipoGuard)
+  @RequiresTipo('admin', 'mozo')
   findAll(@Query('restauranteId') restauranteId: string, @CurrentUser() user: JwtPayload) {
     return this.mesas.findAll(restauranteId, user)
   }
