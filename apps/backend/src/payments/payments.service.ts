@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common'
 import { JwtService } from '@nestjs/jwt'
 import { PrismaService } from '../prisma/prisma.service'
+import { CryptoService } from '../common/crypto.service'
 import { MenyuGateway } from '../gateway/menyu.gateway'
 import { PaymentProvider } from './providers/payment-provider.interface'
 import { InitiatePaymentDto } from './dto/initiate-payment.dto'
@@ -42,6 +43,7 @@ export class PaymentsService {
     @Inject('PAYMENT_PROVIDER') private readonly provider: PaymentProvider,
     private readonly jwt: JwtService,
     private readonly prisma: PrismaService,
+    private readonly crypto: CryptoService,
     private readonly gateway: MenyuGateway,
   ) {}
 
@@ -77,7 +79,7 @@ export class PaymentsService {
       monto: dto.monto,
       descripcion: dto.descripcion,
       externalReference,
-      accessToken: restaurante.mpAccessToken,
+      accessToken: this.crypto.decrypt(restaurante.mpAccessToken),
     })
 
     const pago = await this.prisma.pago.create({
@@ -169,8 +171,10 @@ export class PaymentsService {
     await this.prisma.restaurante.update({
       where: { id: restauranteId },
       data: {
-        mpAccessToken: tokenData.access_token,
-        mpRefreshToken: tokenData.refresh_token,
+        mpAccessToken: this.crypto.encrypt(tokenData.access_token),
+        mpRefreshToken: tokenData.refresh_token
+          ? this.crypto.encrypt(tokenData.refresh_token)
+          : null,
         mpUserId: String(tokenData.user_id),
       },
     })
