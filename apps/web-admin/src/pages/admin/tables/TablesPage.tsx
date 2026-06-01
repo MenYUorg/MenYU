@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AlertTriangle, Check, Clock, DollarSign, QrCode, Settings, Users, X } from 'lucide-react'
 import type { Restaurante } from '@menyu/types'
+import { useAuth } from '@menyu/auth'
 import { useContextStore } from '../../../store/contextStore'
 import { api } from '../../../services/api'
 import type { MesaConQr, SesionActiva } from '../../../services/api'
@@ -239,11 +240,13 @@ function ModalDetalle({
   onClose,
   onUpdated,
   onDeleted,
+  canDelete,
 }: {
   mesa:      MesaConQr
   onClose:   () => void
   onUpdated: (mesa: MesaConQr) => void
   onDeleted: (id: string) => void
+  canDelete: boolean
 }) {
   const [loading,         setLoading]         = useState(false)
   const [error,           setError]           = useState<string | null>(null)
@@ -383,24 +386,26 @@ function ModalDetalle({
               </p>
             )}
 
-            <button
-              onClick={() => { if (!loading && !ocupada) setConfirmEliminar(true) }}
-              disabled={ocupada || loading}
-              style={{
-                ...btnSecondary,
-                border:  `1px solid ${ocupada ? C.border : C.red}`,
-                color:   ocupada ? C.textMuted : C.red,
-                cursor:  ocupada || loading ? 'not-allowed' : 'pointer',
-                opacity: ocupada || loading ? 0.4 : 1,
-              }}
-            >
-              Eliminar mesa
-            </button>
+            {canDelete && (
+              <button
+                onClick={() => { if (!loading && !ocupada) setConfirmEliminar(true) }}
+                disabled={ocupada || loading}
+                style={{
+                  ...btnSecondary,
+                  border:  `1px solid ${ocupada ? C.border : C.red}`,
+                  color:   ocupada ? C.textMuted : C.red,
+                  cursor:  ocupada || loading ? 'not-allowed' : 'pointer',
+                  opacity: ocupada || loading ? 0.4 : 1,
+                }}
+              >
+                Eliminar mesa
+              </button>
+            )}
           </div>
         </div>
       </div>
 
-      {confirmEliminar && (
+      {canDelete && confirmEliminar && (
         <ModalConfirmar
           title={`¿Eliminar mesa ${mesa.numero}?`}
           text="Esta acción no se puede deshacer. Se eliminará la mesa y su QR."
@@ -655,6 +660,8 @@ function ModalConfig({
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 export function TablesPage() {
+  const { user } = useAuth()
+  const isOwner = user?.rol === 'OWNER' || user?.rol === 'ROOT'
   const { restaurantes, selectedRestauranteId } = useContextStore()
 
   const [showConfig,  setShowConfig]  = useState(false)
@@ -751,29 +758,33 @@ export function TablesPage() {
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button
-            onClick={() => setShowConfig(true)}
-            onMouseEnter={() => setCfgBtnHov(true)}
-            onMouseLeave={() => setCfgBtnHov(false)}
-            style={{
-              width: 38, height: 38,
-              border: `1px solid ${cfgBtnHov ? C.navy : C.border}`,
-              borderRadius: 8, background: 'white',
-              color: cfgBtnHov ? C.navy : C.textSub,
-              cursor: 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              transition: 'border-color 0.2s, color 0.2s',
-              padding: 0,
-            }}
-          >
-            <Settings size={16} />
-          </button>
-          <button
-            onClick={() => setShowCrear(true)}
-            style={{ background: C.orange, color: 'white', border: 'none', borderRadius: 10, padding: '10px 18px', fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}
-          >
-            + Nueva mesa
-          </button>
+          {isOwner && (
+            <button
+              onClick={() => setShowConfig(true)}
+              onMouseEnter={() => setCfgBtnHov(true)}
+              onMouseLeave={() => setCfgBtnHov(false)}
+              style={{
+                width: 38, height: 38,
+                border: `1px solid ${cfgBtnHov ? C.navy : C.border}`,
+                borderRadius: 8, background: 'white',
+                color: cfgBtnHov ? C.navy : C.textSub,
+                cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                transition: 'border-color 0.2s, color 0.2s',
+                padding: 0,
+              }}
+            >
+              <Settings size={16} />
+            </button>
+          )}
+          {isOwner && (
+            <button
+              onClick={() => setShowCrear(true)}
+              style={{ background: C.orange, color: 'white', border: 'none', borderRadius: 10, padding: '10px 18px', fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}
+            >
+              + Nueva mesa
+            </button>
+          )}
         </div>
       </div>
 
@@ -823,6 +834,7 @@ export function TablesPage() {
             setMesaSeleccionada(updated)
           }}
           onDeleted={(id) => setMesas((prev) => prev.filter((m) => m.id !== id))}
+          canDelete={isOwner}
         />
       )}
 

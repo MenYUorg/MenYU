@@ -6,10 +6,17 @@ import { useContextStore } from '../../../store/contextStore'
 import { useMenuStore } from '../../../store/menuStore'
 import { api } from '../../../services/api'
 
+const matchesBusqueda = (nombre: string, buscar: string): boolean => {
+  if (!buscar.trim()) return true
+  const query = buscar.toLowerCase().trim()
+  return nombre.toLowerCase().split(/\s+/).some((palabra) => palabra.startsWith(query))
+}
+
 interface Props {
-  open:    boolean
-  onClose: () => void
-  item:    ItemMenu | null
+  open:      boolean
+  onClose:   () => void
+  item:      ItemMenu | null
+  canDelete: boolean
 }
 
 /* ── local ingredient model ─────────────────────────────────────────────── */
@@ -48,7 +55,7 @@ const inputSt: React.CSSProperties = {
 }
 
 /* ── component ──────────────────────────────────────────────────────────── */
-export function ItemFormModal({ open, onClose, item }: Props) {
+export function ItemFormModal({ open, onClose, item, canDelete }: Props) {
   const { selectedRestauranteId } = useContextStore()
   const {
     categorias, clasificaciones,
@@ -107,7 +114,7 @@ export function ItemFormModal({ open, onClose, item }: Props) {
     } else {
       setNombre('')
       setDescripcion('')
-      setCategoriaId('')
+      setCategoriaId(categorias[0]?.id ?? '')
       setPrecio('')
       setPreviewUrl(null)
       setSelectedClasificaciones([])
@@ -154,7 +161,7 @@ export function ItemFormModal({ open, onClose, item }: Props) {
     .filter(
       (i) =>
         !addedIds.has(i.id) &&
-        i.nombre.toLowerCase().includes(ingQuery.toLowerCase()),
+        matchesBusqueda(i.nombre, ingQuery),
     )
     .slice(0, 5)
 
@@ -345,6 +352,7 @@ export function ItemFormModal({ open, onClose, item }: Props) {
           precioBase:  precioNum,
         })
       } else {
+        if (!categoriaId) { setError('La categoría es obligatoria.'); setSaving(false); return }
         const nuevoItem = await createItem({
           restauranteId: selectedRestauranteId,
           nombre:        trimmedNombre,
@@ -547,10 +555,15 @@ export function ItemFormModal({ open, onClose, item }: Props) {
           {/* 4. Categoría */}
           <div>
             <label style={labelSt}>Categoría</label>
-            <select value={categoriaId} onChange={(e) => setCategoriaId(e.target.value)} style={inputSt}>
-              <option value="">Sin categoría</option>
-              {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-            </select>
+            {categorias.length === 0 ? (
+              <p style={{ margin: 0, fontSize: 13, color: '#9ca3af' }}>
+                No hay categorías. Creá una desde Gestionar catálogo.
+              </p>
+            ) : (
+              <select value={categoriaId} onChange={(e) => setCategoriaId(e.target.value)} style={inputSt}>
+                {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+              </select>
+            )}
           </div>
 
           {/* 5. Dietas */}
@@ -721,14 +734,28 @@ export function ItemFormModal({ open, onClose, item }: Props) {
                 ref={ingSearchRef}
                 style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: 10, padding: 12, marginTop: 8 }}
               >
-                <input
-                  autoFocus
-                  value={ingQuery}
-                  onChange={(e) => setIngQuery(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Escape') setShowIngSearch(false) }}
-                  placeholder="Buscar ingrediente..."
-                  style={{ ...inputSt, marginBottom: 8 }}
-                />
+                <div style={{ position: 'relative', marginBottom: 8 }}>
+                  <input
+                    autoFocus
+                    value={ingQuery}
+                    onChange={(e) => setIngQuery(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Escape') setShowIngSearch(false) }}
+                    placeholder="Buscar ingrediente..."
+                    style={{ ...inputSt, paddingRight: ingQuery ? 32 : undefined }}
+                  />
+                  {ingQuery && (
+                    <button
+                      onClick={() => setIngQuery('')}
+                      style={{
+                        position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
+                        background: 'none', border: 'none', cursor: 'pointer',
+                        color: '#9CA3AF', fontSize: 16, lineHeight: 1, padding: 0,
+                      }}
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
                 <div>
                   {ingResults.length === 0 && !showCrear && (
                     <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#9ca3af', margin: '8px 0', textAlign: 'center' }}>
@@ -792,7 +819,7 @@ export function ItemFormModal({ open, onClose, item }: Props) {
             </p>
           )}
 
-          {isEdit && (
+          {isEdit && canDelete && (
             <button
               type="button"
               onClick={() => { void handleEliminar() }}

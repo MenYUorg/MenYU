@@ -39,7 +39,7 @@ export function joinRestauranteComoCocina(restauranteId: string) {
   }
 }
 
-export function onMozoCalled(cb: (data: { sesionId: string; mesaNumero: string }) => void) {
+export function onMozoCalled(cb: (data: { llamadoId: string; sesionId: string; mesaNumero: string; motivo: string }) => void) {
   const s = getSocket()
   s.on('waiter:called', cb)
   return () => s.off('waiter:called', cb)
@@ -55,4 +55,10 @@ export function onPedidoActualizado(cb: (pedido: Pedido) => void) {
   const s = getSocket()
   s.on('order:updated', cb)
   return () => s.off('order:updated', cb)
+}
+
+export function onPedidoEditado(cb: (pedido: Pedido) => void) {
+  const s = getSocket()
+  s.on('order:edited', cb)
+  return () => s.off('order:edited', cb)
 }

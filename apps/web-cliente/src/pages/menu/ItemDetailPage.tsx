@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { usePublicMenuStore } from '../../store/publicMenuStore'
 import { useSessionStore } from '../../store/sessionStore'
 import { useCarritoStore } from '../../store/carritoStore'
@@ -19,22 +19,42 @@ const C = {
 export function ItemDetailPage() {
   const { itemId } = useParams<{ itemId: string }>()
   const navigate = useNavigate()
+  const location = useLocation()
+  const cartId = (location.state as { cartId?: string } | null)?.cartId ?? null
+
   const { menu, loading, error, fetchMenu, getItemById } = usePublicMenuStore()
   const { restauranteId } = useSessionStore()
   const item = getItemById(itemId ?? '') as MenuPublicoItem | undefined
 
-  // ── State — lógica sin cambios ─────────────────────────────────────────────
+  // ── State ──────────────────────────────────────────────────────────────────
   const [removidos, setRemovidos] = useState<Set<string>>(new Set())
   const [agregados, setAgregados] = useState<Map<string, number>>(new Map())
   const [cantidad, setCantidad] = useState(1)
   const [nota, setNota] = useState('')
-  const { agregar } = useCarritoStore()
+  const { agregar, reemplazar } = useCarritoStore()
+  const itemEnCarrito = useCarritoStore((s) => s.items.find((i) => i.cartId === cartId))
 
   useEffect(() => {
     if (!menu && restauranteId) {
       void fetchMenu(restauranteId)
     }
   }, [menu, restauranteId, fetchMenu])
+
+  useEffect(() => {
+    if (!itemEnCarrito) return
+    setRemovidos(new Set(
+      itemEnCarrito.modificaciones
+        .filter((m) => m.accion === 'quitar')
+        .map((m) => m.itemIngredienteId),
+    ))
+    setAgregados(new Map(
+      itemEnCarrito.modificaciones
+        .filter((m) => m.accion === 'agregar')
+        .map((m) => [m.itemIngredienteId, m.cantidad]),
+    ))
+    setNota(itemEnCarrito.nota ?? '')
+    setCantidad(itemEnCarrito.cantidad)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) {
     return (
@@ -209,14 +229,14 @@ export function ItemDetailPage() {
                         aria-label={quitado ? 'Restaurar' : 'Quitar'}
                         style={{
                           width: 44, height: 24, borderRadius: 999, flexShrink: 0,
-                          background: quitado ? C.orange : '#D1D5DB',
+                          background: quitado ? '#E5E7EB' : C.orange,
                           border: 'none', cursor: 'pointer', position: 'relative',
                           transition: 'background 0.2s',
                         }}
                       >
                         <span style={{
                           position: 'absolute', top: 3,
-                          left: quitado ? 23 : 3,
+                          left: quitado ? 3 : 23,
                           width: 18, height: 18, borderRadius: '50%',
                           background: 'white',
                           boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
@@ -368,14 +388,19 @@ export function ItemDetailPage() {
                   }
                 }),
               ]
-              agregar({
+              const payload = {
                 itemMenuId:     item.id,
                 nombre:         item.nombre,
-                precioUnitario: precioTotal * cantidad,
+                precioUnitario: precioTotal,
                 cantidad,
                 nota:           nota.trim() || undefined,
                 modificaciones,
-              })
+              }
+              if (cartId) {
+                reemplazar(cartId, payload)
+              } else {
+                agregar(payload)
+              }
               navigate('/carrito')
             }}
             style={{
@@ -396,7 +421,7 @@ export function ItemDetailPage() {
               <span style={{ width: 22, height: 22, background: 'rgba(255,255,255,0.18)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, flexShrink: 0 }}>
                 🛒
               </span>
-              Agregar al pedido
+              {cartId ? 'Guardar cambios' : 'Agregar al pedido'}
             </span>
             <span style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 800, fontSize: 17, letterSpacing: '0.01em', flexShrink: 0 }}>
               ${totalConCantidad.toFixed(2)}

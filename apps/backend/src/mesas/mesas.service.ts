@@ -38,7 +38,10 @@ export class MesasService {
     const mesas = await this.prisma.mesa.findMany({
       where: { restauranteId, activo: true },
       orderBy: { numero: 'asc' },
-      include: { restaurante: { select: { qrBaseUrl: true } } },
+      include: {
+        restaurante: { select: { qrBaseUrl: true } },
+        mozoMesas: { include: { mozo: { select: { id: true, nombre: true } } } },
+      },
     })
 
     return Promise.all(
@@ -106,6 +109,12 @@ export class MesasService {
   }
 
   private async assertRestauranteOwnership(restauranteId: string, user: JwtPayload) {
+    if (user.tipo === 'mozo') {
+      if (user.restauranteId !== restauranteId) {
+        throw new ForbiddenException('No tenés acceso a este restaurante')
+      }
+      return
+    }
     if (user.rol === 'ROOT') return
     if (user.rol === 'OWNER') {
       const admin = await this.prisma.admin.findUnique({ where: { id: user.sub } })

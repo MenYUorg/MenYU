@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { api } from '../services/api'
+import { useCarritoStore } from './carritoStore'
 
 type OpenSessionReturn =
   | { error: 'REQUIERE_CODIGO_SESION' }
@@ -85,5 +86,6 @@ export const useSessionStore = create<SessionStore>()((set) => ({
     sessionStorage.removeItem(CODIGO_KEY)
     sessionStorage.removeItem(MODO_KEY)
     set({ sesionId: null, mesaId: null, restauranteId: null, jwt: null, numeroMesa: null, codigoSesion: null, modoSesion: null })
+    useCarritoStore.getState().vaciar()
   },
 }))

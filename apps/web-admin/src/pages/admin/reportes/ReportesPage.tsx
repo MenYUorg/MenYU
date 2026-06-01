@@ -56,13 +56,20 @@ const PERIODOS: PeriodoConfig[] = [
 ]
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+const toLocalDateString = (date: Date): string => {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
 function calcRange(periodo: Periodo): { desde: string; hasta: string } {
   const cfg = PERIODOS.find((p) => p.key === periodo)!
   const hoy = new Date()
-  const hasta = hoy.toISOString().split('T')[0]
+  const hasta = toLocalDateString(hoy)
   const inicio = new Date()
   inicio.setDate(inicio.getDate() - cfg.offset)
-  const desde = inicio.toISOString().split('T')[0]
+  const desde = toLocalDateString(inicio)
   return { desde, hasta }
 }
 
@@ -205,7 +212,7 @@ export function ReportesPage() {
       </div>
 
       {/* ── KPI cards ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
+      <div className="grid grid-cols-2 lg:grid-cols-4" style={{ gap: 14, marginTop: 24 }}>
         {(
           [
             { label: 'VENTAS TOTALES',  value: loading ? '–' : formatARS(resumen?.total ?? 0),           Icon: DollarSign,   iconBg: '#FDE5DF', iconColor: C.orange },

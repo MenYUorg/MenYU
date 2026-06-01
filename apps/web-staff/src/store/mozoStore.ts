@@ -1,9 +1,23 @@
 import { create } from 'zustand'
+import { TOKEN_KEY } from '@menyu/auth'
 import type { Pedido } from '@menyu/types'
 
+function restauranteIdFromJwt(): string | null {
+  try {
+    const token = localStorage.getItem(TOKEN_KEY)
+    if (!token) return null
+    const payload = JSON.parse(atob(token.split('.')[1])) as { restauranteId?: string }
+    return payload.restauranteId ?? null
+  } catch {
+    return null
+  }
+}
+
 export interface Llamado {
+  llamadoId: string
   sesionId: string
   mesaNumero: string
+  motivo: string
   recibitoEn: Date
   atendido: boolean
 }
@@ -15,14 +29,14 @@ interface MozoStore {
   llamados: Llamado[]
   pedidosListos: Pedido[]
   setRestauranteId: (id: string) => void
-  addLlamado: (data: { sesionId: string; mesaNumero: string }) => void
+  addLlamado: (data: { llamadoId: string; sesionId: string; mesaNumero: string; motivo: string }) => void
   marcarAtendido: (sesionId: string) => void
   agregarPedidoListo: (pedido: Pedido) => void
   marcarEntregado: (pedidoId: string, jwt: string) => Promise<void>
 }
 
 export const useMozoStore = create<MozoStore>()((set) => ({
-  restauranteId: null,
+  restauranteId: restauranteIdFromJwt(),
   llamados: [],
   pedidosListos: [],
 
@@ -32,7 +46,7 @@ export const useMozoStore = create<MozoStore>()((set) => ({
     set((s) => ({
       llamados: [
         ...s.llamados.filter((l) => l.sesionId !== data.sesionId),
-        { ...data, recibitoEn: new Date(), atendido: false },
+        { llamadoId: data.llamadoId, sesionId: data.sesionId, mesaNumero: data.mesaNumero, motivo: data.motivo, recibitoEn: new Date(), atendido: false },
       ],
     })),
 

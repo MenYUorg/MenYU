@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
@@ -32,7 +33,7 @@ export class MozosService {
   async findAll(restauranteId: string, user: JwtPayload) {
     await this.assertRestauranteOwnership(restauranteId, user)
     return this.prisma.mozo.findMany({
-      where: { restauranteId },
+      where: { restauranteId, activo: true },
       orderBy: { nombre: 'asc' },
       select: {
         id: true,
@@ -70,6 +71,68 @@ export class MozosService {
     const mozo = await this.getOrThrow(id)
     await this.assertRestauranteOwnership(mozo.restauranteId, user)
     await this.prisma.mozo.update({ where: { id }, data: { activo: false } })
+  }
+
+  async assignMesa(mozoId: string, mesaId: string, user: JwtPayload) {
+    const mozo = await this.getOrThrow(mozoId)
+    await this.assertRestauranteOwnership(mozo.restauranteId, user)
+
+    const mesa = await this.prisma.mesa.findUnique({ where: { id: mesaId } })
+    if (!mesa) throw new NotFoundException('Mesa no encontrada')
+    if (mesa.restauranteId !== mozo.restauranteId) {
+      throw new BadRequestException('La mesa no pertenece al mismo restaurante que el mozo')
+    }
+
+    try {
+      return await this.prisma.mozoMesa.create({ data: { mozoId, mesaId } })
+    } catch {
+      throw new ConflictException('El mozo ya tiene asignada esa mesa')
+    }
+  }
+
+  async unassignMesa(mozoId: string, mesaId: string, user: JwtPayload) {
+    const mozo = await this.getOrThrow(mozoId)
+    await this.assertRestauranteOwnership(mozo.restauranteId, user)
+
+    const asignacion = await this.prisma.mozoMesa.findUnique({
+      where: { mesaId_mozoId: { mesaId, mozoId } },
+    })
+    if (!asignacion) throw new NotFoundException('Asignación no encontrada')
+
+    await this.prisma.mozoMesa.delete({ where: { mesaId_mozoId: { mesaId, mozoId } } })
+  }
+
+  async getMesas(mozoId: string, user: JwtPayload) {
+    const mozo = await this.getOrThrow(mozoId)
+    await this.assertRestauranteOwnership(mozo.restauranteId, user)
+
+    const asignaciones = await this.prisma.mozoMesa.findMany({
+      where: { mozoId },
+      include: {
+        mesa: { select: { id: true, numero: true, estado: true, activo: true } },
+      },
+      orderBy: { mesa: { numero: 'asc' } },
+    })
+
+    return asignaciones.map((a) => a.mesa)
+  }
+
+  async llamadosHoy(mozoId: string, user: JwtPayload) {
+    const mozo = await this.getOrThrow(mozoId)
+    await this.assertRestauranteOwnership(mozo.restauranteId, user)
+
+    const hoy = new Date()
+    hoy.setHours(0, 0, 0, 0)
+
+    const total = await this.prisma.llamadoMozo.count({
+      where: {
+        mozoId,
+        estado: 'atendido',
+        createdAt: { gte: hoy },
+      },
+    })
+
+    return { total }
   }
 
   private async getOrThrow(id: string) {

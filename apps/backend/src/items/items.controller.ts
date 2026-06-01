@@ -91,6 +91,7 @@ export class ItemsController {
   }
 
   @Delete(':id')
+  @Roles('ROOT', 'OWNER')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Eliminar un ítem' })
   @ApiResponse({ status: 204, description: 'Ítem eliminado' })
