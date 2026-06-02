@@ -445,7 +445,7 @@ export function PagosPage() {
       setPagadas(data)
     } catch { /* silencioso */ }
     finally { setLoadingPagadas(false) }
-  }, [selectedRestauranteId, esGerente])
+  }, [selectedRestauranteId])
 
   // ── Carga inicial ──────────────────────────────────────────────────────────
   useEffect(() => {
