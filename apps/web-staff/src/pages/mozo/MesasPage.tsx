@@ -1,11 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { io, type Socket } from 'socket.io-client'
 import type { Mesa } from '@menyu/types'
-import { Bell, ChevronLeft, Clock, DollarSign, DoorOpen, ShoppingBag, Users } from 'lucide-react'
+import { Bell, Clock, DollarSign, DoorOpen, LayoutGrid, ShoppingBag, Users } from 'lucide-react'
+import { useAuth } from '@menyu/auth'
 import { useMozoStore } from '../../store/mozoStore'
 import { api, getToken } from '../../services/api'
 import type { SesionActivaRico, WaiterCallRico } from '../../services/api'
+import { PageHeader } from '../../components/PageHeader'
+
+function getInitials(name?: string): string {
+  if (!name) return '?'
+  return name.split(' ').slice(0, 2).map((w) => w[0]).join('').toUpperCase()
+}
 
 // ── Bell animation ────────────────────────────────────────────────────────────
 if (typeof document !== 'undefined' && !document.getElementById('mp-bell-css')) {
@@ -207,7 +214,10 @@ function PedidoSesionCard({ pedido }: { pedido: SesionActivaRico['pedidos'][0] }
 // ── Main ──────────────────────────────────────────────────────────────────────
 export function MesasPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const { user } = useAuth()
   const { restauranteId } = useMozoStore()
+  const nombreMozo = user?.nombre ?? user?.email ?? 'Mozo'
 
   // TODO: agregar mesasAsignadas al payload del JWT del mozo cuando el backend lo soporte
   const mesasAsignadas: string[] = []
@@ -351,33 +361,27 @@ export function MesasPage() {
     }
   }
 
+  useEffect(() => {
+    const mesaIdParam = searchParams.get('mesaId')
+    if (!mesaIdParam || mesas.length === 0 || mesaSeleccionada) return
+    const mesa = mesas.find((m) => m.id === mesaIdParam)
+    if (mesa) void handleSeleccionarMesa(mesa)
+  }, [mesas, searchParams]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Vista B ──────────────────────────────────────────────────────────────────
   if (mesaSeleccionada) {
     const ocupada = mesaSeleccionada.estado === 'ocupada'
 
     return (
       <div className="min-h-screen bg-gray-50 flex flex-col">
-        {/* Header */}
-        <header style={{ background: C.navy, height: 56, display: 'flex', alignItems: 'center', padding: '0 20px', gap: 12, flexShrink: 0 }}>
-          <button
-            onClick={() => { setMesaSeleccionada(null); setSesionDetalle(null) }}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'white', display: 'flex', alignItems: 'center', gap: 6, fontFamily: 'Inter,sans-serif', fontSize: 13 }}
-          >
-            <ChevronLeft size={16} /> Volver
-          </button>
-          <span style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 18, color: 'white' }}>
-            Mesa {mesaSeleccionada.numero}
-          </span>
-          <span style={{
-            marginLeft: 'auto',
-            background: ocupada ? C.orangeBadge : C.greenBadge,
-            color:      ocupada ? C.orange : C.green,
-            fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
-            padding: '3px 8px', borderRadius: 999, fontFamily: 'Inter,sans-serif',
-          }}>
-            {ocupada ? 'Ocupada' : 'Libre'}
-          </span>
-        </header>
+        <PageHeader
+          title={`Mesa ${mesaSeleccionada.numero}`}
+          icon={<LayoutGrid size={18} />}
+          onBack={() => { setMesaSeleccionada(null); setSesionDetalle(null) }}
+          userName={nombreMozo}
+          userRole="Mozo"
+          userInitials={getInitials(user?.nombre ?? user?.email)}
+        />
 
         {/* Content */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '20px 20px 120px' }}>
@@ -476,20 +480,14 @@ export function MesasPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header style={{ background: C.navy, height: 56, display: 'flex', alignItems: 'center', padding: '0 20px', gap: 12, flexShrink: 0 }}>
-        <button
-          onClick={() => navigate('/mozo')}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'white', display: 'flex', alignItems: 'center', gap: 6, fontFamily: 'Inter,sans-serif', fontSize: 13 }}
-        >
-          <ChevronLeft size={16} /> Panel
-        </button>
-        <span style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 18, color: 'white' }}>
-          Mesas
-        </span>
-        <span style={{ marginLeft: 'auto', fontFamily: 'Inter,sans-serif', fontSize: 12, color: 'rgba(255,255,255,0.6)' }}>
-          {mesas.length} mesas · {totalOcupadas} ocupadas
-        </span>
-      </header>
+      <PageHeader
+        title="Mesas"
+        icon={<LayoutGrid size={18} />}
+        onBack={() => navigate('/mozo')}
+        userName={nombreMozo}
+        userRole="Mozo"
+        userInitials={getInitials(user?.nombre ?? user?.email)}
+      />
 
       <main style={{ padding: 20 }}>
         {error && (

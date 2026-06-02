@@ -1,10 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { io, type Socket } from 'socket.io-client'
-import { AlertTriangle, ChevronLeft, ChevronRight, ClipboardList, Clock, RefreshCw, X } from 'lucide-react'
+import { AlertTriangle, ChevronRight, ClipboardList, Clock, RefreshCw, X } from 'lucide-react'
+import { useAuth } from '@menyu/auth'
 import { getToken, api } from '../../services/api'
 import type { PedidoRico, EditarItemBody } from '../../services/api'
 import { useMozoStore } from '../../store/mozoStore'
+import { PageHeader } from '../../components/PageHeader'
+
+function getInitials(name?: string): string {
+  if (!name) return '?'
+  return name.split(' ').slice(0, 2).map((w) => w[0]).join('').toUpperCase()
+}
 
 // ── Palette & WS ──────────────────────────────────────────────────────────────
 const C = {
@@ -313,7 +320,9 @@ function PedidoCard({
 // ── Main page ─────────────────────────────────────────────────────────────────
 export function PedidosPage() {
   const navigate = useNavigate()
+  const { user } = useAuth()
   const { restauranteId } = useMozoStore()
+  const nombreMozo = user?.nombre ?? user?.email ?? 'Mozo'
   const [pedidos,       setPedidos]       = useState<PedidoRico[]>([])
   const [loadingIds,    setLoadingIds]    = useState<Set<string>>(new Set())
   const [error,         setError]         = useState<string | null>(null)
@@ -405,20 +414,15 @@ export function PedidosPage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
-      {/* Header */}
-      <header style={{ background: C.navy, height: 56, display: 'flex', alignItems: 'center', padding: '0 20px', gap: 12, flexShrink: 0 }}>
-        <button onClick={() => navigate('/mozo')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'white', display: 'flex', alignItems: 'center', gap: 6, fontFamily: 'Inter,sans-serif', fontSize: 13 }}>
-          <ChevronLeft size={16} /> Panel
-        </button>
-        <ClipboardList size={18} color="white" />
-        <span style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 18, color: 'white' }}>Pedidos</span>
-        <button
-          onClick={() => void fetchAll()}
-          style={{ marginLeft: 'auto', background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: 6, padding: '5px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'white' }}
-        >
-          <RefreshCw size={12} /> Actualizar
-        </button>
-      </header>
+      <PageHeader
+        title="Pedidos"
+        icon={<ClipboardList size={18} />}
+        onBack={() => navigate('/mozo')}
+        onRefresh={() => void fetchAll()}
+        userName={nombreMozo}
+        userRole="Mozo"
+        userInitials={getInitials(user?.nombre ?? user?.email)}
+      />
 
       {error && (
         <div style={{ background: C.redBg, color: C.red, padding: '10px 20px', fontSize: 13 }}>{error}</div>

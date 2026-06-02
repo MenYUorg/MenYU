@@ -19,6 +19,7 @@ function SessionGuard({ children }: { children: React.ReactNode }) {
   const clear         = useSessionStore((s) => s.clear)
   const navigate      = useNavigate()
   const [sesionCerrada, setSesionCerrada] = useState(false)
+  const [showGracias, setShowGracias] = useState(false)
 
   // Ref para siempre tener el sesionId actual dentro del handler del socket
   // sin necesidad de recrear el socket cada vez que cambia.
@@ -30,7 +31,10 @@ function SessionGuard({ children }: { children: React.ReactNode }) {
     const socket = io(`${WS_BASE}/ws`, { transports: ['websocket'] })
     socket.on('connect', () => socket.emit('session:join', { restauranteId }))
     socket.on('sesion:cerrada', ({ sesionId: sid }: { sesionId: string }) => {
-      if (sesionIdRef.current && sid === sesionIdRef.current) setSesionCerrada(true)
+      if (sesionIdRef.current && sid === sesionIdRef.current) setShowGracias(true)
+    })
+    socket.on('sesion:cobrada', ({ sesionId: sid }: { sesionId: string }) => {
+      if (sesionIdRef.current && sid === sesionIdRef.current) setShowGracias(true)
     })
     socket.on('menu:updated', ({ restauranteId: rid }: { restauranteId: string }) => {
       if (rid !== restauranteId) return
@@ -38,7 +42,7 @@ function SessionGuard({ children }: { children: React.ReactNode }) {
       clearMenu()
       void fetchMenu(rid)
     })
-    return () => { socket.disconnect() }
+    return () => { socket.off('sesion:cobrada'); socket.disconnect() }
   }, [restauranteId])
 
   const handleAceptar = () => {
@@ -49,6 +53,80 @@ function SessionGuard({ children }: { children: React.ReactNode }) {
 
   return (
     <>
+      {showGracias && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 9999,
+          background: 'rgba(45, 53, 97, 0.85)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: 24,
+        }}>
+          <div style={{
+            background: 'white',
+            borderRadius: 16,
+            padding: '40px 32px',
+            maxWidth: 340,
+            width: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: 16,
+            boxShadow: '0 8px 28px rgba(0,0,0,0.10)',
+          }}>
+            <div style={{
+              width: 64, height: 64, borderRadius: '50%',
+              background: '#FDF0ED',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none"
+                stroke="#E8563A" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            </div>
+            <p style={{
+              fontFamily: 'Montserrat, sans-serif',
+              fontWeight: 800, fontSize: 22,
+              color: '#2D3561', margin: 0,
+              letterSpacing: '-0.01em',
+              textAlign: 'center',
+            }}>
+              ¡Gracias por su visita!
+            </p>
+            <p style={{
+              fontFamily: 'Inter, sans-serif',
+              fontSize: 14, color: '#6B7280',
+              margin: 0, textAlign: 'center',
+              lineHeight: 1.5,
+            }}>
+              Su sesión ha sido cerrada. Esperamos verle pronto.
+            </p>
+            <button
+              onClick={() => { setShowGracias(false); clear(); navigate('/menu') }}
+              onMouseEnter={e => e.currentTarget.style.background = '#d34a30'}
+              onMouseLeave={e => e.currentTarget.style.background = '#E8563A'}
+              style={{
+                marginTop: 8,
+                width: '100%',
+                padding: '14px 0',
+                background: '#E8563A',
+                color: 'white',
+                border: 'none',
+                borderRadius: 12,
+                fontFamily: 'Montserrat, sans-serif',
+                fontWeight: 700,
+                fontSize: 15,
+                cursor: 'pointer',
+                transition: 'background .14s',
+              }}
+            >
+              Salir
+            </button>
+          </div>
+        </div>
+      )}
       {children}
       {sesionCerrada && (
         <div

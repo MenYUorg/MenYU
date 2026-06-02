@@ -106,6 +106,7 @@ model Mozo {
   llamados      LlamadoMozo[]
   mozoMesas     MozoMesa[]
   ediciones     PedidoEdicion[]
+  pagos         Pago[]
 
   @@map("mozo")
 }
@@ -454,15 +455,19 @@ model PedidoEdicionItem {
 }
 
 model Pago {
-  id                String   @id @default(uuid())
-  pedidoId          String   @unique @map("pedido_id")
-  monto             Decimal  @db.Decimal(10, 2)
+  id                String    @id @default(uuid())
+  pedidoId          String    @unique @map("pedido_id")
+  monto             Decimal   @db.Decimal(10, 2)
   metodo            String
-  estado            String   @default("pendiente")
-  referenciaExterna String?  @map("referencia_externa")
-  createdAt         DateTime @default(now()) @map("created_at")
+  estado            String    @default("pendiente")
+  referenciaExterna String?   @map("referencia_externa")
+  mozoId            String?   @map("mozo_id")
+  cobradoPorNombre  String?   @map("cobrado_por_nombre")
+  fechaCobro        DateTime? @map("fecha_cobro")
+  createdAt         DateTime  @default(now()) @map("created_at")
 
   pedido Pedido @relation(fields: [pedidoId], references: [id])
+  mozo   Mozo?  @relation(fields: [mozoId], references: [id])
 
   @@map("pago")
 }

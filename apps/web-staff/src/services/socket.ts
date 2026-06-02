@@ -62,3 +62,15 @@ export function onPedidoEditado(cb: (pedido: Pedido) => void) {
   s.on('order:edited', cb)
   return () => s.off('order:edited', cb)
 }
+
+export function onSesionQuierePagar(cb: (data: { sesionId: string; mesaId: string; mesaNumero: string; totalAcumulado: number }) => void) {
+  const s = getSocket()
+  s.on('sesion:quierePagar', cb)
+  return () => s.off('sesion:quierePagar', cb)
+}
+
+export function onSesionCobrada(cb: (data: { sesionId: string; mesaId: string; mesaNumero: string }) => void) {
+  const s = getSocket()
+  s.on('sesion:cobrada', cb)
+  return () => s.off('sesion:cobrada', cb)
+}
