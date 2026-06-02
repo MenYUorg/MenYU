@@ -423,7 +423,7 @@ export function PagosGerente() {
   const [sesionesActivas, setSesionesActivas] = useState<SesionActivaItem[]>([])
   const [sesionesPagadas, setSesionesPagadas] = useState<SesionPagadaItem[]>([])
   const [tabHistorial, setTabHistorial]       = useState<'hoy' | 'ayer'>('hoy')
-  const [_loadingActivas, setLoadingActivas]  = useState(false)
+  const [, setLoadingActivas]                 = useState(false)
   const [loadingPagadas, setLoadingPagadas]   = useState(false)
   const [modalSesion, setModalSesion]         = useState<SesionActivaItem | null>(null)
   const [toast, setToast]                     = useState<string | null>(null)
