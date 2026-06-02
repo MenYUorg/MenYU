@@ -4,13 +4,14 @@ import { ProtectedRoute } from '@menyu/auth'
 import { LoginPage } from './pages/login/LoginPage'
 import { MozoNotifications } from './components/MozoNotifications'
 
-const MozoPanel       = lazy(() => import('./pages/mozo/MozoPanel').then((m) => ({ default: m.MozoPanel })))
-const MesasPage       = lazy(() => import('./pages/mozo/MesasPage').then((m) => ({ default: m.MesasPage })))
-const TomaPedidosPage = lazy(() => import('./pages/mozo/TomaPedidosPage').then((m) => ({ default: m.TomaPedidosPage })))
-const PedidosPage     = lazy(() => import('./pages/mozo/PedidosPage').then((m) => ({ default: m.PedidosPage })))
-const HistorialPage   = lazy(() => import('./pages/mozo/HistorialPage').then((m) => ({ default: m.HistorialPage })))
-const CocinaPage      = lazy(() => import('./pages/cocina/CocinaPage').then((m) => ({ default: m.CocinaPage })))
-const SelectorPage    = lazy(() => import('./pages/selector/SelectorPage').then((m) => ({ default: m.SelectorPage })))
+const MozoPanel         = lazy(() => import('./pages/mozo/MozoPanel').then((m) => ({ default: m.MozoPanel })))
+const MesasPage         = lazy(() => import('./pages/mozo/MesasPage').then((m) => ({ default: m.MesasPage })))
+const TomaPedidosPage   = lazy(() => import('./pages/mozo/TomaPedidosPage').then((m) => ({ default: m.TomaPedidosPage })))
+const PedidosPage       = lazy(() => import('./pages/mozo/PedidosPage').then((m) => ({ default: m.PedidosPage })))
+const HistorialPage     = lazy(() => import('./pages/mozo/HistorialPage').then((m) => ({ default: m.HistorialPage })))
+const CocinaPage        = lazy(() => import('./pages/cocina/CocinaPage').then((m) => ({ default: m.CocinaPage })))
+const SelectorPage      = lazy(() => import('./pages/selector/SelectorPage').then((m) => ({ default: m.SelectorPage })))
+const PagosMozo         = lazy(() => import('./pages/mozo/PagosMozo').then((m) => ({ default: m.PagosMozo })))
 
 function MozoLayout() {
   return (
@@ -39,6 +40,7 @@ export function App() {
           <Route element={<ProtectedRoute roles={['mozo', 'cocina', 'admin']} />}>
             <Route path="/selector" element={<SelectorPage />} />
             <Route path="/cocina"   element={<CocinaPage />} />
+            <Route path="/mozo/pagos" element={<PagosMozo />} />
 
             {/* Rutas del mozo — MozoLayout monta MozoNotifications una sola vez */}
             <Route element={<MozoLayout />}>

@@ -12,10 +12,11 @@ import {
   ChevronLeft,
   ChevronRight,
   LogOut,
-  Wallet,
+  ClipboardList,
   History,
   ShoppingBag,
   Shield as ShieldIcon,
+  CreditCard,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -37,6 +38,7 @@ const NAV_BY_ROL: Record<string, NavSection[]> = {
       items: [
         { to: '/admin/dashboard', label: 'Dashboard', Icon: LayoutDashboard },
         { to: '/admin/tables',    label: 'Mesas',     Icon: Grid2x2 },
+        { to: '/admin/pagos',     label: 'Caja',      Icon: CreditCard },
       ],
     },
     {
@@ -64,8 +66,9 @@ const NAV_BY_ROL: Record<string, NavSection[]> = {
       label: 'OPERACIÓN',
       items: [
         { to: '/admin/tables',        label: 'Mesas',            Icon: Grid2x2 },
+        { to: '/admin/pagos',         label: 'Caja',             Icon: CreditCard },
         { to: '/admin/toma-pedidos',  label: 'Toma de pedidos',  Icon: ShoppingBag },
-        { to: '/admin/pedidos',       label: 'Pedidos',          Icon: Wallet },
+        { to: '/admin/pedidos',       label: 'Pedidos',          Icon: ClipboardList },
         { to: '/admin/historial',     label: 'Historial',        Icon: History },
       ],
     },
@@ -83,7 +86,34 @@ const NAV_BY_ROL: Record<string, NavSection[]> = {
     },
   ],
 }
-NAV_BY_ROL['ROOT'] = NAV_BY_ROL['OWNER']
+NAV_BY_ROL['ROOT'] = [
+  {
+    label: 'OPERACIÓN',
+    items: [
+      { to: '/admin/dashboard', label: 'Dashboard', Icon: LayoutDashboard },
+      { to: '/admin/tables',    label: 'Mesas',     Icon: Grid2x2 },
+    ],
+  },
+  {
+    label: 'CATÁLOGO',
+    items: [
+      { to: '/admin/menu', label: 'Menú', Icon: UtensilsCrossed },
+    ],
+  },
+  {
+    label: 'PERSONAL',
+    items: [
+      { to: '/admin/mozos', label: 'Mozos', Icon: Users },
+    ],
+  },
+  {
+    label: 'ANÁLISIS',
+    items: [
+      { to: '/admin/reportes',  label: 'Reportes',  Icon: BarChart2 },
+      { to: '/admin/auditoria', label: 'Auditoría', Icon: ShieldIcon },
+    ],
+  },
+]
 
 const SECTION_TITLES: Record<string, string> = {
   '/admin/dashboard':     'Dashboard',
@@ -92,6 +122,7 @@ const SECTION_TITLES: Record<string, string> = {
   '/admin/reportes':      'Reportes',
   '/admin/auditoria':     'Auditoría',
   '/admin/mozos':         'Mozos',
+  '/admin/pagos':         'Caja',
   '/admin/pedidos':       'Pedidos',
   '/admin/historial':     'Historial',
   '/admin/toma-pedidos':  'Toma de pedidos',

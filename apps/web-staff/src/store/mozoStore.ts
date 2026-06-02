@@ -2,14 +2,18 @@ import { create } from 'zustand'
 import { TOKEN_KEY } from '@menyu/auth'
 import type { Pedido } from '@menyu/types'
 
-function restauranteIdFromJwt(): string | null {
+function nombresFromJwt(): { restauranteId: string | null; restauranteNombre: string | null; marcaNombre: string | null } {
   try {
     const token = localStorage.getItem(TOKEN_KEY)
-    if (!token) return null
-    const payload = JSON.parse(atob(token.split('.')[1])) as { restauranteId?: string }
-    return payload.restauranteId ?? null
+    if (!token) return { restauranteId: null, restauranteNombre: null, marcaNombre: null }
+    const payload = JSON.parse(atob(token.split('.')[1])) as { restauranteId?: string; restauranteNombre?: string; marcaNombre?: string }
+    return {
+      restauranteId:      payload.restauranteId      ?? null,
+      restauranteNombre:  payload.restauranteNombre  ?? null,
+      marcaNombre:        payload.marcaNombre         ?? null,
+    }
   } catch {
-    return null
+    return { restauranteId: null, restauranteNombre: null, marcaNombre: null }
   }
 }
 
@@ -26,6 +30,8 @@ const API = import.meta.env.VITE_API_URL ?? ''
 
 interface MozoStore {
   restauranteId: string | null
+  restauranteNombre: string | null
+  marcaNombre: string | null
   llamados: Llamado[]
   pedidosListos: Pedido[]
   setRestauranteId: (id: string) => void
@@ -35,8 +41,12 @@ interface MozoStore {
   marcarEntregado: (pedidoId: string, jwt: string) => Promise<void>
 }
 
+const _jwt = nombresFromJwt()
+
 export const useMozoStore = create<MozoStore>()((set) => ({
-  restauranteId: restauranteIdFromJwt(),
+  restauranteId:     _jwt.restauranteId,
+  restauranteNombre: _jwt.restauranteNombre,
+  marcaNombre:       _jwt.marcaNombre,
   llamados: [],
   pedidosListos: [],
 

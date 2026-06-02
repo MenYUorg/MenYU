@@ -10,7 +10,7 @@ import { ReportesPage } from './pages/admin/reportes/ReportesPage'
 import { MozosPage } from './pages/admin/mozos/MozosPage'
 import { GerenceMesasPage } from './pages/admin/gerente/GerenceMesasPage'
 import { PedidosPage } from './pages/admin/gerente/PedidosPage'
-import { HistorialPage } from './pages/admin/gerente/HistorialPage'
+import { HistorialSesionesPage } from './pages/admin/gerente/HistorialSesionesPage'
 import { TomaPedidosPage } from './pages/admin/gerente/TomaPedidosPage'
 import { AuditoriaPage } from './pages/admin/auditoria/AuditoriaPage'
 
@@ -62,7 +62,7 @@ export function App() {
               </RoleGuard>
             } />
             <Route path="/admin/pagos" element={
-              <RoleGuard roles={['OWNER', 'ROOT']}>
+              <RoleGuard roles={['OWNER', 'GERENTE']}>
                 <PagosPage />
               </RoleGuard>
             } />
@@ -80,7 +80,7 @@ export function App() {
             } />
             <Route path="/admin/historial" element={
               <RoleGuard roles={['GERENTE', 'ROOT']}>
-                <HistorialPage />
+                <HistorialSesionesPage />
               </RoleGuard>
             } />
             <Route path="/admin/toma-pedidos" element={

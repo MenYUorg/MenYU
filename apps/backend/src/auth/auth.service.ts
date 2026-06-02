@@ -19,6 +19,8 @@ export interface JwtPayload {
   tipo: UserTipo
   rol?: RolAdmin
   restauranteId?: string
+  restauranteNombre?: string
+  marcaNombre?: string
 }
 
 export interface TokenPair {
@@ -53,7 +55,14 @@ export class AuthService {
     }
 
     const { user, tipo } = resolved
-    return this.issueTokens(user.id, email, tipo, (user as any).rol, (user as any).nombre, (user as any).restauranteId)
+    let restauranteNombre: string | undefined
+    let marcaNombre: string | undefined
+    if (tipo === 'mozo' && (user as any).restauranteId) {
+      const nombres = await this.fetchRestauranteNombres((user as any).restauranteId as string)
+      restauranteNombre = nombres?.restauranteNombre
+      marcaNombre = nombres?.marcaNombre
+    }
+    return this.issueTokens(user.id, email, tipo, (user as any).rol, (user as any).nombre, (user as any).restauranteId, restauranteNombre, marcaNombre)
   }
 
   // ── Register (solo Cliente) ────────────────────────────
@@ -104,12 +113,22 @@ export class AuthService {
       throw new UnauthorizedException('Usuario no encontrado')
     }
 
+    let restauranteNombre: string | undefined
+    let marcaNombre: string | undefined
+    if (stored.userTipo === 'mozo' && (user as any).restauranteId) {
+      const nombres = await this.fetchRestauranteNombres((user as any).restauranteId as string)
+      restauranteNombre = nombres?.restauranteNombre
+      marcaNombre = nombres?.marcaNombre
+    }
     return this.issueTokens(
       stored.userId,
       (user as any).email,
       stored.userTipo as UserTipo,
       (user as any).rol,
       (user as any).nombre,
+      (user as any).restauranteId,
+      restauranteNombre,
+      marcaNombre,
     )
   }
 
@@ -203,6 +222,15 @@ export class AuthService {
 
   // ── Helpers ────────────────────────────────────────────
 
+  private async fetchRestauranteNombres(restauranteId: string): Promise<{ restauranteNombre: string; marcaNombre: string } | null> {
+    const r = await this.prisma.restaurante.findUnique({
+      where: { id: restauranteId },
+      select: { nombre: true, marca: { select: { nombre: true } } },
+    })
+    if (!r) return null
+    return { restauranteNombre: r.nombre, marcaNombre: r.marca?.nombre ?? '' }
+  }
+
   private async issueTokens(
     userId: string,
     email: string | undefined,
@@ -210,8 +238,10 @@ export class AuthService {
     rol?: RolAdmin,
     nombre?: string,
     restauranteId?: string,
+    restauranteNombre?: string,
+    marcaNombre?: string,
   ): Promise<TokenPair> {
-    const payload: JwtPayload = { sub: userId, email, nombre, tipo, rol, restauranteId }
+    const payload: JwtPayload = { sub: userId, email, nombre, tipo, rol, restauranteId, restauranteNombre, marcaNombre }
 
     const accessToken = this.jwt.sign(payload)
 

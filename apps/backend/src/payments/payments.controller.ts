@@ -72,7 +72,7 @@ export class PaymentsController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Confirmar pago en efectivo y cerrar sesión' })
   @ApiResponse({ status: 200, description: 'Sesión cerrada' })
-  confirmarEfectivo(@Body() body: { sesionId: string }) {
-    return this.payments.confirmarEfectivo(body.sesionId)
+  confirmarEfectivo(@Body() body: { sesionId: string; mozoId?: string }) {
+    return this.payments.confirmarEfectivo(body.sesionId, body.mozoId)
   }
 }

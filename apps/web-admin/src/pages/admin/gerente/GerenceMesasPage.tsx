@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   AlertTriangle, Bell, ClipboardList, Clock, CreditCard,
   DollarSign, DoorOpen, Printer, QrCode, Users, X,
@@ -339,6 +339,7 @@ function PedidoCard({ pedido }: { pedido: SesionActiva['pedidos'][0] }) {
 // ── Main page ──────────────────────────────────────────────────────────────────
 export function GerenceMesasPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const { selectedRestauranteId } = useContextStore()
 
   const [mesas,            setMesas]            = useState<MesaConQr[]>([])
@@ -486,6 +487,13 @@ export function GerenceMesasPage() {
       setRegenerandoQr(false)
     }
   }
+
+  useEffect(() => {
+    const mesaIdParam = searchParams.get('mesaId')
+    if (!mesaIdParam || mesas.length === 0 || mesaSeleccionada) return
+    const mesa = mesas.find((m) => m.id === mesaIdParam)
+    if (mesa) setMesaSeleccionada(mesa)
+  }, [mesas, searchParams]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const totalOcupadas  = useMemo(() => mesas.filter((m) => m.estado === 'ocupada').length, [mesas])
   const totalLlamados  = useMemo(() => [...sesiones.values()].filter((s) => s.llamadoActivo).length, [sesiones])

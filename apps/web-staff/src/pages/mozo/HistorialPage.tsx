@@ -1,24 +1,15 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronDown, ChevronLeft, ChevronUp, Search, X } from 'lucide-react'
+import { useAuth } from '@menyu/auth'
+import { Clock, ClipboardList, DollarSign, ChevronRight, X, ChevronDown, ChevronUp, Edit, XCircle, History } from 'lucide-react'
 import { api } from '../../services/api'
-import type { PedidoRico, EditarItemBody } from '../../services/api'
+import type { SesionHistorial } from '../../services/api'
 import { useMozoStore } from '../../store/mozoStore'
+import { PageHeader } from '../../components/PageHeader'
 
-// ── Palette ───────────────────────────────────────────────────────────────────
-const C = {
-  navy:      '#2D3561',
-  orange:    '#E8563A',
-  green:     '#16a34a',
-  border:    '#e5e7eb',
-  bgLight:   '#f9fafb',
-  textMuted: '#6b7280',
-  red:       '#dc2626',
-  white:     '#ffffff',
-} as const
-
-// ── Period helpers ─────────────────────────────────────────────────────────────
+/* ── types ───────────────────────────────────────────────────────────────── */
 type Period = 'hoy' | 'ayer' | 'semana' | 'mes'
+type SesionPedido = SesionHistorial['pedidos'][number]
 
 const PERIOD_LABELS: Record<Period, string> = {
   hoy:    'Hoy',
@@ -27,6 +18,7 @@ const PERIOD_LABELS: Record<Period, string> = {
   mes:    'Último mes',
 }
 
+/* ── helpers ─────────────────────────────────────────────────────────────── */
 const toLocalDateStr = (date: Date): string => {
   const y = date.getFullYear()
   const m = String(date.getMonth() + 1).padStart(2, '0')
@@ -34,421 +26,641 @@ const toLocalDateStr = (date: Date): string => {
   return `${y}-${m}-${d}`
 }
 
-const getPeriodBounds = (period: Period) => {
+const getPeriodBounds = (period: Period): { desde: string; hasta: string } => {
   const now = new Date()
   const hoy = toLocalDateStr(now)
   const offset = (days: number) => {
-    const d = new Date(now); d.setDate(d.getDate() - days); return toLocalDateStr(d)
+    const d = new Date(now)
+    d.setDate(d.getDate() - days)
+    return toLocalDateStr(d)
   }
-  let from: string, to = hoy
   switch (period) {
-    case 'ayer':   from = offset(1); to = offset(1); break
-    case 'semana': from = offset(6); break
-    case 'mes':    from = offset(29); break
-    default:       from = hoy
+    case 'ayer':   return { desde: offset(1), hasta: offset(1) }
+    case 'semana': return { desde: offset(6), hasta: hoy }
+    case 'mes':    return { desde: offset(29), hasta: hoy }
+    default:       return { desde: hoy, hasta: hoy }
   }
-  return { from: new Date(from + 'T00:00:00'), to: new Date(to + 'T23:59:59') }
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-function cantActual(item: PedidoRico['items'][number]): number {
-  return item.cantidadEditada ?? item.cantidad
+function calcDuracion(iniciadaEn: string, cerradaEn: string): string {
+  const totalMin = Math.floor(
+    (new Date(cerradaEn).getTime() - new Date(iniciadaEn).getTime()) / 60000,
+  )
+  if (totalMin < 60) return `${totalMin} min`
+  const h = Math.floor(totalMin / 60)
+  const m = totalMin % 60
+  return m > 0 ? `${h}h ${m}m` : `${h}h`
 }
 
-function countWords(text: string): number {
-  return text.trim() === '' ? 0 : text.trim().split(/\s+/).length
+function fmtTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
+}
+
+function fmtDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })
+}
+
+function isToday(iso: string): boolean {
+  return new Date(iso).toDateString() === new Date().toDateString()
 }
 
 function shortId(id: string): string {
-  return '#' + id.slice(0, 8).toUpperCase()
+  return '#' + id.slice(0, 4).toUpperCase()
 }
 
-function fmt(dateStr: string): string {
-  return new Date(dateStr).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
+function getInitials(name?: string): string {
+  if (!name) return '?'
+  return name.split(' ').slice(0, 2).map((w) => w[0]).join('').toUpperCase()
 }
 
-function fmtDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })
-}
-
-// ── EdicionItem ───────────────────────────────────────────────────────────────
-interface EdicionAdmin {
-  id: string
-  justificacion: string
-  creadoEn: string
-  editor: { nombre: string; tipo: string }
-  itemsEliminados: { id: string; itemNombre: string; cantidadAntes: number; cantidadDespues: number; precioUnitario: number }[]
-}
-
-// ── StepBtn ───────────────────────────────────────────────────────────────────
-function StepBtn({ label, onClick, disabled }: { label: string; onClick: () => void; disabled: boolean }) {
+/* ── BadgeEstado ─────────────────────────────────────────────────────────── */
+function BadgeEstado({ estado }: { estado: string }) {
+  const MAP: Record<string, { bg: string; color: string; label: string }> = {
+    entregado:      { bg: '#f3f4f6', color: '#6b7280', label: 'Entregado' },
+    anulado:        { bg: '#fef2f2', color: '#dc2626', label: 'Anulado' },
+    pendiente:      { bg: '#FFF7ED', color: '#D97706', label: 'Pendiente' },
+    en_preparacion: { bg: '#EFF6FF', color: '#2563EB', label: 'En preparación' },
+    listo:          { bg: '#ECFDF5', color: '#059669', label: 'Listo' },
+  }
+  const s = MAP[estado] ?? { bg: '#f3f4f6', color: '#6b7280', label: estado }
   return (
-    <button
-      onClick={onClick} disabled={disabled}
-      style={{ width: 28, height: 28, borderRadius: 6, border: '1px solid #D1D5DB', background: disabled ? '#F9FAFB' : 'white', color: disabled ? '#D1D5DB' : '#374151', fontFamily: 'Montserrat, sans-serif', fontWeight: 700, fontSize: 16, lineHeight: 1, cursor: disabled ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+    <span
+      style={{
+        background:   s.bg,
+        color:        s.color,
+        fontFamily:   'Inter, sans-serif',
+        fontWeight:   600,
+        fontSize:     11,
+        padding:      '3px 8px',
+        borderRadius: 20,
+        flexShrink:   0,
+      }}
     >
-      {label}
-    </button>
+      {s.label}
+    </span>
   )
 }
 
-// ── EditModal ─────────────────────────────────────────────────────────────────
-function EditModal({ pedido, onClose, onDone }: { pedido: PedidoRico; onClose: () => void; onDone: () => void }) {
-  const isPagado = pedido.pago?.estado === 'aprobado'
-  const [quantities,    setQuantities]    = useState<Record<string, number>>(() => Object.fromEntries(pedido.items.map((i) => [i.id, cantActual(i)])))
-  const [justificacion, setJustificacion] = useState('')
-  const [submitting,    setSubmitting]    = useState(false)
-  const [error,         setError]         = useState<string | null>(null)
-
-  const words     = countWords(justificacion)
-  const ediciones = pedido.items.filter((item) => quantities[item.id] !== cantActual(item)).map((item) => ({ pedidoItemId: item.id, cantidadNueva: quantities[item.id] }))
-  const hasChanges            = ediciones.length > 0
-  const todosAnuladosTrasEdit = pedido.items.every((item) => quantities[item.id] === 0)
-  const canSubmit             = hasChanges && justificacion.trim().length > 0 && words <= 50 && !submitting && !isPagado
-
-  function setQty(id: string, val: number) { setQuantities((prev) => ({ ...prev, [id]: val })) }
-
-  async function handleSubmit() {
-    if (!canSubmit) return
-    setSubmitting(true); setError(null)
-    try {
-      const body: EditarItemBody = { justificacion: justificacion.trim(), ediciones }
-      await api.pedidos.editarItem(pedido.id, body)
-      onDone()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Error al editar pedido')
-      setSubmitting(false)
-    }
-  }
-
-  return (
-    <div
-      style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div style={{ background: 'white', borderRadius: 12, width: '100%', maxWidth: 500, padding: 24, boxShadow: '0 20px 60px rgba(0,0,0,0.2)', maxHeight: '90vh', overflowY: 'auto' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-          <h3 style={{ fontFamily: 'Montserrat, sans-serif', fontWeight: 700, fontSize: 16, color: '#2D3561', margin: 0 }}>Editar {shortId(pedido.id)}</h3>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', padding: 4, display: 'flex' }}><X size={18} /></button>
-        </div>
-
-        {isPagado ? (
-          <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#DC2626', margin: 0 }}>Este pedido ya fue pagado y no puede editarse.</p>
-        ) : (
-          <>
-            <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, color: '#6B7280', margin: '0 0 16px' }}>Ajustá la cantidad de cada ítem.</p>
-            <div style={{ marginBottom: 16 }}>
-              {pedido.items.map((item) => {
-                const actual  = cantActual(item)
-                const current = quantities[item.id]
-                const changed = current !== actual
-                const anulado = current === 0
-                return (
-                  <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 10px', borderRadius: 8, background: changed ? (anulado ? '#FEF2F0' : '#FFF7ED') : 'transparent', marginBottom: 4 }}>
-                    <div style={{ flex: 1 }}>
-                      <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#374151' }}>{item.item.nombre}</span>
-                      {anulado && <div><span style={{ fontSize: 11, fontWeight: 600, color: '#DC2626' }}>Ítem anulado</span></div>}
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <StepBtn label="−" onClick={() => setQty(item.id, Math.max(0, current - 1))} disabled={current === 0} />
-                      <span style={{ fontFamily: 'Montserrat, sans-serif', fontWeight: 700, fontSize: 14, color: anulado ? '#DC2626' : '#2D3561', minWidth: 20, textAlign: 'center' }}>{current}</span>
-                      <StepBtn label="+" onClick={() => setQty(item.id, Math.min(actual, current + 1))} disabled={current === actual} />
-                    </div>
-                    <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, color: '#6B7280', minWidth: 56, textAlign: 'right', flexShrink: 0 }}>
-                      ${(current * Number(item.precioUnitario)).toFixed(2)}
-                    </span>
-                  </div>
-                )
-              })}
-            </div>
-
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, fontWeight: 600, color: '#374151' }}>Justificación</label>
-                <span style={{ fontSize: 11, color: words > 50 ? '#E8563A' : '#9CA3AF' }}>{words}/50 palabras</span>
-              </div>
-              <textarea
-                value={justificacion} onChange={(e) => setJustificacion(e.target.value)} rows={3}
-                placeholder="Describí el motivo de la edición…"
-                style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: `1px solid ${words > 50 ? '#E8563A' : '#D1D5DB'}`, fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#374151', resize: 'vertical', outline: 'none', boxSizing: 'border-box' }}
-              />
-            </div>
-
-            {hasChanges && todosAnuladosTrasEdit && (
-              <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, color: '#92400E', background: '#FEF3C7', border: '1px solid #FCD34D', borderRadius: 6, padding: '8px 12px', margin: '0 0 12px' }}>
-                Esto anulará el pedido completo.
-              </p>
-            )}
-            {error && <p style={{ fontSize: 12, color: '#E8563A', margin: '0 0 12px' }}>{error}</p>}
-
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-              <button onClick={onClose} style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #D1D5DB', background: 'white', fontSize: 13, color: '#374151', cursor: 'pointer' }}>Cancelar</button>
-              <button onClick={handleSubmit} disabled={!canSubmit} style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: canSubmit ? '#E8563A' : '#D1D5DB', fontSize: 13, fontWeight: 600, color: canSubmit ? 'white' : '#9CA3AF', cursor: canSubmit ? 'pointer' : 'not-allowed' }}>
-                {submitting ? 'Guardando…' : 'Guardar edición'}
-              </button>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  )
-}
-
-// ── PedidoCard ────────────────────────────────────────────────────────────────
-function PedidoCard({ pedido, onEdit }: { pedido: PedidoRico; onEdit: (p: PedidoRico) => void }) {
-  const [expanded,  setExpanded]  = useState(false)
-  const [editions,  setEditions]  = useState<EdicionAdmin[] | null>(null)
-  const [loadingEd, setLoadingEd] = useState(false)
-  const isPagado = pedido.pago?.estado === 'aprobado'
-
-  async function handleToggle() {
-    if (!expanded && editions === null) {
-      setLoadingEd(true)
-      try {
-        // GET /pedidos/:id/ediciones requiere rol admin — mozos pueden recibir 403
-        const res = await fetch(`${import.meta.env.VITE_API_URL ?? ''}/pedidos/${pedido.id}/ediciones`, {
-          headers: { Authorization: `Bearer ${localStorage.getItem('access_token') ?? ''}` },
-        })
-        if (res.ok) {
-          setEditions((await res.json()) as EdicionAdmin[])
-        } else {
-          setEditions([])
-        }
-      } catch {
-        setEditions([])
-      } finally {
-        setLoadingEd(false)
-      }
-    }
-    setExpanded((p) => !p)
-  }
-
+/* ── PedidoEnSesion ──────────────────────────────────────────────────────── */
+function PedidoEnSesion({ pedido }: { pedido: SesionPedido }) {
+  const [showEdiciones, setShowEdiciones] = useState(false)
   const isAnulado = pedido.estado === 'anulado'
-  const hasEdits  = pedido.items.some((i) => i.cantidadEditada !== null)
+
+  const borderLeft = pedido.tieneEdiciones
+    ? '3px solid #E8563A'
+    : isAnulado
+      ? '3px solid #dc2626'
+      : '3px solid transparent'
 
   return (
-    <div style={{ background: 'white', borderRadius: 10, border: '1px solid #e5e7eb', overflow: 'hidden', flexShrink: 0 }}>
+    <div style={{ background: '#f9fafb', borderRadius: 10, padding: 14, borderLeft }}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', padding: '12px 16px', borderBottom: '1px solid #f3f4f6', gap: 12 }}>
-        <div style={{ width: 36, height: 36, borderRadius: 8, background: '#F3F4F6', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-          <span style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 13, color: '#2D3561' }}>{pedido.mesa.numero}</span>
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <span style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 13, color: '#2D3561' }}>Mesa {pedido.mesa.numero}</span>
-            <span style={{ fontFamily: 'Inter,sans-serif', fontSize: 11, color: '#9CA3AF' }}>{shortId(pedido.id)}</span>
-          </div>
-          <span style={{ fontFamily: 'Inter,sans-serif', fontSize: 11, color: '#9CA3AF' }}>{fmtDate(pedido.updatedAt)} {fmt(pedido.updatedAt)}</span>
-        </div>
-        {(() => {
-          const label  = isAnulado ? 'Anulado' : hasEdits ? 'Entregado · Editado' : 'Entregado'
-          const bg     = isAnulado ? '#fef2f2' : hasEdits ? '#FDE5DF' : '#f3f4f6'
-          const color  = isAnulado ? '#dc2626' : hasEdits ? '#E8563A' : '#6b7280'
-          const border = isAnulado ? '#fecaca' : hasEdits ? '#fca5a5' : '#e5e7eb'
-          return <span style={{ background: bg, color, border: `1px solid ${border}`, fontFamily: 'Inter,sans-serif', fontWeight: 600, fontSize: 11, padding: '3px 8px', borderRadius: 20, flexShrink: 0 }}>{label}</span>
-        })()}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <span style={{ fontFamily: 'Montserrat, sans-serif', fontWeight: 700, fontSize: 13, color: '#2D3561', flex: 1 }}>
+          {shortId(pedido.id)}
+        </span>
+        <BadgeEstado estado={pedido.estado} />
+        {pedido.tieneEdiciones && !isAnulado && (
+          <span style={{ background: '#FDE5DF', color: '#E8563A', fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: 11, padding: '3px 8px', borderRadius: 20 }}>
+            Editado
+          </span>
+        )}
+        {isAnulado && (
+          <span style={{ background: '#fef2f2', color: '#dc2626', fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: 11, padding: '3px 8px', borderRadius: 20 }}>
+            Anulado
+          </span>
+        )}
       </div>
 
       {/* Items */}
-      <div style={{ padding: '10px 16px' }}>
+      <div style={{ marginTop: 8 }}>
         {pedido.items.map((item) => {
-          const cantOrig  = item.cantidad
-          const cantEdit  = item.cantidadEditada ?? cantOrig
-          const cantQuita = cantOrig - cantEdit
+          const cantidadOriginal = item.cantidad
+          const cantidadEditada  = item.cantidadEditada ?? cantidadOriginal
+          const cantidadQuitada  = cantidadOriginal - cantidadEditada
+
           return (
-            <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '4px 0' }}>
-              <div>
-                {cantEdit === 0 ? (
-                  <span style={{ fontFamily: 'Inter,sans-serif', fontSize: 13, color: '#DC2626', textDecoration: 'line-through' }}>{cantOrig}× {item.item.nombre}</span>
-                ) : cantQuita > 0 ? (
-                  <>
-                    <span style={{ fontFamily: 'Inter,sans-serif', fontSize: 13, color: '#374151' }}>{cantEdit}× {item.item.nombre}</span>
-                    <div><span style={{ fontSize: 12, color: '#DC2626', textDecoration: 'line-through' }}>{cantQuita}× {item.item.nombre}</span></div>
-                  </>
-                ) : (
-                  <span style={{ fontFamily: 'Inter,sans-serif', fontSize: 13, color: '#374151' }}>{cantOrig}× {item.item.nombre}</span>
-                )}
-              </div>
-              <span style={{ fontFamily: 'Inter,sans-serif', fontSize: 12, color: '#6B7280', marginLeft: 8 }}>
-                ${(cantActual(item) * Number(item.precioUnitario)).toFixed(2)}
-              </span>
+            <div key={item.id} style={{ padding: '3px 0' }}>
+              {cantidadEditada === 0 ? (
+                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#DC2626', textDecoration: 'line-through' }}>
+                  {cantidadOriginal}× {item.itemNombre}
+                </span>
+              ) : cantidadQuitada > 0 ? (
+                <>
+                  <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#374151' }}>
+                    {cantidadEditada}× {item.itemNombre}
+                  </span>
+                  <div>
+                    <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, color: '#DC2626', textDecoration: 'line-through' }}>
+                      {cantidadQuitada}× {item.itemNombre}
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#374151' }}>
+                  {cantidadOriginal}× {item.itemNombre}
+                </span>
+              )}
+
+              {cantidadEditada > 0 && item.mods.length > 0 && (
+                <div style={{ marginTop: 2 }}>
+                  {item.mods.map((mod, i) => (
+                    <div
+                      key={i}
+                      style={{
+                        fontFamily: 'Inter, sans-serif',
+                        fontSize:   11,
+                        color:      mod.accion.toLowerCase() === 'quitar' ? '#DC2626' : '#059669',
+                        marginTop:  2,
+                      }}
+                    >
+                      {mod.accion.toLowerCase() === 'quitar'
+                        ? `sin ${mod.ingredienteNombre}`
+                        : `+ ${mod.ingredienteNombre}`}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )
         })}
       </div>
 
       {/* Footer */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', borderTop: '1px solid #f3f4f6', gap: 8 }}>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <button onClick={handleToggle} style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: '1px solid #e5e7eb', borderRadius: 6, padding: '5px 10px', fontFamily: 'Inter,sans-serif', fontSize: 12, color: '#6B7280', cursor: 'pointer' }}>
-            {expanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-            {loadingEd ? 'Cargando…' : 'Ver ediciones'}
-          </button>
-          {!isPagado && !isAnulado && (
-            <button onClick={() => onEdit(pedido)} style={{ background: 'none', border: '1px solid #e5e7eb', borderRadius: 6, padding: '5px 10px', fontFamily: 'Inter,sans-serif', fontSize: 12, color: '#E8563A', cursor: 'pointer' }}>
-              Editar
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }}>
+        <div>
+          {pedido.tieneEdiciones && (
+            <button
+              onClick={() => setShowEdiciones((v) => !v)}
+              style={{
+                display:      'flex',
+                alignItems:   'center',
+                gap:          4,
+                background:   'none',
+                border:       '1px solid #FECACA',
+                borderRadius: 6,
+                padding:      '5px 10px',
+                fontFamily:   'Inter, sans-serif',
+                fontSize:     12,
+                color:        '#E8563A',
+                cursor:       'pointer',
+              }}
+            >
+              {showEdiciones ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+              Ver ediciones ({pedido.ediciones.length})
             </button>
           )}
-          {isPagado && (
-            <span style={{ fontFamily: 'Inter,sans-serif', fontSize: 11, fontWeight: 600, color: '#DC2626', padding: '5px 10px', border: '1px solid #FECACA', borderRadius: 6, background: '#FEF2F2' }}>Ya pagado</span>
-          )}
         </div>
-        <div style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 14, color: '#2D3561' }}>
-          ${pedido.items.reduce((s, i) => s + cantActual(i) * Number(i.precioUnitario), 0).toFixed(2)}
+        <div style={{ fontFamily: 'Montserrat, sans-serif', fontWeight: 700, fontSize: 14, color: '#2D3561' }}>
+          ${pedido.totalPedido.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
         </div>
       </div>
 
-      {/* Ediciones */}
-      {expanded && (
-        <div style={{ borderTop: '1px solid #f3f4f6', background: '#F9FAFB', padding: '12px 16px' }}>
-          {loadingEd ? (
-            <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 12, color: '#9CA3AF', margin: 0 }}>Cargando…</p>
-          ) : editions === null || editions.length === 0 ? (
-            <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 12, color: '#9CA3AF', margin: 0 }}>Sin ediciones registradas.</p>
-          ) : (
-            editions.map((ed, idx) => (
-              <div key={ed.id} style={{ marginBottom: idx < editions.length - 1 ? 12 : 0, paddingBottom: idx < editions.length - 1 ? 12 : 0, borderBottom: idx < editions.length - 1 ? '1px solid #e5e7eb' : 'none' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                  <span style={{ fontFamily: 'Inter,sans-serif', fontSize: 12, fontWeight: 600, color: '#374151' }}>{ed.editor.nombre}</span>
-                  <span style={{ fontFamily: 'Inter,sans-serif', fontSize: 11, color: '#9CA3AF' }}>{fmtDate(ed.creadoEn)} {fmt(ed.creadoEn)}</span>
-                </div>
-                <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 12, color: '#6B7280', margin: '0 0 8px', fontStyle: 'italic' }}>"{ed.justificacion}"</p>
-                {ed.itemsEliminados.map((ei) => (
-                  <div key={ei.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                    <span style={{ fontFamily: 'Inter,sans-serif', fontSize: 12, color: '#374151' }}>{ei.itemNombre}: {ei.cantidadAntes} → {ei.cantidadDespues}</span>
-                    <span style={{ fontFamily: 'Inter,sans-serif', fontSize: 11, color: '#DC2626', marginLeft: 'auto' }}>
-                      −${((ei.cantidadAntes - ei.cantidadDespues) * ei.precioUnitario).toFixed(2)}
-                    </span>
-                  </div>
-                ))}
+      {/* Ediciones panel (solo lectura) */}
+      {showEdiciones && pedido.ediciones.length > 0 && (
+        <div style={{ marginTop: 8 }}>
+          {pedido.ediciones.map((ed) => (
+            <div
+              key={ed.id}
+              style={{ borderLeft: '3px solid #E8563A', background: 'white', borderRadius: 6, padding: 10, marginTop: 8 }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, fontWeight: 600, color: '#374151' }}>
+                  {ed.editor.nombre} · {ed.editor.tipo}
+                </span>
+                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 11, color: '#9CA3AF' }}>
+                  {fmtDate(ed.creadoEn)} {fmtTime(ed.creadoEn)}
+                </span>
               </div>
-            ))
-          )}
+              <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, color: '#6B7280', margin: '0 0 8px', fontStyle: 'italic' }}>
+                "{ed.justificacion}"
+              </p>
+              <div>
+                {ed.itemsEliminados.map((ei, idx) => {
+                  const diferencia = (ei.cantidadAntes - ei.cantidadDespues) * ei.precioUnitario
+                  return (
+                    <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                      <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, color: '#374151' }}>
+                        {ei.itemNombre}: {ei.cantidadAntes} → {ei.cantidadDespues}
+                      </span>
+                      {ei.esAnulacion && (
+                        <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 11, fontWeight: 600, color: '#DC2626' }}>
+                          anulado
+                        </span>
+                      )}
+                      <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 11, color: '#DC2626', marginLeft: 'auto' }}>
+                        −${diferencia.toFixed(2)}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>
   )
 }
 
-// ── Main page ─────────────────────────────────────────────────────────────────
+/* ── SesionDetalleModal ──────────────────────────────────────────────────── */
+function SesionDetalleModal({
+  sesion,
+  onClose,
+}: {
+  sesion: SesionHistorial
+  onClose: () => void
+}) {
+  const duracion = calcDuracion(sesion.iniciadaEn, sesion.cerradaEn)
+
+  return (
+    <div
+      style={{
+        position:       'fixed',
+        inset:          0,
+        zIndex:         200,
+        background:     'rgba(45,53,97,0.55)',
+        display:        'flex',
+        alignItems:     'center',
+        justifyContent: 'center',
+        padding:        20,
+      }}
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div
+        style={{
+          background:    'white',
+          borderRadius:  16,
+          width:         '100%',
+          maxWidth:      600,
+          maxHeight:     '85vh',
+          display:       'flex',
+          flexDirection: 'column',
+          overflow:      'hidden',
+          boxShadow:     '0 24px 60px rgba(31,35,51,0.30)',
+        }}
+      >
+        {/* Fixed header */}
+        <div
+          style={{
+            padding:        '20px 24px',
+            borderBottom:   '1px solid #e5e7eb',
+            display:        'flex',
+            alignItems:     'center',
+            justifyContent: 'space-between',
+            flexShrink:     0,
+          }}
+        >
+          <div>
+            <div style={{ fontFamily: 'Montserrat, sans-serif', fontWeight: 700, fontSize: 18, color: '#2D3561' }}>
+              Mesa {sesion.mesaNumero}
+            </div>
+            <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#6b7280', marginTop: 2 }}>
+              {fmtTime(sesion.iniciadaEn)} → {fmtTime(sesion.cerradaEn)} · {duracion} · ${sesion.totalSesion.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', padding: 4, display: 'flex', flexShrink: 0 }}
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Scrollable body */}
+        <div
+          style={{
+            overflowY:     'auto',
+            padding:       '20px 24px',
+            display:       'flex',
+            flexDirection: 'column',
+            gap:           16,
+          }}
+        >
+          {sesion.pedidos.length === 0 ? (
+            <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#9CA3AF', textAlign: 'center', padding: '16px 0' }}>
+              Sin pedidos registrados.
+            </p>
+          ) : (
+            sesion.pedidos.map((p) => (
+              <PedidoEnSesion key={p.id} pedido={p} />
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ── SesionCard ──────────────────────────────────────────────────────────── */
+function SesionCard({
+  sesion,
+  onClick,
+}: {
+  sesion: SesionHistorial
+  onClick: () => void
+}) {
+  const [hovered, setHovered] = useState(false)
+  const [pressed, setPressed] = useState(false)
+
+  const duracion      = calcDuracion(sesion.iniciadaEn, sesion.cerradaEn)
+  const mostrarFecha  = !isToday(sesion.cerradaEn)
+  const tieneAnulados = sesion.pedidos.some((p) => p.estado === 'anulado')
+  const tieneEditados = sesion.pedidos.some((p) => p.tieneEdiciones)
+
+  return (
+    <div
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => { setHovered(false); setPressed(false) }}
+      onMouseDown={() => setPressed(true)}
+      onMouseUp={() => setPressed(false)}
+      style={{
+        background:    'white',
+        border:        `1px solid ${hovered ? '#F6C4B8' : '#e5e7eb'}`,
+        borderRadius:  12,
+        padding:       16,
+        cursor:        'pointer',
+        display:       'flex',
+        alignItems:    'center',
+        gap:           14,
+        boxShadow:     hovered ? '0 2px 12px rgba(0,0,0,0.06)' : 'none',
+        transform:     pressed ? 'translateY(1px)' : 'none',
+        transition:    'border-color 0.2s, box-shadow 0.2s, transform 0.08s',
+      }}
+    >
+      {/* Table chip */}
+      <div
+        style={{
+          width:          50,
+          height:         50,
+          borderRadius:   12,
+          background:     '#EEF0F8',
+          display:        'flex',
+          flexDirection:  'column',
+          alignItems:     'center',
+          justifyContent: 'center',
+          flexShrink:     0,
+          gap:            1,
+        }}
+      >
+        <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 8, fontWeight: 600, color: '#2D3561', letterSpacing: '0.1em', textTransform: 'uppercase', lineHeight: 1 }}>
+          MESA
+        </span>
+        <span style={{ fontFamily: 'Montserrat, sans-serif', fontWeight: 800, fontSize: 21, color: '#2D3561', lineHeight: 1 }}>
+          {sesion.mesaNumero}
+        </span>
+      </div>
+
+      {/* Info */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        {/* Metrics */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#6b7280' }}>
+            <Clock size={13} color="#9ca3af" />
+            {duracion}
+          </span>
+          <span style={{ color: '#d1d5db', fontSize: 12 }}>·</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#6b7280' }}>
+            <ClipboardList size={13} color="#9ca3af" />
+            {sesion.cantidadPedidos} {sesion.cantidadPedidos === 1 ? 'pedido' : 'pedidos'}
+          </span>
+          <span style={{ color: '#d1d5db', fontSize: 12 }}>·</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#6b7280' }}>
+            <DollarSign size={13} color="#9ca3af" />
+            ${sesion.totalSesion.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+          </span>
+        </div>
+
+        {/* Badges */}
+        {(tieneAnulados || tieneEditados) && (
+          <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+            {tieneAnulados && (
+              <span style={{ display: 'flex', alignItems: 'center', gap: 5, background: '#fef2f2', color: '#dc2626', fontFamily: 'Inter, sans-serif', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 999 }}>
+                <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: '#dc2626', flexShrink: 0 }} />
+                con anulaciones
+              </span>
+            )}
+            {tieneEditados && (
+              <span style={{ display: 'flex', alignItems: 'center', gap: 5, background: '#FDE5DF', color: '#E8563A', fontFamily: 'Inter, sans-serif', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 999 }}>
+                <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: '#E8563A', flexShrink: 0 }} />
+                con ediciones
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Right */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+        <div style={{ textAlign: 'right' }}>
+          {mostrarFecha && (
+            <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, color: '#9ca3af' }}>
+              {fmtDate(sesion.cerradaEn)}
+            </div>
+          )}
+          <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, color: '#9ca3af' }}>
+            {fmtTime(sesion.cerradaEn)}
+          </div>
+        </div>
+        <ChevronRight size={16} color={hovered ? '#F6C4B8' : '#d1d5db'} />
+      </div>
+    </div>
+  )
+}
+
+/* ── main page ───────────────────────────────────────────────────────────── */
 export function HistorialPage() {
-  const navigate = useNavigate()
-  const { restauranteId } = useMozoStore()
-  const [pedidos,       setPedidos]       = useState<PedidoRico[]>([])
-  const [loading,       setLoading]       = useState(false)
-  const [period,        setPeriod]        = useState<Period>('hoy')
-  const [search,        setSearch]        = useState('')
-  const [editingPedido, setEditingPedido] = useState<PedidoRico | null>(null)
+  const navigate            = useNavigate()
+  const { user }            = useAuth()
+  const { restauranteId }   = useMozoStore()
+  const nombreMozo          = user?.nombre ?? user?.email ?? 'Mozo'
+
+  const [sesiones, setSesiones]                     = useState<SesionHistorial[]>([])
+  const [loading, setLoading]                       = useState(false)
+  const [period, setPeriod]                         = useState<Period>('hoy')
+  const [search, setSearch]                         = useState('')
+  const [searchFocused, setSearchFocused]           = useState(false)
+  const [sesionSeleccionada, setSesionSeleccionada] = useState<SesionHistorial | null>(null)
+
+  const { desde, hasta } = useMemo(() => getPeriodBounds(period), [period])
 
   const load = useCallback(async () => {
     if (!restauranteId) return
     setLoading(true)
     try {
-      const [entregados, anulados] = await Promise.all([
-        api.pedidos.getByRestaurante(restauranteId, { estado: 'entregado' }),
-        api.pedidos.getByRestaurante(restauranteId, { estado: 'anulado' }),
-      ])
-      setPedidos([...entregados, ...anulados].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()))
+      const data = await api.sesiones.historial(restauranteId, desde, hasta)
+      setSesiones(data)
     } catch {
-      // silencioso
+      setSesiones([])
     } finally {
       setLoading(false)
     }
-  }, [restauranteId])
+  }, [restauranteId, desde, hasta])
 
-  useEffect(() => { void load() }, [load])
-
-  const filteredByPeriod = useMemo(() => {
-    const { from, to } = getPeriodBounds(period)
-    return pedidos.filter((p) => {
-      const t = new Date(p.updatedAt)
-      return t >= from && t <= to
-    })
-  }, [pedidos, period])
+  useEffect(() => {
+    void load()
+  }, [load])
 
   const filtered = useMemo(() => {
-    return filteredByPeriod.filter((p) => {
-      if (!search.trim()) return true
-      return p.mesa.numero.toLowerCase().includes(search.trim().toLowerCase())
-    })
-  }, [filteredByPeriod, search])
-
-  const pedidoCount  = filteredByPeriod.length
-  const editadoCount = filteredByPeriod.filter((p) => p.items.some((i) => i.cantidadEditada !== null)).length
-  const anuladoCount = filteredByPeriod.filter((p) => p.estado === 'anulado').length
-
-  function handleEditDone() {
-    setEditingPedido(null)
-    void load()
-  }
+    if (!search.trim()) return sesiones
+    const q = search.trim().toLowerCase()
+    return sesiones.filter((s) => s.mesaNumero.toLowerCase().includes(q))
+  }, [sesiones, search])
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
-      {/* Header */}
-      <header style={{ background: C.navy, height: 56, display: 'flex', alignItems: 'center', padding: '0 20px', gap: 12, flexShrink: 0 }}>
-        <button onClick={() => navigate('/mozo')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'white', display: 'flex', alignItems: 'center', gap: 6, fontFamily: 'Inter,sans-serif', fontSize: 13 }}>
-          <ChevronLeft size={16} /> Panel
-        </button>
-        <span style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 18, color: 'white' }}>Historial</span>
-      </header>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: '#F6F7F9' }}>
+      <PageHeader
+        title="Historial de sesiones"
+        icon={<History size={18} />}
+        onBack={() => navigate('/mozo')}
+        userName={nombreMozo}
+        userRole="Mozo"
+        userInitials={getInitials(user?.nombre ?? user?.email)}
+      />
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
-        {/* Period pills */}
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
-          {(Object.keys(PERIOD_LABELS) as Period[]).map((p) => (
-            <button
-              key={p} onClick={() => setPeriod(p)}
-              style={{ padding: '6px 14px', borderRadius: 20, border: period === p ? `1px solid ${C.orange}` : '1px solid #D1D5DB', background: period === p ? C.orange : 'white', color: period === p ? 'white' : '#6B7280', fontFamily: 'Inter,sans-serif', fontSize: 12, fontWeight: period === p ? 600 : 400, cursor: 'pointer' }}
-            >
-              {PERIOD_LABELS[p]}
-            </button>
-          ))}
+      <div
+        style={{
+          flex:          1,
+          overflowY:     'auto',
+          padding:       20,
+          display:       'flex',
+          flexDirection: 'column',
+          gap:           16,
+        }}
+      >
+        {/* Toolbar: segmented pills + search */}
+        <div
+          style={{
+            display:        'flex',
+            alignItems:     'center',
+            justifyContent: 'space-between',
+            gap:            12,
+            flexWrap:       'wrap',
+          }}
+        >
+          <div style={{ display: 'flex', gap: 2, background: '#EEF0F8', borderRadius: 999, padding: 4 }}>
+            {(Object.keys(PERIOD_LABELS) as Period[]).map((p) => (
+              <button
+                key={p}
+                onClick={() => setPeriod(p)}
+                style={{
+                  padding:      '6px 14px',
+                  borderRadius: 999,
+                  border:       'none',
+                  background:   period === p ? '#E8563A' : 'transparent',
+                  color:        period === p ? 'white' : '#6B7280',
+                  fontFamily:   'Montserrat, sans-serif',
+                  fontWeight:   700,
+                  fontSize:     13,
+                  cursor:       'pointer',
+                  boxShadow:    period === p ? '0 1px 4px rgba(232,86,58,0.35)' : 'none',
+                  transition:   'all 0.15s',
+                  whiteSpace:   'nowrap',
+                }}
+              >
+                {PERIOD_LABELS[p]}
+              </button>
+            ))}
+          </div>
+
+          <div
+            style={{
+              display:      'flex',
+              alignItems:   'center',
+              gap:          8,
+              background:   'white',
+              border:       `1px solid ${searchFocused ? '#E8563A' : '#D1D5DB'}`,
+              borderRadius: 10,
+              padding:      '9px 14px',
+              width:        260,
+              boxSizing:    'border-box',
+              transition:   'border-color 0.15s',
+              flexShrink:   0,
+            }}
+          >
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onFocus={() => setSearchFocused(true)}
+              onBlur={() => setSearchFocused(false)}
+              placeholder="Buscar por mesa..."
+              style={{ flex: 1, border: 'none', outline: 'none', fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#374151', background: 'transparent', minWidth: 0 }}
+            />
+            {search && (
+              <button onClick={() => setSearch('')} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: '#9CA3AF', display: 'flex', flexShrink: 0 }}>
+                <X size={13} />
+              </button>
+            )}
+          </div>
         </div>
 
-        {/* KPIs */}
-        <div style={{ display: 'flex', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
-          {[
-            { label: 'Entregados', value: pedidoCount },
-            { label: 'Editados',   value: editadoCount },
-            { label: 'Anulados',   value: anuladoCount },
-          ].map(({ label, value }) => (
-            <div key={label} style={{ background: 'white', border: `1px solid ${C.border}`, borderRadius: 10, padding: '12px 16px' }}>
-              <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#6b7280', fontWeight: 600 }}>{label}</div>
-              <div style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 800, fontSize: 22, color: '#111827' }}>{value}</div>
+        {/* KPI cards */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+          <div style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: 12, padding: '16px 18px', display: 'flex', alignItems: 'center', gap: 14 }}>
+            <div style={{ width: 40, height: 40, borderRadius: 10, background: '#E5E7F0', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <ClipboardList size={18} color="#2D3561" />
             </div>
-          ))}
-        </div>
+            <div>
+              <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#6B7280', fontWeight: 600 }}>Sesiones</div>
+              <div style={{ fontFamily: 'Montserrat, sans-serif', fontWeight: 800, fontSize: 24, color: '#2D3561', letterSpacing: '-0.01em', lineHeight: 1.1 }}>{sesiones.length}</div>
+            </div>
+          </div>
 
-        {/* Search */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'white', border: `1px solid ${C.border}`, borderRadius: 8, padding: '6px 12px', marginBottom: 16 }}>
-          <Search size={14} color="#9CA3AF" />
-          <input
-            type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por mesa..."
-            style={{ flex: 1, border: 'none', outline: 'none', fontFamily: 'Inter,sans-serif', fontSize: 13, color: '#374151', background: 'transparent' }}
-          />
-          {search && (
-            <button onClick={() => setSearch('')} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: '#9CA3AF', display: 'flex' }}>
-              <X size={13} />
-            </button>
-          )}
+          <div style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: 12, padding: '16px 18px', display: 'flex', alignItems: 'center', gap: 14 }}>
+            <div style={{ width: 40, height: 40, borderRadius: 10, background: '#FDE5DF', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <Edit size={18} color="#E8563A" />
+            </div>
+            <div>
+              <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#6B7280', fontWeight: 600 }}>Editadas</div>
+              <div style={{ fontFamily: 'Montserrat, sans-serif', fontWeight: 800, fontSize: 24, color: '#2D3561', letterSpacing: '-0.01em', lineHeight: 1.1 }}>
+                {sesiones.filter((s) => s.pedidos.some((p) => p.tieneEdiciones)).length}
+              </div>
+            </div>
+          </div>
+
+          <div style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: 12, padding: '16px 18px', display: 'flex', alignItems: 'center', gap: 14 }}>
+            <div style={{ width: 40, height: 40, borderRadius: 10, background: '#fef2f2', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <XCircle size={18} color="#dc2626" />
+            </div>
+            <div>
+              <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#6B7280', fontWeight: 600 }}>Anulados</div>
+              <div style={{ fontFamily: 'Montserrat, sans-serif', fontWeight: 800, fontSize: 24, color: '#2D3561', letterSpacing: '-0.01em', lineHeight: 1.1 }}>
+                {sesiones.reduce((acc, s) => acc + s.pedidos.filter((p) => p.estado === 'anulado').length, 0)}
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* List */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {loading ? (
-            <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 13, color: '#9CA3AF', textAlign: 'center', paddingTop: 32 }}>Cargando pedidos…</p>
+            <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#9CA3AF', textAlign: 'center', paddingTop: 32 }}>
+              Cargando sesiones…
+            </p>
           ) : filtered.length === 0 ? (
-            <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 13, color: '#9CA3AF', textAlign: 'center', paddingTop: 32 }}>No hay pedidos entregados en este período.</p>
+            <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#9CA3AF', textAlign: 'center', paddingTop: 32 }}>
+              No hay sesiones cerradas en este período.
+            </p>
           ) : (
-            filtered.map((p) => (
-              <PedidoCard key={p.id} pedido={p} onEdit={setEditingPedido} />
+            filtered.map((s) => (
+              <SesionCard
+                key={s.sesionId}
+                sesion={s}
+                onClick={() => setSesionSeleccionada(s)}
+              />
             ))
           )}
         </div>
       </div>
 
-      {editingPedido && (
-        <EditModal pedido={editingPedido} onClose={() => setEditingPedido(null)} onDone={handleEditDone} />
+      {/* Session detail modal */}
+      {sesionSeleccionada && (
+        <SesionDetalleModal
+          sesion={sesionSeleccionada}
+          onClose={() => setSesionSeleccionada(null)}
+        />
       )}
     </div>
   )

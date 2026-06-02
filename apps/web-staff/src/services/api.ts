@@ -126,6 +126,73 @@ export interface WaiterCallRico {
   }
 }
 
+export interface SesionActivaItem {
+  id: string
+  mesaId: string
+  mesaNumero: string
+  tiempoTranscurrido: number
+  cantidadItems: number
+  cantidadPersonas: number
+  totalAcumulado: number
+  quierePagar: boolean
+}
+
+export interface SesionHistorial {
+  sesionId: string
+  mesaNumero: string
+  iniciadaEn: string
+  cerradaEn: string
+  cantidadPedidos: number
+  totalSesion: number
+  pedidos: {
+    id: string
+    estado: string
+    createdAt: string
+    totalPedido: number
+    tieneEdiciones: boolean
+    items: {
+      id: string
+      cantidad: number
+      cantidadEditada: number | null
+      precioUnitario: number
+      itemNombre: string
+      mods: {
+        accion: string
+        ingredienteNombre: string
+      }[]
+    }[]
+    ediciones: {
+      id: string
+      justificacion: string
+      creadoEn: string
+      editor: { nombre: string; tipo: 'gerente' | 'mozo' }
+      itemsEliminados: {
+        itemNombre: string
+        cantidadAntes: number
+        cantidadDespues: number
+        precioUnitario: number
+        esAnulacion: boolean
+      }[]
+    }[]
+  }[]
+}
+
+export interface SesionPagadaItem {
+  id: string
+  mesaNumero: string
+  totalCobrado: number
+  metodoPago: string
+  cobradoPorNombre: string | null
+  referenciaExterna: string | null
+  fechaCobro: string | null
+}
+
+export interface MozoSimple {
+  id: string
+  nombre: string
+  activo: boolean
+}
+
 export interface SesionAbierta {
   sesionId: string
   mesaId: string
@@ -238,5 +305,32 @@ export const api = {
 
     cerrar: (mesaId: string) =>
       authFetch<{ ok: boolean }>(`/sessions/mesa/${mesaId}/cerrar`, { method: 'POST' }),
+
+    getActivas: (restauranteId: string) =>
+      authFetch<SesionActivaItem[]>(`/sessions/activas?restauranteId=${encodeURIComponent(restauranteId)}`),
+
+    getPagadas: (restauranteId: string, fecha?: string) => {
+      const params = new URLSearchParams({ restauranteId })
+      if (fecha) params.set('fecha', fecha)
+      return authFetch<SesionPagadaItem[]>(`/sessions/pagadas?${params.toString()}`)
+    },
+
+    registrarCobro: (sesionId: string, body: { metodoPago: string; mozoId?: string; cobradoPorNombre?: string; referenciaExterna?: string }) =>
+      authFetch<{ ok: boolean }>(`/sessions/${sesionId}/cobro`, {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+      }),
+
+    historial: (restauranteId: string, desde?: string, hasta?: string) => {
+      const params = new URLSearchParams({ restauranteId })
+      if (desde) params.set('desde', desde)
+      if (hasta) params.set('hasta', hasta)
+      return authFetch<SesionHistorial[]>(`/sessions/historial?${params.toString()}`)
+    },
+  },
+
+  mozos: {
+    list: (restauranteId: string) =>
+      authFetch<MozoSimple[]>(`/mozos?restauranteId=${encodeURIComponent(restauranteId)}`),
   },
 }

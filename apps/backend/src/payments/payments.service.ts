@@ -257,7 +257,10 @@ export class PaymentsService {
 
     const sesion = await this.prisma.sesionMesa.findUnique({
       where: { id: sesionId },
-      include: { mesa: { select: { numero: true, restauranteId: true } } },
+      include: {
+        mesa: { select: { id: true, numero: true, restauranteId: true } },
+        pedidos: { include: { items: { select: { cantidad: true, precioUnitario: true } } } },
+      },
     })
     if (!sesion) throw new NotFoundException('Sesión no encontrada')
 
@@ -278,6 +281,11 @@ export class PaymentsService {
       data: { sesionId, motivo: 'pedir_cuenta' },
     })
 
+    const totalAcumulado = sesion.pedidos.reduce(
+      (acc, p) => acc + p.items.reduce((s, i) => s + Number(i.precioUnitario) * i.cantidad, 0),
+      0,
+    )
+
     this.gateway.emitMozoCalled(sesion.mesa.restauranteId, {
       llamadoId: llamado.id,
       sesionId,
@@ -285,10 +293,19 @@ export class PaymentsService {
       motivo: 'pedir_cuenta',
     })
 
+    this.gateway.emitQuierePagar(sesion.mesa.restauranteId, {
+      sesionId,
+      mesaId: sesion.mesa.id,
+      mesaNumero: sesion.mesa.numero,
+      totalAcumulado,
+    })
+
     return { pagoId: pago.id, sesionId, estado: 'efectivo_solicitado' }
   }
 
-  async confirmarEfectivo(sesionId: string) {
+  async confirmarEfectivo(sesionId: string, mozoId?: string) {
+    const fechaCobro = new Date()
+
     const pedidoConEfectivo = await this.prisma.pedido.findFirst({
       where: { sesionId, pago: { metodo: 'efectivo' } },
       include: { pago: true },
@@ -299,11 +316,11 @@ export class PaymentsService {
       await this.prisma.$transaction([
         this.prisma.pago.update({
           where: { id: pedidoConEfectivo.pago.id },
-          data: { estado: 'aprobado' },
+          data: { estado: 'aprobado', fechaCobro, ...(mozoId ? { mozoId } : {}) },
         }),
         this.prisma.sesionMesa.update({
           where: { id: sesionId },
-          data: { estado: 'cerrada', cerradaEn: new Date() },
+          data: { estado: 'cerrada', cerradaEn: fechaCobro },
         }),
       ])
       return { sesionId, estado: 'cerrada' }
@@ -332,11 +349,13 @@ export class PaymentsService {
           monto,
           metodo: 'efectivo',
           estado: 'aprobado',
+          fechaCobro,
+          ...(mozoId ? { mozoId } : {}),
         },
       })
       await tx.sesionMesa.update({
         where: { id: sesionId },
-        data: { estado: 'cerrada', cerradaEn: new Date() },
+        data: { estado: 'cerrada', cerradaEn: fechaCobro },
       })
     })
 

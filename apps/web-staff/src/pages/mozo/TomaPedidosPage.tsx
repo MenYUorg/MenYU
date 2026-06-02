@@ -1,10 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import type { Mesa } from '@menyu/types'
-import { ArrowLeft, ChevronLeft, Minus, Plus, ShoppingBag, X } from 'lucide-react'
+import { ClipboardList, Minus, Plus, ShoppingBag, X } from 'lucide-react'
+import { useAuth } from '@menyu/auth'
 import { useMozoStore } from '../../store/mozoStore'
 import { api } from '../../services/api'
 import type { MenuItem, MenuCategoria, SesionActivaRico } from '../../services/api'
+import { PageHeader } from '../../components/PageHeader'
+
+function getInitials(name?: string): string {
+  if (!name) return '?'
+  return name.split(' ').slice(0, 2).map((w) => w[0]).join('').toUpperCase()
+}
 
 // ── Palette ────────────────────────────────────────────────────────────────────
 const C = {
@@ -349,9 +356,11 @@ function CartItemCard({ ci, onEditar, onQuitar }: { ci: CarritoItem; onEditar: (
 // ── Main page ──────────────────────────────────────────────────────────────────
 export function TomaPedidosPage() {
   const navigate = useNavigate()
+  const { user } = useAuth()
   const [searchParams] = useSearchParams()
   const mesaIdFromUrl = searchParams.get('mesaId')
   const { restauranteId } = useMozoStore()
+  const nombreMozo = user?.nombre ?? user?.email ?? 'Mozo'
 
   const [mesas,        setMesas]        = useState<Mesa[]>([])
   const [sesiones,     setSesiones]     = useState<Map<string, SesionActivaRico>>(new Map())
@@ -514,14 +523,14 @@ export function TomaPedidosPage() {
   if (vista === 'carrito') {
     return (
       <div className="min-h-screen bg-gray-50 flex flex-col">
-        <header style={{ background: C.navy, height: 56, display: 'flex', alignItems: 'center', padding: '0 20px', gap: 12, flexShrink: 0 }}>
-          <button onClick={() => setVista('menu')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'white', display: 'flex', alignItems: 'center', gap: 6, fontFamily: 'Inter,sans-serif', fontSize: 13 }}>
-            <ArrowLeft size={16} /> Volver al menú
-          </button>
-          <span style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 16, color: 'white' }}>
-            Comanda · Mesa {sesionActual?.numeroMesa}
-          </span>
-        </header>
+        <PageHeader
+          title={`Comanda · Mesa ${sesionActual?.numeroMesa ?? ''}`}
+          icon={<ClipboardList size={18} />}
+          onBack={() => setVista('menu')}
+          userName={nombreMozo}
+          userRole="Mozo"
+          userInitials={getInitials(user?.nombre ?? user?.email)}
+        />
 
         <main style={{ flex: 1, overflowY: 'auto', padding: 20, maxWidth: 640, margin: '0 auto', width: '100%' }}>
           {enviado ? (
@@ -577,14 +586,14 @@ export function TomaPedidosPage() {
   if (vista === 'menu') {
     return (
       <div className="min-h-screen bg-gray-50 flex flex-col">
-        <header style={{ background: C.navy, height: 56, display: 'flex', alignItems: 'center', padding: '0 20px', gap: 12, flexShrink: 0 }}>
-          <button onClick={() => { setVista('mesas'); setCarrito([]) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'white', display: 'flex', alignItems: 'center', gap: 6, fontFamily: 'Inter,sans-serif', fontSize: 13 }}>
-            <ArrowLeft size={16} /> Mesas
-          </button>
-          <span style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 16, color: 'white' }}>
-            Mesa {sesionActual?.numeroMesa} · Nueva comanda
-          </span>
-        </header>
+        <PageHeader
+          title={`Mesa ${sesionActual?.numeroMesa ?? ''} · Nueva comanda`}
+          icon={<ClipboardList size={18} />}
+          onBack={() => { setVista('mesas'); setCarrito([]) }}
+          userName={nombreMozo}
+          userRole="Mozo"
+          userInitials={getInitials(user?.nombre ?? user?.email)}
+        />
 
         <main style={{ flex: 1, overflowY: 'auto', padding: '16px 20px 100px' }}>
           {/* Buscador */}
@@ -700,14 +709,14 @@ export function TomaPedidosPage() {
   // ── Vista A — Mesas ───────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-gray-50">
-      <header style={{ background: C.navy, height: 56, display: 'flex', alignItems: 'center', padding: '0 20px', gap: 12, flexShrink: 0 }}>
-        <button onClick={() => navigate('/mozo')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'white', display: 'flex', alignItems: 'center', gap: 6, fontFamily: 'Inter,sans-serif', fontSize: 13 }}>
-          <ChevronLeft size={16} /> Panel
-        </button>
-        <span style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 18, color: 'white' }}>
-          Tomar pedido
-        </span>
-      </header>
+      <PageHeader
+        title="Tomar pedido"
+        icon={<ClipboardList size={18} />}
+        onBack={() => navigate('/mozo')}
+        userName={nombreMozo}
+        userRole="Mozo"
+        userInitials={getInitials(user?.nombre ?? user?.email)}
+      />
 
       <main style={{ padding: 20 }}>
         {error && (
