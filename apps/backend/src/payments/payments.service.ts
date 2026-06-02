@@ -161,6 +161,12 @@ export class PaymentsService {
     })
 
     if (!response.ok) {
+      const errorBody = await response.text()
+      console.error('MP OAuth falló', {
+        status: response.status,
+        statusText: response.statusText,
+        body: errorBody,
+      })
       throw new InternalServerErrorException('MP OAuth falló')
     }
 
