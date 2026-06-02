@@ -423,7 +423,7 @@ export function PagosGerente() {
   const [sesionesActivas, setSesionesActivas] = useState<SesionActivaItem[]>([])
   const [sesionesPagadas, setSesionesPagadas] = useState<SesionPagadaItem[]>([])
   const [tabHistorial, setTabHistorial]       = useState<'hoy' | 'ayer'>('hoy')
-  const [loadingActivas, setLoadingActivas]   = useState(false)
+  const [_loadingActivas, setLoadingActivas]  = useState(false)
   const [loadingPagadas, setLoadingPagadas]   = useState(false)
   const [modalSesion, setModalSesion]         = useState<SesionActivaItem | null>(null)
   const [toast, setToast]                     = useState<string | null>(null)
@@ -496,8 +496,6 @@ export function PagosGerente() {
     setToast(`Pago registrado · Mesa ${mesaNumero}`)
     toastTimer.current = setTimeout(() => setToast(null), 2500)
   }
-
-  const quierenPagar = sesionesActivas.filter((s) => s.quierePagar).length
 
   return (
     <div style={{ minHeight: '100vh', background: C.bg, display: 'flex', flexDirection: 'column' }}>

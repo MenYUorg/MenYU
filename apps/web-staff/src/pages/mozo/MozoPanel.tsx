@@ -319,9 +319,9 @@ function NavCard({ icon, chipBg, iconColor, title, titleBadge, description, to, 
 export function MozoPanel() {
   const { user, logout } = useAuth()
   const { restauranteId: restauranteIdStore, restauranteNombre: storeRestauranteNombre, marcaNombre: storeMarcaNombre } = useMozoStore()
-  const restauranteId     = user?.restauranteId     ?? restauranteIdStore
-  const restauranteNombre = user?.restauranteNombre ?? storeRestauranteNombre
-  const marcaNombre       = user?.marcaNombre       ?? storeMarcaNombre
+  const restauranteId     = user?.restauranteId ?? restauranteIdStore
+  const restauranteNombre = storeRestauranteNombre
+  const marcaNombre       = storeMarcaNombre
 
   const [llamados,      setLlamados]      = useState<WaiterCallRico[]>([])
   const [pedidosListos, setPedidosListos] = useState<PedidoRico[]>([])
@@ -481,7 +481,7 @@ export function MozoPanel() {
           fontSize:       15,
           flexShrink:     0,
         }}>
-          {marcaNombre ? marcaNombre.split(' ').slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('') : 'M'}
+          {marcaNombre ? marcaNombre.split(' ').slice(0, 2).map((w: string) => w[0]?.toUpperCase() ?? '').join('') : 'M'}
         </div>
         {/* Nombres */}
         <div style={{ flex: 1 }}>

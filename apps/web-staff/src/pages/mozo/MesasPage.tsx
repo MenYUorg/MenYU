@@ -476,8 +476,6 @@ export function MesasPage() {
   }
 
   // ── Vista A ──────────────────────────────────────────────────────────────────
-  const totalOcupadas = mesas.filter((m) => m.estado === 'ocupada').length
-
   return (
     <div className="min-h-screen bg-gray-50">
       <PageHeader
