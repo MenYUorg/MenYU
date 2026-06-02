@@ -1,5 +1,5 @@
-import { Body, Controller, Get, Headers, HttpCode, HttpStatus, Param, Post, UseGuards } from '@nestjs/common'
-import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger'
+import { Body, Controller, Get, Headers, HttpCode, HttpStatus, Param, Patch, Post, Query, UseGuards } from '@nestjs/common'
+import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger'
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'
 import { RolesGuard } from '../common/guards/roles.guard'
 import { Roles } from '../common/decorators/roles.decorator'
@@ -82,5 +82,69 @@ export class SessionsController {
     @Headers('authorization') authHeader: string | undefined,
   ): Promise<{ ok: boolean }> {
     return this.sessions.close(authHeader)
+  }
+
+  @Get('activas')
+  @UseGuards(JwtAuthGuard, TipoGuard)
+  @RequiresTipo('admin', 'mozo')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Listar sesiones activas de un restaurante (gerente/owner)' })
+  @ApiResponse({ status: 200, description: 'Lista de sesiones activas con totales y flags' })
+  @ApiResponse({ status: 400, description: 'restauranteId requerido' })
+  @ApiResponse({ status: 403, description: 'Sin acceso a este restaurante' })
+  getSessionesActivas(
+    @Query('restauranteId') restauranteId: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.sessions.getSessionesActivas(restauranteId, user)
+  }
+
+  @Get('pagadas')
+  @UseGuards(JwtAuthGuard, TipoGuard)
+  @RequiresTipo('admin', 'mozo')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Listar sesiones cobradas de un restaurante con filtro de fecha' })
+  @ApiResponse({ status: 200, description: 'Lista de sesiones cobradas' })
+  @ApiResponse({ status: 403, description: 'Sin acceso a este restaurante' })
+  getSessionesPagadas(
+    @Query('restauranteId') restauranteId: string,
+    @Query('fecha') fecha: string | undefined,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.sessions.getSessionesPagadas(restauranteId, fecha, user)
+  }
+
+  @Get('historial')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Historial de sesiones cerradas con pedidos e ítems completos' })
+  @ApiResponse({ status: 200, description: 'Lista de sesiones con pedidos detallados' })
+  @ApiResponse({ status: 400, description: 'restauranteId requerido' })
+  @ApiResponse({ status: 403, description: 'Sin acceso a este restaurante' })
+  getHistorialSesiones(
+    @Query('restauranteId') restauranteId: string,
+    @Query('desde') desde: string | undefined,
+    @Query('hasta') hasta: string | undefined,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.sessions.getHistorialSesiones(restauranteId, desde, hasta, user)
+  }
+
+  @Patch(':id/cobro')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard, TipoGuard)
+  @RequiresTipo('admin', 'mozo')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Registrar cobro de una sesión (mozo o gerente)' })
+  @ApiResponse({ status: 200, description: 'Cobro registrado y sesión cerrada' })
+  @ApiResponse({ status: 400, description: 'La sesión ya fue cerrada o no tiene pedidos' })
+  @ApiResponse({ status: 403, description: 'Sin acceso a este restaurante' })
+  @ApiResponse({ status: 404, description: 'Sesión no encontrada' })
+  registrarCobro(
+    @Param('id') id: string,
+    @Body() body: { metodoPago: 'efectivo' | 'debito' | 'credito' | 'transferencia' | 'mercadopago'; mozoId?: string; cobradoPorNombre?: string; referenciaExterna?: string },
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.sessions.registrarCobro(id, body, user)
   }
 }
