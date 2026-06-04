@@ -44,13 +44,27 @@ export class MercadoPagoProvider implements PaymentProvider {
       },
     })
 
-    if (!result.id || !result.init_point) {
+    const isSandbox = process.env.MP_ENV === 'sandbox'
+    const selectedInitPoint =
+      isSandbox && result.sandbox_init_point
+        ? result.sandbox_init_point
+        : result.init_point
+
+    console.log('[MP] createPreference debug', {
+      MP_ENV: process.env.MP_ENV ?? '(no definida)',
+      isSandbox,
+      init_point_exists: !!result.init_point,
+      sandbox_init_point_exists: !!result.sandbox_init_point,
+      selectedUrlType: isSandbox && result.sandbox_init_point ? 'sandbox_init_point' : 'init_point',
+    })
+
+    if (!result.id || !selectedInitPoint) {
       throw new InternalServerErrorException('MP: preference inválida')
     }
 
     return {
       id: result.id,
-      initPoint: result.init_point,
+      initPoint: selectedInitPoint,
       externalReference: data.externalReference,
     }
   }
