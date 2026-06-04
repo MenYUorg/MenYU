@@ -7,11 +7,9 @@ interface Props {
 
 export function ProtectedRoute({ roles }: Props) {
   const { isLoggedIn, user, logout } = useAuth()
-  console.log('[ProtectedRoute] isLoggedIn:', isLoggedIn, 'user:', user)
   if (!isLoggedIn || !user) return <Navigate to="/login" replace />
   const check = user.rol ?? user.tipo
   if (!roles.includes(check)) {
-    // Token inválido o sin rol — limpiar para evitar loop con LoginPage
     logout()
     return <Navigate to="/login" replace />
   }
