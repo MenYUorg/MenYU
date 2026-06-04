@@ -33,6 +33,7 @@ export const useContextStore = create<ContextStore>()((set) => ({
   selectedRestauranteId: localStorage.getItem(RESTAURANTE_KEY),
 
   loadContext: async () => {
+    console.log('[contextStore] loadContext called, VITE_API_URL:', import.meta.env.VITE_API_URL)
     const rol = getJwtRol()
     try {
       const saved = localStorage.getItem(RESTAURANTE_KEY)
@@ -54,8 +55,8 @@ export const useContextStore = create<ContextStore>()((set) => ({
         const selectedRestauranteId = existe ? saved : (restaurantes[0]?.id ?? null)
         set({ marcas, restaurantes, selectedMarcaId: marcas[0]?.id ?? null, selectedRestauranteId })
       }
-    } catch {
-      // api.ts redirige a /login en caso de 401
+    } catch (e) {
+      console.error('[contextStore] loadContext error:', e)
     }
   },
 
