@@ -1,4 +1,4 @@
-import { IsNumber, IsString, Min } from 'class-validator'
+import { IsNumber, IsOptional, IsString, IsUrl, Min } from 'class-validator'
 
 export class InitiatePaymentDto {
   @IsString()
@@ -16,4 +16,8 @@ export class InitiatePaymentDto {
 
   @IsString()
   descripcion!: string
+
+  @IsOptional()
+  @IsUrl()
+  returnBaseUrl?: string
 }

@@ -74,12 +74,47 @@ export class PaymentsService {
 
     const externalReference = `${dto.sesionId}-${Date.now()}`
 
+    const ALLOWED_ORIGINS: (RegExp | string)[] = [
+      /^https:\/\/menyu-cliente(-[a-z0-9]+)?\.vercel\.app$/,
+      /^https:\/\/menyu-cliente-git-[a-z0-9-]+-men-yu-s-projects\.vercel\.app$/,
+    ]
+    if (process.env.MP_SUCCESS_URL) {
+      try {
+        ALLOWED_ORIGINS.push(new URL(process.env.MP_SUCCESS_URL).origin)
+      } catch {
+        // ignore malformed env URL
+      }
+    }
+
+    let successUrl: string | undefined
+    let failureUrl: string | undefined
+    let pendingUrl: string | undefined
+
+    if (dto.returnBaseUrl) {
+      const allowed = ALLOWED_ORIGINS.some((rule) =>
+        rule instanceof RegExp ? rule.test(dto.returnBaseUrl!) : rule === dto.returnBaseUrl,
+      )
+      if (!allowed) {
+        throw new BadRequestException('returnBaseUrl no permitido')
+      }
+      successUrl = `${dto.returnBaseUrl}/pago/exitoso`
+      failureUrl = `${dto.returnBaseUrl}/pago/fallido`
+      pendingUrl = `${dto.returnBaseUrl}/pago/pendiente`
+    } else {
+      successUrl = process.env.MP_SUCCESS_URL
+      failureUrl = process.env.MP_FAILURE_URL
+      pendingUrl = process.env.MP_PENDING_URL
+    }
+
     const preference = await this.provider.createPreference({
       sesionId: dto.sesionId,
       monto: dto.monto,
       descripcion: dto.descripcion,
       externalReference,
       accessToken: this.crypto.decrypt(restaurante.mpAccessToken),
+      successUrl,
+      failureUrl,
+      pendingUrl,
     })
 
     const pago = await this.prisma.pago.create({
@@ -155,6 +190,10 @@ export class PaymentsService {
       code,
       redirect_uri: process.env.MP_REDIRECT_URI!,
     })
+
+    if (process.env.MP_ENV === 'sandbox') {
+      body.set('test_token', 'true')
+    }
 
     const response = await fetch('https://api.mercadopago.com/oauth/token', {
       method: 'POST',
