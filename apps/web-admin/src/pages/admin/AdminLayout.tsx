@@ -255,6 +255,7 @@ export function AdminLayout() {
   }
 
   useEffect(() => {
+    console.log('[AdminLayout] mounted')
     void loadContext()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
