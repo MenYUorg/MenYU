@@ -10,8 +10,9 @@ export function ProtectedRoute({ roles }: Props) {
   console.log('[ProtectedRoute] isLoggedIn:', isLoggedIn, 'user:', user)
   if (!isLoggedIn || !user) return <Navigate to="/login" replace />
   const check = user.rol ?? user.tipo
+  console.log('[ProtectedRoute] check:', check, 'roles:', roles, 'includes:', roles.includes(check))
   if (!roles.includes(check)) {
-    // Token inválido o sin rol — limpiar para evitar loop con LoginPage
+    console.log('[ProtectedRoute] role check failed, logging out')
     logout()
     return <Navigate to="/login" replace />
   }
