@@ -10,6 +10,7 @@ interface PageHeaderProps {
   userName?: string
   userRole?: string
   userInitials?: string
+  extraActions?: React.ReactNode
 }
 
 export function PageHeader({
@@ -22,6 +23,7 @@ export function PageHeader({
   userName,
   userRole,
   userInitials,
+  extraActions,
 }: PageHeaderProps) {
   return (
     <header
@@ -188,6 +190,9 @@ export function PageHeader({
           </div>
         </div>
       )}
+
+      {/* Acciones extra (ej: botón impresora) */}
+      {extraActions}
 
       {/* Botón Actualizar */}
       {onRefresh && (

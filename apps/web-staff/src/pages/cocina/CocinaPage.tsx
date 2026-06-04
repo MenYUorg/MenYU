@@ -6,6 +6,7 @@ import type { PedidoRico } from '../../services/api'
 import { useMozoStore } from '../../store/mozoStore'
 import * as socketService from '../../services/socket'
 import type { Pedido } from '@menyu/types'
+import { imprimirPedido, conectarImpresora, impresoraConectada } from '../../services/impresora'
 
 // ── Palette & WS ──────────────────────────────────────────────────────────────
 const C = {
@@ -222,6 +223,7 @@ export function CocinaPage() {
   const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set())
   const [error,      setError]      = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
+  const [conectada,  setConectada]  = useState<boolean>(impresoraConectada())
   const anuladosTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
 
   const fetchAll = useCallback(async () => {
@@ -241,6 +243,15 @@ export function CocinaPage() {
     }
   }, [restauranteId])
 
+  const handleConectar = useCallback(async () => {
+    try {
+      await conectarImpresora()
+      setConectada(true)
+    } catch {
+      console.error('No se pudo conectar la impresora.')
+    }
+  }, [])
+
   useEffect(() => { void fetchAll() }, [fetchAll])
 
   useEffect(() => {
@@ -252,6 +263,7 @@ export function CocinaPage() {
       const rico = pedido as unknown as PedidoRico
       if (!ESTADOS_COCINA.includes(rico.estado as EstadoPedido)) return
       playSound('nuevo')
+      imprimirPedido(rico).catch(console.error)
       setPedidos((prev) => prev.some((p) => p.id === rico.id) ? prev : [rico, ...prev])
     })
 
@@ -346,14 +358,29 @@ export function CocinaPage() {
             {totalActivos}
           </span>
         )}
-        <button
-          onClick={() => void fetchAll()}
-          disabled={refreshing}
-          style={{ marginLeft: 'auto', background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: 6, padding: '5px 10px', cursor: refreshing ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'white', opacity: refreshing ? 0.7 : 1 }}
-        >
-          <RefreshCw size={12} style={refreshing ? { animation: 'spin 0.8s linear infinite' } : undefined} />
-          {refreshing ? 'Actualizando…' : 'Actualizar'}
-        </button>
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+          {conectada ? (
+            <span style={{ fontSize: 11, color: '#86efac', display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span style={{ width: 6, height: 6, background: '#4ade80', borderRadius: '50%', display: 'inline-block' }} />
+              Impresora
+            </span>
+          ) : (
+            <button
+              onClick={() => void handleConectar()}
+              style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 6, padding: '4px 8px', cursor: 'pointer', fontSize: 11, color: 'rgba(255,255,255,0.6)', fontFamily: 'Montserrat,sans-serif' }}
+            >
+              Conectar impresora
+            </button>
+          )}
+          <button
+            onClick={() => void fetchAll()}
+            disabled={refreshing}
+            style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: 6, padding: '5px 10px', cursor: refreshing ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'white', opacity: refreshing ? 0.7 : 1 }}
+          >
+            <RefreshCw size={12} style={refreshing ? { animation: 'spin 0.8s linear infinite' } : undefined} />
+            {refreshing ? 'Actualizando…' : 'Actualizar'}
+          </button>
+        </div>
       </header>
 
       {error && (

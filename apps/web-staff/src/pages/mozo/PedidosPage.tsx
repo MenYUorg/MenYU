@@ -7,6 +7,7 @@ import { getToken, api } from '../../services/api'
 import type { PedidoRico, EditarItemBody } from '../../services/api'
 import { useMozoStore } from '../../store/mozoStore'
 import { PageHeader } from '../../components/PageHeader'
+import { conectarImpresora, impresoraConectada, imprimirPedido, testPrint } from '../../services/impresora'
 
 function getInitials(name?: string): string {
   if (!name) return '?'
@@ -327,7 +328,17 @@ export function PedidosPage() {
   const [loadingIds,    setLoadingIds]    = useState<Set<string>>(new Set())
   const [error,         setError]         = useState<string | null>(null)
   const [editingPedido, setEditingPedido] = useState<PedidoRico | null>(null)
+  const [conectada,     setConectada]     = useState<boolean>(impresoraConectada())
   const socketRef = useRef<Socket | null>(null)
+
+  const handleConectarImpresora = useCallback(async () => {
+    try {
+      await conectarImpresora()
+      setConectada(true)
+    } catch {
+      console.error('No se pudo conectar la impresora.')
+    }
+  }, [])
 
   const fetchAll = useCallback(async () => {
     if (!restauranteId) return
@@ -352,6 +363,7 @@ export function PedidosPage() {
     socketRef.current = socket
     socket.on('connect', () => { socket.emit('cocina:join', { restauranteId }) })
     socket.on('order:new', (pedido: PedidoRico) => {
+      imprimirPedido(pedido).catch(console.error)
       setPedidos((prev) => prev.some((p) => p.id === pedido.id) ? prev : [pedido, ...prev])
     })
     socket.on('order:updated', (pedido: PedidoRico) => {
@@ -422,6 +434,29 @@ export function PedidosPage() {
         userName={nombreMozo}
         userRole="Mozo"
         userInitials={getInitials(user?.nombre ?? user?.email)}
+        extraActions={
+          conectada ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+              <span style={{ fontSize: 11, color: '#86efac', display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span style={{ width: 6, height: 6, background: '#4ade80', borderRadius: '50%', display: 'inline-block' }} />
+                Impresora
+              </span>
+              <button
+                onClick={() => void testPrint().catch(console.error)}
+                style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 6, padding: '4px 8px', cursor: 'pointer', fontSize: 11, color: 'rgba(255,255,255,0.6)', fontFamily: 'Montserrat,sans-serif' }}
+              >
+                Test
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => void handleConectarImpresora()}
+              style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 6, padding: '4px 8px', cursor: 'pointer', fontSize: 11, color: 'rgba(255,255,255,0.6)', fontFamily: 'Montserrat,sans-serif', flexShrink: 0 }}
+            >
+              Conectar impresora
+            </button>
+          )
+        }
       />
 
       {error && (
