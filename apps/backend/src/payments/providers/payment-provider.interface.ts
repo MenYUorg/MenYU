@@ -6,6 +6,9 @@ export interface CreatePaymentDto {
   descripcion: string
   externalReference: string
   accessToken: string
+  successUrl?: string
+  failureUrl?: string
+  pendingUrl?: string
 }
 
 export interface PaymentPreference {

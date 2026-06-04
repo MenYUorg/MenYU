@@ -73,4 +73,23 @@ export const api = {
       }>,
     ) => req<{ id: string }>('POST', '/orders', { items }, jwt),
   },
+
+  payments: {
+    initiate: (
+      jwt: string,
+      data: {
+        pedidoId: string
+        restauranteId: string
+        sesionId: string
+        monto: number
+        descripcion: string
+      },
+    ) =>
+      req<{ id: string; initPoint: string; externalReference: string; pagoId: string }>(
+        'POST',
+        '/payments/initiate',
+        { ...data, returnBaseUrl: window.location.origin },
+        jwt,
+      ),
+  },
 }
