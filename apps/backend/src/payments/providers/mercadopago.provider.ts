@@ -66,7 +66,7 @@ export class MercadoPagoProvider implements PaymentProvider {
       .catch((err: unknown) => {
         console.error('[MP] createPreference SDK error', {
           message: err instanceof Error ? err.message : String(err),
-          cause: err instanceof Error ? (err as Record<string, unknown>)['cause'] : undefined,
+          cause: err instanceof Error ? (err as unknown as Record<string, unknown>)['cause'] : undefined,
         })
         throw new InternalServerErrorException(
           `MP: error al crear preference — ${err instanceof Error ? err.message : String(err)}`,
