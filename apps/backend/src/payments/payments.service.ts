@@ -106,12 +106,24 @@ export class PaymentsService {
       pendingUrl = process.env.MP_PENDING_URL
     }
 
+    const decryptedToken = this.crypto.decrypt(restaurante.mpAccessToken)
+
+    console.log('[MP] initiatePayment debug', {
+      restauranteId: dto.restauranteId,
+      monto: dto.monto,
+      monto_type: typeof dto.monto,
+      isTestToken: decryptedToken.startsWith('TEST-'),
+      isSandbox: process.env.MP_ENV === 'sandbox',
+      hasReturnBaseUrl: !!dto.returnBaseUrl,
+      successUrl: successUrl ?? '(no definida)',
+    })
+
     const preference = await this.provider.createPreference({
       sesionId: dto.sesionId,
       monto: dto.monto,
       descripcion: dto.descripcion,
       externalReference,
-      accessToken: this.crypto.decrypt(restaurante.mpAccessToken),
+      accessToken: decryptedToken,
       successUrl,
       failureUrl,
       pendingUrl,
