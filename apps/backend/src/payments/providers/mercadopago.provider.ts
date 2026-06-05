@@ -28,9 +28,6 @@ export class MercadoPagoProvider implements PaymentProvider {
     // En sandbox usar preference mínima: sin back_urls ni notification_url.
     // Replicamos el entorno local donde funcionó, y evitamos comportamientos
     // distintos del sandbox de MP con URLs externas.
-    const hasValidBackUrl =
-      !isSandbox && !!(data.successUrl && !data.successUrl.includes('localhost'))
-
     const preferenceBody = {
       external_reference: data.externalReference,
       items: [
@@ -42,11 +39,11 @@ export class MercadoPagoProvider implements PaymentProvider {
           currency_id: 'ARS',
         },
       ],
-      ...(hasValidBackUrl && {
+      ...(data.successUrl && {
         back_urls: {
-          success: data.successUrl!,
-          failure: data.failureUrl ?? data.successUrl!,
-          pending: data.pendingUrl ?? data.successUrl!,
+          success: data.successUrl,
+          failure: data.failureUrl ?? data.successUrl,
+          pending: data.pendingUrl ?? data.successUrl,
         },
         auto_return: 'approved' as const,
       }),
@@ -63,9 +60,9 @@ export class MercadoPagoProvider implements PaymentProvider {
       unit_price_original: Number(data.monto),
       currency_id: 'ARS',
       title: data.descripcion,
-      has_back_urls: hasValidBackUrl,
-      back_url_success: hasValidBackUrl ? data.successUrl : '(omitida — sandbox o localhost)',
-      has_auto_return: hasValidBackUrl,
+      has_back_urls: !!data.successUrl,
+      back_url_success: data.successUrl ?? '(no definida)',
+      has_auto_return: !!data.successUrl,
       has_notification_url: !isSandbox && !!process.env.MP_WEBHOOK_URL,
     })
 
