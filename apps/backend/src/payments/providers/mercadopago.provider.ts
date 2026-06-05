@@ -19,43 +19,70 @@ export class MercadoPagoProvider implements PaymentProvider {
   }
 
   async createPreference(data: CreatePaymentDto): Promise<PaymentPreference> {
+    const isSandbox = process.env.MP_ENV === 'sandbox'
     const localClient = new MercadoPagoConfig({ accessToken: data.accessToken })
-    const result = await new Preference(localClient).create({
-      body: {
-        external_reference: data.externalReference,
-        items: [
-          {
-            id: data.sesionId,
-            title: data.descripcion,
-            quantity: 1,
-            unit_price: data.monto,
-            currency_id: 'ARS',
-          },
-        ],
-        ...(data.successUrl && !data.successUrl.includes('localhost') && {
-          back_urls: {
-            success: data.successUrl,
-            failure: data.failureUrl ?? data.successUrl,
-            pending: data.pendingUrl ?? data.successUrl,
-          },
-          auto_return: 'approved' as const,
-        }),
-        notification_url: process.env.MP_WEBHOOK_URL ?? undefined,
-      },
+
+    const hasValidBackUrl = !!(data.successUrl && !data.successUrl.includes('localhost'))
+
+    const preferenceBody = {
+      external_reference: data.externalReference,
+      items: [
+        {
+          id: data.sesionId,
+          title: data.descripcion,
+          quantity: 1,
+          unit_price: Number(data.monto),
+          currency_id: 'ARS',
+        },
+      ],
+      ...(hasValidBackUrl && {
+        back_urls: {
+          success: data.successUrl!,
+          failure: data.failureUrl ?? data.successUrl!,
+          pending: data.pendingUrl ?? data.successUrl!,
+        },
+        // auto_return rompe el checkout en Sandbox — solo en producción
+        ...(!isSandbox && { auto_return: 'approved' as const }),
+      }),
+      notification_url: process.env.MP_WEBHOOK_URL ?? undefined,
+    }
+
+    console.log('[MP] createPreference → body', {
+      MP_ENV: process.env.MP_ENV ?? '(no definida)',
+      isSandbox,
+      external_reference: data.externalReference,
+      unit_price: Number(data.monto),
+      unit_price_original_type: typeof data.monto,
+      currency_id: 'ARS',
+      title: data.descripcion,
+      has_back_urls: hasValidBackUrl,
+      back_url_success: hasValidBackUrl ? data.successUrl : '(omitida)',
+      has_auto_return: hasValidBackUrl && !isSandbox,
+      notification_url: process.env.MP_WEBHOOK_URL ?? '(no definida)',
     })
 
-    const isSandbox = process.env.MP_ENV === 'sandbox'
+    const result = await new Preference(localClient)
+      .create({ body: preferenceBody })
+      .catch((err: unknown) => {
+        console.error('[MP] createPreference SDK error', {
+          message: err instanceof Error ? err.message : String(err),
+          cause: err instanceof Error ? (err as unknown as Record<string, unknown>)['cause'] : undefined,
+        })
+        throw new InternalServerErrorException(
+          `MP: error al crear preference — ${err instanceof Error ? err.message : String(err)}`,
+        )
+      })
+
     const selectedInitPoint =
       isSandbox && result.sandbox_init_point
         ? result.sandbox_init_point
         : result.init_point
 
-    console.log('[MP] createPreference debug', {
-      MP_ENV: process.env.MP_ENV ?? '(no definida)',
-      isSandbox,
+    console.log('[MP] createPreference → response', {
+      preference_id: result.id,
       init_point_exists: !!result.init_point,
       sandbox_init_point_exists: !!result.sandbox_init_point,
-      selectedUrlType: isSandbox && result.sandbox_init_point ? 'sandbox_init_point' : 'init_point',
+      selected_url_type: isSandbox && result.sandbox_init_point ? 'sandbox_init_point' : 'init_point',
     })
 
     if (!result.id || !selectedInitPoint) {
