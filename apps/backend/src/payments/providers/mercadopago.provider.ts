@@ -22,7 +22,14 @@ export class MercadoPagoProvider implements PaymentProvider {
     const isSandbox = process.env.MP_ENV === 'sandbox'
     const localClient = new MercadoPagoConfig({ accessToken: data.accessToken })
 
-    const hasValidBackUrl = !!(data.successUrl && !data.successUrl.includes('localhost'))
+    // Redondear a 2 decimales — MP rechaza precios con floating point impreciso
+    const unitPrice = Math.round(Number(data.monto) * 100) / 100
+
+    // En sandbox usar preference mínima: sin back_urls ni notification_url.
+    // Replicamos el entorno local donde funcionó, y evitamos comportamientos
+    // distintos del sandbox de MP con URLs externas.
+    const hasValidBackUrl =
+      !isSandbox && !!(data.successUrl && !data.successUrl.includes('localhost'))
 
     const preferenceBody = {
       external_reference: data.externalReference,
@@ -31,7 +38,7 @@ export class MercadoPagoProvider implements PaymentProvider {
           id: data.sesionId,
           title: data.descripcion,
           quantity: 1,
-          unit_price: Number(data.monto),
+          unit_price: unitPrice,
           currency_id: 'ARS',
         },
       ],
@@ -41,24 +48,25 @@ export class MercadoPagoProvider implements PaymentProvider {
           failure: data.failureUrl ?? data.successUrl!,
           pending: data.pendingUrl ?? data.successUrl!,
         },
-        // auto_return rompe el checkout en Sandbox — solo en producción
-        ...(!isSandbox && { auto_return: 'approved' as const }),
+        auto_return: 'approved' as const,
       }),
-      notification_url: process.env.MP_WEBHOOK_URL ?? undefined,
+      ...(!isSandbox && process.env.MP_WEBHOOK_URL && {
+        notification_url: process.env.MP_WEBHOOK_URL,
+      }),
     }
 
     console.log('[MP] createPreference → body', {
       MP_ENV: process.env.MP_ENV ?? '(no definida)',
       isSandbox,
       external_reference: data.externalReference,
-      unit_price: Number(data.monto),
-      unit_price_original_type: typeof data.monto,
+      unit_price: unitPrice,
+      unit_price_original: Number(data.monto),
       currency_id: 'ARS',
       title: data.descripcion,
       has_back_urls: hasValidBackUrl,
-      back_url_success: hasValidBackUrl ? data.successUrl : '(omitida)',
-      has_auto_return: hasValidBackUrl && !isSandbox,
-      notification_url: process.env.MP_WEBHOOK_URL ?? '(no definida)',
+      back_url_success: hasValidBackUrl ? data.successUrl : '(omitida — sandbox o localhost)',
+      has_auto_return: hasValidBackUrl,
+      has_notification_url: !isSandbox && !!process.env.MP_WEBHOOK_URL,
     })
 
     const result = await new Preference(localClient)
