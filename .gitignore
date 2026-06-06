@@ -32,7 +32,6 @@ Thumbs.db
 apps/backend/prisma/migrations/*.sql.bak
 
 # Documentación (excepto archivos base del proyecto)
-Documentacion/*
 !Documentacion/Doc_DB.md
 !Documentacion/Gantt.html
 
