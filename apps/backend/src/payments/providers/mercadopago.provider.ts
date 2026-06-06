@@ -20,14 +20,15 @@ export class MercadoPagoProvider implements PaymentProvider {
 
   async createPreference(data: CreatePaymentDto): Promise<PaymentPreference> {
     const isSandbox = process.env.MP_ENV === 'sandbox'
+    const isMinimal = process.env.MP_MINIMAL_PREFERENCE === 'true'
     const localClient = new MercadoPagoConfig({ accessToken: data.accessToken })
 
     // Redondear a 2 decimales — MP rechaza precios con floating point impreciso
     const unitPrice = Math.round(Number(data.monto) * 100) / 100
 
-    // En sandbox usar preference mínima: sin back_urls ni notification_url.
-    // Replicamos el entorno local donde funcionó, y evitamos comportamientos
-    // distintos del sandbox de MP con URLs externas.
+    const includeBackUrls = !isMinimal && !!data.successUrl
+    const includeNotificationUrl = !isMinimal && !!process.env.MP_WEBHOOK_URL
+
     const preferenceBody = {
       external_reference: data.externalReference,
       items: [
@@ -39,31 +40,32 @@ export class MercadoPagoProvider implements PaymentProvider {
           currency_id: 'ARS',
         },
       ],
-      ...(data.successUrl && {
+      ...(includeBackUrls && {
         back_urls: {
-          success: data.successUrl,
-          failure: data.failureUrl ?? data.successUrl,
-          pending: data.pendingUrl ?? data.successUrl,
+          success: data.successUrl!,
+          failure: data.failureUrl ?? data.successUrl!,
+          pending: data.pendingUrl ?? data.successUrl!,
         },
         auto_return: 'approved' as const,
       }),
-      ...(process.env.MP_WEBHOOK_URL && {
+      ...(includeNotificationUrl && {
         notification_url: process.env.MP_WEBHOOK_URL,
       }),
     }
 
     console.log('[MP] createPreference → body', {
       MP_ENV: process.env.MP_ENV ?? '(no definida)',
+      MP_MINIMAL_PREFERENCE: isMinimal,
       isSandbox,
       external_reference: data.externalReference,
       unit_price: unitPrice,
       unit_price_original: Number(data.monto),
       currency_id: 'ARS',
       title: data.descripcion,
-      has_back_urls: !!data.successUrl,
-      back_url_success: data.successUrl ?? '(no definida)',
-      has_auto_return: !!data.successUrl,
-      has_notification_url: !!process.env.MP_WEBHOOK_URL,
+      has_back_urls: includeBackUrls,
+      back_url_success: includeBackUrls ? data.successUrl : '(omitida — minimal)',
+      has_auto_return: includeBackUrls,
+      has_notification_url: includeNotificationUrl,
     })
 
     const result = await new Preference(localClient)
@@ -83,11 +85,12 @@ export class MercadoPagoProvider implements PaymentProvider {
         ? result.sandbox_init_point
         : result.init_point
 
+    const selectedUrlType = isSandbox && result.sandbox_init_point ? 'sandbox_init_point' : 'init_point'
     console.log('[MP] createPreference → response', {
       preference_id: result.id,
       init_point_exists: !!result.init_point,
       sandbox_init_point_exists: !!result.sandbox_init_point,
-      selected_url_type: isSandbox && result.sandbox_init_point ? 'sandbox_init_point' : 'init_point',
+      selected_url_type: selectedUrlType,
     })
 
     if (!result.id || !selectedInitPoint) {
