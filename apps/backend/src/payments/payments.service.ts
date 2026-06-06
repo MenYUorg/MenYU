@@ -76,7 +76,9 @@ export class PaymentsService {
 
     const ALLOWED_ORIGINS: (RegExp | string)[] = [
       /^https:\/\/menyu-cliente(-[a-z0-9]+)?\.vercel\.app$/,
-      /^https:\/\/menyu-cliente-git-[a-z0-9-]+-men-yu-s-projects\.vercel\.app$/,
+      // branch previews:  menyu-cliente-git-<branch>-men-yu-s-projects.vercel.app
+      // deploy previews:  menyu-cliente-<hash>-men-yu-s-projects.vercel.app
+      /^https:\/\/menyu-cliente-[a-z0-9-]+-men-yu-s-projects\.vercel\.app$/,
     ]
     if (process.env.MP_SUCCESS_URL) {
       try {

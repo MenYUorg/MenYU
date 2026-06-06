@@ -20,6 +20,7 @@ export class MercadoPagoProvider implements PaymentProvider {
 
   async createPreference(data: CreatePaymentDto): Promise<PaymentPreference> {
     const isSandbox = process.env.MP_ENV === 'sandbox'
+    const isMinimal = process.env.MP_MINIMAL_PREFERENCE === 'true'
     const localClient = new MercadoPagoConfig({ accessToken: data.accessToken })
 
     // Redondear a 2 decimales — MP rechaza precios con floating point impreciso
@@ -58,6 +59,7 @@ export class MercadoPagoProvider implements PaymentProvider {
 
     console.log('[MP] createPreference → body', {
       MP_ENV: process.env.MP_ENV ?? '(no definida)',
+      MP_MINIMAL_PREFERENCE: isMinimal,
       isSandbox,
       external_reference: data.externalReference,
       unit_price: unitPrice,
@@ -87,11 +89,12 @@ export class MercadoPagoProvider implements PaymentProvider {
         ? result.sandbox_init_point
         : result.init_point
 
+    const selectedUrlType = isSandbox && result.sandbox_init_point ? 'sandbox_init_point' : 'init_point'
     console.log('[MP] createPreference → response', {
       preference_id: result.id,
       init_point_exists: !!result.init_point,
       sandbox_init_point_exists: !!result.sandbox_init_point,
-      selected_url_type: isSandbox && result.sandbox_init_point ? 'sandbox_init_point' : 'init_point',
+      selected_url_type: selectedUrlType,
     })
 
     if (!result.id || !selectedInitPoint) {
@@ -144,6 +147,7 @@ export class MercadoPagoProvider implements PaymentProvider {
       case 'in_process':
       case 'pending':
         return 'EN_PROCESO'
+        
       default:
         return 'PENDIENTE'
     }
