@@ -40,6 +40,14 @@ export class MercadoPagoProvider implements PaymentProvider {
       ? {
           external_reference: data.externalReference,
           items: baseItems,
+          ...(data.successUrl && {
+            back_urls: {
+              success: data.successUrl,
+              failure: data.failureUrl ?? data.successUrl,
+              pending: data.pendingUrl ?? data.successUrl,
+            },
+            auto_return: 'approved' as const,
+          }),
         }
       : {
           external_reference: data.externalReference,
@@ -66,9 +74,9 @@ export class MercadoPagoProvider implements PaymentProvider {
       unit_price_original: Number(data.monto),
       currency_id: 'ARS',
       title: data.descripcion,
-      has_back_urls: !isSandbox && !!data.successUrl,
-      back_url_success: !isSandbox ? (data.successUrl ?? '(no definida)') : '(omitida en sandbox)',
-      has_auto_return: !isSandbox && !!data.successUrl,
+      has_back_urls: !!data.successUrl,
+      back_url_success: data.successUrl ?? '(no definida)',
+      has_auto_return: !!data.successUrl,
       has_notification_url: !isSandbox && !!process.env.MP_WEBHOOK_URL,
     })
 
