@@ -161,7 +161,10 @@ export class PaymentsService {
 
     const pedido = await this.prisma.pedido.findUnique({
       where: { id: pago.pedidoId },
-      select: { sesionId: true },
+      select: {
+        sesionId: true,
+        sesion: { select: { mesa: { select: { restauranteId: true } } } },
+      },
     })
 
     await this.prisma.$transaction([
@@ -174,6 +177,9 @@ export class PaymentsService {
         data: { estado: 'cerrada', cerradaEn: new Date() },
       }),
     ])
+
+    const restauranteId = pedido!.sesion.mesa.restauranteId
+    this.gateway.emitPaymentApproved(restauranteId, pedido!.sesionId)
 
     return { sesionId: pedido!.sesionId, estado: 'cerrada' }
   }

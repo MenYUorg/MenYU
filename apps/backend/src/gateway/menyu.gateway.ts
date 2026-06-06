@@ -83,4 +83,8 @@ export class MenyuGateway implements OnGatewayConnection, OnGatewayDisconnect {
   emitMenuUpdated(restauranteId: string) {
     this.server.to(`restaurante-${restauranteId}`).emit('menu:updated', { restauranteId })
   }
+
+  emitPaymentApproved(restauranteId: string, sesionId: string) {
+    this.server.to(`restaurante-${restauranteId}`).emit('payment:approved', { sesionId })
+  }
 }
