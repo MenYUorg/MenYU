@@ -26,32 +26,36 @@ export class MercadoPagoProvider implements PaymentProvider {
     // Redondear a 2 decimales — MP rechaza precios con floating point impreciso
     const unitPrice = Math.round(Number(data.monto) * 100) / 100
 
-    const includeBackUrls = !isMinimal && !!data.successUrl
-    const includeNotificationUrl = !isMinimal && !!process.env.MP_WEBHOOK_URL
+    const baseItems = [
+      {
+        id: data.sesionId,
+        title: data.descripcion,
+        quantity: 1,
+        unit_price: unitPrice,
+        currency_id: 'ARS',
+      },
+    ]
 
-    const preferenceBody = {
-      external_reference: data.externalReference,
-      items: [
-        {
-          id: data.sesionId,
-          title: data.descripcion,
-          quantity: 1,
-          unit_price: unitPrice,
-          currency_id: 'ARS',
-        },
-      ],
-      ...(includeBackUrls && {
-        back_urls: {
-          success: data.successUrl!,
-          failure: data.failureUrl ?? data.successUrl!,
-          pending: data.pendingUrl ?? data.successUrl!,
-        },
-        auto_return: 'approved' as const,
-      }),
-      ...(includeNotificationUrl && {
-        notification_url: process.env.MP_WEBHOOK_URL,
-      }),
-    }
+    const preferenceBody = isSandbox
+      ? {
+          external_reference: data.externalReference,
+          items: baseItems,
+        }
+      : {
+          external_reference: data.externalReference,
+          items: baseItems,
+          ...(data.successUrl && {
+            back_urls: {
+              success: data.successUrl,
+              failure: data.failureUrl ?? data.successUrl,
+              pending: data.pendingUrl ?? data.successUrl,
+            },
+            auto_return: 'approved' as const,
+          }),
+          ...(process.env.MP_WEBHOOK_URL && {
+            notification_url: process.env.MP_WEBHOOK_URL,
+          }),
+        }
 
     console.log('[MP] createPreference → body', {
       MP_ENV: process.env.MP_ENV ?? '(no definida)',
@@ -62,10 +66,10 @@ export class MercadoPagoProvider implements PaymentProvider {
       unit_price_original: Number(data.monto),
       currency_id: 'ARS',
       title: data.descripcion,
-      has_back_urls: includeBackUrls,
-      back_url_success: includeBackUrls ? data.successUrl : '(omitida — minimal)',
-      has_auto_return: includeBackUrls,
-      has_notification_url: includeNotificationUrl,
+      has_back_urls: !isSandbox && !!data.successUrl,
+      back_url_success: !isSandbox ? (data.successUrl ?? '(no definida)') : '(omitida en sandbox)',
+      has_auto_return: !isSandbox && !!data.successUrl,
+      has_notification_url: !isSandbox && !!process.env.MP_WEBHOOK_URL,
     })
 
     const result = await new Preference(localClient)
@@ -143,6 +147,7 @@ export class MercadoPagoProvider implements PaymentProvider {
       case 'in_process':
       case 'pending':
         return 'EN_PROCESO'
+        
       default:
         return 'PENDIENTE'
     }
