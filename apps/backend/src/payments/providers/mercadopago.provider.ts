@@ -47,7 +47,7 @@ export class MercadoPagoProvider implements PaymentProvider {
         },
         auto_return: 'approved' as const,
       }),
-      ...(!isSandbox && process.env.MP_WEBHOOK_URL && {
+      ...(process.env.MP_WEBHOOK_URL && {
         notification_url: process.env.MP_WEBHOOK_URL,
       }),
     }
@@ -63,7 +63,7 @@ export class MercadoPagoProvider implements PaymentProvider {
       has_back_urls: !!data.successUrl,
       back_url_success: data.successUrl ?? '(no definida)',
       has_auto_return: !!data.successUrl,
-      has_notification_url: !isSandbox && !!process.env.MP_WEBHOOK_URL,
+      has_notification_url: !!process.env.MP_WEBHOOK_URL,
     })
 
     const result = await new Preference(localClient)
