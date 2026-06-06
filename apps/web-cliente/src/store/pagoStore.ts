@@ -41,7 +41,7 @@ export const usePagoStore = create<PagoStore>()((set) => ({
           'Content-Type': 'application/json',
           Authorization: `Bearer ${jwt}`,
         },
-        body: JSON.stringify({ pedidoId, sesionId, restauranteId, monto, descripcion: 'Pago MenYu' }),
+        body: JSON.stringify({ pedidoId, sesionId, restauranteId, monto, descripcion: 'Pago MenYu', returnBaseUrl: window.location.origin }),
       })
 
       if (!res.ok) {
