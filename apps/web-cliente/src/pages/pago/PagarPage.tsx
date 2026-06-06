@@ -1,9 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { io } from 'socket.io-client'
 import { Spinner } from '@menyu/ui'
 import { useSessionStore } from '../../store/sessionStore'
 import { usePagoStore } from '../../store/pagoStore'
 import { api } from '../../services/api'
+
+const WS_BASE = (import.meta.env.VITE_WS_URL as string) ??
+  ((import.meta.env.VITE_API_URL as string) ?? '').replace('/api', '')
 
 const C = {
   orange:     '#E8563A',
@@ -38,6 +42,16 @@ export function PagarPage() {
   const [error,   setError]   = useState<string | null>(null)
 
   useEffect(() => { resetPago() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (estadoPago !== 'mp_redirect' || !restauranteId || !sesionId) return
+    const socket = io(`${WS_BASE}/ws`, { transports: ['websocket'] })
+    socket.on('connect', () => { socket.emit('session:join', { restauranteId }) })
+    socket.on('payment:approved', ({ sesionId: sid }: { sesionId: string }) => {
+      if (sid === sesionId) navigate('/pago/exitoso')
+    })
+    return () => { socket.disconnect() }
+  }, [estadoPago, restauranteId, sesionId, navigate])
 
   function cargar() {
     if (!jwt) { setLoading(false); setError('No hay sesión activa'); return }
