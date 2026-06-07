@@ -1,4 +1,4 @@
-import { TOKEN_KEY, REFRESH_KEY } from '@menyu/auth'
+import { TOKEN_KEY, REFRESH_KEY, resolveLoginUrl } from '@menyu/auth'
 import type {
   Marca,
   Restaurante,
@@ -65,7 +65,7 @@ async function req<T>(method: string, path: string, body?: unknown, isRetry = fa
       if (!newToken) {
         localStorage.removeItem(TOKEN_KEY)
         localStorage.removeItem(REFRESH_KEY)
-        window.location.href = '/login'
+        window.location.replace(resolveLoginUrl())
         throw new ApiError(401, 'Sesión expirada')
       }
       return req<T>(method, path, body, true)

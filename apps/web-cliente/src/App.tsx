@@ -9,7 +9,9 @@ import { PagoFallidoPage } from './pages/pago/PagoFallidoPage'
 import { PagoPendientePage } from './pages/pago/PagoPendientePage'
 import { MisPedidosPage } from './pages/pedidos/MisPedidosPage'
 import { PagarPage } from './pages/pago/PagarPage'
-import { CheckInPage } from './pages/check-in/CheckInPage'
+import { EntradaPage } from './pages/entrada/EntradaPage'
+import { IngresoManualPage } from './pages/entrada/IngresoManualPage'
+import { AuthPage } from './pages/auth/AuthPage'
 import { useSessionStore } from './store/sessionStore'
 import { usePublicMenuStore } from './store/publicMenuStore'
 
@@ -51,7 +53,7 @@ function SessionGuard({ children }: { children: React.ReactNode }) {
   const handleAceptar = () => {
     clear()
     setSesionCerrada(false)
-    navigate('/menu')
+    navigate('/')
   }
 
   return (
@@ -107,7 +109,7 @@ function SessionGuard({ children }: { children: React.ReactNode }) {
               Su sesión ha sido cerrada. Esperamos verle pronto.
             </p>
             <button
-              onClick={() => { setShowGracias(false); clear(); navigate('/menu') }}
+              onClick={() => { setShowGracias(false); clear(); navigate('/') }}
               onMouseEnter={e => e.currentTarget.style.background = '#d34a30'}
               onMouseLeave={e => e.currentTarget.style.background = '#E8563A'}
               style={{
@@ -199,6 +201,9 @@ export function App() {
     <BrowserRouter>
       <SessionGuard>
         <Routes>
+          <Route path="/" element={<EntradaPage />} />
+          <Route path="/ingresar-pin" element={<IngresoManualPage />} />
+          <Route path="/auth" element={<AuthPage />} />
           <Route path="/menu" element={<ClienteMenuPage />} />
           <Route path="/menu/:itemId" element={<ItemDetailPage />} />
           <Route path="/carrito" element={<CarritoPage />} />
@@ -207,8 +212,7 @@ export function App() {
           <Route path="/pago/pendiente" element={<PagoPendientePage />} />
           <Route path="/pedidos" element={<MisPedidosPage />} />
           <Route path="/pagar" element={<PagarPage />} />
-          <Route path="/check-in" element={<CheckInPage />} />
-          <Route path="*" element={<Navigate to="/menu" replace />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </SessionGuard>
     </BrowserRouter>
