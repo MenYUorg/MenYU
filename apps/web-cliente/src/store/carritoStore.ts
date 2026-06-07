@@ -16,6 +16,7 @@ export interface CartItem {
   cantidad: number
   nota?: string
   modificaciones: CartMod[]
+  imagenUrl?: string | null
 }
 
 interface CarritoStore {

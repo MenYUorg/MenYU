@@ -395,6 +395,7 @@ export function ItemDetailPage() {
                 cantidad,
                 nota:           nota.trim() || undefined,
                 modificaciones,
+                imagenUrl:      item.imagenUrl,
               }
               if (cartId) {
                 reemplazar(cartId, payload)
