@@ -35,7 +35,7 @@ export function PagarPage() {
   const sesionId      = useSessionStore((s) => s.sesionId)
   const numeroMesa    = useSessionStore((s) => s.numeroMesa)
   const restauranteId = useSessionStore((s) => s.restauranteId)
-  const { estado: estadoPago, error: errorPago, initiarPagoMP, solicitarEfectivo, reset: resetPago } = usePagoStore()
+  const { estado: estadoPago, error: errorPago, solicitarEfectivo, reset: resetPago } = usePagoStore()
 
   const [pedidos, setPedidos] = useState<PedidoSesion[]>([])
   const [loading, setLoading] = useState(true)
