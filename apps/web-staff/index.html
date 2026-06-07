@@ -7,6 +7,18 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      (function() {
+        var params = new URLSearchParams(window.location.search);
+        var token = params.get('token');
+        var refresh = params.get('refresh');
+        if (token && refresh) {
+          localStorage.setItem('menyu_access_token', token);
+          localStorage.setItem('menyu_refresh_token', refresh);
+          window.history.replaceState({}, '', window.location.pathname);
+        }
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
