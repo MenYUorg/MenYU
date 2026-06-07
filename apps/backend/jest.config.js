@@ -6,4 +6,5 @@ module.exports = {
   testEnvironment: 'node',
   coverageDirectory: '../coverage',
   collectCoverageFrom: ['**/*.(t|j)s', '!**/*.module.ts', '!**/main.ts'],
+  coverageReporters: ['text', 'json-summary', 'lcov'],
 }
