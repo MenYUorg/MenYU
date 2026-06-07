@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { AppHeader } from '../../components/AppHeader'
 import { api } from '../../services/api'
 import { resolveAppUrl } from '../../utils/resolveAppUrl'
+import { useSessionStore } from '../../store/sessionStore'
 
 const C = {
   orange: '#E8563A',
@@ -61,7 +62,8 @@ function LoginForm() {
         })
         window.location.href = `${baseUrl}?${params.toString()}`
       } else {
-        navigate('/')
+        const { sesionId } = useSessionStore.getState()
+        navigate(sesionId ? '/menu' : '/')
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Credenciales incorrectas. Verificá e intentá de nuevo.')
@@ -135,7 +137,8 @@ function RegisterForm() {
     try {
       const data = await api.auth.register(nombre, email, password, telefono || undefined)
       storeTokens(data.accessToken, data.refreshToken)
-      navigate('/')
+      const { sesionId } = useSessionStore.getState()
+      navigate(sesionId ? '/menu' : '/')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo crear la cuenta. El email puede estar en uso.')
     } finally {
