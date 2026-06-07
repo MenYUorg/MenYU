@@ -29,7 +29,7 @@ export class MesasService {
       data: { ...dto, qrToken, pin },
     })
 
-    return { ...mesa, qrImage: await this.generateQr(qrToken, restaurante.qrBaseUrl, dto.restauranteId) }
+    return { ...mesa, qrImage: await this.generateQr(qrToken, dto.restauranteId) }
   }
 
   async findAll(restauranteId: string, user: JwtPayload) {
@@ -39,20 +39,19 @@ export class MesasService {
       where: { restauranteId, activo: true },
       orderBy: { numero: 'asc' },
       include: {
-        restaurante: { select: { qrBaseUrl: true } },
         mozoMesas: { include: { mozo: { select: { id: true, nombre: true } } } },
       },
     })
 
     return Promise.all(
-      mesas.map(async (m) => ({ ...m, qrImage: await this.generateQr(m.qrToken, m.restaurante.qrBaseUrl, m.restauranteId) })),
+      mesas.map(async (m) => ({ ...m, qrImage: await this.generateQr(m.qrToken, m.restauranteId) })),
     )
   }
 
   async findOne(id: string, user: JwtPayload) {
     const mesa = await this.getMesaOrThrow(id)
     await this.assertRestauranteOwnership(mesa.restauranteId, user)
-    return { ...mesa, qrImage: await this.generateQr(mesa.qrToken, mesa.restaurante.qrBaseUrl, mesa.restauranteId) }
+    return { ...mesa, qrImage: await this.generateQr(mesa.qrToken, mesa.restauranteId) }
   }
 
   async update(id: string, dto: UpdateMesaDto, user: JwtPayload) {
@@ -67,7 +66,7 @@ export class MesasService {
     }
 
     const updated = await this.prisma.mesa.update({ where: { id }, data: dto })
-    return { ...updated, qrImage: await this.generateQr(updated.qrToken, mesa.restaurante.qrBaseUrl, updated.restauranteId) }
+    return { ...updated, qrImage: await this.generateQr(updated.qrToken, updated.restauranteId) }
   }
 
   async remove(id: string, user: JwtPayload) {
@@ -82,7 +81,7 @@ export class MesasService {
 
     const qrToken = randomUUID()
     const updated = await this.prisma.mesa.update({ where: { id }, data: { qrToken } })
-    return { ...updated, qrImage: await this.generateQr(qrToken, mesa.restaurante.qrBaseUrl, mesa.restauranteId) }
+    return { ...updated, qrImage: await this.generateQr(qrToken, mesa.restauranteId) }
   }
 
   async cambiarPin(id: string, pin: string, user: JwtPayload) {
@@ -100,10 +99,7 @@ export class MesasService {
   // ── Helpers ────────────────────────────────────────────────────────────
 
   private async getMesaOrThrow(id: string) {
-    const mesa = await this.prisma.mesa.findUnique({
-      where: { id },
-      include: { restaurante: { select: { qrBaseUrl: true } } },
-    })
+    const mesa = await this.prisma.mesa.findUnique({ where: { id } })
     if (!mesa || !mesa.activo) throw new NotFoundException('Mesa no encontrada')
     return mesa
   }
@@ -149,8 +145,8 @@ export class MesasService {
     throw new ConflictException('No se pudo generar un PIN único para este restaurante')
   }
 
-  private generateQr(token: string, qrBaseUrl: string | null, restauranteId: string): Promise<string> {
-    const base = qrBaseUrl ?? 'https://menyu.app'
+  private generateQr(token: string, restauranteId: string): Promise<string> {
+    const base = process.env.QR_BASE_URL ?? 'https://menyu-cliente.vercel.app'
     const url = `${base}/check-in?restaurantId=${restauranteId}&tableCode=${token}`
     return QRCode.toDataURL(url, { errorCorrectionLevel: 'M', width: 300 })
   }

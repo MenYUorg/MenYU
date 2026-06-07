@@ -52,7 +52,7 @@ export const api = {
       req<{ sesionId: string; mesaId: string; restauranteId: string; esAnfitrion: boolean; codigoSesion: string; jwt: string; numeroMesa: string; modoSesion: string }>(
         'POST',
         '/sessions/open',
-        data,
+        { tableCode: data.qrToken, restauranteId: data.restauranteId, pin: data.pin, codigoSesion: data.codigoSesion },
       ),
   },
 

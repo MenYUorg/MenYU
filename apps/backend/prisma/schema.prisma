@@ -30,7 +30,6 @@ model Restaurante {
   marcaId     String   @map("marca_id")
   nombre      String
   direccion   String?
-  qrBaseUrl   String?  @map("qr_base_url")
   modoSesion  String   @default("abierto") @map("modo_sesion")
   activo      Boolean  @default(true)
   createdAt   DateTime @default(now()) @map("created_at")
