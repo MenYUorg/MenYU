@@ -9,6 +9,7 @@ import { PagoFallidoPage } from './pages/pago/PagoFallidoPage'
 import { PagoPendientePage } from './pages/pago/PagoPendientePage'
 import { MisPedidosPage } from './pages/pedidos/MisPedidosPage'
 import { PagarPage } from './pages/pago/PagarPage'
+import { CheckInPage } from './pages/check-in/CheckInPage'
 import { useSessionStore } from './store/sessionStore'
 import { usePublicMenuStore } from './store/publicMenuStore'
 
@@ -206,6 +207,7 @@ export function App() {
           <Route path="/pago/pendiente" element={<PagoPendientePage />} />
           <Route path="/pedidos" element={<MisPedidosPage />} />
           <Route path="/pagar" element={<PagarPage />} />
+          <Route path="/check-in" element={<CheckInPage />} />
           <Route path="*" element={<Navigate to="/menu" replace />} />
         </Routes>
       </SessionGuard>
