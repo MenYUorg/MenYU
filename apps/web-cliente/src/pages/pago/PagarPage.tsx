@@ -178,6 +178,7 @@ export function PagarPage() {
   } else {
     bottomContent = (
       <>
+        {/* TODO: reactivar cuando MP esté funcionando
         <button
           onClick={handleMP}
           style={{
@@ -192,6 +193,7 @@ export function PagarPage() {
         >
           Pagar con Mercado Pago
         </button>
+        */}
         <button
           onClick={handleEfectivo}
           style={{
@@ -201,7 +203,7 @@ export function PagarPage() {
             fontWeight: 700, fontSize: 15, cursor: 'pointer',
           }}
         >
-          Pagar en efectivo
+          Llamar al mozo para pagar
         </button>
       </>
     )
