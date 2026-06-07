@@ -19,8 +19,7 @@ const OWNER: JwtPayload = { sub: 'admin-1', tipo: 'admin', rol: 'OWNER' }
 // marcaId necesario para que assertRestauranteOwnership compare admin.marcaId === restaurante.marcaId
 const RESTAURANTE = { id: 'rest-1', activo: true, marcaId: 'marca-1' }
 const ADMIN = { id: 'admin-1', marcaId: 'marca-1' }
-// restaurante necesario porque getMesaOrThrow incluye { restaurante: { select: { qrBaseUrl } } }
-const MESA = { id: 'mesa-1', numero: '1', qrToken: 'token-abc', estado: 'libre', restauranteId: 'rest-1', activo: true, restaurante: { qrBaseUrl: null } }
+const MESA = { id: 'mesa-1', numero: '1', qrToken: 'token-abc', estado: 'libre', restauranteId: 'rest-1', activo: true }
 
 const mockPrisma = {
   mesa: {

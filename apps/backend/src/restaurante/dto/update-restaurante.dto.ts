@@ -10,10 +10,6 @@ export class UpdateRestauranteDto {
   @IsOptional()
   direccion?: string
 
-  @IsString()
-  @IsOptional()
-  qrBaseUrl?: string
-
   @IsIn(['abierto', 'seguro'])
   @IsOptional()
   modoSesion?: string
