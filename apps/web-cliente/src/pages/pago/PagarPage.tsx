@@ -86,10 +86,11 @@ export function PagarPage() {
     ),
   )
 
-  function handleMP() {
-    if (!jwt || !sesionId || !restauranteId || !pedidoId) return
-    void initiarPagoMP(jwt, sesionId, restauranteId, pedidoId, total)
-  }
+  // TODO: reactivar cuando MP esté funcionando
+  // function handleMP() {
+  //   if (!jwt || !sesionId || !restauranteId || !pedidoId) return
+  //   void initiarPagoMP(jwt, sesionId, restauranteId, pedidoId, total)
+  // }
 
   function handleEfectivo() {
     if (!jwt || !sesionId || !pedidoId) return
