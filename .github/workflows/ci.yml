@@ -40,5 +40,45 @@ jobs:
       - name: Test
         run: pnpm turbo test --filter=@menyu/api --filter=@menyu/web-admin --filter=@menyu/web-cliente --filter=@menyu/web-staff
 
+      - name: Coverage (informativo)
+        run: pnpm turbo test:coverage --filter=@menyu/api --filter=@menyu/web-admin --filter=@menyu/web-cliente --filter=@menyu/web-staff
+        continue-on-error: true
+
+      - name: Upload coverage — backend
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-backend
+          path: apps/backend/coverage/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload coverage — web-admin
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-web-admin
+          path: apps/web-admin/coverage/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload coverage — web-cliente
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-web-cliente
+          path: apps/web-cliente/coverage/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload coverage — web-staff
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-web-staff
+          path: apps/web-staff/coverage/
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Build
         run: pnpm turbo build --filter=@menyu/api --filter=@menyu/web-admin --filter=@menyu/web-cliente --filter=@menyu/web-staff
