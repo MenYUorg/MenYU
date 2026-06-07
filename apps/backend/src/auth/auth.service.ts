@@ -73,15 +73,16 @@ export class AuthService {
     password: string,
     telefono?: string,
   ): Promise<TokenPair> {
-    const existing = await this.users.findClienteByEmail(email)
+    const normalizedEmail = email.toLowerCase().trim()
+    const existing = await this.users.findClienteByEmail(normalizedEmail)
     if (existing) {
       throw new ConflictException('El email ya está registrado')
     }
 
     const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS)
-    const cliente = await this.users.createCliente({ nombre, email, passwordHash, telefono })
+    const cliente = await this.users.createCliente({ nombre, email: normalizedEmail, passwordHash, telefono })
 
-    return this.issueTokens(cliente.id, email, 'cliente', undefined, nombre)
+    return this.issueTokens(cliente.id, normalizedEmail, 'cliente', undefined, nombre)
   }
 
   // ── Guest ──────────────────────────────────────────────
@@ -241,7 +242,8 @@ export class AuthService {
     restauranteNombre?: string,
     marcaNombre?: string,
   ): Promise<TokenPair> {
-    const payload: JwtPayload = { sub: userId, email, nombre, tipo, rol, restauranteId, restauranteNombre, marcaNombre }
+    const normalizedEmail = email?.toLowerCase().trim()
+    const payload: JwtPayload = { sub: userId, email: normalizedEmail, nombre, tipo, rol, restauranteId, restauranteNombre, marcaNombre }
 
     const accessToken = this.jwt.sign(payload)
 
@@ -262,11 +264,12 @@ export class AuthService {
   }
 
   private async resolveUserByEmail(email: string): Promise<{ user: any; tipo: UserTipo } | null> {
-    const admin = await this.users.findAdminByEmail(email)
+    const normalized = email.toLowerCase().trim()
+    const admin = await this.users.findAdminByEmail(normalized)
     if (admin) return { user: admin, tipo: 'admin' }
-    const mozo = await this.users.findMozoByEmail(email)
+    const mozo = await this.users.findMozoByEmail(normalized)
     if (mozo) return { user: mozo, tipo: 'mozo' }
-    const cliente = await this.users.findClienteByEmail(email)
+    const cliente = await this.users.findClienteByEmail(normalized)
     if (cliente) return { user: cliente, tipo: 'cliente' }
     return null
   }

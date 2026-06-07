@@ -54,15 +54,11 @@ export function AppHeader({ hideAuthButtons = false }: AppHeaderProps) {
         onClick={() => navigate('/')}
         style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
       >
-        <span style={{
-          fontFamily: 'Montserrat, sans-serif',
-          fontWeight: 800,
-          fontSize: 22,
-          color: C.navy,
-          letterSpacing: '-0.02em',
-        }}>
-          Men<span style={{ color: C.orange }}>YU</span>
-        </span>
+        <img
+          src="/logo.png"
+          alt="MenYU"
+          style={{ height: 28, width: 'auto', display: 'block' }}
+        />
       </button>
 
       {!hideAuthButtons && (
