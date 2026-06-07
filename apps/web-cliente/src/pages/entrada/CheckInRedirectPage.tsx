@@ -29,7 +29,7 @@ export default function CheckInRedirectPage() {
         navigate('/', { replace: true })
       }
     })
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   return null
 }
