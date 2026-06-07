@@ -35,7 +35,7 @@ export function PagarPage() {
   const sesionId      = useSessionStore((s) => s.sesionId)
   const numeroMesa    = useSessionStore((s) => s.numeroMesa)
   const restauranteId = useSessionStore((s) => s.restauranteId)
-  const { estado: estadoPago, error: errorPago, initiarPagoMP, solicitarEfectivo, reset: resetPago } = usePagoStore()
+  const { estado: estadoPago, error: errorPago, solicitarEfectivo, reset: resetPago } = usePagoStore()
 
   const [pedidos, setPedidos] = useState<PedidoSesion[]>([])
   const [loading, setLoading] = useState(true)
@@ -86,10 +86,11 @@ export function PagarPage() {
     ),
   )
 
-  function handleMP() {
-    if (!jwt || !sesionId || !restauranteId || !pedidoId) return
-    void initiarPagoMP(jwt, sesionId, restauranteId, pedidoId, total)
-  }
+  // TODO: reactivar cuando MP esté funcionando
+  // function handleMP() {
+  //   if (!jwt || !sesionId || !restauranteId || !pedidoId) return
+  //   void initiarPagoMP(jwt, sesionId, restauranteId, pedidoId, total)
+  // }
 
   function handleEfectivo() {
     if (!jwt || !sesionId || !pedidoId) return
@@ -178,6 +179,7 @@ export function PagarPage() {
   } else {
     bottomContent = (
       <>
+        {/* TODO: reactivar cuando MP esté funcionando
         <button
           onClick={handleMP}
           style={{
@@ -192,6 +194,7 @@ export function PagarPage() {
         >
           Pagar con Mercado Pago
         </button>
+        */}
         <button
           onClick={handleEfectivo}
           style={{
@@ -201,7 +204,7 @@ export function PagarPage() {
             fontWeight: 700, fontSize: 15, cursor: 'pointer',
           }}
         >
-          Pagar en efectivo
+          Llamar al mozo para pagar
         </button>
       </>
     )
