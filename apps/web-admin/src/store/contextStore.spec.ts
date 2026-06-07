@@ -19,9 +19,20 @@ function makeJwt(payload: Record<string, unknown>): string {
   return `header.${btoa(JSON.stringify(payload))}.signature`
 }
 
-const RESTAURANTE_A = { id: 'rest-1', nombre: 'Resto A', marca: { id: 'marca-1', nombre: 'Marca X' } }
-const RESTAURANTE_B = { id: 'rest-2', nombre: 'Resto B', marca: { id: 'marca-1', nombre: 'Marca X' } }
-const MARCA_X = { id: 'marca-1', nombre: 'Marca X' }
+const MARCA_X = { id: 'marca-1', nombre: 'Marca X', slug: 'marca-x', activo: true, createdAt: '2024-01-01' }
+
+const RESTAURANTE_BASE = {
+  marcaId: 'marca-1',
+  direccion: null,
+  qrBaseUrl: null,
+  modoSesion: 'abierto',
+  activo: true,
+  createdAt: '2024-01-01',
+  marca: MARCA_X,
+}
+
+const RESTAURANTE_A = { ...RESTAURANTE_BASE, id: 'rest-1', nombre: 'Resto A' }
+const RESTAURANTE_B = { ...RESTAURANTE_BASE, id: 'rest-2', nombre: 'Resto B' }
 
 describe('contextStore', () => {
   beforeEach(async () => {
