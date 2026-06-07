@@ -447,8 +447,21 @@ export function ClienteMenuPage() {
   const [checkInRidTemp, setCheckInRidTemp] = useState('')
   const [checkInPinTemp, setCheckInPinTemp] = useState('')
 
-  // Placeholder for future user auth (never truthy today)
-  const user = null as null | { nombre: string; email: string }
+  const user = (() => {
+    try {
+      const token = localStorage.getItem('menyu_access_token')
+      if (!token) return null
+      const payload = JSON.parse(atob(token.split('.')[1])) as {
+        tipo: string
+        nombre?: string
+        email?: string
+      }
+      if (payload.tipo !== 'cliente') return null
+      return { nombre: payload.nombre ?? payload.email ?? 'Cliente', email: payload.email ?? '' }
+    } catch {
+      return null
+    }
+  })()
 
   useEffect(() => {
     if (restauranteId && !menu) void fetchMenu(restauranteId)
@@ -702,15 +715,25 @@ export function ClienteMenuPage() {
         <div style={{ background: `linear-gradient(135deg, ${C.navy} 0%, #3d4880 100%)`, padding: '22px 18px 18px' }}>
           {user ? (
             <>
-              <div style={{ width: 52, height: 52, borderRadius: '50%', background: `linear-gradient(135deg, ${C.orange}, #ff7a5e)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Montserrat,sans-serif', fontWeight: 800, fontSize: 18, color: 'white', marginBottom: 10 }}>
-                {user.nombre[0]?.toUpperCase()}
+              <div style={{ width: 52, height: 52, borderRadius: '50%', background: 'rgba(255,255,255,0.14)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, fontFamily: 'Montserrat,sans-serif', fontWeight: 700, color: 'white', marginBottom: 10 }}>
+                {user.nombre.slice(0, 1).toUpperCase()}
               </div>
-              <div style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 17, color: 'white' }}>
-                Hola, {user.nombre.split(' ')[0]} 👋
+              <div style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 17, color: 'white', lineHeight: 1.2 }}>
+                ¡Hola, {user.nombre.split(' ')[0]}!
               </div>
-              <div style={{ fontFamily: 'Inter,sans-serif', fontSize: 11, color: 'rgba(255,255,255,0.55)', marginTop: 2 }}>
+              <div style={{ fontFamily: 'Inter,sans-serif', fontSize: 11, color: 'rgba(255,255,255,0.55)', marginTop: 2, marginBottom: 14 }}>
                 {user.email}
               </div>
+              <button
+                style={{ background: 'rgba(255,255,255,0.1)', color: 'white', border: '1.5px solid rgba(255,255,255,0.22)', borderRadius: 8, padding: '10px 16px', fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 13, cursor: 'pointer', width: '100%' }}
+                onClick={() => {
+                  localStorage.removeItem('menyu_access_token')
+                  localStorage.removeItem('menyu_refresh_token')
+                  setDrawerOpen(false)
+                }}
+              >
+                Cerrar sesión
+              </button>
             </>
           ) : (
             <>
@@ -724,10 +747,16 @@ export function ClienteMenuPage() {
                 Estás navegando como invitado
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <button style={{ background: C.orange, color: 'white', border: 'none', borderRadius: 8, padding: '10px 16px', fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+                <button
+                  style={{ background: C.orange, color: 'white', border: 'none', borderRadius: 8, padding: '10px 16px', fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}
+                  onClick={() => { setDrawerOpen(false); navigate('/auth') }}
+                >
                   Iniciar sesión
                 </button>
-                <button style={{ background: 'rgba(255,255,255,0.1)', color: 'white', border: '1.5px solid rgba(255,255,255,0.22)', borderRadius: 8, padding: '10px 16px', fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+                <button
+                  style={{ background: 'rgba(255,255,255,0.1)', color: 'white', border: '1.5px solid rgba(255,255,255,0.22)', borderRadius: 8, padding: '10px 16px', fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}
+                  onClick={() => { setDrawerOpen(false); navigate('/auth?tab=register') }}
+                >
                   Crear cuenta gratis
                 </button>
               </div>

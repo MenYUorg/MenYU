@@ -66,7 +66,7 @@ export function ItemDetailPage() {
   }
 
   if (!restauranteId) {
-    navigate('/menu')
+    navigate('/')
     return null
   }
 

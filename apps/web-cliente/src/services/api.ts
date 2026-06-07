@@ -92,4 +92,22 @@ export const api = {
         jwt,
       ),
   },
+
+  auth: {
+    login: (email: string, password: string) =>
+      req<{ accessToken: string; refreshToken: string }>('POST', '/auth/login', { email, password }),
+    register: (nombre: string, email: string, password: string, telefono?: string) =>
+      req<{ accessToken: string; refreshToken: string }>(
+        'POST',
+        '/auth/register',
+        { nombre, email, password, ...(telefono ? { telefono } : {}) },
+      ),
+  },
+
+  marca: {
+    publicas: () =>
+      req<Array<{ id: string; nombre: string; restaurantesActivos: number }>>('GET', '/marca/publicas'),
+    restaurantes: (marcaId: string) =>
+      req<Array<{ id: string; nombre: string; direccion: string | null }>>('GET', `/marca/${marcaId}/restaurantes`),
+  },
 }
