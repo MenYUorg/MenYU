@@ -370,28 +370,13 @@ export function CarritoPage() {
                 boxShadow:    '0 1px 4px rgba(0,0,0,0.06)',
               }}>
                 <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-                  {item.imagenUrl ? (
-                    <img
-                      src={item.imagenUrl}
-                      alt={item.nombre}
-                      style={{
-                        width:        56,
-                        height:       56,
-                        borderRadius: 8,
-                        objectFit:    'cover',
-                        flexShrink:   0,
-                        display:      'block',
-                      }}
-                    />
-                  ) : (
-                    <div style={{
-                      width:        56,
-                      height:       56,
-                      borderRadius: 8,
-                      background:   '#F7F7F8',
-                      flexShrink:   0,
-                    }} />
-                  )}
+                  <div style={{
+                    width:        64,
+                    height:       64,
+                    borderRadius: 10,
+                    background:   C.bg,
+                    flexShrink:   0,
+                  }} />
 
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <p
