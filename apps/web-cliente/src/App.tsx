@@ -12,6 +12,7 @@ import { PagarPage } from './pages/pago/PagarPage'
 import { EntradaPage } from './pages/entrada/EntradaPage'
 import { IngresoManualPage } from './pages/entrada/IngresoManualPage'
 import { AuthPage } from './pages/auth/AuthPage'
+import CheckInRedirectPage from './pages/entrada/CheckInRedirectPage'
 import { useSessionStore } from './store/sessionStore'
 import { usePublicMenuStore } from './store/publicMenuStore'
 
@@ -212,6 +213,7 @@ export function App() {
           <Route path="/pago/pendiente" element={<PagoPendientePage />} />
           <Route path="/pedidos" element={<MisPedidosPage />} />
           <Route path="/pagar" element={<PagarPage />} />
+          <Route path="/check-in" element={<CheckInRedirectPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </SessionGuard>
