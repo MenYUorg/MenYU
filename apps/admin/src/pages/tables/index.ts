@@ -1,1 +1,0 @@
-export { TablesPage } from './TablesPage'
