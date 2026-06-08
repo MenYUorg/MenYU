@@ -13,8 +13,6 @@ Equipo: De Marcos, Ojeda, Strumia Carrara (ODS390-2026). Stack sin experiencia p
 | Backend | Node.js + TypeScript + NestJS + Prisma ORM |
 | Base de datos | PostgreSQL via Supabase |
 | Tiempo real | Socket.io |
-| App cliente (comensal) | Expo (React Native + Expo Web) |
-| App mozo | Expo (React Native) · push notifications |
 | Panel web admin | React + Vite + TailwindCSS · apps/web-admin |
 | Panel web staff | React + Vite + TailwindCSS · apps/web-staff (cocina + mozo web) |
 | App web cliente | React + Vite + TailwindCSS · apps/web-cliente |
@@ -33,9 +31,7 @@ Equipo: De Marcos, Ojeda, Strumia Carrara (ODS390-2026). Stack sin experiencia p
 ```
 MenYu/
 ├── apps/
-│   ├── backend/          → @menyu/api      (NestJS + Prisma)
-│   ├── cliente/          → @menyu/cliente  (Expo React Native + Expo Web)
-│   ├── mozo/             → @menyu/mozo     (Expo React Native · push notifications · panel completo)
+│   ├── backend/          → @menyu/api          (NestJS + Prisma)
 │   ├── web-cliente/      → @menyu/web-cliente  (React + Vite · menú del comensal)
 │   ├── web-staff/        → @menyu/web-staff    (React + Vite · cocina + mozo web)
 │   └── web-admin/        → @menyu/web-admin    (React + Vite · panel administrador)
@@ -48,10 +44,6 @@ MenYu/
 ├── pnpm-workspace.yaml
 └── .env.example
 ```
-
-> **apps/cocina, apps/admin, apps/cliente, apps/mozo y apps/web están ARCHIVADAS.**
-> Todo desarrollo web va en las tres apps nuevas.
-> No agregar código nuevo a esas carpetas.
 
 ### Interior de `apps/backend/`
 
@@ -79,30 +71,6 @@ apps/backend/
     └── common/           (filters/, interceptors/, decorators/, pipes/)
 ```
 
-### Interior de `apps/cliente/`
-
-```
-apps/cliente/src/
-├── app/                  (Expo Router file-based: _layout.tsx, (auth)/, (session)/)
-├── features/             (auth/, qr-scanner/, menu/, cart/, payment/, waiter-call/, session/)
-├── components/           (ui/, layout/, menu/, order/)
-├── store/                (sessionStore.ts, cartStore.ts, userStore.ts — Zustand)
-└── services/             (api.ts, socket.ts)
-```
-
-### Interior de `apps/mozo/`
-
-App Expo React Native. El mozo se mueve por el salón — necesita push notifications nativas que lleguen con la pantalla bloqueada. Panel completo: estado de platos, llamados de mesa, pedidos listos para despacho.
-
-```
-apps/mozo/src/
-├── app/                  (Expo Router: _layout.tsx, (auth)/, (panel)/)
-├── features/             (notifications/, orders/, tables/, waiter-calls/)
-├── components/           (ui/, layout/, order/)
-├── store/                (mozoStore.ts, ordersStore.ts — Zustand)
-└── services/             (api.ts, socket.ts, notifications.ts)
-```
-
 ### Interior de `packages/types/`
 
 ```
@@ -128,9 +96,9 @@ packages/types/src/
 ### Tipos de usuario adicionales (tablas separadas, NO son RolAdmin)
 | Tipo | Tabla | App |
 |---|---|---|
-| Mozo | `mozo` | apps/mozo + apps/web-staff |
+| Mozo | `mozo` | apps/web-staff |
 | Cocina | `cocina` | apps/web-staff |
-| Cliente/Comensal | `cliente` | apps/cliente + apps/web-cliente |
+| Cliente/Comensal | `cliente` | apps/web-cliente |
 
 ### Guards NestJS
 - `@Roles(RolAdmin.ROOT)` — solo ROOT
@@ -292,7 +260,6 @@ pnpm dev
 
 # Solo una app
 pnpm --filter @menyu/api dev
-pnpm --filter @menyu/cliente dev
 
 # Build
 pnpm build
@@ -315,7 +282,6 @@ pnpm typecheck
 - Cada módulo de NestJS tiene su propio archivo `.module.ts`, `.controller.ts`, `.service.ts`.
 - El patrón de pagos es `PaymentProvider` — nunca llamar Mercado Pago directamente desde el controller.
 - El QR es un identificador interno de la app, **no** una URL directa a una ruta web.
-- apps/cocina, apps/admin y apps/web están archivadas — no agregar código nuevo.
 - Cada feature nueva de frontend va en la app correspondiente a su rol: web-cliente, web-staff o web-admin.
 - El login QR/PIN del comensal es independiente del login común — nunca mezclarlos ni importar packages/auth en web-cliente.
 - Componentes compartidos entre apps van en packages/ui o packages/auth. Nunca duplicar lógica idéntica en cada app.
