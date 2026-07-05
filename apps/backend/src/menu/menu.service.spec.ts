@@ -10,11 +10,14 @@ const mockPrisma = {
   categoriaMenu: {
     findMany: jest.fn(),
   },
+  itemMenu: {
+    findMany: jest.fn(),
+  },
 }
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
-const RESTAURANTE = { id: 'rest-1', nombre: 'Restaurante Test', activo: true }
+const RESTAURANTE = { id: 'rest-1', nombre: 'Restaurante Test', activo: true, nombreSeccionRecomendados: 'Recomendaciones del chef' }
 
 const ING_REMOVIBLE = {
   id: 'ii-pan',
@@ -102,6 +105,7 @@ describe('MenuService', () => {
     jest.clearAllMocks()
     mockPrisma.restaurante.findUnique.mockResolvedValue(RESTAURANTE)
     mockPrisma.categoriaMenu.findMany.mockResolvedValue([])
+    mockPrisma.itemMenu.findMany.mockResolvedValue([])
   })
 
   // ── getMenuPublico ─────────────────────────────────────────────────────────
@@ -114,7 +118,11 @@ describe('MenuService', () => {
 
       const result = await service.getMenuPublico('rest-1', {})
 
-      expect(result.restaurante).toEqual({ id: 'rest-1', nombre: 'Restaurante Test' })
+      expect(result.restaurante).toEqual({
+        id: 'rest-1',
+        nombre: 'Restaurante Test',
+        nombreSeccionRecomendados: 'Recomendaciones del chef',
+      })
       expect(result.categorias).toEqual([])
     })
 

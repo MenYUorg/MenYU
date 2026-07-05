@@ -33,6 +33,15 @@ function matchesBusqueda(nombre: string, buscar: string): boolean {
   return nombre.toLowerCase().split(/\s+/).some((palabra) => palabra.startsWith(query))
 }
 
+function itemPasaFiltros(item: MenuPublicoItem, buscar: string, activeDiets: Set<string>): boolean {
+  if (!matchesBusqueda(item.nombre, buscar)) return false
+  if (activeDiets.size > 0) {
+    const ids = new Set(item.clasificaciones.map((c) => c.id))
+    for (const d of activeDiets) if (!ids.has(d)) return false
+  }
+  return true
+}
+
 // ── Sub-components ────────────────────────────────────────────────────────────
 
 function EmptyState({ buscar, activeDiets, onClear }: { buscar: string; activeDiets: Set<string>; onClear: () => void }) {
@@ -506,15 +515,13 @@ export function ClienteMenuPage() {
     if (!menu) return []
     return menu.categorias.map((cat) => ({
       ...cat,
-      itemsDirectos: cat.itemsDirectos.filter((item) => {
-        if (!matchesBusqueda(item.nombre, buscar)) return false
-        if (activeDiets.size > 0) {
-          const ids = new Set(item.clasificaciones.map((c) => c.id))
-          for (const d of activeDiets) if (!ids.has(d)) return false
-        }
-        return true
-      }),
+      itemsDirectos: cat.itemsDirectos.filter((item) => itemPasaFiltros(item, buscar, activeDiets)),
     })).filter((cat) => cat.itemsDirectos.length > 0)
+  }, [menu, buscar, activeDiets])
+
+  // Chef's recommendations with the same filters applied
+  const recomendadosFiltrados = useMemo(() => {
+    return (menu?.recomendados ?? []).filter((item) => itemPasaFiltros(item, buscar, activeDiets))
   }, [menu, buscar, activeDiets])
 
   // Scroll-spy: update active chip based on which section is visible
@@ -1006,6 +1013,29 @@ export function ClienteMenuPage() {
 
       {/* ── Items grid */}
       <div ref={scrollContainerRef} style={{ flex: 1, overflowY: 'auto', padding: 14 }}>
+        {recomendadosFiltrados.length > 0 && (
+          <div style={{ marginBottom: 28 }}>
+            <h2 style={{
+              fontFamily: 'Montserrat,sans-serif',
+              fontWeight: 800,
+              fontSize: 13,
+              letterSpacing: '0.1em',
+              textTransform: 'uppercase',
+              color: C.navy,
+              margin: '0 0 12px',
+              paddingBottom: 8,
+              borderBottom: `2px solid ${C.orange}`,
+              display: 'inline-block',
+            }}>
+              {menu?.restaurante.nombreSeccionRecomendados}
+            </h2>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+              {recomendadosFiltrados.map((item) => (
+                <ItemCard key={item.id} item={item} onPress={() => navigate(`/menu/${item.id}`)} />
+              ))}
+            </div>
+          </div>
+        )}
         {categoriasFiltradas.length > 0 ? (
           categoriasFiltradas.map((cat) => (
             <div
@@ -1035,9 +1065,9 @@ export function ClienteMenuPage() {
               </div>
             </div>
           ))
-        ) : (
+        ) : recomendadosFiltrados.length === 0 ? (
           <EmptyState buscar={buscar} activeDiets={activeDiets} onClear={() => { setBuscar(''); setActiveDiets(new Set()) }} />
-        )}
+        ) : null}
       </div>
 
       {/* ── Cart FAB */}

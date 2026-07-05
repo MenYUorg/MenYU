@@ -43,6 +43,11 @@ export class UpdateItemDto {
   @IsBoolean()
   disponible?: boolean
 
+  @ApiPropertyOptional({ example: true })
+  @IsOptional()
+  @IsBoolean()
+  esRecomendado?: boolean
+
   @ApiPropertyOptional({ example: 'https://storage.example.com/nueva-imagen.jpg' })
   @IsOptional()
   @IsUrl()

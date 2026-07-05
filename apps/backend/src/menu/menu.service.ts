@@ -28,7 +28,7 @@ export class MenuService {
   async getMenuPublico(restauranteId: string, filtros: MenuFiltros) {
     const restaurante = await this.prisma.restaurante.findUnique({
       where: { id: restauranteId },
-      select: { id: true, nombre: true, activo: true },
+      select: { id: true, nombre: true, activo: true, nombreSeccionRecomendados: true },
     })
     if (!restaurante || !restaurante.activo) throw new NotFoundException('Restaurante no encontrado')
 
@@ -62,9 +62,30 @@ export class MenuService {
       }))
       .filter((cat) => cat.itemsDirectos.length > 0)
 
+    const recomendadosRaw = await this.prisma.itemMenu.findMany({
+      where: { restauranteId, disponible: true, recomendadoEn: { not: null }, ...buscarWhere },
+      orderBy: { nombre: 'asc' },
+      include: { ...ITEM_INCLUDE, categoria: { select: { orden: true } } },
+    })
+
+    const recomendados = recomendadosRaw
+      .filter((item) => this.pasaFiltros(item, filtros))
+      .sort((a, b) => {
+        const ordenA = a.categoria?.orden ?? Number.MAX_SAFE_INTEGER
+        const ordenB = b.categoria?.orden ?? Number.MAX_SAFE_INTEGER
+        if (ordenA !== ordenB) return ordenA - ordenB
+        return a.nombre.localeCompare(b.nombre)
+      })
+      .map((item) => ({ ...this.serializeItem(item), esRecomendado: true }))
+
     return {
-      restaurante: { id: restaurante.id, nombre: restaurante.nombre },
+      restaurante: {
+        id: restaurante.id,
+        nombre: restaurante.nombre,
+        nombreSeccionRecomendados: restaurante.nombreSeccionRecomendados,
+      },
       categorias: result,
+      recomendados,
     }
   }
 
