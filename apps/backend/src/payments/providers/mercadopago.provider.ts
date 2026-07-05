@@ -36,34 +36,21 @@ export class MercadoPagoProvider implements PaymentProvider {
       },
     ]
 
-    const preferenceBody = isSandbox
-      ? {
-          external_reference: data.externalReference,
-          items: baseItems,
-          ...(data.successUrl && {
-            back_urls: {
-              success: data.successUrl,
-              failure: data.failureUrl ?? data.successUrl,
-              pending: data.pendingUrl ?? data.successUrl,
-            },
-            auto_return: 'approved' as const,
-          }),
-        }
-      : {
-          external_reference: data.externalReference,
-          items: baseItems,
-          ...(data.successUrl && {
-            back_urls: {
-              success: data.successUrl,
-              failure: data.failureUrl ?? data.successUrl,
-              pending: data.pendingUrl ?? data.successUrl,
-            },
-            auto_return: 'approved' as const,
-          }),
-          ...(process.env.MP_WEBHOOK_URL && {
-            notification_url: process.env.MP_WEBHOOK_URL,
-          }),
-        }
+    const preferenceBody = {
+      external_reference: data.externalReference,
+      items: baseItems,
+      ...(data.successUrl && {
+        back_urls: {
+          success: data.successUrl,
+          failure: data.failureUrl ?? data.successUrl,
+          pending: data.pendingUrl ?? data.successUrl,
+        },
+        auto_return: 'approved' as const,
+      }),
+      ...(process.env.MP_WEBHOOK_URL && {
+        notification_url: process.env.MP_WEBHOOK_URL,
+      }),
+    }
 
     console.log('[MP] createPreference → body', {
       MP_ENV: process.env.MP_ENV ?? '(no definida)',
@@ -77,7 +64,7 @@ export class MercadoPagoProvider implements PaymentProvider {
       has_back_urls: !!data.successUrl,
       back_url_success: data.successUrl ?? '(no definida)',
       has_auto_return: !!data.successUrl,
-      has_notification_url: !isSandbox && !!process.env.MP_WEBHOOK_URL,
+      has_notification_url: !!process.env.MP_WEBHOOK_URL,
     })
 
     const result = await new Preference(localClient)
