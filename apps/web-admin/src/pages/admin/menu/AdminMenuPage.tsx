@@ -16,19 +16,22 @@ const matchesBusqueda = (nombre: string, buscar: string): boolean => {
 }
 
 /* ─── ToggleSwitch ──────────────────────────────────────────────────────── */
-function ToggleSwitch({ value, onChange }: { value: boolean; onChange: () => void }) {
+function ToggleSwitch({ value, onChange, title, disabled }: { value: boolean; onChange: () => void; title?: string; disabled?: boolean }) {
   return (
     <div
       role="switch"
       aria-checked={value}
-      onClick={(e) => { e.stopPropagation(); onChange() }}
+      aria-disabled={disabled}
+      title={disabled ? `${title ?? ''} (no disponible)`.trim() : title}
+      onClick={(e) => { e.stopPropagation(); if (!disabled) onChange() }}
       style={{
         width:        44,
         height:       24,
         borderRadius: 999,
         background:   value ? '#E8563A' : '#d1d5db',
-        cursor:       'pointer',
-        transition:   'background 200ms',
+        cursor:       disabled ? 'not-allowed' : 'pointer',
+        opacity:      disabled ? 0.4 : 1,
+        transition:   'background 200ms, opacity 200ms',
         position:     'relative',
         flexShrink:   0,
       }}
@@ -779,6 +782,7 @@ export function AdminMenuPage() {
   const [busqueda, setBusqueda]   = useState('')
   const [catalogOpen, setCatalogOpen] = useState(false)
   const [optimistic, setOptimistic]   = useState<Record<string, boolean>>({})
+  const [optimisticRecomendado, setOptimisticRecomendado] = useState<Record<string, boolean>>({})
   const [itemModal, setItemModal]     = useState<{ open: boolean; item: ItemMenu | null }>({ open: false, item: null })
   const [categoriaActiva, setCategoriaActiva] = useState<string | null>(null)
 
@@ -815,6 +819,17 @@ export function AdminMenuPage() {
         items: sinCategoria,
       })
     }
+
+    const recomendados = items.filter(
+      (item) => item.esRecomendado && matchesBusqueda(item.nombre, busqueda),
+    )
+    if (recomendados.length > 0) {
+      grupos.unshift({
+        categoria: { id: '__recomendados__', nombre: '⭐ Recomendaciones', orden: -1 } as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+        items: recomendados,
+      })
+    }
+
     return grupos
   }, [items, categorias, busqueda])
 
@@ -857,6 +872,28 @@ export function AdminMenuPage() {
       setOptimistic((prev) => ({ ...prev, [item.id]: current }))
     } finally {
       setOptimistic((prev) => {
+        const copy = { ...prev }
+        delete copy[item.id]
+        return copy
+      })
+    }
+  }
+
+  /* ── Toggle recomendado ── */
+  function getRecomendado(item: ItemMenu): boolean {
+    return item.id in optimisticRecomendado ? optimisticRecomendado[item.id] : !!item.esRecomendado
+  }
+
+  async function handleToggleRecomendado(item: ItemMenu) {
+    const current = getRecomendado(item)
+    const next = !current
+    setOptimisticRecomendado((prev) => ({ ...prev, [item.id]: next }))
+    try {
+      await updateItem(item.id, { esRecomendado: next })
+    } catch {
+      setOptimisticRecomendado((prev) => ({ ...prev, [item.id]: current }))
+    } finally {
+      setOptimisticRecomendado((prev) => {
         const copy = { ...prev }
         delete copy[item.id]
         return copy
@@ -1065,19 +1102,20 @@ export function AdminMenuPage() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                   {grupoItems.map((item) => {
                     const disponible = getDisponible(item)
+                    const recomendado = getRecomendado(item)
                     return (
                       <div
                         key={item.id}
                         style={{
-                          background:   'white',
-                          border:       '1px solid #e5e7eb',
+                          background:   recomendado ? '#FDE5DF' : 'white',
+                          border:       recomendado ? '2px solid #E8563A' : '1px solid #e5e7eb',
                           borderRadius: 12,
                           padding:      '12px 16px',
                           display:      'flex',
                           alignItems:   'center',
                           gap:          16,
                           opacity:      disponible ? 1 : 0.55,
-                          transition:   'opacity 200ms',
+                          transition:   'opacity 200ms, background 200ms, border-color 200ms',
                         }}
                       >
                         {item.imagenUrl ? (
@@ -1119,7 +1157,25 @@ export function AdminMenuPage() {
                           >
                             Editar
                           </button>
-                          <ToggleSwitch value={disponible} onChange={() => handleToggle(item)} />
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 11, color: '#9ca3af', width: 76, textAlign: 'right' }}>
+                                Disponible
+                              </span>
+                              <ToggleSwitch value={disponible} onChange={() => handleToggle(item)} title="Disponible para el cliente" />
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 11, color: '#9ca3af', width: 76, textAlign: 'right' }}>
+                                Recomendado
+                              </span>
+                              <ToggleSwitch
+                                value={recomendado}
+                                onChange={() => handleToggleRecomendado(item)}
+                                title="Recomendado por el chef"
+                                disabled={!disponible}
+                              />
+                            </div>
+                          </div>
                         </div>
                       </div>
                     )

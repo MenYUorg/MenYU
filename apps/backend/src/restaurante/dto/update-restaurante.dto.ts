@@ -1,4 +1,4 @@
-import { IsIn, IsNotEmpty, IsOptional, IsString } from 'class-validator'
+import { IsIn, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator'
 
 export class UpdateRestauranteDto {
   @IsString()
@@ -13,4 +13,9 @@ export class UpdateRestauranteDto {
   @IsIn(['abierto', 'seguro'])
   @IsOptional()
   modoSesion?: string
+
+  @IsString()
+  @IsOptional()
+  @MaxLength(60)
+  nombreSeccionRecomendados?: string
 }
