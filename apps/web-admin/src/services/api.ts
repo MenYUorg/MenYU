@@ -124,6 +124,7 @@ export interface UpdateItemInput {
   descripcion?: string
   categoriaId?: string | null
   disponible?: boolean
+  esRecomendado?: boolean
 }
 
 export interface SesionResumen {

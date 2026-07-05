@@ -33,6 +33,7 @@ model Restaurante {
   modoSesion  String   @default("abierto") @map("modo_sesion")
   activo      Boolean  @default(true)
   createdAt   DateTime @default(now()) @map("created_at")
+  nombreSeccionRecomendados String @default("Recomendaciones del chef") @map("nombre_seccion_recomendados")
 
   marca         Marca              @relation(fields: [marcaId], references: [id])
   mozos         Mozo[]
@@ -278,6 +279,7 @@ model ItemMenu {
   descripcion       String?
   precioBase        Decimal  @map("precio_base") @db.Decimal(10, 2)
   disponible        Boolean  @default(true)
+  recomendadoEn     DateTime? @map("recomendado_en")
   imagenUrl         String?  @map("imagen_url")
 
   restaurante    Restaurante        @relation(fields: [restauranteId], references: [id])

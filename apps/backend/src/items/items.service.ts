@@ -40,13 +40,14 @@ export class ItemsService {
     await this.assertRestauranteOwnership(dto.restauranteId, user)
     await this.assertNombreUnico(dto.restauranteId, dto.nombre)
 
-    return this.prisma.itemMenu.create({ data: dto, include: DETAIL_INCLUDE })
+    const created = await this.prisma.itemMenu.create({ data: dto, include: DETAIL_INCLUDE })
+    return this.serializeItem(created)
   }
 
   async findAll(restauranteId: string, user: JwtPayload, disponible?: boolean) {
     await this.assertRestauranteOwnership(restauranteId, user)
 
-    return this.prisma.itemMenu.findMany({
+    const items = await this.prisma.itemMenu.findMany({
       where: {
         restauranteId,
         ...(disponible !== undefined ? { disponible } : {}),
@@ -54,12 +55,14 @@ export class ItemsService {
       orderBy: { nombre: 'asc' },
       include: DETAIL_INCLUDE,
     })
+    return items.map((item) => this.serializeItem(item))
   }
 
   async findOne(id: string, user: JwtPayload) {
     const item = await this.getOrThrow(id)
     await this.assertRestauranteOwnership(item.restauranteId, user)
-    return this.prisma.itemMenu.findUnique({ where: { id }, include: DETAIL_INCLUDE })
+    const found = await this.prisma.itemMenu.findUnique({ where: { id }, include: DETAIL_INCLUDE })
+    return this.serializeItem(found)
   }
 
   async update(id: string, dto: UpdateItemDto, user: JwtPayload) {
@@ -70,9 +73,17 @@ export class ItemsService {
       await this.assertNombreUnico(item.restauranteId, dto.nombre, id)
     }
 
-    const updated = await this.prisma.itemMenu.update({ where: { id }, data: dto, include: DETAIL_INCLUDE })
+    const { esRecomendado, ...rest } = dto
+    const data = {
+      ...rest,
+      ...(esRecomendado !== undefined
+        ? { recomendadoEn: esRecomendado ? new Date() : null }
+        : {}),
+    }
+
+    const updated = await this.prisma.itemMenu.update({ where: { id }, data, include: DETAIL_INCLUDE })
     this.gateway.emitMenuUpdated(item.restauranteId)
-    return updated
+    return this.serializeItem(updated)
   }
 
   async uploadImagen(id: string, file: Express.Multer.File, user: JwtPayload) {
@@ -82,7 +93,8 @@ export class ItemsService {
     const path = `${item.restauranteId}/${id}`
     const url = await this.storage.uploadFile(IMAGEN_BUCKET, path, file.buffer, file.mimetype)
 
-    return this.prisma.itemMenu.update({ where: { id }, data: { imagenUrl: url }, include: DETAIL_INCLUDE })
+    const updated = await this.prisma.itemMenu.update({ where: { id }, data: { imagenUrl: url }, include: DETAIL_INCLUDE })
+    return this.serializeItem(updated)
   }
 
   async removeImagen(id: string, user: JwtPayload) {
@@ -93,7 +105,8 @@ export class ItemsService {
 
     await this.storage.deleteFile(IMAGEN_BUCKET, `${item.restauranteId}/${id}`)
 
-    return this.prisma.itemMenu.update({ where: { id }, data: { imagenUrl: null }, include: DETAIL_INCLUDE })
+    const updated = await this.prisma.itemMenu.update({ where: { id }, data: { imagenUrl: null }, include: DETAIL_INCLUDE })
+    return this.serializeItem(updated)
   }
 
   async remove(id: string, user: JwtPayload) {
@@ -124,7 +137,8 @@ export class ItemsService {
 
     await this.prisma.itemIngrediente.create({ data: { itemId, ...dto } })
 
-    return this.prisma.itemMenu.findUnique({ where: { id: itemId }, include: DETAIL_INCLUDE })
+    const updated = await this.prisma.itemMenu.findUnique({ where: { id: itemId }, include: DETAIL_INCLUDE })
+    return this.serializeItem(updated)
   }
 
   async updateIngrediente(itemId: string, id: string, dto: UpdateIngredienteItemDto, user: JwtPayload) {
@@ -133,7 +147,8 @@ export class ItemsService {
 
     await this.prisma.itemIngrediente.update({ where: { id }, data: dto })
 
-    return this.prisma.itemMenu.findUnique({ where: { id: itemId }, include: DETAIL_INCLUDE })
+    const updated = await this.prisma.itemMenu.findUnique({ where: { id: itemId }, include: DETAIL_INCLUDE })
+    return this.serializeItem(updated)
   }
 
   async removeIngrediente(itemId: string, id: string, user: JwtPayload) {
@@ -149,6 +164,11 @@ export class ItemsService {
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────
+
+  private serializeItem(item: any) {
+    const { recomendadoEn, ...rest } = item
+    return { ...rest, esRecomendado: recomendadoEn !== null }
+  }
 
   private async getOrThrow(id: string) {
     const item = await this.prisma.itemMenu.findUnique({ where: { id } })

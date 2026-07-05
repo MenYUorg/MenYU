@@ -66,6 +66,7 @@ export interface ItemMenu {
   descripcion: string | null
   precioBase: number
   disponible: boolean
+  esRecomendado?: boolean
   imagenUrl: string | null
   ingredientes?: ItemIngrediente[]
   clasificaciones?: { clasificacionId: string; clasificacion: ClasificacionDieta }[]
@@ -95,6 +96,7 @@ export interface MenuPublicoItem {
   imagenUrl: string | null
   ingredientes: ItemIngrediente[]
   clasificaciones: ClasificacionDieta[]
+  esRecomendado?: boolean
 }
 
 export interface MenuPublicoCategoria {
@@ -105,6 +107,7 @@ export interface MenuPublicoCategoria {
 }
 
 export interface MenuPublico {
-  restaurante: { id: string; nombre: string }
+  restaurante: { id: string; nombre: string; nombreSeccionRecomendados: string }
   categorias: MenuPublicoCategoria[]
+  recomendados: MenuPublicoItem[]
 }
