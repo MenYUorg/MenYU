@@ -76,10 +76,11 @@ export class MercadoPagoProvider implements PaymentProvider {
           ? (e['cause'] as Array<{ code?: unknown; description?: string }>)
           : []
         console.error('[MP] createPreference SDK error', JSON.stringify({
-          status:   e['status'],
-          message:  e['message'],
+          status:     e['status'],
+          message:    e['message'],
+          blocked_by: e['blocked_by'],
           cause,
-          rawKeys:  Object.keys(e),
+          rawKeys:    Object.keys(e),
         }))
         const mpDescription =
           cause[0]?.description ??
