@@ -70,13 +70,23 @@ export class MercadoPagoProvider implements PaymentProvider {
     const result = await new Preference(localClient)
       .create({ body: preferenceBody })
       .catch((err: unknown) => {
-        console.error('[MP] createPreference SDK error', {
-          message: err instanceof Error ? err.message : String(err),
-          cause: err instanceof Error ? (err as unknown as Record<string, unknown>)['cause'] : undefined,
-        })
-        throw new InternalServerErrorException(
-          `MP: error al crear preference — ${err instanceof Error ? err.message : String(err)}`,
-        )
+        const e = err as Record<string, unknown>
+        const cause = Array.isArray(e['cause'])
+          ? (e['cause'] as Array<{ code?: unknown; description?: string }>)
+          : []
+        console.error('[MP] createPreference SDK error', JSON.stringify({
+          status:   e['status'],
+          message:  e['message'],
+          cause,
+          rawKeys:  Object.keys(e),
+        }))
+        const mpDescription =
+          cause[0]?.description ??
+          (typeof e['message'] === 'string' && e['message'] !== '[object Object]'
+            ? e['message']
+            : null) ??
+          `status ${String(e['status'] ?? 'desconocido')}`
+        throw new InternalServerErrorException(`MP: ${mpDescription}`)
       })
 
     const selectedInitPoint =
