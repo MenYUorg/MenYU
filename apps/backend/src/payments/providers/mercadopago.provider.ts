@@ -36,6 +36,8 @@ export class MercadoPagoProvider implements PaymentProvider {
       },
     ]
 
+    // En sandbox: sin notification_url (no está registrada en la app MP) ni auto_return
+    // (triggean la policy "UNAUTHORIZED"). En producción van los dos.
     const preferenceBody = {
       external_reference: data.externalReference,
       items: baseItems,
@@ -45,16 +47,15 @@ export class MercadoPagoProvider implements PaymentProvider {
           failure: data.failureUrl ?? data.successUrl,
           pending: data.pendingUrl ?? data.successUrl,
         },
-        auto_return: 'approved' as const,
+        ...(!isSandbox && { auto_return: 'approved' as const }),
       }),
-      ...(process.env.MP_WEBHOOK_URL && {
+      ...(!isSandbox && process.env.MP_WEBHOOK_URL && {
         notification_url: process.env.MP_WEBHOOK_URL,
       }),
     }
 
     console.log('[MP] createPreference → body', {
       MP_ENV: process.env.MP_ENV ?? '(no definida)',
-      MP_MINIMAL_PREFERENCE: isMinimal,
       isSandbox,
       external_reference: data.externalReference,
       unit_price: unitPrice,
@@ -63,8 +64,8 @@ export class MercadoPagoProvider implements PaymentProvider {
       title: data.descripcion,
       has_back_urls: !!data.successUrl,
       back_url_success: data.successUrl ?? '(no definida)',
-      has_auto_return: !!data.successUrl,
-      has_notification_url: !!process.env.MP_WEBHOOK_URL,
+      has_auto_return: !isSandbox && !!data.successUrl,
+      has_notification_url: !isSandbox && !!process.env.MP_WEBHOOK_URL,
     })
 
     const result = await new Preference(localClient)
