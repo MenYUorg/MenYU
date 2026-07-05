@@ -18,6 +18,6 @@ export class InitiatePaymentDto {
   descripcion!: string
 
   @IsOptional()
-  @IsUrl()
+  @IsUrl({ require_tld: false })
   returnBaseUrl?: string
 }

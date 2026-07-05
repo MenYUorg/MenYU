@@ -1,5 +1,8 @@
-import { Body, Controller, Get, Headers, HttpCode, HttpStatus, Param, Post, Query } from '@nestjs/common'
-import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger'
+import { Body, Controller, Get, Headers, HttpCode, HttpStatus, Param, Post, Query, UseGuards } from '@nestjs/common'
+import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger'
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'
+import { RolesGuard } from '../common/guards/roles.guard'
+import { Roles } from '../common/decorators/roles.decorator'
 import { PaymentsService } from './payments.service'
 import { InitiatePaymentDto } from './dto/initiate-payment.dto'
 
@@ -74,5 +77,19 @@ export class PaymentsController {
   @ApiResponse({ status: 200, description: 'Sesión cerrada' })
   confirmarEfectivo(@Body() body: { sesionId: string; mozoId?: string }) {
     return this.payments.confirmarEfectivo(body.sesionId, body.mozoId)
+  }
+
+  @Post('credentials/:restauranteId')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ROOT', 'OWNER', 'GERENTE')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Cargar credenciales de Mercado Pago manualmente (para testing)' })
+  @ApiResponse({ status: 200, description: 'Credenciales guardadas' })
+  setCredentials(
+    @Param('restauranteId') restauranteId: string,
+    @Body() body: { accessToken: string; refreshToken?: string; userId?: string },
+  ) {
+    return this.payments.setMpCredentials(restauranteId, body.accessToken, body.refreshToken, body.userId)
   }
 }

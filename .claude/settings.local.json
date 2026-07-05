@@ -43,7 +43,12 @@
       "Bash(tasklist /FI \"PID eq 15948\" /FO LIST)",
       "PowerShell(Get-Process -Id 15948)",
       "PowerShell(Get-WmiObject Win32_Process -Filter \"ProcessId=15948\")",
-      "Bash(pnpm --filter @menyu/api run build)"
+      "Bash(pnpm --filter @menyu/api run build)",
+      "Bash(sort -k2)",
+      "Bash(gh issue *)",
+      "Bash(gh pr *)",
+      "Bash(gh release *)",
+      "Bash(claude plugin *)"
     ]
   }
 }
