@@ -219,10 +219,6 @@ export class PaymentsService {
       redirect_uri: process.env.MP_REDIRECT_URI!,
     })
 
-    if (process.env.MP_ENV === 'sandbox') {
-      body.set('test_token', 'true')
-    }
-
     const response = await fetch('https://api.mercadopago.com/oauth/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
