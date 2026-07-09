@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { usePublicMenuStore } from '../../store/publicMenuStore'
 import { useSessionStore } from '../../store/sessionStore'
 import { useCarritoStore } from '../../store/carritoStore'
-import { Spinner } from '@menyu/ui'
+import { Spinner, MenuItemImage } from '@menyu/ui'
 import { api } from '../../services/api'
 import type { MenuPublicoItem } from '@menyu/types'
 
@@ -123,22 +123,6 @@ function DrawerRow({
   )
 }
 
-function Placeholder() {
-  return (
-    <div style={{
-      position: 'absolute', inset: 0,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: 'linear-gradient(135deg, #F2EEEA 0%, #EDE9E5 100%)',
-    }}>
-      <span style={{
-        fontFamily: 'Montserrat,sans-serif', fontWeight: 800,
-        fontSize: 11, color: C.orange, letterSpacing: '0.12em',
-        opacity: 0.7,
-      }}>MENYU</span>
-    </div>
-  )
-}
-
 function ItemCard({ item, onPress }: { item: MenuPublicoItem; onPress: () => void }) {
   return (
     <div
@@ -161,15 +145,11 @@ function ItemCard({ item, onPress }: { item: MenuPublicoItem; onPress: () => voi
       }}
     >
       <div style={{ position: 'relative', width: '100%', paddingBottom: '80%', overflow: 'hidden', flexShrink: 0 }}>
-        {item.imagenUrl ? (
-          <img
-            src={item.imagenUrl}
-            alt={item.nombre}
-            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
-          />
-        ) : (
-          <Placeholder />
-        )}
+        <MenuItemImage
+          src={item.imagenUrl}
+          alt={item.nombre}
+          className="absolute inset-0"
+        />
       </div>
       <div style={{ padding: '10px 11px 11px', display: 'flex', flexDirection: 'column', flex: 1, gap: 3 }}>
         <p style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 13, color: C.text, lineHeight: 1.25, margin: 0 }}>
@@ -208,230 +188,11 @@ function ItemCard({ item, onPress }: { item: MenuPublicoItem; onPress: () => voi
 
 // ── Check-in screen ───────────────────────────────────────────────────────────
 
-interface CheckInProps {
-  pin: string; setPin: (v: string) => void
-  rid: string; setRid: (v: string) => void
-  loading: boolean; error: string | null
-  onSubmit: (e: React.FormEvent) => void
-  step: 'inicial' | 'codigo-sesion' | 'anfitrion'
-  codigo: string; setCodigo: (v: string) => void
-  onSubmitCodigo: (e: React.FormEvent) => void
-  onVolver: () => void
-  codigoAnfitrion: string | null
-  onContinuar: () => void
-}
-
-function CheckInScreen({
-  pin, setPin, rid, setRid, loading, error, onSubmit,
-  step, codigo, setCodigo, onSubmitCodigo, onVolver,
-  codigoAnfitrion, onContinuar,
-}: CheckInProps) {
-  return (
-    <div style={{
-      minHeight: '100svh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-      padding: 16, background: `linear-gradient(135deg, ${C.navy} 0%, #1e254a 100%)`,
-    }}>
-      <div style={{ width: '100%', maxWidth: 360, borderRadius: 20, overflow: 'hidden', boxShadow: '0 24px 64px rgba(0,0,0,0.35)' }}>
-        {/* Brand header */}
-        <div style={{ background: C.navy, padding: '28px 32px 20px', textAlign: 'center' }}>
-          <div style={{ display: 'inline-flex', alignItems: 'flex-end', gap: 2, marginBottom: 8 }}>
-            <span style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 800, fontSize: 26, color: 'white', letterSpacing: '-0.01em' }}>
-              MENY
-            </span>
-            <div style={{
-              width: 14, height: 17, background: C.orange, marginBottom: 3,
-              borderRadius: '3px 3px 50% 50% / 3px 3px 30% 30%',
-            }} />
-          </div>
-          <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 13, color: 'rgba(255,255,255,0.55)', margin: 0 }}>
-            Ingresá para ver el menú
-          </p>
-        </div>
-
-        {/* Paso 1: inicial */}
-        {step === 'inicial' && (
-          <form onSubmit={onSubmit} style={{ background: 'white', padding: '24px 28px 28px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div>
-              <label style={{ fontFamily: 'Inter,sans-serif', fontSize: 11, fontWeight: 600, color: C.textMuted, textTransform: 'uppercase', letterSpacing: '0.07em', display: 'block', marginBottom: 6 }}>
-                ID del restaurante
-              </label>
-              <input
-                type="text" value={rid} onChange={(e) => setRid(e.target.value)}
-                placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                style={{
-                  width: '100%', boxSizing: 'border-box', height: 42,
-                  border: `1.5px solid ${C.border}`, borderRadius: 10,
-                  padding: '0 14px', fontFamily: 'Inter,sans-serif',
-                  fontSize: 13, color: C.text, outline: 'none',
-                  transition: 'border-color .15s',
-                }}
-                onFocus={(e) => { e.target.style.borderColor = C.orange }}
-                onBlur={(e) => { e.target.style.borderColor = C.border }}
-              />
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ flex: 1, height: 1, background: C.border }} />
-              <span style={{ fontFamily: 'Inter,sans-serif', fontSize: 11, color: C.textMuted }}>o</span>
-              <div style={{ flex: 1, height: 1, background: C.border }} />
-            </div>
-
-            <div>
-              <label style={{ fontFamily: 'Inter,sans-serif', fontSize: 11, fontWeight: 600, color: C.textMuted, textTransform: 'uppercase', letterSpacing: '0.07em', display: 'block', marginBottom: 6 }}>
-                PIN de la mesa
-              </label>
-              <input
-                type="text" value={pin} onChange={(e) => setPin(e.target.value)}
-                placeholder="1234"
-                style={{
-                  width: '100%', boxSizing: 'border-box', height: 42,
-                  border: `1.5px solid ${C.border}`, borderRadius: 10,
-                  padding: '0 14px', fontFamily: 'Inter,sans-serif',
-                  fontSize: 13, color: C.text, outline: 'none',
-                  transition: 'border-color .15s',
-                }}
-                onFocus={(e) => { e.target.style.borderColor = C.orange }}
-                onBlur={(e) => { e.target.style.borderColor = C.border }}
-              />
-            </div>
-
-            {error && (
-              <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 12, color: C.orange, background: C.orangeSoft, borderRadius: 8, padding: '9px 12px', margin: 0 }}>
-                {error}
-              </p>
-            )}
-
-            <button
-              type="submit"
-              disabled={loading || (!rid.trim() && !pin.trim())}
-              style={{
-                background: C.orange, color: 'white', border: 'none',
-                borderRadius: 10, padding: '13px 20px',
-                fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 14,
-                cursor: loading ? 'wait' : 'pointer',
-                opacity: loading || (!rid.trim() && !pin.trim()) ? 0.5 : 1,
-                transition: 'opacity .15s',
-              }}
-            >
-              {loading ? 'Conectando…' : 'Ver menú'}
-            </button>
-          </form>
-        )}
-
-        {/* Paso 2: codigo-sesion */}
-        {step === 'codigo-sesion' && (
-          <form
-            onSubmit={onSubmitCodigo}
-            style={{ background: 'white', padding: '24px 28px 28px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}
-          >
-            <span style={{ fontSize: 48 }}>🔒</span>
-            <div style={{ textAlign: 'center' }}>
-              <p style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 800, fontSize: 20, color: C.navy, margin: '0 0 8px' }}>
-                Mesa en modo seguro
-              </p>
-              <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 13, color: C.textSub, margin: 0 }}>
-                El anfitrión de la mesa tiene un código de 3 dígitos. Pedíselo para unirte.
-              </p>
-            </div>
-            <input
-              type="text"
-              inputMode="numeric"
-              maxLength={3}
-              value={codigo}
-              onChange={(e) => setCodigo(e.target.value.replace(/\D/g, '').slice(0, 3))}
-              placeholder="000"
-              style={{
-                width: 120, height: 64, textAlign: 'center',
-                fontFamily: 'Montserrat,sans-serif', fontWeight: 800,
-                fontSize: 32, letterSpacing: '0.3em',
-                border: `2px solid ${C.border}`, borderRadius: 12,
-                outline: 'none', color: C.navy, boxSizing: 'border-box',
-              }}
-              onFocus={(e) => { e.target.style.borderColor = C.orange }}
-              onBlur={(e) => { e.target.style.borderColor = C.border }}
-            />
-            {error && (
-              <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 12, color: C.orange, background: C.orangeSoft, borderRadius: 8, padding: '9px 12px', margin: 0, width: '100%', boxSizing: 'border-box' }}>
-                {error}
-              </p>
-            )}
-            <button
-              type="submit"
-              disabled={loading || codigo.length !== 3}
-              style={{
-                width: '100%', background: C.orange, color: 'white', border: 'none',
-                borderRadius: 10, padding: '13px 20px',
-                fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 14,
-                cursor: loading ? 'wait' : 'pointer',
-                opacity: loading || codigo.length !== 3 ? 0.5 : 1,
-                transition: 'opacity .15s',
-              }}
-            >
-              {loading ? 'Uniéndome…' : 'Unirme a la mesa'}
-            </button>
-            <button
-              type="button"
-              onClick={onVolver}
-              style={{ background: 'none', border: 'none', fontFamily: 'Inter,sans-serif', fontSize: 12, color: C.textMuted, cursor: 'pointer', padding: '4px 0' }}
-            >
-              ← Volver
-            </button>
-          </form>
-        )}
-
-        {/* Paso 3: anfitrion */}
-        {step === 'anfitrion' && (
-          <div style={{ background: 'white', padding: '24px 28px 28px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
-            <div style={{
-              width: 56, height: 56, borderRadius: '50%',
-              background: C.orange, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              <span style={{ fontSize: 24, color: 'white', fontWeight: 'bold' }}>✓</span>
-            </div>
-            <div style={{ textAlign: 'center' }}>
-              <p style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 800, fontSize: 18, color: C.navy, margin: '0 0 8px' }}>
-                ¡Sos el anfitrión de la mesa!
-              </p>
-              <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 13, color: C.textSub, margin: 0 }}>
-                Compartí este código con tus acompañantes para que puedan unirse:
-              </p>
-            </div>
-            <div style={{
-              width: '100%', boxSizing: 'border-box',
-              border: `2px solid ${C.navy}`, borderRadius: 16,
-              background: '#E5E7F0', padding: '20px 16px', textAlign: 'center',
-            }}>
-              <p style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 800, fontSize: 48, color: C.navy, margin: '0 0 4px', letterSpacing: '0.1em' }}>
-                {codigoAnfitrion ?? '—'}
-              </p>
-              <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 12, color: C.textSub, margin: 0 }}>
-                Código de mesa
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={onContinuar}
-              style={{
-                width: '100%', background: C.orange, color: 'white', border: 'none',
-                borderRadius: 10, padding: '13px 20px',
-                fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 14,
-                cursor: 'pointer',
-              }}
-            >
-              Ver el menú
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export function ClienteMenuPage() {
   const navigate = useNavigate()
-  const { restauranteId, sesionId, mesaId, jwt, openSession, loading: sessionLoading, error: sessionError, numeroMesa, codigoSesion, modoSesion } = useSessionStore()
+  const { restauranteId, sesionId, mesaId, jwt, numeroMesa, codigoSesion, modoSesion } = useSessionStore()
   const carritoCount = useCarritoStore((s) => s.items.length)
   const { menu, loading, error, fetchMenu } = usePublicMenuStore()
 
@@ -447,14 +208,6 @@ export function ClienteMenuPage() {
   const dietRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({})
-
-  // Check-in state
-  const [checkInPin,    setCheckInPin]    = useState('')
-  const [checkInRid,    setCheckInRid]    = useState('')
-  const [checkInStep,   setCheckInStep]   = useState<'inicial' | 'codigo-sesion' | 'anfitrion'>('inicial')
-  const [checkInCodigo, setCheckInCodigo] = useState('')
-  const [checkInRidTemp, setCheckInRidTemp] = useState('')
-  const [checkInPinTemp, setCheckInPinTemp] = useState('')
 
   const user = (() => {
     try {
@@ -587,46 +340,6 @@ export function ClienteMenuPage() {
     sectionRefs.current[catId]?.scrollIntoView({ behavior: 'smooth' })
   }
 
-  const handleCheckIn = async (e: React.FormEvent) => {
-    e.preventDefault()
-    const rid = checkInRid.trim() || undefined
-    const pin = checkInPin.trim() || undefined
-    if (!rid && !pin) return
-
-    const result = await openSession({ restauranteId: rid, pin })
-
-    if (result?.error === 'REQUIERE_CODIGO_SESION') {
-      setCheckInRidTemp(rid ?? '')
-      setCheckInPinTemp(pin ?? '')
-      setCheckInStep('codigo-sesion')
-      return
-    }
-
-    if (result?.codigoSesion && result?.modoSesion === 'seguro') {
-      setCheckInStep('anfitrion')
-      return
-    }
-
-    if (rid) void fetchMenu(rid)
-  }
-
-  const handleCheckInCodigo = async (e: React.FormEvent) => {
-    e.preventDefault()
-    const result = await openSession({
-      restauranteId: checkInRidTemp || undefined,
-      pin: checkInPinTemp || undefined,
-      codigoSesion: checkInCodigo.trim(),
-    })
-    if (result && !result.error) {
-      if (checkInRidTemp) void fetchMenu(checkInRidTemp)
-    }
-  }
-
-  const handleAnfitrionContinuar = () => {
-    setCheckInStep('inicial')
-    if (checkInRid.trim()) void fetchMenu(checkInRid.trim())
-  }
-
   const handleCallMozo = async () => {
     if (mozoStatus !== 'idle' || !sesionId || !jwt) return
     setMozoStatus('loading')
@@ -661,24 +374,6 @@ export function ClienteMenuPage() {
     setPendingDiets(new Set())
     setActiveDiets(new Set())
     setDietOpen(false)
-  }
-
-  // ── Render guards
-  if (!restauranteId || checkInStep === 'anfitrion') {
-    return (
-      <CheckInScreen
-        pin={checkInPin} setPin={setCheckInPin}
-        rid={checkInRid} setRid={setCheckInRid}
-        loading={sessionLoading} error={sessionError}
-        onSubmit={handleCheckIn}
-        step={checkInStep}
-        codigo={checkInCodigo} setCodigo={setCheckInCodigo}
-        onSubmitCodigo={handleCheckInCodigo}
-        onVolver={() => setCheckInStep('inicial')}
-        codigoAnfitrion={codigoSesion}
-        onContinuar={handleAnfitrionContinuar}
-      />
-    )
   }
 
   if (loading) return (

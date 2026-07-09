@@ -3,7 +3,7 @@ import type { FormEvent, ChangeEvent } from 'react'
 import type { ItemMenu } from '@menyu/types'
 import { useContextStore } from '../../../store/contextStore'
 import { useMenuStore } from '../../../store/menuStore'
-import { Button, Input, Textarea, Select, Badge, Modal, Spinner } from '@menyu/ui'
+import { Button, Input, Textarea, Select, Badge, Modal, Spinner, MenuItemImage } from '@menyu/ui'
 import { ItemIngredientesPanel } from './ItemIngredientesPanel'
 import { api } from '../../../services/api'
 
@@ -133,7 +133,7 @@ export function ItemsTab() {
               {items.map((item) => (
                 <tr key={item.id} className={`hover:bg-gray-50 transition-colors ${item.disponible ? '' : 'opacity-50'}`}>
                   <td className="px-4 py-3">
-                    <img src={item.imagenUrl || '/src/assets/predeterminada_menu.png'} alt={item.nombre} className="w-12 h-12 object-cover rounded-md border border-gray-100" />
+                    <MenuItemImage src={item.imagenUrl} alt={item.nombre} width={48} height={48} borderRadius={6} className="border border-gray-100" />
                   </td>
                   <td className="px-4 py-3">
                     <div className="font-medium text-gray-900">{item.nombre}</div>

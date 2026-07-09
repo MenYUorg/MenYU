@@ -3,6 +3,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { usePublicMenuStore } from '../../store/publicMenuStore'
 import { useSessionStore } from '../../store/sessionStore'
 import { useCarritoStore } from '../../store/carritoStore'
+import { MenuItemImage } from '@menyu/ui'
 import type { MenuPublicoItem } from '@menyu/types'
 
 const C = {
@@ -140,17 +141,7 @@ export function ItemDetailPage() {
 
           {/* Hero image */}
           <div style={{ position: 'relative', width: '100%', aspectRatio: '16 / 9', overflow: 'hidden', flexShrink: 0 }}>
-            {item.imagenUrl ? (
-              <img
-                src={item.imagenUrl}
-                alt={item.nombre}
-                style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-              />
-            ) : (
-              <div style={{ width: '100%', height: '100%', background: `linear-gradient(135deg, ${C.orangeSoft} 0%, #F0CEC2 100%)`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <span style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 800, fontSize: 15, color: 'rgba(232,86,58,0.35)', letterSpacing: '0.12em' }}>MENYU</span>
-              </div>
-            )}
+            <MenuItemImage src={item.imagenUrl} alt={item.nombre} />
             {/* Back button — overlaid */}
             <button
               onClick={() => navigate('/menu')}

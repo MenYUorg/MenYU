@@ -7,6 +7,7 @@ import { useContextStore } from '../../../store/contextStore'
 import { useMenuStore } from '../../../store/menuStore'
 import { ItemFormModal } from './ItemFormModal'
 import { api } from '../../../services/api'
+import { MenuItemImage } from '@menyu/ui'
 
 type CatalogTab = 'categorias' | 'ingredientes' | 'dietas'
 
@@ -1276,15 +1277,7 @@ export function AdminMenuPage() {
                           transition:   'opacity 200ms, background 200ms, border-color 200ms',
                         }}
                       >
-                        {item.imagenUrl ? (
-                          <img
-                            src={item.imagenUrl}
-                            alt={item.nombre}
-                            style={{ width: 64, height: 64, borderRadius: 10, objectFit: 'cover', flexShrink: 0 }}
-                          />
-                        ) : (
-                          <div style={{ width: 64, height: 64, borderRadius: 10, background: '#f3f4f6', flexShrink: 0 }} />
-                        )}
+                        <MenuItemImage src={item.imagenUrl} alt={item.nombre} width={64} height={64} borderRadius={10} />
 
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <p style={{

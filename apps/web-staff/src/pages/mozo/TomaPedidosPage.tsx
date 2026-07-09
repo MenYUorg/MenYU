@@ -7,6 +7,7 @@ import { useMozoStore } from '../../store/mozoStore'
 import { api } from '../../services/api'
 import type { MenuItem, MenuCategoria, SesionActivaRico } from '../../services/api'
 import { PageHeader } from '../../components/PageHeader'
+import { MenuItemImage } from '@menyu/ui'
 
 function getInitials(name?: string): string {
   if (!name) return '?'
@@ -646,11 +647,7 @@ export function TomaPedidosPage() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {recomendadosFiltrados.map((item) => (
                     <div key={item.id} style={{ background: 'white', border: `1px solid ${C.border}`, borderRadius: 12, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 16 }}>
-                      {item.imagenUrl ? (
-                        <img src={item.imagenUrl} alt={item.nombre} style={{ width: 56, height: 56, borderRadius: 8, objectFit: 'cover', flexShrink: 0 }} />
-                      ) : (
-                        <div style={{ width: 56, height: 56, borderRadius: 8, background: C.bgLight, flexShrink: 0 }} />
-                      )}
+                      <MenuItemImage src={item.imagenUrl} alt={item.nombre} width={56} height={56} borderRadius={8} />
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <p style={{ fontFamily: 'Inter,sans-serif', fontWeight: 600, fontSize: 15, color: '#374151', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {item.nombre}
@@ -680,11 +677,7 @@ export function TomaPedidosPage() {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {recomendadosFiltrados.map((item) => (
                       <div key={item.id} style={{ background: 'white', border: `1px solid ${C.border}`, borderRadius: 12, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 16 }}>
-                        {item.imagenUrl ? (
-                          <img src={item.imagenUrl} alt={item.nombre} style={{ width: 56, height: 56, borderRadius: 8, objectFit: 'cover', flexShrink: 0 }} />
-                        ) : (
-                          <div style={{ width: 56, height: 56, borderRadius: 8, background: C.bgLight, flexShrink: 0 }} />
-                        )}
+                        <MenuItemImage src={item.imagenUrl} alt={item.nombre} width={56} height={56} borderRadius={8} />
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <p style={{ fontFamily: 'Inter,sans-serif', fontWeight: 600, fontSize: 15, color: '#374151', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {item.nombre}
@@ -716,11 +709,7 @@ export function TomaPedidosPage() {
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                         {cat.items.map((item) => (
                           <div key={item.id} style={{ background: 'white', border: `1px solid ${C.border}`, borderRadius: 12, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 16 }}>
-                            {item.imagenUrl ? (
-                              <img src={item.imagenUrl} alt={item.nombre} style={{ width: 56, height: 56, borderRadius: 8, objectFit: 'cover', flexShrink: 0 }} />
-                            ) : (
-                              <div style={{ width: 56, height: 56, borderRadius: 8, background: C.bgLight, flexShrink: 0 }} />
-                            )}
+                            <MenuItemImage src={item.imagenUrl} alt={item.nombre} width={56} height={56} borderRadius={8} />
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <p style={{ fontFamily: 'Inter,sans-serif', fontWeight: 600, fontSize: 15, color: '#374151', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                 {item.nombre}
