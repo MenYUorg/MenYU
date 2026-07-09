@@ -79,6 +79,7 @@ export class PaymentsService {
       // branch previews:  menyu-cliente-git-<branch>-men-yu-s-projects.vercel.app
       // deploy previews:  menyu-cliente-<hash>-men-yu-s-projects.vercel.app
       /^https:\/\/menyu-cliente-[a-z0-9-]+-men-yu-s-projects\.vercel\.app$/,
+      /^http:\/\/localhost(:\d+)?$/,
     ]
     if (process.env.MP_SUCCESS_URL) {
       try {
@@ -131,8 +132,15 @@ export class PaymentsService {
       pendingUrl,
     })
 
-    const pago = await this.prisma.pago.create({
-      data: {
+    const pago = await this.prisma.pago.upsert({
+      where: { pedidoId: dto.pedidoId },
+      update: {
+        monto: dto.monto,
+        metodo: 'mercadopago',
+        estado: 'pendiente',
+        referenciaExterna: preference.externalReference,
+      },
+      create: {
         pedidoId: dto.pedidoId,
         monto: dto.monto,
         metodo: 'mercadopago',
@@ -210,10 +218,6 @@ export class PaymentsService {
       code,
       redirect_uri: process.env.MP_REDIRECT_URI!,
     })
-
-    if (process.env.MP_ENV === 'sandbox') {
-      body.set('test_token', 'true')
-    }
 
     const response = await fetch('https://api.mercadopago.com/oauth/token', {
       method: 'POST',
@@ -360,6 +364,23 @@ export class PaymentsService {
     })
 
     return { pagoId: pago.id, sesionId, estado: 'efectivo_solicitado' }
+  }
+
+  async setMpCredentials(
+    restauranteId: string,
+    accessToken: string,
+    refreshToken?: string,
+    userId?: string,
+  ) {
+    await this.prisma.restaurante.update({
+      where: { id: restauranteId },
+      data: {
+        mpAccessToken: this.crypto.encrypt(accessToken),
+        mpRefreshToken: refreshToken ? this.crypto.encrypt(refreshToken) : null,
+        mpUserId: userId ?? null,
+      },
+    })
+    return { restauranteId, conectado: true }
   }
 
   async confirmarEfectivo(sesionId: string, mozoId?: string) {

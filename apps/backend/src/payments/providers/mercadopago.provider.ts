@@ -36,38 +36,26 @@ export class MercadoPagoProvider implements PaymentProvider {
       },
     ]
 
-    const preferenceBody = isSandbox
-      ? {
-          external_reference: data.externalReference,
-          items: baseItems,
-          ...(data.successUrl && {
-            back_urls: {
-              success: data.successUrl,
-              failure: data.failureUrl ?? data.successUrl,
-              pending: data.pendingUrl ?? data.successUrl,
-            },
-            auto_return: 'approved' as const,
-          }),
-        }
-      : {
-          external_reference: data.externalReference,
-          items: baseItems,
-          ...(data.successUrl && {
-            back_urls: {
-              success: data.successUrl,
-              failure: data.failureUrl ?? data.successUrl,
-              pending: data.pendingUrl ?? data.successUrl,
-            },
-            auto_return: 'approved' as const,
-          }),
-          ...(process.env.MP_WEBHOOK_URL && {
-            notification_url: process.env.MP_WEBHOOK_URL,
-          }),
-        }
+    // En sandbox: sin notification_url (no está registrada en la app MP) ni auto_return
+    // (triggean la policy "UNAUTHORIZED"). En producción van los dos.
+    const preferenceBody = {
+      external_reference: data.externalReference,
+      items: baseItems,
+      ...(data.successUrl && {
+        back_urls: {
+          success: data.successUrl,
+          failure: data.failureUrl ?? data.successUrl,
+          pending: data.pendingUrl ?? data.successUrl,
+        },
+        ...(!isSandbox && { auto_return: 'approved' as const }),
+      }),
+      ...(!isSandbox && process.env.MP_WEBHOOK_URL && {
+        notification_url: process.env.MP_WEBHOOK_URL,
+      }),
+    }
 
     console.log('[MP] createPreference → body', {
       MP_ENV: process.env.MP_ENV ?? '(no definida)',
-      MP_MINIMAL_PREFERENCE: isMinimal,
       isSandbox,
       external_reference: data.externalReference,
       unit_price: unitPrice,
@@ -76,20 +64,31 @@ export class MercadoPagoProvider implements PaymentProvider {
       title: data.descripcion,
       has_back_urls: !!data.successUrl,
       back_url_success: data.successUrl ?? '(no definida)',
-      has_auto_return: !!data.successUrl,
+      has_auto_return: !isSandbox && !!data.successUrl,
       has_notification_url: !isSandbox && !!process.env.MP_WEBHOOK_URL,
     })
 
     const result = await new Preference(localClient)
       .create({ body: preferenceBody })
       .catch((err: unknown) => {
-        console.error('[MP] createPreference SDK error', {
-          message: err instanceof Error ? err.message : String(err),
-          cause: err instanceof Error ? (err as unknown as Record<string, unknown>)['cause'] : undefined,
-        })
-        throw new InternalServerErrorException(
-          `MP: error al crear preference — ${err instanceof Error ? err.message : String(err)}`,
-        )
+        const e = err as Record<string, unknown>
+        const cause = Array.isArray(e['cause'])
+          ? (e['cause'] as Array<{ code?: unknown; description?: string }>)
+          : []
+        console.error('[MP] createPreference SDK error', JSON.stringify({
+          status:     e['status'],
+          message:    e['message'],
+          blocked_by: e['blocked_by'],
+          cause,
+          rawKeys:    Object.keys(e),
+        }))
+        const mpDescription =
+          cause[0]?.description ??
+          (typeof e['message'] === 'string' && e['message'] !== '[object Object]'
+            ? e['message']
+            : null) ??
+          `status ${String(e['status'] ?? 'desconocido')}`
+        throw new InternalServerErrorException(`MP: ${mpDescription}`)
       })
 
     const selectedInitPoint =
