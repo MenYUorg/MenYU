@@ -13,6 +13,7 @@ import { EntradaPage } from './pages/entrada/EntradaPage'
 import { IngresoManualPage } from './pages/entrada/IngresoManualPage'
 import { AuthPage } from './pages/auth/AuthPage'
 import CheckInRedirectPage from './pages/entrada/CheckInRedirectPage'
+import { SesionRequiredRoute } from './SesionRequiredRoute'
 import { useSessionStore } from './store/sessionStore'
 import { usePublicMenuStore } from './store/publicMenuStore'
 
@@ -205,15 +206,19 @@ export function App() {
           <Route path="/" element={<EntradaPage />} />
           <Route path="/ingresar-pin" element={<IngresoManualPage />} />
           <Route path="/auth" element={<AuthPage />} />
-          <Route path="/menu" element={<ClienteMenuPage />} />
-          <Route path="/menu/:itemId" element={<ItemDetailPage />} />
-          <Route path="/carrito" element={<CarritoPage />} />
-          <Route path="/pago/exitoso" element={<PagoExitosoPage />} />
-          <Route path="/pago/fallido" element={<PagoFallidoPage />} />
-          <Route path="/pago/pendiente" element={<PagoPendientePage />} />
-          <Route path="/pedidos" element={<MisPedidosPage />} />
-          <Route path="/pagar" element={<PagarPage />} />
           <Route path="/check-in" element={<CheckInRedirectPage />} />
+
+          <Route element={<SesionRequiredRoute />}>
+            <Route path="/menu" element={<ClienteMenuPage />} />
+            <Route path="/menu/:itemId" element={<ItemDetailPage />} />
+            <Route path="/carrito" element={<CarritoPage />} />
+            <Route path="/pago/exitoso" element={<PagoExitosoPage />} />
+            <Route path="/pago/fallido" element={<PagoFallidoPage />} />
+            <Route path="/pago/pendiente" element={<PagoPendientePage />} />
+            <Route path="/pedidos" element={<MisPedidosPage />} />
+            <Route path="/pagar" element={<PagarPage />} />
+          </Route>
+
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </SessionGuard>
