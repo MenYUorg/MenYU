@@ -6,6 +6,7 @@ import { useAuth } from '@menyu/auth'
 import { useContextStore } from '../../../store/contextStore'
 import { useMenuStore } from '../../../store/menuStore'
 import { ItemFormModal } from './ItemFormModal'
+import { api } from '../../../services/api'
 
 type CatalogTab = 'categorias' | 'ingredientes' | 'dietas'
 
@@ -275,6 +276,16 @@ function CategoriasTabContent({
   onNewNameChange,
   creating,
   canDelete = true,
+  isOwner = false,
+  nombreSeccionRecomendados = '',
+  editandoNombreRecomendados = false,
+  nombreRecomendadosInput = '',
+  guardandoNombreRecomendados = false,
+  errorNombreRecomendados = null,
+  onEditarNombreRecomendados,
+  onCambiarNombreRecomendadosInput,
+  onGuardarNombreRecomendados,
+  onCancelarNombreRecomendados,
 }: {
   categorias:      { id: string; nombre: string; orden?: number }[]
   onDelete:        (id: string, nombre: string) => void
@@ -284,6 +295,16 @@ function CategoriasTabContent({
   onNewNameChange: (v: string) => void
   creating:        boolean
   canDelete?:      boolean
+  isOwner?:        boolean
+  nombreSeccionRecomendados?:        string
+  editandoNombreRecomendados?:       boolean
+  nombreRecomendadosInput?:          string
+  guardandoNombreRecomendados?:      boolean
+  errorNombreRecomendados?:          string | null
+  onEditarNombreRecomendados?:       () => void
+  onCambiarNombreRecomendadosInput?: (v: string) => void
+  onGuardarNombreRecomendados?:      () => void
+  onCancelarNombreRecomendados?:     () => void
 }) {
   const { updateCategoria } = useMenuStore()
   const sortByOrden = (cats: typeof propCats) =>
@@ -340,6 +361,101 @@ function CategoriasTabContent({
 
   return (
     <div>
+      {isOwner && (
+        <>
+          <div style={{ marginBottom: 12 }}>
+            {editandoNombreRecomendados ? (
+              <div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  value={nombreRecomendadosInput}
+                  onChange={(e) => onCambiarNombreRecomendadosInput?.(e.target.value)}
+                  placeholder="Nombre de la sección de recomendados"
+                  autoFocus
+                  style={{
+                    flex:         1,
+                    border:       '1px solid #e5e7eb',
+                    borderRadius: 8,
+                    padding:      '8px 12px',
+                    fontFamily:   'Inter, sans-serif',
+                    fontSize:     13,
+                    color:        '#111827',
+                    outline:      'none',
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => onGuardarNombreRecomendados?.()}
+                  disabled={!nombreRecomendadosInput.trim() || guardandoNombreRecomendados}
+                  style={{
+                    background:   '#2D3561',
+                    color:        'white',
+                    border:       'none',
+                    borderRadius: 8,
+                    padding:      '8px 16px',
+                    cursor:       !nombreRecomendadosInput.trim() || guardandoNombreRecomendados ? 'not-allowed' : 'pointer',
+                    fontFamily:   'Inter, sans-serif',
+                    fontSize:     13,
+                    fontWeight:   600,
+                    opacity:      !nombreRecomendadosInput.trim() || guardandoNombreRecomendados ? 0.5 : 1,
+                    whiteSpace:   'nowrap',
+                  }}
+                >
+                  {guardandoNombreRecomendados ? '…' : 'Guardar'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onCancelarNombreRecomendados?.()}
+                  style={{
+                    background:   'none',
+                    color:        '#6b7280',
+                    border:       '1px solid #e5e7eb',
+                    borderRadius: 8,
+                    padding:      '8px 16px',
+                    cursor:       'pointer',
+                    fontFamily:   'Inter, sans-serif',
+                    fontSize:     13,
+                    whiteSpace:   'nowrap',
+                  }}
+                >
+                  Cancelar
+                </button>
+              </div>
+              {errorNombreRecomendados && (
+                <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, color: '#dc2626', margin: '6px 0 0' }}>
+                  {errorNombreRecomendados}
+                </p>
+              )}
+              </div>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#6b7280', flex: 1 }}>
+                  Sección de recomendados: <strong style={{ color: '#111827' }}>{nombreSeccionRecomendados}</strong>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => onEditarNombreRecomendados?.()}
+                  style={{
+                    background:   'none',
+                    color:        '#E8563A',
+                    border:       '1px solid #E8563A',
+                    borderRadius: 8,
+                    padding:      '6px 12px',
+                    cursor:       'pointer',
+                    fontFamily:   'Inter, sans-serif',
+                    fontSize:     12,
+                    fontWeight:   500,
+                    whiteSpace:   'nowrap',
+                  }}
+                >
+                  Cambiar nombre de recomendaciones
+                </button>
+              </div>
+            )}
+          </div>
+          <div style={{ borderBottom: '1px solid #e5e7eb', marginBottom: 12 }} />
+        </>
+      )}
       <form onSubmit={onCreate} style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
         <input
           value={newName}
@@ -525,7 +641,8 @@ function CategoriasTabContent({
 function CatalogModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { user } = useAuth()
   const isOwner = user?.rol === 'OWNER' || user?.rol === 'ROOT'
-  const { selectedRestauranteId } = useContextStore()
+  const { selectedRestauranteId, restaurantes, loadContext } = useContextStore()
+  const restaurante = restaurantes.find((r) => r.id === selectedRestauranteId)
   const {
     categorias, ingredientes, clasificaciones,
     createCategoria, updateCategoria, deleteCategoria,
@@ -543,7 +660,38 @@ function CatalogModal({ open, onClose }: { open: boolean; onClose: () => void })
   const [dietaCreating, setDietaCreating] = useState(false)
   const [ingBusqueda, setIngBusqueda]     = useState('')
 
+  const [editandoNombreRecomendados, setEditandoNombreRecomendados] = useState(false)
+  const [nombreRecomendadosInput, setNombreRecomendadosInput]       = useState('')
+  const [guardandoNombreRecomendados, setGuardandoNombreRecomendados] = useState(false)
+  const [errorNombreRecomendados, setErrorNombreRecomendados]       = useState<string | null>(null)
+
   if (!open) return null
+
+  const handleEditarNombreRecomendados = () => {
+    setNombreRecomendadosInput(restaurante?.nombreSeccionRecomendados ?? '')
+    setErrorNombreRecomendados(null)
+    setEditandoNombreRecomendados(true)
+  }
+
+  const handleCancelarNombreRecomendados = () => {
+    setErrorNombreRecomendados(null)
+    setEditandoNombreRecomendados(false)
+  }
+
+  const handleGuardarNombreRecomendados = async () => {
+    if (!selectedRestauranteId || !nombreRecomendadosInput.trim()) return
+    setGuardandoNombreRecomendados(true)
+    setErrorNombreRecomendados(null)
+    try {
+      await api.restaurantes.update(selectedRestauranteId, { nombreSeccionRecomendados: nombreRecomendadosInput.trim() })
+      await loadContext()
+      setEditandoNombreRecomendados(false)
+    } catch (e) {
+      setErrorNombreRecomendados(e instanceof Error ? e.message : 'Error al guardar')
+    } finally {
+      setGuardandoNombreRecomendados(false)
+    }
+  }
 
   const TABS: { id: CatalogTab; label: string }[] = [
     { id: 'categorias',   label: 'Categorías'   },
@@ -704,6 +852,16 @@ function CatalogModal({ open, onClose }: { open: boolean; onClose: () => void })
               onNewNameChange={setCatName}
               creating={catCreating}
               canDelete={isOwner}
+              isOwner={isOwner}
+              nombreSeccionRecomendados={restaurante?.nombreSeccionRecomendados ?? ''}
+              editandoNombreRecomendados={editandoNombreRecomendados}
+              nombreRecomendadosInput={nombreRecomendadosInput}
+              guardandoNombreRecomendados={guardandoNombreRecomendados}
+              errorNombreRecomendados={errorNombreRecomendados}
+              onEditarNombreRecomendados={handleEditarNombreRecomendados}
+              onCambiarNombreRecomendadosInput={setNombreRecomendadosInput}
+              onGuardarNombreRecomendados={handleGuardarNombreRecomendados}
+              onCancelarNombreRecomendados={handleCancelarNombreRecomendados}
             />
           )}
           {tab === 'ingredientes' && (

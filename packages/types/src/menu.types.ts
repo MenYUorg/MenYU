@@ -20,6 +20,7 @@ export interface Restaurante {
   modoSesion: string
   activo: boolean
   createdAt: string
+  nombreSeccionRecomendados: string
   marca?: Marca | null
 }
 

@@ -275,7 +275,7 @@ export const api = {
 
   restaurantes: {
     list: () => req<Restaurante[]>('GET', '/restaurantes'),
-    update: (id: string, data: { modoSesion?: string }) =>
+    update: (id: string, data: { modoSesion?: string; nombreSeccionRecomendados?: string }) =>
       req<Restaurante>('PATCH', `/restaurantes/${id}`, data),
   },
 

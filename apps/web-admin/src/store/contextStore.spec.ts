@@ -28,6 +28,7 @@ const RESTAURANTE_BASE = {
   modoSesion: 'abierto',
   activo: true,
   createdAt: '2024-01-01',
+  nombreSeccionRecomendados: 'Recomendaciones del chef',
   marca: MARCA_X,
 }
 
