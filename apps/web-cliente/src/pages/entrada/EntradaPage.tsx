@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { AppHeader } from '../../components/AppHeader'
+import { AnfitrionScreen, CodigoSesionScreen } from '../../components/SesionSeguraModals'
 import { useSessionStore } from '../../store/sessionStore'
 
 const C = {
@@ -206,18 +207,58 @@ export function EntradaPage() {
   const [error, setError] = useState<string | null>(null)
   const [btnHover, setBtnHover] = useState(false)
 
+  const [pendingQrToken, setPendingQrToken] = useState<string | null>(null)
+  const [showCodigoModal, setShowCodigoModal] = useState(false)
+  const [showAnfitrionModal, setShowAnfitrionModal] = useState(false)
+  const [anfitrionCodigo, setAnfitrionCodigo] = useState<string | null>(null)
+
+  function handleOpenResult(result: Awaited<ReturnType<typeof openSession>>) {
+    if (result && !result.error) {
+      if (result.esAnfitrion && result.modoSesion === 'seguro') {
+        setAnfitrionCodigo(result.codigoSesion)
+        setShowAnfitrionModal(true)
+      } else {
+        navigate('/menu')
+      }
+    } else if (result?.error === 'REQUIERE_CODIGO_SESION') {
+      setShowCodigoModal(true)
+    } else {
+      setError(sessionError ?? 'No se pudo abrir la sesión. Intentá de nuevo.')
+    }
+  }
+
   const handleDetected = async (raw: string) => {
     setError(null)
     setScanning(false)
     const qrToken = extractQrToken(raw)
+    setPendingQrToken(qrToken)
     const result = await openSession({ qrToken })
+    handleOpenResult(result)
+  }
+
+  const handleSubmitCodigo = async (codigo: string) => {
+    if (!pendingQrToken) return
+    const result = await openSession({ qrToken: pendingQrToken, codigoSesion: codigo })
     if (result && !result.error) {
-      navigate('/menu')
-    } else if (result?.error === 'REQUIERE_CODIGO_SESION') {
-      navigate('/menu')
-    } else {
-      setError(sessionError ?? 'No se pudo abrir la sesión. Intentá de nuevo.')
+      setShowCodigoModal(false)
+      handleOpenResult(result)
     }
+    // si falla, sessionStore.error queda seteado y se muestra dentro del modal
+  }
+
+  if (showAnfitrionModal) {
+    return <AnfitrionScreen codigo={anfitrionCodigo} onContinuar={() => navigate('/menu')} />
+  }
+
+  if (showCodigoModal) {
+    return (
+      <CodigoSesionScreen
+        loading={loading}
+        error={sessionError}
+        onSubmit={(codigo) => void handleSubmitCodigo(codigo)}
+        onVolver={() => setShowCodigoModal(false)}
+      />
+    )
   }
 
   return (

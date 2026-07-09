@@ -1,8 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
-import { useSearchParams, useNavigate } from 'react-router-dom'
-import { Spinner } from '@menyu/ui'
-import { useSessionStore } from '../../store/sessionStore'
-import { usePublicMenuStore } from '../../store/publicMenuStore'
+import { useState } from 'react'
 
 const C = {
   orange: '#E8563A',
@@ -36,20 +32,7 @@ function Shell({ children }: { children: React.ReactNode }) {
   )
 }
 
-function LoadingScreen() {
-  return (
-    <Shell>
-      <div style={{ background: 'white', padding: '40px 28px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
-        <Spinner size="lg" />
-        <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 14, color: C.textSub, margin: 0 }}>
-          Conectando con la mesa…
-        </p>
-      </div>
-    </Shell>
-  )
-}
-
-function AnfitrionScreen({ codigo, onContinuar }: { codigo: string | null; onContinuar: () => void }) {
+export function AnfitrionScreen({ codigo, onContinuar }: { codigo: string | null; onContinuar: () => void }) {
   return (
     <Shell>
       <div style={{ background: 'white', padding: '24px 28px 28px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
@@ -83,20 +66,25 @@ function AnfitrionScreen({ codigo, onContinuar }: { codigo: string | null; onCon
   )
 }
 
-function CodigoSesionScreen({
-  codigo, setCodigoInput, loading, error, onSubmit, onVolver,
-}: {
-  codigo: string
-  setCodigoInput: (v: string) => void
+interface CodigoSesionScreenProps {
   loading: boolean
   error: string | null
-  onSubmit: (e: React.FormEvent) => void
+  onSubmit: (codigo: string) => void
   onVolver: () => void
-}) {
+}
+
+export function CodigoSesionScreen({ loading, error, onSubmit, onVolver }: CodigoSesionScreenProps) {
+  const [codigo, setCodigo] = useState('')
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    onSubmit(codigo)
+  }
+
   return (
     <Shell>
       <form
-        onSubmit={onSubmit}
+        onSubmit={handleSubmit}
         style={{ background: 'white', padding: '24px 28px 28px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}
       >
         <span style={{ fontSize: 48 }}>🔒</span>
@@ -113,7 +101,7 @@ function CodigoSesionScreen({
           inputMode="numeric"
           maxLength={3}
           value={codigo}
-          onChange={(e) => setCodigoInput(e.target.value.replace(/\D/g, '').slice(0, 3))}
+          onChange={(e) => setCodigo(e.target.value.replace(/\D/g, '').slice(0, 3))}
           placeholder="000"
           style={{
             width: 120, height: 64, textAlign: 'center',
@@ -140,79 +128,9 @@ function CodigoSesionScreen({
           onClick={onVolver}
           style={{ background: 'none', border: 'none', fontFamily: 'Inter,sans-serif', fontSize: 12, color: C.textSub, cursor: 'pointer', padding: '4px 0' }}
         >
-          ← Volver al menú
+          ← Volver
         </button>
       </form>
     </Shell>
-  )
-}
-
-type Step = 'loading' | 'anfitrion' | 'codigo-sesion'
-
-export function CheckInPage() {
-  const [searchParams] = useSearchParams()
-  const navigate = useNavigate()
-  const { openSession, codigoSesion: storedCodigo, loading, error } = useSessionStore()
-  const { fetchMenu } = usePublicMenuStore()
-
-  const tableCode    = searchParams.get('tableCode')   ?? undefined
-  const restaurantId = searchParams.get('restaurantId') ?? undefined
-
-  const [step, setStep] = useState<Step>('loading')
-  const [codigoInput, setCodigoInput] = useState('')
-  const submitted = useRef(false)
-
-  useEffect(() => {
-    if (!tableCode && !restaurantId) {
-      navigate('/menu', { replace: true })
-      return
-    }
-    if (submitted.current) return
-    submitted.current = true
-    void submit()
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
-
-  async function submit() {
-    const result = await openSession({ qrToken: tableCode, restauranteId: restaurantId })
-    if (!result) return // error already in store
-
-    if (result.error === 'REQUIERE_CODIGO_SESION') {
-      setStep('codigo-sesion')
-      return
-    }
-
-    if (result.modoSesion === 'seguro' && result.codigoSesion) {
-      if (result.restauranteId) void fetchMenu(result.restauranteId)
-      setStep('anfitrion')
-      return
-    }
-
-    if (result.restauranteId) void fetchMenu(result.restauranteId)
-    navigate('/menu', { replace: true })
-  }
-
-  async function handleSubmitCodigo(e: React.FormEvent) {
-    e.preventDefault()
-    const result = await openSession({ qrToken: tableCode, restauranteId: restaurantId, codigoSesion: codigoInput })
-    if (!result || result.error) return
-    if (result.restauranteId) void fetchMenu(result.restauranteId)
-    navigate('/menu', { replace: true })
-  }
-
-  if (step === 'loading' || (loading && step !== 'codigo-sesion')) return <LoadingScreen />
-
-  if (step === 'anfitrion') {
-    return <AnfitrionScreen codigo={storedCodigo} onContinuar={() => navigate('/menu', { replace: true })} />
-  }
-
-  return (
-    <CodigoSesionScreen
-      codigo={codigoInput}
-      setCodigoInput={setCodigoInput}
-      loading={loading}
-      error={error}
-      onSubmit={handleSubmitCodigo}
-      onVolver={() => navigate('/menu', { replace: true })}
-    />
   )
 }
