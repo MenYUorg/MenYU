@@ -4,6 +4,7 @@ import type { Restaurante } from '@menyu/types'
 import { useContextStore } from '../../../store/contextStore'
 import { api } from '../../../services/api'
 import type { MesaConQr, SesionActiva } from '../../../services/api'
+import { MenuItemImage } from '@menyu/ui'
 
 // ── Palette ────────────────────────────────────────────────────────────────────
 const C = {
@@ -915,15 +916,7 @@ export function TomaPedidosPage() {
                       display: 'flex', alignItems: 'center', gap: 16,
                     }}
                   >
-                    {item.imagenUrl ? (
-                      <img
-                        src={item.imagenUrl}
-                        alt={item.nombre}
-                        style={{ width: 56, height: 56, borderRadius: 8, objectFit: 'cover', flexShrink: 0 }}
-                      />
-                    ) : (
-                      <div style={{ width: 56, height: 56, borderRadius: 8, background: C.bgLight, flexShrink: 0 }} />
-                    )}
+                    <MenuItemImage src={item.imagenUrl} alt={item.nombre} width={56} height={56} borderRadius={8} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <p style={{ fontFamily: 'Inter,sans-serif', fontWeight: 600, fontSize: 15, color: '#374151', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {item.nombre}
@@ -970,15 +963,7 @@ export function TomaPedidosPage() {
                         display: 'flex', alignItems: 'center', gap: 16,
                       }}
                     >
-                      {item.imagenUrl ? (
-                        <img
-                          src={item.imagenUrl}
-                          alt={item.nombre}
-                          style={{ width: 56, height: 56, borderRadius: 8, objectFit: 'cover', flexShrink: 0 }}
-                        />
-                      ) : (
-                        <div style={{ width: 56, height: 56, borderRadius: 8, background: C.bgLight, flexShrink: 0 }} />
-                      )}
+                      <MenuItemImage src={item.imagenUrl} alt={item.nombre} width={56} height={56} borderRadius={8} />
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <p style={{ fontFamily: 'Inter,sans-serif', fontWeight: 600, fontSize: 15, color: '#374151', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {item.nombre}
@@ -1030,15 +1015,7 @@ export function TomaPedidosPage() {
                             display: 'flex', alignItems: 'center', gap: 16,
                           }}
                         >
-                          {item.imagenUrl ? (
-                            <img
-                              src={item.imagenUrl}
-                              alt={item.nombre}
-                              style={{ width: 56, height: 56, borderRadius: 8, objectFit: 'cover', flexShrink: 0 }}
-                            />
-                          ) : (
-                            <div style={{ width: 56, height: 56, borderRadius: 8, background: C.bgLight, flexShrink: 0 }} />
-                          )}
+                          <MenuItemImage src={item.imagenUrl} alt={item.nombre} width={56} height={56} borderRadius={8} />
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <p style={{ fontFamily: 'Inter,sans-serif', fontWeight: 600, fontSize: 15, color: '#374151', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                               {item.nombre}
