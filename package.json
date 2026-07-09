@@ -26,9 +26,6 @@
     "overrides": {
       "react-native>@types/react": "~19.0.14",
       "react-native-web": "0.20.0"
-    },
-    "patchedDependencies": {
-      "@expo/metro-config@0.20.18": "patches/@expo__metro-config@0.20.18.patch"
     }
   }
 }

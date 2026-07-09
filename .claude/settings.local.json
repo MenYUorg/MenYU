@@ -48,7 +48,9 @@
       "Bash(gh issue *)",
       "Bash(gh pr *)",
       "Bash(gh release *)",
-      "Bash(claude plugin *)"
+      "Bash(claude plugin *)",
+      "Bash(grep -n -B2 -A5 \"patchedDependencies\" package.json pnpm-workspace.yaml)",
+      "Bash(grep -rn \"expo/metro-config\" package.json pnpm-workspace.yaml apps/*/package.json)"
     ]
   }
 }
