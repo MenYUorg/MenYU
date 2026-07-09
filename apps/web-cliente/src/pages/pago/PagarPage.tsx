@@ -167,7 +167,7 @@ export function PagarPage() {
             fontWeight: 700, fontSize: 15, cursor: 'pointer',
           }}
         >
-          Pagar en efectivo
+          Llamar al mozo para pagar
         </button>
       </>
     )

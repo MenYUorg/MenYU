@@ -30,6 +30,33 @@ const DETAIL_INCLUDE = {
 export class MarcaService {
   constructor(private readonly prisma: PrismaService) {}
 
+  async findRestaurantesByMarca(marcaId: string) {
+    return this.prisma.restaurante.findMany({
+      where: { marcaId, activo: true },
+      select: { id: true, nombre: true, direccion: true },
+      orderBy: { nombre: 'asc' },
+    })
+  }
+
+  async findAllPublicas() {
+    const marcas = await this.prisma.marca.findMany({
+      where: { activo: true },
+      select: {
+        id: true,
+        nombre: true,
+        _count: {
+          select: { restaurantes: { where: { activo: true } } },
+        },
+      },
+      orderBy: { nombre: 'asc' },
+    })
+    return marcas.map((m) => ({
+      id: m.id,
+      nombre: m.nombre,
+      restaurantesActivos: m._count.restaurantes,
+    }))
+  }
+
   async create(dto: CreateMarcaDto) {
     const existing = await this.prisma.marca.findUnique({ where: { slug: dto.slug } })
     if (existing) throw new ConflictException('Ya existe una marca con ese slug')

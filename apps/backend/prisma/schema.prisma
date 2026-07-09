@@ -30,10 +30,10 @@ model Restaurante {
   marcaId     String   @map("marca_id")
   nombre      String
   direccion   String?
-  qrBaseUrl   String?  @map("qr_base_url")
   modoSesion  String   @default("abierto") @map("modo_sesion")
   activo      Boolean  @default(true)
   createdAt   DateTime @default(now()) @map("created_at")
+  nombreSeccionRecomendados String @default("RECOMENDACIONES") @map("nombre_seccion_recomendados")
 
   marca         Marca              @relation(fields: [marcaId], references: [id])
   mozos         Mozo[]
@@ -279,6 +279,7 @@ model ItemMenu {
   descripcion       String?
   precioBase        Decimal  @map("precio_base") @db.Decimal(10, 2)
   disponible        Boolean  @default(true)
+  recomendadoEn     DateTime? @map("recomendado_en")
   imagenUrl         String?  @map("imagen_url")
 
   restaurante    Restaurante        @relation(fields: [restauranteId], references: [id])

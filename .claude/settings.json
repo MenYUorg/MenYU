@@ -34,7 +34,8 @@
       "Bash(pnpm --filter @menyu/api exec prisma migrate dev --name nullable_sesion_cliente_id --skip-seed)",
       "Bash(xargs grep -l \"Restaurante\")",
       "Bash(git log *)",
-      "Bash(pnpm --filter @menyu/web-staff exec tsc --noEmit)"
+      "Bash(pnpm --filter @menyu/web-staff exec tsc --noEmit)",
+      "Bash(pnpm --filter @menyu/web-staff exec eslint . --max-warnings 0)"
     ]
   }
 }

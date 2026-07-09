@@ -12,7 +12,4 @@ export class CreateRestauranteDto {
   @IsOptional()
   direccion?: string
 
-  @IsString()
-  @IsOptional()
-  qrBaseUrl?: string
 }

@@ -3,7 +3,7 @@ import type { FormEvent, ChangeEvent } from 'react'
 import type { ItemMenu } from '@menyu/types'
 import { useContextStore } from '../../../store/contextStore'
 import { useMenuStore } from '../../../store/menuStore'
-import { Button, Input, Textarea, Select, Badge, Modal, Spinner } from '@menyu/ui'
+import { Button, Input, Textarea, Select, Badge, Modal, Spinner, MenuItemImage } from '@menyu/ui'
 import { ItemIngredientesPanel } from './ItemIngredientesPanel'
 import { api } from '../../../services/api'
 
@@ -13,9 +13,10 @@ interface ItemForm {
   descripcion: string
   categoriaId: string
   disponible: boolean
+  esRecomendado: boolean
 }
 
-const EMPTY_FORM: ItemForm = { nombre: '', precioBase: '', descripcion: '', categoriaId: '', disponible: true }
+const EMPTY_FORM: ItemForm = { nombre: '', precioBase: '', descripcion: '', categoriaId: '', disponible: true, esRecomendado: false }
 
 function itemToForm(item: ItemMenu): ItemForm {
   return {
@@ -24,6 +25,7 @@ function itemToForm(item: ItemMenu): ItemForm {
     descripcion: item.descripcion ?? '',
     categoriaId: item.categoriaId ?? '',
     disponible: item.disponible,
+    esRecomendado: item.esRecomendado ?? false,
   }
 }
 
@@ -55,7 +57,7 @@ export function ItemsTab() {
     setSubmitting(true); setFormError(null)
     try {
       if (editing) {
-        await updateItem(editing.id, { nombre, precioBase: precio, descripcion: form.descripcion.trim() || undefined, categoriaId: form.categoriaId || null, disponible: form.disponible })
+        await updateItem(editing.id, { nombre, precioBase: precio, descripcion: form.descripcion.trim() || undefined, categoriaId: form.categoriaId || null, disponible: form.disponible, esRecomendado: form.esRecomendado })
       } else {
         await createItem({ restauranteId: selectedRestauranteId, nombre, precioBase: precio, descripcion: form.descripcion.trim() || undefined, categoriaId: form.categoriaId || undefined, disponible: form.disponible })
       }
@@ -129,9 +131,9 @@ export function ItemsTab() {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {items.map((item) => (
-                <tr key={item.id} className="hover:bg-gray-50 transition-colors">
+                <tr key={item.id} className={`hover:bg-gray-50 transition-colors ${item.disponible ? '' : 'opacity-50'}`}>
                   <td className="px-4 py-3">
-                    <img src={item.imagenUrl || '/src/assets/predeterminada_menu.png'} alt={item.nombre} className="w-12 h-12 object-cover rounded-md border border-gray-100" />
+                    <MenuItemImage src={item.imagenUrl} alt={item.nombre} width={48} height={48} borderRadius={6} className="border border-gray-100" />
                   </td>
                   <td className="px-4 py-3">
                     <div className="font-medium text-gray-900">{item.nombre}</div>
@@ -139,7 +141,19 @@ export function ItemsTab() {
                   </td>
                   <td className="px-4 py-3 font-mono text-gray-700">${Number(item.precioBase).toFixed(2)}</td>
                   <td className="px-4 py-3 text-gray-500">{categorias.find((c) => c.id === item.categoriaId)?.nombre ?? <span className="text-gray-300">—</span>}</td>
-                  <td className="px-4 py-3"><Badge variant={item.disponible ? 'success' : 'error'}>{item.disponible ? 'Disponible' : 'No disponible'}</Badge></td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-1.5">
+                      <Badge variant={item.disponible ? 'success' : 'error'}>{item.disponible ? 'Disponible' : 'No disponible'}</Badge>
+                      {item.esRecomendado && (
+                        <span
+                          className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
+                          style={{ backgroundColor: '#fde5df', color: '#E8563A' }}
+                        >
+                          Recomendado
+                        </span>
+                      )}
+                    </div>
+                  </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1.5">
                       <Button variant="ghost" size="sm" onClick={() => handleUploadClick(item.id)} title="Subir imagen">📷</Button>
@@ -176,6 +190,10 @@ export function ItemsTab() {
           <label className="flex items-center gap-2 cursor-pointer select-none">
             <input type="checkbox" checked={form.disponible} onChange={(e) => setForm((f) => ({ ...f, disponible: e.target.checked }))} className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
             <span className="text-sm font-medium text-gray-700">Disponible para el cliente</span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input type="checkbox" checked={form.esRecomendado} onChange={(e) => setForm((f) => ({ ...f, esRecomendado: e.target.checked }))} className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+            <span className="text-sm font-medium text-gray-700">Destacar como recomendación del chef</span>
           </label>
           {editing && clasificaciones.length > 0 && (
             <div>

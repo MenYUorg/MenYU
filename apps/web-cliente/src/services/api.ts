@@ -52,7 +52,7 @@ export const api = {
       req<{ sesionId: string; mesaId: string; restauranteId: string; esAnfitrion: boolean; codigoSesion: string; jwt: string; numeroMesa: string; modoSesion: string }>(
         'POST',
         '/sessions/open',
-        data,
+        { tableCode: data.qrToken, restauranteId: data.restauranteId, pin: data.pin, codigoSesion: data.codigoSesion },
       ),
   },
 
@@ -91,5 +91,23 @@ export const api = {
         { ...data, returnBaseUrl: window.location.origin },
         jwt,
       ),
+  },
+
+  auth: {
+    login: (email: string, password: string) =>
+      req<{ accessToken: string; refreshToken: string }>('POST', '/auth/login', { email, password }),
+    register: (nombre: string, email: string, password: string, telefono?: string) =>
+      req<{ accessToken: string; refreshToken: string }>(
+        'POST',
+        '/auth/register',
+        { nombre, email, password, ...(telefono ? { telefono } : {}) },
+      ),
+  },
+
+  marca: {
+    publicas: () =>
+      req<Array<{ id: string; nombre: string; restaurantesActivos: number }>>('GET', '/marca/publicas'),
+    restaurantes: (marcaId: string) =>
+      req<Array<{ id: string; nombre: string; direccion: string | null }>>('GET', `/marca/${marcaId}/restaurantes`),
   },
 }

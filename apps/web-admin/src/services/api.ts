@@ -1,4 +1,4 @@
-import { TOKEN_KEY, REFRESH_KEY } from '@menyu/auth'
+import { TOKEN_KEY, REFRESH_KEY, resolveLoginUrl } from '@menyu/auth'
 import type {
   Marca,
   Restaurante,
@@ -65,7 +65,7 @@ async function req<T>(method: string, path: string, body?: unknown, isRetry = fa
       if (!newToken) {
         localStorage.removeItem(TOKEN_KEY)
         localStorage.removeItem(REFRESH_KEY)
-        window.location.href = '/login'
+        window.location.replace(resolveLoginUrl())
         throw new ApiError(401, 'Sesión expirada')
       }
       return req<T>(method, path, body, true)
@@ -124,6 +124,7 @@ export interface UpdateItemInput {
   descripcion?: string
   categoriaId?: string | null
   disponible?: boolean
+  esRecomendado?: boolean
 }
 
 export interface SesionResumen {
@@ -274,7 +275,7 @@ export const api = {
 
   restaurantes: {
     list: () => req<Restaurante[]>('GET', '/restaurantes'),
-    update: (id: string, data: { modoSesion?: string }) =>
+    update: (id: string, data: { modoSesion?: string; nombreSeccionRecomendados?: string }) =>
       req<Restaurante>('PATCH', `/restaurantes/${id}`, data),
   },
 

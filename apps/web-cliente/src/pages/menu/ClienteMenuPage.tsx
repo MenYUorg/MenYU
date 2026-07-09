@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { usePublicMenuStore } from '../../store/publicMenuStore'
 import { useSessionStore } from '../../store/sessionStore'
 import { useCarritoStore } from '../../store/carritoStore'
-import { Spinner } from '@menyu/ui'
+import { Spinner, MenuItemImage } from '@menyu/ui'
 import { api } from '../../services/api'
 import type { MenuPublicoItem } from '@menyu/types'
 
@@ -31,6 +31,15 @@ function matchesBusqueda(nombre: string, buscar: string): boolean {
   if (!buscar.trim()) return true
   const query = buscar.toLowerCase().trim()
   return nombre.toLowerCase().split(/\s+/).some((palabra) => palabra.startsWith(query))
+}
+
+function itemPasaFiltros(item: MenuPublicoItem, buscar: string, activeDiets: Set<string>): boolean {
+  if (!matchesBusqueda(item.nombre, buscar)) return false
+  if (activeDiets.size > 0) {
+    const ids = new Set(item.clasificaciones.map((c) => c.id))
+    for (const d of activeDiets) if (!ids.has(d)) return false
+  }
+  return true
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
@@ -114,22 +123,6 @@ function DrawerRow({
   )
 }
 
-function Placeholder() {
-  return (
-    <div style={{
-      position: 'absolute', inset: 0,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: 'linear-gradient(135deg, #F2EEEA 0%, #EDE9E5 100%)',
-    }}>
-      <span style={{
-        fontFamily: 'Montserrat,sans-serif', fontWeight: 800,
-        fontSize: 11, color: C.orange, letterSpacing: '0.12em',
-        opacity: 0.7,
-      }}>MENYU</span>
-    </div>
-  )
-}
-
 function ItemCard({ item, onPress }: { item: MenuPublicoItem; onPress: () => void }) {
   return (
     <div
@@ -152,15 +145,11 @@ function ItemCard({ item, onPress }: { item: MenuPublicoItem; onPress: () => voi
       }}
     >
       <div style={{ position: 'relative', width: '100%', paddingBottom: '80%', overflow: 'hidden', flexShrink: 0 }}>
-        {item.imagenUrl ? (
-          <img
-            src={item.imagenUrl}
-            alt={item.nombre}
-            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
-          />
-        ) : (
-          <Placeholder />
-        )}
+        <MenuItemImage
+          src={item.imagenUrl}
+          alt={item.nombre}
+          className="absolute inset-0"
+        />
       </div>
       <div style={{ padding: '10px 11px 11px', display: 'flex', flexDirection: 'column', flex: 1, gap: 3 }}>
         <p style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 13, color: C.text, lineHeight: 1.25, margin: 0 }}>
@@ -199,230 +188,11 @@ function ItemCard({ item, onPress }: { item: MenuPublicoItem; onPress: () => voi
 
 // ── Check-in screen ───────────────────────────────────────────────────────────
 
-interface CheckInProps {
-  pin: string; setPin: (v: string) => void
-  rid: string; setRid: (v: string) => void
-  loading: boolean; error: string | null
-  onSubmit: (e: React.FormEvent) => void
-  step: 'inicial' | 'codigo-sesion' | 'anfitrion'
-  codigo: string; setCodigo: (v: string) => void
-  onSubmitCodigo: (e: React.FormEvent) => void
-  onVolver: () => void
-  codigoAnfitrion: string | null
-  onContinuar: () => void
-}
-
-function CheckInScreen({
-  pin, setPin, rid, setRid, loading, error, onSubmit,
-  step, codigo, setCodigo, onSubmitCodigo, onVolver,
-  codigoAnfitrion, onContinuar,
-}: CheckInProps) {
-  return (
-    <div style={{
-      minHeight: '100svh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-      padding: 16, background: `linear-gradient(135deg, ${C.navy} 0%, #1e254a 100%)`,
-    }}>
-      <div style={{ width: '100%', maxWidth: 360, borderRadius: 20, overflow: 'hidden', boxShadow: '0 24px 64px rgba(0,0,0,0.35)' }}>
-        {/* Brand header */}
-        <div style={{ background: C.navy, padding: '28px 32px 20px', textAlign: 'center' }}>
-          <div style={{ display: 'inline-flex', alignItems: 'flex-end', gap: 2, marginBottom: 8 }}>
-            <span style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 800, fontSize: 26, color: 'white', letterSpacing: '-0.01em' }}>
-              MENY
-            </span>
-            <div style={{
-              width: 14, height: 17, background: C.orange, marginBottom: 3,
-              borderRadius: '3px 3px 50% 50% / 3px 3px 30% 30%',
-            }} />
-          </div>
-          <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 13, color: 'rgba(255,255,255,0.55)', margin: 0 }}>
-            Ingresá para ver el menú
-          </p>
-        </div>
-
-        {/* Paso 1: inicial */}
-        {step === 'inicial' && (
-          <form onSubmit={onSubmit} style={{ background: 'white', padding: '24px 28px 28px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div>
-              <label style={{ fontFamily: 'Inter,sans-serif', fontSize: 11, fontWeight: 600, color: C.textMuted, textTransform: 'uppercase', letterSpacing: '0.07em', display: 'block', marginBottom: 6 }}>
-                ID del restaurante
-              </label>
-              <input
-                type="text" value={rid} onChange={(e) => setRid(e.target.value)}
-                placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                style={{
-                  width: '100%', boxSizing: 'border-box', height: 42,
-                  border: `1.5px solid ${C.border}`, borderRadius: 10,
-                  padding: '0 14px', fontFamily: 'Inter,sans-serif',
-                  fontSize: 13, color: C.text, outline: 'none',
-                  transition: 'border-color .15s',
-                }}
-                onFocus={(e) => { e.target.style.borderColor = C.orange }}
-                onBlur={(e) => { e.target.style.borderColor = C.border }}
-              />
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ flex: 1, height: 1, background: C.border }} />
-              <span style={{ fontFamily: 'Inter,sans-serif', fontSize: 11, color: C.textMuted }}>o</span>
-              <div style={{ flex: 1, height: 1, background: C.border }} />
-            </div>
-
-            <div>
-              <label style={{ fontFamily: 'Inter,sans-serif', fontSize: 11, fontWeight: 600, color: C.textMuted, textTransform: 'uppercase', letterSpacing: '0.07em', display: 'block', marginBottom: 6 }}>
-                PIN de la mesa
-              </label>
-              <input
-                type="text" value={pin} onChange={(e) => setPin(e.target.value)}
-                placeholder="1234"
-                style={{
-                  width: '100%', boxSizing: 'border-box', height: 42,
-                  border: `1.5px solid ${C.border}`, borderRadius: 10,
-                  padding: '0 14px', fontFamily: 'Inter,sans-serif',
-                  fontSize: 13, color: C.text, outline: 'none',
-                  transition: 'border-color .15s',
-                }}
-                onFocus={(e) => { e.target.style.borderColor = C.orange }}
-                onBlur={(e) => { e.target.style.borderColor = C.border }}
-              />
-            </div>
-
-            {error && (
-              <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 12, color: C.orange, background: C.orangeSoft, borderRadius: 8, padding: '9px 12px', margin: 0 }}>
-                {error}
-              </p>
-            )}
-
-            <button
-              type="submit"
-              disabled={loading || (!rid.trim() && !pin.trim())}
-              style={{
-                background: C.orange, color: 'white', border: 'none',
-                borderRadius: 10, padding: '13px 20px',
-                fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 14,
-                cursor: loading ? 'wait' : 'pointer',
-                opacity: loading || (!rid.trim() && !pin.trim()) ? 0.5 : 1,
-                transition: 'opacity .15s',
-              }}
-            >
-              {loading ? 'Conectando…' : 'Ver menú'}
-            </button>
-          </form>
-        )}
-
-        {/* Paso 2: codigo-sesion */}
-        {step === 'codigo-sesion' && (
-          <form
-            onSubmit={onSubmitCodigo}
-            style={{ background: 'white', padding: '24px 28px 28px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}
-          >
-            <span style={{ fontSize: 48 }}>🔒</span>
-            <div style={{ textAlign: 'center' }}>
-              <p style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 800, fontSize: 20, color: C.navy, margin: '0 0 8px' }}>
-                Mesa en modo seguro
-              </p>
-              <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 13, color: C.textSub, margin: 0 }}>
-                El anfitrión de la mesa tiene un código de 3 dígitos. Pedíselo para unirte.
-              </p>
-            </div>
-            <input
-              type="text"
-              inputMode="numeric"
-              maxLength={3}
-              value={codigo}
-              onChange={(e) => setCodigo(e.target.value.replace(/\D/g, '').slice(0, 3))}
-              placeholder="000"
-              style={{
-                width: 120, height: 64, textAlign: 'center',
-                fontFamily: 'Montserrat,sans-serif', fontWeight: 800,
-                fontSize: 32, letterSpacing: '0.3em',
-                border: `2px solid ${C.border}`, borderRadius: 12,
-                outline: 'none', color: C.navy, boxSizing: 'border-box',
-              }}
-              onFocus={(e) => { e.target.style.borderColor = C.orange }}
-              onBlur={(e) => { e.target.style.borderColor = C.border }}
-            />
-            {error && (
-              <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 12, color: C.orange, background: C.orangeSoft, borderRadius: 8, padding: '9px 12px', margin: 0, width: '100%', boxSizing: 'border-box' }}>
-                {error}
-              </p>
-            )}
-            <button
-              type="submit"
-              disabled={loading || codigo.length !== 3}
-              style={{
-                width: '100%', background: C.orange, color: 'white', border: 'none',
-                borderRadius: 10, padding: '13px 20px',
-                fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 14,
-                cursor: loading ? 'wait' : 'pointer',
-                opacity: loading || codigo.length !== 3 ? 0.5 : 1,
-                transition: 'opacity .15s',
-              }}
-            >
-              {loading ? 'Uniéndome…' : 'Unirme a la mesa'}
-            </button>
-            <button
-              type="button"
-              onClick={onVolver}
-              style={{ background: 'none', border: 'none', fontFamily: 'Inter,sans-serif', fontSize: 12, color: C.textMuted, cursor: 'pointer', padding: '4px 0' }}
-            >
-              ← Volver
-            </button>
-          </form>
-        )}
-
-        {/* Paso 3: anfitrion */}
-        {step === 'anfitrion' && (
-          <div style={{ background: 'white', padding: '24px 28px 28px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
-            <div style={{
-              width: 56, height: 56, borderRadius: '50%',
-              background: C.orange, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              <span style={{ fontSize: 24, color: 'white', fontWeight: 'bold' }}>✓</span>
-            </div>
-            <div style={{ textAlign: 'center' }}>
-              <p style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 800, fontSize: 18, color: C.navy, margin: '0 0 8px' }}>
-                ¡Sos el anfitrión de la mesa!
-              </p>
-              <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 13, color: C.textSub, margin: 0 }}>
-                Compartí este código con tus acompañantes para que puedan unirse:
-              </p>
-            </div>
-            <div style={{
-              width: '100%', boxSizing: 'border-box',
-              border: `2px solid ${C.navy}`, borderRadius: 16,
-              background: '#E5E7F0', padding: '20px 16px', textAlign: 'center',
-            }}>
-              <p style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 800, fontSize: 48, color: C.navy, margin: '0 0 4px', letterSpacing: '0.1em' }}>
-                {codigoAnfitrion ?? '—'}
-              </p>
-              <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 12, color: C.textSub, margin: 0 }}>
-                Código de mesa
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={onContinuar}
-              style={{
-                width: '100%', background: C.orange, color: 'white', border: 'none',
-                borderRadius: 10, padding: '13px 20px',
-                fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 14,
-                cursor: 'pointer',
-              }}
-            >
-              Ver el menú
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export function ClienteMenuPage() {
   const navigate = useNavigate()
-  const { restauranteId, sesionId, mesaId, jwt, openSession, loading: sessionLoading, error: sessionError, numeroMesa, codigoSesion, modoSesion } = useSessionStore()
+  const { restauranteId, sesionId, mesaId, jwt, numeroMesa, codigoSesion, modoSesion } = useSessionStore()
   const carritoCount = useCarritoStore((s) => s.items.length)
   const { menu, loading, error, fetchMenu } = usePublicMenuStore()
 
@@ -439,23 +209,32 @@ export function ClienteMenuPage() {
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({})
 
-  // Check-in state
-  const [checkInPin,    setCheckInPin]    = useState('')
-  const [checkInRid,    setCheckInRid]    = useState('')
-  const [checkInStep,   setCheckInStep]   = useState<'inicial' | 'codigo-sesion' | 'anfitrion'>('inicial')
-  const [checkInCodigo, setCheckInCodigo] = useState('')
-  const [checkInRidTemp, setCheckInRidTemp] = useState('')
-  const [checkInPinTemp, setCheckInPinTemp] = useState('')
-
-  // Placeholder for future user auth (never truthy today)
-  const user = null as null | { nombre: string; email: string }
+  const user = (() => {
+    try {
+      const token = localStorage.getItem('menyu_access_token')
+      if (!token) return null
+      const payload = JSON.parse(atob(token.split('.')[1])) as {
+        tipo: string
+        nombre?: string
+        email?: string
+      }
+      if (payload.tipo !== 'cliente') return null
+      return { nombre: payload.nombre ?? payload.email ?? 'Cliente', email: payload.email ?? '' }
+    } catch {
+      return null
+    }
+  })()
 
   useEffect(() => {
     if (restauranteId && !menu) void fetchMenu(restauranteId)
   }, [restauranteId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (menu?.categorias[0]?.id) setCategoriaActiva(menu.categorias[0].id)
+    if (menu?.recomendados && menu.recomendados.length > 0) {
+      setCategoriaActiva('recomendados')
+    } else if (menu?.categorias[0]?.id) {
+      setCategoriaActiva(menu.categorias[0].id)
+    }
   }, [menu])
 
   // Click outside diet dropdown
@@ -493,21 +272,32 @@ export function ClienteMenuPage() {
     if (!menu) return []
     return menu.categorias.map((cat) => ({
       ...cat,
-      itemsDirectos: cat.itemsDirectos.filter((item) => {
-        if (!matchesBusqueda(item.nombre, buscar)) return false
-        if (activeDiets.size > 0) {
-          const ids = new Set(item.clasificaciones.map((c) => c.id))
-          for (const d of activeDiets) if (!ids.has(d)) return false
-        }
-        return true
-      }),
+      itemsDirectos: cat.itemsDirectos.filter((item) => itemPasaFiltros(item, buscar, activeDiets)),
     })).filter((cat) => cat.itemsDirectos.length > 0)
   }, [menu, buscar, activeDiets])
+
+  // Chef's recommendations with the same filters applied
+  const recomendadosFiltrados = useMemo(() => {
+    return (menu?.recomendados ?? []).filter((item) => itemPasaFiltros(item, buscar, activeDiets))
+  }, [menu, buscar, activeDiets])
+
+  // Recomendados + categorías combinados, para chips y scroll-spy
+  const seccionesConId = useMemo(() => {
+    const secciones: { id: string; nombre: string }[] = []
+    if (recomendadosFiltrados.length > 0) {
+      secciones.push({
+        id: 'recomendados',
+        nombre: menu?.restaurante.nombreSeccionRecomendados ?? 'RECOMENDACIONES',
+      })
+    }
+    secciones.push(...categoriasFiltradas.map((c) => ({ id: c.id, nombre: c.nombre })))
+    return secciones
+  }, [recomendadosFiltrados, categoriasFiltradas, menu])
 
   // Scroll-spy: update active chip based on which section is visible
   useEffect(() => {
     // Purge refs for categories no longer in the DOM
-    const activeIds = new Set(categoriasFiltradas.map((c) => c.id))
+    const activeIds = new Set(seccionesConId.map((s) => s.id))
     Object.keys(sectionRefs.current).forEach((id) => {
       if (!activeIds.has(id)) delete sectionRefs.current[id]
     })
@@ -529,7 +319,7 @@ export function ClienteMenuPage() {
     })
 
     return () => observer.disconnect()
-  }, [categoriasFiltradas])
+  }, [seccionesConId])
 
   // Scroll listener: highlight "Todo" chip when scrolled to top
   useEffect(() => {
@@ -537,57 +327,17 @@ export function ClienteMenuPage() {
     if (!container) return
     const handleScroll = () => {
       if (container.scrollTop === 0) {
-        const firstId = categoriasFiltradas[0]?.id
+        const firstId = seccionesConId[0]?.id
         if (firstId) setCategoriaActiva(firstId)
       }
     }
     container.addEventListener('scroll', handleScroll)
     return () => container.removeEventListener('scroll', handleScroll)
-  }, [categoriasFiltradas])
+  }, [seccionesConId])
 
   // Handlers
   const handleCategoriaClick = (catId: string) => {
     sectionRefs.current[catId]?.scrollIntoView({ behavior: 'smooth' })
-  }
-
-  const handleCheckIn = async (e: React.FormEvent) => {
-    e.preventDefault()
-    const rid = checkInRid.trim() || undefined
-    const pin = checkInPin.trim() || undefined
-    if (!rid && !pin) return
-
-    const result = await openSession({ restauranteId: rid, pin })
-
-    if (result?.error === 'REQUIERE_CODIGO_SESION') {
-      setCheckInRidTemp(rid ?? '')
-      setCheckInPinTemp(pin ?? '')
-      setCheckInStep('codigo-sesion')
-      return
-    }
-
-    if (result?.codigoSesion && result?.modoSesion === 'seguro') {
-      setCheckInStep('anfitrion')
-      return
-    }
-
-    if (rid) void fetchMenu(rid)
-  }
-
-  const handleCheckInCodigo = async (e: React.FormEvent) => {
-    e.preventDefault()
-    const result = await openSession({
-      restauranteId: checkInRidTemp || undefined,
-      pin: checkInPinTemp || undefined,
-      codigoSesion: checkInCodigo.trim(),
-    })
-    if (result && !result.error) {
-      if (checkInRidTemp) void fetchMenu(checkInRidTemp)
-    }
-  }
-
-  const handleAnfitrionContinuar = () => {
-    setCheckInStep('inicial')
-    if (checkInRid.trim()) void fetchMenu(checkInRid.trim())
   }
 
   const handleCallMozo = async () => {
@@ -624,24 +374,6 @@ export function ClienteMenuPage() {
     setPendingDiets(new Set())
     setActiveDiets(new Set())
     setDietOpen(false)
-  }
-
-  // ── Render guards
-  if (!restauranteId || checkInStep === 'anfitrion') {
-    return (
-      <CheckInScreen
-        pin={checkInPin} setPin={setCheckInPin}
-        rid={checkInRid} setRid={setCheckInRid}
-        loading={sessionLoading} error={sessionError}
-        onSubmit={handleCheckIn}
-        step={checkInStep}
-        codigo={checkInCodigo} setCodigo={setCheckInCodigo}
-        onSubmitCodigo={handleCheckInCodigo}
-        onVolver={() => setCheckInStep('inicial')}
-        codigoAnfitrion={codigoSesion}
-        onContinuar={handleAnfitrionContinuar}
-      />
-    )
   }
 
   if (loading) return (
@@ -702,15 +434,25 @@ export function ClienteMenuPage() {
         <div style={{ background: `linear-gradient(135deg, ${C.navy} 0%, #3d4880 100%)`, padding: '22px 18px 18px' }}>
           {user ? (
             <>
-              <div style={{ width: 52, height: 52, borderRadius: '50%', background: `linear-gradient(135deg, ${C.orange}, #ff7a5e)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Montserrat,sans-serif', fontWeight: 800, fontSize: 18, color: 'white', marginBottom: 10 }}>
-                {user.nombre[0]?.toUpperCase()}
+              <div style={{ width: 52, height: 52, borderRadius: '50%', background: 'rgba(255,255,255,0.14)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, fontFamily: 'Montserrat,sans-serif', fontWeight: 700, color: 'white', marginBottom: 10 }}>
+                {user.nombre.slice(0, 1).toUpperCase()}
               </div>
-              <div style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 17, color: 'white' }}>
-                Hola, {user.nombre.split(' ')[0]} 👋
+              <div style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 17, color: 'white', lineHeight: 1.2 }}>
+                ¡Hola, {user.nombre.split(' ')[0]}!
               </div>
-              <div style={{ fontFamily: 'Inter,sans-serif', fontSize: 11, color: 'rgba(255,255,255,0.55)', marginTop: 2 }}>
+              <div style={{ fontFamily: 'Inter,sans-serif', fontSize: 11, color: 'rgba(255,255,255,0.55)', marginTop: 2, marginBottom: 14 }}>
                 {user.email}
               </div>
+              <button
+                style={{ background: 'rgba(255,255,255,0.1)', color: 'white', border: '1.5px solid rgba(255,255,255,0.22)', borderRadius: 8, padding: '10px 16px', fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 13, cursor: 'pointer', width: '100%' }}
+                onClick={() => {
+                  localStorage.removeItem('menyu_access_token')
+                  localStorage.removeItem('menyu_refresh_token')
+                  setDrawerOpen(false)
+                }}
+              >
+                Cerrar sesión
+              </button>
             </>
           ) : (
             <>
@@ -724,10 +466,16 @@ export function ClienteMenuPage() {
                 Estás navegando como invitado
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <button style={{ background: C.orange, color: 'white', border: 'none', borderRadius: 8, padding: '10px 16px', fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+                <button
+                  style={{ background: C.orange, color: 'white', border: 'none', borderRadius: 8, padding: '10px 16px', fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}
+                  onClick={() => { setDrawerOpen(false); navigate('/auth') }}
+                >
                   Iniciar sesión
                 </button>
-                <button style={{ background: 'rgba(255,255,255,0.1)', color: 'white', border: '1.5px solid rgba(255,255,255,0.22)', borderRadius: 8, padding: '10px 16px', fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+                <button
+                  style={{ background: 'rgba(255,255,255,0.1)', color: 'white', border: '1.5px solid rgba(255,255,255,0.22)', borderRadius: 8, padding: '10px 16px', fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}
+                  onClick={() => { setDrawerOpen(false); navigate('/auth?tab=register') }}
+                >
                   Crear cuenta gratis
                 </button>
               </div>
@@ -953,12 +701,12 @@ export function ClienteMenuPage() {
       {/* ── Category chips */}
       <div style={{ background: 'white', borderBottom: `1px solid ${C.border}`, flexShrink: 0, overflowX: 'auto', scrollbarWidth: 'none' }}>
         <div style={{ display: 'flex', padding: '8px 14px', gap: 6, width: 'max-content' }}>
-          {categoriasFiltradas.map((cat) => {
-            const active = categoriaActiva === cat.id
+          {seccionesConId.map((sec) => {
+            const active = categoriaActiva === sec.id
             return (
               <button
-                key={cat.id}
-                onClick={() => handleCategoriaClick(cat.id)}
+                key={sec.id}
+                onClick={() => handleCategoriaClick(sec.id)}
                 style={{
                   padding: '6px 14px', borderRadius: 999,
                   background: active ? C.navy : 'white',
@@ -968,7 +716,7 @@ export function ClienteMenuPage() {
                   cursor: 'pointer', whiteSpace: 'nowrap', transition: 'all .15s',
                 }}
               >
-                {cat.nombre}
+                {sec.nombre}
               </button>
             )
           })}
@@ -977,6 +725,33 @@ export function ClienteMenuPage() {
 
       {/* ── Items grid */}
       <div ref={scrollContainerRef} style={{ flex: 1, overflowY: 'auto', padding: 14 }}>
+        {recomendadosFiltrados.length > 0 && (
+          <div
+            ref={(el) => { sectionRefs.current['recomendados'] = el }}
+            data-categoria-id="recomendados"
+            style={{ marginBottom: 28 }}
+          >
+            <h2 style={{
+              fontFamily: 'Montserrat,sans-serif',
+              fontWeight: 800,
+              fontSize: 13,
+              letterSpacing: '0.1em',
+              textTransform: 'uppercase',
+              color: C.navy,
+              margin: '0 0 12px',
+              paddingBottom: 8,
+              borderBottom: `2px solid ${C.orange}`,
+              display: 'inline-block',
+            }}>
+              {menu?.restaurante.nombreSeccionRecomendados}
+            </h2>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+              {recomendadosFiltrados.map((item) => (
+                <ItemCard key={item.id} item={item} onPress={() => navigate(`/menu/${item.id}`)} />
+              ))}
+            </div>
+          </div>
+        )}
         {categoriasFiltradas.length > 0 ? (
           categoriasFiltradas.map((cat) => (
             <div
@@ -1006,9 +781,9 @@ export function ClienteMenuPage() {
               </div>
             </div>
           ))
-        ) : (
+        ) : recomendadosFiltrados.length === 0 ? (
           <EmptyState buscar={buscar} activeDiets={activeDiets} onClear={() => { setBuscar(''); setActiveDiets(new Set()) }} />
-        )}
+        ) : null}
       </div>
 
       {/* ── Cart FAB */}

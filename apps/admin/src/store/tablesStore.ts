@@ -1,2 +1,0 @@
-// pendiente — Sprint admin
-export {}

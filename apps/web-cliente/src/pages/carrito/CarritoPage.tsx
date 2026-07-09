@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useCarritoStore } from '../../store/carritoStore'
 import { useSessionStore } from '../../store/sessionStore'
 import { api } from '../../services/api'
+import { MenuItemImage } from '@menyu/ui'
 
 interface PedidoConfirmado {
   id: string
@@ -370,13 +371,13 @@ export function CarritoPage() {
                 boxShadow:    '0 1px 4px rgba(0,0,0,0.06)',
               }}>
                 <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-                  <div style={{
-                    width:        64,
-                    height:       64,
-                    borderRadius: 10,
-                    background:   C.bg,
-                    flexShrink:   0,
-                  }} />
+                  <MenuItemImage
+                    src={item.imagenUrl}
+                    alt={item.nombre}
+                    width={56}
+                    height={56}
+                    borderRadius={8}
+                  />
 
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <p

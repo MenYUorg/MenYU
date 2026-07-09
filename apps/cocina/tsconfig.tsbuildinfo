@@ -1,1 +1,0 @@
-{"root":["./src/app.tsx","./src/index.ts","./src/main.tsx","./src/components/ordercard.tsx","./src/components/orderlist.tsx","./src/components/statusbadge.tsx","./src/config/printerconfig.ts","./src/pages/kitchenboard.tsx","./src/services/api.ts","./src/services/printer.ts","./src/services/socket.ts","./src/store/ordersstore.ts"],"errors":true,"version":"5.8.3"}

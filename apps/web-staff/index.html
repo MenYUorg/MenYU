@@ -4,9 +4,22 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>MenYu — Staff</title>
+    <link rel="icon" type="image/png" href="/favicon.png" />
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      (function() {
+        var params = new URLSearchParams(window.location.search);
+        var token = params.get('token');
+        var refresh = params.get('refresh');
+        if (token && refresh) {
+          localStorage.setItem('menyu_access_token', token);
+          localStorage.setItem('menyu_refresh_token', refresh);
+          window.history.replaceState({}, '', window.location.pathname);
+        }
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

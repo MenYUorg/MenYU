@@ -76,6 +76,9 @@ export class RestauranteService {
     if (user.rol === 'GERENTE') {
       await this.assertRestauranteOwnership(id, user)
     }
+    if (dto.nombreSeccionRecomendados !== undefined && user.rol === 'GERENTE') {
+      throw new ForbiddenException('Solo el owner puede renombrar la sección de recomendados')
+    }
     await this.assertExists(id)
     return this.prisma.restaurante.update({ where: { id }, data: dto })
   }

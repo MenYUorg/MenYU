@@ -6,6 +6,8 @@ import { useAuth } from '@menyu/auth'
 import { useContextStore } from '../../../store/contextStore'
 import { useMenuStore } from '../../../store/menuStore'
 import { ItemFormModal } from './ItemFormModal'
+import { api } from '../../../services/api'
+import { MenuItemImage } from '@menyu/ui'
 
 type CatalogTab = 'categorias' | 'ingredientes' | 'dietas'
 
@@ -16,19 +18,22 @@ const matchesBusqueda = (nombre: string, buscar: string): boolean => {
 }
 
 /* ─── ToggleSwitch ──────────────────────────────────────────────────────── */
-function ToggleSwitch({ value, onChange }: { value: boolean; onChange: () => void }) {
+function ToggleSwitch({ value, onChange, title, disabled }: { value: boolean; onChange: () => void; title?: string; disabled?: boolean }) {
   return (
     <div
       role="switch"
       aria-checked={value}
-      onClick={(e) => { e.stopPropagation(); onChange() }}
+      aria-disabled={disabled}
+      title={disabled ? `${title ?? ''} (no disponible)`.trim() : title}
+      onClick={(e) => { e.stopPropagation(); if (!disabled) onChange() }}
       style={{
         width:        44,
         height:       24,
         borderRadius: 999,
         background:   value ? '#E8563A' : '#d1d5db',
-        cursor:       'pointer',
-        transition:   'background 200ms',
+        cursor:       disabled ? 'not-allowed' : 'pointer',
+        opacity:      disabled ? 0.4 : 1,
+        transition:   'background 200ms, opacity 200ms',
         position:     'relative',
         flexShrink:   0,
       }}
@@ -272,6 +277,16 @@ function CategoriasTabContent({
   onNewNameChange,
   creating,
   canDelete = true,
+  isOwner = false,
+  nombreSeccionRecomendados = '',
+  editandoNombreRecomendados = false,
+  nombreRecomendadosInput = '',
+  guardandoNombreRecomendados = false,
+  errorNombreRecomendados = null,
+  onEditarNombreRecomendados,
+  onCambiarNombreRecomendadosInput,
+  onGuardarNombreRecomendados,
+  onCancelarNombreRecomendados,
 }: {
   categorias:      { id: string; nombre: string; orden?: number }[]
   onDelete:        (id: string, nombre: string) => void
@@ -281,6 +296,16 @@ function CategoriasTabContent({
   onNewNameChange: (v: string) => void
   creating:        boolean
   canDelete?:      boolean
+  isOwner?:        boolean
+  nombreSeccionRecomendados?:        string
+  editandoNombreRecomendados?:       boolean
+  nombreRecomendadosInput?:          string
+  guardandoNombreRecomendados?:      boolean
+  errorNombreRecomendados?:          string | null
+  onEditarNombreRecomendados?:       () => void
+  onCambiarNombreRecomendadosInput?: (v: string) => void
+  onGuardarNombreRecomendados?:      () => void
+  onCancelarNombreRecomendados?:     () => void
 }) {
   const { updateCategoria } = useMenuStore()
   const sortByOrden = (cats: typeof propCats) =>
@@ -337,6 +362,101 @@ function CategoriasTabContent({
 
   return (
     <div>
+      {isOwner && (
+        <>
+          <div style={{ marginBottom: 12 }}>
+            {editandoNombreRecomendados ? (
+              <div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  value={nombreRecomendadosInput}
+                  onChange={(e) => onCambiarNombreRecomendadosInput?.(e.target.value)}
+                  placeholder="Nombre de la sección de recomendados"
+                  autoFocus
+                  style={{
+                    flex:         1,
+                    border:       '1px solid #e5e7eb',
+                    borderRadius: 8,
+                    padding:      '8px 12px',
+                    fontFamily:   'Inter, sans-serif',
+                    fontSize:     13,
+                    color:        '#111827',
+                    outline:      'none',
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => onGuardarNombreRecomendados?.()}
+                  disabled={!nombreRecomendadosInput.trim() || guardandoNombreRecomendados}
+                  style={{
+                    background:   '#2D3561',
+                    color:        'white',
+                    border:       'none',
+                    borderRadius: 8,
+                    padding:      '8px 16px',
+                    cursor:       !nombreRecomendadosInput.trim() || guardandoNombreRecomendados ? 'not-allowed' : 'pointer',
+                    fontFamily:   'Inter, sans-serif',
+                    fontSize:     13,
+                    fontWeight:   600,
+                    opacity:      !nombreRecomendadosInput.trim() || guardandoNombreRecomendados ? 0.5 : 1,
+                    whiteSpace:   'nowrap',
+                  }}
+                >
+                  {guardandoNombreRecomendados ? '…' : 'Guardar'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onCancelarNombreRecomendados?.()}
+                  style={{
+                    background:   'none',
+                    color:        '#6b7280',
+                    border:       '1px solid #e5e7eb',
+                    borderRadius: 8,
+                    padding:      '8px 16px',
+                    cursor:       'pointer',
+                    fontFamily:   'Inter, sans-serif',
+                    fontSize:     13,
+                    whiteSpace:   'nowrap',
+                  }}
+                >
+                  Cancelar
+                </button>
+              </div>
+              {errorNombreRecomendados && (
+                <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, color: '#dc2626', margin: '6px 0 0' }}>
+                  {errorNombreRecomendados}
+                </p>
+              )}
+              </div>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#6b7280', flex: 1 }}>
+                  Sección de recomendados: <strong style={{ color: '#111827' }}>{nombreSeccionRecomendados}</strong>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => onEditarNombreRecomendados?.()}
+                  style={{
+                    background:   'none',
+                    color:        '#E8563A',
+                    border:       '1px solid #E8563A',
+                    borderRadius: 8,
+                    padding:      '6px 12px',
+                    cursor:       'pointer',
+                    fontFamily:   'Inter, sans-serif',
+                    fontSize:     12,
+                    fontWeight:   500,
+                    whiteSpace:   'nowrap',
+                  }}
+                >
+                  Cambiar nombre de recomendaciones
+                </button>
+              </div>
+            )}
+          </div>
+          <div style={{ borderBottom: '1px solid #e5e7eb', marginBottom: 12 }} />
+        </>
+      )}
       <form onSubmit={onCreate} style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
         <input
           value={newName}
@@ -522,7 +642,8 @@ function CategoriasTabContent({
 function CatalogModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { user } = useAuth()
   const isOwner = user?.rol === 'OWNER' || user?.rol === 'ROOT'
-  const { selectedRestauranteId } = useContextStore()
+  const { selectedRestauranteId, restaurantes, loadContext } = useContextStore()
+  const restaurante = restaurantes.find((r) => r.id === selectedRestauranteId)
   const {
     categorias, ingredientes, clasificaciones,
     createCategoria, updateCategoria, deleteCategoria,
@@ -540,7 +661,38 @@ function CatalogModal({ open, onClose }: { open: boolean; onClose: () => void })
   const [dietaCreating, setDietaCreating] = useState(false)
   const [ingBusqueda, setIngBusqueda]     = useState('')
 
+  const [editandoNombreRecomendados, setEditandoNombreRecomendados] = useState(false)
+  const [nombreRecomendadosInput, setNombreRecomendadosInput]       = useState('')
+  const [guardandoNombreRecomendados, setGuardandoNombreRecomendados] = useState(false)
+  const [errorNombreRecomendados, setErrorNombreRecomendados]       = useState<string | null>(null)
+
   if (!open) return null
+
+  const handleEditarNombreRecomendados = () => {
+    setNombreRecomendadosInput(restaurante?.nombreSeccionRecomendados ?? '')
+    setErrorNombreRecomendados(null)
+    setEditandoNombreRecomendados(true)
+  }
+
+  const handleCancelarNombreRecomendados = () => {
+    setErrorNombreRecomendados(null)
+    setEditandoNombreRecomendados(false)
+  }
+
+  const handleGuardarNombreRecomendados = async () => {
+    if (!selectedRestauranteId || !nombreRecomendadosInput.trim()) return
+    setGuardandoNombreRecomendados(true)
+    setErrorNombreRecomendados(null)
+    try {
+      await api.restaurantes.update(selectedRestauranteId, { nombreSeccionRecomendados: nombreRecomendadosInput.trim() })
+      await loadContext()
+      setEditandoNombreRecomendados(false)
+    } catch (e) {
+      setErrorNombreRecomendados(e instanceof Error ? e.message : 'Error al guardar')
+    } finally {
+      setGuardandoNombreRecomendados(false)
+    }
+  }
 
   const TABS: { id: CatalogTab; label: string }[] = [
     { id: 'categorias',   label: 'Categorías'   },
@@ -701,6 +853,16 @@ function CatalogModal({ open, onClose }: { open: boolean; onClose: () => void })
               onNewNameChange={setCatName}
               creating={catCreating}
               canDelete={isOwner}
+              isOwner={isOwner}
+              nombreSeccionRecomendados={restaurante?.nombreSeccionRecomendados ?? ''}
+              editandoNombreRecomendados={editandoNombreRecomendados}
+              nombreRecomendadosInput={nombreRecomendadosInput}
+              guardandoNombreRecomendados={guardandoNombreRecomendados}
+              errorNombreRecomendados={errorNombreRecomendados}
+              onEditarNombreRecomendados={handleEditarNombreRecomendados}
+              onCambiarNombreRecomendadosInput={setNombreRecomendadosInput}
+              onGuardarNombreRecomendados={handleGuardarNombreRecomendados}
+              onCancelarNombreRecomendados={handleCancelarNombreRecomendados}
             />
           )}
           {tab === 'ingredientes' && (
@@ -779,6 +941,7 @@ export function AdminMenuPage() {
   const [busqueda, setBusqueda]   = useState('')
   const [catalogOpen, setCatalogOpen] = useState(false)
   const [optimistic, setOptimistic]   = useState<Record<string, boolean>>({})
+  const [optimisticRecomendado, setOptimisticRecomendado] = useState<Record<string, boolean>>({})
   const [itemModal, setItemModal]     = useState<{ open: boolean; item: ItemMenu | null }>({ open: false, item: null })
   const [categoriaActiva, setCategoriaActiva] = useState<string | null>(null)
 
@@ -815,6 +978,17 @@ export function AdminMenuPage() {
         items: sinCategoria,
       })
     }
+
+    const recomendados = items.filter(
+      (item) => item.esRecomendado && matchesBusqueda(item.nombre, busqueda),
+    )
+    if (recomendados.length > 0) {
+      grupos.unshift({
+        categoria: { id: '__recomendados__', nombre: '⭐ Recomendaciones', orden: -1 } as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+        items: recomendados,
+      })
+    }
+
     return grupos
   }, [items, categorias, busqueda])
 
@@ -857,6 +1031,28 @@ export function AdminMenuPage() {
       setOptimistic((prev) => ({ ...prev, [item.id]: current }))
     } finally {
       setOptimistic((prev) => {
+        const copy = { ...prev }
+        delete copy[item.id]
+        return copy
+      })
+    }
+  }
+
+  /* ── Toggle recomendado ── */
+  function getRecomendado(item: ItemMenu): boolean {
+    return item.id in optimisticRecomendado ? optimisticRecomendado[item.id] : !!item.esRecomendado
+  }
+
+  async function handleToggleRecomendado(item: ItemMenu) {
+    const current = getRecomendado(item)
+    const next = !current
+    setOptimisticRecomendado((prev) => ({ ...prev, [item.id]: next }))
+    try {
+      await updateItem(item.id, { esRecomendado: next })
+    } catch {
+      setOptimisticRecomendado((prev) => ({ ...prev, [item.id]: current }))
+    } finally {
+      setOptimisticRecomendado((prev) => {
         const copy = { ...prev }
         delete copy[item.id]
         return copy
@@ -1065,30 +1261,23 @@ export function AdminMenuPage() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                   {grupoItems.map((item) => {
                     const disponible = getDisponible(item)
+                    const recomendado = getRecomendado(item)
                     return (
                       <div
                         key={item.id}
                         style={{
-                          background:   'white',
-                          border:       '1px solid #e5e7eb',
+                          background:   recomendado ? '#FDE5DF' : 'white',
+                          border:       recomendado ? '2px solid #E8563A' : '1px solid #e5e7eb',
                           borderRadius: 12,
                           padding:      '12px 16px',
                           display:      'flex',
                           alignItems:   'center',
                           gap:          16,
                           opacity:      disponible ? 1 : 0.55,
-                          transition:   'opacity 200ms',
+                          transition:   'opacity 200ms, background 200ms, border-color 200ms',
                         }}
                       >
-                        {item.imagenUrl ? (
-                          <img
-                            src={item.imagenUrl}
-                            alt={item.nombre}
-                            style={{ width: 64, height: 64, borderRadius: 10, objectFit: 'cover', flexShrink: 0 }}
-                          />
-                        ) : (
-                          <div style={{ width: 64, height: 64, borderRadius: 10, background: '#f3f4f6', flexShrink: 0 }} />
-                        )}
+                        <MenuItemImage src={item.imagenUrl} alt={item.nombre} width={64} height={64} borderRadius={10} />
 
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <p style={{
@@ -1119,7 +1308,25 @@ export function AdminMenuPage() {
                           >
                             Editar
                           </button>
-                          <ToggleSwitch value={disponible} onChange={() => handleToggle(item)} />
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 11, color: '#9ca3af', width: 76, textAlign: 'right' }}>
+                                Disponible
+                              </span>
+                              <ToggleSwitch value={disponible} onChange={() => handleToggle(item)} title="Disponible para el cliente" />
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 11, color: '#9ca3af', width: 76, textAlign: 'right' }}>
+                                Recomendado
+                              </span>
+                              <ToggleSwitch
+                                value={recomendado}
+                                onChange={() => handleToggleRecomendado(item)}
+                                title="Recomendado por el chef"
+                                disabled={!disponible}
+                              />
+                            </div>
+                          </div>
                         </div>
                       </div>
                     )
