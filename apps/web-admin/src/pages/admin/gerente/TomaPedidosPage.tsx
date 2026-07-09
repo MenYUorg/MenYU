@@ -502,9 +502,11 @@ export function TomaPedidosPage() {
   const [sesionActual,setSesionActual]= useState<SesionActual | null>(null)
   const [pinModal,    setPinModal]    = useState<PinModalData | null>(null)
   const [menuCats,    setMenuCats]    = useState<MenuCategoria[]>([])
+  const [recomendados, setRecomendados] = useState<MenuItemType[]>([])
+  const [restauranteMenu, setRestauranteMenu] = useState<{ id: string; nombre: string; nombreSeccionRecomendados: string } | null>(null)
   const [menuLoading, setMenuLoading] = useState(false)
   const [busqueda,    setBusqueda]    = useState('')
-  const [catSel,      setCatSel]      = useState<string | null>(null)
+  const [catSel,      setCatSel]      = useState<string | null | 'recomendados'>(null)
   const [carrito,     setCarrito]     = useState<CarritoItem[]>([])
   const [itemModal,     setItemModal]     = useState<MenuItemType | null>(null)
   const [editingCartId, setEditingCartId] = useState<string | null>(null)
@@ -565,8 +567,14 @@ export function TomaPedidosPage() {
     try {
       const res = await fetch(`${API_BASE}/menu/${selectedRestauranteId}`)
       if (!res.ok) throw new Error('Error al cargar el menú')
-      const data = (await res.json()) as { categorias: MenuCategoria[] }
+      const data = (await res.json()) as {
+        categorias: MenuCategoria[]
+        recomendados: MenuItemType[]
+        restaurante: { id: string; nombre: string; nombreSeccionRecomendados: string }
+      }
       setMenuCats(data.categorias)
+      setRecomendados(data.recomendados)
+      setRestauranteMenu(data.restaurante)
     } catch {
       // no bloquea el flujo
     } finally {
@@ -696,6 +704,11 @@ export function TomaPedidosPage() {
       }))
       .filter((cat) => cat.items.length > 0)
   }, [menuCats, catSel, busqueda])
+
+  const recomendadosFiltrados = useMemo(() => {
+    const q = busqueda.toLowerCase().trim()
+    return recomendados.filter((item) => !q || item.nombre.toLowerCase().split(/\s+/).some((p) => p.startsWith(q)))
+  }, [recomendados, busqueda])
 
   // ── Sin restaurante ─────────────────────────────────────────────────────────
   if (!selectedRestauranteId) {
@@ -843,6 +856,18 @@ export function TomaPedidosPage() {
           >
             Todos
           </button>
+          <button
+            onClick={() => setCatSel(catSel === 'recomendados' ? null : 'recomendados')}
+            style={{
+              padding: '6px 14px', borderRadius: 999, flexShrink: 0,
+              background: catSel === 'recomendados' ? C.orange : 'white',
+              color:      catSel === 'recomendados' ? 'white' : '#374151',
+              border:     catSel === 'recomendados' ? 'none' : `1px solid ${C.border}`,
+              fontFamily: 'Inter,sans-serif', fontWeight: 600, fontSize: 13, cursor: 'pointer',
+            }}
+          >
+            RECOMENDADOS
+          </button>
           {menuCats.map((cat) => (
             <button
               key={cat.id}
@@ -865,25 +890,78 @@ export function TomaPedidosPage() {
           <p style={{ textAlign: 'center', fontFamily: 'Inter,sans-serif', fontSize: 14, color: C.textMuted, padding: '40px 0' }}>
             Cargando menú...
           </p>
-        ) : categoriasFiltradas.length === 0 ? (
-          <p style={{ textAlign: 'center', fontFamily: 'Inter,sans-serif', fontSize: 14, color: C.textMuted, padding: '40px 0' }}>
-            Sin ítems encontrados.
-          </p>
+        ) : catSel === 'recomendados' ? (
+          recomendadosFiltrados.length === 0 ? (
+            <p style={{ textAlign: 'center', fontFamily: 'Inter,sans-serif', fontSize: 14, color: C.textMuted, padding: '40px 0' }}>
+              Sin ítems encontrados.
+            </p>
+          ) : (
+            <div>
+              <p style={{
+                fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 13,
+                color: C.textSub, textTransform: 'uppercase', letterSpacing: '0.06em',
+                margin: '0 0 10px', paddingBottom: 6,
+                borderBottom: `1px solid ${C.border}`,
+              }}>
+                {restauranteMenu?.nombreSeccionRecomendados}
+              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {recomendadosFiltrados.map((item) => (
+                  <div
+                    key={item.id}
+                    style={{
+                      background: 'white', border: `1px solid ${C.border}`,
+                      borderRadius: 12, padding: '14px 16px',
+                      display: 'flex', alignItems: 'center', gap: 16,
+                    }}
+                  >
+                    {item.imagenUrl ? (
+                      <img
+                        src={item.imagenUrl}
+                        alt={item.nombre}
+                        style={{ width: 56, height: 56, borderRadius: 8, objectFit: 'cover', flexShrink: 0 }}
+                      />
+                    ) : (
+                      <div style={{ width: 56, height: 56, borderRadius: 8, background: C.bgLight, flexShrink: 0 }} />
+                    )}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontFamily: 'Inter,sans-serif', fontWeight: 600, fontSize: 15, color: '#374151', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {item.nombre}
+                      </p>
+                      <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 13, color: C.textSub, margin: '2px 0 0' }}>
+                        ${item.precioBase.toFixed(2)}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => { setSidebarWidth(getSidebarWidth()); setItemModal(item) }}
+                      style={{
+                        width: 32, height: 32, borderRadius: '50%', border: 'none',
+                        background: C.orange, color: 'white',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        cursor: 'pointer', flexShrink: 0, fontSize: 22, fontWeight: 700, lineHeight: 1,
+                      }}
+                    >
+                      +
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-            {categoriasFiltradas.map((cat) => (
-              <div key={cat.id}>
-                {/* Título de categoría */}
+          <>
+            {catSel === null && recomendadosFiltrados.length > 0 && (
+              <div style={{ marginBottom: 24 }}>
                 <p style={{
                   fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 13,
                   color: C.textSub, textTransform: 'uppercase', letterSpacing: '0.06em',
                   margin: '0 0 10px', paddingBottom: 6,
                   borderBottom: `1px solid ${C.border}`,
                 }}>
-                  {cat.nombre}
+                  {restauranteMenu?.nombreSeccionRecomendados}
                 </p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {cat.items.map((item) => (
+                  {recomendadosFiltrados.map((item) => (
                     <div
                       key={item.id}
                       style={{
@@ -924,8 +1002,70 @@ export function TomaPedidosPage() {
                   ))}
                 </div>
               </div>
-            ))}
-          </div>
+            )}
+            {categoriasFiltradas.length === 0 ? (
+              <p style={{ textAlign: 'center', fontFamily: 'Inter,sans-serif', fontSize: 14, color: C.textMuted, padding: '40px 0' }}>
+                Sin ítems encontrados.
+              </p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+                {categoriasFiltradas.map((cat) => (
+                  <div key={cat.id}>
+                    {/* Título de categoría */}
+                    <p style={{
+                      fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 13,
+                      color: C.textSub, textTransform: 'uppercase', letterSpacing: '0.06em',
+                      margin: '0 0 10px', paddingBottom: 6,
+                      borderBottom: `1px solid ${C.border}`,
+                    }}>
+                      {cat.nombre}
+                    </p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {cat.items.map((item) => (
+                        <div
+                          key={item.id}
+                          style={{
+                            background: 'white', border: `1px solid ${C.border}`,
+                            borderRadius: 12, padding: '14px 16px',
+                            display: 'flex', alignItems: 'center', gap: 16,
+                          }}
+                        >
+                          {item.imagenUrl ? (
+                            <img
+                              src={item.imagenUrl}
+                              alt={item.nombre}
+                              style={{ width: 56, height: 56, borderRadius: 8, objectFit: 'cover', flexShrink: 0 }}
+                            />
+                          ) : (
+                            <div style={{ width: 56, height: 56, borderRadius: 8, background: C.bgLight, flexShrink: 0 }} />
+                          )}
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <p style={{ fontFamily: 'Inter,sans-serif', fontWeight: 600, fontSize: 15, color: '#374151', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {item.nombre}
+                            </p>
+                            <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 13, color: C.textSub, margin: '2px 0 0' }}>
+                              ${item.precioBase.toFixed(2)}
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => { setSidebarWidth(getSidebarWidth()); setItemModal(item) }}
+                            style={{
+                              width: 32, height: 32, borderRadius: '50%', border: 'none',
+                              background: C.orange, color: 'white',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              cursor: 'pointer', flexShrink: 0, fontSize: 22, fontWeight: 700, lineHeight: 1,
+                            }}
+                          >
+                            +
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
         )}
 
         {/* FAB carrito */}

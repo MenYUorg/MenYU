@@ -477,7 +477,11 @@ export function ClienteMenuPage() {
   }, [restauranteId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (menu?.categorias[0]?.id) setCategoriaActiva(menu.categorias[0].id)
+    if (menu?.recomendados && menu.recomendados.length > 0) {
+      setCategoriaActiva('recomendados')
+    } else if (menu?.categorias[0]?.id) {
+      setCategoriaActiva(menu.categorias[0].id)
+    }
   }, [menu])
 
   // Click outside diet dropdown
@@ -524,10 +528,23 @@ export function ClienteMenuPage() {
     return (menu?.recomendados ?? []).filter((item) => itemPasaFiltros(item, buscar, activeDiets))
   }, [menu, buscar, activeDiets])
 
+  // Recomendados + categorías combinados, para chips y scroll-spy
+  const seccionesConId = useMemo(() => {
+    const secciones: { id: string; nombre: string }[] = []
+    if (recomendadosFiltrados.length > 0) {
+      secciones.push({
+        id: 'recomendados',
+        nombre: menu?.restaurante.nombreSeccionRecomendados ?? 'RECOMENDACIONES',
+      })
+    }
+    secciones.push(...categoriasFiltradas.map((c) => ({ id: c.id, nombre: c.nombre })))
+    return secciones
+  }, [recomendadosFiltrados, categoriasFiltradas, menu])
+
   // Scroll-spy: update active chip based on which section is visible
   useEffect(() => {
     // Purge refs for categories no longer in the DOM
-    const activeIds = new Set(categoriasFiltradas.map((c) => c.id))
+    const activeIds = new Set(seccionesConId.map((s) => s.id))
     Object.keys(sectionRefs.current).forEach((id) => {
       if (!activeIds.has(id)) delete sectionRefs.current[id]
     })
@@ -549,7 +566,7 @@ export function ClienteMenuPage() {
     })
 
     return () => observer.disconnect()
-  }, [categoriasFiltradas])
+  }, [seccionesConId])
 
   // Scroll listener: highlight "Todo" chip when scrolled to top
   useEffect(() => {
@@ -557,13 +574,13 @@ export function ClienteMenuPage() {
     if (!container) return
     const handleScroll = () => {
       if (container.scrollTop === 0) {
-        const firstId = categoriasFiltradas[0]?.id
+        const firstId = seccionesConId[0]?.id
         if (firstId) setCategoriaActiva(firstId)
       }
     }
     container.addEventListener('scroll', handleScroll)
     return () => container.removeEventListener('scroll', handleScroll)
-  }, [categoriasFiltradas])
+  }, [seccionesConId])
 
   // Handlers
   const handleCategoriaClick = (catId: string) => {
@@ -989,12 +1006,12 @@ export function ClienteMenuPage() {
       {/* ── Category chips */}
       <div style={{ background: 'white', borderBottom: `1px solid ${C.border}`, flexShrink: 0, overflowX: 'auto', scrollbarWidth: 'none' }}>
         <div style={{ display: 'flex', padding: '8px 14px', gap: 6, width: 'max-content' }}>
-          {categoriasFiltradas.map((cat) => {
-            const active = categoriaActiva === cat.id
+          {seccionesConId.map((sec) => {
+            const active = categoriaActiva === sec.id
             return (
               <button
-                key={cat.id}
-                onClick={() => handleCategoriaClick(cat.id)}
+                key={sec.id}
+                onClick={() => handleCategoriaClick(sec.id)}
                 style={{
                   padding: '6px 14px', borderRadius: 999,
                   background: active ? C.navy : 'white',
@@ -1004,7 +1021,7 @@ export function ClienteMenuPage() {
                   cursor: 'pointer', whiteSpace: 'nowrap', transition: 'all .15s',
                 }}
               >
-                {cat.nombre}
+                {sec.nombre}
               </button>
             )
           })}
@@ -1014,7 +1031,11 @@ export function ClienteMenuPage() {
       {/* ── Items grid */}
       <div ref={scrollContainerRef} style={{ flex: 1, overflowY: 'auto', padding: 14 }}>
         {recomendadosFiltrados.length > 0 && (
-          <div style={{ marginBottom: 28 }}>
+          <div
+            ref={(el) => { sectionRefs.current['recomendados'] = el }}
+            data-categoria-id="recomendados"
+            style={{ marginBottom: 28 }}
+          >
             <h2 style={{
               fontFamily: 'Montserrat,sans-serif',
               fontWeight: 800,
