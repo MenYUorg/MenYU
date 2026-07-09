@@ -112,6 +112,8 @@ export interface MenuCategoria {
 
 export interface MenuResponse {
   categorias: MenuCategoria[]
+  recomendados: MenuItem[]
+  restaurante: { id: string; nombre: string; nombreSeccionRecomendados: string }
 }
 
 export interface WaiterCallRico {

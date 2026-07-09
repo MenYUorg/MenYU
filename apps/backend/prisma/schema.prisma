@@ -33,7 +33,7 @@ model Restaurante {
   modoSesion  String   @default("abierto") @map("modo_sesion")
   activo      Boolean  @default(true)
   createdAt   DateTime @default(now()) @map("created_at")
-  nombreSeccionRecomendados String @default("Recomendaciones del chef") @map("nombre_seccion_recomendados")
+  nombreSeccionRecomendados String @default("RECOMENDACIONES") @map("nombre_seccion_recomendados")
 
   marca         Marca              @relation(fields: [marcaId], references: [id])
   mozos         Mozo[]
