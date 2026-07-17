@@ -30,7 +30,7 @@ export function PagarPage() {
   const jwt           = useSessionStore((s) => s.jwt)
   const sesionId      = useSessionStore((s) => s.sesionId)
   const numeroMesa    = useSessionStore((s) => s.numeroMesa)
-  const { estado: estadoPago, error: errorPago, solicitarEfectivo, reset: resetPago } = usePagoStore()
+  const { estado: estadoPago, error: errorPago, solicitarEfectivo, pagarConMercadoPago, reset: resetPago } = usePagoStore()
 
   const [pedidos, setPedidos] = useState<PedidoSesion[]>([])
   const [loading, setLoading] = useState(true)
@@ -74,6 +74,11 @@ export function PagarPage() {
   function handleEfectivo() {
     if (!jwt || !sesionId || !pedidoId) return
     void solicitarEfectivo(jwt, sesionId, pedidoId, total)
+  }
+
+  function handleMercadoPago() {
+    if (!sesionId || !pedidoId) return
+    void pagarConMercadoPago(sesionId, pedidoId, total)
   }
 
   const header = (
@@ -155,6 +160,15 @@ export function PagarPage() {
         </p>
       </div>
     )
+  } else if (estadoPago === 'mp_redirigiendo') {
+    bottomContent = (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+        <Spinner size="md" />
+        <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: C.gray, margin: 0 }}>
+          Conectando con Mercado Pago...
+        </p>
+      </div>
+    )
   } else {
     bottomContent = (
       <>
@@ -168,6 +182,17 @@ export function PagarPage() {
           }}
         >
           Llamar al mozo para pagar
+        </button>
+        <button
+          onClick={handleMercadoPago}
+          style={{
+            width: '100%', padding: '14px 16px',
+            background: C.orange, color: 'white', border: 'none',
+            borderRadius: 14, fontFamily: 'Montserrat, sans-serif',
+            fontWeight: 700, fontSize: 15, cursor: 'pointer',
+          }}
+        >
+          Pagar con Mercado Pago
         </button>
       </>
     )

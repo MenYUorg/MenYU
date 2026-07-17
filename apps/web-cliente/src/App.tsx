@@ -16,6 +16,7 @@ import CheckInRedirectPage from './pages/entrada/CheckInRedirectPage'
 import { SesionRequiredRoute } from './SesionRequiredRoute'
 import { useSessionStore } from './store/sessionStore'
 import { usePublicMenuStore } from './store/publicMenuStore'
+import { GraciasCard } from './components/GraciasCard'
 
 const WS_BASE = (import.meta.env.VITE_WS_URL as string) ??
   ((import.meta.env.VITE_API_URL as string) ?? '').replace('/api', '')
@@ -71,67 +72,10 @@ function SessionGuard({ children }: { children: React.ReactNode }) {
           justifyContent: 'center',
           padding: 24,
         }}>
-          <div style={{
-            background: 'white',
-            borderRadius: 16,
-            padding: '40px 32px',
-            maxWidth: 340,
-            width: '100%',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: 16,
-            boxShadow: '0 8px 28px rgba(0,0,0,0.10)',
-          }}>
-            <div style={{
-              width: 64, height: 64, borderRadius: '50%',
-              background: '#FDF0ED',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none"
-                stroke="#E8563A" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-            </div>
-            <p style={{
-              fontFamily: 'Montserrat, sans-serif',
-              fontWeight: 800, fontSize: 22,
-              color: '#2D3561', margin: 0,
-              letterSpacing: '-0.01em',
-              textAlign: 'center',
-            }}>
-              ¡Gracias por su visita!
-            </p>
-            <p style={{
-              fontFamily: 'Inter, sans-serif',
-              fontSize: 14, color: '#6B7280',
-              margin: 0, textAlign: 'center',
-              lineHeight: 1.5,
-            }}>
-              Su sesión ha sido cerrada. Esperamos verle pronto.
-            </p>
-            <button
-              onClick={() => { setShowGracias(false); clear(); navigate('/') }}
-              onMouseEnter={e => e.currentTarget.style.background = '#d34a30'}
-              onMouseLeave={e => e.currentTarget.style.background = '#E8563A'}
-              style={{
-                marginTop: 8,
-                width: '100%',
-                padding: '14px 0',
-                background: '#E8563A',
-                color: 'white',
-                border: 'none',
-                borderRadius: 12,
-                fontFamily: 'Montserrat, sans-serif',
-                fontWeight: 700,
-                fontSize: 15,
-                cursor: 'pointer',
-                transition: 'background .14s',
-              }}
-            >
-              Salir
-            </button>
-          </div>
+          <GraciasCard
+            subtitulo="Su sesión ha sido cerrada. Esperamos verle pronto."
+            onSalir={() => { setShowGracias(false); clear(); navigate('/') }}
+          />
         </div>
       )}
       {children}

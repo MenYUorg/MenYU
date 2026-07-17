@@ -4,35 +4,14 @@ import { NestFactory } from '@nestjs/core'
 import { ValidationPipe, RequestMethod } from '@nestjs/common'
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger'
 import { AppModule } from './app.module'
-
-const CORS_ORIGINS = [
-  'http://localhost:8081',
-  'http://localhost:19006',
-  'http://localhost:5173',
-  'http://localhost:5174',
-  'http://localhost:5175',
-  'http://localhost:5176',
-  'http://localhost:4173',
-]
+import { isAllowedOrigin } from './common/is-allowed-origin'
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule)
 
-  const allowedOrigins = process.env.CORS_ORIGINS?.split(',').map(o => o.trim()) ?? CORS_ORIGINS
-  const originPatterns = (process.env.CORS_ORIGIN_PATTERNS ?? '')
-    .split(',')
-    .filter(Boolean)
-    .map(p => new RegExp(p.trim()))
-
   app.enableCors({
     origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
-      if (!origin || origin.startsWith('http://localhost:')) {
-        return callback(null, true)
-      }
-      const allowed =
-        allowedOrigins.includes(origin) ||
-        originPatterns.some(re => re.test(origin))
-      callback(null, allowed)
+      callback(null, isAllowedOrigin(origin))
     },
     credentials: true,
   })

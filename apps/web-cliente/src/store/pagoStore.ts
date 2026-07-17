@@ -3,10 +3,15 @@ import { create } from 'zustand'
 const BASE = import.meta.env.VITE_API_URL ?? ''
 
 interface PagoStore {
-  estado: 'idle' | 'loading' | 'efectivo_solicitado' | 'error'
+  estado: 'idle' | 'loading' | 'efectivo_solicitado' | 'mp_redirigiendo' | 'error'
   error: string | null
   solicitarEfectivo: (
     jwt: string,
+    sesionId: string,
+    pedidoId: string,
+    monto: number,
+  ) => Promise<void>
+  pagarConMercadoPago: (
     sesionId: string,
     pedidoId: string,
     monto: number,
@@ -40,6 +45,30 @@ export const usePagoStore = create<PagoStore>()((set) => ({
       set({
         estado: 'error',
         error: e instanceof Error ? e.message : 'Error al registrar pago en efectivo',
+      })
+    }
+  },
+
+  pagarConMercadoPago: async (sesionId, pedidoId, monto) => {
+    set({ estado: 'mp_redirigiendo', error: null })
+    try {
+      const res = await fetch(`${BASE}/payments/mercadopago/crear-preferencia`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sesionId, pedidoId, monto }),
+      })
+
+      if (!res.ok) {
+        const err = (await res.json().catch(() => ({}))) as Record<string, unknown>
+        throw new Error(typeof err['message'] === 'string' ? err['message'] : `Error ${res.status}`)
+      }
+
+      const data = (await res.json()) as { initPoint: string }
+      window.location.href = data.initPoint
+    } catch (e) {
+      set({
+        estado: 'error',
+        error: e instanceof Error ? e.message : 'Error al iniciar el pago con Mercado Pago',
       })
     }
   },
