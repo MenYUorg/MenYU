@@ -72,6 +72,9 @@ importers:
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2
+      mercadopago:
+        specifier: ^3.2.0
+        version: 3.2.0
       multer:
         specifier: ^2.1.1
         version: 2.1.1
@@ -199,22 +202,22 @@ importers:
         version: 19.2.3(@types/react@19.0.14)
       '@vitejs/plugin-react':
         specifier: ^4.3.0
-        version: 4.7.0(vite@6.4.2(@types/node@25.6.0)(jiti@1.21.7)(lightningcss@1.27.0)(terser@5.46.2))
+        version: 4.7.0(vite@6.4.2(@types/node@25.6.0)(jiti@2.6.1)(lightningcss@1.27.0)(terser@5.46.2))
       '@vitest/coverage-v8':
         specifier: ^3.0.0
-        version: 3.2.6(vitest@3.2.4(@types/node@25.6.0)(jiti@1.21.7)(jsdom@26.1.0)(lightningcss@1.27.0)(terser@5.46.2))
+        version: 3.2.6(vitest@3.2.4(@types/node@25.6.0)(jiti@2.6.1)(jsdom@26.1.0)(lightningcss@1.27.0)(terser@5.46.2))
       autoprefixer:
         specifier: ^10.4.0
         version: 10.5.0(postcss@8.5.10)
       eslint:
         specifier: ^9.0.0
-        version: 9.39.4(jiti@1.21.7)
+        version: 9.39.4(jiti@2.6.1)
       eslint-plugin-react-hooks:
         specifier: ^5.0.0
-        version: 5.2.0(eslint@9.39.4(jiti@1.21.7))
+        version: 5.2.0(eslint@9.39.4(jiti@2.6.1))
       eslint-plugin-react-refresh:
         specifier: ^0.4.0
-        version: 0.4.26(eslint@9.39.4(jiti@1.21.7))
+        version: 0.4.26(eslint@9.39.4(jiti@2.6.1))
       globals:
         specifier: ^15.0.0
         version: 15.15.0
@@ -232,13 +235,13 @@ importers:
         version: 5.8.3
       typescript-eslint:
         specifier: ^8.0.0
-        version: 8.59.4(eslint@9.39.4(jiti@1.21.7))(typescript@5.8.3)
+        version: 8.59.4(eslint@9.39.4(jiti@2.6.1))(typescript@5.8.3)
       vite:
         specifier: ^6.0.0
-        version: 6.4.2(@types/node@25.6.0)(jiti@1.21.7)(lightningcss@1.27.0)(terser@5.46.2)
+        version: 6.4.2(@types/node@25.6.0)(jiti@2.6.1)(lightningcss@1.27.0)(terser@5.46.2)
       vitest:
         specifier: ^3.0.0
-        version: 3.2.4(@types/node@25.6.0)(jiti@1.21.7)(jsdom@26.1.0)(lightningcss@1.27.0)(terser@5.46.2)
+        version: 3.2.4(@types/node@25.6.0)(jiti@2.6.1)(jsdom@26.1.0)(lightningcss@1.27.0)(terser@5.46.2)
 
   apps/web-cliente:
     dependencies:
@@ -278,22 +281,22 @@ importers:
         version: 19.2.3(@types/react@19.0.14)
       '@vitejs/plugin-react':
         specifier: ^4.3.0
-        version: 4.7.0(vite@6.4.2(@types/node@25.6.0)(jiti@2.6.1)(lightningcss@1.27.0)(terser@5.46.2))
+        version: 4.7.0(vite@6.4.2(@types/node@25.6.0)(jiti@1.21.7)(lightningcss@1.27.0)(terser@5.46.2))
       '@vitest/coverage-v8':
         specifier: ^3.0.0
-        version: 3.2.6(vitest@3.2.4(@types/node@25.6.0)(jiti@2.6.1)(jsdom@26.1.0)(lightningcss@1.27.0)(terser@5.46.2))
+        version: 3.2.6(vitest@3.2.4(@types/node@25.6.0)(jiti@1.21.7)(jsdom@26.1.0)(lightningcss@1.27.0)(terser@5.46.2))
       autoprefixer:
         specifier: ^10.4.0
         version: 10.5.0(postcss@8.5.10)
       eslint:
         specifier: ^9.0.0
-        version: 9.39.4(jiti@2.6.1)
+        version: 9.39.4(jiti@1.21.7)
       eslint-plugin-react-hooks:
         specifier: ^5.0.0
-        version: 5.2.0(eslint@9.39.4(jiti@2.6.1))
+        version: 5.2.0(eslint@9.39.4(jiti@1.21.7))
       eslint-plugin-react-refresh:
         specifier: ^0.4.0
-        version: 0.4.26(eslint@9.39.4(jiti@2.6.1))
+        version: 0.4.26(eslint@9.39.4(jiti@1.21.7))
       globals:
         specifier: ^15.0.0
         version: 15.15.0
@@ -314,13 +317,13 @@ importers:
         version: 5.8.3
       typescript-eslint:
         specifier: ^8.0.0
-        version: 8.59.4(eslint@9.39.4(jiti@2.6.1))(typescript@5.8.3)
+        version: 8.59.4(eslint@9.39.4(jiti@1.21.7))(typescript@5.8.3)
       vite:
         specifier: ^6.0.0
-        version: 6.4.2(@types/node@25.6.0)(jiti@2.6.1)(lightningcss@1.27.0)(terser@5.46.2)
+        version: 6.4.2(@types/node@25.6.0)(jiti@1.21.7)(lightningcss@1.27.0)(terser@5.46.2)
       vitest:
         specifier: ^3.0.0
-        version: 3.2.4(@types/node@25.6.0)(jiti@2.6.1)(jsdom@26.1.0)(lightningcss@1.27.0)(terser@5.46.2)
+        version: 3.2.4(@types/node@25.6.0)(jiti@1.21.7)(jsdom@26.1.0)(lightningcss@1.27.0)(terser@5.46.2)
 
   apps/web-staff:
     dependencies:
@@ -3584,6 +3587,10 @@ packages:
   memfs@3.5.3:
     resolution: {integrity: sha512-UERzLsxzllchadvbPs5aolHh65ISpKpM+ccLbOJ8/vvpBKmAWf+la7dXFy7Mr0ySHbdHrFv5kGFCUHHe6GFEmw==}
     engines: {node: '>= 4.0.0'}
+
+  mercadopago@3.2.0:
+    resolution: {integrity: sha512-9keIOj21CpIvpLepeUp+VTUejiD7Dc2eCy2yqW21G4yBtj3Ey2E4AsnFrxRfGchtRc6L7qxA3YNkT4N7IcWj+g==}
+    engines: {node: '>=18'}
 
   merge-descriptors@2.0.0:
     resolution: {integrity: sha512-Snk314V5ayFLhp3fkUREub6WtjBfPdCPY1Ln8/8munuLuiYhsABgBVWsozAG+MWMbVEvcdcpbi9R7ww22l9Q3g==}
@@ -8518,6 +8525,8 @@ snapshots:
   memfs@3.5.3:
     dependencies:
       fs-monkey: 1.1.0
+
+  mercadopago@3.2.0: {}
 
   merge-descriptors@2.0.0: {}
 

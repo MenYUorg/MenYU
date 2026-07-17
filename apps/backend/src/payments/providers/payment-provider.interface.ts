@@ -1,7 +1,9 @@
 export type PaymentStatus = 'PENDIENTE' | 'APROBADO' | 'RECHAZADO' | 'EN_PROCESO'
 
 export interface CreatePaymentDto {
+  restauranteId: string
   sesionId: string
+  pedidoId: string
   monto: number
   descripcion: string
   externalReference: string
@@ -25,6 +27,6 @@ export interface WebhookResult {
 
 export interface PaymentProvider {
   createPreference(data: CreatePaymentDto): Promise<PaymentPreference>
-  processWebhook(payload: unknown): Promise<WebhookResult>
-  getPaymentStatus(externalId: string): Promise<PaymentStatus>
+  processWebhook(payload: unknown, accessToken: string): Promise<WebhookResult>
+  getPaymentStatus(externalId: string, accessToken: string): Promise<PaymentStatus>
 }

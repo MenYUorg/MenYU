@@ -1,9 +1,21 @@
 import {
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
 import { MenyuGateway } from '../gateway/menyu.gateway'
+import { MercadoPagoProvider } from './providers/mercado-pago.provider'
+import { MercadoPagoOAuthService } from './mercado-pago-oauth.service'
+import { PaymentStatus } from './providers/payment-provider.interface'
+import { isAllowedOrigin } from '../common/is-allowed-origin'
+
+const MP_STATUS_MAP: Record<PaymentStatus, string> = {
+  APROBADO: 'aprobado',
+  PENDIENTE: 'pendiente',
+  RECHAZADO: 'rechazado',
+  EN_PROCESO: 'pendiente',
+}
 
 export interface SesionResumen {
   sesionId: string
@@ -17,9 +29,13 @@ export interface SesionResumen {
 
 @Injectable()
 export class PaymentsService {
+  private readonly logger = new Logger(PaymentsService.name)
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly gateway: MenyuGateway,
+    private readonly mpProvider: MercadoPagoProvider,
+    private readonly mpOAuth: MercadoPagoOAuthService,
   ) {}
 
   async getSesiones(restauranteId: string): Promise<SesionResumen[]> {
@@ -194,5 +210,115 @@ export class PaymentsService {
     })
 
     return { sesionId, estado: 'cerrada' }
+  }
+
+  async crearPreferenciaMercadoPago(
+    sesionId: string,
+    pedidoId: string,
+    monto: number,
+    origin?: string,
+  ) {
+    const pedido = await this.prisma.pedido.findUnique({
+      where: { id: pedidoId },
+      include: { mesa: { select: { restauranteId: true } } },
+    })
+    if (!pedido) throw new NotFoundException('Pedido no encontrado')
+
+    const restauranteId = pedido.mesa.restauranteId
+    const accessToken = await this.mpOAuth.getAccessTokenDecrypted(restauranteId)
+
+    await this.prisma.pago.upsert({
+      where: { pedidoId },
+      update: { metodo: 'mercadopago', estado: 'pendiente', monto },
+      create: { pedidoId, metodo: 'mercadopago', estado: 'pendiente', monto },
+    })
+
+    const frontendOrigin = this.resolveFrontendOrigin(origin)
+
+    const preference = await this.mpProvider.createPreference({
+      restauranteId,
+      sesionId,
+      pedidoId,
+      monto,
+      descripcion: `Pedido ${pedidoId}`,
+      externalReference: pedidoId,
+      accessToken,
+      ...(frontendOrigin
+        ? {
+            successUrl: `${frontendOrigin}/pago/exitoso`,
+            failureUrl: `${frontendOrigin}/pago/fallido`,
+            pendingUrl: `${frontendOrigin}/pago/pendiente`,
+          }
+        : {}),
+    })
+
+    return { initPoint: preference.initPoint, preferenceId: preference.id }
+  }
+
+  // Deriva las back_urls del Origin del request (validado contra la misma whitelist que CORS)
+  // en vez de una FRONTEND_URL fija, para no depender de la URL de preview de Vercel de cada rama de QA.
+  private resolveFrontendOrigin(origin?: string): string | undefined {
+    if (!origin) {
+      this.logger.debug('crearPreferenciaMercadoPago: sin header Origin, uso fallback FRONTEND_URL')
+      return undefined
+    }
+    const cleanOrigin = origin.replace(/\/+$/, '')
+    if (!isAllowedOrigin(cleanOrigin)) {
+      this.logger.debug(
+        `crearPreferenciaMercadoPago: origin "${cleanOrigin}" no matchea la whitelist de CORS, uso fallback FRONTEND_URL`,
+      )
+      return undefined
+    }
+    return cleanOrigin
+  }
+
+  async procesarWebhookMercadoPago(
+    restauranteId: string,
+    pedidoId: string,
+    query: Record<string, string>,
+  ) {
+    const accessToken = await this.mpOAuth.getAccessTokenDecrypted(restauranteId)
+    const resultado = await this.mpProvider.processWebhook(query, accessToken)
+    const estadoInterno = MP_STATUS_MAP[resultado.status]
+
+    const pagoActual = await this.prisma.pago.findUnique({ where: { pedidoId } })
+    if (pagoActual?.referenciaExterna === resultado.externalId && pagoActual.estado === estadoInterno) {
+      return
+    }
+
+    await this.prisma.pago.upsert({
+      where: { pedidoId },
+      update: {
+        estado: estadoInterno,
+        referenciaExterna: resultado.externalId,
+        ...(estadoInterno === 'aprobado' ? { fechaCobro: new Date() } : {}),
+      },
+      create: {
+        pedidoId,
+        monto: 0,
+        metodo: 'mercadopago',
+        estado: estadoInterno,
+        referenciaExterna: resultado.externalId,
+      },
+    })
+
+    if (estadoInterno === 'aprobado') {
+      const pedido = await this.prisma.pedido.findUnique({
+        where: { id: pedidoId },
+        select: { sesionId: true, mesa: { select: { id: true, numero: true } } },
+      })
+      if (pedido) {
+        await this.prisma.sesionMesa.update({
+          where: { id: pedido.sesionId },
+          data: { estado: 'cerrada', cerradaEn: new Date() },
+        })
+
+        this.gateway.emitSesionCobrada(restauranteId, {
+          sesionId: pedido.sesionId,
+          mesaId: pedido.mesa.id,
+          mesaNumero: pedido.mesa.numero,
+        })
+      }
+    }
   }
 }
