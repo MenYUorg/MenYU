@@ -187,6 +187,15 @@ export interface SesionPagadaItem {
   cobradoPorNombre: string | null
   referenciaExterna: string | null
   fechaCobro: string | null
+  pagos?: {
+    id: string
+    comensalId: string | null
+    metodo: string
+    estado: string
+    cobradoPorNombre: string | null
+    referenciaExterna: string | null
+    fechaCobro: string | null
+  }[]
 }
 
 export interface MozoSimple {

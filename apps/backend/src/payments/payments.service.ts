@@ -1,12 +1,15 @@
 import {
+  BadRequestException,
   Injectable,
   Logger,
   NotFoundException,
 } from '@nestjs/common'
+import { Prisma } from '@prisma/client'
 import { PrismaService } from '../prisma/prisma.service'
 import { MenyuGateway } from '../gateway/menyu.gateway'
 import { MercadoPagoProvider } from './providers/mercado-pago.provider'
 import { MercadoPagoOAuthService } from './mercado-pago-oauth.service'
+import { DivisionService } from '../comensales/division.service'
 import { PaymentStatus } from './providers/payment-provider.interface'
 import { isAllowedOrigin } from '../common/is-allowed-origin'
 
@@ -23,7 +26,7 @@ export interface SesionResumen {
   estado: 'activa' | 'efectivo_solicitado' | 'mp_pendiente' | 'cerrada'
   total: number
   pedidos: { id: string; total: number; estado: string }[]
-  pago?: { id: string; metodo: string; estado: string }
+  pagos: { id: string; comensalId: string | null; metodo: string; estado: string; monto: number }[]
   cerradaEn?: string
 }
 
@@ -36,6 +39,7 @@ export class PaymentsService {
     private readonly gateway: MenyuGateway,
     private readonly mpProvider: MercadoPagoProvider,
     private readonly mpOAuth: MercadoPagoOAuthService,
+    private readonly divisionService: DivisionService,
   ) {}
 
   async getSesiones(restauranteId: string): Promise<SesionResumen[]> {
@@ -45,10 +49,10 @@ export class PaymentsService {
         mesa: { select: { numero: true } },
         pedidos: {
           include: {
-            pago: true,
             items: true,
           },
         },
+        pagos: true,
       },
       orderBy: { iniciadaEn: 'desc' },
       take: 100,
@@ -65,14 +69,14 @@ export class PaymentsService {
         0,
       )
 
-      const pago = sesion.pedidos.flatMap((p) => (p.pago ? [p.pago] : []))[0]
-
       let estado: SesionResumen['estado']
       if (sesion.estado === 'cerrada') {
         estado = 'cerrada'
-      } else if (pago && pago.estado === 'pendiente' && pago.metodo === 'mercadopago') {
+      } else if (
+        sesion.pagos.some((p) => p.estado === 'pendiente' && p.metodo === 'mercadopago')
+      ) {
         estado = 'mp_pendiente'
-      } else if (pago && pago.metodo === 'efectivo') {
+      } else if (sesion.pagos.some((p) => p.metodo === 'efectivo' && p.estado !== 'aprobado')) {
         estado = 'efectivo_solicitado'
       } else {
         estado = 'activa'
@@ -91,15 +95,35 @@ export class PaymentsService {
           ),
           estado: p.estado,
         })),
-        pago: pago ? { id: pago.id, metodo: pago.metodo, estado: pago.estado } : undefined,
+        pagos: sesion.pagos.map((p) => ({
+          id: p.id,
+          comensalId: p.comensalId,
+          metodo: p.metodo,
+          estado: p.estado,
+          monto: Number(p.monto),
+        })),
         cerradaEn: sesion.cerradaEn?.toISOString(),
       }
     })
   }
 
-  async solicitarEfectivo(sesionId: string, pedidoId: string, monto: number) {
+  async solicitarEfectivo(
+    sesionId: string,
+    comensalId: string | null,
+    modo: 'partes_iguales' | 'por_consumo' | null,
+  ) {
+    if (comensalId !== null) {
+      const comensal = await this.prisma.comensal.findUnique({ where: { id: comensalId } })
+      if (!comensal || comensal.sesionId !== sesionId) {
+        throw new NotFoundException('Comensal no encontrado en esta sesión')
+      }
+      if (!modo) {
+        throw new BadRequestException('Debe indicar el modo de división para un pago individual')
+      }
+    }
+
     const existing = await this.prisma.pago.findFirst({
-      where: { pedidoId, metodo: 'efectivo' },
+      where: { sesionId, comensalId, metodo: 'efectivo' },
     })
     if (existing) {
       return { pagoId: existing.id, sesionId, estado: 'efectivo_solicitado' }
@@ -114,9 +138,15 @@ export class PaymentsService {
     })
     if (!sesion) throw new NotFoundException('Sesión no encontrada')
 
+    const monto =
+      comensalId !== null
+        ? await this.montoParaComensal(sesionId, comensalId, modo as 'partes_iguales' | 'por_consumo')
+        : await this.saldoPendienteSesion(sesionId)
+
     const pago = await this.prisma.pago.create({
       data: {
-        pedidoId,
+        sesionId,
+        comensalId,
         monto,
         metodo: 'efectivo',
         estado: 'pendiente',
@@ -153,84 +183,71 @@ export class PaymentsService {
     return { pagoId: pago.id, sesionId, estado: 'efectivo_solicitado' }
   }
 
-  async confirmarEfectivo(sesionId: string, mozoId?: string) {
+  async confirmarEfectivo(pagoId: string, mozoId?: string) {
     const fechaCobro = new Date()
 
-    const pedidoConEfectivo = await this.prisma.pedido.findFirst({
-      where: { sesionId, pago: { metodo: 'efectivo' } },
-      include: { pago: true },
-      orderBy: { createdAt: 'desc' },
+    const pago = await this.prisma.pago.findUnique({
+      where: { id: pagoId },
+      include: { sesion: { select: { mesaId: true } } },
     })
-
-    if (pedidoConEfectivo?.pago) {
-      await this.prisma.$transaction([
-        this.prisma.pago.update({
-          where: { id: pedidoConEfectivo.pago.id },
-          data: { estado: 'aprobado', fechaCobro, ...(mozoId ? { mozoId } : {}) },
-        }),
-        this.prisma.sesionMesa.update({
-          where: { id: sesionId },
-          data: { estado: 'cerrada', cerradaEn: fechaCobro },
-        }),
-      ])
-      return { sesionId, estado: 'cerrada' }
+    if (!pago || pago.metodo !== 'efectivo') {
+      throw new NotFoundException('Pago en efectivo no encontrado')
     }
 
-    // No hay registro de pago en efectivo — crear uno al confirmar
-    const pedidos = await this.prisma.pedido.findMany({
-      where: { sesionId },
-      include: { items: true },
-      orderBy: { createdAt: 'desc' },
-    })
-
-    const ultimo = pedidos[0]
-    if (!ultimo) throw new NotFoundException('No se encontraron pedidos para esta sesión')
-
-    const monto = pedidos.reduce(
-      (acc, p) =>
-        acc + p.items.reduce((s, i) => s + Number(i.precioUnitario) * i.cantidad, 0),
-      0,
-    )
-
-    await this.prisma.$transaction(async (tx) => {
-      await tx.pago.create({
-        data: {
-          pedidoId: ultimo.id,
-          monto,
-          metodo: 'efectivo',
-          estado: 'aprobado',
-          fechaCobro,
-          ...(mozoId ? { mozoId } : {}),
-        },
+    return this.runSerializableTransaction(async (tx) => {
+      await tx.pago.update({
+        where: { id: pagoId },
+        data: { estado: 'aprobado', fechaCobro, ...(mozoId ? { mozoId } : {}) },
       })
-      await tx.sesionMesa.update({
-        where: { id: sesionId },
-        data: { estado: 'cerrada', cerradaEn: fechaCobro },
-      })
-    })
 
-    return { sesionId, estado: 'cerrada' }
+      const totalSesion = await this.calcularTotalSesion(tx, pago.sesionId)
+      const pagosAprobados = await tx.pago.findMany({
+        where: { sesionId: pago.sesionId, estado: 'aprobado' },
+      })
+      const totalCubierto = pagosAprobados.reduce((acc, p) => acc + Number(p.monto), 0)
+      const sesionCubierta = totalCubierto >= totalSesion
+
+      if (sesionCubierta) {
+        await tx.sesionMesa.update({
+          where: { id: pago.sesionId },
+          data: { estado: 'cerrada', cerradaEn: fechaCobro },
+        })
+        await tx.mesa.update({
+          where: { id: pago.sesion.mesaId },
+          data: { estado: 'libre' },
+        })
+      }
+
+      return { sesionId: pago.sesionId, estado: sesionCubierta ? 'cerrada' : 'activa' }
+    })
   }
 
   async crearPreferenciaMercadoPago(
     sesionId: string,
-    pedidoId: string,
-    monto: number,
+    comensalId: string,
+    modo: 'partes_iguales' | 'por_consumo',
     origin?: string,
   ) {
-    const pedido = await this.prisma.pedido.findUnique({
-      where: { id: pedidoId },
+    const comensal = await this.prisma.comensal.findUnique({ where: { id: comensalId } })
+    if (!comensal || comensal.sesionId !== sesionId) {
+      throw new NotFoundException('Comensal no encontrado en esta sesión')
+    }
+
+    const sesion = await this.prisma.sesionMesa.findUnique({
+      where: { id: sesionId },
       include: { mesa: { select: { restauranteId: true } } },
     })
-    if (!pedido) throw new NotFoundException('Pedido no encontrado')
+    if (!sesion) throw new NotFoundException('Sesión no encontrada')
 
-    const restauranteId = pedido.mesa.restauranteId
+    const monto = await this.montoParaComensal(sesionId, comensalId, modo)
+
+    const restauranteId = sesion.mesa.restauranteId
     const accessToken = await this.mpOAuth.getAccessTokenDecrypted(restauranteId)
 
-    await this.prisma.pago.upsert({
-      where: { pedidoId },
+    const pago = await this.prisma.pago.upsert({
+      where: { sesionId_comensalId: { sesionId, comensalId } },
       update: { metodo: 'mercadopago', estado: 'pendiente', monto },
-      create: { pedidoId, metodo: 'mercadopago', estado: 'pendiente', monto },
+      create: { sesionId, comensalId, metodo: 'mercadopago', estado: 'pendiente', monto },
     })
 
     const frontendOrigin = this.resolveFrontendOrigin(origin)
@@ -238,10 +255,10 @@ export class PaymentsService {
     const preference = await this.mpProvider.createPreference({
       restauranteId,
       sesionId,
-      pedidoId,
+      pagoId: pago.id,
       monto,
-      descripcion: `Pedido ${pedidoId}`,
-      externalReference: pedidoId,
+      descripcion: `Pago ${pago.id}`,
+      externalReference: pago.id,
       accessToken,
       ...(frontendOrigin
         ? {
@@ -272,53 +289,137 @@ export class PaymentsService {
     return cleanOrigin
   }
 
+  private async montoParaComensal(
+    sesionId: string,
+    comensalId: string,
+    modo: 'partes_iguales' | 'por_consumo',
+  ): Promise<number> {
+    const partes =
+      modo === 'partes_iguales'
+        ? await this.divisionService.calcularPartesIguales(sesionId)
+        : await this.divisionService.calcularPorConsumo(sesionId)
+    const parte = partes.find((p) => p.comensalId === comensalId)
+    if (!parte) {
+      throw new NotFoundException('No se encontró el monto correspondiente a este comensal')
+    }
+    return parte.monto
+  }
+
+  private async saldoPendienteSesion(sesionId: string): Promise<number> {
+    const totalSesion = await this.calcularTotalSesion(this.prisma, sesionId)
+
+    const pagosAprobados = await this.prisma.pago.findMany({
+      where: { sesionId, estado: 'aprobado' },
+    })
+    const totalYaCobrado = pagosAprobados.reduce((acc, p) => acc + Number(p.monto), 0)
+
+    const saldoPendiente = totalSesion - totalYaCobrado
+    if (saldoPendiente <= 0) {
+      throw new BadRequestException('Esta sesión ya está completamente pagada')
+    }
+    return saldoPendiente
+  }
+
+  private async calcularTotalSesion(client: Prisma.TransactionClient, sesionId: string): Promise<number> {
+    const pedidos = await client.pedido.findMany({
+      where: { sesionId, estado: { not: 'cancelado' } },
+      include: {
+        items: { select: { cantidad: true, cantidadEditada: true, precioUnitario: true } },
+      },
+    })
+    return pedidos.reduce(
+      (acc, p) =>
+        acc +
+        p.items.reduce((s, i) => s + Number(i.precioUnitario) * (i.cantidadEditada ?? i.cantidad), 0),
+      0,
+    )
+  }
+
   async procesarWebhookMercadoPago(
     restauranteId: string,
-    pedidoId: string,
+    pagoId: string,
     query: Record<string, string>,
   ) {
     const accessToken = await this.mpOAuth.getAccessTokenDecrypted(restauranteId)
     const resultado = await this.mpProvider.processWebhook(query, accessToken)
     const estadoInterno = MP_STATUS_MAP[resultado.status]
 
-    const pagoActual = await this.prisma.pago.findUnique({ where: { pedidoId } })
-    if (pagoActual?.referenciaExterna === resultado.externalId && pagoActual.estado === estadoInterno) {
+    const pagoActual = await this.prisma.pago.findUnique({
+      where: { id: pagoId },
+      include: { sesion: { select: { mesaId: true } } },
+    })
+    if (!pagoActual) {
+      this.logger.warn(`procesarWebhookMercadoPago: pago ${pagoId} no encontrado, ignorando notificación`)
       return
     }
 
-    await this.prisma.pago.upsert({
-      where: { pedidoId },
-      update: {
-        estado: estadoInterno,
-        referenciaExterna: resultado.externalId,
-        ...(estadoInterno === 'aprobado' ? { fechaCobro: new Date() } : {}),
-      },
-      create: {
-        pedidoId,
-        monto: 0,
-        metodo: 'mercadopago',
-        estado: estadoInterno,
-        referenciaExterna: resultado.externalId,
-      },
-    })
+    if (pagoActual.referenciaExterna === resultado.externalId && pagoActual.estado === estadoInterno) {
+      return
+    }
 
-    if (estadoInterno === 'aprobado') {
-      const pedido = await this.prisma.pedido.findUnique({
-        where: { id: pedidoId },
-        select: { sesionId: true, mesa: { select: { id: true, numero: true } } },
+    const sesionCerrada = await this.runSerializableTransaction(async (tx) => {
+      await tx.pago.update({
+        where: { id: pagoId },
+        data: {
+          estado: estadoInterno,
+          referenciaExterna: resultado.externalId,
+          ...(estadoInterno === 'aprobado' ? { fechaCobro: new Date() } : {}),
+        },
       })
-      if (pedido) {
-        await this.prisma.sesionMesa.update({
-          where: { id: pedido.sesionId },
+
+      if (estadoInterno !== 'aprobado') return false
+
+      const totalSesion = await this.calcularTotalSesion(tx, pagoActual.sesionId)
+      const pagosAprobados = await tx.pago.findMany({
+        where: { sesionId: pagoActual.sesionId, estado: 'aprobado' },
+      })
+      const totalCubierto = pagosAprobados.reduce((acc, p) => acc + Number(p.monto), 0)
+      const sesionCubierta = totalCubierto >= totalSesion
+
+      if (sesionCubierta) {
+        await tx.sesionMesa.update({
+          where: { id: pagoActual.sesionId },
           data: { estado: 'cerrada', cerradaEn: new Date() },
         })
-
-        this.gateway.emitSesionCobrada(restauranteId, {
-          sesionId: pedido.sesionId,
-          mesaId: pedido.mesa.id,
-          mesaNumero: pedido.mesa.numero,
+        await tx.mesa.update({
+          where: { id: pagoActual.sesion.mesaId },
+          data: { estado: 'libre' },
         })
       }
+
+      return sesionCubierta
+    })
+
+    if (sesionCerrada) {
+      const sesion = await this.prisma.sesionMesa.findUnique({
+        where: { id: pagoActual.sesionId },
+        select: { mesa: { select: { id: true, numero: true } } },
+      })
+      if (sesion) {
+        this.gateway.emitSesionCobrada(restauranteId, {
+          sesionId: pagoActual.sesionId,
+          mesaId: sesion.mesa.id,
+          mesaNumero: sesion.mesa.numero,
+        })
+      }
+    }
+  }
+
+  private async runSerializableTransaction<T>(
+    fn: (tx: Prisma.TransactionClient) => Promise<T>,
+  ): Promise<T> {
+    try {
+      return await this.prisma.$transaction(fn, {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      })
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2034') {
+        this.logger.warn('Conflicto de transacción serializable detectado, reintentando una vez')
+        return this.prisma.$transaction(fn, {
+          isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        })
+      }
+      throw err
     }
   }
 }
