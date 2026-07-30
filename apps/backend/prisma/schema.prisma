@@ -159,6 +159,7 @@ model Cliente {
   sesiones       SesionMesa[]
   sesionClientes SesionMesaCliente[]
   pedidoItems    PedidoItem[]
+  comensales     Comensal[]
 
   @@map("cliente")
 }
@@ -178,6 +179,8 @@ model SesionMesa {
   asignaciones  AsignacionMesa[]
   llamados      LlamadoMozo[]
   participantes SesionMesaCliente[]
+  comensales    Comensal[]
+  pagos         Pago[]
 
   @@map("sesion_mesa")
 }
@@ -389,7 +392,6 @@ model Pedido {
   sesion    SesionMesa     @relation(fields: [sesionId], references: [id])
   mesa      Mesa           @relation(fields: [mesaId], references: [id])
   items     PedidoItem[]
-  pago      Pago?
   ediciones PedidoEdicion[]
 
   @@map("pedido")
@@ -409,6 +411,7 @@ model PedidoItem {
   item    ItemMenu        @relation(fields: [itemId], references: [id])
   cliente Cliente?        @relation(fields: [clienteId], references: [id])
   mods    PedidoItemMod[]
+  asignaciones ItemComensal[]
 
   @@map("pedido_item")
 }
@@ -458,7 +461,8 @@ model PedidoEdicionItem {
 
 model Pago {
   id                String    @id @default(uuid())
-  pedidoId          String    @unique @map("pedido_id")
+  sesionId          String    @map("sesion_id")
+  comensalId        String?   @map("comensal_id")
   monto             Decimal   @db.Decimal(10, 2)
   metodo            String
   estado            String    @default("pendiente")
@@ -468,10 +472,45 @@ model Pago {
   fechaCobro        DateTime? @map("fecha_cobro")
   createdAt         DateTime  @default(now()) @map("created_at")
 
-  pedido Pedido @relation(fields: [pedidoId], references: [id])
-  mozo   Mozo?  @relation(fields: [mozoId], references: [id])
+  sesion   SesionMesa @relation(fields: [sesionId], references: [id])
+  comensal Comensal?  @relation(fields: [comensalId], references: [id])
+  mozo     Mozo?      @relation(fields: [mozoId], references: [id])
 
+  @@unique([sesionId, comensalId])
   @@map("pago")
+}
+
+// ─────────────────────────────────────────────
+// COMENSALES (split de cuenta por persona en la mesa)
+// ─────────────────────────────────────────────
+
+model Comensal {
+  id         String   @id @default(uuid())
+  sesionId   String   @map("sesion_id")
+  clienteId  String?  @map("cliente_id")
+  nombre     String
+  esOwner    Boolean  @default(false) @map("es_owner")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  sesion     SesionMesa     @relation(fields: [sesionId], references: [id])
+  cliente    Cliente?       @relation(fields: [clienteId], references: [id])
+  items      ItemComensal[]
+  pagos      Pago[]
+
+  @@map("comensal")
+}
+
+model ItemComensal {
+  id           String   @id @default(uuid())
+  pedidoItemId String   @map("pedido_item_id")
+  comensalId   String   @map("comensal_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  pedidoItem   PedidoItem @relation(fields: [pedidoItemId], references: [id])
+  comensal     Comensal   @relation(fields: [comensalId], references: [id])
+
+  @@unique([pedidoItemId, comensalId])
+  @@map("item_comensal")
 }
 
 // ─────────────────────────────────────────────

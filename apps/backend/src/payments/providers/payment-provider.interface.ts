@@ -3,7 +3,7 @@ export type PaymentStatus = 'PENDIENTE' | 'APROBADO' | 'RECHAZADO' | 'EN_PROCESO
 export interface CreatePaymentDto {
   restauranteId: string
   sesionId: string
-  pedidoId: string
+  pagoId: string
   monto: number
   descripcion: string
   externalReference: string

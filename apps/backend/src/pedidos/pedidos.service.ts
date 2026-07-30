@@ -289,11 +289,10 @@ export class PedidosService {
   }
 
   async listarPorEstado(restauranteId: string, estado: string) {
-    return this.prisma.pedido.findMany({
+    const pedidos = await this.prisma.pedido.findMany({
       where: { mesa: { restauranteId }, estado },
       include: {
         mesa: { select: { numero: true } },
-        pago: { select: { estado: true } },
         items: {
           include: {
             item: { select: { nombre: true } },
@@ -304,11 +303,27 @@ export class PedidosService {
                 },
               },
             },
+            asignaciones: {
+              include: {
+                comensal: {
+                  include: {
+                    pagos: { where: { estado: 'aprobado' } },
+                  },
+                },
+              },
+            },
           },
         },
       },
       orderBy: { createdAt: 'asc' },
     })
+
+    return pedidos.map((pedido) => ({
+      ...pedido,
+      pagado:
+        pedido.items.length > 0 &&
+        pedido.items.every((item) => item.asignaciones.some((a) => a.comensal.pagos.length > 0)),
+    }))
   }
 
   async actualizarEstado(
@@ -381,7 +396,20 @@ export class PedidosService {
       where: { id },
       include: {
         mesa: { select: { restauranteId: true } },
-        items: { include: { item: { select: { nombre: true } } } },
+        items: {
+          include: {
+            item: { select: { nombre: true } },
+            asignaciones: {
+              include: {
+                comensal: {
+                  include: {
+                    pagos: { where: { estado: 'aprobado' } },
+                  },
+                },
+              },
+            },
+          },
+        },
       },
     })
     if (!pedido) throw new NotFoundException('Pedido no encontrado')
@@ -389,24 +417,29 @@ export class PedidosService {
       throw new BadRequestException('No se puede editar un pedido anulado')
     }
 
-    // 2. Verificar pago aprobado
-    const pagoAprobado = await this.prisma.pago.findFirst({
-      where: { pedidoId: id, estado: 'aprobado' },
-    })
-    if (pagoAprobado) throw new BadRequestException('Este pedido ya fue pagado')
-
-    // 3. Validar justificación
+    // 2. Validar justificación
     const trimmed = dto.justificacion.trim()
     if (!trimmed) throw new BadRequestException('La justificación es requerida')
     if (trimmed.split(/\s+/).length > 50) {
       throw new BadRequestException('La justificación no puede superar 50 palabras')
     }
 
-    // 4. Validar que todos los pedidoItemId pertenecen al pedido
+    // 3. Validar que todos los pedidoItemId pertenecen al pedido
     const itemMap = new Map(pedido.items.map((i) => [i.id, i]))
     for (const ed of dto.ediciones) {
       if (!itemMap.has(ed.pedidoItemId)) {
         throw new BadRequestException(`El ítem ${ed.pedidoItemId} no pertenece a este pedido`)
+      }
+    }
+
+    // 4. Validar que ningún ítem editado ya fue pagado por algún comensal
+    for (const ed of dto.ediciones) {
+      const item = itemMap.get(ed.pedidoItemId)!
+      const yaPagado = item.asignaciones.some((a) => a.comensal.pagos.length > 0)
+      if (yaPagado) {
+        throw new BadRequestException(
+          `El ítem "${item.item.nombre}" ya fue pagado por un comensal y no puede editarse`,
+        )
       }
     }
 

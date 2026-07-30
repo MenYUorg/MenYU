@@ -20,7 +20,7 @@ export class MercadoPagoProvider implements PaymentProvider {
 
     const notificationUrl =
       `${process.env.BASE_URL}/payments/webhook/mercadopago` +
-      `/restaurante/${data.restauranteId}/pedido/${data.pedidoId}`
+      `/restaurante/${data.restauranteId}/pago/${data.pagoId}`
 
     const successUrl = data.successUrl ?? `${process.env.FRONTEND_URL}/pago/exitoso`
     const failureUrl = data.failureUrl ?? `${process.env.FRONTEND_URL}/pago/fallido`
@@ -35,7 +35,7 @@ export class MercadoPagoProvider implements PaymentProvider {
       body: {
         items: [
           {
-            id: data.pedidoId,
+            id: data.pagoId,
             title: data.descripcion,
             unit_price: data.monto,
             quantity: 1,

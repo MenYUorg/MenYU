@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common'
@@ -63,6 +64,8 @@ export interface SessionActivaResult {
 
 @Injectable()
 export class SessionsService {
+  private readonly logger = new Logger(SessionsService.name)
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly users: UsersService,
@@ -349,9 +352,9 @@ export class SessionsService {
         pedidos: {
           include: {
             items: { select: { cantidad: true, cantidadEditada: true, precioUnitario: true } },
-            pago: { select: { metodo: true, estado: true, fechaCobro: true } },
           },
         },
+        pagos: { select: { metodo: true, estado: true, fechaCobro: true } },
       },
       orderBy: { iniciadaEn: 'asc' },
     })
@@ -367,8 +370,8 @@ export class SessionsService {
           acc + p.items.reduce((sum, i) => sum + Number(i.precioUnitario) * (i.cantidadEditada ?? i.cantidad), 0),
         0,
       )
-      const quierePagar = s.pedidos.some(
-        (p) => p.pago?.metodo === 'efectivo' && p.pago?.estado === 'pendiente' && !p.pago?.fechaCobro,
+      const quierePagar = s.pagos.some(
+        (p) => p.metodo === 'efectivo' && p.estado === 'pendiente' && !p.fechaCobro,
       )
       return {
         id: s.id,
@@ -402,35 +405,76 @@ export class SessionsService {
         mesa: { restauranteId },
         estado: 'cerrada',
         ...(fechaFilter ? { cerradaEn: fechaFilter } : {}),
-        pedidos: { some: { pago: { estado: 'aprobado' } } },
+        pagos: { some: { estado: 'aprobado' } },
       },
       include: {
         mesa: { select: { numero: true } },
         pedidos: {
           include: {
             items: { select: { cantidad: true, cantidadEditada: true, precioUnitario: true } },
-            pago: { include: { mozo: { select: { nombre: true } } } },
           },
         },
+        pagos: { include: { mozo: { select: { nombre: true } } } },
       },
       orderBy: { cerradaEn: 'desc' },
     })
 
     return sesiones.map((s) => {
-      const pago = s.pedidos.flatMap((p) => (p.pago ? [p.pago] : [])).find((p) => p.estado === 'aprobado')
+      const pagosAprobados = s.pagos
+        .filter((p) => p.estado === 'aprobado')
+        .sort((a, b) => (a.fechaCobro?.getTime() ?? 0) - (b.fechaCobro?.getTime() ?? 0))
+
       const totalCobrado = s.pedidos.reduce(
         (acc, p) =>
           acc + p.items.reduce((sum, i) => sum + Number(i.precioUnitario) * (i.cantidadEditada ?? i.cantidad), 0),
         0,
       )
+
+      let metodoPago: string
+      let cobradoPorNombre: string | null
+      let referenciaExterna: string | null
+      let fechaCobro: string
+
+      if (pagosAprobados.length === 1) {
+        const pago = pagosAprobados[0]
+        metodoPago = pago.metodo
+        cobradoPorNombre = pago.cobradoPorNombre ?? pago.mozo?.nombre ?? null
+        referenciaExterna = pago.referenciaExterna ?? null
+        fechaCobro = pago.fechaCobro?.toISOString() ?? s.cerradaEn?.toISOString() ?? ''
+      } else if (pagosAprobados.length > 1) {
+        metodoPago = 'mixto'
+        cobradoPorNombre = null
+        referenciaExterna = null
+        const masReciente = pagosAprobados.reduce<Date | null>((latest, p) => {
+          if (!p.fechaCobro) return latest
+          if (!latest || p.fechaCobro > latest) return p.fechaCobro
+          return latest
+        }, null)
+        fechaCobro = masReciente?.toISOString() ?? s.cerradaEn?.toISOString() ?? ''
+      } else {
+        metodoPago = 'desconocido'
+        cobradoPorNombre = null
+        referenciaExterna = null
+        fechaCobro = s.cerradaEn?.toISOString() ?? ''
+      }
+
       return {
         id: s.id,
         mesaNumero: s.mesa.numero,
         totalCobrado,
-        metodoPago:       pago?.metodo ?? 'desconocido',
-        cobradoPorNombre: pago?.cobradoPorNombre ?? pago?.mozo?.nombre ?? null,
-        referenciaExterna: pago?.referenciaExterna ?? null,
-        fechaCobro:       pago?.fechaCobro?.toISOString() ?? s.cerradaEn?.toISOString() ?? '',
+        metodoPago,
+        cobradoPorNombre,
+        referenciaExterna,
+        fechaCobro,
+        pagos: pagosAprobados.map((p) => ({
+          id: p.id,
+          comensalId: p.comensalId,
+          metodo: p.metodo,
+          estado: p.estado,
+          cobradoPorNombre: p.cobradoPorNombre,
+          referenciaExterna: p.referenciaExterna,
+          fechaCobro: p.fechaCobro?.toISOString() ?? null,
+        })),
       }
     })
   }
@@ -557,9 +601,10 @@ export class SessionsService {
       include: {
         mesa: { select: { id: true, numero: true, restauranteId: true } },
         pedidos: {
-          include: { pago: true, items: { select: { cantidad: true, precioUnitario: true } } },
+          include: { items: { select: { cantidad: true, precioUnitario: true } } },
           orderBy: { createdAt: 'desc' },
         },
+        pagos: true,
       },
     })
     if (!sesion) throw new NotFoundException('Sesión no encontrada')
@@ -567,50 +612,79 @@ export class SessionsService {
 
     await this.assertStaffAccess(sesion.mesa.restauranteId, user)
 
-    const pagoExistente = sesion.pedidos.flatMap((p) => (p.pago ? [p.pago] : []))[0]
+    const totalSesion = sesion.pedidos.reduce(
+      (acc, p) => acc + p.items.reduce((s, i) => s + Number(i.precioUnitario) * i.cantidad, 0),
+      0,
+    )
+    const totalYaCobrado = sesion.pagos
+      .filter((p) => p.estado === 'aprobado')
+      .reduce((acc, p) => acc + Number(p.monto), 0)
+    const saldoPendiente = totalSesion - totalYaCobrado
+    if (saldoPendiente <= 0) {
+      throw new BadRequestException('Esta sesión ya está completamente pagada')
+    }
+
+    const pagoManualPendiente = sesion.pagos.find((p) => p.comensalId === null && p.estado !== 'aprobado')
     const fechaCobro = new Date()
 
-    await this.prisma.$transaction(async (tx) => {
-      if (pagoExistente) {
+    const sesionCerrada = await this.prisma.$transaction(async (tx) => {
+      if (pagoManualPendiente) {
         await tx.pago.update({
-          where: { id: pagoExistente.id },
-          data: { metodo: dto.metodoPago, mozoId: dto.mozoId || null, cobradoPorNombre: dto.cobradoPorNombre, referenciaExterna: dto.referenciaExterna, fechaCobro, estado: 'aprobado' },
-        })
-      } else {
-        const ultimoPedido = sesion.pedidos[0]
-        if (!ultimoPedido) throw new BadRequestException('La sesión no tiene pedidos')
-        const monto = sesion.pedidos.reduce(
-          (acc, p) => acc + p.items.reduce((s, i) => s + Number(i.precioUnitario) * i.cantidad, 0),
-          0,
-        )
-        await tx.pago.create({
+          where: { id: pagoManualPendiente.id },
           data: {
-            pedidoId: ultimoPedido.id,
-            monto,
+            estado: 'aprobado',
+            monto: saldoPendiente,
             metodo: dto.metodoPago,
             mozoId: dto.mozoId || null,
             cobradoPorNombre: dto.cobradoPorNombre,
             referenciaExterna: dto.referenciaExterna,
             fechaCobro,
+          },
+        })
+      } else {
+        await tx.pago.create({
+          data: {
+            sesionId,
+            comensalId: null,
+            monto: saldoPendiente,
+            metodo: dto.metodoPago,
             estado: 'aprobado',
+            mozoId: dto.mozoId || null,
+            cobradoPorNombre: dto.cobradoPorNombre,
+            referenciaExterna: dto.referenciaExterna,
+            fechaCobro,
           },
         })
       }
-      await tx.sesionMesa.update({
-        where: { id: sesionId },
-        data: { estado: 'cerrada', cerradaEn: fechaCobro },
-      })
-      await tx.mesa.update({
-        where: { id: sesion.mesaId },
-        data: { estado: 'libre' },
-      })
+
+      const pagosAprobados = await tx.pago.findMany({ where: { sesionId, estado: 'aprobado' } })
+      const totalCubierto = pagosAprobados.reduce((acc, p) => acc + Number(p.monto), 0)
+
+      if (totalCubierto >= totalSesion) {
+        await tx.sesionMesa.update({
+          where: { id: sesionId },
+          data: { estado: 'cerrada', cerradaEn: fechaCobro },
+        })
+        await tx.mesa.update({
+          where: { id: sesion.mesaId },
+          data: { estado: 'libre' },
+        })
+        return true
+      }
+
+      this.logger.warn(
+        `registrarCobro: saldo cubierto (${totalCubierto}) no alcanza el total de la sesión ${sesionId} (${totalSesion}), no se cierra la sesión`,
+      )
+      return false
     })
 
-    this.gateway.emitSesionCobrada(sesion.mesa.restauranteId, {
-      sesionId,
-      mesaId: sesion.mesaId,
-      mesaNumero: sesion.mesa.numero,
-    })
+    if (sesionCerrada) {
+      this.gateway.emitSesionCobrada(sesion.mesa.restauranteId, {
+        sesionId,
+        mesaId: sesion.mesaId,
+        mesaNumero: sesion.mesa.numero,
+      })
+    }
 
     return { ok: true }
   }
