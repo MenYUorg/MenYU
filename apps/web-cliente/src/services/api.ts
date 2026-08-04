@@ -93,6 +93,15 @@ export const api = {
       ),
   },
 
+  comensales: {
+    crear: (sesionId: string, nombre: string, esOwner: boolean) =>
+      req<{ id: string; sesionId: string; nombre: string; esOwner: boolean }>(
+        'POST',
+        `/sesiones/${sesionId}/comensales`,
+        { nombre, esOwner },
+      ),
+  },
+
   auth: {
     login: (email: string, password: string) =>
       req<{ accessToken: string; refreshToken: string }>('POST', '/auth/login', { email, password }),
