@@ -10,10 +10,12 @@ import { PagoPendientePage } from './pages/pago/PagoPendientePage'
 import { MisPedidosPage } from './pages/pedidos/MisPedidosPage'
 import { PagarPage } from './pages/pago/PagarPage'
 import { EntradaPage } from './pages/entrada/EntradaPage'
+import { ElegirNombrePage } from './pages/entrada/ElegirNombrePage'
 import { IngresoManualPage } from './pages/entrada/IngresoManualPage'
 import { AuthPage } from './pages/auth/AuthPage'
 import CheckInRedirectPage from './pages/entrada/CheckInRedirectPage'
 import { SesionRequiredRoute } from './SesionRequiredRoute'
+import { ComensalRequiredRoute } from './ComensalRequiredRoute'
 import { useSessionStore } from './store/sessionStore'
 import { usePublicMenuStore } from './store/publicMenuStore'
 import { GraciasCard } from './components/GraciasCard'
@@ -153,14 +155,18 @@ export function App() {
           <Route path="/check-in" element={<CheckInRedirectPage />} />
 
           <Route element={<SesionRequiredRoute />}>
-            <Route path="/menu" element={<ClienteMenuPage />} />
-            <Route path="/menu/:itemId" element={<ItemDetailPage />} />
-            <Route path="/carrito" element={<CarritoPage />} />
-            <Route path="/pago/exitoso" element={<PagoExitosoPage />} />
-            <Route path="/pago/fallido" element={<PagoFallidoPage />} />
-            <Route path="/pago/pendiente" element={<PagoPendientePage />} />
-            <Route path="/pedidos" element={<MisPedidosPage />} />
-            <Route path="/pagar" element={<PagarPage />} />
+            <Route path="/elegir-nombre" element={<ElegirNombrePage />} />
+
+            <Route element={<ComensalRequiredRoute />}>
+              <Route path="/menu" element={<ClienteMenuPage />} />
+              <Route path="/menu/:itemId" element={<ItemDetailPage />} />
+              <Route path="/carrito" element={<CarritoPage />} />
+              <Route path="/pago/exitoso" element={<PagoExitosoPage />} />
+              <Route path="/pago/fallido" element={<PagoFallidoPage />} />
+              <Route path="/pago/pendiente" element={<PagoPendientePage />} />
+              <Route path="/pedidos" element={<MisPedidosPage />} />
+              <Route path="/pagar" element={<PagarPage />} />
+            </Route>
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />
