@@ -98,7 +98,10 @@
       "Bash(npx jest *)",
       "Bash(npx ts-node *)",
       "Bash(NODE_PATH=\"/c/Users/COTYS/Documents/Apuntes quinto/Tesis/MenYU/apps/backend/node_modules:/c/Users/COTYS/Documents/Apuntes quinto/Tesis/MenYU/node_modules/.pnpm/node_modules\" node -e \"require\\('dotenv'\\).config\\({path:'.env'}\\); require\\('module'\\).Module._initPaths\\(\\); require\\(process.cwd\\(\\)+'/scratch-inline.js'\\)\")",
-      "Bash(taskkill *)"
+      "Bash(taskkill *)",
+      "Bash(pnpm --filter @menyu/api exec prisma migrate dev --name sesion_modo_division --create-only)",
+      "Bash(pnpm why *)",
+      "WebFetch(domain:registry.npmjs.org)"
     ]
   }
 }

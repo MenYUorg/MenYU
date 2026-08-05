@@ -117,9 +117,6 @@ export class PaymentsService {
       if (!comensal || comensal.sesionId !== sesionId) {
         throw new NotFoundException('Comensal no encontrado en esta sesión')
       }
-      if (!modo) {
-        throw new BadRequestException('Debe indicar el modo de división para un pago individual')
-      }
     }
 
     const existing = await this.prisma.pago.findFirst({
@@ -138,10 +135,27 @@ export class PaymentsService {
     })
     if (!sesion) throw new NotFoundException('Sesión no encontrada')
 
-    const monto =
-      comensalId !== null
-        ? await this.montoParaComensal(sesionId, comensalId, modo as 'partes_iguales' | 'por_consumo')
-        : await this.saldoPendienteSesion(sesionId)
+    let monto: number
+    if (comensalId !== null) {
+      let modoReal: 'partes_iguales' | 'por_consumo'
+      if (sesion.modoDivision) {
+        modoReal = sesion.modoDivision as 'partes_iguales' | 'por_consumo'
+      } else {
+        if (!modo) {
+          throw new BadRequestException(
+            'Debe indicarse el modo de división: la sesión aún no lo tiene definido',
+          )
+        }
+        modoReal = modo
+        await this.prisma.sesionMesa.update({
+          where: { id: sesionId },
+          data: { modoDivision: modoReal },
+        })
+      }
+      monto = await this.montoParaComensal(sesionId, comensalId, modoReal)
+    } else {
+      monto = await this.saldoPendienteSesion(sesionId)
+    }
 
     const pago = await this.prisma.pago.create({
       data: {
@@ -225,7 +239,7 @@ export class PaymentsService {
   async crearPreferenciaMercadoPago(
     sesionId: string,
     comensalId: string,
-    modo: 'partes_iguales' | 'por_consumo',
+    modo: 'partes_iguales' | 'por_consumo' | null,
     origin?: string,
   ) {
     const comensal = await this.prisma.comensal.findUnique({ where: { id: comensalId } })
@@ -239,7 +253,23 @@ export class PaymentsService {
     })
     if (!sesion) throw new NotFoundException('Sesión no encontrada')
 
-    const monto = await this.montoParaComensal(sesionId, comensalId, modo)
+    let modoReal: 'partes_iguales' | 'por_consumo'
+    if (sesion.modoDivision) {
+      modoReal = sesion.modoDivision as 'partes_iguales' | 'por_consumo'
+    } else {
+      if (!modo) {
+        throw new BadRequestException(
+          'Debe indicarse el modo de división: la sesión aún no lo tiene definido',
+        )
+      }
+      modoReal = modo
+      await this.prisma.sesionMesa.update({
+        where: { id: sesionId },
+        data: { modoDivision: modoReal },
+      })
+    }
+
+    const monto = await this.montoParaComensal(sesionId, comensalId, modoReal)
 
     const restauranteId = sesion.mesa.restauranteId
     const accessToken = await this.mpOAuth.getAccessTokenDecrypted(restauranteId)
