@@ -103,7 +103,10 @@
       "Bash(pnpm why *)",
       "WebFetch(domain:registry.npmjs.org)",
       "Bash(tasklist //FI \"IMAGENAME eq node.exe\")",
-      "Bash(tasklist //FI \"PID eq 34944\")"
+      "Bash(tasklist //FI \"PID eq 34944\")",
+      "Bash(gh api *)",
+      "Bash(gh run *)",
+      "Bash(gh workflow *)"
     ]
   }
 }

@@ -296,7 +296,17 @@ export function PagarPage() {
   /* ── selector / resumen de "Tu parte" ── */
   let tuParteContent: React.ReactNode
 
-  if (estadoPago === 'cargando_division') {
+  if (estadoPago === 'error') {
+    tuParteContent = (
+      <p style={{
+        fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#DC2626',
+        background: '#FEF2F2', border: '1px solid #FECACA',
+        borderRadius: 10, padding: '10px 12px', textAlign: 'center', margin: 0,
+      }}>
+        {errorPago}
+      </p>
+    )
+  } else if (estadoPago === 'cargando_division') {
     tuParteContent = (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: '12px 0' }}>
         <Spinner size="sm" />
@@ -306,7 +316,7 @@ export function PagarPage() {
       </div>
     )
   } else if (modoDivision === null) {
-    const porConsumoDisponible = montoPorConsumo !== 'no_disponible'
+    const porConsumoDisponible = montoPorConsumo !== 'no_disponible' && montoPorConsumo !== null
 
     tuParteContent = (
       <>
