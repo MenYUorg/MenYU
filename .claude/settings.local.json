@@ -101,7 +101,9 @@
       "Bash(taskkill *)",
       "Bash(pnpm --filter @menyu/api exec prisma migrate dev --name sesion_modo_division --create-only)",
       "Bash(pnpm why *)",
-      "WebFetch(domain:registry.npmjs.org)"
+      "WebFetch(domain:registry.npmjs.org)",
+      "Bash(tasklist //FI \"IMAGENAME eq node.exe\")",
+      "Bash(tasklist //FI \"PID eq 34944\")"
     ]
   }
 }

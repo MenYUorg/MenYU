@@ -80,4 +80,12 @@ export class ComensalesController {
   calcularPorConsumo(@Param('sesionId') sesionId: string) {
     return this.divisionService.calcularPorConsumo(sesionId)
   }
+
+  @Get('division/modo')
+  @ApiOperation({ summary: 'Obtener el modo de división ya fijado para la sesión, si existe' })
+  @ApiResponse({ status: 200, description: 'Modo de división actual (null si todavía no se decidió)' })
+  @ApiResponse({ status: 404, description: 'Sesión no encontrada' })
+  obtenerModoDivision(@Param('sesionId') sesionId: string) {
+    return this.divisionService.obtenerModoDivision(sesionId)
+  }
 }

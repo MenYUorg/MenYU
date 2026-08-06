@@ -2,6 +2,15 @@ import type { MenuPublico } from '@menyu/types'
 
 const BASE = import.meta.env.VITE_API_URL ?? ''
 
+export class ApiError extends Error {
+  status: number
+  constructor(message: string, status: number) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+  }
+}
+
 async function req<T>(method: string, path: string, body?: unknown, token?: string): Promise<T> {
   const headers: Record<string, string> = {}
   if (body !== undefined) headers['Content-Type'] = 'application/json'
@@ -13,8 +22,9 @@ async function req<T>(method: string, path: string, body?: unknown, token?: stri
   })
   if (!res.ok) {
     const err = (await res.json().catch(() => ({}))) as Record<string, unknown>
-    throw new Error(
+    throw new ApiError(
       typeof err['message'] === 'string' ? err['message'] : `Error ${res.status}`,
+      res.status,
     )
   }
   if (res.status === 204) return undefined as T
@@ -91,6 +101,18 @@ export const api = {
         { ...data, returnBaseUrl: window.location.origin },
         jwt,
       ),
+    solicitarEfectivo: (sesionId: string, comensalId: string, modo: 'partes_iguales' | 'por_consumo') =>
+      req<{ pagoId: string; sesionId: string; estado: string }>(
+        'POST',
+        '/payments/solicitar-efectivo',
+        { sesionId, comensalId, modo },
+      ),
+    pagarConMercadoPago: (sesionId: string, comensalId: string, modo: 'partes_iguales' | 'por_consumo') =>
+      req<{ initPoint: string; preferenceId: string }>(
+        'POST',
+        '/payments/mercadopago/crear-preferencia',
+        { sesionId, comensalId, modo },
+      ),
   },
 
   comensales: {
@@ -99,6 +121,30 @@ export const api = {
         'POST',
         `/sesiones/${sesionId}/comensales`,
         { nombre, esOwner },
+      ),
+    listar: (sesionId: string) =>
+      req<Array<{
+        id: string
+        sesionId: string
+        clienteId: string | null
+        nombre: string
+        esOwner: boolean
+        createdAt: string
+      }>>('GET', `/sesiones/${sesionId}/comensales`),
+    calcularPartesIguales: (sesionId: string) =>
+      req<Array<{ comensalId: string; nombre: string; montoCentavos: number; monto: number }>>(
+        'GET',
+        `/sesiones/${sesionId}/comensales/division/partes-iguales`,
+      ),
+    calcularPorConsumo: (sesionId: string) =>
+      req<Array<{ comensalId: string; nombre: string; montoCentavos: number; monto: number }>>(
+        'GET',
+        `/sesiones/${sesionId}/comensales/division/por-consumo`,
+      ),
+    obtenerModoDivision: (sesionId: string) =>
+      req<{ modoDivision: 'partes_iguales' | 'por_consumo' | null }>(
+        'GET',
+        `/sesiones/${sesionId}/comensales/division/modo`,
       ),
   },
 

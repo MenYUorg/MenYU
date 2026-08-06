@@ -30,13 +30,27 @@ export function PagarPage() {
   const jwt           = useSessionStore((s) => s.jwt)
   const sesionId      = useSessionStore((s) => s.sesionId)
   const numeroMesa    = useSessionStore((s) => s.numeroMesa)
-  const { estado: estadoPago, error: errorPago, solicitarEfectivo, pagarConMercadoPago, reset: resetPago } = usePagoStore()
+  const {
+    estado: estadoPago,
+    error: errorPago,
+    modoDivision,
+    modoElegido,
+    montoPartesIguales,
+    montoPorConsumo,
+    miMonto,
+    reset: resetPago,
+  } = usePagoStore()
 
   const [pedidos, setPedidos] = useState<PedidoSesion[]>([])
   const [loading, setLoading] = useState(true)
   const [error,   setError]   = useState<string | null>(null)
 
-  useEffect(() => { resetPago() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    resetPago()
+    if (sesionId) {
+      void usePagoStore.getState().cargarDivision(sesionId)
+    }
+  }, [sesionId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function cargar() {
     if (!jwt) { setLoading(false); setError('No hay sesión activa'); return }
@@ -57,8 +71,6 @@ export function PagarPage() {
     .flatMap((p) => p.items)
     .reduce((acc, i) => acc + Number(i.precioUnitario) * i.cantidad, 0)
 
-  const pedidoId = pedidos[pedidos.length - 1]?.id ?? ''
-
   const itemsAgrupados = Object.values(
     pedidos.flatMap((p) => p.items).reduce<Record<string, { nombre: string; precioUnitario: number; cantidad: number }>>(
       (acc, i) => {
@@ -72,13 +84,13 @@ export function PagarPage() {
   )
 
   function handleEfectivo() {
-    if (!jwt || !sesionId || !pedidoId) return
-    void solicitarEfectivo(jwt, sesionId, pedidoId, total)
+    if (!sesionId || miMonto === null) return
+    void usePagoStore.getState().solicitarEfectivo(sesionId)
   }
 
   function handleMercadoPago() {
-    if (!sesionId || !pedidoId) return
-    void pagarConMercadoPago(sesionId, pedidoId, total)
+    if (!sesionId || miMonto === null) return
+    void usePagoStore.getState().pagarConMercadoPago(sesionId)
   }
 
   const header = (
@@ -170,26 +182,33 @@ export function PagarPage() {
       </div>
     )
   } else {
+    const disabled = miMonto === null
     bottomContent = (
       <>
         <button
           onClick={handleEfectivo}
+          disabled={disabled}
           style={{
             width: '100%', padding: '14px 16px',
             background: C.navy, color: 'white', border: 'none',
             borderRadius: 14, fontFamily: 'Montserrat, sans-serif',
-            fontWeight: 700, fontSize: 15, cursor: 'pointer',
+            fontWeight: 700, fontSize: 15,
+            cursor: disabled ? 'not-allowed' : 'pointer',
+            opacity: disabled ? 0.5 : 1,
           }}
         >
           Llamar al mozo para pagar
         </button>
         <button
           onClick={handleMercadoPago}
+          disabled={disabled}
           style={{
             width: '100%', padding: '14px 16px',
             background: C.orange, color: 'white', border: 'none',
             borderRadius: 14, fontFamily: 'Montserrat, sans-serif',
-            fontWeight: 700, fontSize: 15, cursor: 'pointer',
+            fontWeight: 700, fontSize: 15,
+            cursor: disabled ? 'not-allowed' : 'pointer',
+            opacity: disabled ? 0.5 : 1,
           }}
         >
           Pagar con Mercado Pago
@@ -273,6 +292,100 @@ export function PagarPage() {
       </button>
     </div>,
   )
+
+  /* ── selector / resumen de "Tu parte" ── */
+  let tuParteContent: React.ReactNode
+
+  if (estadoPago === 'cargando_division') {
+    tuParteContent = (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: '12px 0' }}>
+        <Spinner size="sm" />
+        <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: C.gray, margin: 0 }}>
+          Calculando tu parte...
+        </p>
+      </div>
+    )
+  } else if (modoDivision === null) {
+    const porConsumoDisponible = montoPorConsumo !== 'no_disponible'
+
+    tuParteContent = (
+      <>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <button
+            type="button"
+            onClick={() => usePagoStore.getState().elegirModo('partes_iguales')}
+            style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              width: '100%', padding: '12px 14px', textAlign: 'left',
+              borderRadius: 12, cursor: 'pointer',
+              border: `2px solid ${modoElegido === 'partes_iguales' ? C.orange : C.border}`,
+              background: modoElegido === 'partes_iguales' ? C.orangeSoft : 'white',
+            }}
+          >
+            <span style={{ fontFamily: 'Montserrat, sans-serif', fontWeight: 700, fontSize: 14, color: C.text }}>
+              Partes iguales
+            </span>
+            <span style={{ fontFamily: 'Montserrat, sans-serif', fontWeight: 800, fontSize: 15, color: C.navy }}>
+              {montoPartesIguales !== null ? `$${montoPartesIguales.toFixed(2)}` : '—'}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            disabled={!porConsumoDisponible}
+            onClick={() => {
+              if (!porConsumoDisponible) return
+              usePagoStore.getState().elegirModo('por_consumo')
+            }}
+            style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              width: '100%', padding: '12px 14px', textAlign: 'left',
+              borderRadius: 12,
+              cursor: porConsumoDisponible ? 'pointer' : 'not-allowed',
+              border: `2px solid ${modoElegido === 'por_consumo' ? C.orange : C.border}`,
+              background: modoElegido === 'por_consumo' ? C.orangeSoft : 'white',
+              opacity: porConsumoDisponible ? 1 : 0.5,
+            }}
+          >
+            <span style={{ fontFamily: 'Montserrat, sans-serif', fontWeight: 700, fontSize: 14, color: C.text }}>
+              Por consumo
+            </span>
+            {porConsumoDisponible ? (
+              <span style={{ fontFamily: 'Montserrat, sans-serif', fontWeight: 800, fontSize: 15, color: C.navy }}>
+                ${(montoPorConsumo as number).toFixed(2)}
+              </span>
+            ) : (
+              <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, color: C.gray, textAlign: 'right', maxWidth: 140 }}>
+                No disponible: hay ítems sin etiquetar todavía
+              </span>
+            )}
+          </button>
+        </div>
+
+        {miMonto !== null && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginTop: 14 }}>
+            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: C.gray }}>Total a pagar</span>
+            <span style={{ fontFamily: 'Montserrat, sans-serif', fontWeight: 800, fontSize: 22, color: C.navy }}>
+              ${miMonto.toFixed(2)}
+            </span>
+          </div>
+        )}
+      </>
+    )
+  } else {
+    tuParteContent = (
+      <>
+        <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: C.gray, margin: '0 0 6px' }}>
+          División: {modoDivision === 'partes_iguales' ? 'partes iguales' : 'por consumo'}
+        </p>
+        <div style={{ textAlign: 'right' }}>
+          <span style={{ fontFamily: 'Montserrat, sans-serif', fontWeight: 800, fontSize: 26, color: C.navy }}>
+            {miMonto !== null ? `$${miMonto.toFixed(2)}` : '—'}
+          </span>
+        </div>
+      </>
+    )
+  }
 
   /* ── cuenta ── */
   return wrapper(
@@ -365,6 +478,18 @@ export function PagarPage() {
               ${total.toFixed(2)}
             </span>
           </div>
+        </div>
+
+        <div style={{
+          border: `1px solid ${C.border}`, borderRadius: 12, padding: 16, marginTop: 16,
+        }}>
+          <p style={{
+            fontFamily: 'Montserrat, sans-serif', fontWeight: 700,
+            fontSize: 15, color: C.text, margin: '0 0 14px',
+          }}>
+            Tu parte
+          </p>
+          {tuParteContent}
         </div>
       </div>
 

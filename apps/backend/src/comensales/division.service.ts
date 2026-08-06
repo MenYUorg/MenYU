@@ -124,4 +124,13 @@ export class DivisionService {
       }
     })
   }
+
+  async obtenerModoDivision(sesionId: string): Promise<{ modoDivision: 'partes_iguales' | 'por_consumo' | null }> {
+    const sesion = await this.prisma.sesionMesa.findUnique({ where: { id: sesionId } })
+    if (!sesion) {
+      throw new NotFoundException('Sesión no encontrada')
+    }
+
+    return { modoDivision: sesion.modoDivision as 'partes_iguales' | 'por_consumo' | null }
+  }
 }
