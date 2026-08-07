@@ -106,7 +106,8 @@
       "Bash(tasklist //FI \"PID eq 34944\")",
       "Bash(gh api *)",
       "Bash(gh run *)",
-      "Bash(gh workflow *)"
+      "Bash(gh workflow *)",
+      "Bash(railway --version)"
     ]
   }
 }

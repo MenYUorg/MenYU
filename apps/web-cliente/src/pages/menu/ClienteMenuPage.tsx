@@ -485,6 +485,7 @@ export function ClienteMenuPage() {
 
         {/* Drawer body */}
         <div style={{ flex: 1, padding: '10px 8px', overflowY: 'auto' }}>
+          <DrawerRow icon="🏷️" label="Etiquetar pedidos" onClick={() => { setDrawerOpen(false); navigate('/etiquetar') }} />
           <DrawerRow icon="📋" label="Mis pedidos" primary onClick={() => { setDrawerOpen(false); navigate('/pedidos') }} />
           {user && <DrawerRow icon="⭐" label="Mis puntos" badge="Próximamente" onClick={() => {}} />}
           <DrawerRow icon="💳" label="Pagar la cuenta" onClick={() => { setDrawerOpen(false); navigate('/pagar') }} />

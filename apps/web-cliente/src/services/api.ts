@@ -146,6 +146,25 @@ export const api = {
         'GET',
         `/sesiones/${sesionId}/comensales/division/modo`,
       ),
+    etiquetar: (sesionId: string, pedidoItemId: string, comensalId: string) =>
+      req<{ id: string; pedidoItemId: string; comensalId: string; createdAt: string }>(
+        'POST',
+        `/sesiones/${sesionId}/comensales/etiquetas`,
+        { pedidoItemId, comensalId },
+      ),
+    desetiquetar: (sesionId: string, pedidoItemId: string, comensalId: string) =>
+      req<void>(
+        'DELETE',
+        `/sesiones/${sesionId}/comensales/etiquetas/${pedidoItemId}/${comensalId}`,
+      ),
+    listarEtiquetasDeItem: (sesionId: string, pedidoItemId: string) =>
+      req<Array<{
+        id: string
+        pedidoItemId: string
+        comensalId: string
+        createdAt: string
+        comensal: { id: string; sesionId: string; clienteId: string | null; nombre: string; esOwner: boolean; createdAt: string }
+      }>>('GET', `/sesiones/${sesionId}/comensales/etiquetas/${pedidoItemId}`),
   },
 
   auth: {
