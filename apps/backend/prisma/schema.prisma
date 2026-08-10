@@ -172,6 +172,7 @@ model SesionMesa {
   iniciadaEn    DateTime  @default(now()) @map("iniciada_en")
   cerradaEn     DateTime? @map("cerrada_en")
   estado        String    @default("activa")
+  modoDivision  String?   @map("modo_division")
 
   mesa          Mesa               @relation(fields: [mesaId], references: [id])
   cliente       Cliente?           @relation(fields: [clienteId], references: [id])
