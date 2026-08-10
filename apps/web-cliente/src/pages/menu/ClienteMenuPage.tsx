@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { usePublicMenuStore } from '../../store/publicMenuStore'
 import { useSessionStore } from '../../store/sessionStore'
 import { useCarritoStore } from '../../store/carritoStore'
+import { useComensalStore } from '../../store/comensalStore'
 import { Spinner, MenuItemImage } from '@menyu/ui'
 import { api } from '../../services/api'
 import type { MenuPublicoItem } from '@menyu/types'
@@ -194,6 +195,7 @@ export function ClienteMenuPage() {
   const navigate = useNavigate()
   const { restauranteId, sesionId, mesaId, jwt, numeroMesa, codigoSesion, modoSesion } = useSessionStore()
   const carritoCount = useCarritoStore((s) => s.items.length)
+  const comensalNombre = useComensalStore((s) => s.nombre)
   const { menu, loading, error, fetchMenu } = usePublicMenuStore()
 
   // UI state
@@ -460,7 +462,7 @@ export function ClienteMenuPage() {
                 👤
               </div>
               <div style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 17, color: 'white', lineHeight: 1.2 }}>
-                ¡Hola!
+                {comensalNombre ? `¡Hola, ${comensalNombre}!` : '¡Hola!'}
               </div>
               <div style={{ fontFamily: 'Inter,sans-serif', fontSize: 11, color: 'rgba(255,255,255,0.55)', marginTop: 2, marginBottom: 14 }}>
                 Estás navegando como invitado
