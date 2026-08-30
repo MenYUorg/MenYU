@@ -23,6 +23,13 @@ export class PaymentsController {
     return this.payments.solicitarEfectivo(body.sesionId, body.comensalId, body.modo)
   }
 
+  @Post('avisar-mozo-cuenta')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Avisar al mozo que la mesa pidió la cuenta, sin generar un pago individual' })
+  avisarMozoCuenta(@Body() body: { sesionId: string }) {
+    return this.payments.avisarMozoPedidoDeCuenta(body.sesionId)
+  }
+
   @Get('sesiones')
   @ApiOperation({ summary: 'Listar sesiones de mesa de un restaurante (para caja)' })
   @ApiResponse({ status: 200, description: 'Lista de sesiones con estado de pago' })
