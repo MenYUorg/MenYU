@@ -197,6 +197,46 @@ export class PaymentsService {
     return { pagoId: pago.id, sesionId, estado: 'efectivo_solicitado' }
   }
 
+  async avisarMozoPedidoDeCuenta(sesionId: string) {
+    const sesion = await this.prisma.sesionMesa.findUnique({
+      where: { id: sesionId },
+      include: {
+        mesa: { select: { id: true, numero: true, restauranteId: true } },
+        pedidos: { include: { items: { select: { cantidad: true, precioUnitario: true } } } },
+      },
+    })
+    if (!sesion) throw new NotFoundException('Sesión no encontrada')
+
+    // Reemplazar cualquier llamado pendiente y crear uno con motivo pedir_cuenta
+    await this.prisma.llamadoMozo.deleteMany({
+      where: { sesionId, estado: 'pendiente' },
+    })
+    const llamado = await this.prisma.llamadoMozo.create({
+      data: { sesionId, motivo: 'pedir_cuenta' },
+    })
+
+    const totalAcumulado = sesion.pedidos.reduce(
+      (acc, p) => acc + p.items.reduce((s, i) => s + Number(i.precioUnitario) * i.cantidad, 0),
+      0,
+    )
+
+    this.gateway.emitMozoCalled(sesion.mesa.restauranteId, {
+      llamadoId: llamado.id,
+      sesionId,
+      mesaNumero: sesion.mesa.numero,
+      motivo: 'pedir_cuenta',
+    })
+
+    this.gateway.emitQuierePagar(sesion.mesa.restauranteId, {
+      sesionId,
+      mesaId: sesion.mesa.id,
+      mesaNumero: sesion.mesa.numero,
+      totalAcumulado,
+    })
+
+    return { sesionId, estado: 'mozo_llamado' }
+  }
+
   async confirmarEfectivo(pagoId: string, mozoId?: string) {
     const fechaCobro = new Date()
 
