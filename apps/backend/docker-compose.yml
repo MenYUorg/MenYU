@@ -1,0 +1,23 @@
+name: menyu-local
+
+services:
+  postgres:
+    image: postgres:17.6
+    container_name: menyu-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: menyu
+      POSTGRES_PASSWORD: menyu
+      POSTGRES_DB: menyu
+    ports:
+      - "5433:5432"
+    volumes:
+      - menyu-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U menyu -d menyu"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  menyu-pgdata:
