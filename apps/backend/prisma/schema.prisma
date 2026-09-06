@@ -470,7 +470,7 @@ model Pago {
   referenciaExterna String?   @map("referencia_externa")
   mozoId            String?   @map("mozo_id")
   cobradoPorNombre  String?   @map("cobrado_por_nombre")
-  fechaCobro        DateTime? @map("fecha_cobro")
+  fechaCobro        DateTime? @map("fecha_cobro") @db.Timestamptz
   createdAt         DateTime  @default(now()) @map("created_at")
 
   sesion   SesionMesa @relation(fields: [sesionId], references: [id])
