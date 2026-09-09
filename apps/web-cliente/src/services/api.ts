@@ -132,15 +132,22 @@ export const api = {
         createdAt: string
       }>>('GET', `/sesiones/${sesionId}/comensales`),
     calcularPartesIguales: (sesionId: string) =>
-      req<Array<{ comensalId: string; nombre: string; montoCentavos: number; monto: number }>>(
-        'GET',
-        `/sesiones/${sesionId}/comensales/division/partes-iguales`,
-      ),
+      req<{
+        divisionPagosHabilitada: boolean
+        divisor: number
+        partes: Array<{ comensalId: string; nombre: string; montoCentavos: number; monto: number }>
+      }>('GET', `/sesiones/${sesionId}/comensales/division/partes-iguales`),
     calcularPorConsumo: (sesionId: string) =>
-      req<Array<{ comensalId: string; nombre: string; montoCentavos: number; monto: number }>>(
-        'GET',
-        `/sesiones/${sesionId}/comensales/division/por-consumo`,
-      ),
+      req<{
+        divisionPagosHabilitada: boolean
+        divisor: number
+        partes: Array<{ comensalId: string; nombre: string; montoCentavos: number; monto: number }>
+        huerfanos: {
+          items: Array<{ pedidoItemId: string; nombre: string; montoCentavos: number; monto: number }>
+          totalCentavos: number
+          total: number
+        }
+      }>('GET', `/sesiones/${sesionId}/comensales/division/por-consumo`),
     obtenerModoDivision: (sesionId: string) =>
       req<{ modoDivision: 'partes_iguales' | 'por_consumo' | null }>(
         'GET',

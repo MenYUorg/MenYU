@@ -34,6 +34,7 @@ model Restaurante {
   activo      Boolean  @default(true)
   createdAt   DateTime @default(now()) @map("created_at")
   nombreSeccionRecomendados String @default("RECOMENDACIONES") @map("nombre_seccion_recomendados")
+  divisionPagosHabilitada Boolean @default(true) @map("division_pagos_habilitada")
 
   marca         Marca              @relation(fields: [marcaId], references: [id])
   mozos         Mozo[]
@@ -173,6 +174,7 @@ model SesionMesa {
   cerradaEn     DateTime? @map("cerrada_en")
   estado        String    @default("activa")
   modoDivision  String?   @map("modo_division")
+  cantidadComensales Int? @map("cantidad_comensales")
 
   mesa          Mesa               @relation(fields: [mesaId], references: [id])
   cliente       Cliente?           @relation(fields: [clienteId], references: [id])
@@ -486,18 +488,21 @@ model Pago {
 // ─────────────────────────────────────────────
 
 model Comensal {
-  id         String   @id @default(uuid())
-  sesionId   String   @map("sesion_id")
-  clienteId  String?  @map("cliente_id")
-  nombre     String
-  esOwner    Boolean  @default(false) @map("es_owner")
-  createdAt  DateTime @default(now()) @map("created_at")
+  id                  String   @id @default(uuid())
+  sesionId            String   @map("sesion_id")
+  clienteId           String?  @map("cliente_id")
+  nombre              String
+  nombreNormalizado   String   @map("nombre_normalizado")
+  esOwner             Boolean  @default(false) @map("es_owner")
+  creadoPorComensalId String?  @map("creado_por_comensal_id")
+  createdAt           DateTime @default(now()) @map("created_at")
 
   sesion     SesionMesa     @relation(fields: [sesionId], references: [id])
   cliente    Cliente?       @relation(fields: [clienteId], references: [id])
   items      ItemComensal[]
   pagos      Pago[]
 
+  @@unique([sesionId, nombreNormalizado])
   @@map("comensal")
 }
 

@@ -59,7 +59,9 @@ export const usePagoStore = create<PagoStore>()((set, get) => ({
     }
 
     let partesIguales: Array<{ comensalId: string; monto: number }>
-    let porConsumoResult: Array<{ comensalId: string; monto: number }> | 'no_disponible'
+    let porConsumoResult:
+      | { partes: Array<{ comensalId: string; monto: number }>; huerfanos: { items: unknown[] } }
+      | 'no_disponible'
     try {
       const [partesRes, consumoRes] = await Promise.all([
         api.comensales.calcularPartesIguales(sesionId),
@@ -70,7 +72,7 @@ export const usePagoStore = create<PagoStore>()((set, get) => ({
           throw e
         }),
       ])
-      partesIguales = partesRes
+      partesIguales = partesRes.partes
       porConsumoResult = consumoRes
     } catch (e) {
       set({
@@ -83,9 +85,9 @@ export const usePagoStore = create<PagoStore>()((set, get) => ({
     const montoPartesIguales =
       partesIguales.find((p) => p.comensalId === comensalId)?.monto ?? null
     const montoPorConsumo =
-      porConsumoResult === 'no_disponible'
+      porConsumoResult === 'no_disponible' || porConsumoResult.huerfanos.items.length > 0
         ? 'no_disponible'
-        : porConsumoResult.find((p) => p.comensalId === comensalId)?.monto ?? 'no_disponible'
+        : porConsumoResult.partes.find((p) => p.comensalId === comensalId)?.monto ?? 'no_disponible'
 
     set({
       estado: 'idle',

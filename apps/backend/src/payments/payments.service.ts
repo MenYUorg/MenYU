@@ -126,53 +126,43 @@ export class PaymentsService {
       return { pagoId: existing.id, sesionId, estado: 'efectivo_solicitado' }
     }
 
-    const sesion = await this.prisma.sesionMesa.findUnique({
-      where: { id: sesionId },
-      include: {
-        mesa: { select: { id: true, numero: true, restauranteId: true } },
-        pedidos: { include: { items: { select: { cantidad: true, precioUnitario: true } } } },
-      },
-    })
-    if (!sesion) throw new NotFoundException('Sesión no encontrada')
+    const { sesion, pago, llamado } = await this.prisma.$transaction(async (tx) => {
+      const sesion = await tx.sesionMesa.findUnique({
+        where: { id: sesionId },
+        include: {
+          mesa: { select: { id: true, numero: true, restauranteId: true } },
+          pedidos: { include: { items: { select: { cantidad: true, precioUnitario: true } } } },
+        },
+      })
+      if (!sesion) throw new NotFoundException('Sesión no encontrada')
 
-    let monto: number
-    if (comensalId !== null) {
-      let modoReal: 'partes_iguales' | 'por_consumo'
-      if (sesion.modoDivision) {
-        modoReal = sesion.modoDivision as 'partes_iguales' | 'por_consumo'
+      let monto: number
+      if (comensalId !== null) {
+        const modoReal = await this.resolverModoDivision(tx, sesionId, sesion.modoDivision, modo)
+        monto = await this.montoParaComensal(sesionId, comensalId, modoReal)
       } else {
-        if (!modo) {
-          throw new BadRequestException(
-            'Debe indicarse el modo de división: la sesión aún no lo tiene definido',
-          )
-        }
-        modoReal = modo
-        await this.prisma.sesionMesa.update({
-          where: { id: sesionId },
-          data: { modoDivision: modoReal },
-        })
+        monto = await this.saldoPendienteSesion(sesionId)
       }
-      monto = await this.montoParaComensal(sesionId, comensalId, modoReal)
-    } else {
-      monto = await this.saldoPendienteSesion(sesionId)
-    }
 
-    const pago = await this.prisma.pago.create({
-      data: {
-        sesionId,
-        comensalId,
-        monto,
-        metodo: 'efectivo',
-        estado: 'pendiente',
-      },
-    })
+      const pago = await tx.pago.create({
+        data: {
+          sesionId,
+          comensalId,
+          monto,
+          metodo: 'efectivo',
+          estado: 'pendiente',
+        },
+      })
 
-    // Reemplazar cualquier llamado pendiente y crear uno con motivo pedir_cuenta
-    await this.prisma.llamadoMozo.deleteMany({
-      where: { sesionId, estado: 'pendiente' },
-    })
-    const llamado = await this.prisma.llamadoMozo.create({
-      data: { sesionId, motivo: 'pedir_cuenta' },
+      // Reemplazar cualquier llamado pendiente y crear uno con motivo pedir_cuenta
+      await tx.llamadoMozo.deleteMany({
+        where: { sesionId, estado: 'pendiente' },
+      })
+      const llamado = await tx.llamadoMozo.create({
+        data: { sesionId, motivo: 'pedir_cuenta' },
+      })
+
+      return { sesion, pago, llamado }
     })
 
     const totalAcumulado = sesion.pedidos.reduce(
@@ -287,39 +277,30 @@ export class PaymentsService {
       throw new NotFoundException('Comensal no encontrado en esta sesión')
     }
 
-    const sesion = await this.prisma.sesionMesa.findUnique({
-      where: { id: sesionId },
-      include: { mesa: { select: { restauranteId: true } } },
-    })
-    if (!sesion) throw new NotFoundException('Sesión no encontrada')
-
-    let modoReal: 'partes_iguales' | 'por_consumo'
-    if (sesion.modoDivision) {
-      modoReal = sesion.modoDivision as 'partes_iguales' | 'por_consumo'
-    } else {
-      if (!modo) {
-        throw new BadRequestException(
-          'Debe indicarse el modo de división: la sesión aún no lo tiene definido',
-        )
-      }
-      modoReal = modo
-      await this.prisma.sesionMesa.update({
+    // Fase 1: todo lo transaccional — sin I/O externa adentro.
+    const { pago, monto, restauranteId } = await this.prisma.$transaction(async (tx) => {
+      const sesion = await tx.sesionMesa.findUnique({
         where: { id: sesionId },
-        data: { modoDivision: modoReal },
+        include: { mesa: { select: { restauranteId: true } } },
       })
-    }
+      if (!sesion) throw new NotFoundException('Sesión no encontrada')
 
-    const monto = await this.montoParaComensal(sesionId, comensalId, modoReal)
+      const modoReal = await this.resolverModoDivision(tx, sesionId, sesion.modoDivision, modo)
+      const monto = await this.montoParaComensal(sesionId, comensalId, modoReal)
 
-    const restauranteId = sesion.mesa.restauranteId
-    const accessToken = await this.mpOAuth.getAccessTokenDecrypted(restauranteId)
+      const pago = await tx.pago.upsert({
+        where: { sesionId_comensalId: { sesionId, comensalId } },
+        update: { metodo: 'mercadopago', estado: 'pendiente', monto },
+        create: { sesionId, comensalId, metodo: 'mercadopago', estado: 'pendiente', monto },
+      })
 
-    const pago = await this.prisma.pago.upsert({
-      where: { sesionId_comensalId: { sesionId, comensalId } },
-      update: { metodo: 'mercadopago', estado: 'pendiente', monto },
-      create: { sesionId, comensalId, metodo: 'mercadopago', estado: 'pendiente', monto },
+      return { pago, monto, restauranteId: sesion.mesa.restauranteId }
     })
 
+    // Fase 2: I/O externa (Mercado Pago), fuera de la transacción.
+    // Si esto falla, el Pago ya quedó 'pendiente' sin preferencia asociada —
+    // comportamiento preexistente, no introducido acá (ya pasaba antes de partir el método en dos fases).
+    const accessToken = await this.mpOAuth.getAccessTokenDecrypted(restauranteId)
     const frontendOrigin = this.resolveFrontendOrigin(origin)
 
     const preference = await this.mpProvider.createPreference({
@@ -359,16 +340,46 @@ export class PaymentsService {
     return cleanOrigin
   }
 
+  private async resolverModoDivision(
+    tx: Prisma.TransactionClient,
+    sesionId: string,
+    modoDivisionActual: string | null,
+    modoPedido: 'partes_iguales' | 'por_consumo' | null,
+  ): Promise<'partes_iguales' | 'por_consumo'> {
+    if (modoDivisionActual) {
+      return modoDivisionActual as 'partes_iguales' | 'por_consumo'
+    }
+    if (!modoPedido) {
+      throw new BadRequestException(
+        'Debe indicarse el modo de división: la sesión aún no lo tiene definido',
+      )
+    }
+
+    const { count } = await tx.sesionMesa.updateMany({
+      where: { id: sesionId, modoDivision: null },
+      data: { modoDivision: modoPedido },
+    })
+    if (count === 0) {
+      // Otra transacción concurrente lo fijó primero: usar ese valor, no el que pedimos nosotros.
+      const actual = await tx.sesionMesa.findUniqueOrThrow({
+        where: { id: sesionId },
+        select: { modoDivision: true },
+      })
+      return actual.modoDivision as 'partes_iguales' | 'por_consumo'
+    }
+    return modoPedido
+  }
+
   private async montoParaComensal(
     sesionId: string,
     comensalId: string,
     modo: 'partes_iguales' | 'por_consumo',
   ): Promise<number> {
-    const partes =
+    const resultado =
       modo === 'partes_iguales'
         ? await this.divisionService.calcularPartesIguales(sesionId)
         : await this.divisionService.calcularPorConsumo(sesionId)
-    const parte = partes.find((p) => p.comensalId === comensalId)
+    const parte = resultado.partes.find((p) => p.comensalId === comensalId)
     if (!parte) {
       throw new NotFoundException('No se encontró el monto correspondiente a este comensal')
     }
