@@ -9,6 +9,32 @@ export interface ParteComensal {
   monto: number
 }
 
+export interface PartesIgualesResult {
+  divisionPagosHabilitada: boolean
+  divisor: number
+  partes: ParteComensal[]
+}
+
+export interface ItemHuerfano {
+  pedidoItemId: string
+  nombre: string
+  montoCentavos: number
+  monto: number
+}
+
+export interface HuerfanosResumen {
+  items: ItemHuerfano[]
+  totalCentavos: number
+  total: number
+}
+
+export interface PorConsumoResult {
+  divisionPagosHabilitada: boolean
+  divisor: number
+  partes: ParteComensal[]
+  huerfanos: HuerfanosResumen
+}
+
 @Injectable()
 export class DivisionService {
   constructor(
@@ -16,22 +42,12 @@ export class DivisionService {
     private readonly comensalesService: ComensalesService,
   ) {}
 
-  async calcularPartesIguales(sesionId: string): Promise<ParteComensal[]> {
-    const sesion = await this.prisma.sesionMesa.findUnique({ where: { id: sesionId } })
-    if (!sesion) {
-      throw new NotFoundException('Sesión no encontrada')
-    }
+  async calcularPartesIguales(sesionId: string): Promise<PartesIgualesResult> {
+    const sesion = await this.buscarSesionConRestaurante(sesionId)
 
     const comensales = await this.comensalesService.listarComensales(sesionId)
     if (comensales.length === 0) {
       throw new BadRequestException('No hay comensales registrados en esta sesión')
-    }
-
-    const owner = comensales.find((c) => c.esOwner)
-    if (!owner) {
-      throw new BadRequestException(
-        'La sesión no tiene un comensal owner definido, no se puede calcular la división',
-      )
     }
 
     const pedidos = await this.prisma.pedido.findMany({
@@ -47,12 +63,16 @@ export class DivisionService {
       )
 
     const totalCentavos = Math.round(total * 100)
-    const cantidadComensales = comensales.length
-    const parteBaseCentavos = Math.floor(totalCentavos / cantidadComensales)
-    const resto = totalCentavos - parteBaseCentavos * cantidadComensales
+    const divisor = this.calcularDivisor(sesion.cantidadComensales, comensales.length)
+    const parteBaseCentavos = Math.floor(totalCentavos / divisor)
+    const resto = totalCentavos - parteBaseCentavos * divisor
 
-    return comensales.map((comensal) => {
-      const montoCentavos = parteBaseCentavos + (comensal.id === owner.id ? resto : 0)
+    // No se usa esOwner acá: es una convención que setea el frontend al crear el primer
+    // comensal, pero el slot de anfitrión se consume en sessions.open() antes de que
+    // exista ningún Comensal, así que puede no cumplirse nunca en una sesión dada. El
+    // resto de centavos cae en comensales[0], determinístico por createdAt asc.
+    const partes = comensales.map((comensal, index) => {
+      const montoCentavos = parteBaseCentavos + (index === 0 ? resto : 0)
       return {
         comensalId: comensal.id,
         nombre: comensal.nombre,
@@ -60,13 +80,16 @@ export class DivisionService {
         monto: montoCentavos / 100,
       }
     })
+
+    return {
+      divisionPagosHabilitada: sesion.mesa.restaurante.divisionPagosHabilitada,
+      divisor,
+      partes,
+    }
   }
 
-  async calcularPorConsumo(sesionId: string): Promise<ParteComensal[]> {
-    const sesion = await this.prisma.sesionMesa.findUnique({ where: { id: sesionId } })
-    if (!sesion) {
-      throw new NotFoundException('Sesión no encontrada')
-    }
+  async calcularPorConsumo(sesionId: string): Promise<PorConsumoResult> {
+    const sesion = await this.buscarSesionConRestaurante(sesionId)
 
     const comensales = await this.comensalesService.listarComensales(sesionId)
     if (comensales.length === 0) {
@@ -81,21 +104,15 @@ export class DivisionService {
       },
     })
 
-    const itemsSinEtiquetar = pedidoItems.filter((pi) => pi.asignaciones.length === 0)
-    if (itemsSinEtiquetar.length > 0) {
-      throw new BadRequestException(
-        `Los siguientes ítems no están etiquetados: ${itemsSinEtiquetar
-          .map((pi) => pi.item.nombre)
-          .join(', ')}`,
-      )
-    }
+    const itemsEtiquetados = pedidoItems.filter((pi) => pi.asignaciones.length > 0)
+    const itemsHuerfanos = pedidoItems.filter((pi) => pi.asignaciones.length === 0)
 
     const montosPorComensal = new Map<string, number>()
     for (const comensal of comensales) {
       montosPorComensal.set(comensal.id, 0)
     }
 
-    for (const pedidoItem of pedidoItems) {
+    for (const pedidoItem of itemsEtiquetados) {
       const valorTotalCentavos = Math.round(
         Number(pedidoItem.precioUnitario) *
           (pedidoItem.cantidadEditada ?? pedidoItem.cantidad) *
@@ -114,7 +131,7 @@ export class DivisionService {
       })
     }
 
-    return comensales.map((comensal) => {
+    const partes = comensales.map((comensal) => {
       const montoCentavos = montosPorComensal.get(comensal.id) ?? 0
       return {
         comensalId: comensal.id,
@@ -123,14 +140,55 @@ export class DivisionService {
         monto: montoCentavos / 100,
       }
     })
+
+    const huerfanosItems: ItemHuerfano[] = itemsHuerfanos.map((pi) => {
+      const montoCentavos = Math.round(
+        Number(pi.precioUnitario) * (pi.cantidadEditada ?? pi.cantidad) * 100,
+      )
+      return {
+        pedidoItemId: pi.id,
+        nombre: pi.item.nombre,
+        montoCentavos,
+        monto: montoCentavos / 100,
+      }
+    })
+    const huerfanosTotalCentavos = huerfanosItems.reduce((acc, i) => acc + i.montoCentavos, 0)
+
+    return {
+      divisionPagosHabilitada: sesion.mesa.restaurante.divisionPagosHabilitada,
+      divisor: this.calcularDivisor(sesion.cantidadComensales, comensales.length),
+      partes,
+      huerfanos: {
+        items: huerfanosItems,
+        totalCentavos: huerfanosTotalCentavos,
+        total: huerfanosTotalCentavos / 100,
+      },
+    }
   }
 
-  async obtenerModoDivision(sesionId: string): Promise<{ modoDivision: 'partes_iguales' | 'por_consumo' | null }> {
+  async obtenerModoDivision(
+    sesionId: string,
+  ): Promise<{ modoDivision: 'partes_iguales' | 'por_consumo' | null }> {
     const sesion = await this.prisma.sesionMesa.findUnique({ where: { id: sesionId } })
     if (!sesion) {
       throw new NotFoundException('Sesión no encontrada')
     }
 
     return { modoDivision: sesion.modoDivision as 'partes_iguales' | 'por_consumo' | null }
+  }
+
+  private calcularDivisor(cantidadComensales: number | null, comensalesRegistrados: number): number {
+    return Math.max(cantidadComensales ?? 0, comensalesRegistrados)
+  }
+
+  private async buscarSesionConRestaurante(sesionId: string) {
+    const sesion = await this.prisma.sesionMesa.findUnique({
+      where: { id: sesionId },
+      include: { mesa: { include: { restaurante: { select: { divisionPagosHabilitada: true } } } } },
+    })
+    if (!sesion) {
+      throw new NotFoundException('Sesión no encontrada')
+    }
+    return sesion
   }
 }
