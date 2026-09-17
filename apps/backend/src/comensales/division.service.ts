@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
+import { Prisma } from '@prisma/client'
 import { PrismaService } from '../prisma/prisma.service'
 import { ComensalesService } from './comensales.service'
 
@@ -50,17 +51,7 @@ export class DivisionService {
       throw new BadRequestException('No hay comensales registrados en esta sesión')
     }
 
-    const pedidos = await this.prisma.pedido.findMany({
-      where: { sesionId, estado: { not: 'cancelado' } },
-      include: { items: true },
-    })
-
-    const total = pedidos
-      .flatMap((pedido) => pedido.items)
-      .reduce(
-        (acc, item) => acc + Number(item.precioUnitario) * (item.cantidadEditada ?? item.cantidad),
-        0,
-      )
+    const total = await this.calcularTotalSesion(this.prisma, sesionId)
 
     const totalCentavos = Math.round(total * 100)
     const divisor = this.calcularDivisor(sesion.cantidadComensales, comensales.length)
@@ -175,6 +166,48 @@ export class DivisionService {
     }
 
     return { modoDivision: sesion.modoDivision as 'partes_iguales' | 'por_consumo' | null }
+  }
+
+  async obtenerSaldo(sesionId: string): Promise<{
+    totalSesion: number
+    totalCobrado: number
+    saldoPendiente: number
+  }> {
+    const sesion = await this.prisma.sesionMesa.findUnique({ where: { id: sesionId } })
+    if (!sesion) {
+      throw new NotFoundException('Sesión no encontrada')
+    }
+
+    const totalSesion = await this.calcularTotalSesion(this.prisma, sesionId)
+
+    const pagosAprobados = await this.prisma.pago.findMany({
+      where: { sesionId, estado: 'aprobado' },
+    })
+    const totalCobrado = pagosAprobados.reduce((acc, p) => acc + Number(p.monto), 0)
+
+    return {
+      totalSesion,
+      totalCobrado,
+      saldoPendiente: Math.max(0, totalSesion - totalCobrado),
+    }
+  }
+
+  // Fórmula única del total de una sesión (excluye pedidos cancelados, respeta
+  // cantidadEditada cuando el mozo corrigió una cantidad ya impresa). La consumen
+  // tanto los cálculos de división de acá como PaymentsService — no duplicar.
+  async calcularTotalSesion(client: Prisma.TransactionClient, sesionId: string): Promise<number> {
+    const pedidos = await client.pedido.findMany({
+      where: { sesionId, estado: { not: 'cancelado' } },
+      include: {
+        items: { select: { cantidad: true, cantidadEditada: true, precioUnitario: true } },
+      },
+    })
+    return pedidos.reduce(
+      (acc, p) =>
+        acc +
+        p.items.reduce((s, i) => s + Number(i.precioUnitario) * (i.cantidadEditada ?? i.cantidad), 0),
+      0,
+    )
   }
 
   private calcularDivisor(cantidadComensales: number | null, comensalesRegistrados: number): number {

@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   Logger,
   NotFoundException,
@@ -144,6 +145,8 @@ export class PaymentsService {
         monto = await this.saldoPendienteSesion(sesionId)
       }
 
+      await this.assertSinPagoEnConflicto(tx, sesionId, comensalId)
+
       const pago = await tx.pago.create({
         data: {
           sesionId,
@@ -244,7 +247,7 @@ export class PaymentsService {
         data: { estado: 'aprobado', fechaCobro, ...(mozoId ? { mozoId } : {}) },
       })
 
-      const totalSesion = await this.calcularTotalSesion(tx, pago.sesionId)
+      const totalSesion = await this.divisionService.calcularTotalSesion(tx, pago.sesionId)
       const pagosAprobados = await tx.pago.findMany({
         where: { sesionId: pago.sesionId, estado: 'aprobado' },
       })
@@ -268,13 +271,15 @@ export class PaymentsService {
 
   async crearPreferenciaMercadoPago(
     sesionId: string,
-    comensalId: string,
+    comensalId: string | null,
     modo: 'partes_iguales' | 'por_consumo' | null,
     origin?: string,
   ) {
-    const comensal = await this.prisma.comensal.findUnique({ where: { id: comensalId } })
-    if (!comensal || comensal.sesionId !== sesionId) {
-      throw new NotFoundException('Comensal no encontrado en esta sesión')
+    if (comensalId !== null) {
+      const comensal = await this.prisma.comensal.findUnique({ where: { id: comensalId } })
+      if (!comensal || comensal.sesionId !== sesionId) {
+        throw new NotFoundException('Comensal no encontrado en esta sesión')
+      }
     }
 
     // Fase 1: todo lo transaccional — sin I/O externa adentro.
@@ -285,14 +290,37 @@ export class PaymentsService {
       })
       if (!sesion) throw new NotFoundException('Sesión no encontrada')
 
-      const modoReal = await this.resolverModoDivision(tx, sesionId, sesion.modoDivision, modo)
-      const monto = await this.montoParaComensal(sesionId, comensalId, modoReal)
+      let monto: number
+      if (comensalId !== null) {
+        const modoReal = await this.resolverModoDivision(tx, sesionId, sesion.modoDivision, modo)
+        monto = await this.montoParaComensal(sesionId, comensalId, modoReal)
+      } else {
+        monto = await this.saldoPendienteSesion(sesionId)
+      }
 
-      const pago = await tx.pago.upsert({
-        where: { sesionId_comensalId: { sesionId, comensalId } },
-        update: { metodo: 'mercadopago', estado: 'pendiente', monto },
-        create: { sesionId, comensalId, metodo: 'mercadopago', estado: 'pendiente', monto },
-      })
+      await this.assertSinPagoEnConflicto(tx, sesionId, comensalId)
+
+      // La unique compuesta (sesionId, comensalId) no aplica con comensalId
+      // null — Postgres trata cada NULL como distinto — así que el slot de
+      // "mesa completa" se busca y actualiza a mano en vez de con upsert.
+      const pago =
+        comensalId !== null
+          ? await tx.pago.upsert({
+              where: { sesionId_comensalId: { sesionId, comensalId } },
+              update: { metodo: 'mercadopago', estado: 'pendiente', monto },
+              create: { sesionId, comensalId, metodo: 'mercadopago', estado: 'pendiente', monto },
+            })
+          : await (async () => {
+              const existente = await tx.pago.findFirst({ where: { sesionId, comensalId: null } })
+              return existente
+                ? tx.pago.update({
+                    where: { id: existente.id },
+                    data: { metodo: 'mercadopago', estado: 'pendiente', monto },
+                  })
+                : tx.pago.create({
+                    data: { sesionId, comensalId: null, metodo: 'mercadopago', estado: 'pendiente', monto },
+                  })
+            })()
 
       return { pago, monto, restauranteId: sesion.mesa.restauranteId }
     })
@@ -387,7 +415,7 @@ export class PaymentsService {
   }
 
   private async saldoPendienteSesion(sesionId: string): Promise<number> {
-    const totalSesion = await this.calcularTotalSesion(this.prisma, sesionId)
+    const totalSesion = await this.divisionService.calcularTotalSesion(this.prisma, sesionId)
 
     const pagosAprobados = await this.prisma.pago.findMany({
       where: { sesionId, estado: 'aprobado' },
@@ -401,18 +429,45 @@ export class PaymentsService {
     return saldoPendiente
   }
 
-  private async calcularTotalSesion(client: Prisma.TransactionClient, sesionId: string): Promise<number> {
-    const pedidos = await client.pedido.findMany({
-      where: { sesionId, estado: { not: 'cancelado' } },
-      include: {
-        items: { select: { cantidad: true, cantidadEditada: true, precioUnitario: true } },
+  // Un pago de "mesa completa" (comensalId null) y uno individual no pueden
+  // quedar pendientes en simultáneo: si los dos se aprueban después, la sesión
+  // cobra de más. Se bloquea el que se crea segundo mientras el otro siga
+  // "reciente". Ventanas distintas por método: un checkout de Mercado Pago se
+  // resuelve en minutos, pero un efectivo pendiente espera legítimamente a que
+  // el mozo se acerque, y en una mesa llena eso supera los 5 minutos.
+  private static readonly VENTANA_CONFLICTO_MP_MS = 5 * 60 * 1000
+  private static readonly VENTANA_CONFLICTO_EFECTIVO_MS = 30 * 60 * 1000
+
+  private async assertSinPagoEnConflicto(
+    tx: Prisma.TransactionClient,
+    sesionId: string,
+    comensalId: string | null,
+  ): Promise<void> {
+    const ahora = Date.now()
+    const desdeMp = new Date(ahora - PaymentsService.VENTANA_CONFLICTO_MP_MS)
+    const desdeEfectivo = new Date(ahora - PaymentsService.VENTANA_CONFLICTO_EFECTIVO_MS)
+
+    const conflicto = await tx.pago.findFirst({
+      where: {
+        sesionId,
+        estado: 'pendiente',
+        comensalId: comensalId === null ? { not: null } : null,
+        OR: [
+          { metodo: 'mercadopago', createdAt: { gte: desdeMp } },
+          { metodo: 'efectivo', createdAt: { gte: desdeEfectivo } },
+        ],
       },
     })
-    return pedidos.reduce(
-      (acc, p) =>
-        acc +
-        p.items.reduce((s, i) => s + Number(i.precioUnitario) * (i.cantidadEditada ?? i.cantidad), 0),
-      0,
+
+    if (!conflicto) return
+
+    if (comensalId === null) {
+      throw new ConflictException(
+        'Hay un pago individual en curso en esta mesa. Esperá unos minutos a que se resuelva antes de pagar toda la cuenta.',
+      )
+    }
+    throw new ConflictException(
+      'Alguien está pagando toda la cuenta en este momento. Esperá unos minutos a que se resuelva antes de pagar tu parte.',
     )
   }
 
@@ -450,7 +505,7 @@ export class PaymentsService {
 
       if (estadoInterno !== 'aprobado') return false
 
-      const totalSesion = await this.calcularTotalSesion(tx, pagoActual.sesionId)
+      const totalSesion = await this.divisionService.calcularTotalSesion(tx, pagoActual.sesionId)
       const pagosAprobados = await tx.pago.findMany({
         where: { sesionId: pagoActual.sesionId, estado: 'aprobado' },
       })

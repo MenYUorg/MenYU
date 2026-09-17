@@ -3,17 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { AppHeader } from '../../components/AppHeader'
 import { useSessionStore } from '../../store/sessionStore'
 import { useComensalStore } from '../../store/comensalStore'
-
-const C = {
-  orange: '#E8563A',
-  orangeHover: '#d34a30',
-  navy: '#2D3561',
-  textSub: '#6B7280',
-  border: '#DDDDE0',
-  borderFocus: '#E8563A',
-  bg: '#F7F7F8',
-  white: '#FFFFFF',
-} as const
+import { C } from '../../theme'
 
 // ── Shared sub-components ─────────────────────────────────────────────────────
 
@@ -137,7 +127,7 @@ const inputStyle: React.CSSProperties = {
   width: '100%',
   padding: '12px 14px',
   background: '#FFFFFF',
-  border: '1.5px solid #DDDDE0',
+  border: `1.5px solid ${C.borderInput}`,
   borderRadius: 10,
   fontFamily: 'Inter, sans-serif',
   fontSize: 15,

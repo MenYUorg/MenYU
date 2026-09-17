@@ -101,13 +101,13 @@ export const api = {
         { ...data, returnBaseUrl: window.location.origin },
         jwt,
       ),
-    solicitarEfectivo: (sesionId: string, comensalId: string, modo: 'partes_iguales' | 'por_consumo') =>
+    solicitarEfectivo: (sesionId: string, comensalId: string | null, modo: 'partes_iguales' | 'por_consumo' | null) =>
       req<{ pagoId: string; sesionId: string; estado: string }>(
         'POST',
         '/payments/solicitar-efectivo',
         { sesionId, comensalId, modo },
       ),
-    pagarConMercadoPago: (sesionId: string, comensalId: string, modo: 'partes_iguales' | 'por_consumo') =>
+    pagarConMercadoPago: (sesionId: string, comensalId: string | null, modo: 'partes_iguales' | 'por_consumo' | null) =>
       req<{ initPoint: string; preferenceId: string }>(
         'POST',
         '/payments/mercadopago/crear-preferencia',
@@ -116,11 +116,25 @@ export const api = {
   },
 
   comensales: {
-    crear: (sesionId: string, nombre: string, esOwner: boolean) =>
-      req<{ id: string; sesionId: string; nombre: string; esOwner: boolean }>(
+    crear: (sesionId: string, nombre: string, esOwner: boolean, creadoPorComensalId?: string) =>
+      req<{ id: string; sesionId: string; nombre: string; esOwner: boolean; creadoPorComensalId: string | null }>(
         'POST',
         `/sesiones/${sesionId}/comensales`,
-        { nombre, esOwner },
+        { nombre, esOwner, ...(creadoPorComensalId ? { creadoPorComensalId } : {}) },
+      ),
+    reclamar: (sesionId: string, nombre: string, pin: string) =>
+      req<{
+        id: string
+        sesionId: string
+        clienteId: string | null
+        nombre: string
+        esOwner: boolean
+        createdAt: string
+        tienePagoAprobado: boolean
+      }>(
+        'POST',
+        `/sesiones/${sesionId}/comensales/reclamar`,
+        { nombre, pin },
       ),
     listar: (sesionId: string) =>
       req<Array<{
@@ -129,8 +143,15 @@ export const api = {
         clienteId: string | null
         nombre: string
         esOwner: boolean
+        creadoPorComensalId: string | null
         createdAt: string
       }>>('GET', `/sesiones/${sesionId}/comensales`),
+    setCantidadComensales: (sesionId: string, cantidadComensales: number | null) =>
+      req<{ id: string; cantidadComensales: number | null }>(
+        'PATCH',
+        `/sesiones/${sesionId}/comensales/cantidad-comensales`,
+        { cantidadComensales },
+      ),
     calcularPartesIguales: (sesionId: string) =>
       req<{
         divisionPagosHabilitada: boolean
@@ -170,8 +191,21 @@ export const api = {
         pedidoItemId: string
         comensalId: string
         createdAt: string
-        comensal: { id: string; sesionId: string; clienteId: string | null; nombre: string; esOwner: boolean; createdAt: string }
+        comensal: { id: string; sesionId: string; clienteId: string | null; nombre: string; esOwner: boolean; creadoPorComensalId: string | null; createdAt: string }
       }>>('GET', `/sesiones/${sesionId}/comensales/etiquetas/${pedidoItemId}`),
+    borrarComensal: (sesionId: string, comensalId: string, solicitante: string) =>
+      req<{ id: string }>(
+        'DELETE',
+        `/sesiones/${sesionId}/comensales/${comensalId}?solicitante=${encodeURIComponent(solicitante)}`,
+      ),
+  },
+
+  sesiones: {
+    saldo: (sesionId: string) =>
+      req<{ totalSesion: number; totalCobrado: number; saldoPendiente: number }>(
+        'GET',
+        `/sesiones/${sesionId}/saldo`,
+      ),
   },
 
   auth: {
