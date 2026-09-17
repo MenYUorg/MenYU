@@ -49,7 +49,7 @@ export class PaymentsController {
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Crear preferencia de pago con Mercado Pago' })
   crearPreferenciaMP(
-    @Body() body: { sesionId: string; comensalId: string; modo: 'partes_iguales' | 'por_consumo' | null },
+    @Body() body: { sesionId: string; comensalId: string | null; modo: 'partes_iguales' | 'por_consumo' | null },
     @Headers('origin') origin?: string,
   ) {
     return this.payments.crearPreferenciaMercadoPago(body.sesionId, body.comensalId, body.modo, origin)

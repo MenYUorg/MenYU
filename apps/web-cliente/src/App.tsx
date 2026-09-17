@@ -10,6 +10,8 @@ import { PagoPendientePage } from './pages/pago/PagoPendientePage'
 import { MisPedidosPage } from './pages/pedidos/MisPedidosPage'
 import { PagarPage } from './pages/pago/PagarPage'
 import { EtiquetarPedidosPage } from './pages/etiquetado/EtiquetarPedidosPage'
+import { CantidadComensalesPage } from './pages/dividir/CantidadComensalesPage'
+import { MensajePage } from './pages/dividir/MensajePage'
 import { EntradaPage } from './pages/entrada/EntradaPage'
 import { ElegirNombrePage } from './pages/entrada/ElegirNombrePage'
 import { IngresoManualPage } from './pages/entrada/IngresoManualPage'
@@ -168,6 +170,8 @@ export function App() {
               <Route path="/pedidos" element={<MisPedidosPage />} />
               <Route path="/pagar" element={<PagarPage />} />
               <Route path="/etiquetar" element={<EtiquetarPedidosPage />} />
+              <Route path="/dividir/cantidad" element={<CantidadComensalesPage />} />
+              <Route path="/dividir/mensaje" element={<MensajePage />} />
             </Route>
           </Route>
 

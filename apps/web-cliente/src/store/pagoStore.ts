@@ -21,6 +21,8 @@ interface PagoStore {
   error: string | null
   modoDivision: Modo | null
   modoElegido: Modo | null
+  divisionPagosHabilitada: boolean
+  divisorPartesIguales: number | null
   montoPartesIguales: number | null
   montoPorConsumo: number | null | 'no_disponible'
   miMonto: number | null
@@ -37,6 +39,8 @@ export const usePagoStore = create<PagoStore>()((set, get) => ({
   error: null,
   modoDivision: null,
   modoElegido: null,
+  divisionPagosHabilitada: true,
+  divisorPartesIguales: null,
   montoPartesIguales: null,
   montoPorConsumo: null,
   miMonto: null,
@@ -59,6 +63,8 @@ export const usePagoStore = create<PagoStore>()((set, get) => ({
     }
 
     let partesIguales: Array<{ comensalId: string; monto: number }>
+    let divisionPagosHabilitada = true
+    let divisorPartesIguales: number | null = null
     let porConsumoResult:
       | { partes: Array<{ comensalId: string; monto: number }>; huerfanos: { items: unknown[] } }
       | 'no_disponible'
@@ -73,6 +79,8 @@ export const usePagoStore = create<PagoStore>()((set, get) => ({
         }),
       ])
       partesIguales = partesRes.partes
+      divisionPagosHabilitada = partesRes.divisionPagosHabilitada
+      divisorPartesIguales = partesRes.divisor
       porConsumoResult = consumoRes
     } catch (e) {
       set({
@@ -92,6 +100,8 @@ export const usePagoStore = create<PagoStore>()((set, get) => ({
     set({
       estado: 'idle',
       modoDivision,
+      divisionPagosHabilitada,
+      divisorPartesIguales,
       montoPartesIguales,
       montoPorConsumo,
       miMonto: calcularMiMonto(modoDivision, get().modoElegido, montoPartesIguales, montoPorConsumo),
@@ -165,6 +175,8 @@ export const usePagoStore = create<PagoStore>()((set, get) => ({
       error: null,
       modoDivision: null,
       modoElegido: null,
+      divisionPagosHabilitada: true,
+      divisorPartesIguales: null,
       montoPartesIguales: null,
       montoPorConsumo: null,
       miMonto: null,

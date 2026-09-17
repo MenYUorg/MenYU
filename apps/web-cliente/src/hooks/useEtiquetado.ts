@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../services/api'
 import { useSessionStore } from '../store/sessionStore'
+import { useComensalStore } from '../store/comensalStore'
 
 interface PedidoSesion {
   id: string
@@ -18,6 +19,7 @@ export interface Comensal {
   clienteId: string | null
   nombre: string
   esOwner: boolean
+  creadoPorComensalId: string | null
   createdAt: string
 }
 
@@ -36,6 +38,15 @@ export function useEtiquetado(sesionId: string) {
   const [error, setError] = useState<string | null>(null)
 
   const refetch = useCallback(async () => {
+    // sesionId falsy: el caller lo está usando en modo inerte a propósito
+    // (por ejemplo, una pantalla que solo necesita el hook en una de sus ramas),
+    // no un error — no hay nada que pedirle al backend.
+    if (!sesionId) {
+      setLoading(false)
+      setError(null)
+      return
+    }
+
     const jwt = useSessionStore.getState().jwt
     if (!jwt) {
       setLoading(false)
@@ -95,5 +106,24 @@ export function useEtiquetado(sesionId: string) {
     [sesionId, refetch],
   )
 
-  return { items, comensales, loading, error, refetch, etiquetar, desetiquetar }
+  const agregarComensal = useCallback(
+    async (nombre: string) => {
+      const comensalIdActual = useComensalStore.getState().comensalId
+      await api.comensales.crear(sesionId, nombre, false, comensalIdActual ?? undefined)
+      await refetch()
+    },
+    [sesionId, refetch],
+  )
+
+  const borrarComensal = useCallback(
+    async (comensalId: string) => {
+      const comensalIdActual = useComensalStore.getState().comensalId
+      if (!comensalIdActual) throw new Error('No se encontró el comensal actual')
+      await api.comensales.borrarComensal(sesionId, comensalId, comensalIdActual)
+      await refetch()
+    },
+    [sesionId, refetch],
+  )
+
+  return { items, comensales, loading, error, refetch, etiquetar, desetiquetar, agregarComensal, borrarComensal }
 }
