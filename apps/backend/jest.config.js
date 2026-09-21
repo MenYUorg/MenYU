@@ -1,3 +1,5 @@
+const path = require('path')
+
 module.exports = {
   moduleFileExtensions: ['js', 'json', 'ts'],
   rootDir: 'src',
@@ -13,5 +15,9 @@ module.exports = {
     '!**/*.e2e-spec.ts',
     '!**/*.d.ts',
   ],
-  coverageReporters: ['text', 'json-summary', 'lcov'],
+  coverageReporters: [
+    'text',
+    'json-summary',
+    ['lcov', { projectRoot: path.resolve(__dirname, '../..') }],
+  ],
 }
