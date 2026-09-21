@@ -14,6 +14,7 @@ module.exports = {
     '!**/*.spec.ts',
     '!**/*.e2e-spec.ts',
     '!**/*.d.ts',
+    '!**/*.dto.ts',
   ],
   coverageReporters: [
     'text',
