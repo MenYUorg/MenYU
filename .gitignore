@@ -12,6 +12,10 @@ dist/
 build/
 .expo/
 .next/
+coverage/
+
+# SonarQube (carpeta de trabajo local del scanner)
+.scannerwork/
 
 # Logs
 *.log
