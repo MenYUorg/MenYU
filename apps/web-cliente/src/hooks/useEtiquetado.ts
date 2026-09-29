@@ -60,13 +60,13 @@ export function useEtiquetado(sesionId: string) {
     try {
       const [pedidosRaw, comensalesData] = await Promise.all([
         api.orders.list(jwt),
-        api.comensales.listar(sesionId),
+        api.comensales.listar(jwt, sesionId),
       ])
       const pedidos = pedidosRaw as PedidoSesion[]
       const pedidoItems = pedidos.flatMap((p) => p.items)
 
       const etiquetasPorItem = await Promise.all(
-        pedidoItems.map((pi) => api.comensales.listarEtiquetasDeItem(sesionId, pi.id)),
+        pedidoItems.map((pi) => api.comensales.listarEtiquetasDeItem(jwt, sesionId, pi.id)),
       )
 
       const itemsCombinados: ItemEtiquetado[] = pedidoItems.map((pi, idx) => ({
@@ -92,7 +92,9 @@ export function useEtiquetado(sesionId: string) {
 
   const etiquetar = useCallback(
     async (pedidoItemId: string, comensalId: string) => {
-      await api.comensales.etiquetar(sesionId, pedidoItemId, comensalId)
+      const jwt = useSessionStore.getState().jwt
+      if (!jwt) throw new Error('No hay sesión activa')
+      await api.comensales.etiquetar(jwt, sesionId, pedidoItemId, comensalId)
       await refetch()
     },
     [sesionId, refetch],
@@ -100,7 +102,9 @@ export function useEtiquetado(sesionId: string) {
 
   const desetiquetar = useCallback(
     async (pedidoItemId: string, comensalId: string) => {
-      await api.comensales.desetiquetar(sesionId, pedidoItemId, comensalId)
+      const jwt = useSessionStore.getState().jwt
+      if (!jwt) throw new Error('No hay sesión activa')
+      await api.comensales.desetiquetar(jwt, sesionId, pedidoItemId, comensalId)
       await refetch()
     },
     [sesionId, refetch],
@@ -108,8 +112,10 @@ export function useEtiquetado(sesionId: string) {
 
   const agregarComensal = useCallback(
     async (nombre: string) => {
+      const jwt = useSessionStore.getState().jwt
+      if (!jwt) throw new Error('No hay sesión activa')
       const comensalIdActual = useComensalStore.getState().comensalId
-      await api.comensales.crear(sesionId, nombre, false, comensalIdActual ?? undefined)
+      await api.comensales.crear(jwt, sesionId, nombre, false, comensalIdActual ?? undefined)
       await refetch()
     },
     [sesionId, refetch],
@@ -117,9 +123,11 @@ export function useEtiquetado(sesionId: string) {
 
   const borrarComensal = useCallback(
     async (comensalId: string) => {
+      const jwt = useSessionStore.getState().jwt
+      if (!jwt) throw new Error('No hay sesión activa')
       const comensalIdActual = useComensalStore.getState().comensalId
       if (!comensalIdActual) throw new Error('No se encontró el comensal actual')
-      await api.comensales.borrarComensal(sesionId, comensalId, comensalIdActual)
+      await api.comensales.borrarComensal(jwt, sesionId, comensalId, comensalIdActual)
       await refetch()
     },
     [sesionId, refetch],

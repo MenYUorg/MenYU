@@ -1,25 +1,27 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
-  UnauthorizedException,
 } from '@nestjs/common'
 import { JwtService } from '@nestjs/jwt'
 import { PrismaService } from '../prisma/prisma.service'
 import { UsersService } from '../users/users.service'
 import { MenyuGateway } from '../gateway/menyu.gateway'
 import { JwtPayload } from '../auth/auth.service'
+import { SessionJwtPayload } from '../auth/guards/session-auth.guard'
 import { OpenSessionDto } from './dto/open-session.dto'
-
-interface SessionJwtPayload {
-  sub: string
-  tipo: 'cliente'
-  sesionId: string
-  mesaId: string
-  restauranteId: string
-}
+import { RegistrarCobroDto } from './dto/registrar-cobro.dto'
+import { DivisionService } from '../comensales/division.service'
+import { runSerializableTransaction } from '../common/run-serializable-transaction'
+import { assertStaffAccess } from '../common/assert-staff-access'
+import {
+  ESTADO_PAGO_APROBADO,
+  ESTADO_PAGO_PENDIENTE,
+  ESTADO_PAGO_CANCELADO,
+} from '../common/estado-pago.constant'
 
 export interface OpenStaffSessionResult {
   sesionId: string
@@ -71,6 +73,7 @@ export class SessionsService {
     private readonly users: UsersService,
     private readonly jwt: JwtService,
     private readonly gateway: MenyuGateway,
+    private readonly divisionService: DivisionService,
   ) {}
 
   async openStaff(dto: { mesaId: string }, user: JwtPayload): Promise<OpenStaffSessionResult> {
@@ -80,7 +83,7 @@ export class SessionsService {
     })
     if (!mesa || !mesa.activo) throw new NotFoundException('Mesa no encontrada')
 
-    await this.assertStaffAccess(mesa.restauranteId, user)
+    await assertStaffAccess(this.prisma, mesa.restauranteId, user)
 
     const sesionActiva = await this.prisma.sesionMesa.findFirst({
       where: { mesaId: mesa.id, estado: 'activa' },
@@ -208,22 +211,7 @@ export class SessionsService {
     }
   }
 
-  async close(authHeader?: string): Promise<{ ok: boolean }> {
-    if (!authHeader?.startsWith('Bearer ')) {
-      throw new UnauthorizedException('Session JWT requerido')
-    }
-
-    let payload: SessionJwtPayload
-    try {
-      payload = this.jwt.verify<SessionJwtPayload>(authHeader.slice(7))
-    } catch {
-      throw new UnauthorizedException('Session JWT inválido o expirado')
-    }
-
-    if (payload.tipo !== 'cliente') {
-      throw new UnauthorizedException('Solo clientes pueden cerrar sesiones de mesa')
-    }
-
+  async close(payload: SessionJwtPayload): Promise<{ ok: boolean }> {
     const sesion = await this.prisma.sesionMesa.findUnique({ where: { id: payload.sesionId } })
     if (!sesion) throw new NotFoundException('Sesión no encontrada')
     if (sesion.estado !== 'activa') throw new BadRequestException('La sesión ya está cerrada')
@@ -247,7 +235,7 @@ export class SessionsService {
   async cerrarMesaAdmin(mesaId: string, user: JwtPayload): Promise<{ ok: boolean }> {
     const mesa = await this.prisma.mesa.findUnique({ where: { id: mesaId } })
     if (!mesa) throw new NotFoundException('Mesa no encontrada')
-    await this.assertStaffAccess(mesa.restauranteId, user)
+    await assertStaffAccess(this.prisma, mesa.restauranteId, user)
 
     const sesion = await this.prisma.sesionMesa.findFirst({
       where: { mesaId, estado: 'activa' },
@@ -273,7 +261,7 @@ export class SessionsService {
   async getSessionActiva(mesaId: string, user: JwtPayload): Promise<SessionActivaResult | null> {
     const mesa = await this.prisma.mesa.findUnique({ where: { id: mesaId } })
     if (!mesa) throw new NotFoundException('Mesa no encontrada')
-    await this.assertStaffAccess(mesa.restauranteId, user)
+    await assertStaffAccess(this.prisma, mesa.restauranteId, user)
 
     const sesion = await this.prisma.sesionMesa.findFirst({
       where: { mesaId, estado: 'activa' },
@@ -342,7 +330,7 @@ export class SessionsService {
   }
 
   async getSessionesActivas(restauranteId: string, user: JwtPayload) {
-    await this.assertStaffAccess(restauranteId, user)
+    await assertStaffAccess(this.prisma, restauranteId, user)
 
     const sesiones = await this.prisma.sesionMesa.findMany({
       where: { mesa: { restauranteId }, estado: 'activa' },
@@ -387,7 +375,7 @@ export class SessionsService {
   }
 
   async getSessionesPagadas(restauranteId: string, fecha: string | undefined, user: JwtPayload) {
-    await this.assertStaffAccess(restauranteId, user)
+    await assertStaffAccess(this.prisma, restauranteId, user)
 
     let fechaFilter: { gte: Date; lte: Date } | undefined
     if (fecha === 'hoy') {
@@ -485,7 +473,7 @@ export class SessionsService {
     hasta: string | undefined,
     user: JwtPayload,
   ) {
-    await this.assertStaffAccess(restauranteId, user)
+    await assertStaffAccess(this.prisma, restauranteId, user)
 
     const hoy = new Date().toISOString().slice(0, 10)
     const desdeStr = desde ?? hoy
@@ -593,46 +581,60 @@ export class SessionsService {
 
   async registrarCobro(
     sesionId: string,
-    dto: { metodoPago: string; mozoId?: string; cobradoPorNombre?: string; referenciaExterna?: string },
+    dto: RegistrarCobroDto,
     user: JwtPayload,
   ) {
     const sesion = await this.prisma.sesionMesa.findUnique({
       where: { id: sesionId },
       include: {
         mesa: { select: { id: true, numero: true, restauranteId: true } },
-        pedidos: {
-          include: { items: { select: { cantidad: true, precioUnitario: true } } },
-          orderBy: { createdAt: 'desc' },
-        },
-        pagos: true,
       },
     })
     if (!sesion) throw new NotFoundException('Sesión no encontrada')
     if (sesion.cerradaEn !== null) throw new BadRequestException('La sesión ya fue cerrada')
 
-    await this.assertStaffAccess(sesion.mesa.restauranteId, user)
+    await assertStaffAccess(this.prisma, sesion.mesa.restauranteId, user)
 
-    const totalSesion = sesion.pedidos.reduce(
-      (acc, p) => acc + p.items.reduce((s, i) => s + Number(i.precioUnitario) * i.cantidad, 0),
-      0,
-    )
-    const totalYaCobrado = sesion.pagos
-      .filter((p) => p.estado === 'aprobado')
-      .reduce((acc, p) => acc + Number(p.monto), 0)
-    const saldoPendiente = totalSesion - totalYaCobrado
-    if (saldoPendiente <= 0) {
-      throw new BadRequestException('Esta sesión ya está completamente pagada')
-    }
-
-    const pagoManualPendiente = sesion.pagos.find((p) => p.comensalId === null && p.estado !== 'aprobado')
     const fechaCobro = new Date()
 
-    const sesionCerrada = await this.prisma.$transaction(async (tx) => {
+    const sesionCerrada = await runSerializableTransaction(this.prisma, async (tx) => {
+      const totalSesion = await this.divisionService.calcularTotalSesion(tx, sesionId)
+
+      const pagosAprobadosPrevios = await tx.pago.findMany({
+        where: { sesionId, estado: ESTADO_PAGO_APROBADO },
+      })
+      const totalYaCobrado = pagosAprobadosPrevios.reduce((acc, p) => acc + Number(p.monto), 0)
+      const saldoPendiente = totalSesion - totalYaCobrado
+      if (saldoPendiente <= 0) {
+        throw new BadRequestException('Esta sesión ya está completamente pagada')
+      }
+
+      const pagosPendientesComensales = await tx.pago.findMany({
+        where: { sesionId, comensalId: { not: null }, estado: ESTADO_PAGO_PENDIENTE },
+      })
+      if (pagosPendientesComensales.length > 0) {
+        if (!dto.confirmarCancelacionPagosPendientes) {
+          const montoTotal = pagosPendientesComensales.reduce((acc, p) => acc + Number(p.monto), 0)
+          throw new ConflictException(
+            `Hay ${pagosPendientesComensales.length} pago(s) pendiente(s) de comensales por un total de $${montoTotal.toFixed(2)}. ` +
+              'Confirmá la cancelación para cobrar toda la mesa.',
+          )
+        }
+        await tx.pago.updateMany({
+          where: { id: { in: pagosPendientesComensales.map((p) => p.id) } },
+          data: { estado: ESTADO_PAGO_CANCELADO },
+        })
+      }
+
+      const pagoManualPendiente = await tx.pago.findFirst({
+        where: { sesionId, comensalId: null, estado: { not: ESTADO_PAGO_APROBADO } },
+      })
+
       if (pagoManualPendiente) {
         await tx.pago.update({
           where: { id: pagoManualPendiente.id },
           data: {
-            estado: 'aprobado',
+            estado: ESTADO_PAGO_APROBADO,
             monto: saldoPendiente,
             metodo: dto.metodoPago,
             mozoId: dto.mozoId || null,
@@ -648,7 +650,7 @@ export class SessionsService {
             comensalId: null,
             monto: saldoPendiente,
             metodo: dto.metodoPago,
-            estado: 'aprobado',
+            estado: ESTADO_PAGO_APROBADO,
             mozoId: dto.mozoId || null,
             cobradoPorNombre: dto.cobradoPorNombre,
             referenciaExterna: dto.referenciaExterna,
@@ -657,7 +659,9 @@ export class SessionsService {
         })
       }
 
-      const pagosAprobados = await tx.pago.findMany({ where: { sesionId, estado: 'aprobado' } })
+      const pagosAprobados = await tx.pago.findMany({
+        where: { sesionId, estado: ESTADO_PAGO_APROBADO },
+      })
       const totalCubierto = pagosAprobados.reduce((acc, p) => acc + Number(p.monto), 0)
 
       if (totalCubierto >= totalSesion) {
@@ -676,7 +680,7 @@ export class SessionsService {
         `registrarCobro: saldo cubierto (${totalCubierto}) no alcanza el total de la sesión ${sesionId} (${totalSesion}), no se cierra la sesión`,
       )
       return false
-    })
+    }, 'registrarCobro')
 
     if (sesionCerrada) {
       this.gateway.emitSesionCobrada(sesion.mesa.restauranteId, {
@@ -724,35 +728,5 @@ export class SessionsService {
 
   private generateCodigoSesion(): string {
     return String(Math.floor(Math.random() * 999) + 1).padStart(3, '0')
-  }
-
-  private async assertStaffAccess(restauranteId: string, user: JwtPayload): Promise<void> {
-    if (user.tipo === 'mozo') {
-      if (user.restauranteId !== restauranteId) {
-        throw new ForbiddenException('No tenés acceso a este restaurante')
-      }
-      return
-    }
-    await this.assertAdminAccess(restauranteId, user)
-  }
-
-  private async assertAdminAccess(restauranteId: string, user: JwtPayload): Promise<void> {
-    if (user.rol === 'ROOT') return
-    if (user.rol === 'OWNER') {
-      const admin = await this.prisma.admin.findUnique({ where: { id: user.sub } })
-      const restaurante = await this.prisma.restaurante.findUnique({ where: { id: restauranteId } })
-      if (!admin || !restaurante || admin.marcaId !== restaurante.marcaId) {
-        throw new ForbiddenException('No tenés acceso a este restaurante')
-      }
-      return
-    }
-    if (user.rol === 'GERENTE') {
-      const asignacion = await this.prisma.adminRestaurante.findUnique({
-        where: { adminId_restauranteId: { adminId: user.sub, restauranteId } },
-      })
-      if (!asignacion) throw new ForbiddenException('No tenés acceso a este restaurante')
-      return
-    }
-    throw new ForbiddenException('No tenés acceso a este restaurante')
   }
 }

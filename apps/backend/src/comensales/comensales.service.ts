@@ -117,8 +117,8 @@ export class ComensalesService {
     }
   }
 
-  async listarComensales(sesionId: string) {
-    return this.prisma.comensal.findMany({
+  async listarComensales(sesionId: string, client: Prisma.TransactionClient = this.prisma) {
+    return client.comensal.findMany({
       where: { sesionId },
       orderBy: { createdAt: 'asc' },
     })

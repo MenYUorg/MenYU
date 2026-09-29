@@ -3,6 +3,7 @@ import { JwtModule } from '@nestjs/jwt'
 import { PrismaModule } from '../prisma/prisma.module'
 import { UsersModule } from '../users/users.module'
 import { GatewayModule } from '../gateway/gateway.module'
+import { ComensalesModule } from '../comensales/comensales.module'
 import { SessionsService } from './sessions.service'
 import { SessionsController } from './sessions.controller'
 
@@ -11,6 +12,7 @@ import { SessionsController } from './sessions.controller'
     PrismaModule,
     UsersModule,
     GatewayModule,
+    ComensalesModule,
     JwtModule.registerAsync({
       useFactory: () => ({
         secret: process.env.JWT_SECRET!,

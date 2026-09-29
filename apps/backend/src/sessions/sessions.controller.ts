@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Headers, HttpCode, HttpStatus, Param, Patch, Post, Query, UseGuards } from '@nestjs/common'
+import { Body, Controller, Get, Headers, HttpCode, HttpStatus, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common'
+import type { Request } from 'express'
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger'
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'
 import { RolesGuard } from '../common/guards/roles.guard'
@@ -7,9 +8,11 @@ import { TipoGuard } from '../auth/guards/tipo.guard'
 import { RequiresTipo } from '../auth/decorators/requires-tipo.decorator'
 import { CurrentUser } from '../common/decorators/current-user.decorator'
 import { JwtPayload } from '../auth/auth.service'
+import { SessionAuthGuard, SessionJwtPayload } from '../auth/guards/session-auth.guard'
 import { SessionsService, OpenSessionResult, OpenStaffSessionResult } from './sessions.service'
 import { OpenSessionDto } from './dto/open-session.dto'
 import { OpenStaffSessionDto } from './dto/open-staff-session.dto'
+import { RegistrarCobroDto } from './dto/registrar-cobro.dto'
 
 @ApiTags('sessions')
 @Controller('sessions')
@@ -74,14 +77,15 @@ export class SessionsController {
 
   @Post('close')
   @HttpCode(HttpStatus.OK)
+  @UseGuards(SessionAuthGuard)
   @ApiOperation({ summary: 'Cerrar la sesión activa del cliente autenticado' })
   @ApiResponse({ status: 200, description: 'Sesión cerrada' })
   @ApiResponse({ status: 401, description: 'Session JWT requerido o inválido' })
   @ApiResponse({ status: 400, description: 'La sesión ya está cerrada' })
   close(
-    @Headers('authorization') authHeader: string | undefined,
+    @Req() req: Request & { sessionUser: SessionJwtPayload },
   ): Promise<{ ok: boolean }> {
-    return this.sessions.close(authHeader)
+    return this.sessions.close(req.sessionUser)
   }
 
   @Get('activas')
@@ -140,11 +144,12 @@ export class SessionsController {
   @ApiResponse({ status: 400, description: 'La sesión ya fue cerrada o no tiene pedidos' })
   @ApiResponse({ status: 403, description: 'Sin acceso a este restaurante' })
   @ApiResponse({ status: 404, description: 'Sesión no encontrada' })
+  @ApiResponse({ status: 409, description: 'Hay pagos pendientes de comensales sin confirmar cancelación' })
   registrarCobro(
     @Param('id') id: string,
-    @Body() body: { metodoPago: 'efectivo' | 'debito' | 'credito' | 'transferencia' | 'mercadopago'; mozoId?: string; cobradoPorNombre?: string; referenciaExterna?: string },
+    @Body() dto: RegistrarCobroDto,
     @CurrentUser() user: JwtPayload,
   ) {
-    return this.sessions.registrarCobro(id, body, user)
+    return this.sessions.registrarCobro(id, dto, user)
   }
 }

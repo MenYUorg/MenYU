@@ -13,6 +13,7 @@ export function CantidadComensalesPage() {
   const destino: 'pagar' | 'mensaje' = searchParams.get('destino') === 'mensaje' ? 'mensaje' : 'pagar'
 
   const sesionId = useSessionStore((s) => s.sesionId)
+  const jwt = useSessionStore((s) => s.jwt)
 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -29,12 +30,12 @@ export function CantidadComensalesPage() {
   const [errorConfirmar, setErrorConfirmar] = useState<string | null>(null)
 
   const cargar = useCallback(() => {
-    if (!sesionId) { setLoading(false); setError('No hay sesión activa'); return }
+    if (!sesionId || !jwt) { setLoading(false); setError('No hay sesión activa'); return }
     setLoading(true)
     setError(null)
     Promise.all([
-      api.sesiones.saldo(sesionId),
-      api.comensales.listar(sesionId),
+      api.sesiones.saldo(jwt, sesionId),
+      api.comensales.listar(jwt, sesionId),
     ])
       .then(([saldo, comensales]) => {
         setTotalSesion(saldo.totalSesion)
@@ -49,7 +50,7 @@ export function CantidadComensalesPage() {
         setError(e instanceof Error ? e.message : 'Error al cargar los datos de la sesión')
         setLoading(false)
       })
-  }, [sesionId, destino])
+  }, [sesionId, jwt, destino])
 
   useEffect(() => { cargar() }, [cargar])
 
@@ -89,7 +90,7 @@ export function CantidadComensalesPage() {
   }
 
   async function handleContinuar() {
-    if (!sesionId || disabled) return
+    if (!sesionId || !jwt || disabled) return
     setErrorConfirmar(null)
 
     if (destino === 'mensaje') {
@@ -99,7 +100,7 @@ export function CantidadComensalesPage() {
 
     setConfirmando(true)
     try {
-      await api.comensales.setCantidadComensales(sesionId, cantidad)
+      await api.comensales.setCantidadComensales(jwt, sesionId, cantidad)
       navigate('/pagar?modo=partes_iguales')
     } catch (e) {
       if (e instanceof ApiError && e.status === 409) {
