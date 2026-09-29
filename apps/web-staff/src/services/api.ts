@@ -11,6 +11,13 @@ export function getToken(): string | null {
 
 // ── Base fetch ────────────────────────────────────────────────────────────────
 
+export class ApiError extends Error {
+  constructor(message: string, public readonly status: number) {
+    super(message)
+    this.name = 'ApiError'
+  }
+}
+
 async function authFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getToken()
   const headers: Record<string, string> = {
@@ -25,8 +32,9 @@ async function authFetch<T>(path: string, options: RequestInit = {}): Promise<T>
 
   if (!res.ok) {
     const err = (await res.json().catch(() => ({}))) as Record<string, unknown>
-    throw new Error(
+    throw new ApiError(
       typeof err['message'] === 'string' ? err['message'] : `Error ${res.status}`,
+      res.status,
     )
   }
 
@@ -35,6 +43,39 @@ async function authFetch<T>(path: string, options: RequestInit = {}): Promise<T>
 }
 
 // ── Response types ────────────────────────────────────────────────────────────
+
+// Espejo de EstadoComensalDto / EstadoComensalesResult (payments.service.ts del backend).
+// El backend declara estadoPago como string libre; acá se acota para que un typo al
+// comparar en el modal falle en typecheck.
+export type EstadoPagoComensal = 'aprobado' | 'pendiente' | 'cancelado' | 'rechazado'
+
+export interface EstadoComensalDto {
+  comensalId: string | null
+  nombre: string
+  monto: number | null
+  estadoPago: EstadoPagoComensal | null
+  pagoId: string | null
+}
+
+export interface EstadoComensalesResult {
+  modoDivision: 'partes_iguales' | 'por_consumo' | null
+  divisionPagosHabilitada: boolean
+  cantidadComensales: number | null
+  totalSesion: number
+  totalCobrado: number
+  saldoPendiente: number
+  comensales: EstadoComensalDto[]
+  hayPagosPendientes: boolean
+}
+
+// Espejo de CobrarComensalDto. indiceSlot es obligatorio cuando comensalId es null.
+export interface CobrarComensalBody {
+  comensalId: string | null
+  indiceSlot?: number
+  metodoPago: string
+  mozoId?: string
+  cobradoPorNombre?: string
+}
 
 export interface IngredienteInfo {
   nombre: string
@@ -326,7 +367,7 @@ export const api = {
       return authFetch<SesionPagadaItem[]>(`/sessions/pagadas?${params.toString()}`)
     },
 
-    registrarCobro: (sesionId: string, body: { metodoPago: string; mozoId?: string; cobradoPorNombre?: string; referenciaExterna?: string }) =>
+    registrarCobro: (sesionId: string, body: { metodoPago: string; mozoId?: string; cobradoPorNombre?: string; referenciaExterna?: string; confirmarCancelacionPagosPendientes?: boolean }) =>
       authFetch<{ ok: boolean }>(`/sessions/${sesionId}/cobro`, {
         method: 'PATCH',
         body: JSON.stringify(body),
@@ -343,5 +384,16 @@ export const api = {
   mozos: {
     list: (restauranteId: string) =>
       authFetch<MozoSimple[]>(`/mozos?restauranteId=${encodeURIComponent(restauranteId)}`),
+  },
+
+  pagos: {
+    getEstadoComensales: (sesionId: string) =>
+      authFetch<EstadoComensalesResult>(`/payments/sesiones/${sesionId}/comensales`),
+
+    cobrarComensal: (sesionId: string, body: CobrarComensalBody) =>
+      authFetch<{ ok: boolean }>(`/payments/sesiones/${sesionId}/comensales/cobrar`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
   },
 }

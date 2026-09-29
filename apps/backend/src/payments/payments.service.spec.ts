@@ -517,6 +517,49 @@ describe('PaymentsService', () => {
       expect(tx.pago.update).not.toHaveBeenCalled()
     })
 
+    it('cobradoPorNombre llega al pago nuevo (create)', async () => {
+      mockPrisma.sesionMesa.findUnique.mockResolvedValue(SESION_COBRO_BASE)
+      tx.comensal.findUnique.mockResolvedValue({ id: 'c1', sesionId: 'sesion-1' })
+      mockDivision.calcularPartesIguales.mockResolvedValue({
+        divisionPagosHabilitada: true,
+        divisor: 4,
+        parteBase: 250,
+        partes: [{ comensalId: 'c1', nombre: 'Ana', montoCentavos: 25000, monto: 250 }],
+      })
+      tx.pago.findUnique.mockResolvedValue(null)
+      tx.pago.create.mockResolvedValue({ id: 'pago-nuevo' })
+
+      await service.cobrarComensal('sesion-1', { ...DTO_REAL, cobradoPorNombre: 'Gerente Pérez' }, USER_MOZO)
+
+      expect(tx.pago.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ cobradoPorNombre: 'Gerente Pérez' }),
+      })
+    })
+
+    it('cobradoPorNombre llega al pago reactivado (update) y reemplaza el anterior', async () => {
+      mockPrisma.sesionMesa.findUnique.mockResolvedValue(SESION_COBRO_BASE)
+      tx.comensal.findUnique.mockResolvedValue({ id: 'c1', sesionId: 'sesion-1' })
+      mockDivision.calcularPartesIguales.mockResolvedValue({
+        divisionPagosHabilitada: true,
+        divisor: 4,
+        parteBase: 250,
+        partes: [{ comensalId: 'c1', nombre: 'Ana', montoCentavos: 25000, monto: 250 }],
+      })
+      tx.pago.findUnique.mockResolvedValue({
+        id: 'pago-1',
+        estado: ESTADO_PAGO_CANCELADO,
+        monto: 250,
+        cobradoPorNombre: 'Otro',
+      })
+
+      await service.cobrarComensal('sesion-1', { ...DTO_REAL, cobradoPorNombre: 'Mercado Pago' }, USER_MOZO)
+
+      expect(tx.pago.update).toHaveBeenCalledWith({
+        where: { id: 'pago-1' },
+        data: expect.objectContaining({ cobradoPorNombre: 'Mercado Pago' }),
+      })
+    })
+
     it('modoDivision por_consumo → usa calcularPorConsumo en vez de calcularPartesIguales', async () => {
       mockPrisma.sesionMesa.findUnique.mockResolvedValue({ ...SESION_COBRO_BASE, modoDivision: 'por_consumo' })
       tx.comensal.findUnique.mockResolvedValue({ id: 'c1', sesionId: 'sesion-1' })

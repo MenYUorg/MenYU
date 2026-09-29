@@ -1,21 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@menyu/auth'
-import { Bell, CheckCircle, CreditCard, RefreshCw, X } from 'lucide-react'
+import { Bell, CheckCircle, CreditCard, RefreshCw } from 'lucide-react'
 import { api } from '../../services/api'
 import type { SesionActivaItem, SesionPagadaItem } from '../../services/api'
 import { useMozoStore } from '../../store/mozoStore'
 import * as socketService from '../../services/socket'
 import { PageHeader } from '../../components/PageHeader'
+import { CobroModal } from '../../components/CobroModal'
 
 function getInitials(name?: string): string {
   if (!name) return '?'
   return name.split(' ').slice(0, 2).map((w) => w[0]).join('').toUpperCase()
 }
-
-// ── Types ─────────────────────────────────────────────────────────────────────
-type MetodoPago = 'efectivo' | 'debito' | 'credito' | 'transferencia' | 'mercadopago'
-type CobradoPorTipo = 'mozo' | 'gerente'
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 const C = {
@@ -45,242 +42,6 @@ function fmtMoney(n: number): string {
 function fmtHora(iso: string | null): string {
   if (!iso) return '—'
   return new Date(iso).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
-}
-
-// ── CobroModal ────────────────────────────────────────────────────────────────
-const METODOS: { key: MetodoPago; label: string }[] = [
-  { key: 'efectivo',      label: 'Efectivo' },
-  { key: 'debito',        label: 'Débito' },
-  { key: 'credito',       label: 'Crédito' },
-  { key: 'transferencia', label: 'Transferencia' },
-  { key: 'mercadopago',   label: 'Mercado Pago' },
-]
-
-function CobroModal({
-  sesion,
-  gerenteNombre,
-  onClose,
-  onDone,
-}: {
-  sesion: SesionActivaItem
-  gerenteNombre: string
-  onClose: () => void
-  onDone: (mesaNumero: string) => void
-}) {
-  const [metodo,            setMetodo]            = useState<MetodoPago | null>(null)
-  const [cobradoPorTipo,    setCobradoPorTipo]    = useState<CobradoPorTipo | null>(null)
-  const [mozoId,            setMozoId]            = useState('')
-  const [referenciaExterna, setReferenciaExterna] = useState('')
-  const [loading,           setLoading]           = useState(false)
-  const [error,             setError]             = useState<string | null>(null)
-
-  const canConfirm = !!metodo && (
-    metodo === 'mercadopago' ||
-    cobradoPorTipo === 'gerente' ||
-    (cobradoPorTipo === 'mozo' && !!mozoId)
-  )
-
-  async function handleConfirmar() {
-    if (!canConfirm) return
-    setLoading(true)
-    setError(null)
-    try {
-      const body: { metodoPago: string; mozoId?: string; cobradoPorNombre?: string; referenciaExterna?: string } = { metodoPago: metodo! }
-      if (metodo === 'mercadopago') {
-        body.cobradoPorNombre = 'Mercado Pago'
-        if (referenciaExterna.trim()) body.referenciaExterna = referenciaExterna.trim()
-      } else if (cobradoPorTipo === 'mozo' && mozoId) {
-        body.mozoId = mozoId
-      } else if (cobradoPorTipo === 'gerente') {
-        body.cobradoPorNombre = gerenteNombre
-      }
-      await api.sesiones.registrarCobro(sesion.id, body)
-      onDone(sesion.mesaNumero)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Error al registrar pago')
-      setLoading(false)
-    }
-  }
-
-  return (
-    <div
-      style={{
-        position: 'fixed', inset: 0, zIndex: 1000,
-        background: 'rgba(0,0,0,0.45)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: 20,
-      }}
-      onClick={(e) => { if (e.target === e.currentTarget && !loading) onClose() }}
-    >
-      <div style={{
-        background: C.white, borderRadius: 14, width: '100%', maxWidth: 440,
-        padding: '28px 28px 24px', boxShadow: '0 24px 64px rgba(0,0,0,0.18)',
-      }}>
-        {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 22 }}>
-          <div>
-            <h3 style={{
-              fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 17,
-              color: C.navy, margin: 0,
-            }}>
-              Registrar pago · Mesa {sesion.mesaNumero}
-            </h3>
-            <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 13, color: C.textMut, margin: '5px 0 0' }}>
-              Total a cobrar:{' '}
-              <span style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 800, color: C.navy }}>
-                {fmtMoney(sesion.totalAcumulado)}
-              </span>
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            disabled={loading}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.textMut, padding: 4, display: 'flex' }}
-          >
-            <X size={18} />
-          </button>
-        </div>
-
-        {/* Método de pago */}
-        <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 10 }}>
-          Método de pago
-        </p>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 20 }}>
-          {METODOS.map(({ key, label }) => {
-            const sel = metodo === key
-            return (
-              <button
-                key={key}
-                onClick={() => { setMetodo(key); setCobradoPorTipo(null); setMozoId('') }}
-                style={{
-                  padding: '10px 14px', borderRadius: 8,
-                  border: `1.5px solid ${sel ? C.orange : C.border}`,
-                  background: sel ? C.orangeBg : C.white,
-                  color: sel ? C.orange : '#374151',
-                  fontFamily: 'Inter,sans-serif', fontSize: 13, fontWeight: sel ? 600 : 400,
-                  cursor: 'pointer', textAlign: 'left', transition: 'all 0.13s',
-                }}
-              >
-                {label}
-              </button>
-            )
-          })}
-        </div>
-
-        {/* Cobrado por — solo si NO es MP */}
-        {metodo && metodo !== 'mercadopago' && (
-          <>
-            <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 8 }}>
-              Cobrado por
-            </p>
-            <div style={{ display: 'flex', gap: 8, marginBottom: cobradoPorTipo ? 12 : 22 }}>
-              {(['mozo', 'gerente'] as const).map((tipo) => {
-                const sel = cobradoPorTipo === tipo
-                return (
-                  <button
-                    key={tipo}
-                    onClick={() => { setCobradoPorTipo(tipo); setMozoId('') }}
-                    style={{
-                      flex: 1, padding: '9px 0', borderRadius: 8,
-                      border: `1.5px solid ${sel ? C.orange : C.border}`,
-                      background: sel ? C.orangeBg : C.white,
-                      color: sel ? C.orange : '#374151',
-                      fontFamily: 'Inter,sans-serif', fontSize: 13, fontWeight: sel ? 600 : 400,
-                      cursor: 'pointer', transition: 'all 0.13s',
-                    }}
-                  >
-                    {tipo === 'mozo' ? 'Mozo' : 'Gerente (yo)'}
-                  </button>
-                )
-              })}
-            </div>
-            {cobradoPorTipo === 'mozo' && (
-              <select
-                value={mozoId}
-                onChange={(e) => setMozoId(e.target.value)}
-                style={{
-                  width: '100%', padding: '10px 12px', borderRadius: 8,
-                  border: `1px solid ${C.border}`, fontFamily: 'Inter,sans-serif', fontSize: 13,
-                  color: mozoId ? '#374151' : C.textMut,
-                  background: C.white, outline: 'none', boxSizing: 'border-box',
-                  marginBottom: 22,
-                }}
-              >
-                <option value="">Seleccionar mozo…</option>
-              </select>
-            )}
-            {cobradoPorTipo === 'gerente' && (
-              <div style={{
-                padding: '10px 12px', borderRadius: 8, marginBottom: 22,
-                background: C.chipBg, border: `1px solid ${C.border}`,
-                fontFamily: 'Inter,sans-serif', fontSize: 13, color: C.navy,
-              }}>
-                {gerenteNombre}
-              </div>
-            )}
-          </>
-        )}
-
-        {/* ID de transacción — solo MP */}
-        {metodo === 'mercadopago' && (
-          <>
-            <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 8 }}>
-              ID de transacción (opcional)
-            </p>
-            <input
-              type="text"
-              value={referenciaExterna}
-              onChange={(e) => setReferenciaExterna(e.target.value)}
-              placeholder="Ej. 12345678901"
-              style={{
-                width: '100%', padding: '10px 12px', borderRadius: 8,
-                border: `1px solid ${C.border}`, fontFamily: 'Inter,sans-serif', fontSize: 13,
-                color: '#374151', background: C.white, outline: 'none',
-                boxSizing: 'border-box', marginBottom: 22,
-              }}
-            />
-          </>
-        )}
-
-        {error && (
-          <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 12, color: C.red, marginBottom: 14 }}>
-            {error}
-          </p>
-        )}
-
-        {/* Acciones */}
-        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-          <button
-            onClick={onClose}
-            disabled={loading}
-            style={{
-              padding: '10px 18px', borderRadius: 8,
-              border: `1px solid ${C.border}`, background: C.white,
-              fontFamily: 'Inter,sans-serif', fontSize: 13, color: '#374151',
-              cursor: loading ? 'default' : 'pointer',
-            }}
-          >
-            Cancelar
-          </button>
-          <button
-            onClick={() => void handleConfirmar()}
-            disabled={!canConfirm || loading}
-            style={{
-              padding: '10px 22px', borderRadius: 8, border: 'none',
-              background: !canConfirm || loading ? '#d1d5db' : C.orange,
-              fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 13,
-              color: !canConfirm || loading ? '#9ca3af' : C.white,
-              cursor: !canConfirm || loading ? 'not-allowed' : 'pointer',
-              display: 'flex', alignItems: 'center', gap: 6,
-            }}
-          >
-            {loading && <RefreshCw size={13} style={{ animation: 'spin 0.8s linear infinite' }} />}
-            {loading ? 'Registrando…' : 'Confirmar pago'}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
 }
 
 // ── Pill ──────────────────────────────────────────────────────────────────────
@@ -605,7 +366,7 @@ export function PagosGerente() {
       {modalSesion && (
         <CobroModal
           sesion={modalSesion}
-          gerenteNombre={user?.nombre ?? user?.email ?? 'Gerente'}
+          cobradoPor={{ modo: 'elegir', gerenteNombre: user?.nombre ?? user?.email ?? 'Gerente' }}
           onClose={() => setModalSesion(null)}
           onDone={handleCobroDone}
         />

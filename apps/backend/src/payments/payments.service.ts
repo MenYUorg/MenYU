@@ -325,6 +325,7 @@ export class PaymentsService {
             monto: parte.monto,
             metodo: dto.metodoPago,
             mozoId: dto.mozoId || null,
+            cobradoPorNombre: dto.cobradoPorNombre ?? null,
             referenciaExterna: null,
             fechaCobro,
           },
@@ -338,6 +339,7 @@ export class PaymentsService {
             metodo: dto.metodoPago,
             estado: ESTADO_PAGO_APROBADO,
             mozoId: dto.mozoId || null,
+            cobradoPorNombre: dto.cobradoPorNombre ?? null,
             fechaCobro,
           },
         })
