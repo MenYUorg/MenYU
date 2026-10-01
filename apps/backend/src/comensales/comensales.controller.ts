@@ -10,8 +10,10 @@ import {
   Patch,
   Post,
   Query,
+  UseGuards,
 } from '@nestjs/common'
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger'
+import { SessionAuthGuard } from '../auth/guards/session-auth.guard'
 import { ComensalesService } from './comensales.service'
 import { DivisionService } from './division.service'
 import { CrearComensalDto } from './dto/crear-comensal.dto'
@@ -21,6 +23,7 @@ import { SetCantidadComensalesDto } from './dto/set-cantidad-comensales.dto'
 
 @ApiTags('comensales')
 @Controller('sesiones/:sesionId/comensales')
+@UseGuards(SessionAuthGuard)
 export class ComensalesController {
   constructor(
     private readonly comensalesService: ComensalesService,

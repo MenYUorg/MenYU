@@ -13,6 +13,11 @@ export interface ParteComensal {
 export interface PartesIgualesResult {
   divisionPagosHabilitada: boolean
   divisor: number
+  // Parte que le toca a cualquier comensal que no sea el índice 0 (el resto de
+  // centavos de la división siempre cae en comensales[0] — ver comentario más
+  // abajo). Única fuente de verdad para calcular cuánto pagaría un comensal
+  // todavía no registrado, sin reimplementar esta aritmética en otro service.
+  parteBase: number
   partes: ParteComensal[]
 }
 
@@ -43,15 +48,18 @@ export class DivisionService {
     private readonly comensalesService: ComensalesService,
   ) {}
 
-  async calcularPartesIguales(sesionId: string): Promise<PartesIgualesResult> {
-    const sesion = await this.buscarSesionConRestaurante(sesionId)
+  async calcularPartesIguales(
+    sesionId: string,
+    client: Prisma.TransactionClient = this.prisma,
+  ): Promise<PartesIgualesResult> {
+    const sesion = await this.buscarSesionConRestaurante(client, sesionId)
 
-    const comensales = await this.comensalesService.listarComensales(sesionId)
+    const comensales = await this.comensalesService.listarComensales(sesionId, client)
     if (comensales.length === 0) {
       throw new BadRequestException('No hay comensales registrados en esta sesión')
     }
 
-    const total = await this.calcularTotalSesion(this.prisma, sesionId)
+    const total = await this.calcularTotalSesion(client, sesionId)
 
     const totalCentavos = Math.round(total * 100)
     const divisor = this.calcularDivisor(sesion.cantidadComensales, comensales.length)
@@ -75,19 +83,23 @@ export class DivisionService {
     return {
       divisionPagosHabilitada: sesion.mesa.restaurante.divisionPagosHabilitada,
       divisor,
+      parteBase: parteBaseCentavos / 100,
       partes,
     }
   }
 
-  async calcularPorConsumo(sesionId: string): Promise<PorConsumoResult> {
-    const sesion = await this.buscarSesionConRestaurante(sesionId)
+  async calcularPorConsumo(
+    sesionId: string,
+    client: Prisma.TransactionClient = this.prisma,
+  ): Promise<PorConsumoResult> {
+    const sesion = await this.buscarSesionConRestaurante(client, sesionId)
 
-    const comensales = await this.comensalesService.listarComensales(sesionId)
+    const comensales = await this.comensalesService.listarComensales(sesionId, client)
     if (comensales.length === 0) {
       throw new BadRequestException('No hay comensales registrados en esta sesión')
     }
 
-    const pedidoItems = await this.prisma.pedidoItem.findMany({
+    const pedidoItems = await client.pedidoItem.findMany({
       where: { pedido: { sesionId, estado: { not: 'cancelado' } } },
       include: {
         item: { select: { nombre: true } },
@@ -214,8 +226,8 @@ export class DivisionService {
     return Math.max(cantidadComensales ?? 0, comensalesRegistrados)
   }
 
-  private async buscarSesionConRestaurante(sesionId: string) {
-    const sesion = await this.prisma.sesionMesa.findUnique({
+  private async buscarSesionConRestaurante(client: Prisma.TransactionClient, sesionId: string) {
+    const sesion = await client.sesionMesa.findUnique({
       where: { id: sesionId },
       include: { mesa: { include: { restaurante: { select: { divisionPagosHabilitada: true } } } } },
     })

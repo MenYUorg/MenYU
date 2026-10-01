@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { api, ApiError } from '../services/api'
 import { useComensalStore } from './comensalStore'
+import { useSessionStore } from './sessionStore'
 
 type Modo = 'partes_iguales' | 'por_consumo'
 
@@ -49,10 +50,15 @@ export const usePagoStore = create<PagoStore>()((set, get) => ({
     set({ estado: 'cargando_division', error: null })
 
     const comensalId = useComensalStore.getState().comensalId
+    const jwt = useSessionStore.getState().jwt
+    if (!jwt) {
+      set({ estado: 'error', error: 'No se encontró la sesión de mesa' })
+      return
+    }
 
     let modoDivision: Modo | null
     try {
-      const res = await api.comensales.obtenerModoDivision(sesionId)
+      const res = await api.comensales.obtenerModoDivision(jwt, sesionId)
       modoDivision = res.modoDivision
     } catch (e) {
       set({
@@ -70,8 +76,8 @@ export const usePagoStore = create<PagoStore>()((set, get) => ({
       | 'no_disponible'
     try {
       const [partesRes, consumoRes] = await Promise.all([
-        api.comensales.calcularPartesIguales(sesionId),
-        api.comensales.calcularPorConsumo(sesionId).catch((e: unknown) => {
+        api.comensales.calcularPartesIguales(jwt, sesionId),
+        api.comensales.calcularPorConsumo(jwt, sesionId).catch((e: unknown) => {
           if (e instanceof ApiError && e.status === 400) {
             return 'no_disponible' as const
           }
@@ -122,6 +128,11 @@ export const usePagoStore = create<PagoStore>()((set, get) => ({
       set({ estado: 'error', error: 'No se encontró el comensal actual' })
       return
     }
+    const jwt = useSessionStore.getState().jwt
+    if (!jwt) {
+      set({ estado: 'error', error: 'No se encontró la sesión de mesa' })
+      return
+    }
 
     const { modoDivision, modoElegido } = get()
     const modo = modoDivision ?? modoElegido
@@ -132,7 +143,7 @@ export const usePagoStore = create<PagoStore>()((set, get) => ({
 
     set({ estado: 'loading', error: null })
     try {
-      await api.payments.solicitarEfectivo(sesionId, comensalId, modo)
+      await api.payments.solicitarEfectivo(jwt, sesionId, comensalId, modo)
       set({ estado: 'efectivo_solicitado' })
     } catch (e) {
       set({
@@ -149,6 +160,11 @@ export const usePagoStore = create<PagoStore>()((set, get) => ({
       set({ estado: 'error', error: 'No se encontró el comensal actual' })
       return
     }
+    const jwt = useSessionStore.getState().jwt
+    if (!jwt) {
+      set({ estado: 'error', error: 'No se encontró la sesión de mesa' })
+      return
+    }
 
     const { modoDivision, modoElegido } = get()
     const modo = modoDivision ?? modoElegido
@@ -159,7 +175,7 @@ export const usePagoStore = create<PagoStore>()((set, get) => ({
 
     set({ estado: 'mp_redirigiendo', error: null })
     try {
-      const { initPoint } = await api.payments.pagarConMercadoPago(sesionId, comensalId, modo)
+      const { initPoint } = await api.payments.pagarConMercadoPago(jwt, sesionId, comensalId, modo)
       window.location.href = initPoint
     } catch (e) {
       set({

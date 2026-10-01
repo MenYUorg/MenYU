@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { api } from '../services/api'
+import { useSessionStore } from './sessionStore'
 
 interface ComensalStore {
   comensalId: string | null
@@ -27,8 +28,13 @@ export const useComensalStore = create<ComensalStore>()((set) => ({
 
   crearComensal: async (sesionId, nombre, esOwner) => {
     set({ error: null })
+    const jwt = useSessionStore.getState().jwt
+    if (!jwt) {
+      set({ error: 'No hay sesión activa' })
+      return
+    }
     try {
-      const comensal = await api.comensales.crear(sesionId, nombre, esOwner)
+      const comensal = await api.comensales.crear(jwt, sesionId, nombre, esOwner)
       sessionStorage.setItem(COMENSAL_ID_KEY, comensal.id)
       sessionStorage.setItem(COMENSAL_NOMBRE_KEY, comensal.nombre)
       set({ comensalId: comensal.id, nombre: comensal.nombre })

@@ -13,6 +13,7 @@ build/
 .expo/
 .next/
 coverage/
+*.tsbuildinfo
 
 # SonarQube (carpeta de trabajo local del scanner)
 .scannerwork/

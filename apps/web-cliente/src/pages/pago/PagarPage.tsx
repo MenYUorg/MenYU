@@ -58,7 +58,9 @@ export function PagarPage() {
       // Fallo silencioso: si esto no llega, los botones de "toda la cuenta" quedan
       // habilitados (no bloqueamos por una falla de red puntual) y el error real,
       // si lo hay, sale recién al intentar pagar.
-      void api.sesiones.saldo(sesionId).then((s) => setSaldoPendiente(s.saldoPendiente)).catch(() => {})
+      if (jwt) {
+        void api.sesiones.saldo(jwt, sesionId).then((s) => setSaldoPendiente(s.saldoPendiente)).catch(() => {})
+      }
     }
   }, [sesionId]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -106,11 +108,11 @@ export function PagarPage() {
   }
 
   async function handlePagarTodoEfectivo() {
-    if (!sesionId || pagandoTotal !== null || bloqueadoPorSaldo) return
+    if (!sesionId || !jwt || pagandoTotal !== null || bloqueadoPorSaldo) return
     setPagandoTotal('efectivo')
     setErrorPagoTotal(null)
     try {
-      await api.payments.solicitarEfectivo(sesionId, null, null)
+      await api.payments.solicitarEfectivo(jwt, sesionId, null, null)
       setPagoTotalConfirmado(true)
     } catch (e) {
       // El 409 de conflicto con un pago individual pendiente llega acá con su mensaje.
@@ -121,11 +123,11 @@ export function PagarPage() {
   }
 
   async function handlePagarTodoMercadoPago() {
-    if (!sesionId || pagandoTotal !== null || bloqueadoPorSaldo) return
+    if (!sesionId || !jwt || pagandoTotal !== null || bloqueadoPorSaldo) return
     setPagandoTotal('mercadopago')
     setErrorPagoTotal(null)
     try {
-      const { initPoint } = await api.payments.pagarConMercadoPago(sesionId, null, null)
+      const { initPoint } = await api.payments.pagarConMercadoPago(jwt, sesionId, null, null)
       window.location.href = initPoint
     } catch (e) {
       setErrorPagoTotal(e instanceof Error ? e.message : 'Error al iniciar el pago con Mercado Pago')

@@ -33,6 +33,7 @@ export function MensajePage() {
         : 'invalido'
 
   const sesionId = useSessionStore((s) => s.sesionId)
+  const jwt = useSessionStore((s) => s.jwt)
   const numeroMesa = useSessionStore((s) => s.numeroMesa)
 
   const [loading, setLoading] = useState(true)
@@ -51,12 +52,13 @@ export function MensajePage() {
   const cargar = useCallback(() => {
     if (!sesionId) { setLoading(false); setError('No hay sesión activa'); return }
     if (rama === 'invalido') { setLoading(false); return }
+    if (!jwt) { setLoading(false); setError('No hay sesión activa'); return }
 
     setLoading(true)
     setError(null)
 
-    const llamadaSaldo = api.sesiones.saldo(sesionId)
-    const llamadaConsumo = rama === 'por_consumo' ? api.comensales.calcularPorConsumo(sesionId) : Promise.resolve(null)
+    const llamadaSaldo = api.sesiones.saldo(jwt, sesionId)
+    const llamadaConsumo = rama === 'por_consumo' ? api.comensales.calcularPorConsumo(jwt, sesionId) : Promise.resolve(null)
 
     Promise.all([llamadaSaldo, llamadaConsumo])
       .then(([saldo, consumo]) => {
@@ -69,7 +71,7 @@ export function MensajePage() {
         setError(e instanceof Error ? e.message : 'Error al cargar los datos de la sesión')
         setLoading(false)
       })
-  }, [sesionId, rama])
+  }, [sesionId, jwt, rama])
 
   useEffect(() => { cargar() }, [cargar])
 
@@ -120,11 +122,11 @@ export function MensajePage() {
   const pagoDisabled = pagando !== null || bloqueadoPorSaldo || pagoConfirmado
 
   async function pagarEfectivo() {
-    if (!sesionId || pagoDisabled) return
+    if (!sesionId || !jwt || pagoDisabled) return
     setPagando('efectivo')
     setErrorPago(null)
     try {
-      await api.payments.solicitarEfectivo(sesionId, null, null)
+      await api.payments.solicitarEfectivo(jwt, sesionId, null, null)
       setPagoConfirmado(true)
     } catch (e) {
       // El 409 de conflicto con otro pago pendiente (individual o de mesa completa) llega acá con su mensaje.
@@ -135,11 +137,11 @@ export function MensajePage() {
   }
 
   async function pagarMercadoPago() {
-    if (!sesionId || pagoDisabled) return
+    if (!sesionId || !jwt || pagoDisabled) return
     setPagando('mercadopago')
     setErrorPago(null)
     try {
-      const { initPoint } = await api.payments.pagarConMercadoPago(sesionId, null, null)
+      const { initPoint } = await api.payments.pagarConMercadoPago(jwt, sesionId, null, null)
       window.location.href = initPoint
     } catch (e) {
       // Mismo 409 de conflicto que en pagarEfectivo, más los propios de Mercado Pago (sin conectar, etc).
