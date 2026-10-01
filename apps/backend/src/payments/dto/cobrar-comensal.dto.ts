@@ -21,4 +21,11 @@ export class CobrarComensalDto {
   @IsOptional()
   @IsString()
   mozoId?: string
+
+  // Quién responde por el cobro cuando no es un mozo con cuenta (gerente, o
+  // "Mercado Pago"). Mismo criterio que RegistrarCobroDto. No hay
+  // referenciaExterna: en el cobro individual por MP ese dato viene del webhook.
+  @IsOptional()
+  @IsString()
+  cobradoPorNombre?: string
 }
