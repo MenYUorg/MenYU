@@ -337,7 +337,7 @@ export function PagarPage() {
         <button type="button" onClick={() => navigate('/dividir/cantidad')} style={modalBtnStyle}>
           Partes iguales
         </button>
-        <button type="button" onClick={() => navigate('/dividir/mensaje?modo=por_consumo')} style={modalBtnStyle}>
+        <button type="button" onClick={() => navigate('/etiquetar?destino=mensaje')} style={modalBtnStyle}>
           Por consumo
         </button>
 

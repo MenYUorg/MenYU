@@ -250,6 +250,8 @@ export function EtiquetarPedidosPage() {
     }
   }
 
+  const sinEtiquetar = items.filter((i) => i.etiquetas.length === 0).length
+
   function handleContinuar() {
     if (destino === 'mensaje') {
       navigate('/dividir/mensaje?modo=por_consumo')
@@ -380,7 +382,7 @@ export function EtiquetarPedidosPage() {
         <div style={{
           flex:      1,
           overflowY: 'auto',
-          padding:   destino ? '12px 16px 110px' : '12px 16px 24px',
+          padding:   destino ? '12px 16px 130px' : '12px 16px 24px',
           display:   'flex',
           flexDirection: 'column',
           gap:       10,
@@ -392,7 +394,9 @@ export function EtiquetarPedidosPage() {
             margin:     '0 0 4px',
             lineHeight: 1.4,
           }}>
-            Etiquetá qué pediste vos para calcular tu parte de la cuenta.
+            {destino === 'mensaje'
+              ? 'Etiquetá quién pidió cada plato para armar el mensaje. Lo que quede sin etiquetar aparece aparte.'
+              : 'Etiquetá qué pediste vos para calcular tu parte de la cuenta.'}
           </p>
 
           {/* ── barra de comensales ── */}
@@ -490,6 +494,14 @@ export function EtiquetarPedidosPage() {
             borderTop: `1px solid ${C.border}`, padding: '14px 16px 24px',
             boxShadow: '0 -4px 20px rgba(0,0,0,0.08)',
           }}>
+            {sinEtiquetar === items.length && (
+              <p style={{
+                fontFamily: 'Inter, sans-serif', fontSize: 12, color: C.gray,
+                margin: '0 0 8px', textAlign: 'center',
+              }}>
+                Todavía no etiquetaste ningún plato.
+              </p>
+            )}
             <button
               onClick={handleContinuar}
               style={{
@@ -499,7 +511,7 @@ export function EtiquetarPedidosPage() {
                 cursor: 'pointer',
               }}
             >
-              Continuar
+              {sinEtiquetar === 0 ? 'Armar mensaje' : `Armar mensaje · ${sinEtiquetar} sin etiquetar`}
             </button>
           </div>
         )}
