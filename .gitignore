@@ -38,3 +38,7 @@ apps/backend/prisma/migrations/*.sql.bak
 # Claude Code (generado por el entorno del SDK)
 .claude/skills/
 .patches/
+
+.claude/settings.local.json
+.agents/
+AGENTS.md
