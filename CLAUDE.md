@@ -89,9 +89,22 @@ packages/types/src/
 ### Roles de administración (enum `RolAdmin` en DB)
 | Rol | Descripción |
 |---|---|
-| `ROOT` | Dueños del sistema MenYu — bypass total, acceso a todo |
+| `ROOT` | Dueños del sistema MenYu — administración general: crean y eliminan marcas, restaurantes y usuarios OWNER y GERENTE. Sin acceso a datos privados ni decisiones sobre marcas/restaurantes (ver regla abajo) |
 | `OWNER` | Dueño de una marca — acceso a toda su marca y sus restaurantes |
 | `GERENTE` | Gerente de restaurantes específicos, asignados via tabla `AdminRestaurante` |
+
+### Regla: ROOT no accede a datos privados
+- ROOT solo hace administración general del sistema: crear y eliminar marcas, restaurantes y usuarios OWNER y GERENTE, y tareas similares.
+- ROOT **no** toma decisiones sobre marcas o restaurantes ni puede ver sus datos privados: logo, dirección, menú, precios y descuentos, mesas (QR/PIN), mozos, pedidos, sesiones, caja y reportes.
+- ROOT **no** es un bypass. En código nuevo no se lo incluye en `@Roles(...)` ni en los chequeos de pertenencia (nada de `if (user.rol === 'ROOT') return`).
+- El código anterior a esta regla todavía le da a ROOT más permisos de los que corresponden (pendiente de revisión): no replicar ese patrón.
+
+Permisos de las funciones de logo/dirección y descuentos:
+
+| Acción | OWNER | GERENTE | ROOT |
+|---|---|---|---|
+| Logo de marca, logo y dirección de restaurante | ✔ su marca | ✘ | ✘ |
+| Poner o sacar descuentos de ítems | ✔ su marca | ✔ restaurantes asignados | ✘ |
 
 ### Tipos de usuario adicionales (tablas separadas, NO son RolAdmin)
 | Tipo | Tabla | App |
@@ -101,8 +114,8 @@ packages/types/src/
 | Cliente/Comensal | `cliente` | apps/web-cliente |
 
 ### Guards NestJS
-- `@Roles(RolAdmin.ROOT)` — solo ROOT
-- `@Roles(RolAdmin.OWNER, RolAdmin.GERENTE)` — panel admin
+- `@Roles(RolAdmin.ROOT)` — solo ROOT (crear/eliminar marcas, restaurantes y usuarios OWNER/GERENTE, administración general)
+- `@Roles(RolAdmin.OWNER, RolAdmin.GERENTE)` — datos y operación del panel admin (ROOT no se incluye)
 - Mozos y cocina usan sus propios guards separados del enum RolAdmin
 - El comensal no usa guards de admin — se autentica por sesión de mesa
 
@@ -286,6 +299,7 @@ pnpm typecheck
 - El login QR/PIN del comensal es independiente del login común — nunca mezclarlos ni importar packages/auth en web-cliente.
 - Componentes compartidos entre apps van en packages/ui o packages/auth. Nunca duplicar lógica idéntica en cada app.
 - Nunca agregar lógica de un rol en la app de otro rol. El comensal no debe tener acceso al código del admin ni siquiera en el bundle compilado.
+- ROOT no accede a datos privados de marcas ni restaurantes: no incluirlo en `@Roles(...)` ni en chequeos de pertenencia de código nuevo (ver "Roles de administración").
 
 ---
 
