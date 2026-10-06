@@ -180,9 +180,7 @@ function ComensalChip({
 export function EtiquetarPedidosPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const destino = searchParams.get('destino') === 'pagar' || searchParams.get('destino') === 'mensaje'
-    ? (searchParams.get('destino') as 'pagar' | 'mensaje')
-    : null
+  const destino = searchParams.get('destino') === 'mensaje' ? 'mensaje' : null
 
   const sesionId = useSessionStore((s) => s.sesionId)
   const comensalIdActual = useComensalStore((s) => s.comensalId)
@@ -252,14 +250,8 @@ export function EtiquetarPedidosPage() {
     }
   }
 
-  const huerfanos = items.filter((i) => i.etiquetas.length === 0)
-  const nombresHuerfanos = Array.from(new Set(huerfanos.map((i) => i.nombre)))
-
   function handleContinuar() {
-    if (destino === 'pagar') {
-      if (huerfanos.length > 0) return
-      navigate('/pagar?modo=por_consumo')
-    } else if (destino === 'mensaje') {
+    if (destino === 'mensaje') {
       navigate('/dividir/mensaje?modo=por_consumo')
     }
   }
@@ -373,8 +365,6 @@ export function EtiquetarPedidosPage() {
   }
 
   /* ── lista ── */
-  const continuarDisabled = destino === 'pagar' && huerfanos.length > 0
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: C.bg }}>
       <div style={{
@@ -500,24 +490,13 @@ export function EtiquetarPedidosPage() {
             borderTop: `1px solid ${C.border}`, padding: '14px 16px 24px',
             boxShadow: '0 -4px 20px rgba(0,0,0,0.08)',
           }}>
-            {continuarDisabled && (
-              <p style={{
-                fontFamily: 'Inter, sans-serif', fontSize: 12, color: '#DC2626',
-                background: '#FEF2F2', border: '1px solid #FECACA',
-                borderRadius: 10, padding: '8px 10px', margin: '0 0 10px', textAlign: 'center',
-              }}>
-                Faltan etiquetar: {nombresHuerfanos.join(', ')}
-              </p>
-            )}
             <button
               onClick={handleContinuar}
-              disabled={continuarDisabled}
               style={{
                 width: '100%', padding: '14px 16px',
                 background: C.orange, color: 'white', border: 'none',
                 borderRadius: 14, fontFamily: 'Montserrat, sans-serif', fontWeight: 700, fontSize: 15,
-                cursor: continuarDisabled ? 'not-allowed' : 'pointer',
-                opacity: continuarDisabled ? 0.5 : 1,
+                cursor: 'pointer',
               }}
             >
               Continuar

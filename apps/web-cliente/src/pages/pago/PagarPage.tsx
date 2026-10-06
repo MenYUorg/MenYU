@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { Spinner } from '@menyu/ui'
 import { useSessionStore } from '../../store/sessionStore'
-import { usePagoStore } from '../../store/pagoStore'
 import { api } from '../../services/api'
 import { C } from '../../theme'
 
@@ -18,22 +17,9 @@ interface PedidoSesion {
 
 export function PagarPage() {
   const navigate       = useNavigate()
-  const [searchParams] = useSearchParams()
   const jwt           = useSessionStore((s) => s.jwt)
   const sesionId      = useSessionStore((s) => s.sesionId)
   const numeroMesa    = useSessionStore((s) => s.numeroMesa)
-  const {
-    estado: estadoPago,
-    error: errorPago,
-    modoDivision,
-    modoElegido,
-    divisionPagosHabilitada,
-    divisorPartesIguales,
-    miMonto,
-    reset: resetPago,
-  } = usePagoStore()
-
-  const modoActivo = modoDivision ?? modoElegido
 
   const [pedidos, setPedidos] = useState<PedidoSesion[]>([])
   const [loading, setLoading] = useState(true)
@@ -41,20 +27,14 @@ export function PagarPage() {
 
   const [saldoPendiente, setSaldoPendiente] = useState<number | null>(null)
 
-  const [menuAbierto, setMenuAbierto] = useState<null | 'raiz' | 'dispositivo' | 'mensaje'>(null)
+  const [modalMensajeAbierto, setModalMensajeAbierto] = useState(false)
 
   const [pagandoTotal, setPagandoTotal] = useState<'efectivo' | 'mercadopago' | null>(null)
   const [pagoTotalConfirmado, setPagoTotalConfirmado] = useState(false)
   const [errorPagoTotal, setErrorPagoTotal] = useState<string | null>(null)
 
   useEffect(() => {
-    resetPago()
-    const modoParam = searchParams.get('modo')
-    if (modoParam === 'partes_iguales' || modoParam === 'por_consumo') {
-      usePagoStore.getState().elegirModo(modoParam)
-    }
     if (sesionId) {
-      void usePagoStore.getState().cargarDivision(sesionId)
       // Fallo silencioso: si esto no llega, los botones de "toda la cuenta" quedan
       // habilitados (no bloqueamos por una falla de red puntual) y el error real,
       // si lo hay, sale recién al intentar pagar.
@@ -97,16 +77,6 @@ export function PagarPage() {
 
   const bloqueadoPorSaldo = saldoPendiente !== null && saldoPendiente <= 0
 
-  function handleEfectivo() {
-    if (!sesionId || miMonto === null) return
-    void usePagoStore.getState().solicitarEfectivo(sesionId)
-  }
-
-  function handleMercadoPago() {
-    if (!sesionId || miMonto === null) return
-    void usePagoStore.getState().pagarConMercadoPago(sesionId)
-  }
-
   async function handlePagarTodoEfectivo() {
     if (!sesionId || !jwt || pagandoTotal !== null || bloqueadoPorSaldo) return
     setPagandoTotal('efectivo')
@@ -132,19 +102,6 @@ export function PagarPage() {
     } catch (e) {
       setErrorPagoTotal(e instanceof Error ? e.message : 'Error al iniciar el pago con Mercado Pago')
       setPagandoTotal(null)
-    }
-  }
-
-  function irArmarMensaje() {
-    if (modoActivo === 'partes_iguales') {
-      // El modo ya está fijado, así que ya existe un divisor real (backend:
-      // Math.max(cantidadComensales, comensales.length)). No hay que volver a
-      // preguntar cantidad — eso es lo que causaba el mensaje con un número
-      // inventado que no coincidía con "Tu parte" de esta misma pantalla.
-      if (divisorPartesIguales === null) return
-      navigate(`/dividir/mensaje?cantidad=${divisorPartesIguales}`)
-    } else if (modoActivo === 'por_consumo') {
-      navigate('/dividir/mensaje?modo=por_consumo')
     }
   }
 
@@ -186,149 +143,63 @@ export function PagarPage() {
 
   let bottomContent: React.ReactNode
 
-  if (modoActivo === null) {
-    if (pagoTotalConfirmado) {
-      bottomContent = (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 32 }}>✅</span>
-          <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: C.text, margin: 0, textAlign: 'center' }}>
-            El mozo se va a acercar a la mesa a cobrar el total.
-          </p>
-        </div>
-      )
-    } else if (bloqueadoPorSaldo) {
-      bottomContent = (
-        <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: C.gray, margin: 0, textAlign: 'center' }}>
-          Esta cuenta ya está saldada.
-        </p>
-      )
-    } else {
-      const disabledTotal = pagandoTotal !== null
-      bottomContent = (
-        <>
-          {errorPagoTotal && (
-            <p style={{
-              fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#DC2626',
-              background: '#FEF2F2', border: '1px solid #FECACA',
-              borderRadius: 10, padding: '10px 12px', textAlign: 'center', margin: 0,
-            }}>
-              {errorPagoTotal}
-            </p>
-          )}
-          <button
-            onClick={handlePagarTodoEfectivo}
-            disabled={disabledTotal}
-            style={{
-              width: '100%', padding: '14px 16px',
-              background: C.navy, color: 'white', border: 'none',
-              borderRadius: 14, fontFamily: 'Montserrat, sans-serif',
-              fontWeight: 700, fontSize: 15,
-              cursor: disabledTotal ? 'not-allowed' : 'pointer',
-              opacity: disabledTotal ? 0.5 : 1,
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-            }}
-          >
-            {pagandoTotal === 'efectivo' ? <Spinner size="sm" /> : 'Pagar toda la cuenta en efectivo'}
-          </button>
-          <button
-            onClick={handlePagarTodoMercadoPago}
-            disabled={disabledTotal}
-            style={{
-              width: '100%', padding: '14px 16px',
-              background: C.orange, color: 'white', border: 'none',
-              borderRadius: 14, fontFamily: 'Montserrat, sans-serif',
-              fontWeight: 700, fontSize: 15,
-              cursor: disabledTotal ? 'not-allowed' : 'pointer',
-              opacity: disabledTotal ? 0.5 : 1,
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-            }}
-          >
-            {pagandoTotal === 'mercadopago' ? <Spinner size="sm" /> : 'Pagar toda la cuenta con Mercado Pago'}
-          </button>
-        </>
-      )
-    }
-  } else if (estadoPago === 'efectivo_solicitado') {
+  if (pagoTotalConfirmado) {
     bottomContent = (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
         <span style={{ fontSize: 32 }}>✅</span>
         <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: C.text, margin: 0, textAlign: 'center' }}>
-          El mozo se acercará a tu mesa en breve.
+          El mozo se va a acercar a la mesa a cobrar el total.
         </p>
       </div>
     )
-  } else if (estadoPago === 'error') {
+  } else if (bloqueadoPorSaldo) {
     bottomContent = (
-      <>
-        <p style={{
-          fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#DC2626',
-          background: '#FEF2F2', border: '1px solid #FECACA',
-          borderRadius: 10, padding: '10px 12px', textAlign: 'center', margin: 0,
-        }}>
-          {errorPago}
-        </p>
-        <button
-          onClick={resetPago}
-          style={{
-            width: '100%', padding: '14px 16px',
-            background: C.orange, color: 'white', border: 'none',
-            borderRadius: 14, fontFamily: 'Montserrat, sans-serif',
-            fontWeight: 700, fontSize: 15, cursor: 'pointer',
-          }}
-        >
-          Reintentar
-        </button>
-      </>
-    )
-  } else if (estadoPago === 'loading') {
-    bottomContent = (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
-        <Spinner size="md" />
-        <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: C.gray, margin: 0 }}>
-          Conectando con Mercado Pago...
-        </p>
-      </div>
-    )
-  } else if (estadoPago === 'mp_redirigiendo') {
-    bottomContent = (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
-        <Spinner size="md" />
-        <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: C.gray, margin: 0 }}>
-          Conectando con Mercado Pago...
-        </p>
-      </div>
+      <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: C.gray, margin: 0, textAlign: 'center' }}>
+        Esta cuenta ya está saldada.
+      </p>
     )
   } else {
-    const disabled = miMonto === null
+    const disabledTotal = pagandoTotal !== null
     bottomContent = (
       <>
+        {errorPagoTotal && (
+          <p style={{
+            fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#DC2626',
+            background: '#FEF2F2', border: '1px solid #FECACA',
+            borderRadius: 10, padding: '10px 12px', textAlign: 'center', margin: 0,
+          }}>
+            {errorPagoTotal}
+          </p>
+        )}
         <button
-          onClick={handleEfectivo}
-          disabled={disabled}
+          onClick={handlePagarTodoEfectivo}
+          disabled={disabledTotal}
           style={{
             width: '100%', padding: '14px 16px',
             background: C.navy, color: 'white', border: 'none',
             borderRadius: 14, fontFamily: 'Montserrat, sans-serif',
             fontWeight: 700, fontSize: 15,
-            cursor: disabled ? 'not-allowed' : 'pointer',
-            opacity: disabled ? 0.5 : 1,
+            cursor: disabledTotal ? 'not-allowed' : 'pointer',
+            opacity: disabledTotal ? 0.5 : 1,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
           }}
         >
-          Llamar al mozo para pagar
+          {pagandoTotal === 'efectivo' ? <Spinner size="sm" /> : 'Pagar toda la cuenta en efectivo'}
         </button>
         <button
-          onClick={handleMercadoPago}
-          disabled={disabled}
+          onClick={handlePagarTodoMercadoPago}
+          disabled={disabledTotal}
           style={{
             width: '100%', padding: '14px 16px',
             background: C.orange, color: 'white', border: 'none',
             borderRadius: 14, fontFamily: 'Montserrat, sans-serif',
             fontWeight: 700, fontSize: 15,
-            cursor: disabled ? 'not-allowed' : 'pointer',
-            opacity: disabled ? 0.5 : 1,
+            cursor: disabledTotal ? 'not-allowed' : 'pointer',
+            opacity: disabledTotal ? 0.5 : 1,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
           }}
         >
-          Pagar con Mercado Pago
+          {pagandoTotal === 'mercadopago' ? <Spinner size="sm" /> : 'Pagar toda la cuenta con Mercado Pago'}
         </button>
       </>
     )
@@ -410,84 +281,32 @@ export function PagarPage() {
     </div>,
   )
 
-  /* ── selector / resumen de "Tu parte" ── */
-  const armarMensajeDisabled = modoActivo === 'partes_iguales' && divisorPartesIguales === null
-
-  let tuParteContent: React.ReactNode
-
-  if (estadoPago === 'error') {
-    tuParteContent = (
-      <p style={{
-        fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#DC2626',
-        background: '#FEF2F2', border: '1px solid #FECACA',
-        borderRadius: 10, padding: '10px 12px', textAlign: 'center', margin: 0,
-      }}>
-        {errorPago}
-      </p>
-    )
-  } else if (estadoPago === 'cargando_division') {
-    tuParteContent = (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: '12px 0' }}>
-        <Spinner size="sm" />
-        <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: C.gray, margin: 0 }}>
-          Calculando tu parte...
-        </p>
+  /* ── resumen de "Total a pagar" ── */
+  const totalAPagarContent = (
+    <>
+      <div style={{ textAlign: 'right' }}>
+        <span style={{ fontFamily: 'Montserrat, sans-serif', fontWeight: 800, fontSize: 26, color: C.navy }}>
+          {saldoPendiente !== null ? `$${saldoPendiente.toFixed(2)}` : '—'}
+        </span>
       </div>
-    )
-  } else if (modoActivo === null) {
-    tuParteContent = (
-      <>
-        <div style={{ textAlign: 'right' }}>
-          <span style={{ fontFamily: 'Montserrat, sans-serif', fontWeight: 800, fontSize: 26, color: C.navy }}>
-            {saldoPendiente !== null ? `$${saldoPendiente.toFixed(2)}` : '—'}
-          </span>
-        </div>
-        <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, color: C.gray, margin: '10px 0 0' }}>
-          ¿Van a dividir la cuenta entre varios?
-        </p>
-        <button
-          type="button"
-          onClick={() => setMenuAbierto(divisionPagosHabilitada ? 'raiz' : 'mensaje')}
-          style={{
-            width: '100%', marginTop: 10, padding: '12px 14px',
-            background: 'white', color: C.orange, border: `1.5px solid ${C.orange}`,
-            borderRadius: 12, fontFamily: 'Montserrat, sans-serif', fontWeight: 700, fontSize: 14, cursor: 'pointer',
-          }}
-        >
-          {divisionPagosHabilitada ? 'Dividir la cuenta' : 'Armar mensaje'}
-        </button>
-      </>
-    )
-  } else {
-    tuParteContent = (
-      <>
-        <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: C.gray, margin: '0 0 6px' }}>
-          División: {modoActivo === 'partes_iguales' ? 'partes iguales' : 'por consumo'}
-        </p>
-        <div style={{ textAlign: 'right' }}>
-          <span style={{ fontFamily: 'Montserrat, sans-serif', fontWeight: 800, fontSize: 26, color: C.navy }}>
-            {miMonto !== null ? `$${miMonto.toFixed(2)}` : '—'}
-          </span>
-        </div>
-        <button
-          type="button"
-          onClick={irArmarMensaje}
-          disabled={armarMensajeDisabled}
-          style={{
-            width: '100%', marginTop: 10, padding: '12px 14px',
-            background: 'white', color: C.orange, border: `1.5px solid ${C.orange}`,
-            borderRadius: 12, fontFamily: 'Montserrat, sans-serif', fontWeight: 700, fontSize: 14,
-            cursor: armarMensajeDisabled ? 'not-allowed' : 'pointer',
-            opacity: armarMensajeDisabled ? 0.5 : 1,
-          }}
-        >
-          Armar mensaje
-        </button>
-      </>
-    )
-  }
+      <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, color: C.gray, margin: '10px 0 0' }}>
+        ¿Van a dividir la cuenta entre varios?
+      </p>
+      <button
+        type="button"
+        onClick={() => setModalMensajeAbierto(true)}
+        style={{
+          width: '100%', marginTop: 10, padding: '12px 14px',
+          background: 'white', color: C.orange, border: `1.5px solid ${C.orange}`,
+          borderRadius: 12, fontFamily: 'Montserrat, sans-serif', fontWeight: 700, fontSize: 14, cursor: 'pointer',
+        }}
+      >
+        Armar mensaje
+      </button>
+    </>
+  )
 
-  /* ── modal "Dividir la cuenta" ── */
+  /* ── modal "Generador de mensaje" ── */
   const modalBtnStyle: React.CSSProperties = {
     width: '100%', padding: '14px 16px', textAlign: 'left',
     borderRadius: 12, border: `1.5px solid ${C.border}`, background: 'white',
@@ -495,9 +314,9 @@ export function PagarPage() {
     cursor: 'pointer',
   }
 
-  const modal = menuAbierto !== null && (
+  const modal = modalMensajeAbierto && (
     <div
-      onClick={() => setMenuAbierto(null)}
+      onClick={() => setModalMensajeAbierto(false)}
       style={{
         position: 'fixed', inset: 0, zIndex: 1000,
         background: 'rgba(45, 53, 97, 0.85)',
@@ -512,67 +331,19 @@ export function PagarPage() {
           width: 320, maxWidth: '90vw', display: 'flex', flexDirection: 'column', gap: 10,
         }}
       >
-        {menuAbierto === 'raiz' && (
-          <>
-            <p style={{ fontFamily: 'Montserrat, sans-serif', fontWeight: 700, fontSize: 16, color: C.text, margin: '0 0 4px', textAlign: 'center' }}>
-              Dividir la cuenta
-            </p>
-            <button type="button" onClick={() => setMenuAbierto('dispositivo')} style={modalBtnStyle}>
-              Dividir en dispositivo
-            </button>
-            <button type="button" onClick={() => setMenuAbierto('mensaje')} style={modalBtnStyle}>
-              Generador de mensaje
-            </button>
-          </>
-        )}
-
-        {menuAbierto === 'dispositivo' && (
-          <>
-            <button
-              type="button"
-              onClick={() => setMenuAbierto('raiz')}
-              style={{ alignSelf: 'flex-start', background: 'none', border: 'none', cursor: 'pointer', color: C.orange, fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: 13, padding: 0, marginBottom: 4 }}
-            >
-              ← Atrás
-            </button>
-            <p style={{ fontFamily: 'Montserrat, sans-serif', fontWeight: 700, fontSize: 15, color: C.text, margin: '0 0 4px' }}>
-              Dividir en dispositivo
-            </p>
-            <button type="button" onClick={() => navigate('/dividir/cantidad?destino=pagar')} style={modalBtnStyle}>
-              Partes iguales
-            </button>
-            <button type="button" onClick={() => navigate('/etiquetar?destino=pagar')} style={modalBtnStyle}>
-              Por consumo
-            </button>
-          </>
-        )}
-
-        {menuAbierto === 'mensaje' && (
-          <>
-            {divisionPagosHabilitada && (
-              <button
-                type="button"
-                onClick={() => setMenuAbierto('raiz')}
-                style={{ alignSelf: 'flex-start', background: 'none', border: 'none', cursor: 'pointer', color: C.orange, fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: 13, padding: 0, marginBottom: 4 }}
-              >
-                ← Atrás
-              </button>
-            )}
-            <p style={{ fontFamily: 'Montserrat, sans-serif', fontWeight: 700, fontSize: 15, color: C.text, margin: '0 0 4px' }}>
-              Generador de mensaje
-            </p>
-            <button type="button" onClick={() => navigate('/dividir/cantidad?destino=mensaje')} style={modalBtnStyle}>
-              Partes iguales
-            </button>
-            <button type="button" onClick={() => navigate('/dividir/mensaje?modo=por_consumo')} style={modalBtnStyle}>
-              Por consumo
-            </button>
-          </>
-        )}
+        <p style={{ fontFamily: 'Montserrat, sans-serif', fontWeight: 700, fontSize: 15, color: C.text, margin: '0 0 4px' }}>
+          Generador de mensaje
+        </p>
+        <button type="button" onClick={() => navigate('/dividir/cantidad')} style={modalBtnStyle}>
+          Partes iguales
+        </button>
+        <button type="button" onClick={() => navigate('/dividir/mensaje?modo=por_consumo')} style={modalBtnStyle}>
+          Por consumo
+        </button>
 
         <button
           type="button"
-          onClick={() => setMenuAbierto(null)}
+          onClick={() => setModalMensajeAbierto(false)}
           style={{ width: '100%', padding: '10px 0', border: 'none', background: 'none', color: C.gray, fontFamily: 'Inter, sans-serif', fontSize: 13, cursor: 'pointer', marginTop: 4 }}
         >
           Cancelar
@@ -681,9 +452,9 @@ export function PagarPage() {
             fontFamily: 'Montserrat, sans-serif', fontWeight: 700,
             fontSize: 15, color: C.text, margin: '0 0 14px',
           }}>
-            {modoActivo === null ? 'Total a pagar' : 'Tu parte'}
+            Total a pagar
           </p>
-          {tuParteContent}
+          {totalAPagarContent}
         </div>
       </div>
 

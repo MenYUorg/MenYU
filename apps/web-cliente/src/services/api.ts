@@ -150,19 +150,6 @@ export const api = {
         creadoPorComensalId: string | null
         createdAt: string
       }>>('GET', `/sesiones/${sesionId}/comensales`, undefined, jwt),
-    setCantidadComensales: (jwt: string, sesionId: string, cantidadComensales: number | null) =>
-      req<{ id: string; cantidadComensales: number | null }>(
-        'PATCH',
-        `/sesiones/${sesionId}/comensales/cantidad-comensales`,
-        { cantidadComensales },
-        jwt,
-      ),
-    calcularPartesIguales: (jwt: string, sesionId: string) =>
-      req<{
-        divisionPagosHabilitada: boolean
-        divisor: number
-        partes: Array<{ comensalId: string; nombre: string; montoCentavos: number; monto: number }>
-      }>('GET', `/sesiones/${sesionId}/comensales/division/partes-iguales`, undefined, jwt),
     calcularPorConsumo: (jwt: string, sesionId: string) =>
       req<{
         divisionPagosHabilitada: boolean
@@ -174,13 +161,6 @@ export const api = {
           total: number
         }
       }>('GET', `/sesiones/${sesionId}/comensales/division/por-consumo`, undefined, jwt),
-    obtenerModoDivision: (jwt: string, sesionId: string) =>
-      req<{ modoDivision: 'partes_iguales' | 'por_consumo' | null }>(
-        'GET',
-        `/sesiones/${sesionId}/comensales/division/modo`,
-        undefined,
-        jwt,
-      ),
     etiquetar: (jwt: string, sesionId: string, pedidoItemId: string, comensalId: string) =>
       req<{ id: string; pedidoItemId: string; comensalId: string; createdAt: string }>(
         'POST',
