@@ -1,16 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { Spinner } from '@menyu/ui'
 import { useSessionStore } from '../../store/sessionStore'
-import { api, ApiError } from '../../services/api'
+import { api } from '../../services/api'
 import { C } from '../../theme'
 
+const CANTIDAD_MIN = 1
 const CANTIDAD_MAX = 99
 
 export function CantidadComensalesPage() {
   const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
-  const destino: 'pagar' | 'mensaje' = searchParams.get('destino') === 'mensaje' ? 'mensaje' : 'pagar'
 
   const sesionId = useSessionStore((s) => s.sesionId)
   const jwt = useSessionStore((s) => s.jwt)
@@ -18,39 +17,27 @@ export function CantidadComensalesPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [totalSesion, setTotalSesion] = useState<number | null>(null)
-  const [comensalesRegistrados, setComensalesRegistrados] = useState(0)
-  const [congelada, setCongelada] = useState(false)
 
   const [cantidad, setCantidad] = useState(1)
   const [editando, setEditando] = useState(false)
   const [inputValue, setInputValue] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const [confirmando, setConfirmando] = useState(false)
-  const [errorConfirmar, setErrorConfirmar] = useState<string | null>(null)
-
   const cargar = useCallback(() => {
     if (!sesionId || !jwt) { setLoading(false); setError('No hay sesión activa'); return }
     setLoading(true)
     setError(null)
-    Promise.all([
-      api.sesiones.saldo(jwt, sesionId),
-      api.comensales.listar(jwt, sesionId),
-    ])
-      .then(([saldo, comensales]) => {
+    api.sesiones.saldo(jwt, sesionId)
+      .then((saldo) => {
         setTotalSesion(saldo.totalSesion)
-        setCongelada(saldo.totalCobrado > 0)
-        setComensalesRegistrados(comensales.length)
-        // En "pagar" arrancamos ya en el piso real (comensales registrados);
-        // en "mensaje" no hay piso atado a lo registrado, así que arranca en 1.
-        setCantidad(destino === 'pagar' ? Math.max(comensales.length, 1) : 1)
+        setCantidad(1)
         setLoading(false)
       })
       .catch((e: unknown) => {
         setError(e instanceof Error ? e.message : 'Error al cargar los datos de la sesión')
         setLoading(false)
       })
-  }, [sesionId, jwt, destino])
+  }, [sesionId, jwt])
 
   useEffect(() => { cargar() }, [cargar])
 
@@ -58,60 +45,26 @@ export function CantidadComensalesPage() {
     if (editando) inputRef.current?.focus()
   }, [editando])
 
-  // Piso del stepper: solo la rama "pagar" fuerza no bajar de los comensales ya
-  // registrados (si no, el PATCH que sigue no tendría sentido). En "mensaje" no
-  // se persiste nada, así que el piso es 1.
-  const piso = destino === 'pagar' ? Math.max(comensalesRegistrados, 1) : 1
-
-  // El backend calcula el divisor real como Math.max(cantidadComensales, comensales.length).
-  // El preview tiene que reflejar eso, no la cantidad elegida a secas — pero
-  // eso solo aplica a "pagar": ahí es el número que termina persistido y usado
-  // por el backend. En "mensaje" no hay backend de por medio, el mensaje es
-  // total/N puro con el N que el usuario eligió.
-  const divisorEfectivo = destino === 'pagar' ? Math.max(cantidad, comensalesRegistrados) : cantidad
-  const montoPorPersona = totalSesion !== null ? totalSesion / divisorEfectivo : null
-  const bloqueadaPorCongelamiento = destino === 'pagar' && congelada
-  const disabled = bloqueadaPorCongelamiento || confirmando
+  // No se persiste nada: el mensaje es total/N puro con el N que el usuario eligió.
+  const montoPorPersona = totalSesion !== null ? totalSesion / cantidad : null
 
   function ajustar(delta: number) {
-    setCantidad((c) => Math.max(piso, Math.min(CANTIDAD_MAX, c + delta)))
+    setCantidad((c) => Math.max(CANTIDAD_MIN, Math.min(CANTIDAD_MAX, c + delta)))
   }
 
   function abrirEdicion() {
-    if (disabled) return
     setInputValue(String(cantidad))
     setEditando(true)
   }
 
   function commitEdicion() {
     const n = parseInt(inputValue, 10)
-    if (!Number.isNaN(n)) setCantidad(Math.max(piso, Math.min(CANTIDAD_MAX, n)))
+    if (!Number.isNaN(n)) setCantidad(Math.max(CANTIDAD_MIN, Math.min(CANTIDAD_MAX, n)))
     setEditando(false)
   }
 
-  async function handleContinuar() {
-    if (!sesionId || !jwt || disabled) return
-    setErrorConfirmar(null)
-
-    if (destino === 'mensaje') {
-      navigate(`/dividir/mensaje?cantidad=${cantidad}`)
-      return
-    }
-
-    setConfirmando(true)
-    try {
-      await api.comensales.setCantidadComensales(jwt, sesionId, cantidad)
-      navigate('/pagar?modo=partes_iguales')
-    } catch (e) {
-      if (e instanceof ApiError && e.status === 409) {
-        setCongelada(true)
-        setErrorConfirmar('La sesión ya tiene un pago aprobado: no se puede cambiar la cantidad de comensales.')
-      } else {
-        setErrorConfirmar(e instanceof Error ? e.message : 'Error al guardar la cantidad de comensales')
-      }
-    } finally {
-      setConfirmando(false)
-    }
+  function handleContinuar() {
+    navigate(`/dividir/mensaje?cantidad=${cantidad}`)
   }
 
   const header = (
@@ -182,16 +135,6 @@ export function CantidadComensalesPage() {
   return wrapper(
     <>
       <div style={{ flex: 1, padding: '24px 16px 180px', display: 'flex', flexDirection: 'column', gap: 20 }}>
-        {bloqueadaPorCongelamiento && (
-          <p style={{
-            fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#DC2626',
-            background: '#FEF2F2', border: '1px solid #FECACA',
-            borderRadius: 10, padding: '10px 12px', margin: 0,
-          }}>
-            Ya se registró un pago en esta mesa. No se puede cambiar la cantidad de comensales para pagar desde el dispositivo — probá con el generador de mensaje.
-          </p>
-        )}
-
         <div style={{
           border: `1px solid ${C.border}`, borderRadius: 12, padding: 24,
           display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16,
@@ -203,13 +146,13 @@ export function CantidadComensalesPage() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
             <button
               onClick={() => ajustar(-1)}
-              disabled={disabled || cantidad <= piso}
+              disabled={cantidad <= CANTIDAD_MIN}
               aria-label="Restar"
               style={{
                 width: 44, height: 44, borderRadius: '50%',
                 border: `1.5px solid ${C.border}`, background: 'white',
                 fontSize: 20, color: C.navy, cursor: 'pointer',
-                opacity: disabled || cantidad <= piso ? 0.4 : 1,
+                opacity: cantidad <= CANTIDAD_MIN ? 0.4 : 1,
               }}
             >
               −
@@ -233,12 +176,11 @@ export function CantidadComensalesPage() {
             ) : (
               <button
                 onClick={abrirEdicion}
-                disabled={disabled}
                 aria-label="Editar cantidad"
                 style={{
                   minWidth: 64, background: 'none', border: 'none',
                   fontFamily: 'Montserrat, sans-serif', fontWeight: 800, fontSize: 32,
-                  color: C.navy, cursor: disabled ? 'default' : 'pointer',
+                  color: C.navy, cursor: 'pointer',
                 }}
               >
                 {cantidad}
@@ -247,24 +189,18 @@ export function CantidadComensalesPage() {
 
             <button
               onClick={() => ajustar(1)}
-              disabled={disabled || cantidad >= CANTIDAD_MAX}
+              disabled={cantidad >= CANTIDAD_MAX}
               aria-label="Sumar"
               style={{
                 width: 44, height: 44, borderRadius: '50%',
                 border: `1.5px solid ${C.border}`, background: 'white',
                 fontSize: 20, color: C.navy, cursor: 'pointer',
-                opacity: disabled || cantidad >= CANTIDAD_MAX ? 0.4 : 1,
+                opacity: cantidad >= CANTIDAD_MAX ? 0.4 : 1,
               }}
             >
               +
             </button>
           </div>
-
-          {destino === 'pagar' && comensalesRegistrados > 0 && (
-            <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, color: C.gray, margin: 0, textAlign: 'center' }}>
-              Ya hay {comensalesRegistrados} {comensalesRegistrados === 1 ? 'persona registrada' : 'personas registradas'}
-            </p>
-          )}
         </div>
 
         <div style={{
@@ -278,22 +214,6 @@ export function CantidadComensalesPage() {
             {montoPorPersona !== null ? `$${montoPorPersona.toFixed(2)}` : '—'}
           </span>
         </div>
-
-        {divisorEfectivo > cantidad && (
-          <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, color: C.gray, margin: 0, textAlign: 'center' }}>
-            Se va a dividir entre {divisorEfectivo} porque ya hay {comensalesRegistrados} personas registradas en la mesa.
-          </p>
-        )}
-
-        {errorConfirmar && (
-          <p style={{
-            fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#DC2626',
-            background: '#FEF2F2', border: '1px solid #FECACA',
-            borderRadius: 10, padding: '10px 12px', textAlign: 'center', margin: 0,
-          }}>
-            {errorConfirmar}
-          </p>
-        )}
       </div>
 
       <div style={{
@@ -304,18 +224,14 @@ export function CantidadComensalesPage() {
       }}>
         <button
           onClick={handleContinuar}
-          disabled={disabled}
           style={{
             width: '100%', padding: '14px 16px',
             background: C.orange, color: 'white', border: 'none',
             borderRadius: 14, fontFamily: 'Montserrat, sans-serif',
-            fontWeight: 700, fontSize: 15,
-            cursor: disabled ? 'not-allowed' : 'pointer',
-            opacity: disabled ? 0.5 : 1,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            fontWeight: 700, fontSize: 15, cursor: 'pointer',
           }}
         >
-          {confirmando ? <Spinner size="sm" /> : 'Continuar'}
+          Continuar
         </button>
       </div>
     </>,
