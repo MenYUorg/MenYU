@@ -1,11 +1,12 @@
 import { Test } from '@nestjs/testing'
 import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common'
-import { MarcaService } from './marca.service'
+import { MarcaService, MARCA_DETAIL_INCLUDE } from './marca.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { JwtPayload } from '../auth/auth.service'
 
 const ROOT: JwtPayload = { sub: 'root-1', email: 'root@menyu.com', tipo: 'admin', rol: 'ROOT' }
 const OWNER: JwtPayload = { sub: 'admin-1', email: 'owner@test.com', tipo: 'admin', rol: 'OWNER' }
+const GERENTE: JwtPayload = { sub: 'gerente-1', email: 'gerente@test.com', tipo: 'admin', rol: 'GERENTE' }
 
 const MARCA = { id: 'marca-1', nombre: 'La Parrilla', slug: 'la-parrilla', activo: true }
 const RESTAURANTE = { id: 'rest-1', marcaId: 'marca-1', nombre: 'Sucursal Norte' }
@@ -125,6 +126,26 @@ describe('MarcaService', () => {
       mockPrisma.admin.findUnique.mockResolvedValue(ADMIN_WITH_REST)
 
       await expect(service.findOne('marca-otra', OWNER))
+        .rejects.toThrow(ForbiddenException)
+
+      expect(mockPrisma.marca.findUnique).not.toHaveBeenCalled()
+    })
+
+    it('OWNER de la marca la recibe pidiendo el include de detalle', async () => {
+      mockPrisma.admin.findUnique.mockResolvedValue(ADMIN_WITH_REST)
+      mockPrisma.marca.findUnique.mockResolvedValue(MARCA)
+
+      const result = await service.findOne('marca-1', OWNER)
+
+      expect(mockPrisma.marca.findUnique).toHaveBeenCalledWith({
+        where: { id: 'marca-1' },
+        include: MARCA_DETAIL_INCLUDE,
+      })
+      expect(result).toEqual(MARCA)
+    })
+
+    it('GERENTE lanza 403: los gerentes no tienen acceso a marcas', async () => {
+      await expect(service.findOne('marca-1', GERENTE))
         .rejects.toThrow(ForbiddenException)
 
       expect(mockPrisma.marca.findUnique).not.toHaveBeenCalled()

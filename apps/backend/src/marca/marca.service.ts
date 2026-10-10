@@ -9,19 +9,14 @@ import { JwtPayload } from '../auth/auth.service'
 import { CreateMarcaDto } from './dto/create-marca.dto'
 import { UpdateMarcaDto } from './dto/update-marca.dto'
 
-const DETAIL_INCLUDE = {
+// Los ítems pertenecen a cada restaurante, no a la marca: se piden con GET /items?restauranteId=
+export const MARCA_DETAIL_INCLUDE = {
   restaurantes: {
     where: { activo: true },
     include: {
       admins: { include: { admin: { select: { id: true, email: true, rol: true } } } },
       mozos: { where: { activo: true }, select: { id: true, nombre: true, email: true } },
       mesas: true,
-    },
-  },
-  items: {
-    where: { disponible: true },
-    include: {
-      comanda: true,
     },
   },
 } as const
@@ -100,7 +95,7 @@ export class MarcaService {
     }
     const marca = await this.prisma.marca.findUnique({
       where: { id },
-      include: DETAIL_INCLUDE,
+      include: MARCA_DETAIL_INCLUDE,
     })
     if (!marca || !marca.activo) throw new NotFoundException('Marca no encontrada')
     return marca

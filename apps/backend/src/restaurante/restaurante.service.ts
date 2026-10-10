@@ -8,7 +8,8 @@ import { JwtPayload } from '../auth/auth.service'
 import { CreateRestauranteDto } from './dto/create-restaurante.dto'
 import { UpdateRestauranteDto } from './dto/update-restaurante.dto'
 
-const DETAIL_INCLUDE = {
+// Los ítems del menú no se incluyen acá: se piden con GET /items?restauranteId=
+export const RESTAURANTE_DETAIL_INCLUDE = {
   marca: true,
   mozos: { where: { activo: true } },
   comandas: true,
@@ -16,7 +17,6 @@ const DETAIL_INCLUDE = {
   menus: true,
   mesas: true,
   ingredientes: true,
-  itemSucursal: { include: { item: true } },
 } as const
 
 @Injectable()
@@ -60,7 +60,7 @@ export class RestauranteService {
     }
     const restaurante = await this.prisma.restaurante.findUnique({
       where: { id },
-      include: DETAIL_INCLUDE,
+      include: RESTAURANTE_DETAIL_INCLUDE,
     })
     if (!restaurante || !restaurante.activo) throw new NotFoundException('Restaurante no encontrado')
     return restaurante
