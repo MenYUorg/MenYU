@@ -477,7 +477,6 @@ export class SessionsService {
         fechaCobro,
         pagos: pagosAprobados.map((p) => ({
           id: p.id,
-          comensalId: p.comensalId,
           metodo: p.metodo,
           estado: p.estado,
           cobradoPorNombre: p.cobradoPorNombre,
