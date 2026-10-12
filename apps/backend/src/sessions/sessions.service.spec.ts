@@ -327,24 +327,44 @@ describe('SessionsService', () => {
 
     const DTO_BASE = { metodoPago: 'efectivo' as const }
 
+    // Fecha fija: la ventana de 10 min de registrarCobro se evalúa contra new Date().
+    const AHORA = new Date('2026-10-12T15:00:00.000Z')
+    const hace = (min: number) => new Date(AHORA.getTime() - min * 60_000)
+    const pagoMp = (id: string, monto: number, createdAt: Date) => ({
+      id,
+      monto,
+      metodo: 'mercadopago',
+      estado: ESTADO_PAGO_PENDIENTE,
+      createdAt,
+    })
+
     let tx: ReturnType<typeof createTxMock>
 
     beforeEach(() => {
+      // Solo Date es falso: el resto de los timers (y las promesas) siguen reales.
+      jest.useFakeTimers({
+        now: AHORA,
+        doNotFake: [
+          'nextTick', 'setImmediate', 'setTimeout', 'clearTimeout',
+          'setInterval', 'clearInterval', 'queueMicrotask',
+        ],
+      })
       mockPrisma.sesionMesa.findUnique.mockResolvedValue(SESION_PARA_COBRO)
       tx = createTxMock()
       mockPrisma.$transaction.mockImplementation((fn: any) => fn(tx))
-      // Por defecto no hay pago manual pendiente: se crea uno nuevo.
+      // Por defecto no hay efectivo pendiente: se crea una fila nueva.
       tx.pago.findFirst.mockResolvedValue(null)
     })
 
-    it('hay pagos pendientes de comensales y no viene el flag → 409, ningún pago se modifica', async () => {
+    afterEach(() => {
+      jest.useRealTimers()
+    })
+
+    it('MP pendiente reciente y no viene el flag → 409, ningún pago se modifica', async () => {
       mockDivision.calcularTotalSesion.mockResolvedValue(1000)
       tx.pago.findMany
         .mockResolvedValueOnce([]) // aprobados previos: saldoPendiente > 0, sigue el flujo
-        .mockResolvedValueOnce([
-          { id: 'pago-c1', monto: 300 },
-          { id: 'pago-c2', monto: 200 },
-        ]) // pendientes
+        .mockResolvedValueOnce([pagoMp('pago-mp1', 300, hace(3))]) // MP pendientes
 
       let error: unknown
       try {
@@ -354,7 +374,7 @@ describe('SessionsService', () => {
       }
       expect(error).toBeInstanceOf(ConflictException)
       expect((error as Error).message).toBe(
-        'Hay 2 pago(s) pendiente(s) de comensales por un total de $500.00. Confirmá la cancelación para cobrar toda la mesa.',
+        'Un comensal inició un pago por MercadoPago de $300.00 hace 3 minutos. Si cobrás la mesa, ese pago se cancela.',
       )
 
       expect(tx.pago.updateMany).not.toHaveBeenCalled()
@@ -363,11 +383,11 @@ describe('SessionsService', () => {
       expect(tx.sesionMesa.update).not.toHaveBeenCalled()
     })
 
-    it('hay pendientes y viene el flag → quedan en cancelado y el cobro se registra', async () => {
+    it('MP pendiente reciente y viene el flag → queda cancelado y el cobro se registra', async () => {
       mockDivision.calcularTotalSesion.mockResolvedValue(1000)
       tx.pago.findMany
         .mockResolvedValueOnce([]) // aprobados previos
-        .mockResolvedValueOnce([{ id: 'pago-c1', monto: 300 }]) // pendientes de comensales
+        .mockResolvedValueOnce([pagoMp('pago-mp1', 300, hace(3))]) // MP pendientes
         .mockResolvedValueOnce([{ id: 'pago-nuevo', monto: 1000 }]) // aprobados post-insert
       tx.pago.updateMany.mockResolvedValue({ count: 1 })
       tx.pago.create.mockResolvedValue({ id: 'pago-nuevo' })
@@ -376,7 +396,7 @@ describe('SessionsService', () => {
       const result = await service.registrarCobro('sesion-1', dto, USER_MOZO)
 
       expect(tx.pago.updateMany).toHaveBeenCalledWith({
-        where: { id: { in: ['pago-c1'] } },
+        where: { id: { in: ['pago-mp1'] } },
         data: { estado: ESTADO_PAGO_CANCELADO },
       })
       expect(tx.pago.create).toHaveBeenCalledWith(
@@ -391,11 +411,11 @@ describe('SessionsService', () => {
       expect(result).toEqual({ ok: true })
     })
 
-    it('no hay pendientes → comportamiento igual que antes (sin cancelación)', async () => {
+    it('sin MP pendientes → comportamiento igual que antes (sin cancelación)', async () => {
       mockDivision.calcularTotalSesion.mockResolvedValue(1000)
       tx.pago.findMany
         .mockResolvedValueOnce([]) // aprobados previos
-        .mockResolvedValueOnce([]) // sin pendientes de comensales
+        .mockResolvedValueOnce([]) // sin MP pendientes
         .mockResolvedValueOnce([{ id: 'pago-nuevo', monto: 1000 }]) // aprobados post-insert
       tx.pago.create.mockResolvedValue({ id: 'pago-nuevo' })
 
@@ -410,7 +430,7 @@ describe('SessionsService', () => {
       mockDivision.calcularTotalSesion.mockResolvedValue(1000)
       tx.pago.findMany
         .mockResolvedValueOnce([]) // aprobados previos
-        .mockResolvedValueOnce([]) // sin pendientes de comensales
+        .mockResolvedValueOnce([]) // sin MP pendientes
         .mockResolvedValueOnce([{ id: 'pago-nuevo', monto: 700 }]) // aprobados post-insert: no cubre el total
       tx.pago.create.mockResolvedValue({ id: 'pago-nuevo' })
 
@@ -422,7 +442,7 @@ describe('SessionsService', () => {
       expect(result).toEqual({ ok: true })
     })
 
-    it('saldoPendiente <= 0 sin pendientes de comensales → BadRequestException', async () => {
+    it('saldoPendiente <= 0 sin MP pendientes → BadRequestException', async () => {
       mockDivision.calcularTotalSesion.mockResolvedValue(1000)
       tx.pago.findMany.mockResolvedValueOnce([{ id: 'pago-viejo', monto: 1000 }]) // aprobados previos: ya cubre todo
 
@@ -433,9 +453,9 @@ describe('SessionsService', () => {
       expect(tx.pago.update).not.toHaveBeenCalled()
     })
 
-    it('hay pendientes de comensales Y la sesión ya está totalmente pagada, sin flag → el mozo ve "ya está pagada", no el 409 de confirmar cancelación', async () => {
-      // El chequeo de saldo va antes que el de pendientes: ni siquiera se
-      // llega a consultar pagos pendientes de comensales en este escenario.
+    it('MP pendiente reciente Y la sesión ya está totalmente pagada, sin flag → el mozo ve "ya está pagada", no el 409 de confirmar cancelación', async () => {
+      // El chequeo de saldo va antes que el de MP pendientes: ni siquiera se
+      // llega a consultarlos en este escenario.
       mockDivision.calcularTotalSesion.mockResolvedValue(1000)
       tx.pago.findMany.mockResolvedValueOnce([{ id: 'pago-viejo', monto: 1000 }]) // aprobados previos: ya cubre todo
 
@@ -448,6 +468,160 @@ describe('SessionsService', () => {
       expect(error).toBeInstanceOf(BadRequestException)
       expect((error as Error).message).toBe('Esta sesión ya está completamente pagada')
       expect(tx.pago.findMany).toHaveBeenCalledTimes(1)
+    })
+
+    it('dos MP pendientes recientes sin flag → 409 con texto plural y total sumado', async () => {
+      mockDivision.calcularTotalSesion.mockResolvedValue(1000)
+      tx.pago.findMany
+        .mockResolvedValueOnce([]) // aprobados previos
+        .mockResolvedValueOnce([
+          pagoMp('pago-mp1', 300, hace(7)),
+          pagoMp('pago-mp2', 200, hace(3)),
+        ])
+
+      let error: unknown
+      try {
+        await service.registrarCobro('sesion-1', DTO_BASE, USER_MOZO)
+      } catch (e) {
+        error = e
+      }
+      expect(error).toBeInstanceOf(ConflictException)
+      expect((error as Error).message).toBe(
+        'Hay 2 pagos por MercadoPago sin terminar por un total de $500.00 (el más reciente hace 3 minutos). Si cobrás la mesa, se cancelan.',
+      )
+      expect(tx.pago.updateMany).not.toHaveBeenCalled()
+    })
+
+    it('MP pendiente viejo (11 min) sin flag → se cancela sin aviso y el cobro se registra', async () => {
+      mockDivision.calcularTotalSesion.mockResolvedValue(1000)
+      tx.pago.findMany
+        .mockResolvedValueOnce([]) // aprobados previos
+        .mockResolvedValueOnce([pagoMp('pago-mp1', 300, hace(11))])
+        .mockResolvedValueOnce([{ id: 'pago-nuevo', monto: 1000 }])
+      tx.pago.updateMany.mockResolvedValue({ count: 1 })
+      tx.pago.create.mockResolvedValue({ id: 'pago-nuevo' })
+
+      const result = await service.registrarCobro('sesion-1', DTO_BASE, USER_MOZO)
+
+      expect(tx.pago.updateMany).toHaveBeenCalledWith({
+        where: { id: { in: ['pago-mp1'] } },
+        data: { estado: ESTADO_PAGO_CANCELADO },
+      })
+      expect(result).toEqual({ ok: true })
+    })
+
+    it('MP pendiente reciente + MP pendiente viejo + flag → se cancelan ambos', async () => {
+      mockDivision.calcularTotalSesion.mockResolvedValue(1000)
+      tx.pago.findMany
+        .mockResolvedValueOnce([]) // aprobados previos
+        .mockResolvedValueOnce([
+          pagoMp('pago-mp1', 300, hace(3)),
+          pagoMp('pago-mp2', 200, hace(11)),
+        ])
+        .mockResolvedValueOnce([{ id: 'pago-nuevo', monto: 1000 }])
+      tx.pago.updateMany.mockResolvedValue({ count: 2 })
+      tx.pago.create.mockResolvedValue({ id: 'pago-nuevo' })
+
+      const dto = { ...DTO_BASE, confirmarCancelacionPagosPendientes: true }
+      await service.registrarCobro('sesion-1', dto, USER_MOZO)
+
+      expect(tx.pago.updateMany).toHaveBeenCalledWith({
+        where: { id: { in: ['pago-mp1', 'pago-mp2'] } },
+        data: { estado: ESTADO_PAGO_CANCELADO },
+      })
+    })
+
+    it('frontera de la ventana: a 9 min 59 s el MP es reciente → 409, nada se cancela', async () => {
+      mockDivision.calcularTotalSesion.mockResolvedValue(1000)
+      tx.pago.findMany
+        .mockResolvedValueOnce([]) // aprobados previos
+        .mockResolvedValueOnce([pagoMp('pago-mp1', 300, new Date(AHORA.getTime() - (10 * 60_000 - 1000)))])
+
+      await expect(service.registrarCobro('sesion-1', DTO_BASE, USER_MOZO)).rejects.toThrow(ConflictException)
+      expect(tx.pago.updateMany).not.toHaveBeenCalled()
+    })
+
+    it('frontera de la ventana: a 10 min 0 s el MP es viejo → se cancela sin aviso', async () => {
+      mockDivision.calcularTotalSesion.mockResolvedValue(1000)
+      tx.pago.findMany
+        .mockResolvedValueOnce([]) // aprobados previos
+        .mockResolvedValueOnce([pagoMp('pago-mp1', 300, new Date(AHORA.getTime() - 10 * 60_000))])
+        .mockResolvedValueOnce([{ id: 'pago-nuevo', monto: 1000 }])
+      tx.pago.updateMany.mockResolvedValue({ count: 1 })
+      tx.pago.create.mockResolvedValue({ id: 'pago-nuevo' })
+
+      await service.registrarCobro('sesion-1', DTO_BASE, USER_MOZO)
+
+      expect(tx.pago.updateMany).toHaveBeenCalledWith({
+        where: { id: { in: ['pago-mp1'] } },
+        data: { estado: ESTADO_PAGO_CANCELADO },
+      })
+    })
+
+    it('efectivo pendiente → sin 409, sin cancelaciones, se reutiliza esa fila', async () => {
+      mockDivision.calcularTotalSesion.mockResolvedValue(1000)
+      tx.pago.findMany
+        .mockResolvedValueOnce([]) // aprobados previos
+        .mockResolvedValueOnce([]) // sin MP pendientes
+        .mockResolvedValueOnce([{ id: 'pago-ef', monto: 1000 }]) // aprobados post-update
+      tx.pago.findFirst.mockResolvedValue({ id: 'pago-ef' })
+
+      const result = await service.registrarCobro('sesion-1', DTO_BASE, USER_MOZO)
+
+      expect(tx.pago.updateMany).not.toHaveBeenCalled()
+      expect(tx.pago.create).not.toHaveBeenCalled()
+      expect(tx.pago.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'pago-ef' },
+          data: expect.objectContaining({
+            estado: ESTADO_PAGO_APROBADO,
+            monto: 1000,
+            metodo: 'efectivo',
+          }),
+        }),
+      )
+      expect(result).toEqual({ ok: true })
+    })
+
+    it('el paso 4 solo busca efectivo pendiente: no toma un MP ni la fila recién cancelada', async () => {
+      mockDivision.calcularTotalSesion.mockResolvedValue(1000)
+      tx.pago.findMany
+        .mockResolvedValueOnce([]) // aprobados previos
+        .mockResolvedValueOnce([pagoMp('pago-mp1', 300, hace(11))])
+        .mockResolvedValueOnce([{ id: 'pago-nuevo', monto: 1000 }])
+      tx.pago.updateMany.mockResolvedValue({ count: 1 })
+      tx.pago.create.mockResolvedValue({ id: 'pago-nuevo' })
+
+      await service.registrarCobro('sesion-1', DTO_BASE, USER_MOZO)
+
+      expect(tx.pago.findMany).toHaveBeenNthCalledWith(2, {
+        where: { sesionId: 'sesion-1', metodo: 'mercadopago', estado: ESTADO_PAGO_PENDIENTE },
+      })
+      expect(tx.pago.findFirst).toHaveBeenCalledWith({
+        where: { sesionId: 'sesion-1', metodo: 'efectivo', estado: ESTADO_PAGO_PENDIENTE },
+      })
+      expect(tx.pago.update).not.toHaveBeenCalled() // el MP cancelado no se reutiliza
+      expect(tx.pago.create).toHaveBeenCalled() // el cobro del mozo crea su propia fila
+    })
+
+    it('ninguna consulta de registrarCobro usa comensalId', async () => {
+      mockDivision.calcularTotalSesion.mockResolvedValue(1000)
+      tx.pago.findMany
+        .mockResolvedValueOnce([]) // aprobados previos
+        .mockResolvedValueOnce([pagoMp('pago-mp1', 300, hace(11))])
+        .mockResolvedValueOnce([{ id: 'pago-nuevo', monto: 1000 }])
+      tx.pago.updateMany.mockResolvedValue({ count: 1 })
+      tx.pago.create.mockResolvedValue({ id: 'pago-nuevo' })
+
+      await service.registrarCobro('sesion-1', DTO_BASE, USER_MOZO)
+
+      const consultas = [
+        ...tx.pago.findMany.mock.calls,
+        ...tx.pago.findFirst.mock.calls,
+        ...tx.pago.updateMany.mock.calls,
+        ...tx.pago.create.mock.calls,
+      ]
+      expect(JSON.stringify(consultas)).not.toContain('comensalId')
     })
   })
 })

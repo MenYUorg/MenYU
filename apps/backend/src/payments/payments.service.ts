@@ -17,7 +17,11 @@ import { PaymentStatus } from './providers/payment-provider.interface'
 import { isAllowedOrigin } from '../common/is-allowed-origin'
 import { runSerializableTransaction } from '../common/run-serializable-transaction'
 import { assertStaffAccess } from '../common/assert-staff-access'
-import { ESTADO_PAGO_PENDIENTE, ESTADO_PAGO_APROBADO } from '../common/estado-pago.constant'
+import {
+  ESTADO_PAGO_PENDIENTE,
+  ESTADO_PAGO_APROBADO,
+  ESTADO_PAGO_CANCELADO,
+} from '../common/estado-pago.constant'
 import { JwtPayload } from '../auth/auth.service'
 import { CobrarComensalDto } from './dto/cobrar-comensal.dto'
 
@@ -754,11 +758,49 @@ export class PaymentsService {
       return
     }
 
+    // La notificación tiene que ser de ESTE pago y el pago tiene que ser de Mercado Pago.
+    // Va antes de la transacción: externalReference viene del request y metodo no cambia
+    // mientras el pago está en este flujo. Con el provider actual, las notificaciones de
+    // relleno (tópico desconocido, payment sin order) traen externalReference '' y caen acá.
+    if (resultado.externalReference !== pagoId) {
+      this.logger.warn(
+        `procesarWebhookMercadoPago: externalReference "${resultado.externalReference}" no coincide con pagoId ${pagoId}, ` +
+          `ignorando notificación (sesionId=${pagoActual.sesionId}, merchantOrderId=${resultado.externalId})`,
+      )
+      return
+    }
+    if (pagoActual.metodo !== 'mercadopago') {
+      this.logger.warn(
+        `procesarWebhookMercadoPago: el pago ${pagoId} no es de Mercado Pago (metodo=${pagoActual.metodo}), ` +
+          `ignorando notificación (sesionId=${pagoActual.sesionId}, merchantOrderId=${resultado.externalId})`,
+      )
+      return
+    }
+
     if (pagoActual.referenciaExterna === resultado.externalId && pagoActual.estado === estadoInterno) {
       return
     }
 
     const sesionCerrada = await runSerializableTransaction(this.prisma, async (tx) => {
+      // Estados finales: aprobado y cancelado no los cambia el webhook (ni siquiera
+      // referenciaExterna). Se lee acá, dentro de la tx, porque registrarCobro puede
+      // cancelar el pago entre la lectura de arriba y este punto.
+      const actual = await tx.pago.findUnique({ where: { id: pagoId }, select: { estado: true } })
+      if (
+        actual &&
+        (actual.estado === ESTADO_PAGO_APROBADO || actual.estado === ESTADO_PAGO_CANCELADO)
+      ) {
+        if (actual.estado !== estadoInterno) {
+          const detalle = `sesionId=${pagoActual.sesionId}, pagoId=${pagoId}, merchantOrderId=${resultado.externalId}`
+          this.logger.warn(
+            actual.estado === ESTADO_PAGO_CANCELADO && estadoInterno === ESTADO_PAGO_APROBADO
+              ? `procesarWebhookMercadoPago: MP informó aprobado para un pago cancelado; devolución manual pendiente (${detalle})`
+              : `procesarWebhookMercadoPago: transición ignorada ${actual.estado} → ${estadoInterno} (${detalle})`,
+          )
+        }
+        return false
+      }
+
       await tx.pago.update({
         where: { id: pagoId },
         data: {

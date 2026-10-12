@@ -7,6 +7,7 @@ import {
   NotFoundException,
 } from '@nestjs/common'
 import { JwtService } from '@nestjs/jwt'
+import { Pago } from '@prisma/client'
 import { PrismaService } from '../prisma/prisma.service'
 import { UsersService } from '../users/users.service'
 import { MenyuGateway } from '../gateway/menyu.gateway'
@@ -22,6 +23,26 @@ import {
   ESTADO_PAGO_PENDIENTE,
   ESTADO_PAGO_CANCELADO,
 } from '../common/estado-pago.constant'
+
+// Un pago de Mercado Pago "pendiente" más nuevo que esto puede ser un comensal con el
+// checkout abierto: cobrar la mesa lo cancela, así que se pide confirmación al mozo.
+// Más viejo que esto se considera abandonado y se cancela sin aviso.
+const VENTANA_MP_PENDIENTE_MS = 10 * 60 * 1000
+
+function haceMinutos(createdAt: Date, ahora: number): string {
+  const min = Math.floor((ahora - createdAt.getTime()) / 60_000)
+  if (min < 1) return 'hace menos de 1 minuto'
+  return min === 1 ? 'hace 1 minuto' : `hace ${min} minutos`
+}
+
+function mensajePagosMpRecientes(pagos: Pick<Pago, 'monto' | 'createdAt'>[], ahora: number): string {
+  const total = pagos.reduce((acc, p) => acc + Number(p.monto), 0).toFixed(2)
+  const masReciente = pagos.reduce((a, b) => (b.createdAt > a.createdAt ? b : a))
+  if (pagos.length === 1) {
+    return `Un comensal inició un pago por MercadoPago de $${total} ${haceMinutos(masReciente.createdAt, ahora)}. Si cobrás la mesa, ese pago se cancela.`
+  }
+  return `Hay ${pagos.length} pagos por MercadoPago sin terminar por un total de $${total} (el más reciente ${haceMinutos(masReciente.createdAt, ahora)}). Si cobrás la mesa, se cancelan.`
+}
 
 export interface OpenStaffSessionResult {
   sesionId: string
@@ -596,6 +617,7 @@ export class SessionsService {
     await assertStaffAccess(this.prisma, sesion.mesa.restauranteId, user)
 
     const fechaCobro = new Date()
+    const ahora = fechaCobro.getTime()
 
     const sesionCerrada = await runSerializableTransaction(this.prisma, async (tx) => {
       const totalSesion = await this.divisionService.calcularTotalSesion(tx, sesionId)
@@ -609,30 +631,32 @@ export class SessionsService {
         throw new BadRequestException('Esta sesión ya está completamente pagada')
       }
 
-      const pagosPendientesComensales = await tx.pago.findMany({
-        where: { sesionId, comensalId: { not: null }, estado: ESTADO_PAGO_PENDIENTE },
+      // Pagos de Mercado Pago iniciados por un comensal y sin resolver. Cobrar la mesa los
+      // cancela. Los recientes pueden estar en pleno checkout: piden confirmación.
+      const pagosMpPendientes = await tx.pago.findMany({
+        where: { sesionId, metodo: 'mercadopago', estado: ESTADO_PAGO_PENDIENTE },
       })
-      if (pagosPendientesComensales.length > 0) {
-        if (!dto.confirmarCancelacionPagosPendientes) {
-          const montoTotal = pagosPendientesComensales.reduce((acc, p) => acc + Number(p.monto), 0)
-          throw new ConflictException(
-            `Hay ${pagosPendientesComensales.length} pago(s) pendiente(s) de comensales por un total de $${montoTotal.toFixed(2)}. ` +
-              'Confirmá la cancelación para cobrar toda la mesa.',
-          )
-        }
+      const pagosMpRecientes = pagosMpPendientes.filter(
+        (p) => ahora - p.createdAt.getTime() < VENTANA_MP_PENDIENTE_MS,
+      )
+      if (pagosMpRecientes.length > 0 && !dto.confirmarCancelacionPagosPendientes) {
+        throw new ConflictException(mensajePagosMpRecientes(pagosMpRecientes, ahora))
+      }
+      if (pagosMpPendientes.length > 0) {
         await tx.pago.updateMany({
-          where: { id: { in: pagosPendientesComensales.map((p) => p.id) } },
+          where: { id: { in: pagosMpPendientes.map((p) => p.id) } },
           data: { estado: ESTADO_PAGO_CANCELADO },
         })
       }
 
-      const pagoManualPendiente = await tx.pago.findFirst({
-        where: { sesionId, comensalId: null, estado: { not: ESTADO_PAGO_APROBADO } },
+      // Efectivo que un comensal pidió: es el pago que el mozo viene a cobrar, se reutiliza.
+      const pagoEfectivoPendiente = await tx.pago.findFirst({
+        where: { sesionId, metodo: 'efectivo', estado: ESTADO_PAGO_PENDIENTE },
       })
 
-      if (pagoManualPendiente) {
+      if (pagoEfectivoPendiente) {
         await tx.pago.update({
-          where: { id: pagoManualPendiente.id },
+          where: { id: pagoEfectivoPendiente.id },
           data: {
             estado: ESTADO_PAGO_APROBADO,
             monto: saldoPendiente,
@@ -647,7 +671,6 @@ export class SessionsService {
         await tx.pago.create({
           data: {
             sesionId,
-            comensalId: null,
             monto: saldoPendiente,
             metodo: dto.metodoPago,
             estado: ESTADO_PAGO_APROBADO,

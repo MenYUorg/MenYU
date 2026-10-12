@@ -4,6 +4,7 @@ import {
   ConflictException,
   ForbiddenException,
   InternalServerErrorException,
+  Logger,
   NotFoundException,
 } from '@nestjs/common'
 import { PaymentsService } from './payments.service'
@@ -28,6 +29,7 @@ const mockPrisma = {
   },
   pago: {
     findMany: jest.fn(),
+    findUnique: jest.fn(),
   },
   admin: {
     findUnique: jest.fn(),
@@ -47,8 +49,8 @@ const mockGateway = {
   emitQuierePagar: jest.fn(),
 }
 
-const mockMpProvider = {}
-const mockMpOAuth = {}
+const mockMpProvider = { processWebhook: jest.fn() }
+const mockMpOAuth = { getAccessTokenDecrypted: jest.fn() }
 
 const mockDivision = {
   obtenerSaldo: jest.fn(),
@@ -667,6 +669,160 @@ describe('PaymentsService', () => {
       expect(tx.mesa.update).not.toHaveBeenCalled()
       expect(mockGateway.emitSesionCobrada).not.toHaveBeenCalled()
       expect(result).toEqual({ ok: true })
+    })
+  })
+
+  // ── procesarWebhookMercadoPago ───────────────────────────────────────
+
+  describe('procesarWebhookMercadoPago', () => {
+    const PAGO_ID = 'pago-1'
+
+    let tx: ReturnType<typeof createTxMock>
+    let warnSpy: jest.SpyInstance
+
+    beforeEach(() => {
+      warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation()
+      tx = createTxMock()
+      mockPrisma.$transaction.mockImplementation((fn: any) => fn(tx))
+      mockMpOAuth.getAccessTokenDecrypted.mockResolvedValue('token')
+    })
+
+    afterEach(() => {
+      warnSpy.mockRestore()
+    })
+
+    // `estado` es lo que ve la lectura de afuera de la transacción; `estadoEnTx` lo que ve
+    // la lectura de adentro (distinto cuando alguien lo cambió en el medio).
+    function pagoEnBase(estado: string, metodo = 'mercadopago', estadoEnTx = estado) {
+      mockPrisma.pago.findUnique.mockResolvedValue({
+        id: PAGO_ID,
+        sesionId: 'sesion-1',
+        metodo,
+        estado,
+        referenciaExterna: null,
+        sesion: { mesaId: 'mesa-1' },
+      })
+      tx.pago.findUnique.mockResolvedValue({ estado: estadoEnTx })
+    }
+
+    function webhook(status: string, externalReference = PAGO_ID) {
+      mockMpProvider.processWebhook.mockResolvedValue({
+        externalId: 'mo-123',
+        status,
+        externalReference,
+      })
+      return service.procesarWebhookMercadoPago('rest-1', PAGO_ID, {})
+    }
+
+    it('pendiente → aprobado (camino feliz): actualiza, cierra la sesión y emite el evento', async () => {
+      pagoEnBase('pendiente')
+      mockDivision.calcularTotalSesion.mockResolvedValue(1000)
+      tx.pago.findMany.mockResolvedValue([{ monto: 1000 }])
+      mockPrisma.sesionMesa.findUnique.mockResolvedValue({ mesa: { id: 'mesa-1', numero: '5' } })
+
+      await webhook('APROBADO')
+
+      expect(tx.pago.update).toHaveBeenCalledWith({
+        where: { id: PAGO_ID },
+        data: expect.objectContaining({ estado: ESTADO_PAGO_APROBADO, referenciaExterna: 'mo-123' }),
+      })
+      expect(tx.sesionMesa.update).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: 'sesion-1' }, data: expect.objectContaining({ estado: 'cerrada' }) }),
+      )
+      expect(mockGateway.emitSesionCobrada).toHaveBeenCalledWith('rest-1', {
+        sesionId: 'sesion-1',
+        mesaId: 'mesa-1',
+        mesaNumero: '5',
+      })
+      expect(warnSpy).not.toHaveBeenCalled()
+    })
+
+    it('rechazado → aprobado se aplica (reintento legítimo del comensal)', async () => {
+      pagoEnBase('rechazado')
+      mockDivision.calcularTotalSesion.mockResolvedValue(1000)
+      tx.pago.findMany.mockResolvedValue([{ monto: 1000 }])
+      mockPrisma.sesionMesa.findUnique.mockResolvedValue({ mesa: { id: 'mesa-1', numero: '5' } })
+
+      await webhook('APROBADO')
+
+      expect(tx.pago.update).toHaveBeenCalledWith({
+        where: { id: PAGO_ID },
+        data: expect.objectContaining({ estado: ESTADO_PAGO_APROBADO, referenciaExterna: 'mo-123' }),
+      })
+      expect(warnSpy).not.toHaveBeenCalled()
+    })
+
+    it('aprobado sobre cancelado → no revive, deja warning de devolución manual', async () => {
+      pagoEnBase('cancelado')
+
+      await webhook('APROBADO')
+
+      expect(tx.pago.update).not.toHaveBeenCalled()
+      expect(tx.sesionMesa.update).not.toHaveBeenCalled()
+      expect(mockGateway.emitSesionCobrada).not.toHaveBeenCalled()
+      const mensaje = String(warnSpy.mock.calls[0][0])
+      expect(mensaje).toContain('devolución manual pendiente')
+      expect(mensaje).toContain('sesionId=sesion-1')
+      expect(mensaje).toContain('pagoId=pago-1')
+      expect(mensaje).toContain('merchantOrderId=mo-123')
+    })
+
+    it('pendiente sobre aprobado → no degrada, deja warning de transición ignorada', async () => {
+      pagoEnBase('aprobado')
+
+      await webhook('PENDIENTE')
+
+      expect(tx.pago.update).not.toHaveBeenCalled()
+      expect(String(warnSpy.mock.calls[0][0])).toContain('transición ignorada aprobado → pendiente')
+    })
+
+    it('pendiente sobre cancelado → sigue cancelado, deja warning de transición ignorada', async () => {
+      pagoEnBase('cancelado')
+
+      await webhook('PENDIENTE')
+
+      expect(tx.pago.update).not.toHaveBeenCalled()
+      expect(String(warnSpy.mock.calls[0][0])).toContain('transición ignorada cancelado → pendiente')
+    })
+
+    it('aprobado sobre aprobado → no-op silencioso (sin escritura y sin warning)', async () => {
+      pagoEnBase('aprobado')
+
+      await webhook('APROBADO')
+
+      expect(tx.pago.update).not.toHaveBeenCalled()
+      expect(warnSpy).not.toHaveBeenCalled()
+    })
+
+    it('carrera: la lectura de afuera ve pendiente pero adentro de la tx ya está cancelado → no revive', async () => {
+      pagoEnBase('pendiente', 'mercadopago', 'cancelado') // el mozo cobró la mesa en el medio
+
+      await webhook('APROBADO')
+
+      expect(tx.pago.update).not.toHaveBeenCalled()
+      expect(tx.sesionMesa.update).not.toHaveBeenCalled()
+      expect(mockGateway.emitSesionCobrada).not.toHaveBeenCalled()
+      expect(String(warnSpy.mock.calls[0][0])).toContain('devolución manual pendiente')
+    })
+
+    it('externalReference distinto del pagoId → no escribe', async () => {
+      pagoEnBase('pendiente')
+
+      await webhook('APROBADO', 'otro-pago')
+
+      expect(mockPrisma.$transaction).not.toHaveBeenCalled()
+      expect(tx.pago.update).not.toHaveBeenCalled()
+      expect(String(warnSpy.mock.calls[0][0])).toContain('no coincide con pagoId pago-1')
+    })
+
+    it('el pago no es de Mercado Pago → no escribe', async () => {
+      pagoEnBase('pendiente', 'efectivo')
+
+      await webhook('APROBADO')
+
+      expect(mockPrisma.$transaction).not.toHaveBeenCalled()
+      expect(tx.pago.update).not.toHaveBeenCalled()
+      expect(String(warnSpy.mock.calls[0][0])).toContain('no es de Mercado Pago')
     })
   })
 })
