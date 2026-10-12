@@ -7,7 +7,6 @@ import {
   HttpStatus,
   Param,
   ParseUUIDPipe,
-  Patch,
   Post,
   Query,
   UseGuards,
@@ -19,7 +18,6 @@ import { DivisionService } from './division.service'
 import { CrearComensalDto } from './dto/crear-comensal.dto'
 import { EtiquetarItemDto } from './dto/etiquetar-item.dto'
 import { ReclamarComensalDto } from './dto/reclamar-comensal.dto'
-import { SetCantidadComensalesDto } from './dto/set-cantidad-comensales.dto'
 
 @ApiTags('comensales')
 @Controller('sesiones/:sesionId/comensales')
@@ -44,7 +42,7 @@ export class ComensalesController {
   @Post('reclamar')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Reclamar un comensal existente de la sesión con el PIN de la mesa (no crea nada)' })
-  @ApiResponse({ status: 200, description: 'Comensal encontrado, con si ya tiene pago aprobado' })
+  @ApiResponse({ status: 200, description: 'Comensal encontrado' })
   @ApiResponse({ status: 404, description: 'PIN incorrecto, sesión no activa, o el comensal no existe en esta sesión' })
   reclamarComensal(@Param('sesionId') sesionId: string, @Body() dto: ReclamarComensalDto) {
     return this.comensalesService.reclamarComensal(sesionId, dto)
@@ -55,18 +53,6 @@ export class ComensalesController {
   @ApiResponse({ status: 200, description: 'Lista de comensales de la sesión' })
   listarComensales(@Param('sesionId') sesionId: string) {
     return this.comensalesService.listarComensales(sesionId)
-  }
-
-  @Patch('cantidad-comensales')
-  @ApiOperation({ summary: 'Fijar (o volver a null) la cantidad de comensales esperada de la sesión' })
-  @ApiResponse({ status: 200, description: 'Cantidad de comensales actualizada' })
-  @ApiResponse({ status: 404, description: 'Sesión no encontrada' })
-  @ApiResponse({ status: 409, description: 'Sesión congelada' })
-  setCantidadComensales(
-    @Param('sesionId') sesionId: string,
-    @Body() dto: SetCantidadComensalesDto,
-  ) {
-    return this.comensalesService.setCantidadComensales(sesionId, dto)
   }
 
   @Post('etiquetas')
@@ -107,15 +93,6 @@ export class ComensalesController {
     return this.comensalesService.listarEtiquetasDeItem(sesionId, pedidoItemId)
   }
 
-  @Get('division/partes-iguales')
-  @ApiOperation({ summary: 'Calcular la división de la cuenta en partes iguales' })
-  @ApiResponse({ status: 200, description: 'Monto a pagar por cada comensal' })
-  @ApiResponse({ status: 400, description: 'Sin comensales registrados o sin comensal owner definido' })
-  @ApiResponse({ status: 404, description: 'Sesión no encontrada' })
-  calcularPartesIguales(@Param('sesionId') sesionId: string) {
-    return this.divisionService.calcularPartesIguales(sesionId)
-  }
-
   @Get('division/por-consumo')
   @ApiOperation({ summary: 'Calcular la división de la cuenta según el consumo etiquetado de cada comensal' })
   @ApiResponse({ status: 200, description: 'Monto a pagar por cada comensal según lo que consumió, más los ítems huérfanos' })
@@ -125,14 +102,6 @@ export class ComensalesController {
     return this.divisionService.calcularPorConsumo(sesionId)
   }
 
-  @Get('division/modo')
-  @ApiOperation({ summary: 'Obtener el modo de división ya fijado para la sesión, si existe' })
-  @ApiResponse({ status: 200, description: 'Modo de división actual (null si todavía no se decidió)' })
-  @ApiResponse({ status: 404, description: 'Sesión no encontrada' })
-  obtenerModoDivision(@Param('sesionId') sesionId: string) {
-    return this.divisionService.obtenerModoDivision(sesionId)
-  }
-
   @Delete(':comensalId')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Borrar un comensal creado por otro comensal (nunca uno auto-registrado)' })
@@ -140,7 +109,7 @@ export class ComensalesController {
   @ApiResponse({ status: 400, description: 'El comensal es auto-registrado y no puede borrarse desde acá' })
   @ApiResponse({ status: 403, description: 'El solicitante no es quien creó a este comensal' })
   @ApiResponse({ status: 404, description: 'Comensal no encontrado en esta sesión' })
-  @ApiResponse({ status: 409, description: 'Sesión congelada, o el comensal tiene pago aprobado' })
+  @ApiResponse({ status: 409, description: 'Sesión congelada' })
   borrarComensal(
     @Param('sesionId') sesionId: string,
     @Param('comensalId') comensalId: string,

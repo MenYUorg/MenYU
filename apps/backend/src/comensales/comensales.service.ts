@@ -11,7 +11,6 @@ import { ESTADO_PAGO_APROBADO } from '../common/estado-pago.constant'
 import { CrearComensalDto } from './dto/crear-comensal.dto'
 import { EtiquetarItemDto } from './dto/etiquetar-item.dto'
 import { ReclamarComensalDto } from './dto/reclamar-comensal.dto'
-import { SetCantidadComensalesDto } from './dto/set-cantidad-comensales.dto'
 
 @Injectable()
 export class ComensalesService {
@@ -79,10 +78,6 @@ export class ComensalesService {
     if (comensal.creadoPorComensalId !== solicitanteComensalId) {
       throw new ForbiddenException('Solo quien creó a este comensal puede borrarlo')
     }
-    if (await this.comensalTienePagoAprobado(comensalId)) {
-      throw new ConflictException('No se puede borrar un comensal con pago aprobado')
-    }
-
     await this.prisma.$transaction([
       this.prisma.itemComensal.deleteMany({ where: { comensalId } }),
       this.prisma.comensal.delete({ where: { id: comensalId } }),
@@ -111,34 +106,13 @@ export class ComensalesService {
       throw errorGenerico
     }
 
-    return {
-      ...comensal,
-      tienePagoAprobado: await this.comensalTienePagoAprobado(comensal.id),
-    }
+    return comensal
   }
 
   async listarComensales(sesionId: string, client: Prisma.TransactionClient = this.prisma) {
     return client.comensal.findMany({
       where: { sesionId },
       orderBy: { createdAt: 'asc' },
-    })
-  }
-
-  async setCantidadComensales(sesionId: string, dto: SetCantidadComensalesDto) {
-    const sesion = await this.prisma.sesionMesa.findUnique({ where: { id: sesionId } })
-    if (!sesion) {
-      throw new NotFoundException('Sesión no encontrada')
-    }
-    if (await this.sesionEstaCongelada(sesionId)) {
-      throw new ConflictException(
-        'La sesión está congelada; no se puede modificar la cantidad de comensales',
-      )
-    }
-
-    return this.prisma.sesionMesa.update({
-      where: { id: sesionId },
-      data: { cantidadComensales: dto.cantidadComensales },
-      select: { id: true, cantidadComensales: true },
     })
   }
 
@@ -154,11 +128,6 @@ export class ComensalesService {
       if (!esHuerfano) {
         throw new ConflictException(
           'La sesión está congelada; solo se pueden etiquetar ítems que no tengan ninguna etiqueta',
-        )
-      }
-      if (await this.comensalTienePagoAprobado(dto.comensalId)) {
-        throw new ConflictException(
-          'No se puede etiquetar un ítem hacia un comensal con pago aprobado',
         )
       }
     }
@@ -207,14 +176,6 @@ export class ComensalesService {
   private async sesionEstaCongelada(sesionId: string): Promise<boolean> {
     const pagoAprobado = await this.prisma.pago.findFirst({
       where: { sesionId, estado: ESTADO_PAGO_APROBADO },
-      select: { id: true },
-    })
-    return pagoAprobado !== null
-  }
-
-  private async comensalTienePagoAprobado(comensalId: string): Promise<boolean> {
-    const pagoAprobado = await this.prisma.pago.findFirst({
-      where: { comensalId, estado: ESTADO_PAGO_APROBADO },
       select: { id: true },
     })
     return pagoAprobado !== null

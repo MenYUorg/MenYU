@@ -133,7 +133,6 @@ export const api = {
         nombre: string
         esOwner: boolean
         createdAt: string
-        tienePagoAprobado: boolean
       }>(
         'POST',
         `/sesiones/${sesionId}/comensales/reclamar`,
@@ -152,8 +151,6 @@ export const api = {
       }>>('GET', `/sesiones/${sesionId}/comensales`, undefined, jwt),
     calcularPorConsumo: (jwt: string, sesionId: string) =>
       req<{
-        divisionPagosHabilitada: boolean
-        divisor: number
         partes: Array<{ comensalId: string; nombre: string; montoCentavos: number; monto: number }>
         huerfanos: {
           items: Array<{ pedidoItemId: string; nombre: string; montoCentavos: number; monto: number }>
