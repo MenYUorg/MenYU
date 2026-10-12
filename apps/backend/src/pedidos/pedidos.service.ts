@@ -293,6 +293,7 @@ export class PedidosService {
       where: { mesa: { restauranteId }, estado },
       include: {
         mesa: { select: { numero: true } },
+        sesion: { select: { pagos: { where: { estado: 'aprobado' }, select: { id: true } } } },
         items: {
           include: {
             item: { select: { nombre: true } },
@@ -303,26 +304,17 @@ export class PedidosService {
                 },
               },
             },
-            asignaciones: {
-              include: {
-                comensal: {
-                  include: {
-                    pagos: { where: { estado: 'aprobado' } },
-                  },
-                },
-              },
-            },
           },
         },
       },
       orderBy: { createdAt: 'asc' },
     })
 
-    return pedidos.map((pedido) => ({
+    // `pagado`: la sesión del pedido ya tiene un cobro aprobado. `sesion` es solo para
+    // calcularlo y no se devuelve.
+    return pedidos.map(({ sesion, ...pedido }) => ({
       ...pedido,
-      pagado:
-        pedido.items.length > 0 &&
-        pedido.items.every((item) => item.asignaciones.some((a) => a.comensal.pagos.length > 0)),
+      pagado: pedido.items.length > 0 && sesion.pagos.length > 0,
     }))
   }
 
@@ -396,20 +388,8 @@ export class PedidosService {
       where: { id },
       include: {
         mesa: { select: { restauranteId: true } },
-        items: {
-          include: {
-            item: { select: { nombre: true } },
-            asignaciones: {
-              include: {
-                comensal: {
-                  include: {
-                    pagos: { where: { estado: 'aprobado' } },
-                  },
-                },
-              },
-            },
-          },
-        },
+        sesion: { select: { pagos: { where: { estado: 'aprobado' }, select: { id: true } } } },
+        items: { include: { item: { select: { nombre: true } } } },
       },
     })
     if (!pedido) throw new NotFoundException('Pedido no encontrado')
@@ -432,15 +412,11 @@ export class PedidosService {
       }
     }
 
-    // 4. Validar que ningún ítem editado ya fue pagado por algún comensal
-    for (const ed of dto.ediciones) {
-      const item = itemMap.get(ed.pedidoItemId)!
-      const yaPagado = item.asignaciones.some((a) => a.comensal.pagos.length > 0)
-      if (yaPagado) {
-        throw new BadRequestException(
-          `El ítem "${item.item.nombre}" ya fue pagado por un comensal y no puede editarse`,
-        )
-      }
+    // 4. Un pedido de una sesión con un cobro aprobado no se puede editar
+    if (pedido.sesion.pagos.length > 0) {
+      throw new BadRequestException(
+        'La mesa ya tiene un cobro registrado y el pedido no puede editarse.',
+      )
     }
 
     // 5. Validar cantidadNueva < cantidadActual para cada ítem editado

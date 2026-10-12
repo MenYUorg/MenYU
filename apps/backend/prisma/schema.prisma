@@ -34,7 +34,6 @@ model Restaurante {
   activo      Boolean  @default(true)
   createdAt   DateTime @default(now()) @map("created_at")
   nombreSeccionRecomendados String @default("RECOMENDACIONES") @map("nombre_seccion_recomendados")
-  divisionPagosHabilitada Boolean @default(true) @map("division_pagos_habilitada")
 
   marca         Marca              @relation(fields: [marcaId], references: [id])
   mozos         Mozo[]
@@ -173,8 +172,6 @@ model SesionMesa {
   iniciadaEn    DateTime  @default(now()) @map("iniciada_en")
   cerradaEn     DateTime? @map("cerrada_en")
   estado        String    @default("activa")
-  modoDivision  String?   @map("modo_division")
-  cantidadComensales Int? @map("cantidad_comensales")
 
   mesa          Mesa               @relation(fields: [mesaId], references: [id])
   cliente       Cliente?           @relation(fields: [clienteId], references: [id])
@@ -465,7 +462,6 @@ model PedidoEdicionItem {
 model Pago {
   id                String    @id @default(uuid())
   sesionId          String    @map("sesion_id")
-  comensalId        String?   @map("comensal_id")
   monto             Decimal   @db.Decimal(10, 2)
   metodo            String
   estado            String    @default("pendiente")
@@ -476,10 +472,8 @@ model Pago {
   createdAt         DateTime  @default(now()) @map("created_at")
 
   sesion   SesionMesa @relation(fields: [sesionId], references: [id])
-  comensal Comensal?  @relation(fields: [comensalId], references: [id])
   mozo     Mozo?      @relation(fields: [mozoId], references: [id])
 
-  @@unique([sesionId, comensalId])
   @@map("pago")
 }
 
@@ -500,7 +494,6 @@ model Comensal {
   sesion     SesionMesa     @relation(fields: [sesionId], references: [id])
   cliente    Cliente?       @relation(fields: [clienteId], references: [id])
   items      ItemComensal[]
-  pagos      Pago[]
 
   @@unique([sesionId, nombreNormalizado])
   @@map("comensal")

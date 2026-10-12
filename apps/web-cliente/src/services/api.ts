@@ -101,18 +101,18 @@ export const api = {
         { ...data, returnBaseUrl: window.location.origin },
         jwt,
       ),
-    solicitarEfectivo: (jwt: string, sesionId: string, comensalId: string | null, modo: 'partes_iguales' | 'por_consumo' | null) =>
+    solicitarEfectivo: (jwt: string, sesionId: string) =>
       req<{ pagoId: string; sesionId: string; estado: string }>(
         'POST',
         '/payments/solicitar-efectivo',
-        { sesionId, comensalId, modo },
+        { sesionId },
         jwt,
       ),
-    pagarConMercadoPago: (jwt: string, sesionId: string, comensalId: string | null, modo: 'partes_iguales' | 'por_consumo' | null) =>
+    pagarConMercadoPago: (jwt: string, sesionId: string) =>
       req<{ initPoint: string; preferenceId: string }>(
         'POST',
         '/payments/mercadopago/crear-preferencia',
-        { sesionId, comensalId, modo },
+        { sesionId },
         jwt,
       ),
   },
@@ -133,7 +133,6 @@ export const api = {
         nombre: string
         esOwner: boolean
         createdAt: string
-        tienePagoAprobado: boolean
       }>(
         'POST',
         `/sesiones/${sesionId}/comensales/reclamar`,
@@ -152,8 +151,6 @@ export const api = {
       }>>('GET', `/sesiones/${sesionId}/comensales`, undefined, jwt),
     calcularPorConsumo: (jwt: string, sesionId: string) =>
       req<{
-        divisionPagosHabilitada: boolean
-        divisor: number
         partes: Array<{ comensalId: string; nombre: string; montoCentavos: number; monto: number }>
         huerfanos: {
           items: Array<{ pedidoItemId: string; nombre: string; montoCentavos: number; monto: number }>

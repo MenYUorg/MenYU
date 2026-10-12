@@ -1,12 +1,7 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useState } from 'react'
 import { RefreshCw, X } from 'lucide-react'
 import { api, ApiError } from '../services/api'
-import type {
-  EstadoComensalDto,
-  EstadoComensalesResult,
-  EstadoPagoComensal,
-  SesionActivaItem,
-} from '../services/api'
+import type { SesionActivaItem } from '../services/api'
 
 type MetodoPago = 'efectivo' | 'debito' | 'credito' | 'transferencia' | 'mercadopago'
 type CobradoPorTipo = 'mozo' | 'gerente'
@@ -21,8 +16,6 @@ const C = {
   white:    '#FFFFFF',
   border:   '#E6E8EF',
   chipBg:   '#EEF0F8',
-  green:    '#1F9D57',
-  greenBg:  '#E4F6EC',
   orangeBg: '#FDF0ED',
   textMut:  '#6B7280',
   red:      '#dc2626',
@@ -40,46 +33,6 @@ function fmtMoney(n: number): string {
   return '$' + n.toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })
 }
 
-// El backend nombra los slots virtuales "Invitado N"; ese N es el indiceSlot que espera al cobrar.
-function indiceDeSlot(nombre: string): number | null {
-  const m = /^Invitado (\d+)$/.exec(nombre)
-  return m ? Number(m[1]) : null
-}
-
-interface PresentacionPago {
-  etiqueta: string
-  color: string
-  fondo: string
-  cobrable: boolean
-}
-
-// Switch exhaustivo: si EstadoPagoComensal suma un estado, el `never` del default rompe el typecheck.
-function presentarEstadoPago(estadoPago: EstadoPagoComensal | null): PresentacionPago {
-  switch (estadoPago) {
-    case 'aprobado':
-      return { etiqueta: 'Pagado', color: C.green, fondo: C.greenBg, cobrable: false }
-    case 'pendiente':
-      return { etiqueta: 'Pidió la cuenta', color: C.orange, fondo: C.white, cobrable: true }
-    case 'cancelado':
-      return { etiqueta: 'Pago cancelado', color: C.red, fondo: C.white, cobrable: true }
-    case 'rechazado':
-      return { etiqueta: 'Pago rechazado', color: C.red, fondo: C.white, cobrable: true }
-    case null:
-      return { etiqueta: 'Sin cobrar', color: C.textMut, fondo: C.white, cobrable: true }
-    default: {
-      // En runtime, un estado desconocido nunca se ofrece como cobrable.
-      const _exhaustivo: never = estadoPago
-      void _exhaustivo
-      return { etiqueta: 'Estado desconocido', color: C.red, fondo: C.white, cobrable: false }
-    }
-  }
-}
-
-interface ErrorEstado {
-  mensaje: string
-  reintentable: boolean
-}
-
 interface CobroModalProps {
   sesion: SesionActivaItem
   cobradoPor: CobradoPor
@@ -95,9 +48,6 @@ export function CobroModal({ sesion, cobradoPor, onClose, onDone }: CobroModalPr
   const [loading,           setLoading]           = useState(false)
   const [error,             setError]             = useState<string | null>(null)
   const [advertencia,       setAdvertencia]       = useState<string | null>(null)
-  const [estado,            setEstado]            = useState<EstadoComensalesResult | null>(null)
-  const [errorEstado,       setErrorEstado]       = useState<ErrorEstado | null>(null)
-  const [cargandoLista,     setCargandoLista]     = useState(true)
 
   const canConfirm = !!metodo && (
     cobradoPor.modo === 'mozo-actual' ||
@@ -106,39 +56,6 @@ export function CobroModal({ sesion, cobradoPor, onClose, onDone }: CobroModalPr
     (cobradoPorTipo === 'mozo' && !!mozoId)
   )
 
-  const mostrarLista =
-    estado !== null &&
-    estado.divisionPagosHabilitada &&
-    estado.modoDivision !== null &&
-    estado.cantidadComensales !== null
-
-  const cargarEstado = useCallback(async (): Promise<EstadoComensalesResult | null> => {
-    try {
-      const r = await api.pagos.getEstadoComensales(sesion.id)
-      setEstado(r)
-      setErrorEstado(null)
-      return r
-    } catch (e) {
-      // No se vacía `estado`: si falla una recarga la lista previa sigue visible y el
-      // aviso indica que puede estar desactualizada.
-      const noEncontrada = e instanceof ApiError && e.status === 404
-      setErrorEstado({
-        mensaje: e instanceof Error ? e.message : 'Error de conexión',
-        reintentable: !noEncontrada,
-      })
-      return null
-    }
-  }, [sesion.id])
-
-  useEffect(() => {
-    void cargarEstado().finally(() => setCargandoLista(false))
-  }, [cargarEstado])
-
-  function reintentarEstado() {
-    setCargandoLista(true)
-    void cargarEstado().finally(() => setCargandoLista(false))
-  }
-
   // Quién responde por el cobro, según el rol y las opciones elegidas.
   function datosCobrador(): { mozoId?: string; cobradoPorNombre?: string } {
     if (cobradoPor.modo === 'mozo-actual') return cobradoPor.mozoId ? { mozoId: cobradoPor.mozoId } : {}
@@ -146,15 +63,6 @@ export function CobroModal({ sesion, cobradoPor, onClose, onDone }: CobroModalPr
     if (cobradoPorTipo === 'mozo' && mozoId) return { mozoId }
     if (cobradoPorTipo === 'gerente') return { cobradoPorNombre: cobradoPor.gerenteNombre }
     return {}
-  }
-
-  // Tras un cobro exitoso: si el saldo quedó en 0 la sesión se cerró → cerrar el modal;
-  // si no, queda abierto con la lista actualizada.
-  async function finalizarCobro() {
-    if (!mostrarLista) { onDone(sesion.mesaNumero); return }
-    const r = await cargarEstado()
-    if (r === null || r.saldoPendiente <= 0) { onDone(sesion.mesaNumero); return }
-    setLoading(false)
   }
 
   async function cobrarMesa(confirmarCancelacion = false) {
@@ -169,37 +77,10 @@ export function CobroModal({ sesion, cobradoPor, onClose, onDone }: CobroModalPr
         ...(metodo === 'mercadopago' && referenciaExterna.trim() ? { referenciaExterna: referenciaExterna.trim() } : {}),
         ...(confirmarCancelacion ? { confirmarCancelacionPagosPendientes: true } : {}),
       })
-      await finalizarCobro()
+      onDone(sesion.mesaNumero)
     } catch (e) {
       if (e instanceof ApiError && e.status === 409) setAdvertencia(e.message)
       else setError(e instanceof Error ? e.message : 'Error al registrar pago')
-      setLoading(false)
-    }
-  }
-
-  async function cobrarComensal(c: EstadoComensalDto) {
-    if (!canConfirm || !metodo) return
-    let indiceSlot: number | undefined
-    if (c.comensalId === null) {
-      const n = indiceDeSlot(c.nombre)
-      if (n === null) { setError(`No se pudo determinar el número de "${c.nombre}"`); return }
-      indiceSlot = n
-    }
-    setLoading(true)
-    setError(null)
-    setAdvertencia(null)
-    try {
-      await api.pagos.cobrarComensal(sesion.id, {
-        comensalId: c.comensalId,
-        ...(indiceSlot !== undefined ? { indiceSlot } : {}),
-        metodoPago: metodo,
-        ...datosCobrador(),
-      })
-      await finalizarCobro()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Error al registrar pago')
-      // 409: el slot ya no está disponible o el pago ya estaba aprobado → la lista quedó vieja.
-      if (e instanceof ApiError && e.status === 409) await cargarEstado()
       setLoading(false)
     }
   }
@@ -215,7 +96,7 @@ export function CobroModal({ sesion, cobradoPor, onClose, onDone }: CobroModalPr
       onClick={(e) => { if (e.target === e.currentTarget && !loading) onClose() }}
     >
       <div style={{
-        background: C.white, borderRadius: 14, width: '100%', maxWidth: mostrarLista ? 500 : 440,
+        background: C.white, borderRadius: 14, width: '100%', maxWidth: 440,
         maxHeight: '90vh', overflowY: 'auto',
         padding: '28px 28px 24px', boxShadow: '0 24px 64px rgba(0,0,0,0.18)',
       }}>
@@ -225,29 +106,12 @@ export function CobroModal({ sesion, cobradoPor, onClose, onDone }: CobroModalPr
             <h3 style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 17, color: C.navy, margin: 0 }}>
               Registrar pago · Mesa {sesion.mesaNumero}
             </h3>
-            {mostrarLista && estado ? (
-              <div style={{ display: 'flex', gap: 18, marginTop: 8, fontFamily: 'Inter,sans-serif', fontSize: 12, color: C.textMut }}>
-                {([
-                  ['Total', estado.totalSesion],
-                  ['Cobrado', estado.totalCobrado],
-                  ['Saldo', estado.saldoPendiente],
-                ] as const).map(([label, valor]) => (
-                  <span key={label}>
-                    {label}:{' '}
-                    <span style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 800, color: C.navy }}>
-                      {fmtMoney(valor)}
-                    </span>
-                  </span>
-                ))}
-              </div>
-            ) : (
-              <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 13, color: C.textMut, margin: '5px 0 0' }}>
-                Total a cobrar:{' '}
-                <span style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 800, color: C.navy }}>
-                  {fmtMoney(sesion.totalAcumulado)}
-                </span>
-              </p>
-            )}
+            <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 13, color: C.textMut, margin: '5px 0 0' }}>
+              Total a cobrar:{' '}
+              <span style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 800, color: C.navy }}>
+                {fmtMoney(sesion.totalAcumulado)}
+              </span>
+            </p>
           </div>
           <button
             onClick={onClose}
@@ -257,41 +121,6 @@ export function CobroModal({ sesion, cobradoPor, onClose, onDone }: CobroModalPr
             <X size={18} />
           </button>
         </div>
-
-        {/* Aviso: no se pudo cargar el estado por comensal */}
-        {errorEstado && (
-          <div style={{
-            padding: '12px 14px', borderRadius: 8, marginBottom: 18,
-            background: C.orangeBg, border: `1px solid ${C.orange}`,
-            fontFamily: 'Inter,sans-serif', fontSize: 13, color: '#374151',
-          }}>
-            <div style={{ fontWeight: 600, marginBottom: 4 }}>
-              {estado !== null
-                ? 'No se pudo actualizar la lista de comensales.'
-                : 'No se pudo cargar el estado por comensal.'}
-            </div>
-            <div style={{ fontSize: 12, color: C.textMut }}>
-              {errorEstado.mensaje}.{' '}
-              {estado !== null
-                ? 'Los montos y estados que ves pueden estar desactualizados.'
-                : 'Puede haber pagos de comensales que no se están viendo.'}
-            </div>
-            {errorEstado.reintentable && (
-              <button
-                onClick={reintentarEstado}
-                disabled={cargandoLista || loading}
-                style={{
-                  marginTop: 10, padding: '6px 14px', borderRadius: 6,
-                  border: `1px solid ${C.orange}`, background: C.white, color: C.orange,
-                  fontFamily: 'Inter,sans-serif', fontSize: 12, fontWeight: 600,
-                  cursor: cargandoLista || loading ? 'default' : 'pointer',
-                }}
-              >
-                {cargandoLista ? 'Reintentando…' : 'Reintentar'}
-              </button>
-            )}
-          </div>
-        )}
 
         {/* Método de pago */}
         <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 10 }}>
@@ -377,7 +206,7 @@ export function CobroModal({ sesion, cobradoPor, onClose, onDone }: CobroModalPr
         {metodo === 'mercadopago' && (
           <>
             <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 8 }}>
-              ID de transacción (opcional){mostrarLista ? ' · solo para cobro de mesa completa' : ''}
+              ID de transacción (opcional)
             </p>
             <input
               type="text"
@@ -392,62 +221,6 @@ export function CobroModal({ sesion, cobradoPor, onClose, onDone }: CobroModalPr
               }}
             />
           </>
-        )}
-
-        {/* Comensales */}
-        {cargandoLista && !errorEstado && (
-          <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 12, color: C.textMut, marginBottom: 16 }}>
-            Cargando comensales…
-          </p>
-        )}
-        {mostrarLista && estado && (
-          <div style={{ marginBottom: 20 }}>
-            <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 8 }}>
-              Cobro por comensal
-            </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {estado.comensales.map((c) => {
-                const p = presentarEstadoPago(c.estadoPago)
-                return (
-                  <div
-                    key={c.comensalId ?? c.nombre}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 10,
-                      padding: '9px 12px', borderRadius: 8,
-                      border: `1px solid ${C.border}`, background: p.fondo,
-                    }}
-                  >
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontFamily: 'Inter,sans-serif', fontSize: 13, fontWeight: 600, color: C.navy }}>
-                        {c.nombre}
-                      </div>
-                      <div style={{ fontFamily: 'Inter,sans-serif', fontSize: 11, color: p.color }}>
-                        {p.etiqueta}
-                      </div>
-                    </div>
-                    <span style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 13, color: C.navy }}>
-                      {c.monto === null ? '—' : fmtMoney(c.monto)}
-                    </span>
-                    {p.cobrable && (
-                      <button
-                        onClick={() => void cobrarComensal(c)}
-                        disabled={!canConfirm || loading}
-                        style={{
-                          padding: '6px 14px', borderRadius: 6, border: 'none',
-                          background: !canConfirm || loading ? '#d1d5db' : C.orange,
-                          color: !canConfirm || loading ? '#9ca3af' : C.white,
-                          fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 12,
-                          cursor: !canConfirm || loading ? 'not-allowed' : 'pointer',
-                        }}
-                      >
-                        Cobrar
-                      </button>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          </div>
         )}
 
         {error && (
@@ -522,7 +295,7 @@ export function CobroModal({ sesion, cobradoPor, onClose, onDone }: CobroModalPr
               }}
             >
               {loading && <RefreshCw size={13} style={{ animation: 'spin 0.8s linear infinite' }} />}
-              {loading ? 'Registrando…' : mostrarLista ? 'Cobrar mesa completa' : 'Confirmar pago'}
+              {loading ? 'Registrando…' : 'Confirmar pago'}
             </button>
           </div>
         )}
