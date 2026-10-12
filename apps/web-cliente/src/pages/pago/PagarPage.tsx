@@ -82,10 +82,10 @@ export function PagarPage() {
     setPagandoTotal('efectivo')
     setErrorPagoTotal(null)
     try {
-      await api.payments.solicitarEfectivo(jwt, sesionId, null, null)
+      await api.payments.solicitarEfectivo(jwt, sesionId)
       setPagoTotalConfirmado(true)
     } catch (e) {
-      // El 409 de conflicto con un pago individual pendiente llega acá con su mensaje.
+      // Por ejemplo, "ya está completamente pagada" (400) llega acá con su mensaje.
       setErrorPagoTotal(e instanceof Error ? e.message : 'Error al registrar el pago en efectivo')
     } finally {
       setPagandoTotal(null)
@@ -97,7 +97,7 @@ export function PagarPage() {
     setPagandoTotal('mercadopago')
     setErrorPagoTotal(null)
     try {
-      const { initPoint } = await api.payments.pagarConMercadoPago(jwt, sesionId, null, null)
+      const { initPoint } = await api.payments.pagarConMercadoPago(jwt, sesionId)
       window.location.href = initPoint
     } catch (e) {
       setErrorPagoTotal(e instanceof Error ? e.message : 'Error al iniciar el pago con Mercado Pago')

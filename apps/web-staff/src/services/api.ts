@@ -197,7 +197,6 @@ export interface SesionPagadaItem {
   fechaCobro: string | null
   pagos?: {
     id: string
-    comensalId: string | null
     metodo: string
     estado: string
     cobradoPorNombre: string | null

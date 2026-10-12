@@ -101,18 +101,18 @@ export const api = {
         { ...data, returnBaseUrl: window.location.origin },
         jwt,
       ),
-    solicitarEfectivo: (jwt: string, sesionId: string, comensalId: string | null, modo: 'partes_iguales' | 'por_consumo' | null) =>
+    solicitarEfectivo: (jwt: string, sesionId: string) =>
       req<{ pagoId: string; sesionId: string; estado: string }>(
         'POST',
         '/payments/solicitar-efectivo',
-        { sesionId, comensalId, modo },
+        { sesionId },
         jwt,
       ),
-    pagarConMercadoPago: (jwt: string, sesionId: string, comensalId: string | null, modo: 'partes_iguales' | 'por_consumo' | null) =>
+    pagarConMercadoPago: (jwt: string, sesionId: string) =>
       req<{ initPoint: string; preferenceId: string }>(
         'POST',
         '/payments/mercadopago/crear-preferencia',
-        { sesionId, comensalId, modo },
+        { sesionId },
         jwt,
       ),
   },
