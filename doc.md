@@ -287,6 +287,8 @@ Auth required on all endpoints: `Bearer` + role `ROOT`.
 | `GET` | `/api/marcas/:id` | Get brand by ID |
 | `PATCH` | `/api/marcas/:id` | Update brand |
 | `DELETE` | `/api/marcas/:id` | Delete brand |
+| `POST` | `/api/marcas/:id/logo` | Upload or replace the brand logo (OWNER of that brand only) |
+| `DELETE` | `/api/marcas/:id/logo` | Remove the brand logo (OWNER of that brand only) |
 
 ---
 
@@ -345,6 +347,39 @@ Returns all brands the current user can see (ROOT sees all).
 
 ---
 
+### `POST /api/marcas/:id/logo`
+
+Upload (or replace) the brand logo. Only the `OWNER` of that brand can do it: `ROOT`, `GERENTE` and the `OWNER` of another brand get 403. Accepts `multipart/form-data`.
+
+**Field name:** `logo`  
+**Allowed types:** `image/png`, `image/jpeg`, `image/webp` (checked against the file content, so a renamed file is rejected; SVG is not accepted)  
+**Max size:** 2 MB (a file of exactly 2 MB is accepted)
+
+**Response 201**
+
+```json
+{
+  "id": "uuid",
+  "logoUrl": "https://<project>.supabase.co/storage/v1/object/public/logos/marcas/<id>?v=1760000000000"
+}
+```
+
+The file is always stored at the same path, so the `?v=` suffix changes on every upload to keep browsers from showing the previous logo. The bucket name comes from `SUPABASE_LOGOS_BUCKET` (default `logos`).
+
+**Responses:** 201 uploaded · 400 invalid or missing file · 401 · 403 · 404 · 413 file too large
+
+---
+
+### `DELETE /api/marcas/:id/logo`
+
+Remove the brand logo and delete the stored file. Only the `OWNER` of that brand. Restaurants without a logo of their own end up with no logo.
+
+**Response 200:** `{ "id": "uuid", "logoUrl": null }`
+
+**Responses:** 200 · 401 · 403 · 404 (the brand has no logo)
+
+---
+
 ## Restaurantes — `/api/restaurantes`
 
 Auth required: `Bearer` + role `ROOT` or `OWNER`. OWNER only sees their own brand's restaurants.
@@ -358,6 +393,8 @@ Auth required: `Bearer` + role `ROOT` or `OWNER`. OWNER only sees their own bran
 | `GET` | `/api/restaurantes/:id` | ROOT, OWNER | Get restaurant |
 | `PATCH` | `/api/restaurantes/:id` | ROOT, OWNER | Update restaurant |
 | `DELETE` | `/api/restaurantes/:id` | ROOT | Delete restaurant |
+| `POST` | `/api/restaurantes/:id/logo` | OWNER | Upload or replace the restaurant logo |
+| `DELETE` | `/api/restaurantes/:id/logo` | OWNER | Remove the restaurant logo |
 
 ---
 
@@ -369,8 +406,7 @@ Auth required: `Bearer` + role `ROOT` or `OWNER`. OWNER only sees their own bran
 {
   "marcaId": "uuid",
   "nombre": "Sucursal Centro",
-  "direccion": "Av. Corrientes 1234",
-  "qrBaseUrl": "https://app.menyu.com"
+  "direccion": "Av. Corrientes 1234"
 }
 ```
 
@@ -378,8 +414,7 @@ Auth required: `Bearer` + role `ROOT` or `OWNER`. OWNER only sees their own bran
 |---|---|---|
 | `marcaId` | UUID | yes |
 | `nombre` | string | yes |
-| `direccion` | string | no |
-| `qrBaseUrl` | string | no |
+| `direccion` | string (trimmed, not empty, max 200 characters) | yes |
 
 **Responses:** 201 · 401 · 403
 
@@ -405,7 +440,6 @@ Auth required: `Bearer` + role `ROOT` or `OWNER`. OWNER only sees their own bran
 {
   "nombre": "Sucursal Norte",
   "direccion": "Av. Santa Fe 500",
-  "qrBaseUrl": "https://app.menyu.com",
   "modoSesion": "abierto"
 }
 ```
@@ -413,17 +447,43 @@ Auth required: `Bearer` + role `ROOT` or `OWNER`. OWNER only sees their own bran
 | Field | Type | Values |
 |---|---|---|
 | `nombre` | string | — |
-| `direccion` | string | — |
-| `qrBaseUrl` | string | — |
+| `direccion` | string | Trimmed, not empty, max 200 characters. **Only the `OWNER` of the restaurant's brand can change it** (`GERENTE` and `ROOT` get 403) |
 | `modoSesion` | string | `"abierto"` \| `"seguro"` |
 
-**Responses:** 200 · 404
+**Responses:** 200 · 400 · 403 · 404
 
 ---
 
 ### `DELETE /api/restaurantes/:id`
 
 **Responses:** 204 · 404
+
+---
+
+### `POST /api/restaurantes/:id/logo`
+
+Upload (or replace) the logo of one restaurant. Same rules as the brand logo: `multipart/form-data`, field `logo`, PNG, JPEG or WebP up to 2 MB, only the `OWNER` of the restaurant's brand (`ROOT`, `GERENTE` and the `OWNER` of another brand get 403). When a restaurant has no logo of its own, the brand logo is the one shown to diners.
+
+**Response 201**
+
+```json
+{
+  "id": "uuid",
+  "logoUrl": "https://<project>.supabase.co/storage/v1/object/public/logos/restaurantes/<id>?v=1760000000000"
+}
+```
+
+**Responses:** 201 uploaded · 400 invalid or missing file · 401 · 403 · 404 · 413 file too large
+
+---
+
+### `DELETE /api/restaurantes/:id/logo`
+
+Remove the restaurant's own logo and delete the stored file (it goes back to using the brand logo). Only the `OWNER` of the restaurant's brand.
+
+**Response 200:** `{ "id": "uuid", "logoUrl": null }`
+
+**Responses:** 200 · 401 · 403 · 404 (the restaurant has no logo of its own)
 
 ---
 

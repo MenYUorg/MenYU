@@ -7,6 +7,7 @@ export interface Marca {
   id: string
   nombre: string
   slug: string
+  logoUrl: string | null
   activo: boolean
   createdAt: string
 }
@@ -16,7 +17,7 @@ export interface Restaurante {
   marcaId: string
   nombre: string
   direccion: string | null
-  qrBaseUrl: string | null
+  logoUrl: string | null
   modoSesion: string
   activo: boolean
   createdAt: string

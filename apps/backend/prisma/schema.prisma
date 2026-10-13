@@ -16,6 +16,7 @@ model Marca {
   id         String       @id @default(uuid())
   nombre     String
   slug       String       @unique
+  logoUrl    String?      @map("logo_url")
   activo     Boolean      @default(true)
   createdAt  DateTime     @default(now()) @map("created_at")
 
@@ -30,6 +31,7 @@ model Restaurante {
   marcaId     String   @map("marca_id")
   nombre      String
   direccion   String?
+  logoUrl     String?  @map("logo_url")
   modoSesion  String   @default("abierto") @map("modo_sesion")
   activo      Boolean  @default(true)
   createdAt   DateTime @default(now()) @map("created_at")

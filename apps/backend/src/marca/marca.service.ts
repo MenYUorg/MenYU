@@ -5,11 +5,14 @@ import {
   NotFoundException,
 } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
+import { LogosService } from '../storage/logos.service'
+import { assertOwnerDeMarca } from '../common/assert-owner-access'
 import { JwtPayload } from '../auth/auth.service'
 import { CreateMarcaDto } from './dto/create-marca.dto'
 import { UpdateMarcaDto } from './dto/update-marca.dto'
 
-const DETAIL_INCLUDE = {
+// Los ítems pertenecen a cada restaurante, no a la marca: se piden con GET /items?restauranteId=
+export const MARCA_DETAIL_INCLUDE = {
   restaurantes: {
     where: { activo: true },
     include: {
@@ -18,17 +21,14 @@ const DETAIL_INCLUDE = {
       mesas: true,
     },
   },
-  items: {
-    where: { disponible: true },
-    include: {
-      comanda: true,
-    },
-  },
 } as const
 
 @Injectable()
 export class MarcaService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly logos: LogosService,
+  ) {}
 
   async findRestaurantesByMarca(marcaId: string) {
     return this.prisma.restaurante.findMany({
@@ -100,7 +100,7 @@ export class MarcaService {
     }
     const marca = await this.prisma.marca.findUnique({
       where: { id },
-      include: DETAIL_INCLUDE,
+      include: MARCA_DETAIL_INCLUDE,
     })
     if (!marca || !marca.activo) throw new NotFoundException('Marca no encontrada')
     return marca
@@ -127,6 +127,38 @@ export class MarcaService {
   async remove(id: string) {
     await this.assertExists(id)
     return this.prisma.marca.update({ where: { id }, data: { activo: false } })
+  }
+
+  // ── Logo (solo el OWNER de la marca) ──────────────────────────────────
+
+  async uploadLogo(id: string, file: Express.Multer.File, user: JwtPayload) {
+    await assertOwnerDeMarca(this.prisma, id, user)
+    await this.assertExists(id)
+
+    const logoUrl = await this.logos.subir('marcas', id, file)
+    return this.prisma.marca.update({
+      where: { id },
+      data: { logoUrl },
+      select: { id: true, logoUrl: true },
+    })
+  }
+
+  async removeLogo(id: string, user: JwtPayload) {
+    await assertOwnerDeMarca(this.prisma, id, user)
+
+    const marca = await this.prisma.marca.findUnique({
+      where: { id },
+      select: { activo: true, logoUrl: true },
+    })
+    if (!marca || !marca.activo) throw new NotFoundException('Marca no encontrada')
+    if (!marca.logoUrl) throw new NotFoundException('Esta marca no tiene logo')
+
+    await this.logos.eliminar('marcas', id)
+    return this.prisma.marca.update({
+      where: { id },
+      data: { logoUrl: null },
+      select: { id: true, logoUrl: true },
+    })
   }
 
   private async assertExists(id: string): Promise<void> {

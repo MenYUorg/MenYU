@@ -39,11 +39,14 @@ Solo para el entorno local.
 |---|---|---|
 | Admin ROOT | root@menyu.com | root1234 |
 | Admin OWNER | owner@menyu.com | owner1234 |
+| Admin GERENTE (Restaurante Seed) | gerente@menyu.com | gerente1234 |
+| Admin OWNER (Marca Seed 2) | owner2@menyu.com | owner21234 |
 | Mozo | mozo@menyu.com | mozo1234 |
 | Cliente 1 | cliente1@menyu.com | cliente1234 |
 | Cliente 2 | cliente2@menyu.com | cliente1234 |
 
-Mesas: número 99 (pin 9998), 100 (pin 9997), 101 (pin 9996).
+Mesas: número 99 (pin 9998), 100 (pin 9997), 101 (pin 9996), y la mesa 1 de
+Restaurante Seed 2 (pin 9995), la segunda marca del seed.
 Menú: 3 categorías (Entradas, Principales, Bebidas) con 9 ítems de precios
 distintos entre sí, pensados para testear división de cuenta por consumo.
 
@@ -107,6 +110,24 @@ npx prisma migrate status
 
 El host que imprime es el de `DIRECT_URL`, no el de `DATABASE_URL`: es el que
 `migrate` va a usar de verdad.
+
+### Logos: usar un bucket de desarrollo
+
+Solo la base de datos es local: el `.env` conserva las credenciales de Supabase
+de QA, así que lo que se sube desde local (imágenes de ítems y logos) va al
+Storage de QA. Los logos se guardan en `marcas/<id>` y `restaurantes/<id>`, y los
+IDs del seed son fijos: **subir un logo desde local pisa el logo de QA** de ese
+mismo ID.
+
+Para probar logos sin tocar QA, crear en Supabase un bucket de desarrollo (por
+ejemplo `logos-dev`: público, límite de 2 MB y solo PNG, JPEG y WebP) y sumar al
+`.env` local:
+
+```
+SUPABASE_LOGOS_BUCKET=logos-dev
+```
+
+Sin esa variable se usa el bucket `logos`, el mismo que QA y producción.
 
 ### Notas
 

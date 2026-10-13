@@ -6,6 +6,7 @@ import type {
   CategoriaMenu,
   Ingrediente,
   ClasificacionDieta,
+  LogoResponse,
   TokenPair,
 } from '@menyu/types'
 
@@ -271,12 +272,19 @@ export interface SesionHistorial {
 export const api = {
   marcas: {
     list: () => req<Marca[]>('GET', '/marcas'),
+    uploadLogo: (id: string, file: File) => upload<LogoResponse>(`/marcas/${id}/logo`, 'logo', file),
+    deleteLogo: (id: string) => req<LogoResponse>('DELETE', `/marcas/${id}/logo`),
   },
 
   restaurantes: {
     list: () => req<Restaurante[]>('GET', '/restaurantes'),
-    update: (id: string, data: { modoSesion?: string; nombreSeccionRecomendados?: string }) =>
-      req<Restaurante>('PATCH', `/restaurantes/${id}`, data),
+    update: (
+      id: string,
+      data: { modoSesion?: string; nombreSeccionRecomendados?: string; direccion?: string },
+    ) => req<Restaurante>('PATCH', `/restaurantes/${id}`, data),
+    uploadLogo: (id: string, file: File) =>
+      upload<LogoResponse>(`/restaurantes/${id}/logo`, 'logo', file),
+    deleteLogo: (id: string) => req<LogoResponse>('DELETE', `/restaurantes/${id}/logo`),
   },
 
   items: {
