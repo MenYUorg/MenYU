@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '@menyu/auth'
 import { useContextStore } from '../../store/contextStore'
+import { useMediaQuery } from '../../hooks/useMediaQuery'
 import {
   LayoutDashboard,
   Grid2x2,
@@ -12,6 +13,8 @@ import {
   ChevronLeft,
   ChevronRight,
   LogOut,
+  Menu,
+  X,
   ClipboardList,
   History,
   ShoppingBag,
@@ -136,11 +139,13 @@ function NavItem({
   label,
   Icon,
   collapsed,
+  touch = false,
 }: {
   to: string
   label: string
   Icon: LucideIcon
   collapsed: boolean
+  touch?: boolean
 }) {
   const [hovered, setHovered] = useState(false)
   return (
@@ -151,14 +156,14 @@ function NavItem({
         display:        'flex',
         alignItems:     'center',
         gap:            collapsed ? 0 : 10,
-        padding:        collapsed ? '10px 0' : '10px 12px',
+        padding:        collapsed ? '10px 0' : touch ? '13px 12px' : '10px 12px',
         borderRadius:   8,
         justifyContent: collapsed ? 'center' : 'flex-start',
         background:     isActive ? '#E8563A' : hovered ? 'rgba(255,255,255,0.06)' : 'transparent',
         color:          isActive ? 'white' : 'rgba(255,255,255,0.7)',
         fontFamily:     'Inter, sans-serif',
         fontWeight:     isActive ? 600 : 400,
-        fontSize:       13,
+        fontSize:       touch ? 14 : 13,
         textDecoration: 'none',
         transition:     'background 0.15s',
         userSelect:     'none',
@@ -241,18 +246,37 @@ export function AdminLayout() {
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
-  const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => {
+  const isDesktop = useMediaQuery('(min-width: 768px)')
+  const [mobileOpen, setMobileOpen] = useState(false)
+
+  // Estado persistido del sidebar en escritorio. En celular el menú es un drawer y siempre se ve expandido.
+  const [desktopSidebarOpen, setDesktopSidebarOpen] = useState<boolean>(() => {
     const stored = localStorage.getItem(SIDEBAR_KEY)
     return stored === null ? true : stored === 'true'
   })
+  const sidebarOpen = isDesktop ? desktopSidebarOpen : true
 
   const toggleSidebar = () => {
-    setSidebarOpen((prev) => {
+    setDesktopSidebarOpen((prev) => {
       const next = !prev
       localStorage.setItem(SIDEBAR_KEY, String(next))
       return next
     })
   }
+
+  // El drawer se cierra al navegar y al pasar a escritorio; también con Escape.
+  useEffect(() => {
+    setMobileOpen(false)
+  }, [location.pathname, isDesktop])
+
+  useEffect(() => {
+    if (!mobileOpen) return
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') setMobileOpen(false)
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [mobileOpen])
 
   useEffect(() => {
     void loadContext()
@@ -279,26 +303,65 @@ export function AdminLayout() {
   const emailInitials = user?.email ? user.email.slice(0, 2).toUpperCase() : '?'
 
   return (
-    <div className="flex h-screen overflow-hidden bg-gray-50">
+    <div className="flex h-screen overflow-hidden bg-gray-50" style={{ height: '100dvh' }}>
 
-      {/* ── Sidebar wrapper — transitions width, hosts toggle outside aside ── */}
+      {/* ── Overlay del drawer (solo celular) ── */}
+      {!isDesktop && (
+        <div
+          data-testid="drawer-overlay"
+          aria-hidden="true"
+          onClick={() => setMobileOpen(false)}
+          style={{
+            position:      'fixed',
+            inset:         0,
+            zIndex:        40,
+            background:    'rgba(45,53,97,0.45)',
+            opacity:       mobileOpen ? 1 : 0,
+            pointerEvents: mobileOpen ? 'auto' : 'none',
+            transition:    'opacity 0.25s ease',
+          }}
+        />
+      )}
+
+      {/* ── Sidebar wrapper — en escritorio transiciona el ancho; en celular es un drawer fijo ── */}
       <div
-        style={{
-          position:   'relative',
-          flexShrink: 0,
-          width:      sidebarOpen ? 220 : 56,
-          transition: 'width 0.2s ease',
-        }}
+        data-testid="sidebar"
+        aria-hidden={!isDesktop && !mobileOpen}
+        style={
+          isDesktop
+            ? {
+                position:   'relative',
+                flexShrink: 0,
+                width:      sidebarOpen ? 220 : 56,
+                transition: 'width 0.2s ease',
+              }
+            : {
+                position:   'fixed',
+                top:        0,
+                bottom:     0,
+                left:       0,
+                width:      272,
+                maxWidth:   '85vw',
+                zIndex:     50,
+                transform:  mobileOpen ? 'translateX(0)' : 'translateX(-100%)',
+                visibility: mobileOpen ? 'visible' : 'hidden',
+                transition: mobileOpen
+                  ? 'transform 0.25s ease, visibility 0s'
+                  : 'transform 0.25s ease, visibility 0s linear 0.25s',
+                boxShadow:  mobileOpen ? '4px 0 32px rgba(0,0,0,0.25)' : 'none',
+              }
+        }
       >
         {/* Toggle button — absolutely positioned in wrapper so it isn't clipped by aside */}
         <button
-          onClick={toggleSidebar}
+          onClick={isDesktop ? toggleSidebar : () => setMobileOpen(false)}
+          aria-label={isDesktop ? (sidebarOpen ? 'Colapsar menú' : 'Expandir menú') : 'Cerrar menú'}
           style={{
             position:       'absolute',
-            top:            14,
+            top:            isDesktop ? 14 : 8,
             right:          8,
-            width:          28,
-            height:         28,
+            width:          isDesktop ? 28 : 44,
+            height:         isDesktop ? 28 : 44,
             borderRadius:   '50%',
             background:     'rgba(255,255,255,0.1)',
             border:         'none',
@@ -318,7 +381,7 @@ export function AdminLayout() {
             e.currentTarget.style.background = 'rgba(255,255,255,0.1)'
           }}
         >
-          {sidebarOpen ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
+          {!isDesktop ? <X size={20} /> : sidebarOpen ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
         </button>
 
         <aside
@@ -488,6 +551,7 @@ export function AdminLayout() {
                         label={item.label}
                         Icon={item.Icon}
                         collapsed={!sidebarOpen}
+                        touch={!isDesktop}
                       />
                     ) : (
                       <DisabledNavItem
@@ -539,7 +603,7 @@ export function AdminLayout() {
                     fontSize:   12,
                     color:      'rgba(255,255,255,0.35)',
                     fontFamily: 'Inter, sans-serif',
-                    padding:    0,
+                    padding:    isDesktop ? 0 : '10px 0',
                     display:    'flex',
                     alignItems: 'center',
                     gap:        6,
@@ -576,35 +640,61 @@ export function AdminLayout() {
 
         {/* Topbar */}
         <header
-          className="bg-white px-6 flex items-center justify-between"
+          className={`bg-white flex items-center justify-between gap-3 ${isDesktop ? 'px-6' : 'px-3'}`}
           style={{ height: 56, flexShrink: 0, borderBottom: '1px solid #e5e7eb' }}
         >
-          <div>
-            <h2
-              style={{
-                fontFamily: 'Montserrat, sans-serif',
-                fontWeight: 700,
-                fontSize:   18,
-                color:      '#2D3561',
-                margin:     0,
-                lineHeight: 1.2,
-              }}
-            >
-              {sectionTitle}
-            </h2>
-            {selectedRestaurante && (
-              <p
+          <div className="flex items-center gap-2 min-w-0">
+            {!isDesktop && (
+              <button
+                onClick={() => setMobileOpen(true)}
+                aria-label="Abrir menú"
+                aria-expanded={mobileOpen}
                 style={{
-                  fontFamily: 'Inter, sans-serif',
-                  fontSize:   13,
-                  color:      '#9CA3AF',
+                  width:          44,
+                  height:         44,
+                  flexShrink:     0,
+                  background:     'none',
+                  border:         'none',
+                  borderRadius:   10,
+                  color:          '#2D3561',
+                  cursor:         'pointer',
+                  display:        'flex',
+                  alignItems:     'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Menu size={22} />
+              </button>
+            )}
+            <div className="min-w-0">
+              <h2
+                className="truncate"
+                style={{
+                  fontFamily: 'Montserrat, sans-serif',
+                  fontWeight: 700,
+                  fontSize:   18,
+                  color:      '#2D3561',
                   margin:     0,
                   lineHeight: 1.2,
                 }}
               >
-                {selectedRestaurante.nombre}
-              </p>
-            )}
+                {sectionTitle}
+              </h2>
+              {selectedRestaurante && (
+                <p
+                  className="truncate"
+                  style={{
+                    fontFamily: 'Inter, sans-serif',
+                    fontSize:   13,
+                    color:      '#9CA3AF',
+                    margin:     0,
+                    lineHeight: 1.2,
+                  }}
+                >
+                  {selectedRestaurante.nombre}
+                </p>
+              )}
+            </div>
           </div>
 
           <div
