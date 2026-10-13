@@ -4,8 +4,9 @@ import { usePublicMenuStore } from '../../store/publicMenuStore'
 import { useSessionStore } from '../../store/sessionStore'
 import { useCarritoStore } from '../../store/carritoStore'
 import { useComensalStore } from '../../store/comensalStore'
-import { Spinner, MenuItemImage } from '@menyu/ui'
+import { Spinner } from '@menyu/ui'
 import { api } from '../../services/api'
+import { ItemCard } from '../../components/ItemCard'
 import type { MenuPublicoItem } from '@menyu/types'
 
 // ── Palette ───────────────────────────────────────────────────────────────────
@@ -44,6 +45,25 @@ function itemPasaFiltros(item: MenuPublicoItem, buscar: string, activeDiets: Set
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
+
+function TituloSeccion({ children }: { children: React.ReactNode }) {
+  return (
+    <h2 style={{
+      fontFamily: 'Montserrat,sans-serif',
+      fontWeight: 800,
+      fontSize: 13,
+      letterSpacing: '0.1em',
+      textTransform: 'uppercase',
+      color: C.navy,
+      margin: '0 0 12px',
+      paddingBottom: 8,
+      borderBottom: `2px solid ${C.orange}`,
+      display: 'inline-block',
+    }}>
+      {children}
+    </h2>
+  )
+}
 
 function EmptyState({ buscar, activeDiets, onClear }: { buscar: string; activeDiets: Set<string>; onClear: () => void }) {
   return (
@@ -124,69 +144,6 @@ function DrawerRow({
   )
 }
 
-function ItemCard({ item, onPress }: { item: MenuPublicoItem; onPress: () => void }) {
-  return (
-    <div
-      onClick={onPress}
-      className="group"
-      style={{
-        background: 'white', borderRadius: 12, border: `1px solid ${C.border}`,
-        overflow: 'hidden', display: 'flex', flexDirection: 'column',
-        cursor: 'pointer', transition: 'border-color .15s, box-shadow .15s',
-      }}
-      onMouseEnter={(e) => {
-        const el = e.currentTarget as HTMLDivElement
-        el.style.borderColor = 'rgba(232,86,58,0.3)'
-        el.style.boxShadow = '0 4px 16px rgba(232,86,58,0.1)'
-      }}
-      onMouseLeave={(e) => {
-        const el = e.currentTarget as HTMLDivElement
-        el.style.borderColor = C.border
-        el.style.boxShadow = 'none'
-      }}
-    >
-      <div style={{ position: 'relative', width: '100%', paddingBottom: '80%', overflow: 'hidden', flexShrink: 0 }}>
-        <MenuItemImage
-          src={item.imagenUrl}
-          alt={item.nombre}
-          className="absolute inset-0"
-        />
-      </div>
-      <div style={{ padding: '10px 11px 11px', display: 'flex', flexDirection: 'column', flex: 1, gap: 3 }}>
-        <p style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 13, color: C.text, lineHeight: 1.25, margin: 0 }}>
-          {item.nombre}
-        </p>
-        {item.descripcion && (
-          <p style={{
-            fontFamily: 'Inter,sans-serif', fontSize: 11, color: C.textSub,
-            lineHeight: 1.35, margin: 0,
-            display: '-webkit-box', WebkitLineClamp: 2,
-            WebkitBoxOrient: 'vertical', overflow: 'hidden',
-          }}>
-            {item.descripcion}
-          </p>
-        )}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 'auto', paddingTop: 6 }}>
-          <span style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 14, color: C.orange }}>
-            ${Number(item.precioBase).toFixed(2)}
-          </span>
-          <button
-            onClick={(e) => { e.stopPropagation(); onPress() }}
-            style={{
-              width: 28, height: 28, borderRadius: '50%',
-              background: C.orange, color: 'white', border: 'none',
-              fontSize: 18, lineHeight: 1, display: 'flex',
-              alignItems: 'center', justifyContent: 'center',
-              boxShadow: '0 2px 6px rgba(232,86,58,0.35)',
-              cursor: 'pointer', flexShrink: 0,
-            }}
-          >+</button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 // ── Check-in screen ───────────────────────────────────────────────────────────
 
 // ── Main page ─────────────────────────────────────────────────────────────────
@@ -232,7 +189,9 @@ export function ClienteMenuPage() {
   }, [restauranteId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (menu?.recomendados && menu.recomendados.length > 0) {
+    if ((menu?.descuentos ?? []).length > 0) {
+      setCategoriaActiva('descuentos')
+    } else if (menu?.recomendados && menu.recomendados.length > 0) {
       setCategoriaActiva('recomendados')
     } else if (menu?.categorias[0]?.id) {
       setCategoriaActiva(menu.categorias[0].id)
@@ -283,9 +242,17 @@ export function ClienteMenuPage() {
     return (menu?.recomendados ?? []).filter((item) => itemPasaFiltros(item, buscar, activeDiets))
   }, [menu, buscar, activeDiets])
 
-  // Recomendados + categorías combinados, para chips y scroll-spy
+  // Platos en descuento con los mismos filtros (el backend los manda aparte, en el mismo orden que los recomendados)
+  const descuentosFiltrados = useMemo(() => {
+    return (menu?.descuentos ?? []).filter((item) => itemPasaFiltros(item, buscar, activeDiets))
+  }, [menu, buscar, activeDiets])
+
+  // Descuentos + recomendados + categorías combinados, para chips y scroll-spy
   const seccionesConId = useMemo(() => {
     const secciones: { id: string; nombre: string }[] = []
+    if (descuentosFiltrados.length > 0) {
+      secciones.push({ id: 'descuentos', nombre: 'Descuentos' })
+    }
     if (recomendadosFiltrados.length > 0) {
       secciones.push({
         id: 'recomendados',
@@ -294,7 +261,7 @@ export function ClienteMenuPage() {
     }
     secciones.push(...categoriasFiltradas.map((c) => ({ id: c.id, nombre: c.nombre })))
     return secciones
-  }, [recomendadosFiltrados, categoriasFiltradas, menu])
+  }, [descuentosFiltrados, recomendadosFiltrados, categoriasFiltradas, menu])
 
   // Scroll-spy: update active chip based on which section is visible
   useEffect(() => {
@@ -728,26 +695,27 @@ export function ClienteMenuPage() {
 
       {/* ── Items grid */}
       <div ref={scrollContainerRef} style={{ flex: 1, overflowY: 'auto', padding: 14 }}>
+        {descuentosFiltrados.length > 0 && (
+          <div
+            ref={(el) => { sectionRefs.current['descuentos'] = el }}
+            data-categoria-id="descuentos"
+            style={{ marginBottom: 28 }}
+          >
+            <TituloSeccion>Descuentos</TituloSeccion>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+              {descuentosFiltrados.map((item) => (
+                <ItemCard key={item.id} item={item} onPress={() => navigate(`/menu/${item.id}`)} />
+              ))}
+            </div>
+          </div>
+        )}
         {recomendadosFiltrados.length > 0 && (
           <div
             ref={(el) => { sectionRefs.current['recomendados'] = el }}
             data-categoria-id="recomendados"
             style={{ marginBottom: 28 }}
           >
-            <h2 style={{
-              fontFamily: 'Montserrat,sans-serif',
-              fontWeight: 800,
-              fontSize: 13,
-              letterSpacing: '0.1em',
-              textTransform: 'uppercase',
-              color: C.navy,
-              margin: '0 0 12px',
-              paddingBottom: 8,
-              borderBottom: `2px solid ${C.orange}`,
-              display: 'inline-block',
-            }}>
-              {menu?.restaurante.nombreSeccionRecomendados}
-            </h2>
+            <TituloSeccion>{menu?.restaurante.nombreSeccionRecomendados}</TituloSeccion>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
               {recomendadosFiltrados.map((item) => (
                 <ItemCard key={item.id} item={item} onPress={() => navigate(`/menu/${item.id}`)} />
@@ -763,20 +731,7 @@ export function ClienteMenuPage() {
               data-categoria-id={cat.id}
               style={{ marginBottom: 28 }}
             >
-              <h2 style={{
-                fontFamily: 'Montserrat,sans-serif',
-                fontWeight: 800,
-                fontSize: 13,
-                letterSpacing: '0.1em',
-                textTransform: 'uppercase',
-                color: C.navy,
-                margin: '0 0 12px',
-                paddingBottom: 8,
-                borderBottom: `2px solid ${C.orange}`,
-                display: 'inline-block',
-              }}>
-                {cat.nombre}
-              </h2>
+              <TituloSeccion>{cat.nombre}</TituloSeccion>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
                 {cat.itemsDirectos.map((item) => (
                   <ItemCard key={item.id} item={item} onPress={() => navigate(`/menu/${item.id}`)} />
@@ -784,7 +739,7 @@ export function ClienteMenuPage() {
               </div>
             </div>
           ))
-        ) : recomendadosFiltrados.length === 0 ? (
+        ) : recomendadosFiltrados.length === 0 && descuentosFiltrados.length === 0 ? (
           <EmptyState buscar={buscar} activeDiets={activeDiets} onClear={() => { setBuscar(''); setActiveDiets(new Set()) }} />
         ) : null}
       </div>

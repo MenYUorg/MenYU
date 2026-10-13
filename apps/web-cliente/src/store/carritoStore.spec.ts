@@ -1,4 +1,5 @@
 import { useCarritoStore, type CartItem } from './carritoStore'
+import { crearMenu, crearPlatoEnDescuento } from '../test/fixtures'
 
 const BASE: Omit<CartItem, 'cartId'> = {
   itemMenuId: 'item-1',
@@ -119,6 +120,115 @@ describe('carritoStore', () => {
       useCarritoStore.getState().agregar({ ...BASE, itemMenuId: 'item-2', nota: 'x', precioUnitario: 800, cantidad: 3 })
       // 1500×2 + 800×3 = 3000 + 2400 = 5400
       expect(useCarritoStore.getState().total()).toBe(5400)
+    })
+  })
+  // ── repreciar y aviso de precios ──────────────────────────────────────────
+
+  describe('repreciar', () => {
+    // Hamburguesa a $1500 con un descuento que la deja en $1200.
+    const MENU = crearMenu({
+      categorias: [{
+        id: 'cat-1',
+        nombre: 'Principales',
+        orden: 1,
+        itemsDirectos: [crearPlatoEnDescuento({ id: 'item-1', nombre: 'Hamburguesa', precioBase: 1500, precioDescuento: 1200 })],
+      }],
+    })
+
+    it('actualiza el precio de los platos que cambiaron y levanta el aviso', () => {
+      useCarritoStore.getState().agregar(BASE)
+
+      useCarritoStore.getState().repreciar(MENU)
+
+      expect(useCarritoStore.getState().items[0].precioUnitario).toBe(1200)
+      expect(useCarritoStore.getState().avisoPrecios).toBe(true)
+    })
+
+    it('el total del carrito sigue al nuevo precio', () => {
+      useCarritoStore.getState().agregar({ ...BASE, cantidad: 2 })
+      expect(useCarritoStore.getState().total()).toBe(3000)
+
+      useCarritoStore.getState().repreciar(MENU)
+
+      expect(useCarritoStore.getState().total()).toBe(2400)
+    })
+
+    it('si ningún precio cambió, no toca el carrito ni avisa', () => {
+      useCarritoStore.getState().agregar({ ...BASE, precioUnitario: 1200 })
+      const antes = useCarritoStore.getState().items
+
+      useCarritoStore.getState().repreciar(MENU)
+
+      expect(useCarritoStore.getState().items).toBe(antes)
+      expect(useCarritoStore.getState().avisoPrecios).toBe(false)
+    })
+
+    it('con el carrito vacío no avisa', () => {
+      useCarritoStore.getState().repreciar(MENU)
+
+      expect(useCarritoStore.getState().avisoPrecios).toBe(false)
+    })
+
+    it('descartarAvisoPrecios baja el aviso y deja los precios nuevos', () => {
+      useCarritoStore.getState().agregar(BASE)
+      useCarritoStore.getState().repreciar(MENU)
+
+      useCarritoStore.getState().descartarAvisoPrecios()
+
+      expect(useCarritoStore.getState().avisoPrecios).toBe(false)
+      expect(useCarritoStore.getState().items[0].precioUnitario).toBe(1200)
+    })
+
+    it('vaciar el carrito baja el aviso', () => {
+      useCarritoStore.getState().agregar(BASE)
+      useCarritoStore.getState().repreciar(MENU)
+
+      useCarritoStore.getState().vaciar()
+
+      expect(useCarritoStore.getState().avisoPrecios).toBe(false)
+    })
+
+    it('quitar un plato mantiene el aviso mientras queden platos, y lo baja con el último', () => {
+      useCarritoStore.getState().agregar(BASE)
+      useCarritoStore.getState().agregar({ ...BASE, itemMenuId: 'item-2', nota: 'x' })
+      useCarritoStore.getState().repreciar(MENU)
+      const [primero, segundo] = useCarritoStore.getState().items
+
+      useCarritoStore.getState().quitar(segundo.cartId)
+      expect(useCarritoStore.getState().avisoPrecios).toBe(true)
+
+      useCarritoStore.getState().quitar(primero.cartId)
+      expect(useCarritoStore.getState().avisoPrecios).toBe(false)
+    })
+
+    it('llevar a 0 la cantidad del último plato baja el aviso', () => {
+      useCarritoStore.getState().agregar(BASE)
+      useCarritoStore.getState().repreciar(MENU)
+      const { cartId } = useCarritoStore.getState().items[0]
+
+      useCarritoStore.getState().cambiarCantidad(cartId, 0)
+
+      expect(useCarritoStore.getState().avisoPrecios).toBe(false)
+    })
+
+    it('cambiar la cantidad de un plato no baja el aviso', () => {
+      useCarritoStore.getState().agregar(BASE)
+      useCarritoStore.getState().repreciar(MENU)
+      const { cartId } = useCarritoStore.getState().items[0]
+
+      useCarritoStore.getState().cambiarCantidad(cartId, 3)
+
+      expect(useCarritoStore.getState().avisoPrecios).toBe(true)
+    })
+
+    it('en el navegador se guardan los platos, no el aviso', () => {
+      useCarritoStore.getState().agregar(BASE)
+      useCarritoStore.getState().repreciar(MENU)
+
+      const guardado = JSON.parse(localStorage.getItem('menyu_carrito') ?? '{}') as { state: Record<string, unknown> }
+
+      expect(guardado.state).toHaveProperty('items')
+      expect(guardado.state).not.toHaveProperty('avisoPrecios')
     })
   })
 })

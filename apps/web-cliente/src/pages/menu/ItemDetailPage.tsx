@@ -3,7 +3,8 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { usePublicMenuStore } from '../../store/publicMenuStore'
 import { useSessionStore } from '../../store/sessionStore'
 import { useCarritoStore } from '../../store/carritoStore'
-import { MenuItemImage } from '@menyu/ui'
+import { DescuentoBadge, MenuItemImage, PrecioConDescuento } from '@menyu/ui'
+import { formatearPrecio, precioVigenteDe, tieneDescuento } from '../../utils/precio'
 import type { MenuPublicoItem } from '@menyu/types'
 
 const C = {
@@ -100,7 +101,9 @@ export function ItemDetailPage() {
     const ing = item.ingredientes?.find((ii) => ii.id === id)
     return acc + (ing ? Number(ing.precioExtra) * qty : 0)
   }, 0)
-  const precioTotal = Number(item.precioBase) + precioModificaciones
+  // Se parte del precio vigente (con descuento si lo tiene); los extras se cobran a precio normal.
+  const precioTotal = precioVigenteDe(item) + precioModificaciones
+  const enDescuento = tieneDescuento(item)
 
   const toggleRemovido = (id: string) => {
     setRemovidos((prev) => {
@@ -142,6 +145,11 @@ export function ItemDetailPage() {
           {/* Hero image */}
           <div style={{ position: 'relative', width: '100%', aspectRatio: '16 / 9', overflow: 'hidden', flexShrink: 0 }}>
             <MenuItemImage src={item.imagenUrl} alt={item.nombre} />
+            {enDescuento && (
+              <div style={{ position: 'absolute', top: 16, right: 16 }}>
+                <DescuentoBadge porcentaje={item.porcentajeDescuento} tamano={44} />
+              </div>
+            )}
             {/* Back button — overlaid */}
             <button
               onClick={() => navigate('/menu')}
@@ -166,6 +174,19 @@ export function ItemDetailPage() {
             <h1 style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 800, fontSize: 24, color: C.text, margin: '0 0 8px', lineHeight: 1.2 }}>
               {item.nombre}
             </h1>
+
+            {/* Precio con descuento: original tachado y precio vigente */}
+            {enDescuento && (
+              <div style={{ margin: '0 0 12px' }}>
+                <PrecioConDescuento
+                  variante="detalle"
+                  precioBase={Number(item.precioBase)}
+                  precioVigente={precioVigenteDe(item)}
+                  formatear={formatearPrecio}
+                  estilo={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 800, fontSize: 24, color: C.orange }}
+                />
+              </div>
+            )}
 
             {/* Description */}
             {item.descripcion && (

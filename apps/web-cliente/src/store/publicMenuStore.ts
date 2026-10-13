@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { api } from '../services/api'
+import { useCarritoStore } from './carritoStore'
 import type { MenuPublico, MenuPublicoItem } from '@menyu/types'
 
 interface PublicMenuStore {
@@ -22,6 +23,8 @@ export const usePublicMenuStore = create<PublicMenuStore>()((set, get) => ({
     try {
       const menu = await api.menu.publico(restauranteId)
       set({ menu })
+      // El carrito se guarda en el navegador: con el menú nuevo se corrigen los precios que cambiaron.
+      useCarritoStore.getState().repreciar(menu)
     } catch (e) {
       set({ error: e instanceof Error ? e.message : 'Error al cargar el menú' })
     } finally {
@@ -36,7 +39,11 @@ export const usePublicMenuStore = create<PublicMenuStore>()((set, get) => ({
       const found = cat.itemsDirectos.find((item) => item.id === id)
       if (found) return found
     }
-    return undefined
+    // Un plato sin categoría solo aparece en recomendados o en descuentos.
+    return (
+      (menu.recomendados ?? []).find((item) => item.id === id) ??
+      (menu.descuentos ?? []).find((item) => item.id === id)
+    )
   },
 
   clear: () => set({ menu: null, error: null }),
