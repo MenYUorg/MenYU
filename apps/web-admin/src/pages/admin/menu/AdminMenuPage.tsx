@@ -7,7 +7,9 @@ import { useContextStore } from '../../../store/contextStore'
 import { useMenuStore } from '../../../store/menuStore'
 import { ItemFormModal } from './ItemFormModal'
 import { api } from '../../../services/api'
-import { MenuItemImage } from '@menyu/ui'
+import { useMediaQuery } from '../../../hooks/useMediaQuery'
+import { ItemRow } from './ItemRow'
+import { DescuentoModal } from './DescuentoModal'
 
 type CatalogTab = 'categorias' | 'ingredientes' | 'dietas'
 
@@ -15,41 +17,6 @@ const matchesBusqueda = (nombre: string, buscar: string): boolean => {
   if (!buscar.trim()) return true
   const query = buscar.toLowerCase().trim()
   return nombre.toLowerCase().split(/\s+/).some((palabra) => palabra.startsWith(query))
-}
-
-/* ─── ToggleSwitch ──────────────────────────────────────────────────────── */
-function ToggleSwitch({ value, onChange, title, disabled }: { value: boolean; onChange: () => void; title?: string; disabled?: boolean }) {
-  return (
-    <div
-      role="switch"
-      aria-checked={value}
-      aria-disabled={disabled}
-      title={disabled ? `${title ?? ''} (no disponible)`.trim() : title}
-      onClick={(e) => { e.stopPropagation(); if (!disabled) onChange() }}
-      style={{
-        width:        44,
-        height:       24,
-        borderRadius: 999,
-        background:   value ? '#E8563A' : '#d1d5db',
-        cursor:       disabled ? 'not-allowed' : 'pointer',
-        opacity:      disabled ? 0.4 : 1,
-        transition:   'background 200ms, opacity 200ms',
-        position:     'relative',
-        flexShrink:   0,
-      }}
-    >
-      <div style={{
-        width:        20,
-        height:       20,
-        borderRadius: '50%',
-        background:   'white',
-        position:     'absolute',
-        top:          2,
-        left:         value ? 22 : 2,
-        transition:   'left 200ms',
-      }} />
-    </div>
-  )
 }
 
 /* ─── TabList (ingredientes + dietas) ───────────────────────────────────── */
@@ -931,11 +898,14 @@ function CatalogModal({ open, onClose }: { open: boolean; onClose: () => void })
 export function AdminMenuPage() {
   const { user } = useAuth()
   const isOwner = user?.rol === 'OWNER' || user?.rol === 'ROOT'
+  // Los descuentos los ponen el OWNER y el GERENTE; ROOT no (administra marcas y usuarios, no el menú).
+  const puedeGestionarDescuento = user?.rol === 'OWNER' || user?.rol === 'GERENTE'
+  const esEscritorio = useMediaQuery('(min-width: 768px)')
   const { selectedRestauranteId } = useContextStore()
   const {
     items, categorias, loading,
     fetchItems, fetchCategorias, fetchIngredientes, fetchClasificaciones,
-    updateItem, error, clearError,
+    updateItem, setDescuento, quitarDescuento, error, clearError,
   } = useMenuStore()
 
   const [busqueda, setBusqueda]   = useState('')
@@ -943,6 +913,8 @@ export function AdminMenuPage() {
   const [optimistic, setOptimistic]   = useState<Record<string, boolean>>({})
   const [optimisticRecomendado, setOptimisticRecomendado] = useState<Record<string, boolean>>({})
   const [itemModal, setItemModal]     = useState<{ open: boolean; item: ItemMenu | null }>({ open: false, item: null })
+  const [descuentoId, setDescuentoId]  = useState<string | null>(null)
+  const descuentoItem = descuentoId ? items.find((i) => i.id === descuentoId) ?? null : null
   const [categoriaActiva, setCategoriaActiva] = useState<string | null>(null)
 
   const scrollContainerRef = useRef<HTMLDivElement>(null)
@@ -1064,7 +1036,7 @@ export function AdminMenuPage() {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
 
       {/* ── Fixed header block ── */}
-      <div style={{ flexShrink: 0, padding: '24px 28px 0' }}>
+      <div style={{ flexShrink: 0, padding: esEscritorio ? '24px 28px 0' : '16px 14px 0' }}>
 
         {/* Error banner */}
         {error && (
@@ -1091,7 +1063,7 @@ export function AdminMenuPage() {
         )}
 
         {/* Topbar */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 20 }}>
           <h1 style={{
             fontFamily: 'Montserrat, sans-serif',
             fontWeight: 700,
@@ -1101,7 +1073,7 @@ export function AdminMenuPage() {
           }}>
             Menú
           </h1>
-          <div style={{ display: 'flex', gap: 10 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
             <button
               onClick={() => setCatalogOpen(true)}
               style={{
@@ -1109,6 +1081,7 @@ export function AdminMenuPage() {
                 color:        '#2D3561',
                 border:       '1px solid #2D3561',
                 borderRadius: 10,
+                minHeight:    esEscritorio ? undefined : 44,
                 padding:      '9px 16px',
                 cursor:       'pointer',
                 fontFamily:   'Inter, sans-serif',
@@ -1128,6 +1101,7 @@ export function AdminMenuPage() {
                 color:        'white',
                 border:       'none',
                 borderRadius: 10,
+                minHeight:    esEscritorio ? undefined : 44,
                 padding:      '9px 16px',
                 cursor:       'pointer',
                 fontFamily:   'Montserrat, sans-serif',
@@ -1193,6 +1167,7 @@ export function AdminMenuPage() {
                   color:        active ? 'white' : '#374151',
                   border:       `1px solid ${active ? '#2D3561' : '#e5e7eb'}`,
                   borderRadius: 999,
+                  minHeight:    esEscritorio ? undefined : 44,
                   padding:      '8px 18px',
                   fontFamily:   active ? 'Montserrat, sans-serif' : 'Inter, sans-serif',
                   fontWeight:   active ? 700 : 400,
@@ -1219,7 +1194,7 @@ export function AdminMenuPage() {
           Cargando…
         </div>
       ) : (
-        <div ref={scrollContainerRef} style={{ flex: 1, overflowY: 'auto', padding: '0 28px 24px' }}>
+        <div ref={scrollContainerRef} style={{ flex: 1, overflowY: 'auto', padding: esEscritorio ? '0 28px 24px' : '0 14px 24px' }}>
           {categoriasFiltradas.length === 0 ? (
             <p style={{ textAlign: 'center', fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#9CA3AF', padding: '48px 0', margin: 0 }}>
               {busqueda ? `Sin resultados para "${busqueda}"` : 'No hay platos en el catálogo.'}
@@ -1259,78 +1234,19 @@ export function AdminMenuPage() {
 
                 {/* Item rows */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  {grupoItems.map((item) => {
-                    const disponible = getDisponible(item)
-                    const recomendado = getRecomendado(item)
-                    return (
-                      <div
-                        key={item.id}
-                        style={{
-                          background:   recomendado ? '#FDE5DF' : 'white',
-                          border:       recomendado ? '2px solid #E8563A' : '1px solid #e5e7eb',
-                          borderRadius: 12,
-                          padding:      '12px 16px',
-                          display:      'flex',
-                          alignItems:   'center',
-                          gap:          16,
-                          opacity:      disponible ? 1 : 0.55,
-                          transition:   'opacity 200ms, background 200ms, border-color 200ms',
-                        }}
-                      >
-                        <MenuItemImage src={item.imagenUrl} alt={item.nombre} width={64} height={64} borderRadius={10} />
-
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <p style={{
-                            fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: 15,
-                            color: '#111827', margin: '0 0 3px',
-                            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                          }}>
-                            {item.nombre}
-                          </p>
-                          <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#6b7280', margin: 0 }}>
-                            ${Number(item.precioBase).toLocaleString('es-AR')}
-                            {!disponible && <span style={{ color: '#dc2626' }}> · Sin stock</span>}
-                          </p>
-                        </div>
-
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
-                          <button
-                            onClick={() => setItemModal({ open: true, item })}
-                            style={{
-                              background: 'white', color: '#374151',
-                              border: '1px solid #e5e7eb', borderRadius: 8,
-                              padding: '6px 14px', cursor: 'pointer',
-                              fontFamily: 'Inter, sans-serif', fontSize: 13,
-                              transition: 'border-color 150ms, color 150ms',
-                            }}
-                            onMouseEnter={(e) => { const b = e.currentTarget as HTMLButtonElement; b.style.borderColor = '#2D3561'; b.style.color = '#2D3561' }}
-                            onMouseLeave={(e) => { const b = e.currentTarget as HTMLButtonElement; b.style.borderColor = '#e5e7eb'; b.style.color = '#374151' }}
-                          >
-                            Editar
-                          </button>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                              <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 11, color: '#9ca3af', width: 76, textAlign: 'right' }}>
-                                Disponible
-                              </span>
-                              <ToggleSwitch value={disponible} onChange={() => handleToggle(item)} title="Disponible para el cliente" />
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                              <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 11, color: '#9ca3af', width: 76, textAlign: 'right' }}>
-                                Recomendado
-                              </span>
-                              <ToggleSwitch
-                                value={recomendado}
-                                onChange={() => handleToggleRecomendado(item)}
-                                title="Recomendado por el chef"
-                                disabled={!disponible}
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )
-                  })}
+                  {grupoItems.map((item) => (
+                    <ItemRow
+                      key={item.id}
+                      item={item}
+                      disponible={getDisponible(item)}
+                      recomendado={getRecomendado(item)}
+                      puedeGestionarDescuento={puedeGestionarDescuento}
+                      onEditar={() => setItemModal({ open: true, item })}
+                      onDescuento={() => setDescuentoId(item.id)}
+                      onToggleDisponible={() => handleToggle(item)}
+                      onToggleRecomendado={() => handleToggleRecomendado(item)}
+                    />
+                  ))}
                 </div>
               </div>
             ))
@@ -1344,6 +1260,14 @@ export function AdminMenuPage() {
         item={itemModal.item}
         canDelete={isOwner}
       />
+      {puedeGestionarDescuento && (
+        <DescuentoModal
+          item={descuentoItem}
+          onClose={() => setDescuentoId(null)}
+          onGuardar={setDescuento}
+          onQuitar={quitarDescuento}
+        />
+      )}
       <CatalogModal open={catalogOpen} onClose={() => setCatalogOpen(false)} />
     </div>
   )
