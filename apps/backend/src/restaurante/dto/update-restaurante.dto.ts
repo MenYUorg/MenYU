@@ -1,4 +1,5 @@
-import { IsIn, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator'
+import { Transform } from 'class-transformer'
+import { IsIn, IsNotEmpty, IsOptional, IsString, MaxLength, ValidateIf } from 'class-validator'
 
 export class UpdateRestauranteDto {
   @IsString()
@@ -6,8 +7,12 @@ export class UpdateRestauranteDto {
   @IsOptional()
   nombre?: string
 
+  @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value))
+  // Se valida siempre que venga en el body: con @IsOptional() un null pasaría y dejaría al restaurante sin dirección.
+  @ValidateIf((_dto, valor: unknown) => valor !== undefined)
   @IsString()
-  @IsOptional()
+  @IsNotEmpty()
+  @MaxLength(200)
   direccion?: string
 
   @IsIn(['abierto', 'seguro'])

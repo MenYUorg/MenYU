@@ -4,6 +4,8 @@ import {
   NotFoundException,
 } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
+import { LogosService } from '../storage/logos.service'
+import { assertOwnerDeRestaurante } from '../common/assert-owner-access'
 import { JwtPayload } from '../auth/auth.service'
 import { CreateRestauranteDto } from './dto/create-restaurante.dto'
 import { UpdateRestauranteDto } from './dto/update-restaurante.dto'
@@ -21,7 +23,10 @@ export const RESTAURANTE_DETAIL_INCLUDE = {
 
 @Injectable()
 export class RestauranteService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly logos: LogosService,
+  ) {}
 
   async create(dto: CreateRestauranteDto) {
     return this.prisma.restaurante.create({ data: dto })
@@ -67,6 +72,10 @@ export class RestauranteService {
   }
 
   async update(id: string, dto: UpdateRestauranteDto, user: JwtPayload) {
+    // La dirección solo la modifica el OWNER de la marca: ni GERENTE ni ROOT.
+    if (dto.direccion !== undefined) {
+      await assertOwnerDeRestaurante(this.prisma, id, user)
+    }
     if (user.rol === 'OWNER') {
       const marcaId = await this.getMarcaIdForAdmin(user.sub)
       const restaurante = await this.prisma.restaurante.findUnique({ where: { id } })
@@ -86,6 +95,33 @@ export class RestauranteService {
   async remove(id: string) {
     await this.assertExists(id)
     return this.prisma.restaurante.update({ where: { id }, data: { activo: false } })
+  }
+
+  // ── Logo (solo el OWNER de la marca) ──────────────────────────────────
+
+  async uploadLogo(id: string, file: Express.Multer.File, user: JwtPayload) {
+    const restaurante = await assertOwnerDeRestaurante(this.prisma, id, user)
+    if (!restaurante.activo) throw new NotFoundException('Restaurante no encontrado')
+
+    const logoUrl = await this.logos.subir('restaurantes', id, file)
+    return this.prisma.restaurante.update({
+      where: { id },
+      data: { logoUrl },
+      select: { id: true, logoUrl: true },
+    })
+  }
+
+  async removeLogo(id: string, user: JwtPayload) {
+    const restaurante = await assertOwnerDeRestaurante(this.prisma, id, user)
+    if (!restaurante.activo) throw new NotFoundException('Restaurante no encontrado')
+    if (!restaurante.logoUrl) throw new NotFoundException('Este restaurante no tiene logo propio')
+
+    await this.logos.eliminar('restaurantes', id)
+    return this.prisma.restaurante.update({
+      where: { id },
+      data: { logoUrl: null },
+      select: { id: true, logoUrl: true },
+    })
   }
 
   private async assertExists(id: string): Promise<void> {

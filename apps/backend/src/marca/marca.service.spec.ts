@@ -2,6 +2,7 @@ import { Test } from '@nestjs/testing'
 import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common'
 import { MarcaService, MARCA_DETAIL_INCLUDE } from './marca.service'
 import { PrismaService } from '../prisma/prisma.service'
+import { LogosService } from '../storage/logos.service'
 import { JwtPayload } from '../auth/auth.service'
 
 const ROOT: JwtPayload = { sub: 'root-1', email: 'root@menyu.com', tipo: 'admin', rol: 'ROOT' }
@@ -26,6 +27,14 @@ const mockPrisma = {
   },
 }
 
+const mockLogos = {
+  subir: jest.fn(),
+  eliminar: jest.fn(),
+}
+
+const ARCHIVO = { buffer: Buffer.from('logo'), mimetype: 'image/png' } as Express.Multer.File
+const LOGO_URL = 'https://proyecto.supabase.co/storage/v1/object/public/logos/marcas/marca-1?v=1700000000000'
+
 describe('MarcaService', () => {
   let service: MarcaService
 
@@ -34,6 +43,7 @@ describe('MarcaService', () => {
       providers: [
         MarcaService,
         { provide: PrismaService, useValue: mockPrisma },
+        { provide: LogosService, useValue: mockLogos },
       ],
     }).compile()
 
@@ -184,6 +194,107 @@ describe('MarcaService', () => {
 
       await expect(service.update('no-existe', { nombre: 'X' }, ROOT))
         .rejects.toThrow(NotFoundException)
+    })
+  })
+
+  // ── uploadLogo ────────────────────────────────────────────────────────
+
+  describe('uploadLogo', () => {
+    it('el OWNER de la marca sube el logo y se guarda la URL', async () => {
+      mockPrisma.admin.findUnique.mockResolvedValue(ADMIN_WITH_REST)
+      mockPrisma.marca.findUnique.mockResolvedValue(MARCA)
+      mockLogos.subir.mockResolvedValue(LOGO_URL)
+      mockPrisma.marca.update.mockResolvedValue({ id: 'marca-1', logoUrl: LOGO_URL })
+
+      const result = await service.uploadLogo('marca-1', ARCHIVO, OWNER)
+
+      expect(mockLogos.subir).toHaveBeenCalledWith('marcas', 'marca-1', ARCHIVO)
+      expect(mockPrisma.marca.update).toHaveBeenCalledWith({
+        where: { id: 'marca-1' },
+        data: { logoUrl: LOGO_URL },
+        select: { id: true, logoUrl: true },
+      })
+      expect(result).toEqual({ id: 'marca-1', logoUrl: LOGO_URL })
+    })
+
+    it('un OWNER de otra marca recibe 403 y no se sube nada', async () => {
+      mockPrisma.admin.findUnique.mockResolvedValue({ id: 'admin-2', marcaId: 'marca-otra' })
+
+      await expect(service.uploadLogo('marca-1', ARCHIVO, OWNER))
+        .rejects.toThrow(ForbiddenException)
+
+      expect(mockLogos.subir).not.toHaveBeenCalled()
+      expect(mockPrisma.marca.update).not.toHaveBeenCalled()
+    })
+
+    it.each([
+      ['ROOT', ROOT],
+      ['GERENTE', GERENTE],
+    ])('%s recibe 403 y no se sube nada', async (_nombre, user) => {
+      await expect(service.uploadLogo('marca-1', ARCHIVO, user))
+        .rejects.toThrow(ForbiddenException)
+
+      expect(mockLogos.subir).not.toHaveBeenCalled()
+      expect(mockPrisma.marca.update).not.toHaveBeenCalled()
+    })
+
+    it('lanza 404 si la marca está inactiva', async () => {
+      mockPrisma.admin.findUnique.mockResolvedValue(ADMIN_WITH_REST)
+      mockPrisma.marca.findUnique.mockResolvedValue({ ...MARCA, activo: false })
+
+      await expect(service.uploadLogo('marca-1', ARCHIVO, OWNER))
+        .rejects.toThrow(NotFoundException)
+
+      expect(mockLogos.subir).not.toHaveBeenCalled()
+    })
+  })
+
+  // ── removeLogo ────────────────────────────────────────────────────────
+
+  describe('removeLogo', () => {
+    it('el OWNER borra el archivo y deja el logo en null', async () => {
+      mockPrisma.admin.findUnique.mockResolvedValue(ADMIN_WITH_REST)
+      mockPrisma.marca.findUnique.mockResolvedValue({ ...MARCA, logoUrl: LOGO_URL })
+      mockPrisma.marca.update.mockResolvedValue({ id: 'marca-1', logoUrl: null })
+
+      const result = await service.removeLogo('marca-1', OWNER)
+
+      expect(mockLogos.eliminar).toHaveBeenCalledWith('marcas', 'marca-1')
+      expect(mockPrisma.marca.update).toHaveBeenCalledWith({
+        where: { id: 'marca-1' },
+        data: { logoUrl: null },
+        select: { id: true, logoUrl: true },
+      })
+      expect(result).toEqual({ id: 'marca-1', logoUrl: null })
+    })
+
+    it('lanza 404 si la marca no tiene logo', async () => {
+      mockPrisma.admin.findUnique.mockResolvedValue(ADMIN_WITH_REST)
+      mockPrisma.marca.findUnique.mockResolvedValue({ ...MARCA, logoUrl: null })
+
+      await expect(service.removeLogo('marca-1', OWNER))
+        .rejects.toThrow(NotFoundException)
+
+      expect(mockLogos.eliminar).not.toHaveBeenCalled()
+    })
+
+    it('un OWNER de otra marca recibe 403 y no se borra nada', async () => {
+      mockPrisma.admin.findUnique.mockResolvedValue({ id: 'admin-2', marcaId: 'marca-otra' })
+
+      await expect(service.removeLogo('marca-1', OWNER))
+        .rejects.toThrow(ForbiddenException)
+
+      expect(mockLogos.eliminar).not.toHaveBeenCalled()
+    })
+
+    it.each([
+      ['ROOT', ROOT],
+      ['GERENTE', GERENTE],
+    ])('%s recibe 403 y no se borra nada', async (_nombre, user) => {
+      await expect(service.removeLogo('marca-1', user))
+        .rejects.toThrow(ForbiddenException)
+
+      expect(mockLogos.eliminar).not.toHaveBeenCalled()
     })
   })
 
