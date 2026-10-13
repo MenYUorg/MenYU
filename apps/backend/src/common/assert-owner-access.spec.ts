@@ -1,5 +1,9 @@
 import { ForbiddenException } from '@nestjs/common'
-import { assertOwnerDeMarca, assertOwnerDeRestaurante } from './assert-owner-access'
+import {
+  assertOwnerDeMarca,
+  assertOwnerDeRestaurante,
+  assertOwnerOGerenteDeRestaurante,
+} from './assert-owner-access'
 import { PrismaService } from '../prisma/prisma.service'
 import { JwtPayload } from '../auth/auth.service'
 
@@ -13,6 +17,7 @@ const RESTAURANTE = { id: 'rest-1', marcaId: 'marca-1', activo: true, logoUrl: n
 const mockPrisma = {
   admin: { findUnique: jest.fn() },
   restaurante: { findUnique: jest.fn() },
+  adminRestaurante: { findUnique: jest.fn() },
 }
 const prisma = mockPrisma as unknown as PrismaService
 
@@ -93,5 +98,84 @@ describe('assertOwnerDeRestaurante', () => {
 
     expect(mockPrisma.admin.findUnique).not.toHaveBeenCalled()
     expect(mockPrisma.restaurante.findUnique).not.toHaveBeenCalled()
+  })
+})
+
+describe('assertOwnerOGerenteDeRestaurante', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+  })
+
+  describe('OWNER', () => {
+    it('deja pasar al OWNER de la marca del restaurante', async () => {
+      mockPrisma.admin.findUnique.mockResolvedValue({ marcaId: 'marca-1' })
+      mockPrisma.restaurante.findUnique.mockResolvedValue({ marcaId: 'marca-1' })
+
+      await expect(assertOwnerOGerenteDeRestaurante(prisma, 'rest-1', OWNER)).resolves.toBeUndefined()
+    })
+
+    it('lanza 403 si el restaurante es de otra marca', async () => {
+      mockPrisma.admin.findUnique.mockResolvedValue({ marcaId: 'marca-otra' })
+      mockPrisma.restaurante.findUnique.mockResolvedValue({ marcaId: 'marca-1' })
+
+      await expect(assertOwnerOGerenteDeRestaurante(prisma, 'rest-1', OWNER)).rejects.toThrow(
+        ForbiddenException,
+      )
+    })
+
+    it('lanza 403 si el restaurante no existe o el OWNER no tiene marca', async () => {
+      mockPrisma.admin.findUnique.mockResolvedValue({ marcaId: 'marca-1' })
+      mockPrisma.restaurante.findUnique.mockResolvedValue(null)
+      await expect(assertOwnerOGerenteDeRestaurante(prisma, 'rest-1', OWNER)).rejects.toThrow(
+        ForbiddenException,
+      )
+
+      mockPrisma.admin.findUnique.mockResolvedValue({ marcaId: null })
+      mockPrisma.restaurante.findUnique.mockResolvedValue({ marcaId: 'marca-1' })
+      await expect(assertOwnerOGerenteDeRestaurante(prisma, 'rest-1', OWNER)).rejects.toThrow(
+        ForbiddenException,
+      )
+    })
+  })
+
+  describe('GERENTE', () => {
+    it('deja pasar al GERENTE asignado a ese restaurante', async () => {
+      mockPrisma.adminRestaurante.findUnique.mockResolvedValue({ adminId: 'gerente-1' })
+
+      await expect(assertOwnerOGerenteDeRestaurante(prisma, 'rest-1', GERENTE)).resolves.toBeUndefined()
+      expect(mockPrisma.adminRestaurante.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { adminId_restauranteId: { adminId: 'gerente-1', restauranteId: 'rest-1' } },
+        }),
+      )
+    })
+
+    it('lanza 403 si no está asignado a ese restaurante', async () => {
+      mockPrisma.adminRestaurante.findUnique.mockResolvedValue(null)
+
+      await expect(assertOwnerOGerenteDeRestaurante(prisma, 'rest-2', GERENTE)).rejects.toThrow(
+        ForbiddenException,
+      )
+    })
+
+    it('no consulta marcas ni restaurantes', async () => {
+      mockPrisma.adminRestaurante.findUnique.mockResolvedValue({ adminId: 'gerente-1' })
+
+      await assertOwnerOGerenteDeRestaurante(prisma, 'rest-1', GERENTE)
+
+      expect(mockPrisma.admin.findUnique).not.toHaveBeenCalled()
+      expect(mockPrisma.restaurante.findUnique).not.toHaveBeenCalled()
+    })
+  })
+
+  it.each([
+    ['ROOT', ROOT],
+    ['un mozo', MOZO],
+  ])('lanza 403 a %s sin consultar la base (no hay bypass)', async (_nombre, user) => {
+    await expect(assertOwnerOGerenteDeRestaurante(prisma, 'rest-1', user)).rejects.toThrow(ForbiddenException)
+
+    expect(mockPrisma.admin.findUnique).not.toHaveBeenCalled()
+    expect(mockPrisma.restaurante.findUnique).not.toHaveBeenCalled()
+    expect(mockPrisma.adminRestaurante.findUnique).not.toHaveBeenCalled()
   })
 })

@@ -319,4 +319,128 @@ describe('MenuService', () => {
       expect(typeof item.ingredientes[0].cantidad).toBe('number')
     })
   })
+
+  // ── Descuentos ────────────────────────────────────────────────────────────────
+
+  describe('getMenuPublico — descuentos', () => {
+    const ITEM_CON_DESCUENTO = { ...ITEM_BASE, id: 'item-desc', nombre: 'Milanesa en oferta', precioBase: 2000, precioDescuento: 1500 }
+
+    // La primera consulta de ítems es la de recomendados y la segunda, la de descuentos.
+    function mockearItems(recomendados: unknown[], descuentos: unknown[]) {
+      mockPrisma.itemMenu.findMany.mockResolvedValueOnce(recomendados).mockResolvedValueOnce(descuentos)
+    }
+
+    it('sin ítems en descuento → descuentos: []', async () => {
+      const result = await service.getMenuPublico('rest-1', {})
+
+      expect(result.descuentos).toEqual([])
+    })
+
+    it('un ítem en descuento aparece en descuentos con precio, porcentaje y precio vigente (números)', async () => {
+      mockearItems([], [ITEM_CON_DESCUENTO])
+
+      const result = await service.getMenuPublico('rest-1', {})
+
+      expect(result.descuentos).toHaveLength(1)
+      expect(result.descuentos[0]).toMatchObject({
+        id: 'item-desc',
+        precioBase: 2000,
+        precioDescuento: 1500,
+        porcentajeDescuento: 25,
+        precioVigente: 1500,
+      })
+      expect(typeof result.descuentos[0].precioDescuento).toBe('number')
+      expect(typeof result.descuentos[0].porcentajeDescuento).toBe('number')
+      expect(typeof result.descuentos[0].precioVigente).toBe('number')
+    })
+
+    it('la consulta pide solo ítems disponibles de ese restaurante y con descuento', async () => {
+      await service.getMenuPublico('rest-1', {})
+
+      const consultaDescuentos = mockPrisma.itemMenu.findMany.mock.calls[1][0] as any
+      expect(consultaDescuentos.where).toEqual({
+        restauranteId: 'rest-1',
+        disponible: true,
+        precioDescuento: { not: null },
+      })
+    })
+
+    it('buscar por nombre también filtra los descuentos', async () => {
+      await service.getMenuPublico('rest-1', { buscar: 'milanesa' })
+
+      const consultaDescuentos = mockPrisma.itemMenu.findMany.mock.calls[1][0] as any
+      expect(consultaDescuentos.where.nombre).toEqual({ contains: 'milanesa', mode: 'insensitive' })
+    })
+
+    it('los filtros de dieta y alérgenos se aplican también a los descuentos', async () => {
+      const vegano = { ...ITEM_CON_DESCUENTO, id: 'desc-vegano', clasificaciones: ITEM_VEGANO.clasificaciones }
+      const noVegano = { ...ITEM_CON_DESCUENTO, id: 'desc-no-vegano' }
+      const conAlergeno = {
+        ...ITEM_CON_DESCUENTO,
+        id: 'desc-alergeno',
+        ingredientes: [{ ...ING_REMOVIBLE, ingrediente: { id: 'ing-m', nombre: 'Maní', esAlergeno: true } }],
+      }
+
+      mockearItems([], [vegano, noVegano])
+      const porDieta = await service.getMenuPublico('rest-1', { dieta: ['VEGANO'] })
+      expect(porDieta.descuentos.map((i) => i.id)).toEqual(['desc-vegano'])
+
+      mockearItems([], [noVegano, conAlergeno])
+      const sinAlergenos = await service.getMenuPublico('rest-1', { evitarAlergenos: true })
+      expect(sinAlergenos.descuentos.map((i) => i.id)).toEqual(['desc-no-vegano'])
+    })
+
+    it('se ordenan como los recomendados: por el orden de la categoría y después por nombre; sin categoría al final', async () => {
+      const deCategoria2 = { ...ITEM_CON_DESCUENTO, id: 'c2', nombre: 'A', categoria: { orden: 2 } }
+      const deCategoria1Z = { ...ITEM_CON_DESCUENTO, id: 'c1z', nombre: 'Z', categoria: { orden: 1 } }
+      const deCategoria1A = { ...ITEM_CON_DESCUENTO, id: 'c1a', nombre: 'B', categoria: { orden: 1 } }
+      const sinCategoria = { ...ITEM_CON_DESCUENTO, id: 'sin', nombre: 'A', categoria: null }
+      mockearItems([], [sinCategoria, deCategoria2, deCategoria1Z, deCategoria1A])
+
+      const result = await service.getMenuPublico('rest-1', {})
+
+      expect(result.descuentos.map((i) => i.id)).toEqual(['c1a', 'c1z', 'c2', 'sin'])
+    })
+
+    it('un ítem sin descuento guardado no aparece aunque la consulta lo devuelva', async () => {
+      mockearItems([], [ITEM_BASE, { ...ITEM_BASE, id: 'otro', precioDescuento: null }])
+
+      const result = await service.getMenuPublico('rest-1', {})
+
+      expect(result.descuentos).toEqual([])
+    })
+
+    it('un descuento que no es válido contra el precio base no se muestra y se cobra el base', async () => {
+      mockearItems([], [{ ...ITEM_CON_DESCUENTO, precioDescuento: 2000 }])
+
+      const result = await service.getMenuPublico('rest-1', {})
+
+      expect(result.descuentos[0]).toMatchObject({ precioDescuento: null, porcentajeDescuento: null, precioVigente: 2000 })
+    })
+
+    it('los ítems de las categorías y los recomendados también traen los campos de descuento', async () => {
+      mockPrisma.categoriaMenu.findMany.mockResolvedValue([
+        makeCategoria({ items: [ITEM_CON_DESCUENTO, ITEM_BASE] }),
+      ])
+      mockearItems([ITEM_CON_DESCUENTO], [ITEM_CON_DESCUENTO])
+
+      const result = await service.getMenuPublico('rest-1', {})
+
+      const [conDescuento, sinDescuento] = result.categorias[0].itemsDirectos
+      expect(conDescuento).toMatchObject({ precioBase: 2000, precioDescuento: 1500, porcentajeDescuento: 25, precioVigente: 1500 })
+      expect(sinDescuento).toMatchObject({ precioBase: 1500, precioDescuento: null, porcentajeDescuento: null, precioVigente: 1500 })
+      expect(result.recomendados[0]).toMatchObject({ precioDescuento: 1500, precioVigente: 1500, esRecomendado: true })
+    })
+
+    it('los recomendados siguen igual que antes (misma consulta y mismo orden)', async () => {
+      await service.getMenuPublico('rest-1', {})
+
+      const consultaRecomendados = mockPrisma.itemMenu.findMany.mock.calls[0][0] as any
+      expect(consultaRecomendados.where).toEqual({
+        restauranteId: 'rest-1',
+        disponible: true,
+        recomendadoEn: { not: null },
+      })
+    })
+  })
 })

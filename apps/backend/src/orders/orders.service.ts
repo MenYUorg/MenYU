@@ -8,6 +8,7 @@ import { JwtService } from '@nestjs/jwt'
 import { PrismaService } from '../prisma/prisma.service'
 import { MenyuGateway } from '../gateway/menyu.gateway'
 import { CreateOrderDto } from './dto/create-order.dto'
+import { precioVigente } from '../items/descuento.util'
 
 interface SessionJwt {
   sub: string
@@ -70,7 +71,8 @@ export class OrdersService {
             create: dto.items.map((item) => {
               const dbItem = dbMap.get(item.itemMenuId)!
 
-              let precioUnitario = Number(dbItem.precioBase)
+              // Se parte del precio vigente (con descuento si lo tiene); los extras se cobran a precio normal.
+              let precioUnitario = precioVigente(dbItem)
               for (const mod of item.modificaciones) {
                 if (mod.accion === 'agregar') {
                   const ing = dbItem.ingredientes.find((ii) => ii.id === mod.itemIngredienteId)

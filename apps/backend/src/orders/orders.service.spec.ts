@@ -1,6 +1,7 @@
 import { Test } from '@nestjs/testing'
 import { BadRequestException, NotFoundException, UnauthorizedException } from '@nestjs/common'
 import { JwtService } from '@nestjs/jwt'
+import { Prisma } from '@prisma/client'
 import { OrdersService } from './orders.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { MenyuGateway } from '../gateway/menyu.gateway'
@@ -274,6 +275,113 @@ describe('OrdersService', () => {
       })
 
       expect(mockGateway.emitOrderNew).toHaveBeenCalledWith('rest-1', PEDIDO_CREADO)
+    })
+  })
+
+  // ── create — descuentos ───────────────────────────────────────────────────
+
+  describe('create — descuentos', () => {
+    const ITEM_EN_DESCUENTO = { ...ITEM_CON_INGREDIENTE, id: 'item-desc', precioBase: 2000, precioDescuento: 1500 }
+
+    // Devuelve los precioUnitario que se mandaron a crear, en el orden de los ítems del pedido.
+    async function preciosCobrados(
+      itemsDeLaBd: object[],
+      items: Array<{ itemMenuId: string; cantidad: number; modificaciones: Array<{ itemIngredienteId: string; accion: 'agregar' | 'quitar'; cantidad: number }> }>,
+    ) {
+      mockJwt.verify.mockReturnValue(VALID_PAYLOAD)
+      mockPrisma.sesionMesa.findUnique.mockResolvedValue(SESION_ACTIVA)
+      mockPrisma.itemMenu.findMany.mockResolvedValue(itemsDeLaBd)
+
+      await service.create('Bearer valid.token', { items })
+
+      const data = mockPrisma.pedido.create.mock.calls[0][0].data
+      return data.items.create.map((i: { precioUnitario: number }) => i.precioUnitario)
+    }
+
+    it('un ítem con descuento se cobra al precio con descuento, no al base', async () => {
+      const precios = await preciosCobrados(
+        [ITEM_EN_DESCUENTO],
+        [{ itemMenuId: 'item-desc', cantidad: 1, modificaciones: [] }],
+      )
+
+      expect(precios).toEqual([1500])
+    })
+
+    it('los extras se cobran a precio normal sobre el precio con descuento', async () => {
+      const precios = await preciosCobrados(
+        [ITEM_EN_DESCUENTO],
+        [
+          {
+            itemMenuId: 'item-desc',
+            cantidad: 1,
+            modificaciones: [{ itemIngredienteId: 'ii-queso', accion: 'agregar', cantidad: 2 }],
+          },
+        ],
+      )
+
+      // 1500 (con descuento) + 150 × 2 (extra a precio normal) = 1800
+      expect(precios).toEqual([1800])
+    })
+
+    it('quitar un ingrediente no altera el precio con descuento', async () => {
+      const precios = await preciosCobrados(
+        [ITEM_EN_DESCUENTO],
+        [
+          {
+            itemMenuId: 'item-desc',
+            cantidad: 1,
+            modificaciones: [{ itemIngredienteId: 'ii-queso', accion: 'quitar', cantidad: 1 }],
+          },
+        ],
+      )
+
+      expect(precios).toEqual([1500])
+    })
+
+    it('en un mismo pedido, el ítem con descuento y el que no lo tiene se cobran cada uno a su precio', async () => {
+      const precios = await preciosCobrados(
+        [ITEM_EN_DESCUENTO, { ...ITEM_SIMPLE, precioBase: 1800 }],
+        [
+          { itemMenuId: 'item-desc', cantidad: 3, modificaciones: [] },
+          { itemMenuId: 'item-1', cantidad: 1, modificaciones: [] },
+        ],
+      )
+
+      expect(precios).toEqual([1500, 1800]) // 1500 con descuento (base 2000) y 1800 sin descuento
+    })
+
+    it('un ítem sin descuento se cobra igual que antes (precio base más extras)', async () => {
+      const precios = await preciosCobrados(
+        [{ ...ITEM_CON_INGREDIENTE, precioDescuento: null }],
+        [
+          {
+            itemMenuId: 'item-2',
+            cantidad: 1,
+            modificaciones: [{ itemIngredienteId: 'ii-queso', accion: 'agregar', cantidad: 2 }],
+          },
+        ],
+      )
+
+      expect(precios).toEqual([2300])
+    })
+
+    it('un descuento guardado que no es válido contra el precio base se ignora: se cobra el base', async () => {
+      const precios = await preciosCobrados(
+        [{ ...ITEM_EN_DESCUENTO, precioDescuento: 2000 }],
+        [{ itemMenuId: 'item-desc', cantidad: 1, modificaciones: [] }],
+      )
+
+      expect(precios).toEqual([2000])
+    })
+
+    it('el precio guardado es un número, aunque el precio base de la base de datos llegue como Decimal', async () => {
+      const precios = await preciosCobrados(
+        [{ ...ITEM_EN_DESCUENTO, precioBase: new Prisma.Decimal('2000.00') }],
+        [{ itemMenuId: 'item-desc', cantidad: 1, modificaciones: [] }],
+      )
+
+      expect(typeof precios[0]).toBe('number')
+      expect(precios).toEqual([1500])
     })
   })
 

@@ -67,6 +67,9 @@ export interface ItemMenu {
   nombre: string
   descripcion: string | null
   precioBase: number
+  precioDescuento: number | null
+  porcentajeDescuento: number | null
+  precioVigente: number
   disponible: boolean
   esRecomendado?: boolean
   imagenUrl: string | null
@@ -95,6 +98,12 @@ export interface MenuPublicoItem {
   nombre: string
   descripcion: string | null
   precioBase: number
+  /** Precio con descuento en pesos enteros, o null si el ítem no está en descuento. */
+  precioDescuento: number | null
+  /** Porcentaje entero de 1 a 99 calculado por el backend, o null si no hay descuento. */
+  porcentajeDescuento: number | null
+  /** Lo que se cobra por el ítem sin extras: precioDescuento si lo tiene, si no precioBase. */
+  precioVigente: number
   imagenUrl: string | null
   ingredientes: ItemIngrediente[]
   clasificaciones: ClasificacionDieta[]
@@ -112,4 +121,5 @@ export interface MenuPublico {
   restaurante: { id: string; nombre: string; nombreSeccionRecomendados: string }
   categorias: MenuPublicoCategoria[]
   recomendados: MenuPublicoItem[]
+  descuentos: MenuPublicoItem[]
 }

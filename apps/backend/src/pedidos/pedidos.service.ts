@@ -13,6 +13,7 @@ import { JwtPayload } from '../auth/auth.service'
 import { CreatePedidoDto } from './dto/create-pedido.dto'
 import { UpdateEstadoPedidoDto } from './dto/update-estado-pedido.dto'
 import { EditPedidoDto } from './dto/edit-pedido.dto'
+import { precioVigente } from '../items/descuento.util'
 
 interface SessionJwt {
   sub: string
@@ -76,7 +77,7 @@ export class PedidosService {
           throw new NotFoundException(`Ítem ${itemDto.itemId} no encontrado en este restaurante`)
         }
 
-        let precioUnitario = Number(dbItem.precioBase)
+        let precioUnitario = precioVigente(dbItem) // con descuento si lo tiene; los extras, a precio normal
         const modsData: Array<{ itemIngredienteId: string; accion: string; cantidad: number }> = []
 
         for (const mod of itemDto.mods ?? []) {
@@ -193,7 +194,7 @@ export class PedidosService {
         })
         if (!dbItem) throw new NotFoundException(`Ítem ${itemDto.itemId} no encontrado en este restaurante`)
 
-        let precioUnitario = Number(dbItem.precioBase)
+        let precioUnitario = precioVigente(dbItem) // con descuento si lo tiene; los extras, a precio normal
         const modsData: Array<{ itemIngredienteId: string; accion: string; cantidad: number }> = []
 
         for (const mod of itemDto.mods ?? []) {

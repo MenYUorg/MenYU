@@ -678,6 +678,28 @@ Returns the full public menu for a restaurant — categories, items, ingredients
 | 200 | Full menu with categories, items, and ingredients |
 | 404 | Restaurant not found |
 
+**Response body (shape)**
+
+```json
+{
+  "restaurante": { "id": "uuid", "nombre": "Restaurante Seed", "nombreSeccionRecomendados": "Recomendaciones del chef" },
+  "categorias": [{ "id": "uuid", "nombre": "Principales", "orden": 2, "itemsDirectos": [ /* items */ ] }],
+  "recomendados": [ /* items */ ],
+  "descuentos": [ /* items */ ]
+}
+```
+
+Every item carries its prices already calculated, so the apps never calculate prices or percentages:
+
+| Field | Type | Description |
+|---|---|---|
+| `precioBase` | number | Regular price |
+| `precioDescuento` | number \| null | Discounted price in whole pesos; `null` if the item is not discounted |
+| `porcentajeDescuento` | number \| null | Discount as an integer from 1 to 99, calculated from the two prices; `null` without discount |
+| `precioVigente` | number | What is charged for the item before extras: `precioDescuento` if it has one, otherwise `precioBase` |
+
+`descuentos` lists the available items that are discounted (it honors `buscar`, `dieta` and `evitarAlergenos`), in the same order as `recomendados`: category order, then name. Extras are always charged at their regular price.
+
 ---
 
 ## Categorías — `/api/categorias`
@@ -828,6 +850,8 @@ Auth required: `Bearer` + role `ROOT` or `OWNER`.
 | `GET` | `/api/items/:id` | Get item |
 | `PATCH` | `/api/items/:id` | Update item |
 | `DELETE` | `/api/items/:id` | Delete item |
+| `PUT` | `/api/items/:id/descuento` | Put an item on discount, by price or by percentage (OWNER and assigned GERENTE) |
+| `DELETE` | `/api/items/:id/descuento` | Remove an item's discount (OWNER and assigned GERENTE) |
 | `POST` | `/api/items/:id/imagen` | Upload item image (multipart) |
 | `DELETE` | `/api/items/:id/imagen` | Remove item image |
 | `POST` | `/api/items/:itemId/ingredientes` | Add ingredient to item |
@@ -909,7 +933,9 @@ Auth required: `Bearer` + role `ROOT` or `OWNER`.
 
 `categoriaId` and `subcategoriaId` accept `null` to unset them.
 
-**Responses:** 200 · 404
+If the item has an active discount, the new `precioBase` must stay greater than the discounted price (and the resulting percentage must stay between 1% and 99%); otherwise the request fails with 400 and the discount has to be removed or changed first.
+
+**Responses:** 200 · 400 · 404
 
 ---
 
@@ -928,6 +954,39 @@ Upload an image for an item. Accepts `multipart/form-data`.
 **Max size:** 5 MB
 
 **Responses:** 201 uploaded · 400 invalid file or too large · 404
+
+---
+
+### `PUT /api/items/:id/descuento`
+
+Put an item on discount. Only the `OWNER` of the restaurant's brand and a `GERENTE` assigned to that restaurant can do it: `ROOT`, a `GERENTE` of another restaurant, an `OWNER` of another brand and waiters get 403.
+
+Send exactly one of the two fields; the server calculates the other:
+
+```json
+{ "precioDescuento": 1200 }
+```
+
+```json
+{ "porcentaje": 20 }
+```
+
+| Field | Type | Rules |
+|---|---|---|
+| `precioDescuento` | integer | Whole pesos, greater than 0 and lower than `precioBase`. The resulting percentage (rounded) must be between 1 and 99 |
+| `porcentaje` | integer | From 1 to 99. The price is `precioBase × (100 − porcentaje) / 100`, rounded to the nearest peso (.5 rounds up). Fails if rounding leaves the price equal to `precioBase` or at $0 |
+
+Only the discounted price is stored; the percentage is always calculated. The discount stays active until someone removes it. A new request replaces the previous discount. It applies to the base price only: extras are charged at their regular price. On success the item is returned with `precioDescuento`, `porcentajeDescuento` and `precioVigente`, and a `menu:updated` event is emitted to the restaurant's room.
+
+**Responses:** 200 · 400 (both fields, none, or an invalid value) · 401 · 403 · 404
+
+---
+
+### `DELETE /api/items/:id/descuento`
+
+Remove the item's discount (same permissions as above). Removing a discount that does not exist is not an error: the item is returned as it is, and no event is emitted.
+
+**Responses:** 200 · 401 · 403 · 404
 
 ---
 

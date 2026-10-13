@@ -51,3 +51,32 @@ export async function assertOwnerDeRestaurante(
   }
   return restaurante
 }
+
+// Para lo que pueden hacer el OWNER y el GERENTE de un restaurante (por ejemplo, los descuentos):
+// el OWNER de la marca del restaurante o un GERENTE asignado a ese restaurante. Igual que arriba,
+// ROOT no pasa.
+export async function assertOwnerOGerenteDeRestaurante(
+  prisma: PrismaService,
+  restauranteId: string,
+  user: JwtPayload,
+): Promise<void> {
+  if (user.rol === 'OWNER') {
+    const [admin, restaurante] = await Promise.all([
+      prisma.admin.findUnique({ where: { id: user.sub }, select: { marcaId: true } }),
+      prisma.restaurante.findUnique({ where: { id: restauranteId }, select: { marcaId: true } }),
+    ])
+    if (!admin || !restaurante || admin.marcaId !== restaurante.marcaId) {
+      throw new ForbiddenException('No tenés acceso a este restaurante')
+    }
+    return
+  }
+  if (user.rol === 'GERENTE') {
+    const asignacion = await prisma.adminRestaurante.findUnique({
+      where: { adminId_restauranteId: { adminId: user.sub, restauranteId } },
+      select: { adminId: true },
+    })
+    if (!asignacion) throw new ForbiddenException('No tenés acceso a este restaurante')
+    return
+  }
+  throw new ForbiddenException('Solo el owner o un gerente del restaurante puede hacer esto')
+}
