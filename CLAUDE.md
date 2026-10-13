@@ -293,7 +293,7 @@ pnpm typecheck
 
 Incluye: auth, sesión de mesa vía QR interno, menú digital, pedidos con modificación de ingredientes, llamado al mozo, pago con Mercado Pago, panel de cocina en tiempo real, panel de admin (CRUD menú, mesas, mozos).
 
-**No incluye en v1.0:** pagos divididos, programa de fidelización, motor de recomendaciones, chatbot. Esas son v2.0.
+**No incluye en v1.0:** pagos divididos, módulo Discovery (listado público y anónimo de promos de los locales, con precio promocional real e incluyendo combos, y acceso a la carta en solo lectura; issues #350 a #354, #104 y #110), motor de recomendaciones, chatbot. Esas son v2.0.
 
 ---
 
@@ -304,8 +304,8 @@ La gestión del proyecto se realiza íntegramente en GitHub. Jira es usado por l
 - **Organización:** `MenYUorg`
 - **Repositorio:** `MenYUorg/MenYU`
 - **Handle del autor principal:** `lautiod`
-- **Project ID (GraphQL):** `PVT_kwHOB57las4BUwQe`
-- **Project número:** `#1` bajo el usuario `lautiod`
+- **Project ID (GraphQL):** `PVT_kwDOEHoLEs4BU0UP`
+- **Project número:** `#1` bajo la organización `MenYUorg`
 
 ### Vistas del board
 - **Kanban:** gestión día a día de tareas del equipo

@@ -5,10 +5,7 @@ import { SessionAuthGuard } from '../auth/guards/session-auth.guard'
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'
 import { TipoGuard } from '../auth/guards/tipo.guard'
 import { RequiresTipo } from '../auth/decorators/requires-tipo.decorator'
-import { CurrentUser } from '../common/decorators/current-user.decorator'
-import { JwtPayload } from '../auth/auth.service'
-import { PaymentsService, EstadoComensalesResult } from './payments.service'
-import { CobrarComensalDto } from './dto/cobrar-comensal.dto'
+import { PaymentsService } from './payments.service'
 
 @ApiTags('payments')
 @Controller('payments')
@@ -20,15 +17,8 @@ export class PaymentsController {
   @UseGuards(SessionAuthGuard)
   @ApiOperation({ summary: 'Registrar intención de pago en efectivo' })
   @ApiResponse({ status: 201, description: 'Pago en efectivo registrado' })
-  solicitarEfectivo(
-    @Body()
-    body: {
-      sesionId: string
-      comensalId: string | null
-      modo: 'partes_iguales' | 'por_consumo' | null
-    },
-  ) {
-    return this.payments.solicitarEfectivo(body.sesionId, body.comensalId, body.modo)
+  solicitarEfectivo(@Body() body: { sesionId: string }) {
+    return this.payments.solicitarEfectivo(body.sesionId)
   }
 
   @Post('avisar-mozo-cuenta')
@@ -48,38 +38,6 @@ export class PaymentsController {
     return this.payments.getSesiones(restauranteId)
   }
 
-  @Get('sesiones/:sesionId/comensales')
-  @UseGuards(JwtAuthGuard, TipoGuard)
-  @RequiresTipo('admin', 'mozo')
-  @ApiOperation({ summary: 'Estado de pago por comensal de una sesión (cobro individual desde staff)' })
-  @ApiResponse({ status: 200, description: 'Montos y estado de pago por comensal, incluidos slots virtuales' })
-  @ApiResponse({ status: 403, description: 'Sin acceso a este restaurante' })
-  @ApiResponse({ status: 404, description: 'Sesión no encontrada' })
-  estadoComensales(
-    @Param('sesionId') sesionId: string,
-    @CurrentUser() user: JwtPayload,
-  ): Promise<EstadoComensalesResult> {
-    return this.payments.estadoComensales(sesionId, user)
-  }
-
-  @Post('sesiones/:sesionId/comensales/cobrar')
-  @HttpCode(HttpStatus.OK)
-  @UseGuards(JwtAuthGuard, TipoGuard)
-  @RequiresTipo('admin', 'mozo')
-  @ApiOperation({ summary: 'Cobrar a un comensal (real o slot virtual materializado) desde staff' })
-  @ApiResponse({ status: 200, description: 'Pago registrado; cierra la sesión si cubre el total' })
-  @ApiResponse({ status: 400, description: 'Monto 0, modo de división no definido, o sesión cerrada' })
-  @ApiResponse({ status: 403, description: 'Sin acceso a este restaurante' })
-  @ApiResponse({ status: 404, description: 'Sesión o comensal no encontrado' })
-  @ApiResponse({ status: 409, description: 'Pago ya aprobado, o el slot ya no está disponible' })
-  cobrarComensal(
-    @Param('sesionId') sesionId: string,
-    @Body() dto: CobrarComensalDto,
-    @CurrentUser() user: JwtPayload,
-  ) {
-    return this.payments.cobrarComensal(sesionId, dto, user)
-  }
-
   @Post('confirmar-efectivo')
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard, TipoGuard)
@@ -95,10 +53,10 @@ export class PaymentsController {
   @UseGuards(SessionAuthGuard)
   @ApiOperation({ summary: 'Crear preferencia de pago con Mercado Pago' })
   crearPreferenciaMP(
-    @Body() body: { sesionId: string; comensalId: string | null; modo: 'partes_iguales' | 'por_consumo' | null },
+    @Body() body: { sesionId: string },
     @Headers('origin') origin?: string,
   ) {
-    return this.payments.crearPreferenciaMercadoPago(body.sesionId, body.comensalId, body.modo, origin)
+    return this.payments.crearPreferenciaMercadoPago(body.sesionId, origin)
   }
 
   // Sin guard a propósito: a este endpoint le pega Mercado Pago, no un cliente de MenYU

@@ -44,39 +44,6 @@ async function authFetch<T>(path: string, options: RequestInit = {}): Promise<T>
 
 // ── Response types ────────────────────────────────────────────────────────────
 
-// Espejo de EstadoComensalDto / EstadoComensalesResult (payments.service.ts del backend).
-// El backend declara estadoPago como string libre; acá se acota para que un typo al
-// comparar en el modal falle en typecheck.
-export type EstadoPagoComensal = 'aprobado' | 'pendiente' | 'cancelado' | 'rechazado'
-
-export interface EstadoComensalDto {
-  comensalId: string | null
-  nombre: string
-  monto: number | null
-  estadoPago: EstadoPagoComensal | null
-  pagoId: string | null
-}
-
-export interface EstadoComensalesResult {
-  modoDivision: 'partes_iguales' | 'por_consumo' | null
-  divisionPagosHabilitada: boolean
-  cantidadComensales: number | null
-  totalSesion: number
-  totalCobrado: number
-  saldoPendiente: number
-  comensales: EstadoComensalDto[]
-  hayPagosPendientes: boolean
-}
-
-// Espejo de CobrarComensalDto. indiceSlot es obligatorio cuando comensalId es null.
-export interface CobrarComensalBody {
-  comensalId: string | null
-  indiceSlot?: number
-  metodoPago: string
-  mozoId?: string
-  cobradoPorNombre?: string
-}
-
 export interface IngredienteInfo {
   nombre: string
   esAlergeno: boolean
@@ -230,7 +197,6 @@ export interface SesionPagadaItem {
   fechaCobro: string | null
   pagos?: {
     id: string
-    comensalId: string | null
     metodo: string
     estado: string
     cobradoPorNombre: string | null
@@ -384,16 +350,5 @@ export const api = {
   mozos: {
     list: (restauranteId: string) =>
       authFetch<MozoSimple[]>(`/mozos?restauranteId=${encodeURIComponent(restauranteId)}`),
-  },
-
-  pagos: {
-    getEstadoComensales: (sesionId: string) =>
-      authFetch<EstadoComensalesResult>(`/payments/sesiones/${sesionId}/comensales`),
-
-    cobrarComensal: (sesionId: string, body: CobrarComensalBody) =>
-      authFetch<{ ok: boolean }>(`/payments/sesiones/${sesionId}/comensales/cobrar`, {
-        method: 'POST',
-        body: JSON.stringify(body),
-      }),
   },
 }

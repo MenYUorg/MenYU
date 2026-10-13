@@ -10,17 +10,6 @@ export interface ParteComensal {
   monto: number
 }
 
-export interface PartesIgualesResult {
-  divisionPagosHabilitada: boolean
-  divisor: number
-  // Parte que le toca a cualquier comensal que no sea el índice 0 (el resto de
-  // centavos de la división siempre cae en comensales[0] — ver comentario más
-  // abajo). Única fuente de verdad para calcular cuánto pagaría un comensal
-  // todavía no registrado, sin reimplementar esta aritmética en otro service.
-  parteBase: number
-  partes: ParteComensal[]
-}
-
 export interface ItemHuerfano {
   pedidoItemId: string
   nombre: string
@@ -35,8 +24,6 @@ export interface HuerfanosResumen {
 }
 
 export interface PorConsumoResult {
-  divisionPagosHabilitada: boolean
-  divisor: number
   partes: ParteComensal[]
   huerfanos: HuerfanosResumen
 }
@@ -48,51 +35,17 @@ export class DivisionService {
     private readonly comensalesService: ComensalesService,
   ) {}
 
-  async calcularPartesIguales(
-    sesionId: string,
-    client: Prisma.TransactionClient = this.prisma,
-  ): Promise<PartesIgualesResult> {
-    const sesion = await this.buscarSesionConRestaurante(client, sesionId)
-
-    const comensales = await this.comensalesService.listarComensales(sesionId, client)
-    if (comensales.length === 0) {
-      throw new BadRequestException('No hay comensales registrados en esta sesión')
-    }
-
-    const total = await this.calcularTotalSesion(client, sesionId)
-
-    const totalCentavos = Math.round(total * 100)
-    const divisor = this.calcularDivisor(sesion.cantidadComensales, comensales.length)
-    const parteBaseCentavos = Math.floor(totalCentavos / divisor)
-    const resto = totalCentavos - parteBaseCentavos * divisor
-
-    // No se usa esOwner acá: es una convención que setea el frontend al crear el primer
-    // comensal, pero el slot de anfitrión se consume en sessions.open() antes de que
-    // exista ningún Comensal, así que puede no cumplirse nunca en una sesión dada. El
-    // resto de centavos cae en comensales[0], determinístico por createdAt asc.
-    const partes = comensales.map((comensal, index) => {
-      const montoCentavos = parteBaseCentavos + (index === 0 ? resto : 0)
-      return {
-        comensalId: comensal.id,
-        nombre: comensal.nombre,
-        montoCentavos,
-        monto: montoCentavos / 100,
-      }
-    })
-
-    return {
-      divisionPagosHabilitada: sesion.mesa.restaurante.divisionPagosHabilitada,
-      divisor,
-      parteBase: parteBaseCentavos / 100,
-      partes,
-    }
-  }
-
   async calcularPorConsumo(
     sesionId: string,
     client: Prisma.TransactionClient = this.prisma,
   ): Promise<PorConsumoResult> {
-    const sesion = await this.buscarSesionConRestaurante(client, sesionId)
+    const sesion = await client.sesionMesa.findUnique({
+      where: { id: sesionId },
+      select: { id: true },
+    })
+    if (!sesion) {
+      throw new NotFoundException('Sesión no encontrada')
+    }
 
     const comensales = await this.comensalesService.listarComensales(sesionId, client)
     if (comensales.length === 0) {
@@ -158,8 +111,6 @@ export class DivisionService {
     const huerfanosTotalCentavos = huerfanosItems.reduce((acc, i) => acc + i.montoCentavos, 0)
 
     return {
-      divisionPagosHabilitada: sesion.mesa.restaurante.divisionPagosHabilitada,
-      divisor: this.calcularDivisor(sesion.cantidadComensales, comensales.length),
       partes,
       huerfanos: {
         items: huerfanosItems,
@@ -167,17 +118,6 @@ export class DivisionService {
         total: huerfanosTotalCentavos / 100,
       },
     }
-  }
-
-  async obtenerModoDivision(
-    sesionId: string,
-  ): Promise<{ modoDivision: 'partes_iguales' | 'por_consumo' | null }> {
-    const sesion = await this.prisma.sesionMesa.findUnique({ where: { id: sesionId } })
-    if (!sesion) {
-      throw new NotFoundException('Sesión no encontrada')
-    }
-
-    return { modoDivision: sesion.modoDivision as 'partes_iguales' | 'por_consumo' | null }
   }
 
   async obtenerSaldo(sesionId: string): Promise<{
@@ -222,18 +162,4 @@ export class DivisionService {
     )
   }
 
-  private calcularDivisor(cantidadComensales: number | null, comensalesRegistrados: number): number {
-    return Math.max(cantidadComensales ?? 0, comensalesRegistrados)
-  }
-
-  private async buscarSesionConRestaurante(client: Prisma.TransactionClient, sesionId: string) {
-    const sesion = await client.sesionMesa.findUnique({
-      where: { id: sesionId },
-      include: { mesa: { include: { restaurante: { select: { divisionPagosHabilitada: true } } } } },
-    })
-    if (!sesion) {
-      throw new NotFoundException('Sesión no encontrada')
-    }
-    return sesion
-  }
 }
