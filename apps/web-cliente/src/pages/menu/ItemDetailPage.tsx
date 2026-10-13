@@ -352,7 +352,8 @@ export function ItemDetailPage() {
         </div>
 
         {/* ── Bottom bar ────────────────────────────────────────────────────── */}
-        <div style={{ flexShrink: 0, padding: '12px 16px 20px', background: 'white', borderTop: `1px solid ${C.border}`, display: 'flex', alignItems: 'stretch', gap: 10 }}>
+        {/* Si la cantidad y el botón no entran en una fila (menos de ~460 px) se apilan: así el rótulo no se parte y el precio no se corta. */}
+        <div style={{ flexShrink: 0, padding: '12px 16px 20px', background: 'white', borderTop: `1px solid ${C.border}`, display: 'flex', flexWrap: 'wrap', alignItems: 'stretch', gap: 10 }}>
 
           {/* Dish quantity */}
           <div style={{ background: 'white', border: '1px solid #DCDEE7', borderRadius: 14, display: 'flex', alignItems: 'center', padding: '0 4px 0 12px', gap: 2, flexShrink: 0 }}>
@@ -417,7 +418,7 @@ export function ItemDetailPage() {
               navigate('/carrito')
             }}
             style={{
-              flex: 1, background: C.orange, color: 'white',
+              flex: '1 1 300px', background: C.orange, color: 'white',
               borderRadius: 14, padding: '14px 18px', border: 'none',
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 15,
