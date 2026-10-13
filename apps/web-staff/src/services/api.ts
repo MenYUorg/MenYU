@@ -106,6 +106,11 @@ export interface MenuItem {
   nombre: string
   descripcion: string | null
   precioBase: number
+  // El backend siempre manda los tres datos del descuento, ya calculados. Son opcionales por si la API
+  // todavía no está actualizada: sin ellos el plato se cobra a precioBase.
+  precioDescuento?: number | null
+  porcentajeDescuento?: number | null
+  precioVigente?: number
   imagenUrl: string | null
   disponible: boolean
   ingredientes: MenuIngrediente[]

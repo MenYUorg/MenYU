@@ -8,6 +8,7 @@ import type {
   ClasificacionDieta,
   LogoResponse,
   TokenPair,
+  UpdateItemDescuentoRequest,
 } from '@menyu/types'
 
 export class ApiError extends Error {
@@ -294,6 +295,9 @@ export const api = {
     create: (data: CreateItemInput) => req<ItemMenu>('POST', '/items', data),
     update: (id: string, data: UpdateItemInput) => req<ItemMenu>('PATCH', `/items/${id}`, data),
     delete: (id: string) => req<void>('DELETE', `/items/${id}`),
+    setDescuento: (id: string, data: UpdateItemDescuentoRequest) =>
+      req<ItemMenu>('PUT', `/items/${id}/descuento`, data),
+    quitarDescuento: (id: string) => req<ItemMenu>('DELETE', `/items/${id}/descuento`),
     uploadImage: (id: string, file: File) =>
       upload<ItemMenu>(`/items/${id}/imagen`, 'imagen', file),
     deleteImage: (id: string) => req<ItemMenu>('DELETE', `/items/${id}/imagen`),

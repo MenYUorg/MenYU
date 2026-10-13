@@ -9,10 +9,18 @@ import { PrismaService } from '../prisma/prisma.service'
 import { StorageService } from '../storage/storage.service'
 import { MenyuGateway } from '../gateway/menyu.gateway'
 import { JwtPayload } from '../auth/auth.service'
+import { assertOwnerOGerenteDeRestaurante } from '../common/assert-owner-access'
 import { CreateItemDto } from './dto/create-item.dto'
 import { UpdateItemDto } from './dto/update-item.dto'
+import { SetDescuentoDto } from './dto/set-descuento.dto'
 import { AddIngredienteDto } from './dto/add-ingrediente.dto'
 import { UpdateIngredienteItemDto } from './dto/update-ingrediente-item.dto'
+import {
+  assertPrecioBaseCompatible,
+  derivarDescuento,
+  porcentajeDesdePrecio,
+  precioDesdePorcentaje,
+} from './descuento.util'
 
 const IMAGEN_BUCKET = 'menu-items'
 
@@ -73,6 +81,11 @@ export class ItemsService {
       await this.assertNombreUnico(item.restauranteId, dto.nombre, id)
     }
 
+    // Con un descuento activo, el nuevo precio base tiene que seguir siendo mayor al precio con descuento.
+    if (dto.precioBase !== undefined) {
+      assertPrecioBaseCompatible(dto.precioBase, item.precioDescuento)
+    }
+
     const { esRecomendado, ...rest } = dto
     const data = {
       ...rest,
@@ -106,6 +119,57 @@ export class ItemsService {
     await this.storage.deleteFile(IMAGEN_BUCKET, `${item.restauranteId}/${id}`)
 
     const updated = await this.prisma.itemMenu.update({ where: { id }, data: { imagenUrl: null }, include: DETAIL_INCLUDE })
+    return this.serializeItem(updated)
+  }
+
+  // ── Descuento: solo el OWNER de la marca y el GERENTE asignado (ROOT no) ──────────
+
+  async setDescuento(id: string, dto: SetDescuentoDto, user: JwtPayload) {
+    const item = await this.getOrThrow(id)
+    await assertOwnerOGerenteDeRestaurante(this.prisma, item.restauranteId, user)
+
+    const { precioDescuento, porcentaje } = dto
+    if (precioDescuento != null && porcentaje != null) {
+      throw new BadRequestException('Enviá el precio con descuento o el porcentaje, no los dos')
+    }
+
+    const precioBase = Number(item.precioBase)
+    let nuevoPrecio: number
+    if (precioDescuento != null) {
+      // Solo valida: entero, mayor a 0, menor al precio base y con un porcentaje entre 1 y 99.
+      porcentajeDesdePrecio(precioBase, precioDescuento)
+      nuevoPrecio = precioDescuento
+    } else if (porcentaje != null) {
+      nuevoPrecio = precioDesdePorcentaje(precioBase, porcentaje)
+    } else {
+      throw new BadRequestException('Falta el precio con descuento o el porcentaje')
+    }
+
+    const updated = await this.prisma.itemMenu.update({
+      where: { id },
+      data: { precioDescuento: nuevoPrecio },
+      include: DETAIL_INCLUDE,
+    })
+    this.gateway.emitMenuUpdated(item.restauranteId)
+    return this.serializeItem(updated)
+  }
+
+  async removeDescuento(id: string, user: JwtPayload) {
+    const item = await this.getOrThrow(id)
+    await assertOwnerOGerenteDeRestaurante(this.prisma, item.restauranteId, user)
+
+    // Quitar un descuento que no existe no es un error: el ítem ya queda como se pidió.
+    if (item.precioDescuento == null) {
+      const actual = await this.prisma.itemMenu.findUnique({ where: { id }, include: DETAIL_INCLUDE })
+      return this.serializeItem(actual)
+    }
+
+    const updated = await this.prisma.itemMenu.update({
+      where: { id },
+      data: { precioDescuento: null },
+      include: DETAIL_INCLUDE,
+    })
+    this.gateway.emitMenuUpdated(item.restauranteId)
     return this.serializeItem(updated)
   }
 
@@ -165,9 +229,15 @@ export class ItemsService {
 
   // ── Helpers ────────────────────────────────────────────────────────────
 
+  // Además de los datos del ítem devuelve precioDescuento, porcentajeDescuento y precioVigente ya calculados:
+  // las apps no calculan precios ni porcentajes.
   private serializeItem(item: any) {
     const { recomendadoEn, ...rest } = item
-    return { ...rest, esRecomendado: recomendadoEn !== null }
+    return {
+      ...rest,
+      esRecomendado: recomendadoEn !== null,
+      ...derivarDescuento(item.precioBase, item.precioDescuento),
+    }
   }
 
   private async getOrThrow(id: string) {

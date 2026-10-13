@@ -11,6 +11,7 @@ export default mergeConfig(
     test: {
       environment: 'jsdom',
       globals: true,
+      setupFiles: ['./src/test/setup.ts'],
       coverage: {
         provider: 'v8',
         reporter: [
@@ -26,6 +27,7 @@ export default mergeConfig(
           '**/main.tsx',
           '**/vite.config.ts',
           '**/vitest.config.ts',
+          'src/test/**',
           '**/*.spec.{ts,tsx}',
           '**/*.test.{ts,tsx}',
         ],

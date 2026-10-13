@@ -274,6 +274,20 @@ async function main() {
     })
   }
 
+  // ── Ítems en descuento (ejemplo) ──────────────────────────────
+  // Milanesa Napo (4200) al 20 % y Cerveza Artesanal (2600) al 25 %. Se cargan solo si el ítem todavía no
+  // tiene descuento, así re-seedear no pisa uno cargado a mano. El porcentaje no se guarda: se calcula.
+  const descuentosDeEjemplo = [
+    { id: ITEM_MILANESA_ID, precioDescuento: 3360 },
+    { id: ITEM_CERVEZA_ID,  precioDescuento: 1950 },
+  ]
+  for (const d of descuentosDeEjemplo) {
+    await prisma.itemMenu.updateMany({
+      where: { id: d.id, precioDescuento: null },
+      data: { precioDescuento: d.precioDescuento },
+    })
+  }
+
   // ── Usuarios ─────────────────────────────────────────────────
   // Admin y Cliente tienen email @unique → se upsertean por email.
   // Mozo.email es String? sin @unique → se upsertea por id.
@@ -397,6 +411,7 @@ async function main() {
   console.log('Entradas    : Empanada de Carne 800 | Provoleta 2300 | Rabas 3100')
   console.log('Principales : Hamburguesa Seed 1500 | Milanesa Napo 4200 | Bife de Chorizo 6800')
   console.log('Bebidas     : Agua Mineral 900 | Cerveza Artesanal 2600 | Vino Malbec 5400')
+  console.log('En descuento: Milanesa Napo 4200 -> 3360 (-20%) | Cerveza Artesanal 2600 -> 1950 (-25%)')
 }
 
 main()

@@ -1,6 +1,6 @@
 # Plan: logo y dirección, descuentos y Discovery de restaurantes
 
-**Estado:** en ejecución: `fix/endpoints-get-id` ya está pusheada (PR sin mergear) y `feat/logo-direccion` (Fases 1.0 y 1) está terminada, pendiente de commit, push y PR · **Actualizado:** 2026-10-10 · **Base:** `main` al 2026-10-08
+**Estado:** en ejecución: `fix/endpoints-get-id` y `feat/logo-direccion` (Fases 1.0 y 1, PR #364) ya están en `main`; `feat/descuentos` (Fases 2, 3 y 4) está terminada, pendiente de commit, push y PR; sigue `feat/discovery` (Fases 5 a 8) · **Actualizado:** 2026-10-13 · **Base:** `main` al 2026-10-13
 **Equipo:** De Marcos, Ojeda, Strumia Carrara
 
 Este documento es la referencia del trabajo: qué se construye, qué decidimos, cómo se parte en ramas y fases y cómo se prueba cada una. Si una decisión cambia, se actualiza acá (sección 3) y se anota en la fase afectada.
@@ -146,7 +146,7 @@ Reglas de implementación:
 | D10 | Sesión de mesa: queda como hoy (no se vincula a la cuenta). |
 | D11 | Se valida que el QR o PIN corresponda al restaurante elegido (el backend acepta `restauranteId` junto con `tableCode`). |
 | D12 | Se retira `/ingresar-pin` (marca → sucursal → PIN): la ruta redirige a `/` y el PIN se pide dentro del restaurante elegido. |
-| D13 | Se suma Testing Library (`@testing-library/react` y `jest-dom`) en web-cliente y web-admin. |
+| D13 | Se suma Testing Library (`@testing-library/react` y `jest-dom`) en web-cliente y web-admin, y en web-staff para la Toma de pedidos (Fase 4). |
 | D14 | Mockups HTML de Discovery y de la pantalla del restaurante, aprobados antes de implementar la Fase 6. Mobile primero y escritorio (sección 6, Fase 6). |
 | D15 | Migraciones: se desarrollan contra la base local y QA las recibe al mergear (sección 2.4 y 9). |
 | D16 | Regla de ROOT (sección 2.1). |
@@ -212,6 +212,8 @@ Reglas de los endpoints públicos nuevos: `select` explícito (nunca devolver fi
 
 - `DescuentoBadge`: círculo naranja chico con el %. Lo posiciona el padre (arriba a la derecha de la foto).
 - `PrecioConDescuento`: precio original tachado y chico, más precio vigente. Variantes para tarjeta, fila de lista y detalle. El formato de precio es configurable: web-cliente mantiene el actual y web-admin usa `es-AR`.
+- `precioVigenteDe` y `tieneDescuento`: leen los datos que manda el backend (nunca calculan) y los usan las tres apps.
+- `ItemMenuFila`: fila de plato de la Toma de pedidos (foto con círculo, nombre, precio con tachado y botón +), compartida por web-staff y web-admin.
 
 ### 4.6 web-cliente
 
@@ -288,7 +290,7 @@ Tamaños relativos (no son horas): Fase 0 S · fix S · 1.0 M · 1 M · 2 M · 3
 - [x] Docker Desktop encendido y base local lista: `docker compose up -d`, `npx prisma migrate deploy`, `pnpm prisma db seed` (ver `apps/backend/README.md`).
 - [x] `apps/backend/.env` apuntando a la base local (`localhost:5433`) y con `NODE_ENV=development`. La configuración anterior (Supabase) quedó en `.env.qa`, ignorado por git.
 - [x] Backend, web-cliente, web-admin y web-staff levantan en local y se puede ingresar a una mesa con un PIN del seed.
-- [x] Bucket `logos` creado en QA y prod: público, límite de 2 MB y solo PNG, JPEG y WebP. No hay uno de desarrollo: el nombre del bucket es configurable (`SUPABASE_LOGOS_BUCKET`). El `.env` local conserva las credenciales de Supabase de QA, así que hay que crear un bucket de desarrollo (`logos-dev`) y usarlo en local antes de probar subidas; si no, se pisa el logo de QA (ver `apps/backend/README.md`).
+- [x] Bucket `logos` creado en QA y prod: público, límite de 2 MB y solo PNG, JPEG y WebP. Para desarrollo hay un bucket aparte, `logos-dev`, en el proyecto de Supabase de QA (staging), que es al que apunta el `.env` local (nunca debe apuntar a producción). El nombre del bucket es configurable (`SUPABASE_LOGOS_BUCKET`); subir un logo desde local con el bucket por defecto pisa el de QA (ver `apps/backend/README.md`).
 - [ ] Definir quién prueba en celular real (Android o iPhone) y con qué dispositivos.
 
 ### Rama `fix/endpoints-get-id`
@@ -339,14 +341,14 @@ Tamaños relativos (no son horas): Fase 0 S · fix S · 1.0 M · 1 M · 2 M · 3
   - Backend: `marca.service.spec` (logo: OWNER propio ok, OWNER de otra marca 403, GERENTE 403, ROOT 403) y `restaurante.service.spec` nuevo (dirección: OWNER ok, GERENTE 403, OWNER de otra marca 403, ROOT 403; logo).
   - Frontend: `RoleGuard` de la pantalla (OWNER entra, GERENTE y ROOT no), validación de archivo (tipo y tamaño) y fixtures de `contextStore.spec` con `logoUrl`.
 - **Checklist:**
-  - [x] OWNER sube, cambia y quita logo de marca y de restaurante. Verificado contra el backend real y la base local con un Storage simulado (63 verificaciones por API, incluidos el 413 de más de 2 MB y los 403 de ROOT, GERENTE y OWNER de otra marca) y desde la pantalla con Playwright. **No se probó contra el Supabase real.**
+  - [x] OWNER sube, cambia y quita logo de marca y de restaurante. Verificado contra el backend real y la base local con un Storage simulado (63 verificaciones por API, incluidos el 413 de más de 2 MB y los 403 de ROOT, GERENTE y OWNER de otra marca) y desde la pantalla con Playwright. Después se probó contra el Supabase real (bucket `logos-dev` del proyecto de QA, al que apunta el `.env` local) y funcionó.
   - [x] Un restaurante sin logo propio usa el de la marca: la API devuelve el `logoUrl` propio de cada restaurante y el de la marca (en `marca`), y la pantalla de admin muestra el heredado. La resolución final (restaurante → marca → MenYu) la hacen Discovery (Fase 5) y el header del menú (Fase 7).
   - [x] OWNER guarda la dirección. GERENTE y ROOT reciben 403 por API y no ven la pantalla ni el ítem del menú.
   - [x] Subir un logo nuevo se refleja sin recargar con Ctrl+F5 (`?v=`): comprobado en el navegador con un Storage que sirve el archivo con caché de 1 hora; la URL cambia y la pantalla muestra el logo nuevo.
   - [x] Archivo inválido (SVG, PDF, más de 2 MB) muestra un error claro, en el cliente antes de subir y en el servidor.
   - [x] Responsive estándar de la pantalla nueva a 360, 768 y 1280 px: sin scroll horizontal y con todos los controles de al menos 44 px.
   - [ ] Subir un archivo desde un celular real (galería o cámara).
-  - [ ] Crear el bucket `logos-dev` en Supabase y definir `SUPABASE_LOGOS_BUCKET=logos-dev` en el `.env` local antes de probar subidas desde local.
+  - [x] Crear el bucket `logos-dev` en Supabase y definir `SUPABASE_LOGOS_BUCKET=logos-dev` en el `.env` local antes de probar subidas desde local. `logos-dev` está en el proyecto de QA (staging), que es el que usa el `.env` local.
   - [ ] CI verde en el PR.
 - **Estado (2026-10-10): hecha** (a la espera de los tres pendientes de arriba).
   - Implementado:
@@ -379,13 +381,27 @@ Tamaños relativos (no son horas): Fase 0 S · fix S · 1.0 M · 1 M · 2 M · 3
   - `items.service.spec` nuevo: OWNER y GERENTE asignado ok, GERENTE de otro restaurante 403, OWNER de otra marca 403, ROOT 403, modo precio y modo porcentaje, ambos a la vez (400), quitar, cambio de `precioBase` (D4) y `menu:updated`.
   - `menu.service.spec` extendido: `descuentos[]`, ítems no disponibles, % derivado, números y no strings.
   - `orders.service.spec` extendido: descuento más extra a precio normal; sin descuento igual que hoy.
-  - `pedidos.service.spec` nuevo: `confirmar` y `crearStaff` con y sin descuento.
+  - `pedidos.service.spec` extendido: `confirmar` y `crearStaff` con y sin descuento.
 - **Checklist (Swagger o curl contra la base local):**
-  - [ ] Poner descuento por precio y por %; el % y el precio derivados coinciden con la tabla.
-  - [ ] `GET /menu/:id` muestra el descuento y `descuentos[]`.
-  - [ ] Crear un pedido: `precioUnitario` = precio con descuento + extras a precio normal.
-  - [ ] Cambiar el precio base con descuento activo respeta D4.
-  - [ ] ROOT recibe 403.
+  - [x] Poner descuento por precio y por %; el % y el precio derivados coinciden con la tabla.
+  - [x] `GET /menu/:id` muestra el descuento y `descuentos[]`.
+  - [x] Crear un pedido: `precioUnitario` = precio con descuento + extras a precio normal.
+  - [x] Cambiar el precio base con descuento activo respeta D4.
+  - [x] ROOT recibe 403.
+- **Estado (2026-10-13): hecha.**
+  - Implementado:
+    - **BD:** migración `add_precio_descuento_item_menu`: columna `precio_descuento INTEGER NULL` y el CHECK `item_menu_precio_descuento_check`, editado a mano sobre la migración generada con `--create-only`. Seed: Milanesa Napo ($4200 → $3360, 20%) y Cerveza Artesanal ($2600 → $1950, 25%). El seed solo las carga si el ítem no tiene descuento, así que volver a correrlo no pisa uno cargado a mano.
+    - **Backend:** `items/descuento.util.ts` (fórmulas en centavos enteros, validaciones y `derivarDescuento`); `PUT` y `DELETE /items/:id/descuento` (el DTO exige exactamente uno de `precioDescuento` o `porcentaje`); D4 en `ItemsService.update`; `serializeItem` y `MenuService` con los tres campos derivados, y `descuentos[]` en el menú público (solo ítems disponibles, ordenados por categoría y nombre, con los mismos filtros que el resto del menú); los tres cálculos de cobro con `precioVigente`; `menu:updated` por socket al poner, cambiar o sacar un descuento.
+    - **Permisos:** `assertOwnerOGerenteDeRestaurante` en `common/assert-owner-access.ts` (OWNER de la marca o GERENTE asignado, sin ROOT). En los endpoints, `@Roles(OWNER, GERENTE)` a nivel de método pisa el `@Roles` de la clase, que incluye a ROOT.
+    - **Tipos:** `precioDescuento`, `porcentajeDescuento` y `precioVigente` en `ItemMenu` y `MenuPublicoItem`, `MenuPublico.descuentos` y `UpdateItemDescuentoRequest`.
+    - **Documentación:** `doc.md`, `apps/backend/README.md` y `Documentacion/datos-de-prueba-local.md`.
+  - Decisiones de implementación:
+    - `DELETE` es idempotente: sacar un descuento que no existe devuelve el ítem tal cual (200) y no avisa por socket.
+    - D4 se extiende: además de rechazar un precio base menor o igual al precio con descuento, rechaza el que dejaría el porcentaje fuera de 1–99 (por ejemplo, una suba grande que baje el descuento a menos de 1%). Es el mismo 400 y no se cambia nada.
+    - Un descuento guardado que no sea válido contra el precio base (no debería pasar, por el CHECK y por D4) se ignora: el ítem se muestra y se cobra a precio base.
+    - Precios y porcentajes salen siempre como números, no como strings de Decimal.
+  - Tests: api 472 (20 suites), todos en verde, con `typecheck` y `lint` limpios. Nuevos: `descuento.util.spec` (tabla de redondeo y bordes), `items.service.spec` y `descuento-endpoints.spec` (supertest con el `RolesGuard` real: OWNER y GERENTE pasan, ROOT y mozo reciben 403, sin sesión 401, y validación del body). Extendidos: `menu.service.spec`, `orders.service.spec`, `pedidos.service.spec` y `assert-owner-access.spec`.
+  - Verificado con un script e2e local contra el backend real y la base local (no está en CI): 72 verificaciones, incluidos permisos, D4, el cobro de un pedido real y el aviso `menu:updated` por socket.
 
 #### Fase 3: carga de descuentos en web-admin
 
@@ -394,10 +410,19 @@ Tamaños relativos (no son horas): Fase 0 S · fix S · 1.0 M · 1 M · 2 M · 3
 - `api.ts` y `menuStore`: `setDescuento` y `quitarDescuento`.
 - **Tests:** helper de vista previa (mismos vectores que el util del backend), `menuStore` (actualiza el ítem o propaga el error) y el modal con Testing Library (los dos modos, bordes y el botón no visible para ROOT).
 - **Checklist:**
-  - [ ] Como OWNER y como GERENTE (este solo ve sus restaurantes asignados).
-  - [ ] Cargar por precio y por %, con redondeo visible en la vista previa.
-  - [ ] Quitar el descuento.
-  - [ ] Responsive estándar: el modal y la fila a 360 px (la fila no desborda y los botones se tocan bien).
+  - [x] Como OWNER y como GERENTE (este solo ve sus restaurantes asignados). En el navegador el botón "Descuento" aparece para OWNER y GERENTE y no para ROOT; por API, un GERENTE de otro restaurante recibe 403.
+  - [x] Cargar por precio y por %, con redondeo visible en la vista previa.
+  - [x] Quitar el descuento.
+  - [x] Responsive estándar: el modal y la fila a 360 px (la fila no desborda y los botones se tocan bien). Verificado con Playwright en Edge a 360, 768 y 1280 px: sin scroll horizontal y, en celular, con todos los controles de al menos 44 px.
+  - [ ] Una pasada en un celular real (sección 8).
+- **Estado (2026-10-13): hecha.**
+  - Implementado (web-admin):
+    - `utils/descuento.ts`: precio ↔ % para la vista previa en vivo, con los mismos casos que el util del backend, y `motivoPrecioBaseIncompatible` (mismo criterio que D4).
+    - `api.items.setDescuento` y `quitarDescuento`, y las acciones del `menuStore`.
+    - `DescuentoModal`: dos campos enlazados (precio ↔ %), vista previa con aviso de redondeo y "Quitar descuento".
+    - `ItemRow`: la fila de la lista, extraída de `AdminMenuPage` junto con `ToggleSwitch`. Muestra precio tachado, precio vigente, chip "-X%" y el botón "Descuento" (solo OWNER y GERENTE), con áreas de toque de 44 px en celular.
+    - `AvisoPrecioConDescuento` en `ItemFormModal`; el formulario no deja guardar un precio base que invalide el descuento activo.
+  - Tests: web-admin sube de 114 a 281 con esta fase (293 con la Fase 4). Nuevos: `descuento.spec` (81: los mismos vectores que el backend), `DescuentoModal.spec` (37), `ItemRow.spec` (16), `AdminMenuPage.spec` (15: botón según rol, modal, tachado y 360 px), `AvisoPrecioConDescuento.spec` (11) y `menuStore.spec` (7).
 
 #### Fase 4: visualización (web-cliente, web-staff y Toma de pedidos de admin)
 
@@ -411,11 +436,29 @@ Tamaños relativos (no son horas): Fase 0 S · fix S · 1.0 M · 1 M · 2 M · 3
 - **web-staff y web-admin (Toma de pedidos):** cálculo con `precioVigente` y tachado más badge (D6).
 - **Tests:** `publicMenuStore.getItemById`, util de repricing del carrito, `calcPrecio` de staff y de admin, y la tarjeta con y sin descuento (Testing Library).
 - **Checklist:**
-  - [ ] Con el menú abierto en el cliente, poner o sacar un descuento en admin y ver el cambio (socket).
-  - [ ] Pedir un ítem con descuento y un extra: coincide el total del carrito, de Mis pedidos y de Pagar.
-  - [ ] Un descuento sacado con el ítem ya en el carrito: el carrito se corrige.
-  - [ ] Toma de pedidos de mozo y de gerente muestran y cobran el precio con descuento.
-  - [ ] Responsive estándar: tarjeta con badge y precio tachado a 360 px (el badge no tapa el nombre, nombres largos no rompen), grilla de 2 columnas en celular y 4 en escritorio.
+  - [x] Con el menú abierto en el cliente, poner o sacar un descuento en admin y ver el cambio (socket): la tarjeta aparece y desaparece sin recargar.
+  - [x] Pedir un ítem con descuento y un extra: coinciden el total del carrito, el de Pagar y lo que guardó el servidor. "Mis pedidos" no muestra importes.
+  - [x] Un descuento sacado con el ítem ya en el carrito: el carrito se corrige y avisa, también en vivo con el carrito abierto.
+  - [x] Toma de pedidos de mozo y de gerente muestran y cobran el precio con descuento (el servidor guardó el precio con descuento más el extra en los dos casos).
+  - [x] Responsive estándar de lo nuevo: tarjeta con badge y precio tachado a 360 px (el badge no tapa el nombre), grilla de 2 columnas en celular y 4 desde 768 px, filas de Toma de pedidos que caben en 360 px, modal de web-admin a pantalla completa en celular y barra inferior del detalle del plato con el precio entero (verificada entre 320 y 1280 px).
+  - [ ] Una pasada en un celular real (sección 8).
+- **Estado (2026-10-13): hecha.**
+  - Implementado:
+    - **`@menyu/ui`:** `DescuentoBadge`, `PrecioConDescuento`, los helpers `precioVigenteDe` y `tieneDescuento` (una sola definición para las tres apps) e `ItemMenuFila`, la fila de plato de la Toma de pedidos, que estaba copiada tres veces en web-staff y tres en web-admin.
+    - **web-cliente:** sección "Descuentos" (primera, con su chip y el scroll-spy), `ItemCard` extraída de `ClienteMenuPage`, `ItemDetailPage` con `precioVigente + extras` y el círculo y el tachado, `utils/repreciarCarrito.ts` y `carritoStore` (`repreciar` y `avisoPrecios`), `publicMenuStore` (reprecia el carrito en cada `fetchMenu`, que también corre ante `menu:updated`; `getItemById` busca en categorías, recomendados y descuentos) y `CarritoPage` (pide el menú al abrirse y avisa si cambió algún precio).
+    - **web-staff y web-admin (Toma de pedidos):** `ItemMenuFila` en las tres listas (recomendados y categorías), círculo y precio tachado en el modal, y el total parte de `precioVigente`. Los tipos locales ganan los tres campos como opcionales: si la API todavía no los manda, se cobra a precio base.
+  - Decisiones de implementación:
+    - El que cobra sigue siendo el backend: el carrito y la comanda muestran `precioVigente + extras` y el servidor recalcula con el mismo criterio.
+    - El aviso de precios no se guarda en el navegador (solo los ítems del carrito): es de una sola vez.
+    - Testing Library también en web-staff (D13 la preveía solo en web-cliente y web-admin), para probar la Toma de pedidos del mozo.
+    - El modal de Toma de pedidos de web-admin ya no deja lugar al menú lateral debajo de 768 px: desde la Fase 1.0 el menú es un drawer y el modal quedaba angosto y corrido a la derecha.
+    - La barra inferior de `ItemDetailPage` (cantidad y botón "Agregar al pedido") se apila cuando no entran en una fila (menos de ~460 px): a 360 px el rótulo se partía en tres líneas y el precio quedaba cortado, con o sin descuento. Se resolvió con `flex-wrap` y una base de 300 px para el botón. A 320 px el rótulo ocupa dos líneas, pero el precio se ve completo.
+  - Tests: web-cliente sube de 22 a 113, web-staff de 18 a 28 y web-admin suma 12 (Toma de pedidos). Nuevos en web-cliente: `precio.spec`, `repreciarCarrito.spec`, `publicMenuStore.spec`, `ItemCard.spec`, `ClienteMenuPage.spec` (orden de secciones, buscador y chips), `ItemDetailPage.spec`, `CarritoPage.spec` y los casos de repricing de `carritoStore.spec`. Las cuentas de la Toma de pedidos (`calcPrecio`) se prueban por la pantalla (`TomaPedidosPage.spec` en web-staff y en web-admin): filas, modal, extras, cantidad y total de la comanda. Cada regla se verificó rompiéndola a propósito: los tests fallan.
+  - Verificado en el navegador (Edge, backend y base locales): 69 verificaciones sobre web-cliente a 360, 768 y 1280 px (orden de secciones, círculos, tachado, columnas, detalle con extra, carrito, aviso en vivo por socket, cobro, Pagar), y Toma de pedidos de mozo y de gerente (filas, modal, total y el precio que guarda el servidor al enviar a cocina). Después, 24 verificaciones más de la barra inferior del detalle a 320, 360, 390, 412, 430, 480, 500, 768 y 1280 px: el precio queda completo dentro del botón y del viewport, también con un total largo ($61200.00).
+  - Hallazgos preexistentes que no se tocaron (fuera de lo que modifica este plan, P2):
+    - web-staff a 360 px: el bloque de usuario del `PageHeader` hace que la página mida unos 435 px, y los modales (incluido el de Toma de pedidos) quedan cortados a la derecha.
+    - web-admin, Toma de pedidos a 360 px: la grilla de mesas se pasa del ancho.
+    - web-cliente, scroll-spy: en pantallas altas (1280 × 800) el chip activo al abrir el menú es el de la categoría siguiente y no el de Descuentos, porque gana la última sección visible.
 
 ### Rama `feat/discovery`
 
@@ -532,7 +575,7 @@ Implementación en tres commits:
   - Se desarrollan contra la base local (Docker). QA las recibe al mergear, porque Railway corre `prisma migrate deploy` al arrancar.
   - No se corre `migrate deploy` ni `db seed` a mano contra QA (impacta a todo el equipo; ver `apps/backend/README.md`).
   - `feat/logo-direccion` y `feat/descuentos` tocan `schema.prisma` en modelos distintos: el conflicto se resuelve al mergear.
-- **Storage:** crear el bucket `logos` en QA y prod antes de probar. En local usar un bucket de desarrollo; si no, subir un logo local pisa el de QA para el mismo ID (los IDs del seed son fijos).
+- **Storage:** crear el bucket `logos` en QA y prod antes de probar. En local usar un bucket de desarrollo; si no, subir un logo local pisa el de QA para el mismo ID (los IDs del seed son fijos). El `.env` local tiene que apuntar a QA (staging), nunca a producción.
 - **Caché de logos:** el archivo se pisa en el mismo path, por eso la URL guardada lleva `?v=<timestamp>`.
 - **Precio mostrado vs cobrado:** se evita agrupando 2, 3 y 4 en una sola rama y reprecificando el carrito (Fase 4).
 - **`unaccent`:** validar en QA que la extensión se crea y que `unaccent()` resuelve sin calificar el schema (en Supabase suele vivir en `extensions`). Las consultas van por `$queryRaw`: escapar `%` y `_` y cubrir con el e2e local.

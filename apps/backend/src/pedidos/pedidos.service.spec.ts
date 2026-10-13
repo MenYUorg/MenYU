@@ -2,16 +2,20 @@ import { Test } from '@nestjs/testing'
 import { BadRequestException } from '@nestjs/common'
 import { JwtService } from '@nestjs/jwt'
 import { Request } from 'express'
+import { Prisma } from '@prisma/client'
 import { PedidosService } from './pedidos.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { MenyuGateway } from '../gateway/menyu.gateway'
+import { JwtPayload } from '../auth/auth.service'
 
 const mockPrisma = {
   pedido: { findUnique: jest.fn(), findMany: jest.fn() },
+  sesionMesa: { findUnique: jest.fn() },
+  mesa: { findUnique: jest.fn() },
   $transaction: jest.fn(),
 }
 const mockJwt = { verify: jest.fn(), sign: jest.fn() }
-const mockGateway = { emitOrderEdited: jest.fn() }
+const mockGateway = { emitOrderEdited: jest.fn(), emitOrderNew: jest.fn() }
 
 function createTxMock() {
   return {
@@ -150,6 +154,161 @@ describe('PedidosService', () => {
         select: { pagos: { where: { estado: 'aprobado' }, select: { id: true } } },
       })
       expect(arg.include.items.include).not.toHaveProperty('asignaciones')
+    })
+  })
+
+  // ── Precio de cobro: descuentos ────────────────────────────────────────────────
+  //
+  // confirmar (comensal) y crearStaff (mozo o gerente) arman el precioUnitario que queda guardado en el
+  // pedido: parten del precio vigente (con descuento si el ítem lo tiene) y los extras se cobran a precio
+  // normal. QUITAR conserva el comportamiento de cada camino: confirmar resta el extra y crearStaff no.
+
+  describe('precio de cobro con descuentos', () => {
+    const ITEM_EN_BD = {
+      id: 'item-1',
+      restauranteId: 'rest-1',
+      precioBase: new Prisma.Decimal('1500.00'),
+      precioDescuento: null as number | null,
+    }
+    const ING_QUESO = {
+      id: 'ii-queso',
+      itemId: 'item-1',
+      esAgregable: true,
+      esRemovible: true,
+      precioExtra: new Prisma.Decimal('150.00'),
+    }
+
+    function createTxPedidoMock() {
+      return {
+        sesionMesa: { findUnique: jest.fn().mockResolvedValue({ id: 'ses-1', estado: 'activa' }) },
+        itemMenu: { findFirst: jest.fn() },
+        itemIngrediente: { findUnique: jest.fn().mockResolvedValue(ING_QUESO) },
+        pedido: { create: jest.fn().mockResolvedValue({ id: 'ped-1', mesa: { numero: '5' }, items: [] }) },
+      }
+    }
+
+    // precioUnitario de cada ítem que se mandó a crear
+    const precioGuardado = (tx: ReturnType<typeof createTxPedidoMock>): number[] =>
+      tx.pedido.create.mock.calls[0][0].data.items.create.map((i: { precioUnitario: number }) => i.precioUnitario)
+
+    const mods = (accion: 'AGREGAR' | 'QUITAR', cantidad: number) => [
+      { itemIngredienteId: 'ii-queso', accion, cantidad },
+    ]
+    const dtoConItem = (cantidad = 1, modificaciones?: ReturnType<typeof mods>) => ({
+      sesionId: 'ses-1',
+      mesaId: 'mesa-1',
+      items: [{ itemId: 'item-1', cantidad, ...(modificaciones ? { mods: modificaciones } : {}) }],
+    })
+
+    describe('confirmar (comensal)', () => {
+      const CLIENTE = { sub: 'cli-1', tipo: 'cliente', sesionId: 'ses-1', mesaId: 'mesa-1', restauranteId: 'rest-1' }
+      let tx: ReturnType<typeof createTxPedidoMock>
+
+      beforeEach(() => {
+        tx = createTxPedidoMock()
+        mockJwt.verify.mockReturnValue(CLIENTE)
+        mockPrisma.$transaction.mockImplementation((fn: any) => fn(tx))
+      })
+
+      it('sin descuento se cobra el precio base, como antes', async () => {
+        tx.itemMenu.findFirst.mockResolvedValue(ITEM_EN_BD)
+
+        await service.confirmar('Bearer token', dtoConItem(2))
+
+        expect(precioGuardado(tx)).toEqual([1500])
+      })
+
+      it('con descuento se cobra el precio con descuento', async () => {
+        tx.itemMenu.findFirst.mockResolvedValue({ ...ITEM_EN_BD, precioDescuento: 1200 })
+
+        await service.confirmar('Bearer token', dtoConItem(2))
+
+        expect(precioGuardado(tx)).toEqual([1200])
+      })
+
+      it('un extra agregado se suma a precio normal sobre el precio con descuento', async () => {
+        tx.itemMenu.findFirst.mockResolvedValue({ ...ITEM_EN_BD, precioDescuento: 1200 })
+
+        await service.confirmar('Bearer token', dtoConItem(1, mods('AGREGAR', 2)))
+
+        expect(precioGuardado(tx)).toEqual([1500]) // 1200 + 150 × 2
+      })
+
+      it('quitar un ingrediente mantiene el comportamiento actual (resta el extra) sobre el precio con descuento', async () => {
+        tx.itemMenu.findFirst.mockResolvedValue({ ...ITEM_EN_BD, precioDescuento: 1200 })
+
+        await service.confirmar('Bearer token', dtoConItem(1, mods('QUITAR', 1)))
+
+        expect(precioGuardado(tx)).toEqual([1050]) // 1200 - 150
+      })
+
+      it('un descuento guardado que no es válido contra el precio base se ignora: se cobra el base', async () => {
+        tx.itemMenu.findFirst.mockResolvedValue({ ...ITEM_EN_BD, precioDescuento: 1500 })
+
+        await service.confirmar('Bearer token', dtoConItem())
+
+        expect(precioGuardado(tx)).toEqual([1500])
+      })
+
+      it('emite el pedido nuevo al restaurante', async () => {
+        tx.itemMenu.findFirst.mockResolvedValue({ ...ITEM_EN_BD, precioDescuento: 1200 })
+
+        await service.confirmar('Bearer token', dtoConItem())
+
+        expect(mockGateway.emitOrderNew).toHaveBeenCalledWith('rest-1', expect.objectContaining({ id: 'ped-1' }))
+      })
+    })
+
+    describe('crearStaff (mozo o gerente)', () => {
+      const MOZO: JwtPayload = { sub: 'mozo-1', tipo: 'mozo', restauranteId: 'rest-1' }
+      let tx: ReturnType<typeof createTxPedidoMock>
+
+      beforeEach(() => {
+        tx = createTxPedidoMock()
+        mockPrisma.sesionMesa.findUnique.mockResolvedValue({ id: 'ses-1', estado: 'activa' })
+        mockPrisma.mesa.findUnique.mockResolvedValue({ id: 'mesa-1', restauranteId: 'rest-1' })
+        mockPrisma.$transaction.mockImplementation((fn: any) => fn(tx))
+      })
+
+      it('sin descuento se cobra el precio base, como antes', async () => {
+        tx.itemMenu.findFirst.mockResolvedValue(ITEM_EN_BD)
+
+        await service.crearStaff(dtoConItem(2), MOZO)
+
+        expect(precioGuardado(tx)).toEqual([1500])
+      })
+
+      it('con descuento se cobra el precio con descuento', async () => {
+        tx.itemMenu.findFirst.mockResolvedValue({ ...ITEM_EN_BD, precioDescuento: 1200 })
+
+        await service.crearStaff(dtoConItem(2), MOZO)
+
+        expect(precioGuardado(tx)).toEqual([1200])
+      })
+
+      it('un extra agregado se suma a precio normal sobre el precio con descuento', async () => {
+        tx.itemMenu.findFirst.mockResolvedValue({ ...ITEM_EN_BD, precioDescuento: 1200 })
+
+        await service.crearStaff(dtoConItem(1, mods('AGREGAR', 2)), MOZO)
+
+        expect(precioGuardado(tx)).toEqual([1500]) // 1200 + 150 × 2
+      })
+
+      it('quitar un ingrediente no altera el precio, como antes', async () => {
+        tx.itemMenu.findFirst.mockResolvedValue({ ...ITEM_EN_BD, precioDescuento: 1200 })
+
+        await service.crearStaff(dtoConItem(1, mods('QUITAR', 1)), MOZO)
+
+        expect(precioGuardado(tx)).toEqual([1200])
+      })
+
+      it('un descuento guardado que no es válido contra el precio base se ignora: se cobra el base', async () => {
+        tx.itemMenu.findFirst.mockResolvedValue({ ...ITEM_EN_BD, precioDescuento: 1600 })
+
+        await service.crearStaff(dtoConItem(), MOZO)
+
+        expect(precioGuardado(tx)).toEqual([1500])
+      })
     })
   })
 })

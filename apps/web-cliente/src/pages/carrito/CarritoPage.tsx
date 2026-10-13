@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useCarritoStore } from '../../store/carritoStore'
 import { useSessionStore } from '../../store/sessionStore'
+import { usePublicMenuStore } from '../../store/publicMenuStore'
 import { api } from '../../services/api'
 import { MenuItemImage } from '@menyu/ui'
 
@@ -30,13 +31,21 @@ const C = {
 
 export function CarritoPage() {
   const navigate = useNavigate()
-  const { items, quitar, cambiarCantidad, vaciar, total } = useCarritoStore()
-  const jwt        = useSessionStore((s) => s.jwt)
-  const numeroMesa = useSessionStore((s) => s.numeroMesa)
+  const { items, quitar, cambiarCantidad, vaciar, total, avisoPrecios, descartarAvisoPrecios } = useCarritoStore()
+  const jwt           = useSessionStore((s) => s.jwt)
+  const numeroMesa    = useSessionStore((s) => s.numeroMesa)
+  const restauranteId = useSessionStore((s) => s.restauranteId)
+  const fetchMenu     = usePublicMenuStore((s) => s.fetchMenu)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [exito, setExito] = useState(false)
   const [pedidoConfirmado, setPedidoConfirmado] = useState<PedidoConfirmado | null>(null)
+
+  // Al abrir el carrito se pide el menú de nuevo: si hay un descuento nuevo (o ya se sacó), los precios del
+  // carrito se corrigen y se avisa. Es lo que después cobra el servidor.
+  useEffect(() => {
+    if (restauranteId) void fetchMenu(restauranteId)
+  }, [restauranteId, fetchMenu])
 
   async function confirmarPedido() {
     if (!jwt) {
@@ -351,6 +360,41 @@ export function CarritoPage() {
           flexDirection: 'column',
           gap:           10,
         }}>
+          {avisoPrecios && (
+            <div
+              role="status"
+              style={{
+                background:   C.orangeSoft,
+                border:       `1px solid ${C.orange}`,
+                borderRadius: 12,
+                padding:      '10px 12px',
+                display:      'flex',
+                alignItems:   'center',
+                gap:          10,
+              }}
+            >
+              <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: C.text, flex: 1 }}>
+                Actualizamos los precios de tu pedido: algunos platos cambiaron de precio o de descuento.
+              </span>
+              <button
+                onClick={descartarAvisoPrecios}
+                style={{
+                  background:   'none',
+                  border:       'none',
+                  color:        C.orange,
+                  fontFamily:   'Montserrat, sans-serif',
+                  fontWeight:   700,
+                  fontSize:     13,
+                  cursor:       'pointer',
+                  minHeight:    44,
+                  padding:      '0 6px',
+                  flexShrink:   0,
+                }}
+              >
+                Entendido
+              </button>
+            </div>
+          )}
           {items.map((item) => {
             const modsText = item.modificaciones.length > 0
               ? item.modificaciones

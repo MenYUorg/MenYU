@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
+import { derivarDescuento } from '../items/descuento.util'
 
 export interface MenuFiltros {
   categoriaId?: string
@@ -19,6 +20,18 @@ const ITEM_INCLUDE = {
   clasificaciones: {
     include: { clasificacion: true as const },
   },
+}
+
+// Orden de las secciones Recomendados y Descuentos: por el orden de la categoría del ítem (los que no
+// tienen categoría al final) y después por nombre.
+function porCategoriaYNombre(
+  a: { nombre: string; categoria?: { orden: number } | null },
+  b: { nombre: string; categoria?: { orden: number } | null },
+): number {
+  const ordenA = a.categoria?.orden ?? Number.MAX_SAFE_INTEGER
+  const ordenB = b.categoria?.orden ?? Number.MAX_SAFE_INTEGER
+  if (ordenA !== ordenB) return ordenA - ordenB
+  return a.nombre.localeCompare(b.nombre)
 }
 
 @Injectable()
@@ -70,13 +83,20 @@ export class MenuService {
 
     const recomendados = recomendadosRaw
       .filter((item) => this.pasaFiltros(item, filtros))
-      .sort((a, b) => {
-        const ordenA = a.categoria?.orden ?? Number.MAX_SAFE_INTEGER
-        const ordenB = b.categoria?.orden ?? Number.MAX_SAFE_INTEGER
-        if (ordenA !== ordenB) return ordenA - ordenB
-        return a.nombre.localeCompare(b.nombre)
-      })
+      .sort(porCategoriaYNombre)
       .map((item) => ({ ...this.serializeItem(item), esRecomendado: true }))
+
+    // Ítems en descuento (solo disponibles), en el mismo orden que los recomendados.
+    const descuentosRaw = await this.prisma.itemMenu.findMany({
+      where: { restauranteId, disponible: true, precioDescuento: { not: null }, ...buscarWhere },
+      orderBy: { nombre: 'asc' },
+      include: { ...ITEM_INCLUDE, categoria: { select: { orden: true } } },
+    })
+
+    const descuentos = descuentosRaw
+      .filter((item) => item.precioDescuento != null && this.pasaFiltros(item, filtros))
+      .sort(porCategoriaYNombre)
+      .map((item) => this.serializeItem(item))
 
     return {
       restaurante: {
@@ -86,6 +106,7 @@ export class MenuService {
       },
       categorias: result,
       recomendados,
+      descuentos,
     }
   }
 
@@ -112,6 +133,8 @@ export class MenuService {
       nombre: item.nombre,
       descripcion: item.descripcion,
       precioBase: Number(item.precioBase),
+      // precioDescuento, porcentajeDescuento y precioVigente: ya calculados, las apps no calculan precios.
+      ...derivarDescuento(item.precioBase, item.precioDescuento),
       imagenUrl: item.imagenUrl,
       ingredientes: item.ingredientes.map((ii: any) => ({
         id: ii.id,

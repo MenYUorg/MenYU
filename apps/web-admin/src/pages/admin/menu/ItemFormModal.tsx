@@ -5,6 +5,8 @@ import type { ItemMenu, ItemIngrediente } from '@menyu/types'
 import { useContextStore } from '../../../store/contextStore'
 import { useMenuStore } from '../../../store/menuStore'
 import { api } from '../../../services/api'
+import { motivoPrecioBaseIncompatible } from '../../../utils/descuento'
+import { AvisoPrecioConDescuento } from './AvisoPrecioConDescuento'
 
 const matchesBusqueda = (nombre: string, buscar: string): boolean => {
   if (!buscar.trim()) return true
@@ -335,6 +337,10 @@ export function ItemFormModal({ open, onClose, item, canDelete }: Props) {
     const precioNum = parseFloat(precio)
     if (isNaN(precioNum) || precioNum < 0) { setError('Ingresá un precio válido'); return }
 
+    // Con un descuento activo, el precio base nuevo tiene que seguir siendo mayor al precio con descuento.
+    const motivoDescuento = item ? motivoPrecioBaseIncompatible(precioNum, item.precioDescuento) : null
+    if (motivoDescuento) { setError(motivoDescuento); return }
+
     if (!item && ingredientesLocales.some((i) => !i.esRemovible && !i.esAgregable)) {
       setError('Todos los ingredientes deben ser removibles o agregables.')
       return
@@ -607,6 +613,13 @@ export function ItemFormModal({ open, onClose, item, canDelete }: Props) {
               <span style={{ fontSize: 14, color: '#6b7280', fontFamily: 'Inter, sans-serif', flexShrink: 0 }}>$</span>
               <input type="number" value={precio} onChange={(e) => setPrecio(e.target.value)} placeholder="0.00" min={0} step={0.01} style={inputSt} />
             </div>
+            {item?.precioDescuento != null && (
+              <AvisoPrecioConDescuento
+                precioDescuento={item.precioDescuento}
+                porcentajeDescuento={item.porcentajeDescuento}
+                precioTexto={precio}
+              />
+            )}
           </div>
 
           {/* 7. Ingredientes */}

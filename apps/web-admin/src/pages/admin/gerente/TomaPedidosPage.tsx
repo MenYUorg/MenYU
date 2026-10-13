@@ -4,7 +4,7 @@ import type { Restaurante } from '@menyu/types'
 import { useContextStore } from '../../../store/contextStore'
 import { api } from '../../../services/api'
 import type { MesaConQr, SesionActiva } from '../../../services/api'
-import { MenuItemImage } from '@menyu/ui'
+import { DescuentoBadge, ItemMenuFila, PrecioConDescuento, precioVigenteDe, tieneDescuento } from '@menyu/ui'
 
 // ── Palette ────────────────────────────────────────────────────────────────────
 const C = {
@@ -26,6 +26,8 @@ const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? ''
 
 const SIDEBAR_KEY = 'menyu-sidebar-open'
 function getSidebarWidth(): number {
+  // Debajo de 768 px el menú lateral es un drawer que no ocupa lugar: el modal usa toda la pantalla.
+  if (typeof window.matchMedia === 'function' && !window.matchMedia('(min-width: 768px)').matches) return 0
   const stored = localStorage.getItem(SIDEBAR_KEY)
   const isOpen = stored === null ? true : stored === 'true'
   return isOpen ? 220 : 56
@@ -48,6 +50,11 @@ interface MenuItemType {
   nombre: string
   descripcion: string | null
   precioBase: number
+  // El backend siempre manda los tres datos del descuento, ya calculados. Son opcionales por si la API
+  // todavía no está actualizada: sin ellos el plato se cobra a precioBase.
+  precioDescuento?: number | null
+  porcentajeDescuento?: number | null
+  precioVigente?: number
   imagenUrl: string | null
   ingredientes: MenuIngrediente[]
 }
@@ -97,13 +104,16 @@ function tiempoTranscurrido(creadaEn: string): string {
   return horas > 0 ? `${horas}h ${mins}m` : `${mins} min`
 }
 
+const formatearPrecio = (valor: number): string => `$${valor.toFixed(2)}`
+
+// precioPlato es lo que se cobra por el plato sin extras (con descuento si lo tiene); los extras se suman a precio normal.
 function calcPrecioModal(
-  precioBase: number,
+  precioPlato: number,
   ingredientes: MenuIngrediente[],
   agregados: Map<string, number>,
   cantidad: number,
 ): number {
-  let price = precioBase
+  let price = precioPlato
   for (const ing of ingredientes) {
     const qty = agregados.get(ing.id) ?? 0
     if (qty > 0) price += ing.precioExtra * qty
@@ -255,7 +265,7 @@ function ItemModal({
 
   const removibles = item.ingredientes.filter((i) => i.esRemovible)
   const agregables = item.ingredientes.filter((i) => i.esAgregable)
-  const precioTotal = calcPrecioModal(item.precioBase, item.ingredientes, agregados, cantidad)
+  const precioTotal = calcPrecioModal(precioVigenteDe(item), item.ingredientes, agregados, cantidad)
 
   const toggleRemover = (id: string) => {
     setRemovidos((prev) => {
@@ -316,9 +326,23 @@ function ItemModal({
       >
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
-          <h3 style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 16, color: C.navy, margin: 0, flex: 1, paddingRight: 12 }}>
-            {item.nombre}
-          </h3>
+          <div style={{ flex: 1, paddingRight: 12 }}>
+            <h3 style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 16, color: C.navy, margin: 0 }}>
+              {item.nombre}
+            </h3>
+            {tieneDescuento(item) && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
+                <DescuentoBadge porcentaje={item.porcentajeDescuento} tamano={30} />
+                <PrecioConDescuento
+                  variante="fila"
+                  precioBase={item.precioBase}
+                  precioVigente={precioVigenteDe(item)}
+                  formatear={formatearPrecio}
+                  estilo={{ fontFamily: 'Inter,sans-serif', fontSize: 14, color: '#374151' }}
+                />
+              </div>
+            )}
+          </div>
           <button onClick={onCerrar} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.textMuted, padding: 0, display: 'flex' }}>
             <X size={20} />
           </button>
@@ -908,35 +932,7 @@ export function TomaPedidosPage() {
               </p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {recomendadosFiltrados.map((item) => (
-                  <div
-                    key={item.id}
-                    style={{
-                      background: 'white', border: `1px solid ${C.border}`,
-                      borderRadius: 12, padding: '14px 16px',
-                      display: 'flex', alignItems: 'center', gap: 16,
-                    }}
-                  >
-                    <MenuItemImage src={item.imagenUrl} alt={item.nombre} width={56} height={56} borderRadius={8} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ fontFamily: 'Inter,sans-serif', fontWeight: 600, fontSize: 15, color: '#374151', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {item.nombre}
-                      </p>
-                      <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 13, color: C.textSub, margin: '2px 0 0' }}>
-                        ${item.precioBase.toFixed(2)}
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => { setSidebarWidth(getSidebarWidth()); setItemModal(item) }}
-                      style={{
-                        width: 32, height: 32, borderRadius: '50%', border: 'none',
-                        background: C.orange, color: 'white',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        cursor: 'pointer', flexShrink: 0, fontSize: 22, fontWeight: 700, lineHeight: 1,
-                      }}
-                    >
-                      +
-                    </button>
-                  </div>
+                  <ItemMenuFila key={item.id} item={item} onAgregar={() => { setSidebarWidth(getSidebarWidth()); setItemModal(item) }} />
                 ))}
               </div>
             </div>
@@ -955,35 +951,7 @@ export function TomaPedidosPage() {
                 </p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {recomendadosFiltrados.map((item) => (
-                    <div
-                      key={item.id}
-                      style={{
-                        background: 'white', border: `1px solid ${C.border}`,
-                        borderRadius: 12, padding: '14px 16px',
-                        display: 'flex', alignItems: 'center', gap: 16,
-                      }}
-                    >
-                      <MenuItemImage src={item.imagenUrl} alt={item.nombre} width={56} height={56} borderRadius={8} />
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <p style={{ fontFamily: 'Inter,sans-serif', fontWeight: 600, fontSize: 15, color: '#374151', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {item.nombre}
-                        </p>
-                        <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 13, color: C.textSub, margin: '2px 0 0' }}>
-                          ${item.precioBase.toFixed(2)}
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => { setSidebarWidth(getSidebarWidth()); setItemModal(item) }}
-                        style={{
-                          width: 32, height: 32, borderRadius: '50%', border: 'none',
-                          background: C.orange, color: 'white',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          cursor: 'pointer', flexShrink: 0, fontSize: 22, fontWeight: 700, lineHeight: 1,
-                        }}
-                      >
-                        +
-                      </button>
-                    </div>
+                    <ItemMenuFila key={item.id} item={item} onAgregar={() => { setSidebarWidth(getSidebarWidth()); setItemModal(item) }} />
                   ))}
                 </div>
               </div>
@@ -1007,35 +975,7 @@ export function TomaPedidosPage() {
                     </p>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                       {cat.items.map((item) => (
-                        <div
-                          key={item.id}
-                          style={{
-                            background: 'white', border: `1px solid ${C.border}`,
-                            borderRadius: 12, padding: '14px 16px',
-                            display: 'flex', alignItems: 'center', gap: 16,
-                          }}
-                        >
-                          <MenuItemImage src={item.imagenUrl} alt={item.nombre} width={56} height={56} borderRadius={8} />
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <p style={{ fontFamily: 'Inter,sans-serif', fontWeight: 600, fontSize: 15, color: '#374151', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {item.nombre}
-                            </p>
-                            <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 13, color: C.textSub, margin: '2px 0 0' }}>
-                              ${item.precioBase.toFixed(2)}
-                            </p>
-                          </div>
-                          <button
-                            onClick={() => { setSidebarWidth(getSidebarWidth()); setItemModal(item) }}
-                            style={{
-                              width: 32, height: 32, borderRadius: '50%', border: 'none',
-                              background: C.orange, color: 'white',
-                              display: 'flex', alignItems: 'center', justifyContent: 'center',
-                              cursor: 'pointer', flexShrink: 0, fontSize: 22, fontWeight: 700, lineHeight: 1,
-                            }}
-                          >
-                            +
-                          </button>
-                        </div>
+                        <ItemMenuFila key={item.id} item={item} onAgregar={() => { setSidebarWidth(getSidebarWidth()); setItemModal(item) }} />
                       ))}
                     </div>
                   </div>

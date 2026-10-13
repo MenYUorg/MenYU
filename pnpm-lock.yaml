@@ -288,6 +288,18 @@ importers:
       '@menyu/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@testing-library/dom':
+        specifier: 10.4.2
+        version: 10.4.2
+      '@testing-library/jest-dom':
+        specifier: 7.0.1
+        version: 7.0.1(@testing-library/dom@10.4.2)(vitest@3.2.7(@types/node@25.6.0)(jiti@2.6.1)(jsdom@26.1.0)(lightningcss@1.27.0)(terser@5.46.2))
+      '@testing-library/react':
+        specifier: 16.3.3
+        version: 16.3.3(@testing-library/dom@10.4.2)(@types/react-dom@19.2.3(@types/react@19.0.14))(@types/react@19.0.14)(react-dom@19.0.0(react@19.0.0))(react@19.0.0)
+      '@testing-library/user-event':
+        specifier: 14.6.7
+        version: 14.6.7(@testing-library/dom@10.4.2)
       '@types/react':
         specifier: ^19.0.0
         version: 19.0.14
@@ -379,6 +391,18 @@ importers:
       '@menyu/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@testing-library/dom':
+        specifier: 10.4.2
+        version: 10.4.2
+      '@testing-library/jest-dom':
+        specifier: 7.0.1
+        version: 7.0.1(@testing-library/dom@10.4.2)(vitest@3.2.7(@types/node@25.6.0)(jiti@2.6.1)(jsdom@26.1.0)(lightningcss@1.27.0)(terser@5.46.2))
+      '@testing-library/react':
+        specifier: 16.3.3
+        version: 16.3.3(@testing-library/dom@10.4.2)(@types/react-dom@19.2.3(@types/react@19.0.14))(@types/react@19.0.14)(react-dom@19.0.0(react@19.0.0))(react@19.0.0)
+      '@testing-library/user-event':
+        specifier: 14.6.7
+        version: 14.6.7(@testing-library/dom@10.4.2)
       '@types/react':
         specifier: ^19.0.0
         version: 19.0.14
@@ -6373,6 +6397,18 @@ snapshots:
       redent: 3.0.0
     optionalDependencies:
       vitest: 3.2.7(@types/node@25.6.0)(jiti@1.21.7)(jsdom@26.1.0)(lightningcss@1.27.0)(terser@5.46.2)
+
+  '@testing-library/jest-dom@7.0.1(@testing-library/dom@10.4.2)(vitest@3.2.7(@types/node@25.6.0)(jiti@2.6.1)(jsdom@26.1.0)(lightningcss@1.27.0)(terser@5.46.2))':
+    dependencies:
+      '@adobe/css-tools': 4.5.0
+      '@testing-library/dom': 10.4.2
+      aria-query: 5.3.2
+      css.escape: 1.5.1
+      dom-accessibility-api: 0.6.3
+      picocolors: 1.1.1
+      redent: 3.0.0
+    optionalDependencies:
+      vitest: 3.2.7(@types/node@25.6.0)(jiti@2.6.1)(jsdom@26.1.0)(lightningcss@1.27.0)(terser@5.46.2)
 
   '@testing-library/react@16.3.3(@testing-library/dom@10.4.2)(@types/react-dom@19.2.3(@types/react@19.0.14))(@types/react@19.0.14)(react-dom@19.0.0(react@19.0.0))(react@19.0.0)':
     dependencies:
