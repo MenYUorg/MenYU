@@ -284,6 +284,9 @@ model ItemMenu {
   nombre            String
   descripcion       String?
   precioBase        Decimal  @map("precio_base") @db.Decimal(10, 2)
+  // Precio con descuento en pesos enteros. El porcentaje no se guarda: se calcula. El CHECK
+  // (0 < precio_descuento < precio_base) vive en la migración, porque Prisma no lo puede expresar.
+  precioDescuento   Int?     @map("precio_descuento")
   disponible        Boolean  @default(true)
   recomendadoEn     DateTime? @map("recomendado_en")
   imagenUrl         String?  @map("imagen_url")
