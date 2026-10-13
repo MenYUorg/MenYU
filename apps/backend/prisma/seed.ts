@@ -37,16 +37,26 @@ const ITEM_VINO_ID      = 'bbbbbbbb-0008-4008-a008-000000000008'
 const MESA2_ID = 'cccccccc-0001-4001-a001-000000000001'
 const MESA3_ID = 'cccccccc-0002-4002-a002-000000000002'
 
+// Segunda marca con su restaurante y una mesa: sirve para probar los permisos entre marcas
+// y el caso de un restaurante sin logo propio ni de marca.
+const MARCA2_ID = 'eeeeeeee-0001-4001-a001-000000000001'
+const REST2_ID  = 'eeeeeeee-0002-4002-a002-000000000002'
+const MESA4_ID  = 'eeeeeeee-0003-4003-a003-000000000003'
+
 // Usuarios
-const ADMIN_ROOT_ID  = 'dddddddd-0001-4001-a001-000000000001'
-const ADMIN_OWNER_ID = 'dddddddd-0002-4002-a002-000000000002'
-const MOZO_ID        = 'dddddddd-0003-4003-a003-000000000003'
-const CLIENTE1_ID    = 'dddddddd-0004-4004-a004-000000000004'
-const CLIENTE2_ID    = 'dddddddd-0005-4005-a005-000000000005'
+const ADMIN_ROOT_ID    = 'dddddddd-0001-4001-a001-000000000001'
+const ADMIN_OWNER_ID   = 'dddddddd-0002-4002-a002-000000000002'
+const MOZO_ID          = 'dddddddd-0003-4003-a003-000000000003'
+const CLIENTE1_ID      = 'dddddddd-0004-4004-a004-000000000004'
+const CLIENTE2_ID      = 'dddddddd-0005-4005-a005-000000000005'
+const ADMIN_GERENTE_ID = 'dddddddd-0006-4006-a006-000000000006'
+const ADMIN_OWNER2_ID  = 'dddddddd-0007-4007-a007-000000000007'
 
 // Credenciales del seed (entorno local — nunca usar en QA ni producción)
 const CRED_ROOT     = { email: 'root@menyu.com',     password: 'root1234'    }
 const CRED_OWNER    = { email: 'owner@menyu.com',    password: 'owner1234'   }
+const CRED_GERENTE  = { email: 'gerente@menyu.com',  password: 'gerente1234' }
+const CRED_OWNER2   = { email: 'owner2@menyu.com',   password: 'owner21234'  }
 const CRED_MOZO     = { email: 'mozo@menyu.com',     password: 'mozo1234'    }
 const CRED_CLIENTE1 = { email: 'cliente1@menyu.com', password: 'cliente1234' }
 const CRED_CLIENTE2 = { email: 'cliente2@menyu.com', password: 'cliente1234' }
@@ -67,6 +77,34 @@ async function main() {
       nombre: 'Restaurante Seed',
       modoSesion: 'abierto',
     },
+  })
+
+  await prisma.marca.upsert({
+    where: { id: MARCA2_ID },
+    update: {},
+    create: { id: MARCA2_ID, nombre: 'Marca Seed 2', slug: 'seed-test-2' },
+  })
+
+  await prisma.restaurante.upsert({
+    where: { id: REST2_ID },
+    update: {},
+    create: {
+      id: REST2_ID,
+      marcaId: MARCA2_ID,
+      nombre: 'Restaurante Seed 2',
+      modoSesion: 'abierto',
+    },
+  })
+
+  // Direcciones: solo se cargan si el restaurante todavía no tiene una,
+  // así re-seedear no pisa lo que se edite desde el panel de admin.
+  await prisma.restaurante.updateMany({
+    where: { id: REST_ID, direccion: null },
+    data: { direccion: 'Av. Colón 1234, Córdoba' },
+  })
+  await prisma.restaurante.updateMany({
+    where: { id: REST2_ID, direccion: null },
+    data: { direccion: 'San Martín 456, Rosario' },
   })
 
   // ── Categorías ───────────────────────────────────────────────
@@ -126,6 +164,20 @@ async function main() {
       numero: '101',
       qrToken: 'TEST-QR-SEED-101',
       pin: '9996',
+      estado: 'libre',
+      activo: true,
+    },
+  })
+
+  const mesa4 = await prisma.mesa.upsert({
+    where: { id: MESA4_ID },
+    update: {},
+    create: {
+      id: MESA4_ID,
+      restauranteId: REST2_ID,
+      numero: '1',
+      qrToken: 'TEST-QR-SEED-201',
+      pin: '9995',
       estado: 'libre',
       activo: true,
     },
@@ -251,6 +303,36 @@ async function main() {
     },
   })
 
+  const gerente = await prisma.admin.upsert({
+    where: { email: CRED_GERENTE.email },
+    update: {},
+    create: {
+      id: ADMIN_GERENTE_ID,
+      marcaId: MARCA_ID,
+      email: CRED_GERENTE.email,
+      passwordHash: await bcrypt.hash(CRED_GERENTE.password, BCRYPT_ROUNDS),
+      rol: 'GERENTE',
+    },
+  })
+
+  await prisma.adminRestaurante.upsert({
+    where: { adminId_restauranteId: { adminId: gerente.id, restauranteId: REST_ID } },
+    update: {},
+    create: { adminId: gerente.id, restauranteId: REST_ID },
+  })
+
+  await prisma.admin.upsert({
+    where: { email: CRED_OWNER2.email },
+    update: {},
+    create: {
+      id: ADMIN_OWNER2_ID,
+      marcaId: MARCA2_ID,
+      email: CRED_OWNER2.email,
+      passwordHash: await bcrypt.hash(CRED_OWNER2.password, BCRYPT_ROUNDS),
+      rol: 'OWNER',
+    },
+  })
+
   await prisma.mozo.upsert({
     where: { id: MOZO_ID },
     update: {},
@@ -300,10 +382,13 @@ async function main() {
   for (const m of [mesa, mesa2, mesa3]) {
     console.log(`Mesa ${m.numero.padEnd(4)} qrToken: ${m.qrToken.padEnd(18)} pin: ${m.pin}`)
   }
+  console.log(`Mesa ${mesa4.numero.padEnd(4)} qrToken: ${mesa4.qrToken.padEnd(18)} pin: ${mesa4.pin}  (Restaurante Seed 2)`)
 
   console.log('\n--- Usuarios (solo entorno local) ---')
   console.log(`Admin ROOT   : ${CRED_ROOT.email}     / ${CRED_ROOT.password}`)
   console.log(`Admin OWNER  : ${CRED_OWNER.email}    / ${CRED_OWNER.password}`)
+  console.log(`Admin GERENTE: ${CRED_GERENTE.email}  / ${CRED_GERENTE.password}  (Restaurante Seed)`)
+  console.log(`Admin OWNER 2: ${CRED_OWNER2.email}   / ${CRED_OWNER2.password}  (Marca Seed 2)`)
   console.log(`Mozo         : ${CRED_MOZO.email}     / ${CRED_MOZO.password}`)
   console.log(`Cliente 1    : ${CRED_CLIENTE1.email} / ${CRED_CLIENTE1.password}`)
   console.log(`Cliente 2    : ${CRED_CLIENTE2.email} / ${CRED_CLIENTE2.password}`)

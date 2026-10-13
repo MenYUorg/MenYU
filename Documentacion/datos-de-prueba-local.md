@@ -12,8 +12,10 @@ pnpm --filter @menyu/api seed
 
 | Rol | Email | Password | App / URL |
 |---|---|---|---|
-| ROOT (bypass total) | `root@menyu.com` | `root1234` | web-admin |
+| ROOT (administración general) | `root@menyu.com` | `root1234` | web-admin |
 | OWNER (dueño de marca) | `owner@menyu.com` | `owner1234` | web-admin |
+| GERENTE (de Restaurante Seed) | `gerente@menyu.com` | `gerente1234` | web-admin |
+| OWNER de Marca Seed 2 | `owner2@menyu.com` | `owner21234` | web-admin |
 | Mozo | `mozo@menyu.com` | `mozo1234` | web-staff |
 | Cliente 1 (cuenta registrada) | `cliente1@menyu.com` | `cliente1234` | web-cliente (login, no PIN) |
 | Cliente 2 (cuenta registrada) | `cliente2@menyu.com` | `cliente1234` | web-cliente (login, no PIN) |
@@ -25,6 +27,7 @@ pnpm --filter @menyu/api seed
 | 99 | `9998` | `TEST-QR-SEED-002` |
 | 100 | `9997` | `TEST-QR-SEED-100` |
 | 101 | `9996` | `TEST-QR-SEED-101` |
+| 1 (Restaurante Seed 2) | `9995` | `TEST-QR-SEED-201` |
 
 El comensal entra por **web-cliente → Ingresar con PIN**, elige el restaurante del seed y pone el PIN de la mesa (no hace falta escanear el QR real en local).
 
@@ -42,4 +45,6 @@ Para levantar todo: `pnpm dev` desde la raíz (turbo corre las 4 apps en paralel
 ## Otros datos del seed
 
 - Restaurante y marca del seed usan IDs fijos (`REST_ID`, `MARCA_ID`) definidos al principio de `seed.ts` — no hace falta memorizarlos, los devuelve la API (`/api/marca/publicas`) al elegir restaurante desde el login con PIN.
+- Hay una segunda marca ("Marca Seed 2") con "Restaurante Seed 2" y una mesa (PIN `9995`), sin logo ni menú. Sirve para probar los permisos entre marcas y el caso de un restaurante sin logo.
+- Los dos restaurantes tienen dirección cargada y ninguno tiene logo: se sube desde web-admin, en "Marca y sucursales" (solo OWNER). El seed solo carga la dirección si el restaurante todavía no tiene una.
 - El seed no crea ningún `Comensal` — los comensales se crean en tiempo real cuando alguien entra a una mesa y elige su nombre.
