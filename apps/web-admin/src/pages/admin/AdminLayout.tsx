@@ -20,6 +20,7 @@ import {
   ShoppingBag,
   Shield as ShieldIcon,
   CreditCard,
+  Store,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -61,6 +62,12 @@ const NAV_BY_ROL: Record<string, NavSection[]> = {
       items: [
         { to: '/admin/reportes',  label: 'Reportes',  Icon: BarChart2 },
         { to: '/admin/auditoria', label: 'Auditoría', Icon: ShieldIcon },
+      ],
+    },
+    {
+      label: 'CONFIGURACIÓN',
+      items: [
+        { to: '/admin/marca', label: 'Marca y sucursales', Icon: Store },
       ],
     },
   ],
@@ -129,6 +136,7 @@ const SECTION_TITLES: Record<string, string> = {
   '/admin/pedidos':       'Pedidos',
   '/admin/historial':     'Historial',
   '/admin/toma-pedidos':  'Toma de pedidos',
+  '/admin/marca':         'Marca y sucursales',
 }
 
 const SIDEBAR_KEY = 'menyu-sidebar-open'

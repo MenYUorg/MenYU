@@ -65,14 +65,12 @@ export interface UpdateMarcaRequest {
 export interface CreateRestauranteRequest {
   marcaId: string
   nombre: string
-  direccion?: string
-  qrBaseUrl?: string
+  direccion: string
 }
 
 export interface UpdateRestauranteRequest {
   nombre?: string
   direccion?: string
-  qrBaseUrl?: string
   modoSesion?: ModoSesion
 }
 

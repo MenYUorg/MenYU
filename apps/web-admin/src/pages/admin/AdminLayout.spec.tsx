@@ -4,8 +4,10 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { AdminLayout } from './AdminLayout'
 import { restaurarPantalla, simularPantalla } from '../../test/pantalla'
 
+let rolActual = 'OWNER'
+
 vi.mock('@menyu/auth', () => ({
-  useAuth: () => ({ user: { rol: 'OWNER', email: 'owner@menyu.com' }, logout: vi.fn() }),
+  useAuth: () => ({ user: { rol: rolActual, email: 'usuario@menyu.com' }, logout: vi.fn() }),
 }))
 
 vi.mock('../../store/contextStore', () => ({
@@ -22,16 +24,17 @@ vi.mock('../../store/contextStore', () => ({
 const CELULAR = 360
 const ESCRITORIO = 1280
 
-function renderLayout() {
+function renderLayout(ruta = '/admin/menu') {
   return render(
     <MemoryRouter
-      initialEntries={['/admin/menu']}
+      initialEntries={[ruta]}
       future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
     >
       <Routes>
         <Route element={<AdminLayout />}>
           <Route path="/admin/menu" element={<div>Contenido del menú</div>} />
           <Route path="/admin/tables" element={<div>Contenido de mesas</div>} />
+          <Route path="/admin/marca" element={<div>Contenido de marca</div>} />
         </Route>
       </Routes>
     </MemoryRouter>,
@@ -41,6 +44,7 @@ function renderLayout() {
 describe('AdminLayout', () => {
   beforeEach(() => {
     localStorage.clear()
+    rolActual = 'OWNER'
   })
 
   afterEach(restaurarPantalla)
@@ -172,4 +176,46 @@ describe('AdminLayout', () => {
     })
   })
 
+  describe('Marca y sucursales (logo y dirección)', () => {
+    it('el OWNER ve el acceso en el menú y lo puede abrir', async () => {
+      simularPantalla(ESCRITORIO)
+      const user = userEvent.setup()
+      renderLayout()
+
+      const enlace = screen.getByRole('link', { name: 'Marca y sucursales' })
+      expect(enlace).toHaveAttribute('href', '/admin/marca')
+
+      await user.click(enlace)
+
+      expect(screen.getByText('Contenido de marca')).toBeInTheDocument()
+    })
+
+    it('el título de la pantalla es "Marca y sucursales"', () => {
+      simularPantalla(ESCRITORIO)
+
+      renderLayout('/admin/marca')
+
+      expect(screen.getByRole('heading', { name: 'Marca y sucursales' })).toBeInTheDocument()
+    })
+
+    it('también se llega desde el menú del celular', async () => {
+      simularPantalla(CELULAR)
+      const user = userEvent.setup()
+      renderLayout()
+      await user.click(screen.getByRole('button', { name: 'Abrir menú' }))
+
+      await user.click(screen.getByRole('link', { name: 'Marca y sucursales' }))
+
+      expect(screen.getByText('Contenido de marca')).toBeInTheDocument()
+    })
+
+    it.each(['GERENTE', 'ROOT'])('el %s no ve el acceso', (rol) => {
+      rolActual = rol
+      simularPantalla(ESCRITORIO)
+
+      renderLayout()
+
+      expect(screen.queryByRole('link', { name: 'Marca y sucursales' })).not.toBeInTheDocument()
+    })
+  })
 })

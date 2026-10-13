@@ -1,6 +1,6 @@
 # Plan: logo y dirección, descuentos y Discovery de restaurantes
 
-**Estado:** en ejecución: Fase 0 y rama `fix/endpoints-get-id` terminadas (pendientes de commit, push y PR) · **Actualizado:** 2026-10-10 · **Base:** `main` al 2026-10-08
+**Estado:** en ejecución: `fix/endpoints-get-id` ya está pusheada (PR sin mergear) y `feat/logo-direccion` (Fases 1.0 y 1) está terminada, pendiente de commit, push y PR · **Actualizado:** 2026-10-10 · **Base:** `main` al 2026-10-08
 **Equipo:** De Marcos, Ojeda, Strumia Carrara
 
 Este documento es la referencia del trabajo: qué se construye, qué decidimos, cómo se parte en ramas y fases y cómo se prueba cada una. Si una decisión cambia, se actualiza acá (sección 3) y se anota en la fase afectada.
@@ -288,7 +288,7 @@ Tamaños relativos (no son horas): Fase 0 S · fix S · 1.0 M · 1 M · 2 M · 3
 - [x] Docker Desktop encendido y base local lista: `docker compose up -d`, `npx prisma migrate deploy`, `pnpm prisma db seed` (ver `apps/backend/README.md`).
 - [x] `apps/backend/.env` apuntando a la base local (`localhost:5433`) y con `NODE_ENV=development`. La configuración anterior (Supabase) quedó en `.env.qa`, ignorado por git.
 - [x] Backend, web-cliente, web-admin y web-staff levantan en local y se puede ingresar a una mesa con un PIN del seed.
-- [x] Bucket `logos` creado en QA y prod: público, límite de 2 MB y solo PNG, JPEG y WebP. No hay uno de desarrollo: en la Fase 1 el nombre del bucket sigue siendo configurable (`SUPABASE_LOGOS_BUCKET`) y hay que decidir qué bucket usa el entorno local (D3).
+- [x] Bucket `logos` creado en QA y prod: público, límite de 2 MB y solo PNG, JPEG y WebP. No hay uno de desarrollo: el nombre del bucket es configurable (`SUPABASE_LOGOS_BUCKET`). El `.env` local conserva las credenciales de Supabase de QA, así que hay que crear un bucket de desarrollo (`logos-dev`) y usarlo en local antes de probar subidas; si no, se pisa el logo de QA (ver `apps/backend/README.md`).
 - [ ] Definir quién prueba en celular real (Android o iPhone) y con qué dispositivos.
 
 ### Rama `fix/endpoints-get-id`
@@ -316,6 +316,11 @@ Tamaños relativos (no son horas): Fase 0 S · fix S · 1.0 M · 1 M · 2 M · 3
 - Debajo de `md` (768 px): sidebar oculto por defecto, botón hamburguesa en la barra superior que abre un drawer con overlay, se cierra al navegar, contenido a ancho completo. El selector de marca y restaurante va dentro del drawer. En escritorio no cambia nada.
 - Tests: hook de media query y apertura y cierre del drawer (Testing Library).
 - Checklist: responsive estándar en 360, 390, 768 y 1280; navegar por todas las secciones del admin con el drawer; el estado abierto o cerrado en escritorio se mantiene.
+- **Estado (2026-10-10): hecha.**
+  - Implementado: `useMediaQuery`, sidebar que pasa a drawer debajo de 768 px (overlay, se cierra al navegar, con Escape y al agrandar la pantalla), botón de hamburguesa de 44 px, `100dvh` y áreas de toque de 44 px en el drawer. En escritorio no cambia nada y el estado colapsado se sigue guardando. Se sumó Testing Library a web-admin (D13).
+  - Tests: `useMediaQuery.spec` (5) y `AdminLayout.spec` (11): apertura y cierre del drawer, navegación, Escape, cambio de ancho y estado guardado en escritorio.
+  - [x] Verificado con Playwright en Edge a 360, 768 y 1280 px (capturas y chequeo de scroll horizontal): sin desborde.
+  - [ ] Pendiente de prueba manual: 390 px y recorrer todas las secciones existentes del admin con el drawer. Esas pantallas no se rediseñaron (P2) y algunas siguen estrechas en 360 px.
 
 #### Fase 1: logo y dirección
 
@@ -334,12 +339,28 @@ Tamaños relativos (no son horas): Fase 0 S · fix S · 1.0 M · 1 M · 2 M · 3
   - Backend: `marca.service.spec` (logo: OWNER propio ok, OWNER de otra marca 403, GERENTE 403, ROOT 403) y `restaurante.service.spec` nuevo (dirección: OWNER ok, GERENTE 403, OWNER de otra marca 403, ROOT 403; logo).
   - Frontend: `RoleGuard` de la pantalla (OWNER entra, GERENTE y ROOT no), validación de archivo (tipo y tamaño) y fixtures de `contextStore.spec` con `logoUrl`.
 - **Checklist:**
-  - [ ] OWNER sube, cambia y quita logo de marca y de restaurante.
-  - [ ] Un restaurante sin logo propio usa el de la marca (verificable en la respuesta de la API).
-  - [ ] OWNER guarda la dirección. GERENTE y ROOT reciben 403 por API y no ven la pantalla.
-  - [ ] Subir un logo nuevo se refleja sin recargar con Ctrl+F5 (`?v=`).
-  - [ ] Archivo inválido (SVG, PDF, más de 2 MB) muestra un error claro.
-  - [ ] Responsive estándar en la pantalla nueva, incluyendo subir un archivo desde el celular.
+  - [x] OWNER sube, cambia y quita logo de marca y de restaurante. Verificado contra el backend real y la base local con un Storage simulado (63 verificaciones por API, incluidos el 413 de más de 2 MB y los 403 de ROOT, GERENTE y OWNER de otra marca) y desde la pantalla con Playwright. **No se probó contra el Supabase real.**
+  - [x] Un restaurante sin logo propio usa el de la marca: la API devuelve el `logoUrl` propio de cada restaurante y el de la marca (en `marca`), y la pantalla de admin muestra el heredado. La resolución final (restaurante → marca → MenYu) la hacen Discovery (Fase 5) y el header del menú (Fase 7).
+  - [x] OWNER guarda la dirección. GERENTE y ROOT reciben 403 por API y no ven la pantalla ni el ítem del menú.
+  - [x] Subir un logo nuevo se refleja sin recargar con Ctrl+F5 (`?v=`): comprobado en el navegador con un Storage que sirve el archivo con caché de 1 hora; la URL cambia y la pantalla muestra el logo nuevo.
+  - [x] Archivo inválido (SVG, PDF, más de 2 MB) muestra un error claro, en el cliente antes de subir y en el servidor.
+  - [x] Responsive estándar de la pantalla nueva a 360, 768 y 1280 px: sin scroll horizontal y con todos los controles de al menos 44 px.
+  - [ ] Subir un archivo desde un celular real (galería o cámara).
+  - [ ] Crear el bucket `logos-dev` en Supabase y definir `SUPABASE_LOGOS_BUCKET=logos-dev` en el `.env` local antes de probar subidas desde local.
+  - [ ] CI verde en el PR.
+- **Estado (2026-10-10): hecha** (a la espera de los tres pendientes de arriba).
+  - Implementado:
+    - **BD:** migración `add_logo_url_marca_restaurante`.
+    - **Backend:** `LogosService`, `storage/logo-upload.ts` (interceptor y validación del archivo), `common/assert-owner-access.ts` (OWNER de la marca, sin ROOT), `POST` y `DELETE` en `/marcas/:id/logo` y `/restaurantes/:id/logo`, regla de la dirección en `PATCH /restaurantes/:id` y `direccion` obligatoria en `CreateRestauranteDto`.
+    - **Tipos:** `logoUrl` en `Marca` y `Restaurante`, `LogoResponse`, y `direccion` obligatoria al crear. Se sacó `qrBaseUrl`.
+    - **web-admin:** `/admin/marca` ("Marca y sucursales", solo OWNER) con `RoleGuard` (extraído a `components/RoleGuard.tsx`), ítem "Marca y sucursales" en el menú del OWNER y validación del archivo en el cliente (`utils/logo.ts`).
+    - **Seed:** `gerente@menyu.com`, "Marca Seed 2" con `owner2@menyu.com`, "Restaurante Seed 2" con una mesa (PIN 9995) y direcciones.
+    - **Documentación:** `doc.md`, `apps/backend/README.md`, `apps/backend/.env.example` y `Documentacion/datos-de-prueba-local.md`.
+  - Decisiones de implementación:
+    - El tipo de archivo se valida por la firma (magic number) del contenido, con un detector propio. No se usa `FileTypeValidator` de Nest porque depende de `file-type` (ESM) y no corre bajo Jest. Además, el tipo que declara el cliente tiene que coincidir con el contenido.
+    - Multer y `MaxFileSizeValidator` rechazan los archivos que *llegan* al límite, así que ambos se configuran con 2 MB + 1 byte: uno de exactamente 2 MB es válido y uno de 2 MB + 1 byte da 413.
+    - En tablet (768 a 1279 px) cada sucursal ocupa una columna porque el menú lateral deja poco ancho: las dos columnas empiezan en 1280 px.
+  - Tests: api 277 (15 suites) y web-admin 114 (9 archivos), todos en verde, con `typecheck` y `lint` limpios. Nuevos en backend: `assert-owner-access`, `logos.service`, `logo-upload`, `logo-endpoints` (supertest con el `RolesGuard` real: ROOT, GERENTE y sin sesión), `direccion.dto.spec` (trim, no vacía, 200 caracteres y que `null` no pase en el `PATCH`), `marca.service` y `restaurante.service`. Nuevos en web-admin: `logo`, `RoleGuard`, rutas de `App` (ROOT y GERENTE no entran a `/admin/marca`), `LogoUploader`, `DireccionField`, `MarcaPage` y los casos de `AdminLayout`.
 
 ### Rama `feat/descuentos`
 

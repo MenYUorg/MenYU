@@ -13,14 +13,8 @@ import { PedidosPage } from './pages/admin/gerente/PedidosPage'
 import { HistorialSesionesPage } from './pages/admin/gerente/HistorialSesionesPage'
 import { TomaPedidosPage } from './pages/admin/gerente/TomaPedidosPage'
 import { AuditoriaPage } from './pages/admin/auditoria/AuditoriaPage'
-
-function RoleGuard({ roles, children }: { roles: string[]; children: React.ReactNode }) {
-  const { user } = useAuth()
-  if (!user?.rol || !roles.includes(user.rol)) {
-    return <Navigate to="/admin" replace />
-  }
-  return <>{children}</>
-}
+import { MarcaPage } from './pages/admin/marca/MarcaPage'
+import { RoleGuard } from './components/RoleGuard'
 
 function MesasRouter() {
   const { user } = useAuth()
@@ -69,6 +63,13 @@ export function App() {
             <Route path="/admin/auditoria" element={
               <RoleGuard roles={['OWNER', 'ROOT']}>
                 <AuditoriaPage />
+              </RoleGuard>
+            } />
+
+            {/* Solo OWNER: logo y dirección de su marca y sus sucursales (ROOT no accede a esta información) */}
+            <Route path="/admin/marca" element={
+              <RoleGuard roles={['OWNER']}>
+                <MarcaPage />
               </RoleGuard>
             } />
 
