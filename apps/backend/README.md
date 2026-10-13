@@ -49,6 +49,8 @@ Mesas: número 99 (pin 9998), 100 (pin 9997), 101 (pin 9996), y la mesa 1 de
 Restaurante Seed 2 (pin 9995), la segunda marca del seed.
 Menú: 3 categorías (Entradas, Principales, Bebidas) con 9 ítems de precios
 distintos entre sí, pensados para testear división de cuenta por consumo.
+Dos están en descuento (Milanesa Napo 20 % y Cerveza Artesanal 25 %): los
+pedidos se cobran al precio con descuento.
 
 El seed es idempotente (upserts con IDs fijos), se puede correr las veces que
 haga falta. No siembra sesiones ni pedidos.
@@ -113,21 +115,23 @@ El host que imprime es el de `DIRECT_URL`, no el de `DATABASE_URL`: es el que
 
 ### Logos: usar un bucket de desarrollo
 
-Solo la base de datos es local: el `.env` conserva las credenciales de Supabase
-de QA, así que lo que se sube desde local (imágenes de ítems y logos) va al
-Storage de QA. Los logos se guardan en `marcas/<id>` y `restaurantes/<id>`, y los
-IDs del seed son fijos: **subir un logo desde local pisa el logo de QA** de ese
-mismo ID.
+Solo la base de datos es local: lo que se sube desde local (imágenes de ítems y
+logos) va al Storage del proyecto de Supabase al que apunte `SUPABASE_URL` en tu
+`.env`. **Apuntalo al de QA (staging), nunca al de producción.** Los logos se
+guardan en `marcas/<id>` y `restaurantes/<id>`, y los IDs del seed son fijos:
+**subir un logo desde local pisa el logo de QA** de ese mismo ID si usás el
+bucket por defecto.
 
-Para probar logos sin tocar QA, crear en Supabase un bucket de desarrollo (por
-ejemplo `logos-dev`: público, límite de 2 MB y solo PNG, JPEG y WebP) y sumar al
-`.env` local:
+Para probar logos sin tocar los de QA, crear en el proyecto de QA (staging) un
+bucket de desarrollo (por ejemplo `logos-dev`: público, límite de 2 MB y solo
+PNG, JPEG y WebP) y sumar al `.env` local:
 
 ```
 SUPABASE_LOGOS_BUCKET=logos-dev
 ```
 
-Sin esa variable se usa el bucket `logos`, el mismo que QA y producción.
+Sin esa variable se usa el bucket `logos`: el real de QA (y el de producción, en
+su propio proyecto).
 
 ### Notas
 
