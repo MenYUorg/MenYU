@@ -73,7 +73,7 @@
 <body>
   <header class="top">
     <strong>Mockups · Discovery</strong>
-    <span class="fase">Fase 6 · aprobados + /check-in nuevo</span>
+    <span class="fase">Fase 6 · aprobados</span>
     <span class="espacio"></span>
     <div class="anchos" id="anchos" role="group" aria-label="Ancho de pantalla">
       <button type="button" data-ancho="320">320</button>
@@ -177,7 +177,7 @@
             nota: 'El backend valida que el QR sea de una mesa del restaurante elegido (decisión D11). No se crea la sesión y el PIN sigue escondido.' },
           { id: 'mesa-pin-camara', titulo: 'Viniendo de la cámara', src: MESA + '?id=parrilla&estado=pin-desde-camara',
             nota: 'Si la cámara falló y la persona eligió el PIN en el escáner, vuelve acá con el campo del PIN ya abierto y un aviso.' },
-          { id: 'mesa-pin-qr', titulo: 'Viniendo de /check-in', nuevo: true, src: MESA + '?id=parrilla&estado=pin-desde-qr',
+          { id: 'mesa-pin-qr', titulo: 'Viniendo de /check-in', src: MESA + '?id=parrilla&estado=pin-desde-qr',
             nota: 'Si el QR escaneado con la cámara del celular no abrió la mesa y la persona elige el PIN en <a data-ir="checkin-error-qr">el aviso de /check-in</a>, llega acá con el restaurante del link, el campo del PIN ya abierto y un aviso.' },
           { id: 'mesa-larga', titulo: 'Nombre largo', src: MESA + '?id=rincon&estado=error-qr', nota: 'El nombre del restaurante se parte en varias líneas, sin romper el recuadro.' },
           { id: 'mesa-cargando', titulo: 'Cargando', src: MESA + '?id=parrilla&estado=cargando', nota: 'El recuadro del restaurante carga; el resto ya se puede usar.' },
@@ -200,13 +200,13 @@
             nota: 'Desde el home todavía no hay restaurante, así que el PIN no se puede pedir: la opción es <b>elegir el restaurante</b> en la lista e ingresar con el PIN desde su pantalla. La recomendación de la cámara del celular sirve igual: el QR ya dice de qué mesa es.' },
         ] },
         { nombre: 'Check-in (cámara del celular)', items: [
-          { id: 'checkin-abriendo', titulo: 'Abriendo tu mesa', nuevo: true, src: CHECKIN + '?estado=abriendo',
+          { id: 'checkin-abriendo', titulo: 'Abriendo tu mesa', src: CHECKIN + '?estado=abriendo',
             nota: 'Cuando la cámara del celular lee el QR de la mesa, el navegador abre <b>/check-in</b> y esa pantalla abre la sesión. <b>Hoy queda en blanco</b> hasta que termina. Ahora muestra la misma tarjeta azul de las pantallas del modo seguro (anfitrión y código de la mesa), con "Abriendo tu mesa…" y un giro. Si la mesa está en modo seguro, después sigue la pantalla del anfitrión o la del código, que ya existen.' },
-          { id: 'checkin-error-qr', titulo: 'El QR no abre una mesa', nuevo: true, src: CHECKIN + '?estado=error-qr',
+          { id: 'checkin-error-qr', titulo: 'El QR no abre una mesa', src: CHECKIN + '?estado=error-qr',
             nota: '<b>Hoy, si el QR no sirve, la app vuelve al inicio sin avisar nada.</b> Ahora explica qué pasó y la salida principal es <b>el PIN</b>: lleva a la <a data-ir="mesa-pin-qr">pantalla de ingreso a mesa</a> del restaurante del link, con el campo del PIN ya abierto. "Ir al inicio" queda como salida. Un link sin el código de la mesa se trata igual. Acá reintentar no sirve (el servidor ya dijo que esa mesa no existe), así que no se ofrece.' },
-          { id: 'checkin-error-red', titulo: 'Sin conexión', nuevo: true, src: CHECKIN + '?estado=error-red',
+          { id: 'checkin-error-red', titulo: 'Sin conexión', src: CHECKIN + '?estado=error-red',
             nota: 'Si no hubo respuesta (sin internet o el servidor no contesta), lo primero es <b>Reintentar</b>; el PIN también se ofrece, por si el problema era solo del QR.' },
-          { id: 'checkin-sin-restaurante', titulo: 'Link sin restaurante', nuevo: true, src: CHECKIN + '?estado=error-qr&restaurante=no',
+          { id: 'checkin-sin-restaurante', titulo: 'Link sin restaurante', src: CHECKIN + '?estado=error-qr&restaurante=no',
             nota: 'El QR impreso siempre trae el restaurante, pero un link armado a mano puede no traerlo. Sin restaurante no se puede ir directo a su pantalla: el botón pasa a <b>"Elegir mi restaurante"</b> (lleva al inicio) con una línea de ayuda, igual que en el escáner desde el home.' },
         ] },
       ]
@@ -220,7 +220,7 @@
         '<li><b>Escaneo desde el celular:</b> pide el permiso de la cámara, anda en Chrome (Android) y Safari (iPhone) y, si el permiso se rechaza o la cámara no anda, muestra un mensaje claro, <b>recomienda escanear el QR con la cámara del celular</b> (que abre el link directo a tu mesa) y ofrece la opción del PIN. Se ve en <a data-ir="escaner-denegado">Permiso rechazado</a>.</li>' +
         '<li><b>Resultados de la búsqueda:</b> primero las ofertas que coinciden, después los restaurantes que coinciden por nombre y al final los restaurantes con platos que coinciden. Estos últimos se ven igual que en la lista general, sin los nombres de los platos ni la cantidad (si fueran muchos, el resultado quedaría larguísimo); la API ya no los devuelve. Se ve en <a data-ir="busca-cafe">Resultados: tres grupos</a>.</li>' +
         '<li><b>Sin cambios sobre lo anterior:</b> esqueletos de carga en lugar del Spinner (que es índigo), restaurantes de la A a la Z y ofertas por % mayor.</li>' +
-        '<li><b>Pantallas de /check-in <span style="color:var(--orange)">(nuevo, falta tu OK)</span>:</b> adonde llega la cámara del celular. Mientras abre la mesa muestra "Abriendo tu mesa…" (hoy queda en blanco) y, si falla, un aviso con la opción del PIN (hoy vuelve al inicio sin decir nada). Se ve en <a data-ir="checkin-abriendo">Abriendo tu mesa</a> y <a data-ir="checkin-error-qr">El QR no abre una mesa</a>.</li>' +
+        '<li><b>Pantallas de /check-in <span style="color:var(--orange)">(aprobado el 2026-10-14)</span>:</b> adonde llega la cámara del celular. Mientras abre la mesa muestra "Abriendo tu mesa…" (hoy queda en blanco) y, si falla, un aviso con la opción del PIN (hoy vuelve al inicio sin decir nada). Se ve en <a data-ir="checkin-abriendo">Abriendo tu mesa</a> y <a data-ir="checkin-error-qr">El QR no abre una mesa</a>.</li>' +
         '</ol><p class="nota-chica">Todo lo demás sigue el plan: sin combos, búsqueda sin acentos de 2 letras o más, tocar una oferta abre el restaurante, QR o PIN validados contra el restaurante elegido.</p>' +
         '<h2 style="margin-top:18px">Colores y letras</h2>' +
         '<p class="nota-chica" style="margin-bottom:8px">Son los de <b>apps/web-cliente/src/theme.ts</b>. Montserrat (títulos, botones, precios) e Inter (texto), las mismas del resto de la app.</p>' +
