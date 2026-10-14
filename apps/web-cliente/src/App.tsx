@@ -12,7 +12,7 @@ import { PagarPage } from './pages/pago/PagarPage'
 import { EtiquetarPedidosPage } from './pages/etiquetado/EtiquetarPedidosPage'
 import { CantidadComensalesPage } from './pages/dividir/CantidadComensalesPage'
 import { MensajePage } from './pages/dividir/MensajePage'
-import { EntradaPage } from './pages/entrada/EntradaPage'
+import { DiscoveryPage } from './pages/discovery/DiscoveryPage'
 import { ElegirNombrePage } from './pages/entrada/ElegirNombrePage'
 import { IngresoManualPage } from './pages/entrada/IngresoManualPage'
 import { AuthPage } from './pages/auth/AuthPage'
@@ -152,7 +152,7 @@ export function App() {
     <BrowserRouter>
       <SessionGuard>
         <Routes>
-          <Route path="/" element={<EntradaPage />} />
+          <Route path="/" element={<DiscoveryPage />} />
           <Route path="/ingresar-pin" element={<IngresoManualPage />} />
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/check-in" element={<CheckInRedirectPage />} />

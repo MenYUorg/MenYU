@@ -1,4 +1,4 @@
-import type { ItemIngrediente, MenuPublico, MenuPublicoItem } from '@menyu/types'
+import type { DiscoveryOferta, DiscoveryRestaurante, ItemIngrediente, MenuPublico, MenuPublicoItem } from '@menyu/types'
 import type { api } from '../services/api'
 
 /** Plato del menú público. Por defecto no tiene descuento ni ingredientes. */
@@ -79,4 +79,32 @@ export function crearTokenJwt(payload: Record<string, unknown>): string {
   const base64url = (texto: string) =>
     btoa(String.fromCharCode(...new TextEncoder().encode(texto))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
   return `${base64url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))}.${base64url(JSON.stringify(payload))}.firma`
+}
+
+/** Restaurante del listado de Discovery. Por defecto: con dirección, sin logo y sin ofertas. */
+export function crearRestaurante(parcial: Partial<DiscoveryRestaurante> = {}): DiscoveryRestaurante {
+  return {
+    id: 'rest-1',
+    nombre: 'La Parrilla del Puerto',
+    direccion: 'Av. Alicia Moreau de Justo 1150, Puerto Madero',
+    logoUrl: null,
+    marca: { id: 'marca-1', nombre: 'La Parrilla' },
+    cantidadOfertas: 0,
+    ...parcial,
+  }
+}
+
+/** Oferta de Discovery: por defecto, 20 % de descuento sobre $1000. */
+export function crearOferta(parcial: Partial<DiscoveryOferta> = {}): DiscoveryOferta {
+  return {
+    id: 'oferta-1',
+    nombre: 'Milanesa napolitana',
+    imagenUrl: null,
+    precioBase: 1000,
+    precioDescuento: 800,
+    porcentajeDescuento: 20,
+    precioVigente: 800,
+    restaurante: { id: 'rest-1', nombre: 'La Parrilla del Puerto' },
+    ...parcial,
+  }
 }

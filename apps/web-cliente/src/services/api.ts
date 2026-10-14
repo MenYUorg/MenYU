@@ -1,4 +1,4 @@
-import type { MenuPublico } from '@menyu/types'
+import type { DiscoveryBusquedaResponse, DiscoveryResponse, MenuPublico } from '@menyu/types'
 
 const BASE = import.meta.env.VITE_API_URL ?? ''
 
@@ -50,6 +50,13 @@ export const api = {
       const qs = q.toString()
       return req<MenuPublico>('GET', `/menu/${restauranteId}${qs ? `?${qs}` : ''}`)
     },
+  },
+
+  // Públicos: sin token.
+  discovery: {
+    listar: () => req<DiscoveryResponse>('GET', '/discovery'),
+    buscar: (texto: string) =>
+      req<DiscoveryBusquedaResponse>('GET', `/discovery/buscar?q=${encodeURIComponent(texto)}`),
   },
 
   sessions: {
