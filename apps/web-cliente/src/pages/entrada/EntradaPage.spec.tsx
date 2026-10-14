@@ -11,10 +11,15 @@ vi.mock('../../services/api', () => ({
 
 // El escáner real usa la cámara; acá solo importa lo que la pantalla hace con lo que él entrega.
 vi.mock('../../components/QrScanner', () => ({
-  QrScanner: ({ onDetected, onCancel }: { onDetected: (raw: string) => void; onCancel: () => void }) => (
+  QrScanner: ({ onDetected, onCancel, alternativa }: {
+    onDetected: (raw: string) => void
+    onCancel: () => void
+    alternativa: { texto: string; onElegir: () => void }
+  }) => (
     <div>
       <button onClick={() => onDetected('https://menyu.app/check-in?restaurantId=rest-1&tableCode=qr-9')}>Leer QR de prueba</button>
       <button onClick={onCancel}>Cerrar escáner</button>
+      <button onClick={alternativa.onElegir}>{alternativa.texto}</button>
     </div>
   ),
 }))
@@ -27,6 +32,7 @@ function renderEntrada() {
       <Routes>
         <Route path="/" element={<EntradaPage />} />
         <Route path="/menu" element={<p>pantalla del menú</p>} />
+        <Route path="/ingresar-pin" element={<p>pantalla del PIN</p>} />
       </Routes>
     </MemoryRouter>,
   )
@@ -52,6 +58,15 @@ describe('EntradaPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Cerrar escáner' }))
 
     expect(screen.queryByText('Leer QR de prueba')).not.toBeInTheDocument()
+  })
+
+  it('si la cámara no se puede usar, el escáner ofrece ingresar con el PIN de la mesa', () => {
+    renderEntrada()
+
+    escanear()
+    fireEvent.click(screen.getByRole('button', { name: 'Ingresar el PIN de mi mesa' }))
+
+    expect(screen.getByText('pantalla del PIN')).toBeInTheDocument()
   })
 
   it('al leer el QR abre la sesión con el código de la mesa y va al menú', async () => {

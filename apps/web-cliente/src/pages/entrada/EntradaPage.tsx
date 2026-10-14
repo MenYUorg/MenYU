@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { AppHeader } from '../../components/AppHeader'
 import { QrScanner } from '../../components/QrScanner'
 import { useEntrarAMesa } from '../../hooks/useEntrarAMesa'
@@ -18,6 +18,7 @@ const C = {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export function EntradaPage() {
+  const navigate = useNavigate()
   const [scanning, setScanning] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [btnHover, setBtnHover] = useState(false)
@@ -40,6 +41,7 @@ export function EntradaPage() {
         <QrScanner
           onDetected={handleDetected}
           onCancel={() => setScanning(false)}
+          alternativa={{ texto: 'Ingresar el PIN de mi mesa', onElegir: () => navigate('/ingresar-pin') }}
         />
       )}
 
