@@ -1,11 +1,11 @@
 # Dependencias
 node_modules/
 
-# Variables de entorno
+# Variables de entorno: cualquier .env* puede tener credenciales (.env.local, .env.qa, .env.backup, etc.).
+# Lo único que va al repositorio son los .env.example.
 .env
-.env.local
-.env.*.local
-.env.qa
+.env.*
+!.env.example
 
 # Build outputs
 dist/

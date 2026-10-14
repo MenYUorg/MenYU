@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pantalla del restaurante · mockup</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="mockups.css" />
+</head>
+<body>
+  <div id="cabecera"></div>
+
+  <main class="pagina resto-pagina">
+    <div class="contenedor">
+      <a class="volver" id="volver" href="discovery.html"></a>
+      <div id="contenido"></div>
+    </div>
+  </main>
+
+  <script src="mockups.js"></script>
+  <script>
+    (function () {
+      var p = new URLSearchParams(location.search);
+      var estado = p.get('estado') || 'normal';
+      var id = p.get('id') || 'parrilla';
+      var r = MK.restauranteDe(id);
+      var contenido = document.getElementById('contenido');
+
+      document.getElementById('cabecera').innerHTML = MK.appHeader(p.get('usuario'));
+      document.getElementById('volver').innerHTML = MK.icono('izquierda', 18) + ' Volver';
+
+      if (estado === 'cargando') {
+        contenido.innerHTML =
+          '<div class="resto-disposicion" aria-busy="true"><section class="resto-hero">' +
+          '<div class="sk" style="width:96px;height:96px;border-radius:20px"></div>' +
+          '<div class="sk" style="height:24px;width:70%;margin:16px 0 10px"></div>' +
+          '<div class="sk" style="height:14px;width:85%;margin-bottom:28px"></div>' +
+          '<div class="sk" style="height:52px;width:100%;border-radius:14px;margin-bottom:12px"></div>' +
+          '<div class="sk" style="height:52px;width:100%;border-radius:14px"></div>' +
+          '</section></div>';
+        return;
+      }
+
+      if (estado === 'error' || !r) {
+        contenido.innerHTML = MK.bloqueEstado({
+          icono: 'local',
+          titulo: 'No encontramos este restaurante',
+          texto: 'Puede que ya no esté disponible. Volvé al inicio para ver los demás.',
+          boton: 'Volver al inicio',
+          href: 'discovery.html',
+        });
+        return;
+      }
+
+      var ofertas = MK.ofertasDe(r.id);
+
+      var hero =
+        '<section class="resto-hero">' +
+          MK.logo(r, 'xl') +
+          '<h1>' + MK.esc(r.nombre) + '</h1>' +
+          '<p class="dir' + (r.direccion ? '' : ' vacia') + '">' + MK.icono('pin', 16) + (r.direccion ? MK.esc(r.direccion) : 'Dirección no cargada') + '</p>' +
+          '<div class="opciones">' +
+            '<a class="btn btn-primario" href="mesa.html?id=' + encodeURIComponent(r.id) + '">' + MK.icono('escanear', 20, 'currentColor', 2.5) + 'Ingresar a una mesa</a>' +
+            '<p class="ayuda">Escaneá el QR o ingresá el PIN de tu mesa.</p>' +
+            '<a class="btn btn-secundario" href="#">' + MK.icono('carta', 20, 'currentColor', 2.2) + 'Ver la carta</a>' +
+            '<p class="ayuda">Mirá los platos y los precios sin ingresar a una mesa.</p>' +
+          '</div>' +
+        '</section>';
+
+      var lista = ofertas.length
+        ? '<section class="resto-ofertas">' + MK.seccion('Ofertas de este restaurante',
+            '<div class="grilla-ofertas">' + ofertas.map(function (o) { return MK.cardOferta(o, { sinRestaurante: true, fija: true }); }).join('') + '</div>') +
+          '</section>'
+        : '';
+
+      contenido.innerHTML = '<div class="resto-disposicion' + (ofertas.length ? ' con-ofertas' : '') + '">' + hero + lista + '</div>';
+    })();
+  </script>
+</body>
+</html>

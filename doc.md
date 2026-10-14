@@ -702,6 +702,129 @@ Every item carries its prices already calculated, so the apps never calculate pr
 
 ---
 
+## Discovery — `/api/discovery`
+
+No authentication required. Public and anonymous: only active restaurants of active brands and available items are returned, and every query selects explicit fields (no Mercado Pago tokens, session mode, tables or PINs).
+
+### `GET /api/discovery`
+
+Restaurants and discounted items for the home screen of `web-cliente`.
+
+**Responses:** 200
+
+**Response body (shape)**
+
+```json
+{
+  "restaurantes": [
+    {
+      "id": "uuid",
+      "nombre": "Café Almendra",
+      "direccion": "Thames 1620, Palermo",
+      "logoUrl": "https://.../logos/restaurantes/uuid?v=1760400000000",
+      "marca": { "id": "uuid", "nombre": "Café Almendra" },
+      "cantidadOfertas": 1
+    }
+  ],
+  "ofertas": [
+    {
+      "id": "uuid",
+      "nombre": "Café + medialuna",
+      "imagenUrl": null,
+      "precioBase": 3200,
+      "precioDescuento": 2400,
+      "porcentajeDescuento": 25,
+      "precioVigente": 2400,
+      "restaurante": { "id": "uuid", "nombre": "Café Almendra" }
+    }
+  ]
+}
+```
+
+| Field | Description |
+|---|---|
+| `restaurantes` | Up to 50 active restaurants (of active brands), ordered by name |
+| `restaurantes[].logoUrl` | The restaurant's own logo or, if it has none, its brand's; `null` if neither has one |
+| `restaurantes[].direccion` | `null` for restaurants without a stored address |
+| `restaurantes[].cantidadOfertas` | Number of available discounted items |
+| `ofertas` | Up to 30 available discounted items, highest discount percentage first (ties by name). Prices and percentage are already calculated, as in the menu |
+
+`GET /api/discovery` does not use the `unaccent` extension, so it keeps working if the extension is missing.
+
+---
+
+### `GET /api/discovery/buscar?q=`
+
+Searches restaurants, dishes and offers. It ignores case and accents (`cafe` finds `Café`, `nandu` finds `Ñandú`) and matches "contains", using the `unaccent` PostgreSQL extension (migration `enable_unaccent`). The text is matched literally: `%` and `_` are not wildcards.
+
+**Query params**
+
+| Param | Type | Description |
+|---|---|---|
+| `q` | string | Required. 2 to 60 characters after trimming the spaces |
+
+**Responses**
+
+| Status | Description |
+|---|---|
+| 200 | The three groups (any of them can be empty) |
+| 400 | `q` is missing, is shorter than 2 characters, is longer than 60 or is repeated |
+
+**Response body (shape)**
+
+```json
+{
+  "ofertas": [ /* same shape as "ofertas" in GET /api/discovery */ ],
+  "restaurantes": [ /* same shape as "restaurantes" in GET /api/discovery */ ],
+  "restaurantesConPlatos": [ /* same shape as "restaurantes" in GET /api/discovery */ ]
+}
+```
+
+The groups come in the order in which `web-cliente` shows them: first the offers, then the restaurants that match by name, and last the restaurants that have matching dishes.
+
+| Group | Description |
+|---|---|
+| `ofertas` | Available discounted items whose name matches (up to 30, highest percentage first) |
+| `restaurantes` | Active restaurants whose name, or whose brand's name, matches (up to 50, by name) |
+| `restaurantesConPlatos` | Active restaurants whose name does **not** match but that have at least one available dish that does (up to 50, by name). They have the same fields as the restaurants of the listing: the response does not say which dishes matched or how many |
+
+A restaurant appears in one group only: if its name matches it is in `restaurantes` even when it also has matching dishes.
+
+---
+
+### `GET /api/discovery/restaurantes/:id`
+
+One restaurant and its offers. It is what the restaurant screen of `web-cliente` needs when it is opened from a link or reloaded, because `GET /api/discovery` returns at most 50 restaurants and 30 offers in total. It does not use the `unaccent` extension.
+
+**Path params**
+
+| Param | Type |
+|---|---|
+| `id` | UUID of the restaurant |
+
+**Responses**
+
+| Status | Description |
+|---|---|
+| 200 | The restaurant and its offers |
+| 404 | The restaurant does not exist, is not active, or its brand is not active. An `id` that is not shaped like a UUID also answers 404 |
+
+**Response body (shape)**
+
+```json
+{
+  "restaurante": { /* same shape as an item of "restaurantes" in GET /api/discovery */ },
+  "ofertas": [ /* same shape as "ofertas" in GET /api/discovery, only this restaurant's */ ]
+}
+```
+
+| Field | Description |
+|---|---|
+| `restaurante` | Same fields as in the listing: `logoUrl` is the restaurant's own logo or its brand's, `direccion` can be `null`, `cantidadOfertas` counts the available discounted items |
+| `ofertas` | Up to 30 available discounted items of this restaurant, highest discount percentage first (ties by name) |
+
+---
+
 ## Categorías — `/api/categorias`
 
 Auth required: `Bearer` + role `ROOT` or `OWNER`.

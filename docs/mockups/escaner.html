@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Escáner de QR · mockup</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="mockups.css" />
+</head>
+<body>
+  <!-- Lo que hay debajo del escáner (la pantalla desde la que se abrió) se ve apenas, detrás del fondo oscuro -->
+  <div id="cabecera"></div>
+  <main class="pagina"><div class="contenedor"><div class="hero"><h1 id="fondo-titulo"></h1></div></div></main>
+
+  <div class="overlay" id="overlay" role="dialog" aria-modal="true" aria-labelledby="titulo"></div>
+
+  <script src="mockups.js"></script>
+  <script>
+    (function () {
+      var p = new URLSearchParams(location.search);
+      var estado = p.get('estado') || 'escaneando';
+      var origen = p.get('origen') === 'home' ? 'home' : 'mesa';
+      var id = p.get('id') || 'parrilla';
+
+      document.getElementById('cabecera').innerHTML = MK.appHeader();
+      document.getElementById('fondo-titulo').textContent = origen === 'home' ? 'Descubrí dónde comer' : 'Ingresar a una mesa';
+
+      var base = 'escaner.html?origen=' + origen + (origen === 'mesa' ? '&id=' + encodeURIComponent(id) : '');
+      var cancelar = origen === 'home' ? 'discovery.html' : 'mesa.html?id=' + encodeURIComponent(id);
+      // Sin restaurante elegido (viene del home) el PIN no sirve todavía: primero hay que elegir el restaurante.
+      var pin = origen === 'home'
+        ? { texto: 'Elegir mi restaurante', href: 'discovery.html', ayuda: 'Elegí tu restaurante en la lista e ingresá con el PIN de tu mesa.' }
+        : { texto: 'Ingresar el PIN de mi mesa', href: 'mesa.html?id=' + encodeURIComponent(id) + '&estado=pin-desde-camara', ayuda: '' };
+
+      var AYUDA_PERMISO =
+        '<details><summary>¿Cómo lo habilito?</summary><ul>' +
+        '<li><b>Chrome (Android):</b> tocá el ícono a la izquierda de la dirección, después Permisos → Cámara → Permitir.</li>' +
+        '<li><b>Safari (iPhone):</b> tocá "AA" en la barra de dirección, después Configuración del sitio web → Cámara → Permitir.</li>' +
+        '</ul></details>';
+
+      // Si falla la cámara del navegador, se recomienda la cámara del celular: el QR de la mesa es un link a /check-in
+      // y la app de cámara lo abre en el navegador, sin pedirle nada a esta página.
+      var CONSEJO_CAMARA =
+        '<div class="consejo"><span class="consejo-icono">' + MK.icono('camara', 20, 'var(--orange)', 2) + '</span>' +
+        '<p><b>Otra opción:</b> abrí la cámara de tu celular, apuntala al QR de la mesa y tocá el aviso con el link. Te abre tu mesa directamente.</p></div>';
+
+      var ESTADOS = {
+        esperando: {
+          icono: 'camara', espera: true,
+          titulo: 'Permití el acceso a la cámara',
+          texto: 'Cuando tu navegador te lo pida, tocá "Permitir" para escanear el QR de tu mesa.',
+          giro: true,
+          botones: ['cancelar'],
+        },
+        escaneando: {
+          visor: true,
+          titulo: 'Apuntá la cámara al QR de la mesa',
+          texto: 'Mantené el celular firme y con buena luz. El QR tiene que entrar en el recuadro.',
+          botones: ['cancelar'],
+        },
+        denegado: {
+          icono: 'camaraOff',
+          titulo: 'No pudimos usar tu cámara',
+          texto: 'Parece que no le diste permiso a MenYU. Podés habilitarlo desde la configuración del navegador y volver a intentar.',
+          extra: AYUDA_PERMISO,
+          consejo: true,
+          botones: ['reintentar', 'pin', 'cancelar'],
+        },
+        'sin-camara': {
+          icono: 'camaraOff',
+          titulo: 'La cámara no responde',
+          texto: 'No encontramos una cámara disponible, o la está usando otra aplicación. Cerrala y volvé a intentar.',
+          consejo: true,
+          botones: ['reintentar', 'pin', 'cancelar'],
+        },
+        'sin-soporte': {
+          icono: 'camaraOff',
+          titulo: 'Este navegador no puede usar la cámara',
+          texto: 'Desde este navegador no podemos abrir la cámara. Probá desde Chrome (Android) o Safari (iPhone).',
+          consejo: true,
+          botones: ['pin-principal', 'cancelar'],
+        },
+      };
+
+      var e = ESTADOS[estado] || ESTADOS.escaneando;
+
+      function boton(tipo) {
+        if (tipo === 'cancelar') return '<a class="btn-ov' + (e.botones.length > 1 ? ' texto' : '') + '" href="' + cancelar + '">Cancelar</a>';
+        if (tipo === 'reintentar') return '<a class="btn-ov principal" href="' + base + '&estado=esperando">Reintentar</a>';
+        var aviso = pin.ayuda ? '<span class="aviso-boton">' + MK.esc(pin.ayuda) + '</span>' : '';
+        if (tipo === 'pin') return '<a class="btn-ov" href="' + pin.href + '">' + MK.esc(pin.texto) + '</a>' + aviso;
+        if (tipo === 'pin-principal') return '<a class="btn-ov principal" href="' + pin.href + '">' + MK.esc(pin.texto) + '</a>' + aviso;
+        return '';
+      }
+
+      var cabeza = '';
+      if (e.visor) {
+        cabeza = '<div class="visor"><div class="imagen">' + MK.imagenCamara() + '</div><i class="esquina tl"></i><i class="esquina tr"></i><i class="esquina bl"></i><i class="esquina br"></i></div>';
+      } else {
+        cabeza = '<div class="icono-camara' + (e.espera ? ' espera' : '') + '">' + MK.icono(e.icono, 34, e.espera ? '#FFFFFF' : 'var(--orange)', 2) + '</div>';
+      }
+
+      document.getElementById('overlay').innerHTML =
+        cabeza +
+        '<h1 id="titulo">' + MK.esc(e.titulo) + '</h1>' +
+        '<p>' + MK.esc(e.texto) + '</p>' +
+        (e.giro ? '<svg class="giro-blanco" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle opacity=".25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path opacity=".75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>' : '') +
+        (e.extra || '') +
+        (e.consejo ? CONSEJO_CAMARA : '') +
+        '<div class="acciones">' + e.botones.map(boton).join('') + '</div>';
+    })();
+  </script>
+</body>
+</html>

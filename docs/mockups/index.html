@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mockups de Discovery · Fase 6</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --orange: #E8563A; --orange-soft: #FDE5DF; --navy: #2D3561; --bg: #F7F7F8;
+      --text: #1A1A2E; --text-sub: #6B7280; --gray: #9CA3AF; --border: #E5E7EB; --white: #FFFFFF;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 400 14px/1.5 Inter, sans-serif; display: flex; flex-direction: column; }
+    h1, h2, h3, p { margin: 0; }
+
+    .top { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding: 10px 16px; background: var(--navy); color: #fff; }
+    .top strong { font: 800 16px Montserrat, sans-serif; letter-spacing: -0.01em; }
+    .top .fase { font: 600 11px Montserrat, sans-serif; background: var(--orange); border-radius: 999px; padding: 3px 10px; }
+    .top .espacio { flex: 1; }
+    .anchos { display: flex; gap: 6px; flex-wrap: wrap; }
+    .anchos button, .top a.abrir {
+      font: 600 12px Montserrat, sans-serif; color: #fff; background: rgba(255,255,255,.1);
+      border: 1.5px solid rgba(255,255,255,.25); border-radius: 8px; padding: 6px 12px; cursor: pointer; text-decoration: none;
+    }
+    .anchos button[aria-pressed="true"] { background: #fff; color: var(--navy); border-color: #fff; }
+
+    .cuerpo { flex: 1; min-height: 0; display: grid; grid-template-columns: 270px minmax(0, 1fr); }
+    .lista { overflow-y: auto; background: var(--white); border-right: 1px solid var(--border); padding: 10px 8px 24px; }
+    .lista h2 { font: 800 11px Montserrat, sans-serif; letter-spacing: .1em; text-transform: uppercase; color: var(--navy); padding: 14px 10px 6px; }
+    .lista button {
+      display: block; width: 100%; text-align: left; background: none; border: none; border-radius: 8px;
+      padding: 7px 10px; font: 400 13px Inter, sans-serif; color: var(--text); cursor: pointer;
+    }
+    .lista button:hover { background: var(--bg); }
+    .lista button[aria-current="true"] { background: var(--orange-soft); color: var(--orange); font-weight: 600; }
+    .lista .etiqueta { font: 600 10px Montserrat, sans-serif; color: var(--orange); background: var(--orange-soft); border-radius: 999px; padding: 1px 7px; margin-left: 6px; }
+    .lista button[aria-current="true"] .etiqueta { background: #fff; }
+
+    .vista { overflow: auto; padding: 16px 20px 40px; min-width: 0; }
+    .encabezado { max-width: 880px; margin-bottom: 14px; }
+    .encabezado h1 { font: 800 20px Montserrat, sans-serif; color: var(--navy); letter-spacing: -0.01em; margin-bottom: 4px; }
+    .encabezado p { color: var(--text-sub); }
+    .encabezado p b { color: var(--text); font-weight: 600; }
+
+    .lienzo { display: flex; gap: 24px; align-items: flex-start; flex-wrap: nowrap; }
+    .marco { flex: none; }
+    .marco figcaption { font: 600 11px Montserrat, sans-serif; color: var(--text-sub); letter-spacing: .06em; margin-bottom: 6px; }
+    .marco iframe { display: block; border: 1px solid #c9ccd6; border-radius: 6px; background: #fff; box-shadow: 0 6px 24px rgba(45,53,97,.12); }
+
+    .texto { max-width: 880px; background: var(--white); border: 1px solid var(--border); border-radius: 12px; padding: 18px 22px 8px; }
+    .texto h2 { font: 800 15px Montserrat, sans-serif; color: var(--navy); margin: 0 0 8px; }
+    .texto ol { margin: 0 0 12px; padding-left: 20px; }
+    .texto li { margin-bottom: 10px; }
+    .texto li b { font-weight: 600; }
+    .texto a { color: var(--orange); font-weight: 600; cursor: pointer; text-decoration: none; }
+    .texto a:hover { text-decoration: underline; }
+    .texto .nota-chica { color: var(--text-sub); font-size: 13px; }
+    .muestras { display: flex; flex-wrap: wrap; gap: 10px 18px; margin: 6px 0 14px; }
+    .muestra { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-sub); }
+    .muestra i { width: 20px; height: 20px; border-radius: 6px; border: 1px solid rgba(0,0,0,.12); display: block; }
+    .muestra code { font: 500 12px ui-monospace, Consolas, monospace; color: var(--text); }
+
+    @media (max-width: 900px) {
+      .cuerpo { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); }
+      .lista { max-height: 210px; border-right: none; border-bottom: 1px solid var(--border); }
+    }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <strong>Mockups · Discovery</strong>
+    <span class="fase">Fase 6 · aprobados</span>
+    <span class="espacio"></span>
+    <div class="anchos" id="anchos" role="group" aria-label="Ancho de pantalla">
+      <button type="button" data-ancho="320">320</button>
+      <button type="button" data-ancho="360">Celular 360</button>
+      <button type="button" data-ancho="390">390</button>
+      <button type="button" data-ancho="768">Tablet 768</button>
+      <button type="button" data-ancho="1280">Escritorio 1280</button>
+      <button type="button" data-ancho="todos">Los tres</button>
+    </div>
+    <a class="abrir" id="abrir" href="#" target="_blank" rel="noopener">Abrir sola ↗</a>
+  </header>
+
+  <div class="cuerpo">
+    <nav class="lista" id="lista" aria-label="Pantallas"></nav>
+    <main class="vista">
+      <div class="encabezado"><h1 id="titulo"></h1><p id="nota"></p></div>
+      <div id="contenido"></div>
+    </main>
+  </div>
+
+  <script>
+    (function () {
+      var DISCOVERY = 'discovery.html';
+      var RESTAURANTE = 'restaurante.html';
+      var MESA = 'mesa.html';
+      var ESCANER = 'escaner.html';
+
+      var GRUPOS = [
+        { nombre: 'Header', items: [
+          { id: 'header', titulo: 'Header, sin y con sesión', src: 'header.html',
+            nota: 'El header de todas las pantallas. <b>Sin sesión:</b> botones más chicos y más espacio entre el logo y los botones. <b>Con sesión:</b> "Hola, [nombre]" arriba y "Cerrar sesión" más chico debajo, apilados; si el nombre es largo se muestra solo el primer nombre (nunca se corta con "..."). Los botones se ven chicos pero se tocan como uno de 44 px. Probalo en <b>320</b>, <b>360</b> y <b>390</b> con los botones de arriba.' },
+        ] },
+        { nombre: 'Discovery (home)', items: [
+          { id: 'home-normal', titulo: 'Home', src: DISCOVERY + '?estado=normal',
+            nota: 'La primera pantalla de la app (reemplaza a "Ingresar a mi mesa"). Header, buscador en píldora, debajo <b>"Escanear el QR de mi mesa"</b> (centrado; abre el escáner sin elegir restaurante antes), <b>carrusel de ofertas</b> (scroll horizontal dentro de la sección; con flechas en escritorio) y <b>lista de restaurantes</b> en 1, 2 y 3 columnas. Tocar una oferta o un restaurante abre la pantalla del restaurante. La tarjeta de oferta es la del menú (círculo con el %, precio tachado, precio con descuento) más el restaurante, sin botón "+".' },
+          { id: 'home-sesion', titulo: 'Con sesión iniciada', src: DISCOVERY + '?usuario=Marina%20Gonz%C3%A1lez',
+            nota: 'El header muestra "Hola, [nombre]" y "Cerrar sesión". Después de iniciar sesión se vuelve a esta pantalla.' },
+          { id: 'home-sesion-larga', titulo: 'Con sesión · nombre largo', src: DISCOVERY + '?usuario=Marina%20Gonz%C3%A1lez%20de%20la%20Fuente',
+            nota: 'Con un nombre largo se muestra solo el primer nombre, completo.' },
+          { id: 'home-cargando', titulo: 'Cargando', src: DISCOVERY + '?estado=cargando',
+            nota: 'Esqueletos grises con la forma de las tarjetas: al llegar los datos no se mueve nada.' },
+          { id: 'home-error', titulo: 'Error / sin conexión', src: DISCOVERY + '?estado=error',
+            nota: 'Mensaje claro y botón "Reintentar". El buscador sigue visible.' },
+          { id: 'home-vacio', titulo: 'Sin restaurantes', src: DISCOVERY + '?estado=vacio',
+            nota: 'No hay ningún restaurante activo todavía.' },
+          { id: 'home-sin-ofertas', titulo: 'Sin ofertas', src: DISCOVERY + '?estado=sin-ofertas',
+            nota: 'La sección "Ofertas" desaparece: no se muestra un bloque vacío. La pantalla arranca directo con los restaurantes.' },
+          { id: 'home-muchas', titulo: 'Muchas ofertas y restaurantes', src: DISCOVERY + '?estado=muchas',
+            nota: 'Los topes de la API: <b>30 ofertas</b> (por % mayor) y <b>50 restaurantes</b>, sin paginación. El carrusel recorre las 30; la lista sigue de largo.' },
+          { id: 'home-limite', titulo: 'Casos límite', src: DISCOVERY + '?estado=limite',
+            nota: 'Nombre y dirección larguísimos (se cortan en 2 líneas), restaurante <b>sin dirección</b> ("Dirección no cargada"), <b>sin logo</b> (iniciales), nombre sin espacios, ofertas con <b>-99%</b> y <b>-1%</b>, un plato con nombre larguísimo, un precio grande y un plato <b>sin foto</b> (el placeholder de la app).' },
+        ] },
+        { nombre: 'Buscando (misma pantalla)', items: [
+          { id: 'busca-cafe', titulo: 'Resultados: tres grupos', src: DISCOVERY + '?q=cafe',
+            nota: 'Escribí <b>cafe</b> y encuentra <b>Café Almendra</b>: ignora acentos y mayúsculas. Tres grupos, <b>en este orden</b>: las <b>Ofertas</b> que coinciden, los <b>Restaurantes</b> que coinciden por nombre y los restaurantes <b>Con platos que coinciden</b> (los que tienen algún plato con esa palabra). Estos últimos se ven igual que en la lista, sin decir qué platos: si fueran muchos, el resultado quedaría larguísimo. Un grupo sin resultados no se muestra. <b>El buscador de este mockup funciona</b> con los datos de ejemplo: probá otras palabras.' },
+          { id: 'busca-milan', titulo: 'Sin restaurantes por nombre', src: DISCOVERY + '?q=milan',
+            nota: '"milan" no está en ningún nombre de restaurante: aparecen solo las ofertas y los restaurantes con platos que coinciden.' },
+          { id: 'busca-nandu', titulo: 'Acentos y la Ñ', src: DISCOVERY + '?q=nandu',
+            nota: '"nandu" encuentra "Ñandú Cocina Regional" (extensión unaccent en la base).' },
+          { id: 'busca-xyz', titulo: 'Sin resultados', src: DISCOVERY + '?q=xyz',
+            nota: 'Mensaje con la palabra buscada y botón para borrarla.' },
+          { id: 'busca-una-letra', titulo: 'Una sola letra', src: DISCOVERY + '?q=a',
+            nota: 'La búsqueda pide al menos 2 letras: con una sola se avisa y se sigue viendo la home.' },
+          { id: 'busca-buscando', titulo: 'Buscando…', src: DISCOVERY + '?estado=buscando&q=cafe',
+            nota: 'Mientras llega la respuesta (la búsqueda espera un instante a que termines de escribir) se atenúan los resultados anteriores en vez de vaciar la pantalla.' },
+          { id: 'busca-error', titulo: 'Error al buscar', src: DISCOVERY + '?estado=error-busqueda&q=cafe',
+            nota: 'Mensaje y botón "Reintentar".' },
+        ] },
+        { nombre: 'Pantalla del restaurante', items: [
+          { id: 'resto-parrilla', titulo: 'Con logo y ofertas', src: RESTAURANTE + '?id=parrilla',
+            nota: 'Logo, nombre y dirección, y las dos opciones: <b>Ingresar a una mesa</b> (principal) y <b>Ver la carta</b>. Debajo (a la derecha en pantallas grandes), las ofertas del restaurante. <b>"Ver la carta" se muestra recién con la Fase 7</b>: hasta entonces la pantalla trae solo "Ingresar a una mesa".' },
+          { id: 'resto-fiore', titulo: 'Sin logo', src: RESTAURANTE + '?id=fiore',
+            nota: 'Sin logo ni de restaurante ni de marca: iniciales sobre el naranja suave.' },
+          { id: 'resto-burger', titulo: 'Logo heredado de la marca', src: RESTAURANTE + '?id=burger-palermo',
+            nota: 'El restaurante no tiene logo propio y usa el de su marca (restaurante → marca → iniciales).' },
+          { id: 'resto-almendra', titulo: 'Logo muy ancho', src: RESTAURANTE + '?id=almendra',
+            nota: 'El logo entra entero en el cuadrado blanco (no se recorta ni se deforma). Los muy anchos se ven chicos: conviene subir logos cuadrados.' },
+          { id: 'resto-kaori', titulo: 'Logo muy alto', src: RESTAURANTE + '?id=kaori',
+            nota: 'Igual que el ancho: entra entero.' },
+          { id: 'resto-rincon', titulo: 'Nombre y dirección largos', src: RESTAURANTE + '?id=rincon',
+            nota: 'Acá el nombre y la dirección se muestran completos (en las tarjetas de la lista se cortan en 2 líneas).' },
+          { id: 'resto-larga', titulo: 'Nombre sin espacios', src: RESTAURANTE + '?id=larga',
+            nota: 'Una palabra larguísima se parte en vez de romper la pantalla.' },
+          { id: 'resto-mesa7', titulo: 'Sin dirección y sin ofertas', src: RESTAURANTE + '?id=mesa7',
+            nota: '"Dirección no cargada" (la dirección es opcional en la base) y sin sección de ofertas.' },
+          { id: 'resto-cargando', titulo: 'Cargando', src: RESTAURANTE + '?id=parrilla&estado=cargando', nota: 'Esqueleto con la forma de la tarjeta.' },
+          { id: 'resto-error', titulo: 'No encontrado', src: RESTAURANTE + '?id=parrilla&estado=error',
+            nota: 'Un link a un restaurante que ya no existe o está dado de baja.' },
+        ] },
+        { nombre: 'Ingreso a mesa', items: [
+          { id: 'mesa-normal', titulo: 'Solo el QR', src: MESA + '?id=parrilla',
+            nota: 'Lo principal es el QR: la pantalla muestra solo <b>Escanear QR</b>. Debajo, en letra chica, <b>"¿Pasó algo con tu cámara? Ingresá el PIN de tu mesa"</b>; recién al tocar ese texto se abre el campo del PIN (probalo). Ya no hay que elegir marca ni sucursal: el restaurante viene de la pantalla anterior y se ve arriba.' },
+          { id: 'mesa-pin', titulo: 'PIN abierto', src: MESA + '?id=parrilla&estado=pin',
+            nota: 'Después de tocar el texto chico: aparece el campo del PIN (solo números, hasta 6) y el texto desaparece. El QR sigue arriba como opción principal.' },
+          { id: 'mesa-pin-escrito', titulo: 'PIN escrito', src: MESA + '?id=parrilla&estado=pin-escrito', nota: 'Con el PIN cargado.' },
+          { id: 'mesa-abriendo', titulo: 'Abriendo sesión', src: MESA + '?id=parrilla&estado=abriendo', nota: 'Los dos botones quedan deshabilitados mientras se abre la sesión.' },
+          { id: 'mesa-error-pin', titulo: 'PIN incorrecto', src: MESA + '?id=parrilla&estado=error-pin',
+            nota: 'El PIN se busca dentro del restaurante elegido: si no corresponde a una de sus mesas, se avisa con el nombre del restaurante y no se crea la sesión.' },
+          { id: 'mesa-error-qr', titulo: 'QR de otro restaurante', src: MESA + '?id=parrilla&estado=error-qr',
+            nota: 'El backend valida que el QR sea de una mesa del restaurante elegido (decisión D11). No se crea la sesión y el PIN sigue escondido.' },
+          { id: 'mesa-pin-camara', titulo: 'Viniendo de la cámara', src: MESA + '?id=parrilla&estado=pin-desde-camara',
+            nota: 'Si la cámara falló y la persona eligió el PIN en el escáner, vuelve acá con el campo del PIN ya abierto y un aviso.' },
+          { id: 'mesa-larga', titulo: 'Nombre largo', src: MESA + '?id=rincon&estado=error-qr', nota: 'El nombre del restaurante se parte en varias líneas, sin romper el recuadro.' },
+          { id: 'mesa-cargando', titulo: 'Cargando', src: MESA + '?id=parrilla&estado=cargando', nota: 'El recuadro del restaurante carga; el resto ya se puede usar.' },
+          { id: 'mesa-error', titulo: 'Restaurante no encontrado', src: MESA + '?id=parrilla&estado=error', nota: 'Link a un restaurante que ya no existe.' },
+        ] },
+        { nombre: 'Escáner de QR (cámara)', items: [
+          { id: 'escaner-esperando', titulo: 'Pidiendo permiso', src: ESCANER + '?origen=mesa&id=parrilla&estado=esperando',
+            nota: 'Al tocar "Escanear QR" el navegador (Chrome en Android, Safari en iPhone) muestra su cartel para <b>permitir la cámara</b>. Mientras tanto se explica qué hacer.' },
+          { id: 'escaner-escaneando', titulo: 'Escaneando', src: ESCANER + '?origen=mesa&id=parrilla&estado=escaneando',
+            nota: 'La cámara trasera con el recuadro de siempre. Usa el lector nativo del navegador cuando lo tiene (Chrome en Android) y un lector propio donde no (Safari en iPhone). Al leer el QR abre la sesión sola. La imagen de la cámara es de mentira.' },
+          { id: 'escaner-denegado', titulo: 'Permiso rechazado', src: ESCANER + '?origen=mesa&id=parrilla&estado=denegado',
+            nota: 'Si la persona rechaza el permiso: mensaje claro, <b>cómo habilitarlo</b> en Chrome y en Safari ("¿Cómo lo habilito?"), <b>Reintentar</b>, la recomendación de <b>escanear con la cámara del celular</b> (el QR de la mesa es un link a /check-in que la app de cámara abre directo) y la opción del PIN.' },
+          { id: 'escaner-sin-camara', titulo: 'La cámara no responde', src: ESCANER + '?origen=mesa&id=parrilla&estado=sin-camara',
+            nota: 'No hay cámara, o la está usando otra aplicación: mensaje claro, Reintentar, la recomendación de escanear con la cámara del celular y el PIN.' },
+          { id: 'escaner-sin-soporte', titulo: 'Navegador sin cámara', src: ESCANER + '?origen=mesa&id=parrilla&estado=sin-soporte',
+            nota: 'El navegador o el contexto no permite usar la cámara (por ejemplo, dentro de otra app, o una página sin HTTPS): se recomienda <b>escanear con la cámara del celular</b> y se ofrece el PIN directo.' },
+          { id: 'escaner-home-escaneando', titulo: 'Desde el home: escaneando', src: ESCANER + '?origen=home&estado=escaneando',
+            nota: 'El atajo del home escanea sin restaurante elegido: el QR ya dice de qué mesa es. Al leerlo abre la sesión y va al menú.' },
+          { id: 'escaner-home-denegado', titulo: 'Desde el home: permiso rechazado', src: ESCANER + '?origen=home&estado=denegado',
+            nota: 'Desde el home todavía no hay restaurante, así que el PIN no se puede pedir: la opción es <b>elegir el restaurante</b> en la lista e ingresar con el PIN desde su pantalla. La recomendación de la cámara del celular sirve igual: el QR ya dice de qué mesa es.' },
+        ] },
+      ]
+
+      var DECISIONES = '<h2>Decisiones tomadas</h2><ol>' +
+        '<li><b>Atajo "Escanear el QR de mi mesa" en el home:</b> sí, debajo del buscador y centrado en celular. Se ve en <a data-ir="home-normal">Home</a>. La cámara del celular sigue entrando directo por <b>/check-in</b>.</li>' +
+        '<li><b>Ofertas dentro de la pantalla del restaurante:</b> sí. Se ve en <a data-ir="resto-parrilla">Con logo y ofertas</a>.</li>' +
+        '<li><b>GET /discovery/restaurantes/:id:</b> sí, ya está hecho (Fase 5): la pantalla del restaurante carga sus datos y sus ofertas aunque se entre por un link o se recargue.</li>' +
+        '<li><b>Header en celular:</b> sí, aunque toque las pantallas existentes. Sin sesión, botones más chicos y más espacio con el logo; con sesión, saludo arriba y "Cerrar sesión" debajo; si el nombre es largo, solo el primer nombre. Se ve en <a data-ir="header">Header</a>.</li>' +
+        '<li><b>Ingreso a mesa:</b> lo principal es el QR. El PIN queda escondido detrás de "¿Pasó algo con tu cámara? Ingresá el PIN de tu mesa". Se ve en <a data-ir="mesa-normal">Solo el QR</a>.</li>' +
+        '<li><b>Escaneo desde el celular:</b> pide el permiso de la cámara, anda en Chrome (Android) y Safari (iPhone) y, si el permiso se rechaza o la cámara no anda, muestra un mensaje claro, <b>recomienda escanear el QR con la cámara del celular</b> (que abre el link directo a tu mesa) y ofrece la opción del PIN. Se ve en <a data-ir="escaner-denegado">Permiso rechazado</a>.</li>' +
+        '<li><b>Resultados de la búsqueda:</b> primero las ofertas que coinciden, después los restaurantes que coinciden por nombre y al final los restaurantes con platos que coinciden. Estos últimos se ven igual que en la lista general, sin los nombres de los platos ni la cantidad (si fueran muchos, el resultado quedaría larguísimo); la API ya no los devuelve. Se ve en <a data-ir="busca-cafe">Resultados: tres grupos</a>.</li>' +
+        '<li><b>Sin cambios sobre lo anterior:</b> esqueletos de carga en lugar del Spinner (que es índigo), restaurantes de la A a la Z y ofertas por % mayor.</li>' +
+        '</ol><p class="nota-chica">Todo lo demás sigue el plan: sin combos, búsqueda sin acentos de 2 letras o más, tocar una oferta abre el restaurante, QR o PIN validados contra el restaurante elegido.</p>' +
+        '<h2 style="margin-top:18px">Colores y letras</h2>' +
+        '<p class="nota-chica" style="margin-bottom:8px">Son los de <b>apps/web-cliente/src/theme.ts</b>. Montserrat (títulos, botones, precios) e Inter (texto), las mismas del resto de la app.</p>' +
+        '<div class="muestras">' +
+          [['orange','#E8563A'],['orangeHover','#d34a30'],['orangeSoft','#FDE5DF'],['navy','#2D3561'],['bg','#F7F7F8'],['text','#1A1A2E'],['textSub','#6B7280'],['gray','#9CA3AF'],['border','#E5E7EB'],['borderInput','#DDDDE0'],['error (nuevo)','#c0392b']]
+            .map(function (c) { return '<span class="muestra"><i style="background:' + c[1] + '"></i><code>' + c[0] + '</code> ' + c[1] + '</span>'; }).join('') +
+        '</div><p class="nota-chica">El único color que no está en theme.ts es <b>error</b> (el texto rojo de los avisos), que hoy está escrito suelto en EntradaPage e IngresoManualPage: se suma al tema al implementar.</p>'
+
+      var DISPOSITIVOS = {
+        320: { alto: 640, nombre: 'Celular chico' },
+        360: { alto: 740, nombre: 'Celular' },
+        390: { alto: 844, nombre: 'Celular' },
+        768: { alto: 900, nombre: 'Tablet' },
+        1280: { alto: 800, nombre: 'Escritorio' },
+      };
+
+      var lista = document.getElementById('lista');
+      var contenido = document.getElementById('contenido');
+      var tituloEl = document.getElementById('titulo');
+      var notaEl = document.getElementById('nota');
+      var abrir = document.getElementById('abrir');
+      var botonesAncho = Array.prototype.slice.call(document.querySelectorAll('#anchos button'));
+
+      var todos = [{ id: 'decidir', titulo: 'Decisiones tomadas', texto: true }];
+      GRUPOS.forEach(function (g) { g.items.forEach(function (i) { todos.push(i); }); });
+
+      var actual = 'home-normal';
+      var ancho = '360';
+
+      function pintarLista() {
+        var html = '<h2>Antes de empezar</h2><button type="button" data-id="decidir">Decisiones tomadas<span class="etiqueta">8</span></button>';
+        GRUPOS.forEach(function (g) {
+          html += '<h2>' + g.nombre + '</h2>';
+          g.items.forEach(function (i) { html += '<button type="button" data-id="' + i.id + '">' + i.titulo + '</button>'; });
+        });
+        lista.innerHTML = html;
+      }
+
+      function marco(anchoPx, src, zoom) {
+        var d = DISPOSITIVOS[anchoPx];
+        var pct = zoom && zoom < 0.995 ? ' · al ' + Math.round(zoom * 100) + '%' : '';
+        return '<figure class="marco" style="margin:0' + (zoom && zoom < 0.995 ? ';zoom:' + zoom : '') + '"><figcaption>' + d.nombre.toUpperCase() + ' · ' + anchoPx + ' × ' + d.alto + pct + '</figcaption>' +
+          '<iframe title="' + d.nombre + ' ' + anchoPx + '" src="' + src + '" style="width:' + anchoPx + 'px;height:' + d.alto + 'px"></iframe></figure>';
+      }
+
+      function pintar() {
+        var item = todos.filter(function (i) { return i.id === actual; })[0] || todos[1];
+        Array.prototype.forEach.call(lista.querySelectorAll('button'), function (b) {
+          if (b.dataset.id === item.id) { b.setAttribute('aria-current', 'true'); } else { b.removeAttribute('aria-current'); }
+        });
+        botonesAncho.forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.ancho === ancho)); });
+
+        tituloEl.textContent = item.titulo;
+        if (item.texto) {
+          notaEl.textContent = '';
+          contenido.innerHTML = '<div class="texto">' + DECISIONES + '</div>';
+          abrir.style.display = 'none';
+          return;
+        }
+        abrir.style.display = '';
+        abrir.href = item.src;
+        notaEl.innerHTML = item.nota;
+
+        if (ancho === 'todos') {
+          var disponible = contenido.parentElement.clientWidth - 40 - 48;
+          var zoom = Math.min(1, disponible / (360 + 768 + 1280));
+          contenido.innerHTML = '<div class="lienzo">' + marco(360, item.src, zoom) + marco(768, item.src, zoom) + marco(1280, item.src, zoom) + '</div>';
+        } else {
+          var libre = contenido.parentElement.clientWidth - 40;
+          contenido.innerHTML = '<div class="lienzo">' + marco(Number(ancho), item.src, Math.min(1, libre / Number(ancho))) + '</div>';
+        }
+      }
+
+      function ir(id, nuevoAncho) {
+        actual = id;
+        if (nuevoAncho) ancho = nuevoAncho;
+        history.replaceState(null, '', '#' + actual + ':' + ancho);
+        pintar();
+      }
+
+      lista.addEventListener('click', function (e) {
+        var b = e.target.closest('button[data-id]');
+        if (b) ir(b.dataset.id);
+      });
+      contenido.addEventListener('click', function (e) {
+        var a = e.target.closest('a[data-ir]');
+        if (a) { e.preventDefault(); ir(a.dataset.ir); }
+      });
+      botonesAncho.forEach(function (b) { b.addEventListener('click', function () { ir(actual, b.dataset.ancho); }); });
+      var pendiente = null;
+      window.addEventListener('resize', function () { clearTimeout(pendiente); pendiente = setTimeout(pintar, 120); });
+      document.addEventListener('keydown', function (e) {
+        if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+        if (e.target.closest && e.target.closest('iframe, input')) return;
+        var pos = todos.findIndex(function (i) { return i.id === actual; });
+        var sig = todos[pos + (e.key === 'ArrowDown' ? 1 : -1)];
+        if (sig) { e.preventDefault(); ir(sig.id); }
+      });
+
+      var hash = location.hash.replace('#', '').split(':');
+      if (hash[0] && todos.some(function (i) { return i.id === hash[0]; })) actual = hash[0];
+      if (hash[1] && (hash[1] === 'todos' || DISPOSITIVOS[hash[1]])) ancho = hash[1];
+
+      pintarLista();
+      pintar();
+    })();
+  </script>
+</body>
+</html>

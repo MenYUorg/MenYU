@@ -1,6 +1,6 @@
 # Plan: logo y dirección, descuentos y Discovery de restaurantes
 
-**Estado:** en ejecución: `fix/endpoints-get-id` y `feat/logo-direccion` (Fases 1.0 y 1, PR #364) ya están en `main`; `feat/descuentos` (Fases 2, 3 y 4) está terminada, pendiente de commit, push y PR; sigue `feat/discovery` (Fases 5 a 8) · **Actualizado:** 2026-10-13 · **Base:** `main` al 2026-10-13
+**Estado:** en ejecución: `fix/endpoints-get-id`, `feat/logo-direccion` (Fases 1.0 y 1, PR #364) y `feat/descuentos` (Fases 2, 3 y 4, PR #365) ya están en `main`; en curso `feat/discovery` (Fases 5 a 8): la Fase 5 (API pública) está hecha y los mockups de la Fase 6 están aprobados (`docs/mockups/index.html`); sigue la implementación de la Fase 6 · **Actualizado:** 2026-10-14 · **Base:** `main` al 2026-10-13 (merge ae36522)
 **Equipo:** De Marcos, Ojeda, Strumia Carrara
 
 Este documento es la referencia del trabajo: qué se construye, qué decidimos, cómo se parte en ramas y fases y cómo se prueba cada una. Si una decisión cambia, se actualiza acá (sección 3) y se anota en la fase afectada.
@@ -29,7 +29,7 @@ Este documento es la referencia del trabajo: qué se construye, qué decidimos, 
 | 1 | Logo y dirección | Cada marca tiene logo. Cada restaurante puede tener logo propio (reemplaza al de la marca) y tiene dirección. Se cargan desde web-admin y solo los modifica el OWNER de su marca. |
 | 2 | Descuentos en ítems | OWNER y GERENTE (este solo en sus restaurantes asignados) ponen ítems en descuento cargando el precio nuevo (se calcula el %) o el % (se calcula el precio). El precio se redondea a peso entero, el % no se guarda, el descuento dura hasta que alguien lo saque a mano y aplica solo al precio base (los extras se cobran a precio normal). |
 | 3 | Sección "Descuentos" en el menú del cliente | Mismo estilo que Recomendaciones. Cada plato muestra el precio original tachado y chico, el precio con descuento y un círculo naranja con el % arriba a la derecha de la foto. |
-| 4 | Discovery de restaurantes | Nueva página inicial de web-cliente (reemplaza a la landing actual): todos los restaurantes con logo y dirección, productos en oferta, buscador (restaurantes, restaurantes con platos que coinciden y ofertas que coinciden; ignora acentos) y login. |
+| 4 | Discovery de restaurantes | Nueva página inicial de web-cliente (reemplaza a la landing actual): todos los restaurantes con logo y dirección, productos en oferta, buscador (ofertas que coinciden, restaurantes que coinciden y restaurantes con platos que coinciden, en ese orden; ignora acentos) y login. |
 | 5 | Pantalla del restaurante | Al tocar un restaurante: "Ingresar a una mesa" (QR o PIN) o "Ver la carta". |
 | 6 | Carta en modo vista | Igual al menú de pedido, sin botones de pedir ni detalle de ítems, con buscador y descuentos visibles. En el menú hamburguesa: iniciar sesión e ingresar a una mesa como invitado (QR o PIN). |
 | 7 | Logo en el header del menú | En modo mesa y en modo carta el header muestra el logo del restaurante; si no tiene, el de la marca; si tampoco, el de MenYu. |
@@ -156,6 +156,13 @@ Reglas de implementación:
 | D20 | Logo del header del menú: restaurante → marca → MenYu. El logo reemplaza a las iniciales y funciona como ese mismo botón (al tocarlo abre el drawer); MenYu queda solo como último fallback (P5, confirmado viendo el header real). |
 | D21 | Estética y responsive (secciones 2.2 y 2.3). |
 | D22 | Ramas y commits (sección 5). |
+| D23 | Home de Discovery: debajo del buscador va el atajo "Escanear el QR de mi mesa" (centrado en celular). Abre el escáner sin elegir restaurante antes, porque el QR ya identifica la mesa. |
+| D24 | La pantalla del restaurante muestra sus ofertas y carga sus datos con `GET /discovery/restaurantes/:id` (público), así también anda al entrar por un link o al recargar. |
+| D25 | Ingreso a mesa: lo principal es el QR. El PIN no se ofrece de entrada: queda detrás de un texto chico ("¿Pasó algo con tu cámara? Ingresá el PIN de tu mesa") y recién al tocarlo se abre el campo. |
+| D26 | El escáner anda desde el celular (Chrome en Android y Safari en iPhone): pide el permiso de la cámara, usa el lector nativo del navegador si lo tiene (`BarcodeDetector`) y uno propio si no (Safari no lo tiene). Si se rechaza el permiso o la cámara no anda, muestra un mensaje claro, recomienda escanear el QR con la cámara del celular (el QR es un link a `/check-in` que la app de cámara abre directo, sin pedirle nada a la página) y ofrece la opción del PIN (desde el home, la de elegir el restaurante). |
+| D27 | `AppHeader` en celular: el logo conserva su proporción (24 px de alto debajo de 385 px), botones más chicos con área de toque de 44 px y más espacio entre el logo y los botones. Con sesión, "Hola, [nombre]" arriba y "Cerrar sesión" debajo; si el nombre es largo, solo el primer nombre (nunca se corta con "..."). Toca las pantallas existentes que usan el header. |
+| D28 | `.gitignore` ignora cualquier `.env*` salvo `.env.example`: tienen credenciales (por ejemplo `apps/backend/.env.backup`). |
+| D29 | Resultados de la búsqueda de Discovery: primero las ofertas que coinciden, después los restaurantes que coinciden por nombre y al final los restaurantes que tienen platos que coinciden. Este último grupo muestra solo el restaurante, igual que la lista general: ni los nombres de los platos ni la cantidad (con muchos platos quedaría muy largo), y la API tampoco los devuelve. |
 
 ---
 
@@ -187,7 +194,8 @@ Todo es aditivo y nullable:
 | `PATCH /items/:id` (campo `precioBase`) | existente | 2 | aplica D4 |
 | `GET /menu/:restauranteId` | público | 2 y 7 | Fase 2: `precioDescuento`, `porcentajeDescuento`, `precioVigente` en cada ítem y `descuentos[]`. Fase 7: `restaurante.logoUrl` ya resuelto. |
 | `GET /discovery` | público | 5 | restaurantes y ofertas |
-| `GET /discovery/buscar?q=` | público | 5 | restaurantes, restaurantes con platos y ofertas |
+| `GET /discovery/buscar?q=` | público | 5 | ofertas, restaurantes y restaurantes con platos, en el orden en que se muestran (D29) |
+| `GET /discovery/restaurantes/:id` | público | 5 | un restaurante activo con sus ofertas (hasta 30); 404 si no existe, no está activo o el id no es un UUID (D24) |
 | `POST /sessions/open` | público | 6 | `restauranteId` opcional junto con `tableCode` (D11) |
 
 Reglas de los endpoints públicos nuevos: `select` explícito (nunca devolver filas completas), solo restaurantes y marcas activos, solo ítems disponibles, límites duros y mínimo de 2 caracteres en la búsqueda.
@@ -206,7 +214,7 @@ Reglas de los endpoints públicos nuevos: `select` explícito (nunca devolver fi
 - `Marca.logoUrl` y `Restaurante.logoUrl` (`string | null`). De paso se saca `qrBaseUrl` de `Restaurante`: la columna se eliminó en la migración `drop_qr_base_url`.
 - `ItemMenu` y `MenuPublicoItem`: `precioDescuento`, `porcentajeDescuento`, `precioVigente`.
 - `MenuPublico`: `descuentos` y `restaurante.logoUrl`.
-- Nuevos: `DiscoveryRestaurante`, `DiscoveryOferta`, `DiscoveryResponse`, `DiscoveryBusquedaResponse` y `UpdateItemDescuentoRequest`.
+- Nuevos: `DiscoveryRestaurante`, `DiscoveryOferta`, `DiscoveryResponse`, `DiscoveryRestauranteDetalle`, `DiscoveryBusquedaResponse` y `UpdateItemDescuentoRequest`.
 
 ### 4.5 Componentes compartidos (`@menyu/ui`)
 
@@ -231,6 +239,8 @@ Rutas nuevas, todas públicas (fuera de `SesionRequiredRoute` y de `ComensalRequ
 - Login desde Discovery o desde la carta: `AppHeader` y drawer ya navegan a `/auth`. Se suma `?volver=<ruta>` para volver a donde estaba el usuario. Sin ese parámetro vuelve a `/`.
 - El ingreso a mesa sigue terminando en `/menu`. Ese guard ya redirige a `/elegir-nombre` (comensales) si falta el nombre. Los puntos de entrada nuevos no deben saltearlo.
 - Piezas a extraer: `QrScanner` (hoy dentro de `EntradaPage`) y el hook `useEntrarAMesa` (abrir sesión + modo seguro con `AnfitrionScreen` / `CodigoSesionScreen`, hoy copiado en `EntradaPage`, `IngresoManualPage` y `CheckInRedirectPage`).
+- Escáner (D26): hoy `QrScanner` depende solo de `BarcodeDetector`, que Safari (iPhone) no tiene: ahí no escanea. Pasa a usar `BarcodeDetector` si existe y, si no (o si no soporta QR), un lector propio sobre los cuadros del video (`jsQR`, dependencia nueva de web-cliente). El video lleva `playsinline` y `muted`, pide la cámara trasera (`facingMode: { ideal: 'environment' }`) al tocar "Escanear QR" (el permiso se pide con un gesto del usuario) y apaga la cámara al terminar, cancelar o desmontar. Estados con mensaje claro, la recomendación de escanear con la cámara del celular y el PIN: pidiendo permiso, permiso rechazado (con cómo habilitarlo en Chrome y Safari), sin cámara o cámara en uso, y sin soporte (el navegador no tiene `getUserMedia` o la página no usa HTTPS). Desde el atajo del home no hay restaurante elegido, así que ahí la salida es "Elegir mi restaurante".
+- Header (D27): `AppHeader` pasa a usar clases de Tailwind para lo que cambia con el ancho (los estilos en línea no tienen media queries). Con sesión muestra "Hola, [nombre]" (el nombre completo si tiene hasta 16 caracteres y, si no, el primer nombre) y el botón "Cerrar sesión" debajo en celular.
 - `ClienteMenuPage` se parte en componentes (header, buscador con dietas, chips, secciones, `ItemCard`, drawer) con un `modo` (`mesa` o `carta`).
 - Stores: `discoveryStore` nuevo y `publicMenuStore` indexado por `restauranteId` (hoy no vuelve a pedir el menú si ya hay uno cargado y mostraría el del restaurante anterior).
 
@@ -271,7 +281,7 @@ main ─► feat/descuentos ─────────────────�
 | `fix/endpoints-get-id` | 1 (fix y test) |
 | `feat/logo-direccion` | Fase 1.0: 1 · Fase 1: 3 (BD, backend, web-admin y tipos) |
 | `feat/descuentos` | Fase 2: 2 (BD, backend y tipos) · Fase 3: 1 · Fase 4: 2 (ui y web-cliente, staff y admin) |
-| `feat/discovery` | Fase 5: 2 · Fase 6: 3 (refactor, Discovery, restaurante y mesa) · Fase 7: 2 (carta, logo en header) · Fase 8: 1 |
+| `feat/discovery` | Fase 5: 2 · Fase 6: 4 (refactor, escáner, Discovery con el header, restaurante y mesa) · Fase 7: 2 (carta, logo en header) · Fase 8: 1 |
 
 **Flujo de cada rama:** se trabaja la rama completa y, al terminar, se entregan los comandos de commit (uno por fase) y de push, que ejecuta el equipo. Después: PR (se abre desde la web de GitHub; conviene en borrador hasta que el CI esté verde), `git merge origin/main` antes de empezar la rama siguiente si `main` avanzó, merge a `main` y prueba en QA con el checklist. El tag de producción lo decide el equipo.
 
@@ -467,44 +477,80 @@ Tamaños relativos (no son horas): Fase 0 S · fix S · 1.0 M · 1 M · 2 M · 3
 - **BD:** migración con `CREATE EXTENSION IF NOT EXISTS unaccent` (D9).
 - **Backend:** módulo `discovery/` (module, controller y service) público, con las reglas de 4.2.
   - `GET /discovery`: restaurantes (id, nombre, dirección, `logoUrl` = restaurante ?? marca, marca, cantidad de ofertas) y ofertas (ítem con precios y %, más el restaurante), ordenadas por % mayor, hasta 50 y 30.
-  - `GET /discovery/buscar?q=`: `{ restaurantes, restaurantesConPlatos, ofertas }`. Consulta con `$queryRaw` y `unaccent(...)`, escapando `%` y `_` del texto buscado.
+  - `GET /discovery/buscar?q=`: `{ ofertas, restaurantes, restaurantesConPlatos }`, en el orden en que se muestran (D29). Los restaurantes de los dos grupos tienen la misma forma que en el listado (sin nombres de platos ni cantidades). Consulta con `$queryRaw` y `unaccent(...)`, escapando `%` y `_` del texto buscado.
+  - `GET /discovery/restaurantes/:id` (D24): `{ restaurante, ofertas }` de un restaurante visible, para la pantalla del restaurante.
 - **Tipos:** los de Discovery (4.4).
 - **Tests:** `discovery.service.spec` (fallback de logo, solo activos, solo disponibles, tres grupos de búsqueda, `q` corta, límites, escape de comodines y que el `select` no incluya campos sensibles) y un e2e local de búsqueda con acentos ("cafe" encuentra "Café") contra la base local (no corre en CI).
-- **Checklist (curl contra la base local):** listado, ofertas ordenadas, búsqueda con y sin acentos, con mayúsculas, por nombre de marca, `q` de 1 letra, `q` con `%`.
+- **Checklist (contra la base local):**
+  - [x] Listado: restaurantes activos de marcas activas con logo (el propio o el de la marca), dirección (o `null`) y cantidad de ofertas.
+  - [x] Ofertas ordenadas por porcentaje mayor, solo platos disponibles, con precios y porcentaje ya calculados.
+  - [x] Búsqueda con y sin acentos ("cafe" encuentra "Café", "nandu" y "ñandú" encuentran "Ñandú"), con mayúsculas y por nombre de marca.
+  - [x] `q` de 1 letra, vacía, de solo espacios, de más de 60 caracteres o repetida: 400.
+  - [x] `q` con `%`, `_` o una barra invertida: se busca como texto y no trae todo. Un intento de inyección SQL no hace nada.
+  - [ ] En QA (staging), después de mergear: la migración crea la extensión y `/api/discovery/buscar?q=cafe` responde.
+- **Estado (2026-10-14): hecha.**
+  - Implementado:
+    - **BD:** migración `enable_unaccent` (`CREATE EXTENSION IF NOT EXISTS unaccent`), aplicada a la base local con `migrate deploy`.
+    - **Backend:** módulo `discovery/` público (sin guards): `GET /api/discovery`, `GET /api/discovery/buscar?q=` y `GET /api/discovery/restaurantes/:id`. Primero consultas `$queryRaw` que devuelven solo ids (con `unaccent(...) ILIKE` en la búsqueda, solo activos y disponibles, con su orden y su tope) y después `findMany` con `select` explícito para armar los datos. El listado y el restaurante por id no usan `unaccent`: andan aunque la extensión falte.
+    - **Tipos:** `DiscoveryRestaurante`, `DiscoveryOferta`, `DiscoveryResponse`, `DiscoveryRestauranteDetalle` y `DiscoveryBusquedaResponse` en `@menyu/types`.
+    - **Documentación:** `doc.md` (sección Discovery) y `apps/backend/README.md`.
+  - Decisiones de implementación:
+    - `q` se recorta y tiene que tener de 2 a 60 caracteres (se cuentan caracteres, no unidades de UTF-16) y no puede llevar el carácter nulo; si no, 400 en lugar de una respuesta vacía. Los comodines `%` y `_` y la barra se escapan: el texto se busca tal cual.
+    - Un restaurante aparece en un solo grupo: si coincide su nombre o el de su marca va en `restaurantes`; si no, y tiene algún plato disponible que coincide, en `restaurantesConPlatos`. Ese grupo no informa qué platos coincidieron ni cuántos (la consulta solo pregunta si existe alguno, con `EXISTS`): con muchos platos el resultado quedaría larguísimo y la pantalla no los muestra (D29).
+    - Los grupos salen en el orden en que se muestran: ofertas, restaurantes y restaurantes con platos.
+    - Restaurantes ordenados por nombre y ofertas por porcentaje mayor (desempate por nombre), con los topes de 50 y 30.
+    - `GET /discovery/restaurantes/:id`: un id sin forma de UUID (o con el carácter nulo) responde 404, igual que un restaurante que no existe, no está activo o tiene la marca inactiva. Trae hasta 30 ofertas de ese restaurante por porcentaje mayor.
+  - Tests: api 552 (22 suites), todos en verde, con `typecheck` limpio. Nuevos: `discovery.service.spec` (logo restaurante → marca → `null`, solo activos y disponibles, topes, `select` sin datos sensibles, los tres grupos, el restaurante por id, el SQL de cada consulta y el escape de comodines) y `discovery-endpoints.spec` (supertest con el `ValidationPipe` real: endpoints públicos, validación de `q` y de `:id`). Cada regla se verificó rompiéndola a propósito (45 mutaciones): los tests fallan.
+  - Verificado con un script e2e local contra un backend temporal y la base local (no está en CI): 88 verificaciones con filas propias (acentos, restaurante inactivo, marca inactiva, plato no disponible y un token de Mercado Pago que no tiene que filtrarse). Las filas se borran al terminar y la base queda con los mismos conteos.
 
 #### Fase 6: Discovery como home, pantalla del restaurante y entrada a mesa
 
 **Mockups primero (D14):** HTML estático (en `docs/mockups/`) con la estética de 2.2 y el layout mobile primero. Se aprueban antes de escribir la implementación.
 
-- Pantallas: Discovery (home con ofertas y lista), Discovery buscando (los tres grupos), estados cargando, vacío y error, pantalla del restaurante, ingreso a mesa (QR y PIN).
-- Cada pantalla a 360, 768 y 1280 px.
+- Pantallas: Discovery (home con ofertas y lista), Discovery buscando (los tres grupos), estados cargando, vacío y error, pantalla del restaurante, ingreso a mesa (QR, con el PIN escondido) y escáner de QR (permiso, errores y PIN), más el header.
+- Cada pantalla a 360, 768 y 1280 px (el header y las de celular también a 320 y 390).
 - Casos límite: restaurante sin logo, nombre y dirección largos, sin ofertas, muchas ofertas, sin dirección cargada.
+- **Estado de los mockups (2026-10-14): aprobados, con los ajustes de la revisión.** Abrir `docs/mockups/index.html` en el navegador (ver `docs/mockups/README.md`): 44 vistas a 320, 360, 390, 768 y 1280 px (más "los tres a la vez"), con los estados cargando, vacío, error y sin resultados, los casos límite y los estados del escáner. El buscador del mockup funciona con datos de ejemplo. Verificado en Edge a 320, 360, 390, 768, 1280 y 1920 px: sin scroll horizontal, controles nuevos y botones del header con área de toque de 44 px o más, y comparados lado a lado con `EntradaPage` e `IngresoManualPage`. Lo que se decidió al revisarlos (D23 a D27):
+  - Atajo "Escanear el QR de mi mesa" en el home, debajo del buscador y centrado en celular.
+  - Las ofertas del restaurante dentro de su pantalla, con `GET /discovery/restaurantes/:id` (hecho en la Fase 5).
+  - Header en celular: el logo sin deformarse (hoy, a 360 px, pasa de 141 a 116 px de ancho), botones más chicos y con más aire; con sesión, saludo arriba y "Cerrar sesión" debajo, y solo el primer nombre si el nombre es largo.
+  - Ingreso a mesa con el QR como única opción a la vista: el PIN queda detrás de "¿Pasó algo con tu cámara? Ingresá el PIN de tu mesa".
+  - Escáner que pide permiso, anda en Chrome (Android) y Safari (iPhone) y, si el permiso se rechaza o la cámara no anda, muestra un mensaje claro, recomienda escanear con la cámara del celular y ofrece la opción del PIN.
+  - Resultados de la búsqueda (D29): primero las ofertas que coinciden, después los restaurantes que coinciden por nombre y al final los restaurantes con platos que coinciden. Estos últimos se ven igual que en la lista general, sin los nombres de los platos ni la cantidad; la API ya no los devuelve.
+  - Sin cambios: esqueletos de carga en lugar del `Spinner` (que es índigo), restaurantes de la A a la Z y ofertas por % mayor.
 
-Implementación en tres commits:
+Implementación en cuatro commits:
 
 1. **Refactor sin cambio visible:** extraer `QrScanner` y el hook `useEntrarAMesa` y usarlos en `CheckInRedirectPage`. Test de regresión: anfitrión en modo seguro, código requerido y error.
-2. **`DiscoveryPage` en `/`** (reemplaza a `EntradaPage`):
-   - Header: `AppHeader`.
+2. **Escáner que anda en el celular (D26):** respaldo con `jsQR` cuando no hay `BarcodeDetector` (Safari en iPhone), permiso de la cámara, estados de error con la recomendación de escanear con la cámara del celular y la opción del PIN, y cámara apagada al terminar. Tests con un `getUserMedia` y un detector simulados. Dependencia nueva: `jsqr` (también cambia `pnpm-lock.yaml`).
+3. **`DiscoveryPage` en `/`** (reemplaza a `EntradaPage`):
+   - Header: `AppHeader` con los cambios para celular (D27).
    - Buscador en píldora con debounce.
+   - Atajo "Escanear el QR de mi mesa" debajo del buscador, centrado (D23). Abre el escáner y, al leer el QR, la sesión.
    - Carrusel de ofertas con scroll horizontal contenido (celular).
    - Lista de restaurantes: 1 columna en celular, 2 en tablet, 3 en escritorio.
-   - Resultados de búsqueda en tres grupos.
+   - Resultados de búsqueda en tres grupos, en este orden: ofertas, restaurantes y restaurantes con platos que coinciden (estos con la misma tarjeta que la lista general) (D29).
    - Estados cargando, vacío y error.
    - Login: tras iniciar sesión vuelve a `/`. `discoveryStore` nuevo.
-3. **Pantalla del restaurante y ingreso a mesa:**
-   - `/restaurante/:id` con "Ingresar a una mesa" y "Ver la carta" (este último oculto hasta la Fase 7).
-   - `/restaurante/:id/mesa` con "Escanear QR" y "Ingresar con PIN" (sin marca ni sucursal).
-   - Backend chico: `POST /sessions/open` valida `restauranteId` junto con `tableCode` (D11).
+4. **Pantalla del restaurante y ingreso a mesa:**
+   - `/restaurante/:id` con "Ingresar a una mesa", las ofertas del restaurante y "Ver la carta" (este último oculto hasta la Fase 7). Carga sus datos con `GET /discovery/restaurantes/:id` (D24).
+   - `/restaurante/:id/mesa` con "Escanear QR" como única opción a la vista y, debajo, el texto chico "¿Pasó algo con tu cámara? Ingresá el PIN de tu mesa" que abre el campo del PIN (D25). Sin marca ni sucursal.
+   - Backend chico: `POST /sessions/open` valida `restauranteId` junto con `tableCode` (D11). De paso, resuelve la mesa antes de crear al cliente invitado: hoy cada PIN o QR equivocado deja creado un cliente "Invitado" (`resolveClienteId` corre antes que `resolveMesa`).
    - `/ingresar-pin` redirige a `/` (D12).
-- **Tests:** `discoveryStore` (carga, búsqueda, ignorar respuestas viejas), `useEntrarAMesa`, `DiscoveryPage` y pantalla del restaurante (Testing Library), `sessions.service.spec` (QR con restaurante distinto da error; sin `restauranteId` igual que hoy).
+- **Tests:** `discoveryStore` (carga, búsqueda, ignorar respuestas viejas), `useEntrarAMesa`, `QrScanner` (lector nativo, respaldo, permiso rechazado, sin cámara y sin soporte), `AppHeader` (primer nombre cuando es largo, sin y con sesión), `DiscoveryPage`, pantalla del restaurante y de ingreso a mesa (el PIN no se ve hasta tocar el texto; Testing Library), `sessions.service.spec` (QR con restaurante distinto da error; sin `restauranteId` igual que hoy; no se crea el invitado si la mesa no existe).
 - **Checklist:**
-  - [ ] Home → buscar → restaurante → QR o PIN → "Elegir nombre" → menú de mesa.
+  - [ ] Home → buscar → restaurante → QR → "Elegir nombre" → menú de mesa.
+  - [ ] Home → "Escanear el QR de mi mesa" → QR → "Elegir nombre" → menú de mesa.
+  - [ ] Ingreso con PIN desde el texto chico: solo después de tocarlo aparece el campo.
   - [ ] QR o PIN de otro restaurante: mensaje claro y no se crea la sesión.
   - [ ] Modo seguro: anfitrión (muestra el código) y comensal (pide el código).
   - [ ] Login desde Discovery y vuelta a `/`.
-  - [ ] Tocar una oferta abre la pantalla de su restaurante (D8).
-  - [ ] Responsive estándar en las cuatro pantallas, con el teclado abierto en el buscador y en el PIN.
-  - [ ] Pasada con celular real, incluyendo el escaneo de QR (requiere HTTPS, sección 8).
+  - [ ] Tocar una oferta abre la pantalla de su restaurante (D8). Entrar por el link de un restaurante y recargar la pantalla también funciona (D24).
+  - [ ] Header a 320, 360 y 390 px, sin y con sesión (nombre largo: primer nombre), sin el logo deformado, en todas las pantallas que lo usan.
+  - [ ] Responsive estándar en las pantallas nuevas, con el teclado abierto en el buscador y en el PIN.
+  - [ ] Escáner en un celular real con Chrome (Android): pide el permiso, lee el QR; al rechazar el permiso, mensaje claro, recomendación de la cámara del celular y PIN.
+  - [ ] Escáner en un celular real con Safari (iPhone): lo mismo, con el lector propio (requiere HTTPS, sección 8).
+  - [ ] Escanear el QR de una mesa con la cámara del celular (la app de cámara, no la web) abre la mesa por `/check-in`, en Android y en iPhone: es la salida que se recomienda cuando falla el escáner de la web.
 
 #### Fase 7: carta en modo vista y logo en el header
 
@@ -557,13 +603,20 @@ Implementación en tres commits:
 ## 8. Cómo probar en celular
 
 1. **DevTools (device toolbar):** primera pasada en cada fase, con los anchos del checklist.
-2. **Celular real contra el entorno local (HTTP):**
+2. **Celular real contra el entorno local, por la red (HTTP):** sirve para todo menos la cámara.
    - Levantar el frontend con `--host` (por ejemplo `pnpm --filter @menyu/web-cliente dev -- --host`).
    - Poner en `VITE_API_URL` la IP de la PC (`http://<IP>:3000/api`).
    - Agregar `http://<IP>:5176` a `CORS_ORIGINS` del backend y permitir los puertos en el firewall de Windows.
-   - Limitación: la cámara (escaneo de QR) exige HTTPS. Por HTTP solo se prueba el ingreso con PIN.
-3. **Celular real contra QA (HTTPS):** después de mergear la rama a `main`. La Preview de Vercel de un PR no trae backend propio: usa el backend que tenga configurado (QA), que no tiene los endpoints nuevos hasta mergear. Sirve para revisar estética y responsive de pantallas que no dependen de la API nueva.
-4. **Escaneo de QR:** el escáner depende de `BarcodeDetector`, que no está en todos los navegadores (el código ya avisa y ofrece el PIN). Probar en Chrome para Android.
+   - Limitación: el navegador solo da la cámara en HTTPS (o en `localhost`). Por esta vía solo se prueba el ingreso con PIN.
+3. **Android con cable USB (la cámara anda, sin HTTPS):** para el navegador, `localhost` es un sitio seguro, y con el cable el celular puede tener su propio `localhost` apuntando a la PC.
+   - En el celular: Ajustes → Acerca del teléfono → tocar 7 veces "Número de compilación" → Opciones de desarrollador → activar "Depuración por USB".
+   - En la PC: instalar las platform-tools de Android (`winget install Google.PlatformTools`, o el zip "SDK Platform-Tools" de developer.android.com), conectar el cable, aceptar el cartel del celular y comprobar con `adb devices` que aparece.
+   - Con el backend y web-cliente andando (si no conecta, levantar web-cliente con `--host`): `adb reverse tcp:5176 tcp:5176` y `adb reverse tcp:3000 tcp:3000`.
+   - En Chrome del celular abrir `http://localhost:5176`: usa el mismo `VITE_API_URL=http://localhost:3000/api` y el mismo CORS que en la PC.
+4. **iPhone (o Android sin cable): hace falta HTTPS.** Antes de mergear, con un túnel HTTPS hacia la PC (Cloudflare Quick Tunnel: `winget install Cloudflare.cloudflared` y `cloudflared tunnel --url http://localhost:5176`, que imprime una dirección `https://….trycloudflare.com`). Para que alcance un solo túnel, la Fase 6 deja en `apps/web-cliente/vite.config.ts` los dominios de los túneles en `server.allowedHosts` y el proxy de `/api` y `/socket.io` hacia el backend (con `VITE_API_URL=/api` para esa sesión); los pasos exactos se completan ahí. Después de mergear, es el camino 5.
+5. **Celular real contra QA (HTTPS):** después de mergear la rama a `main` (el deploy de staging corre al pushear). Es el camino más simple para iPhone y para la pasada final. La Preview de Vercel de un PR no trae backend propio: usa el backend que tenga configurado (QA), que no tiene los endpoints nuevos hasta mergear; sirve para revisar estética y responsive de pantallas que no dependen de la API nueva.
+6. **Qué QR escanear:** el de una mesa, que se ve en web-admin (Mesas) y se puede mostrar en otra pantalla o imprimir. Lo que codifica es un link `…/check-in?restaurantId=…&tableCode=…`; el escáner de la app solo usa `tableCode` y no mira el dominio, así que sirve el QR de cualquier mesa del entorno que se esté probando.
+7. **Qué se prueba con el escáner (cada celular):** al tocar "Escanear QR" el navegador pide el permiso; con "Permitir" lee el QR y abre la sesión; con "No permitir" (y también si se rechaza antes) aparece el mensaje claro con cómo habilitarlo, la recomendación de escanear con la cámara del celular y la opción del PIN (esa recomendación también hay que seguirla de verdad: el QR escaneado con la app de cámara tiene que abrir la mesa); con la cámara tapada o en uso por otra app, el mensaje de cámara que no responde; y el ingreso con PIN desde el texto chico. Navegadores a cubrir: Chrome en Android y Safari en iPhone.
 
 ---
 
@@ -580,7 +633,8 @@ Implementación en tres commits:
 - **Precio mostrado vs cobrado:** se evita agrupando 2, 3 y 4 en una sola rama y reprecificando el carrito (Fase 4).
 - **`unaccent`:** validar en QA que la extensión se crea y que `unaccent()` resuelve sin calificar el schema (en Supabase suele vivir en `extensions`). Las consultas van por `$queryRaw`: escapar `%` y `_` y cubrir con el e2e local.
 - **Assets pesados:** `logo.png` pesa 1,5 MB y `favicon.png` 4,9 MB (por app). El header del menú usa una versión liviana (Fase 7).
-- **Escáner QR:** depende de `BarcodeDetector` (ver sección 8).
+- **Escáner QR:** hoy depende de `BarcodeDetector`, que Safari (iPhone) no tiene: ahí no escanea. La Fase 6 suma un lector propio (`jsQR`) como respaldo y estados de error con el PIN (D26). La cámara solo anda en HTTPS o `localhost` (ver sección 8). Un navegador dentro de otra app (el de Instagram, WhatsApp, etc.) puede no dar la cámara: se cubre con el estado "navegador sin cámara" y el PIN.
+- **`.env.*` con credenciales:** `.gitignore` ignora cualquier `.env*` salvo `.env.example` (D28). Eso solo evita commitearlos: `apps/backend/.env.backup` sigue en disco con credenciales de producción y hay que borrarlo.
 - **Código existente de permisos:** el chequeo de pertenencia está duplicado en varios services (más el helper compartido `common/assert-staff-access.ts`), todos con bypass de ROOT. El código nuevo no lo reutiliza (2.1).
 
 ---

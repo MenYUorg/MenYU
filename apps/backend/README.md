@@ -140,6 +140,11 @@ su propio proyecto).
 - `prisma.config.ts` pisa la config de `package.json#prisma`. El `seed` sigue
   tomándose de `package.json` (Prisma lo resuelve igual), pero de cara a
   Prisma 7 conviene migrarlo a `migrations.seed` en `prisma.config.ts`.
+- La búsqueda de Discovery (`GET /api/discovery/buscar`) ignora los acentos con la extensión `unaccent` de
+  PostgreSQL, que crea la migración `enable_unaccent`: en la base local alcanza con `migrate deploy`. En
+  Supabase la extensión suele vivir en el esquema `extensions`, que está en el `search_path` de los roles,
+  así que `unaccent()` resuelve sin calificarlo; la primera vez que llega a QA hay que probar
+  `/api/discovery/buscar?q=cafe`. El listado (`GET /api/discovery`) no usa la extensión.
 - En Windows, `pnpm dev` (`nest start --watch`) puede abrir una shell
   interactiva en vez de arrancar cuando se lo ejecuta sin TTY (background,
   CI). `npx nest start` funciona en ese caso.
