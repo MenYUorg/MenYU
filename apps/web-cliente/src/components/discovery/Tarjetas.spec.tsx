@@ -119,6 +119,24 @@ describe('TarjetaOferta', () => {
     expect(screen.getByRole('link')).toHaveAttribute('href', '/restaurante/rest-9')
   })
 
+  it('con "sinRestaurante" no repite de qué restaurante es (dentro de su propia pantalla ya se sabe)', () => {
+    enRouter(<TarjetaOferta oferta={crearOferta({ nombre: 'Pizza muzzarella', restaurante: { id: 'rest-9', nombre: 'Pizzería Don Vito' } })} sinRestaurante />)
+
+    expect(screen.getByText('Pizza muzzarella')).toBeInTheDocument()
+    expect(screen.queryByText('Pizzería Don Vito')).not.toBeInTheDocument()
+    // El link sigue: "sinRestaurante" solo oculta el texto.
+    expect(screen.getByRole('link')).toHaveAttribute('href', '/restaurante/rest-9')
+  })
+
+  it('"fija" se ve igual pero no es un link: no hay a dónde ir', () => {
+    enRouter(<TarjetaOferta oferta={crearOferta({ nombre: 'Pizza muzzarella', precioBase: 6800, precioDescuento: 4760, precioVigente: 4760, porcentajeDescuento: 30 })} fija />)
+
+    expect(screen.queryByRole('link')).not.toBeInTheDocument()
+    expect(screen.getByText('Pizza muzzarella')).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: '30% de descuento' })).toBeInTheDocument()
+    expect(screen.getByText('$4760.00')).toBeInTheDocument()
+  })
+
   it('no tiene botón "+" (no se pide desde acá)', () => {
     enRouter(<TarjetaOferta oferta={crearOferta()} />)
 

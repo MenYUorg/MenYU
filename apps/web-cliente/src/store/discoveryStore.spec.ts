@@ -1,14 +1,16 @@
-import type { DiscoveryBusquedaResponse, DiscoveryResponse } from '@menyu/types'
-import { api } from '../services/api'
+import type { DiscoveryBusquedaResponse, DiscoveryResponse, DiscoveryRestauranteDetalle } from '@menyu/types'
+import { api, ApiError } from '../services/api'
 import { crearOferta, crearRestaurante } from '../test/fixtures'
 import { cantidadDeCaracteres, reiniciarDiscoveryStore, useDiscoveryStore } from './discoveryStore'
 
-vi.mock('../services/api', () => ({
-  api: { discovery: { listar: vi.fn(), buscar: vi.fn() } },
+vi.mock('../services/api', async (importarOriginal) => ({
+  ...(await importarOriginal<typeof import('../services/api')>()),
+  api: { discovery: { listar: vi.fn(), buscar: vi.fn(), restaurante: vi.fn() } },
 }))
 
 const listar = vi.mocked(api.discovery.listar)
 const buscarEnApi = vi.mocked(api.discovery.buscar)
+const pedirRestaurante = vi.mocked(api.discovery.restaurante)
 const store = () => useDiscoveryStore.getState()
 
 const LISTADO: DiscoveryResponse = {
@@ -35,6 +37,7 @@ describe('discoveryStore', () => {
     reiniciarDiscoveryStore()
     listar.mockReset()
     buscarEnApi.mockReset()
+    pedirRestaurante.mockReset()
   })
 
   describe('cargar', () => {
@@ -247,6 +250,153 @@ describe('discoveryStore', () => {
       await store().buscar('cafe')
 
       expect(store().estadoBusqueda).toBe('listo')
+    })
+  })
+
+  describe('cargarRestaurante', () => {
+    const detalleDe = (id: string, ofertas = [crearOferta({ id: `o-${id}` })]): DiscoveryRestauranteDetalle => ({
+      restaurante: crearRestaurante({ id, nombre: `Restaurante ${id}` }),
+      ofertas,
+    })
+
+    it('trae el restaurante con sus ofertas y guarda el id que se pidió', async () => {
+      pedirRestaurante.mockResolvedValue(detalleDe('a'))
+
+      await store().cargarRestaurante('a')
+
+      expect(pedirRestaurante).toHaveBeenCalledWith('a')
+      expect(store().detalle).toMatchObject({ id: 'a', estado: 'listo' })
+      expect(store().detalle?.restaurante?.nombre).toBe('Restaurante a')
+      expect(store().detalle?.ofertas.map((o) => o.id)).toEqual(['o-a'])
+    })
+
+    it('mientras llega la primera respuesta está cargando y no hay datos', async () => {
+      const { promesa, resolver } = pendiente<DiscoveryRestauranteDetalle>()
+      pedirRestaurante.mockReturnValue(promesa)
+
+      const carga = store().cargarRestaurante('a')
+
+      expect(store().detalle).toEqual({ id: 'a', estado: 'cargando', restaurante: null, ofertas: [] })
+
+      resolver(detalleDe('a'))
+      await carga
+      expect(store().detalle?.estado).toBe('listo')
+    })
+
+    it('un 404 lo marca como no encontrado', async () => {
+      pedirRestaurante.mockRejectedValue(new ApiError('Restaurante no encontrado', 404))
+
+      await store().cargarRestaurante('no-existe')
+
+      expect(store().detalle).toEqual({ id: 'no-existe', estado: 'noEncontrado', restaurante: null, ofertas: [] })
+    })
+
+    it.each([
+      ['sin conexión', new TypeError('Failed to fetch')],
+      ['un error del servidor (500)', new ApiError('Error 500', 500)],
+      ['un 400 (id mal formado)', new ApiError('Bad request', 400)],
+    ])('%s es un error, no un "no existe"', async (_, error) => {
+      pedirRestaurante.mockRejectedValue(error)
+
+      await store().cargarRestaurante('a')
+
+      expect(store().detalle).toEqual({ id: 'a', estado: 'error', restaurante: null, ofertas: [] })
+    })
+
+    it('se puede reintentar después de un error', async () => {
+      pedirRestaurante.mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      await store().cargarRestaurante('a')
+
+      pedirRestaurante.mockResolvedValueOnce(detalleDe('a'))
+      await store().cargarRestaurante('a')
+
+      expect(store().detalle?.estado).toBe('listo')
+    })
+
+    it('al volver a pedir el mismo, lo de antes queda a la vista mientras se actualiza', async () => {
+      pedirRestaurante.mockResolvedValueOnce(detalleDe('a'))
+      await store().cargarRestaurante('a')
+      const { promesa, resolver } = pendiente<DiscoveryRestauranteDetalle>()
+      pedirRestaurante.mockReturnValueOnce(promesa)
+
+      const carga = store().cargarRestaurante('a')
+
+      expect(store().detalle?.estado).toBe('listo')
+      expect(store().detalle?.restaurante?.nombre).toBe('Restaurante a')
+
+      resolver(detalleDe('a', []))
+      await carga
+      expect(store().detalle?.ofertas).toEqual([])
+    })
+
+    it('si la actualización falla (sin conexión o 500), siguen los datos de antes', async () => {
+      pedirRestaurante.mockResolvedValueOnce(detalleDe('a'))
+      await store().cargarRestaurante('a')
+
+      pedirRestaurante.mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      await store().cargarRestaurante('a')
+      pedirRestaurante.mockRejectedValueOnce(new ApiError('Error 500', 500))
+      await store().cargarRestaurante('a')
+
+      expect(store().detalle?.estado).toBe('listo')
+      expect(store().detalle?.restaurante?.nombre).toBe('Restaurante a')
+    })
+
+    it('pero si la actualización dice 404 (el restaurante dejó de estar visible), deja de mostrarlo', async () => {
+      pedirRestaurante.mockResolvedValueOnce(detalleDe('a'))
+      await store().cargarRestaurante('a')
+
+      pedirRestaurante.mockRejectedValueOnce(new ApiError('Restaurante no encontrado', 404))
+      await store().cargarRestaurante('a')
+
+      expect(store().detalle).toEqual({ id: 'a', estado: 'noEncontrado', restaurante: null, ofertas: [] })
+    })
+
+    it('al pedir otro restaurante no se muestran los datos del anterior', async () => {
+      pedirRestaurante.mockResolvedValueOnce(detalleDe('a'))
+      await store().cargarRestaurante('a')
+      pedirRestaurante.mockReturnValueOnce(new Promise(() => {}))
+
+      void store().cargarRestaurante('b')
+
+      expect(store().detalle).toEqual({ id: 'b', estado: 'cargando', restaurante: null, ofertas: [] })
+    })
+
+    it('si llegan dos pedidos fuera de orden, vale el último pedido', async () => {
+      const primero = pendiente<DiscoveryRestauranteDetalle>()
+      const segundo = pendiente<DiscoveryRestauranteDetalle>()
+      pedirRestaurante.mockReturnValueOnce(primero.promesa).mockReturnValueOnce(segundo.promesa)
+
+      const cargaVieja = store().cargarRestaurante('a')
+      const cargaNueva = store().cargarRestaurante('b')
+      segundo.resolver(detalleDe('b'))
+      await cargaNueva
+      primero.resolver(detalleDe('a'))
+      await cargaVieja
+
+      expect(store().detalle?.id).toBe('b')
+      expect(store().detalle?.restaurante?.nombre).toBe('Restaurante b')
+    })
+
+    it('un error o un 404 viejo no pisan al restaurante nuevo', async () => {
+      const viejo = pendiente<DiscoveryRestauranteDetalle>()
+      pedirRestaurante.mockReturnValueOnce(viejo.promesa).mockResolvedValueOnce(detalleDe('b'))
+
+      const cargaVieja = store().cargarRestaurante('a')
+      await store().cargarRestaurante('b')
+      viejo.rechazar(new ApiError('Restaurante no encontrado', 404))
+      await cargaVieja
+
+      expect(store().detalle).toMatchObject({ id: 'b', estado: 'listo' })
+    })
+
+    it('reiniciar el store borra el restaurante guardado', async () => {
+      pedirRestaurante.mockResolvedValue(detalleDe('a'))
+      await store().cargarRestaurante('a')
+
+      reiniciarDiscoveryStore()
+
+      expect(store().detalle).toBeNull()
     })
   })
 

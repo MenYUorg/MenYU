@@ -1,11 +1,12 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes, useNavigationType } from 'react-router-dom'
-import { api } from '../services/api'
+import { api, ApiError } from '../services/api'
 import { useSessionStore } from '../store/sessionStore'
 import { crearSesionAbierta } from '../test/fixtures'
 import { useEntrarAMesa, type DatosEntrada } from './useEntrarAMesa'
 
-vi.mock('../services/api', () => ({
+vi.mock('../services/api', async (importarOriginal) => ({
+  ...(await importarOriginal<typeof import('../services/api')>()),
   api: { sessions: { open: vi.fn() } },
 }))
 
@@ -64,6 +65,16 @@ describe('useEntrarAMesa', () => {
       expect(abrir).toHaveBeenCalledTimes(1)
       expect(abrir).toHaveBeenCalledWith({ qrToken: 'qr-1' })
       expect(useSessionStore.getState().sesionId).toBe('ses-1')
+    })
+
+    it('con el código del QR y el restaurante elegido manda los dos (la mesa tiene que ser de ese restaurante)', async () => {
+      abrir.mockResolvedValue(crearSesionAbierta())
+      renderArnes({ qrToken: 'qr-1', restauranteId: 'rest-1' })
+
+      tocarEntrar()
+
+      expect(await screen.findByText(/^menú/)).toBeInTheDocument()
+      expect(abrir).toHaveBeenCalledWith({ qrToken: 'qr-1', restauranteId: 'rest-1' })
     })
 
     it('con el PIN y el restaurante abre la sesión y va al menú', async () => {
@@ -227,7 +238,7 @@ describe('useEntrarAMesa', () => {
       expect(alFallar).toHaveBeenCalledTimes(1)
     })
 
-    it('sin conexión también avisa a la página', async () => {
+    it('sin conexión también avisa a la página, y sin código HTTP', async () => {
       abrir.mockRejectedValueOnce(new TypeError('Failed to fetch'))
       const alFallar = vi.fn()
       renderArnes(PIN, { alFallar })
@@ -235,6 +246,37 @@ describe('useEntrarAMesa', () => {
       tocarEntrar()
 
       await waitFor(() => expect(alFallar).toHaveBeenCalledTimes(1))
+      expect(alFallar).toHaveBeenCalledWith({ status: null })
+    })
+
+    it.each([
+      ['la mesa es de otro restaurante', 409],
+      ['la mesa no existe', 404],
+      ['el servidor falla', 500],
+    ])('cuando %s, la página recibe el código HTTP (%i)', async (_, status) => {
+      abrir.mockRejectedValueOnce(new ApiError('no se pudo', status))
+      const alFallar = vi.fn()
+      renderArnes(QR, { alFallar })
+
+      tocarEntrar()
+
+      await waitFor(() => expect(alFallar).toHaveBeenCalledTimes(1))
+      expect(alFallar).toHaveBeenCalledWith({ status })
+    })
+
+    it('el código es el del último intento: después de un 409, una caída de red llega como sin código', async () => {
+      abrir.mockRejectedValueOnce(new ApiError('Ese QR no es de este restaurante', 409))
+      abrir.mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      const alFallar = vi.fn()
+      renderArnes(QR, { alFallar })
+
+      tocarEntrar()
+      await waitFor(() => expect(alFallar).toHaveBeenCalledTimes(1))
+      tocarEntrar()
+      await waitFor(() => expect(alFallar).toHaveBeenCalledTimes(2))
+
+      expect(alFallar).toHaveBeenNthCalledWith(1, { status: 409 })
+      expect(alFallar).toHaveBeenNthCalledWith(2, { status: null })
     })
   })
 

@@ -9,6 +9,14 @@ const TRAZOS = {
   derecha: <path d="M9 6l6 6-6 6" />,
   izquierda: <path d="M15 6l-6 6 6 6" />,
   escanear: <path d="M23 7V1h-6M1 7V1h6M23 17v6h-6M1 17v6h6" />,
+  qr: (
+    <>
+      <rect x="3" y="3" width="7" height="7" rx="1" />
+      <rect x="14" y="3" width="7" height="7" rx="1" />
+      <rect x="3" y="14" width="7" height="7" rx="1" />
+      <path d="M14 14h3v3h-3zM17 17h3v3h-3zM14 20h3" />
+    </>
+  ),
   aviso: (
     <>
       <circle cx="12" cy="12" r="10" />

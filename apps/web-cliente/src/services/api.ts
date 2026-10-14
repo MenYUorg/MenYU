@@ -1,4 +1,4 @@
-import type { DiscoveryBusquedaResponse, DiscoveryResponse, MenuPublico } from '@menyu/types'
+import type { DiscoveryBusquedaResponse, DiscoveryResponse, DiscoveryRestauranteDetalle, MenuPublico } from '@menyu/types'
 
 const BASE = import.meta.env.VITE_API_URL ?? ''
 
@@ -57,6 +57,8 @@ export const api = {
     listar: () => req<DiscoveryResponse>('GET', '/discovery'),
     buscar: (texto: string) =>
       req<DiscoveryBusquedaResponse>('GET', `/discovery/buscar?q=${encodeURIComponent(texto)}`),
+    restaurante: (id: string) =>
+      req<DiscoveryRestauranteDetalle>('GET', `/discovery/restaurantes/${encodeURIComponent(id)}`),
   },
 
   sessions: {

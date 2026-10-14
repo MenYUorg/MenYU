@@ -1,7 +1,8 @@
 import { useSessionStore } from './sessionStore'
 import { useCarritoStore } from './carritoStore'
 
-vi.mock('../services/api', () => ({
+vi.mock('../services/api', async (importarOriginal) => ({
+  ...(await importarOriginal<typeof import('../services/api')>()),
   api: {
     sessions: {
       open: vi.fn(),
@@ -43,6 +44,7 @@ describe('sessionStore', () => {
       modoSesion: null,
       loading: false,
       error: null,
+      errorStatus: null,
     })
     vi.clearAllMocks()
   })
@@ -153,6 +155,74 @@ describe('sessionStore', () => {
       expect(result).toBeUndefined()
       expect(useSessionStore.getState().error).toBe('Error de red')
       expect(useSessionStore.getState().loading).toBe(false)
+    })
+
+    describe('errorStatus (para distinguir "la mesa no es de este restaurante" de "no hay conexión")', () => {
+      it('guarda el código HTTP de la respuesta', async () => {
+        const { api, ApiError } = await import('../services/api')
+        vi.mocked(api.sessions.open).mockRejectedValue(new ApiError('Ese QR no es de este restaurante', 409))
+
+        await useSessionStore.getState().openSession({ qrToken: 'qr-abc', restauranteId: 'rest-2' })
+
+        expect(useSessionStore.getState().errorStatus).toBe(409)
+        expect(useSessionStore.getState().error).toBe('Ese QR no es de este restaurante')
+      })
+
+      it('sin respuesta del servidor (sin conexión) queda en null', async () => {
+        const { api } = await import('../services/api')
+        vi.mocked(api.sessions.open).mockRejectedValue(new TypeError('Failed to fetch'))
+
+        await useSessionStore.getState().openSession({ qrToken: 'qr-abc' })
+
+        expect(useSessionStore.getState().error).toBe('Failed to fetch')
+        expect(useSessionStore.getState().errorStatus).toBeNull()
+      })
+
+      it('un error que no es de la API (sin código, o con uno que no es un número) también queda en null', async () => {
+        const { api } = await import('../services/api')
+        vi.mocked(api.sessions.open).mockRejectedValueOnce(Object.assign(new Error('raro'), { status: '404' }))
+        await useSessionStore.getState().openSession({ qrToken: 'qr-abc' })
+        expect(useSessionStore.getState().errorStatus).toBeNull()
+
+        vi.mocked(api.sessions.open).mockRejectedValueOnce('algo que no es un Error')
+        await useSessionStore.getState().openSession({ qrToken: 'qr-abc' })
+        expect(useSessionStore.getState().errorStatus).toBeNull()
+        expect(useSessionStore.getState().error).toBe('Error al abrir la sesión')
+      })
+
+      it('un intento nuevo borra el código del anterior', async () => {
+        const { api, ApiError } = await import('../services/api')
+        vi.mocked(api.sessions.open).mockRejectedValueOnce(new ApiError('Mesa no encontrada', 404))
+        await useSessionStore.getState().openSession({ qrToken: 'qr-malo' })
+        expect(useSessionStore.getState().errorStatus).toBe(404)
+
+        vi.mocked(api.sessions.open).mockResolvedValueOnce(SESION_RESPONSE)
+        await useSessionStore.getState().openSession({ qrToken: 'qr-bueno' })
+
+        expect(useSessionStore.getState().errorStatus).toBeNull()
+        expect(useSessionStore.getState().error).toBeNull()
+      })
+
+      it('mientras se abre la sesión el código del intento anterior ya no está', async () => {
+        const { api, ApiError } = await import('../services/api')
+        vi.mocked(api.sessions.open).mockRejectedValueOnce(new ApiError('Mesa no encontrada', 404))
+        await useSessionStore.getState().openSession({ qrToken: 'qr-malo' })
+        vi.mocked(api.sessions.open).mockReturnValueOnce(new Promise(() => {}))
+
+        void useSessionStore.getState().openSession({ qrToken: 'qr-otro' })
+
+        expect(useSessionStore.getState().errorStatus).toBeNull()
+        expect(useSessionStore.getState().loading).toBe(true)
+      })
+
+      it('"requiere código de sesión" no es un error: no deja código', async () => {
+        const { api, ApiError } = await import('../services/api')
+        vi.mocked(api.sessions.open).mockRejectedValue(new ApiError('Esta mesa requiere código de sesión para unirse', 403))
+
+        await useSessionStore.getState().openSession({ qrToken: 'qr-abc' })
+
+        expect(useSessionStore.getState().errorStatus).toBeNull()
+      })
     })
   })
 })

@@ -14,7 +14,8 @@ import { CantidadComensalesPage } from './pages/dividir/CantidadComensalesPage'
 import { MensajePage } from './pages/dividir/MensajePage'
 import { DiscoveryPage } from './pages/discovery/DiscoveryPage'
 import { ElegirNombrePage } from './pages/entrada/ElegirNombrePage'
-import { IngresoManualPage } from './pages/entrada/IngresoManualPage'
+import { RestaurantePage } from './pages/restaurante/RestaurantePage'
+import { IngresoMesaPage } from './pages/restaurante/IngresoMesaPage'
 import { AuthPage } from './pages/auth/AuthPage'
 import CheckInRedirectPage from './pages/entrada/CheckInRedirectPage'
 import { SesionRequiredRoute } from './SesionRequiredRoute'
@@ -153,7 +154,10 @@ export function App() {
       <SessionGuard>
         <Routes>
           <Route path="/" element={<DiscoveryPage />} />
-          <Route path="/ingresar-pin" element={<IngresoManualPage />} />
+          <Route path="/restaurante/:restauranteId" element={<RestaurantePage />} />
+          <Route path="/restaurante/:restauranteId/mesa" element={<IngresoMesaPage />} />
+          {/* El PIN se pide dentro del restaurante elegido (D12). */}
+          <Route path="/ingresar-pin" element={<Navigate to="/" replace />} />
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/check-in" element={<CheckInRedirectPage />} />
 

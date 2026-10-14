@@ -3,16 +3,24 @@ import { useNavigate } from 'react-router-dom'
 import { AnfitrionScreen, CodigoSesionScreen } from '../components/SesionSeguraModals'
 import { useSessionStore } from '../store/sessionStore'
 
-/** Cómo se identifica la mesa: con el código del QR o con el PIN de una mesa del restaurante. */
-export type DatosEntrada = { qrToken: string } | { pin: string; restauranteId: string }
+/**
+ * Cómo se identifica la mesa: con el código del QR (y, si ya se eligió un restaurante, cuál: la mesa tiene que ser de
+ * ese restaurante) o con el PIN de una mesa del restaurante.
+ */
+export type DatosEntrada = { qrToken: string; restauranteId?: string } | { pin: string; restauranteId: string }
+
+/** Por qué falló: el código HTTP de la respuesta, o `null` si no hubo respuesta (sin conexión o servidor caído). */
+export interface FalloDeEntrada {
+  status: number | null
+}
 
 type Resultado = Awaited<ReturnType<ReturnType<typeof useSessionStore.getState>['openSession']>>
 
 interface OpcionesEntrarAMesa {
   /** Reemplaza la entrada del historial al ir al menú, para que el link de `/check-in` no quede para volver atrás. */
   reemplazar?: boolean
-  /** La sesión no se pudo abrir (la mesa no existe, no hay conexión, etc.). */
-  alFallar?: () => void
+  /** La sesión no se pudo abrir (la mesa no existe, es de otro restaurante, no hay conexión, etc.). */
+  alFallar?: (fallo: FalloDeEntrada) => void
   /** Se tocó "Volver" en la pantalla del código de la mesa (la pantalla ya se cerró). */
   alVolver?: () => void
 }
@@ -45,7 +53,7 @@ export function useEntrarAMesa({ reemplazar = false, alFallar, alVolver }: Opcio
     } else if (resultado?.error === 'REQUIERE_CODIGO_SESION') {
       setVista('codigo')
     } else {
-      alFallar?.()
+      alFallar?.({ status: useSessionStore.getState().errorStatus })
     }
   }
 
