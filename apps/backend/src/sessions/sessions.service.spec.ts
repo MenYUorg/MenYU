@@ -220,6 +220,103 @@ describe('SessionsService', () => {
         .rejects.toThrow(NotFoundException)
     })
 
+    describe('la mesa se resuelve antes de crear al cliente invitado', () => {
+      it('tableCode inexistente → no se crea ningún cliente invitado', async () => {
+        mockPrisma.mesa.findFirst.mockResolvedValue(null)
+
+        await expect(service.open({ tableCode: 'qr-no-existe' })).rejects.toThrow(NotFoundException)
+
+        expect(mockUsers.createCliente).not.toHaveBeenCalled()
+      })
+
+      it('pin inexistente → no se crea ningún cliente invitado', async () => {
+        mockPrisma.mesa.findFirst.mockResolvedValue(null)
+
+        await expect(service.open({ restauranteId: 'rest-1', pin: '9999' })).rejects.toThrow(NotFoundException)
+
+        expect(mockUsers.createCliente).not.toHaveBeenCalled()
+      })
+
+      it('con un JWT, una mesa inexistente tampoco consulta al cliente', async () => {
+        mockPrisma.mesa.findFirst.mockResolvedValue(null)
+
+        await expect(service.open({ tableCode: 'qr-no-existe' }, 'Bearer valid.jwt.token')).rejects.toThrow(NotFoundException)
+
+        expect(mockJwt.verify).not.toHaveBeenCalled()
+        expect(mockUsers.findClienteById).not.toHaveBeenCalled()
+      })
+
+      it('QR de otro restaurante → no se crea ningún cliente invitado ni se mira la sesión', async () => {
+        mockPrisma.mesa.findFirst.mockResolvedValue(MESA_ABIERTA)
+
+        await expect(service.open({ tableCode: 'qr-abc', restauranteId: 'otro-rest' })).rejects.toThrow(ConflictException)
+
+        expect(mockUsers.createCliente).not.toHaveBeenCalled()
+        expect(mockPrisma.sesionMesa.findFirst).not.toHaveBeenCalled()
+        expect(mockPrisma.sesionMesa.create).not.toHaveBeenCalled()
+      })
+    })
+
+    describe('restauranteId junto con tableCode (D11)', () => {
+      it('QR de una mesa de otro restaurante → 409 con un mensaje claro', async () => {
+        mockPrisma.mesa.findFirst.mockResolvedValue(MESA_ABIERTA)
+
+        await expect(service.open({ tableCode: 'qr-abc', restauranteId: 'otro-rest' }))
+          .rejects.toThrow('Ese QR no es de este restaurante')
+      })
+
+      it('QR de una mesa del mismo restaurante → abre la sesión', async () => {
+        mockPrisma.mesa.findFirst.mockResolvedValue(MESA_ABIERTA)
+        mockPrisma.sesionMesa.findFirst.mockResolvedValue(SESION_ACTIVA)
+        mockPrisma.sesionMesaCliente.findUnique.mockResolvedValue(null)
+        mockPrisma.sesionMesaCliente.count.mockResolvedValue(1)
+        mockPrisma.sesionMesaCliente.create.mockResolvedValue({})
+
+        const result = await service.open({ tableCode: 'qr-abc', restauranteId: 'rest-1' })
+
+        expect(result.sesionId).toBe('sesion-1')
+        expect(result.restauranteId).toBe('rest-1')
+      })
+
+      it('sin restauranteId el QR se resuelve igual que antes (cualquier restaurante)', async () => {
+        mockPrisma.mesa.findFirst.mockResolvedValue({ ...MESA_ABIERTA, restauranteId: 'cualquiera' })
+        mockPrisma.sesionMesa.findFirst.mockResolvedValue(SESION_ACTIVA)
+        mockPrisma.sesionMesaCliente.findUnique.mockResolvedValue({ id: 'smc-1' })
+
+        const result = await service.open({ tableCode: 'qr-abc' })
+
+        expect(result.restauranteId).toBe('cualquiera')
+      })
+
+      it('el QR se busca solo por su código y que la mesa esté activa (la comparación con el restaurante es aparte)', async () => {
+        mockPrisma.mesa.findFirst.mockResolvedValue(null)
+
+        await expect(service.open({ tableCode: 'qr-abc', restauranteId: 'rest-1' })).rejects.toThrow(NotFoundException)
+
+        expect(mockPrisma.mesa.findFirst).toHaveBeenCalledWith(
+          expect.objectContaining({ where: { qrToken: 'qr-abc', activo: true } }),
+        )
+      })
+
+      it('el PIN se busca dentro del restaurante indicado', async () => {
+        mockPrisma.mesa.findFirst.mockResolvedValue(null)
+
+        await expect(service.open({ restauranteId: 'rest-1', pin: '1234' })).rejects.toThrow(NotFoundException)
+
+        expect(mockPrisma.mesa.findFirst).toHaveBeenCalledWith(
+          expect.objectContaining({ where: { restauranteId: 'rest-1', pin: '1234', activo: true } }),
+        )
+      })
+
+      it('un PIN de otro restaurante no encuentra la mesa (no se crea el invitado)', async () => {
+        mockPrisma.mesa.findFirst.mockResolvedValue(null)
+
+        await expect(service.open({ restauranteId: 'otro-rest', pin: '1234' })).rejects.toThrow('Mesa no encontrada')
+
+        expect(mockUsers.createCliente).not.toHaveBeenCalled()
+      })
+    })
+
     it('mesa sin sesión activa → crea SesionMesa con participante orden:1, devuelve esAnfitrion: true', async () => {
       mockPrisma.mesa.findFirst.mockResolvedValue(MESA_ABIERTA)
       mockPrisma.sesionMesa.findFirst.mockResolvedValue(null)

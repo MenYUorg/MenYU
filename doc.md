@@ -600,6 +600,8 @@ Open or join a table session. The client either:
 - Provides `tableCode` (the `qrToken` scanned from a QR)
 - Provides `restauranteId` + `pin` (manual entry in secure mode)
 
+`restauranteId` can also come together with `tableCode`: the table has to belong to that restaurant (the app sends it when the person already chose a restaurant). The table is looked up before anything is created, so a wrong QR or PIN does not leave a guest client behind.
+
 If the restaurant is in `seguro` mode and a session already exists, `codigoSesion` is required to join it.
 
 **Auth:** Optional JWT in `Authorization: Bearer <token>`. If absent, the backend auto-creates a guest token.
@@ -618,7 +620,7 @@ If the restaurant is in `seguro` mode and a session already exists, `codigoSesio
 | Field | Type | Required |
 |---|---|---|
 | `tableCode` | string | one of `tableCode` or `restauranteId+pin` |
-| `restauranteId` | string | — |
+| `restauranteId` | string | required with `pin`; optional with `tableCode` (then the table must belong to it) |
 | `pin` | string | — |
 | `codigoSesion` | string | required only to join an existing session in secure mode |
 
@@ -629,6 +631,7 @@ If the restaurant is in `seguro` mode and a session already exists, `codigoSesio
 | 200 | Session opened or joined |
 | 403 | Secure mode — `codigoSesion` required |
 | 404 | Table not found |
+| 409 | The QR belongs to a table of another restaurant than `restauranteId` |
 
 ---
 

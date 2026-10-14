@@ -39,6 +39,7 @@ export class SessionsController {
   @ApiResponse({ status: 200, description: 'Sesión abierta o unión exitosa' })
   @ApiResponse({ status: 403, description: 'Mesa en modo seguro — se requiere código de sesión' })
   @ApiResponse({ status: 404, description: 'Mesa no encontrada' })
+  @ApiResponse({ status: 409, description: 'El QR es de una mesa de otro restaurante que el indicado en restauranteId' })
   open(
     @Body() dto: OpenSessionDto,
     @Headers('authorization') authHeader: string | undefined,
