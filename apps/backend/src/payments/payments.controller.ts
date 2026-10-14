@@ -5,6 +5,8 @@ import { SessionAuthGuard } from '../auth/guards/session-auth.guard'
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'
 import { TipoGuard } from '../auth/guards/tipo.guard'
 import { RequiresTipo } from '../auth/decorators/requires-tipo.decorator'
+import { CurrentUser } from '../common/decorators/current-user.decorator'
+import { JwtPayload } from '../auth/auth.service'
 import { PaymentsService } from './payments.service'
 
 @ApiTags('payments')
@@ -34,8 +36,11 @@ export class PaymentsController {
   @RequiresTipo('admin', 'mozo')
   @ApiOperation({ summary: 'Listar sesiones de mesa de un restaurante (para caja)' })
   @ApiResponse({ status: 200, description: 'Lista de sesiones con estado de pago' })
-  getSesiones(@Query('restauranteId') restauranteId: string) {
-    return this.payments.getSesiones(restauranteId)
+  getSesiones(
+    @Query('restauranteId') restauranteId: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.payments.getSesiones(restauranteId, user)
   }
 
   @Post('confirmar-efectivo')
@@ -44,8 +49,11 @@ export class PaymentsController {
   @RequiresTipo('admin', 'mozo')
   @ApiOperation({ summary: 'Confirmar pago en efectivo y cerrar sesión' })
   @ApiResponse({ status: 200, description: 'Sesión cerrada' })
-  confirmarEfectivo(@Body() body: { pagoId: string; mozoId?: string }) {
-    return this.payments.confirmarEfectivo(body.pagoId, body.mozoId)
+  confirmarEfectivo(
+    @Body() body: { pagoId: string },
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.payments.confirmarEfectivo(body.pagoId, user)
   }
 
   @Post('mercadopago/crear-preferencia')

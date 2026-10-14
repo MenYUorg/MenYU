@@ -1,6 +1,7 @@
 import { Test } from '@nestjs/testing'
-import { BadRequestException, Logger, NotFoundException } from '@nestjs/common'
+import { BadRequestException, ForbiddenException, Logger, NotFoundException } from '@nestjs/common'
 import { PaymentsService } from './payments.service'
+import { JwtPayload } from '../auth/auth.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { MenyuGateway } from '../gateway/menyu.gateway'
 import { MercadoPagoProvider } from './providers/mercado-pago.provider'
@@ -16,6 +17,7 @@ import {
 const mockPrisma = {
   sesionMesa: {
     findUnique: jest.fn(),
+    findMany: jest.fn(),
   },
   pago: {
     findUnique: jest.fn(),
@@ -36,6 +38,10 @@ const mockMpOAuth = { getAccessTokenDecrypted: jest.fn() }
 const mockDivision = {
   calcularTotalSesion: jest.fn(),
 }
+
+const USER_MOZO: JwtPayload = { sub: 'mozo-1', tipo: 'mozo', restauranteId: 'rest-1' }
+const USER_MOZO_OTRO_LOCAL: JwtPayload = { sub: 'mozo-9', tipo: 'mozo', restauranteId: 'rest-2' }
+const USER_ROOT: JwtPayload = { sub: 'admin-1', tipo: 'admin', rol: 'ROOT' }
 
 // Mock del cliente `tx` que reciben los callbacks de las transacciones.
 function createTxMock() {
@@ -71,6 +77,31 @@ describe('PaymentsService', () => {
 
     service = module.get(PaymentsService)
     jest.clearAllMocks()
+  })
+
+  // ── getSesiones ──────────────────────────────────────────────────────
+
+  describe('getSesiones', () => {
+    beforeEach(() => {
+      mockPrisma.sesionMesa.findMany.mockResolvedValue([])
+    })
+
+    it('mozo de otro restaurante → ForbiddenException y no consulta sesiones', async () => {
+      await expect(service.getSesiones('rest-1', USER_MOZO_OTRO_LOCAL)).rejects.toThrow(ForbiddenException)
+      expect(mockPrisma.sesionMesa.findMany).not.toHaveBeenCalled()
+    })
+
+    it('sin restauranteId → BadRequestException (no se lista todo aunque sea ROOT)', async () => {
+      await expect(service.getSesiones('', USER_ROOT)).rejects.toThrow(BadRequestException)
+      expect(mockPrisma.sesionMesa.findMany).not.toHaveBeenCalled()
+    })
+
+    it('mozo de ese restaurante → lista las sesiones filtradas por restaurante', async () => {
+      await service.getSesiones('rest-1', USER_MOZO)
+      expect(mockPrisma.sesionMesa.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { mesa: { restauranteId: 'rest-1' } } }),
+      )
+    })
   })
 
   // ── solicitarEfectivo ────────────────────────────────────────────────
@@ -295,15 +326,43 @@ describe('PaymentsService', () => {
         sesionId: 'sesion-1',
         metodo: 'efectivo',
         estado: 'pendiente',
-        sesion: { mesaId: 'mesa-1' },
+        sesion: { mesaId: 'mesa-1', mesa: { restauranteId: 'rest-1' } },
       })
+    })
+
+    it('mozo de otro restaurante → ForbiddenException, no abre transacción ni toca el pago', async () => {
+      await expect(service.confirmarEfectivo('pago-ef', USER_MOZO_OTRO_LOCAL)).rejects.toThrow(ForbiddenException)
+      expect(mockPrisma.$transaction).not.toHaveBeenCalled()
+      expect(tx.pago.update).not.toHaveBeenCalled()
+    })
+
+    it('mozo del restaurante → el pago queda a nombre del mozo del JWT', async () => {
+      mockDivision.calcularTotalSesion.mockResolvedValue(1000)
+      tx.pago.findMany.mockResolvedValue([{ monto: 1000 }])
+
+      await service.confirmarEfectivo('pago-ef', USER_MOZO)
+
+      expect(tx.pago.update).toHaveBeenCalledWith({
+        where: { id: 'pago-ef' },
+        data: expect.objectContaining({ estado: 'aprobado', mozoId: 'mozo-1' }),
+      })
+    })
+
+    it('admin → confirma sin atribuir mozoId', async () => {
+      mockDivision.calcularTotalSesion.mockResolvedValue(1000)
+      tx.pago.findMany.mockResolvedValue([{ monto: 1000 }])
+
+      await service.confirmarEfectivo('pago-ef', USER_ROOT)
+
+      const data = tx.pago.update.mock.calls[0][0].data
+      expect(data).not.toHaveProperty('mozoId')
     })
 
     it('cierre por confirmarEfectivo: cancela los pagos pendientes restantes (p. ej. un MP)', async () => {
       mockDivision.calcularTotalSesion.mockResolvedValue(1000)
       tx.pago.findMany.mockResolvedValue([{ monto: 1000 }])
 
-      const result = await service.confirmarEfectivo('pago-ef', 'mozo-1')
+      const result = await service.confirmarEfectivo('pago-ef', USER_MOZO)
 
       expect(tx.pago.updateMany).toHaveBeenCalledWith({
         where: { sesionId: 'sesion-1', estado: ESTADO_PAGO_PENDIENTE }, // sin filtro de método
@@ -319,7 +378,7 @@ describe('PaymentsService', () => {
       mockDivision.calcularTotalSesion.mockResolvedValue(2000)
       tx.pago.findMany.mockResolvedValue([{ monto: 1000 }])
 
-      const result = await service.confirmarEfectivo('pago-ef', 'mozo-1')
+      const result = await service.confirmarEfectivo('pago-ef', USER_MOZO)
 
       expect(tx.pago.updateMany).not.toHaveBeenCalled()
       expect(tx.sesionMesa.update).not.toHaveBeenCalled()

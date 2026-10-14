@@ -12,6 +12,8 @@ import { MercadoPagoOAuthService } from './mercado-pago-oauth.service'
 import { DivisionService } from '../comensales/division.service'
 import { PaymentStatus } from './providers/payment-provider.interface'
 import { isAllowedOrigin } from '../common/is-allowed-origin'
+import { assertStaffAccess } from '../common/assert-staff-access'
+import { JwtPayload } from '../auth/auth.service'
 import { runSerializableTransaction } from '../common/run-serializable-transaction'
 import {
   ESTADO_PAGO_PENDIENTE,
@@ -48,7 +50,11 @@ export class PaymentsService {
     private readonly divisionService: DivisionService,
   ) {}
 
-  async getSesiones(restauranteId: string): Promise<SesionResumen[]> {
+  async getSesiones(restauranteId: string, user: JwtPayload): Promise<SesionResumen[]> {
+    // Sin restauranteId, Prisma ignora el filtro y un ROOT vería las sesiones de todos los locales.
+    if (!restauranteId) throw new BadRequestException('restauranteId requerido')
+    await assertStaffAccess(this.prisma, restauranteId, user)
+
     const sesiones = await this.prisma.sesionMesa.findMany({
       where: { mesa: { restauranteId } },
       include: {
@@ -214,16 +220,22 @@ export class PaymentsService {
     return { sesionId, estado: 'mozo_llamado' }
   }
 
-  async confirmarEfectivo(pagoId: string, mozoId?: string) {
+  async confirmarEfectivo(pagoId: string, user: JwtPayload) {
     const fechaCobro = new Date()
 
     const pago = await this.prisma.pago.findUnique({
       where: { id: pagoId },
-      include: { sesion: { select: { mesaId: true } } },
+      include: {
+        sesion: { select: { mesaId: true, mesa: { select: { restauranteId: true } } } },
+      },
     })
     if (!pago || pago.metodo !== 'efectivo') {
       throw new NotFoundException('Pago en efectivo no encontrado')
     }
+    await assertStaffAccess(this.prisma, pago.sesion.mesa.restauranteId, user)
+
+    // Provisorio: la atribución completa (mozo/admin) llega con el commit de atribución desde el JWT.
+    const mozoId = user.tipo === 'mozo' ? user.sub : undefined
 
     return runSerializableTransaction(this.prisma, async (tx) => {
       await tx.pago.update({
