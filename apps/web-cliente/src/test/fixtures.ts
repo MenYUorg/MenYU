@@ -1,4 +1,5 @@
 import type { ItemIngrediente, MenuPublico, MenuPublicoItem } from '@menyu/types'
+import type { api } from '../services/api'
 
 /** Plato del menú público. Por defecto no tiene descuento ni ingredientes. */
 export function crearPlato(parcial: Partial<MenuPublicoItem> = {}): MenuPublicoItem {
@@ -52,6 +53,23 @@ export function crearMenu(parcial: Partial<MenuPublico> = {}): MenuPublico {
     categorias: [],
     recomendados: [],
     descuentos: [],
+    ...parcial,
+  }
+}
+
+type RespuestaSesion = Awaited<ReturnType<typeof api.sessions.open>>
+
+/** Respuesta de `POST /sessions/open`. Por defecto: mesa 5 en modo abierto y quien entra no es el anfitrión. */
+export function crearSesionAbierta(parcial: Partial<RespuestaSesion> = {}): RespuestaSesion {
+  return {
+    sesionId: 'ses-1',
+    mesaId: 'mesa-1',
+    restauranteId: 'rest-1',
+    jwt: 'jwt.de.la.sesion',
+    numeroMesa: '5',
+    codigoSesion: '042',
+    modoSesion: 'abierto',
+    esAnfitrion: false,
     ...parcial,
   }
 }

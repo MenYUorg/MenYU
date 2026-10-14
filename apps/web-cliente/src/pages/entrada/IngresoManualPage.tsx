@@ -1,9 +1,7 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { AppHeader } from '../../components/AppHeader'
-import { AnfitrionScreen, CodigoSesionScreen } from '../../components/SesionSeguraModals'
+import { useEntrarAMesa } from '../../hooks/useEntrarAMesa'
 import { api } from '../../services/api'
-import { useSessionStore } from '../../store/sessionStore'
 
 const C = {
   orange: '#E8563A',
@@ -20,11 +18,6 @@ type Marca = { id: string; nombre: string; restaurantesActivos: number }
 type Restaurante = { id: string; nombre: string; direccion: string | null }
 
 export function IngresoManualPage() {
-  const navigate = useNavigate()
-  const openSession = useSessionStore((s) => s.openSession)
-  const sessionError = useSessionStore((s) => s.error)
-  const loadingSession = useSessionStore((s) => s.loading)
-
   const [marcas, setMarcas] = useState<Marca[]>([])
   const [loadingMarcas, setLoadingMarcas] = useState(true)
 
@@ -37,26 +30,9 @@ export function IngresoManualPage() {
   const [error, setError] = useState<string | null>(null)
   const [btnHover, setBtnHover] = useState(false)
 
-  const [pendingRestauranteId, setPendingRestauranteId] = useState<string | null>(null)
-  const [pendingPin, setPendingPin] = useState<string | null>(null)
-  const [showCodigoModal, setShowCodigoModal] = useState(false)
-  const [showAnfitrionModal, setShowAnfitrionModal] = useState(false)
-  const [anfitrionCodigo, setAnfitrionCodigo] = useState<string | null>(null)
-
-  function handleOpenResult(result: Awaited<ReturnType<typeof openSession>>) {
-    if (result && !result.error) {
-      if (result.esAnfitrion && result.modoSesion === 'seguro') {
-        setAnfitrionCodigo(result.codigoSesion)
-        setShowAnfitrionModal(true)
-      } else {
-        navigate('/menu')
-      }
-    } else if (result?.error === 'REQUIERE_CODIGO_SESION') {
-      setShowCodigoModal(true)
-    } else {
-      setError(sessionError ?? 'PIN incorrecto o mesa no encontrada. Verificá e intentá de nuevo.')
-    }
-  }
+  const { entrar, cargando: loadingSession, pantalla } = useEntrarAMesa({
+    alFallar: () => setError('PIN incorrecto o mesa no encontrada. Verificá e intentá de nuevo.'),
+  })
 
   // Fetch marcas on mount
   useEffect(() => {
@@ -100,36 +76,10 @@ export function IngresoManualPage() {
       return
     }
 
-    setPendingRestauranteId(selectedRestauranteId)
-    setPendingPin(pin.trim())
-    const result = await openSession({ pin: pin.trim(), restauranteId: selectedRestauranteId })
-    handleOpenResult(result)
+    await entrar({ pin: pin.trim(), restauranteId: selectedRestauranteId })
   }
 
-  const handleSubmitCodigo = async (codigo: string) => {
-    if (!pendingRestauranteId || !pendingPin) return
-    const result = await openSession({ pin: pendingPin, restauranteId: pendingRestauranteId, codigoSesion: codigo })
-    if (result && !result.error) {
-      setShowCodigoModal(false)
-      handleOpenResult(result)
-    }
-    // si falla, sessionStore.error queda seteado y se muestra dentro del modal
-  }
-
-  if (showAnfitrionModal) {
-    return <AnfitrionScreen codigo={anfitrionCodigo} onContinuar={() => navigate('/menu')} />
-  }
-
-  if (showCodigoModal) {
-    return (
-      <CodigoSesionScreen
-        loading={loadingSession}
-        error={sessionError}
-        onSubmit={(codigo) => void handleSubmitCodigo(codigo)}
-        onVolver={() => setShowCodigoModal(false)}
-      />
-    )
-  }
+  if (pantalla) return pantalla
 
   const showRestauranteDropdown = selectedMarca && selectedMarca.restaurantesActivos > 1
 
