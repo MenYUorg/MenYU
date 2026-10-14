@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ingreso a mesa · mockup</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="mockups.css" />
+</head>
+<body>
+  <div id="cabecera"></div>
+
+  <main class="pagina mesa-pagina">
+    <div class="mesa-columna" id="columna"></div>
+  </main>
+
+  <script src="mockups.js"></script>
+  <script>
+    (function () {
+      var p = new URLSearchParams(location.search);
+      var estado = p.get('estado') || 'normal';
+      var id = p.get('id') || 'parrilla';
+      var r = MK.restauranteDe(id);
+      var columna = document.getElementById('columna');
+
+      document.getElementById('cabecera').innerHTML = MK.appHeader(p.get('usuario'));
+
+      var volver = '<a class="volver" href="restaurante.html?id=' + encodeURIComponent(id) + '">' + MK.icono('izquierda', 18) + ' Volver</a>';
+
+      if (estado === 'error' || !r) {
+        columna.innerHTML = '<a class="volver" href="discovery.html">' + MK.icono('izquierda', 18) + ' Volver</a>' +
+          MK.bloqueEstado({
+            icono: 'local',
+            titulo: 'No encontramos este restaurante',
+            texto: 'Puede que ya no esté disponible. Volvé al inicio para ver los demás.',
+            boton: 'Volver al inicio',
+            href: 'discovery.html',
+          });
+        return;
+      }
+
+      // El PIN no se ofrece de entrada: el panel arranca cerrado y se abre al tocar el texto chico.
+      var panelAbierto = ['pin', 'pin-escrito', 'abriendo', 'error-pin', 'pin-desde-camara'].indexOf(estado) !== -1;
+      var conPin = estado === 'pin-escrito' || estado === 'abriendo' || estado === 'error-pin';
+      var abriendo = estado === 'abriendo';
+      var errorPin = estado === 'error-pin';
+
+      var aviso = '';
+      if (errorPin) {
+        aviso = '<div class="banner-error" role="alert">' + MK.esc('PIN incorrecto o mesa no encontrada en ' + r.nombre + '. Verificá e intentá de nuevo.') + '</div>';
+      } else if (estado === 'error-qr') {
+        aviso = '<div class="banner-error" role="alert">' + MK.esc('Ese QR no es de ' + r.nombre + '. Escaneá el QR de una de sus mesas.') + '</div>';
+      } else if (estado === 'pin-desde-camara') {
+        aviso = '<div class="banner-info" role="status">No pudimos usar tu cámara. Ingresá el PIN que aparece en tu mesa.</div>';
+      }
+
+      var contexto = estado === 'cargando'
+        ? '<div class="mesa-resto" aria-busy="true"><div class="sk" style="width:40px;height:40px;border-radius:10px;flex:none"></div><div style="flex:1"><div class="sk" style="height:9px;width:35%;margin-bottom:8px"></div><div class="sk" style="height:14px;width:70%"></div></div></div>'
+        : '<div class="mesa-resto">' + MK.logo(r, 'md') + '<div><small>Ingresando a</small><strong>' + MK.esc(r.nombre) + '</strong></div></div>';
+
+      var botonQr = abriendo
+        ? '<button class="btn btn-primario" type="button" disabled>' + MK.icono('escanear', 20, 'currentColor', 2.5) + 'Escanear QR</button>'
+        : '<a class="btn btn-primario" href="escaner.html?origen=mesa&id=' + encodeURIComponent(id) + '">' + MK.icono('escanear', 20, 'currentColor', 2.5) + 'Escanear QR</a>';
+
+      columna.innerHTML =
+        volver +
+        '<div class="mesa-tarjeta">' +
+          contexto +
+          '<div class="mesa-icono">' + MK.icono('qr', 30, 'var(--orange)', 2) + '</div>' +
+          '<h1>Ingresar a una mesa</h1>' +
+          '<p class="sub">Escaneá el código QR de tu mesa para ver el menú y hacer pedidos.</p>' +
+          aviso +
+          botonQr +
+          '<button class="pin-enlace" id="pin-enlace" type="button" aria-expanded="' + panelAbierto + '" aria-controls="pin-panel"' + (panelAbierto ? ' hidden' : '') + '>¿Pasó algo con tu cámara? <b>Ingresá el PIN de tu mesa</b></button>' +
+          '<form class="campo pin-panel" id="pin-panel"' + (panelAbierto ? '' : ' hidden') + '>' +
+            '<label for="pin">PIN de mesa</label>' +
+            '<input id="pin" class="' + (errorPin ? 'con-error' : '') + '" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="Ej: 1234" autocomplete="off" value="' + (conPin ? '4821' : '') + '"' + (abriendo ? ' disabled' : '') + ' />' +
+            '<button class="btn btn-secundario" type="submit"' + (abriendo ? ' disabled' : '') + '>' + (abriendo ? 'Ingresando...' : 'Ingresar con PIN') + '</button>' +
+          '</form>' +
+        '</div>';
+
+      var enlace = document.getElementById('pin-enlace');
+      var panel = document.getElementById('pin-panel');
+      var pin = document.getElementById('pin');
+
+      enlace.addEventListener('click', function () {
+        enlace.hidden = true;
+        enlace.setAttribute('aria-expanded', 'true');
+        panel.hidden = false;
+        pin.focus();
+      });
+      pin.addEventListener('input', function () { pin.value = pin.value.replace(/\D/g, ''); pin.classList.remove('con-error'); });
+      panel.addEventListener('submit', function (e) { e.preventDefault(); });
+    })();
+  </script>
+</body>
+</html>

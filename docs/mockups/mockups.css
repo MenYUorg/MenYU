@@ -1,0 +1,511 @@
+/*
+ * Mockups de Discovery (Fase 6 del plan). HTML estático: no hay build, se abren desde el disco.
+ *
+ * Los colores son los de apps/web-cliente/src/theme.ts. Los medidas (radios, tamaños de letra,
+ * espaciados) son las que usan hoy EntradaPage, IngresoManualPage, AppHeader, ClienteMenuPage e ItemCard.
+ * Lo único que no está en theme.ts todavía está marcado como "nuevo" y se agregaría al implementar.
+ */
+
+:root {
+  --orange: #E8563A;
+  --orange-hover: #d34a30;
+  --orange-soft: #FDE5DF;
+  --navy: #2D3561;
+  --bg: #F7F7F8;
+  --text: #1A1A2E;
+  --text-sub: #6B7280;
+  --gray: #9CA3AF;
+  --border: #E5E7EB;
+  --border-input: #DDDDE0;
+  --white: #FFFFFF;
+  /* nuevo: hoy está suelto en EntradaPage e IngresoManualPage (texto de los banners de error) */
+  --error: #c0392b;
+
+  --font-title: Montserrat, sans-serif;
+  --font-text: Inter, sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-text);
+}
+a { color: inherit; text-decoration: none; }
+button { font: inherit; cursor: pointer; }
+img { display: block; }
+h1, h2, h3, p { margin: 0; }
+[hidden] { display: none !important; }
+
+/* ── AppHeader (existente, sin cambios) ─────────────────────────────────────── */
+
+.appheader {
+  position: fixed; top: 0; left: 0; right: 0;
+  height: 60px;
+  background: var(--white);
+  border-bottom: 1px solid #ECECEE;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 20px;
+  z-index: 100;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+}
+.appheader .marca { background: none; border: none; padding: 0; flex: none; }
+.appheader .marca img { height: 28px; width: auto; max-width: none; }
+.appheader .acciones { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.appheader .btn-h {
+  position: relative; flex: none;
+  font: 600 13px var(--font-title);
+  border-radius: 8px; padding: 6px 14px; white-space: nowrap;
+  background: none; border: 1.5px solid #ECECEE; color: var(--navy);
+}
+.appheader .btn-h.primario { background: var(--orange); border-color: var(--orange); color: var(--white); }
+/* Área de toque de 44 px de alto aunque el botón sea más chico */
+.appheader .btn-h::after { content: ""; position: absolute; inset: -8px -2px; }
+.appheader .btn-h.salir { color: var(--orange); border-color: var(--orange); padding: 6px 12px; }
+/* Con sesión: el saludo y el botón de cerrar sesión, uno al lado del otro */
+.appheader .sesion { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.appheader .saludo { font: 400 13px/1.3 var(--font-text); color: var(--text-sub); overflow-wrap: anywhere; }
+.appheader .saludo b { color: var(--navy); font-weight: 600; word-break: break-all; }
+
+/*
+ * Cambios propuestos para celular (no existen hoy), en la pantalla de menos de 640 px:
+ * - El header de hoy necesita unos 385 px: debajo de eso el logo se comprime (a 360 px pasa de 141 a 116 px de
+ *   ancho y queda deformado; a 320 px queda en 76 px). Debajo de 385 px el logo baja a 24 px de alto, siempre con
+ *   su proporción.
+ * - Los botones son más chicos y entre el logo y los botones queda siempre un espacio de 16 px o más.
+ * - Con sesión, el saludo va arriba y el botón de cerrar sesión debajo, apilados y alineados a la derecha. Si el
+ *   nombre es largo se muestra solo el primer nombre (en lugar de cortarlo con "..."): lo resuelve mockups.js.
+ * - Los botones se ven chicos pero se pueden tocar cómodo: el área de toque llega a 44 px de alto.
+ */
+@media (max-width: 639px) {
+  .appheader { padding: 0 16px; }
+  .appheader .acciones { margin-left: 16px; gap: 6px; }
+  .appheader .btn-h { font-size: 12px; padding: 5px 10px; border-radius: 7px; }
+  .appheader .btn-h::after { inset: -10px -2px; }
+  .appheader .btn-h.salir { font-size: 11px; padding: 3px 9px; border-radius: 6px; }
+  .appheader .btn-h.salir::after { inset: -12px -4px; }
+  .appheader .sesion { flex-direction: column; align-items: flex-end; gap: 3px; text-align: right; }
+  .appheader .saludo { font-size: 12px; line-height: 1.25; }
+}
+@media (max-width: 384px) {
+  .appheader .marca img { height: 24px; }
+}
+@media (max-width: 339px) {
+  .appheader { padding: 0 12px; }
+  .appheader .acciones { margin-left: 12px; gap: 5px; }
+  .appheader .marca img { height: 20px; }
+  .appheader .btn-h { padding: 5px 8px; font-size: 11.5px; }
+}
+
+/* ── Estructura de la página ────────────────────────────────────────────────── */
+
+.pagina { padding-top: 60px; }
+.contenedor { width: 100%; max-width: 1120px; margin: 0 auto; padding: 0 14px; }
+@media (min-width: 768px) { .contenedor { padding: 0 24px; } }
+
+.volver {
+  display: inline-flex; align-items: center; gap: 4px;
+  min-height: 44px;
+  font: 600 14px var(--font-text); color: var(--navy);
+}
+
+/* Encabezado de sección: el mismo de ClienteMenuPage (TituloSeccion) */
+.titulo-seccion {
+  font: 800 13px var(--font-title);
+  letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--navy);
+  margin: 0 0 12px; padding-bottom: 8px;
+  border-bottom: 2px solid var(--orange);
+  display: inline-block;
+}
+.seccion { margin-bottom: 28px; }
+
+/* ── Botones ────────────────────────────────────────────────────────────────── */
+
+.btn {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  width: 100%; min-height: 52px; padding: 0 16px;
+  border-radius: 14px; border: none;
+  font: 700 16px var(--font-title);
+  transition: background .14s;
+}
+.btn-primario { background: var(--orange); color: var(--white); }
+.btn-primario:hover { background: var(--orange-hover); }
+/* nuevo: botón grande secundario (hoy solo existe el principal naranja) */
+.btn-secundario { background: var(--white); color: var(--navy); border: 1.5px solid var(--border-input); }
+.btn-secundario:hover { border-color: var(--navy); }
+.btn[disabled], .btn.deshabilitado { background: var(--gray); color: var(--white); border-color: var(--gray); cursor: not-allowed; }
+.btn svg { flex: none; }
+.btn-chico {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: 44px; padding: 0 20px; border-radius: 10px;
+  font: 700 14px var(--font-title);
+  background: var(--orange); color: var(--white); border: none;
+}
+.btn-chico.contorno { background: var(--white); color: var(--navy); border: 1.5px solid var(--border-input); }
+
+/* ── Buscador en píldora (el del menú, con el texto a 16 px para que iOS no haga zoom) ─ */
+
+.buscador { position: relative; display: flex; align-items: center; max-width: 560px; }
+.buscador .lupa { position: absolute; left: 16px; font-size: 15px; color: var(--gray); pointer-events: none; }
+.buscador input {
+  width: 100%; height: 46px;
+  padding: 0 46px 0 42px;
+  border-radius: 999px; border: 1px solid var(--border); background: var(--white);
+  font: 400 16px var(--font-text); color: var(--text);
+  outline: none; -webkit-appearance: none; appearance: none;
+  transition: border-color .15s;
+}
+.buscador input::placeholder { color: var(--gray); }
+.buscador input:focus { border-color: var(--orange); }
+.buscador .limpiar {
+  position: absolute; right: 0; top: 0; width: 46px; height: 46px;
+  display: none; align-items: center; justify-content: center;
+  background: none; border: none; color: var(--gray); font-size: 22px; line-height: 1;
+}
+.buscador.con-texto .limpiar { display: flex; }
+.ayuda-busqueda { font: 400 13px var(--font-text); color: var(--text-sub); margin-top: 8px; }
+
+/* ── Logo de restaurante (cuadrado, fondo blanco, el logo entra entero) ──────── */
+
+.logo {
+  --s: 56px;
+  width: var(--s); height: var(--s); flex: none;
+  display: flex; align-items: center; justify-content: center; overflow: hidden;
+  border-radius: 12px; background: var(--white); border: 1px solid var(--border);
+}
+.logo img { width: 100%; height: 100%; object-fit: contain; padding: calc(var(--s) * 0.1); }
+.logo.iniciales {
+  background: var(--orange-soft); border-color: var(--orange-soft);
+  color: var(--orange); font-family: var(--font-title); font-weight: 800;
+  font-size: calc(var(--s) * 0.34); letter-spacing: -0.02em; line-height: 1;
+}
+.logo.xl { --s: 96px; border-radius: 20px; }
+.logo.md { --s: 40px; border-radius: 10px; }
+
+/* ── Círculo con el porcentaje (DescuentoBadge de @menyu/ui) ───────────────── */
+
+.badge-desc {
+  width: 38px; height: 38px; border-radius: 50%;
+  background: var(--orange); color: var(--white);
+  display: inline-flex; align-items: center; justify-content: center;
+  font: 800 11px/1 var(--font-title); letter-spacing: -0.02em;
+  box-shadow: 0 2px 6px rgba(232, 86, 58, 0.35);
+  user-select: none;
+}
+
+/* ── Tarjeta de oferta: la del menú (ItemCard) + el restaurante, sin botón "+" ─ */
+
+.oferta {
+  background: var(--white); border: 1px solid var(--border); border-radius: 12px;
+  overflow: hidden; display: flex; flex-direction: column; min-width: 0;
+  transition: border-color .15s, box-shadow .15s;
+}
+a.oferta:hover { border-color: rgba(232, 86, 58, 0.3); box-shadow: 0 4px 16px rgba(232, 86, 58, 0.1); }
+.oferta-foto { position: relative; width: 100%; padding-bottom: 80%; overflow: hidden; flex: none; background: var(--bg); }
+.oferta-foto .ph { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 46px; }
+/* foto que falta: el placeholder real de @menyu/ui (55% del alto, sobre el fondo de la app) */
+.oferta-foto .ph.sin-foto img { width: 55%; height: 55%; object-fit: contain; }
+.oferta-foto .badge-desc { position: absolute; top: 8px; right: 8px; }
+.oferta-info { padding: 10px 11px 11px; display: flex; flex-direction: column; flex: 1; gap: 3px; min-width: 0; }
+.oferta-nombre {
+  font: 700 13px/1.25 var(--font-title); color: var(--text);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.oferta-resto { display: flex; font: 400 11px/1.3 var(--font-text); color: var(--text-sub); min-width: 0; }
+.oferta-resto span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* PrecioConDescuento, variante "tarjeta": el original arriba, chico y tachado; el vigente abajo */
+.precio { margin-top: auto; padding-top: 6px; display: flex; flex-direction: column; line-height: 1.15; }
+.precio s { font: 400 11px var(--font-text); color: var(--gray); }
+.precio b { font: 700 14px var(--font-title); color: var(--orange); }
+
+.grilla-ofertas { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+@media (min-width: 768px) { .grilla-ofertas { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (min-width: 1280px) { .grilla-ofertas { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+
+/* Carrusel: el scroll horizontal queda dentro de la sección (la página no se mueve) */
+.carrusel-caja { position: relative; }
+.carrusel {
+  display: flex; gap: 10px; overflow-x: auto;
+  scroll-snap-type: x proximity; scroll-padding-left: 14px;
+  margin: 0 -14px; padding: 2px 14px 8px;
+  scrollbar-width: none; -webkit-overflow-scrolling: touch;
+}
+.carrusel::-webkit-scrollbar { display: none; }
+.carrusel > .oferta, .carrusel > .sk-oferta { flex: 0 0 148px; scroll-snap-align: start; }
+@media (min-width: 768px) {
+  .carrusel { margin: 0 -24px; padding: 2px 24px 8px; scroll-padding-left: 24px; }
+  .carrusel > .oferta, .carrusel > .sk-oferta { flex-basis: 172px; }
+}
+@media (min-width: 1024px) {
+  .carrusel { margin: 0; padding: 2px 2px 8px; scroll-padding-left: 2px; }
+}
+@media (min-width: 1280px) { .carrusel > .oferta, .carrusel > .sk-oferta { flex-basis: 196px; } }
+
+/* Flechas: solo con mouse (escritorio); en celular se desliza con el dedo */
+.flecha {
+  display: none; position: absolute; top: calc(50% - 28px); z-index: 2;
+  width: 44px; height: 44px; border-radius: 50%;
+  background: var(--white); border: 1px solid var(--border); color: var(--navy);
+  box-shadow: 0 4px 12px rgba(45, 53, 97, 0.15);
+  align-items: center; justify-content: center;
+}
+.flecha:hover { border-color: var(--navy); }
+.flecha.izq { left: -18px; }
+.flecha.der { right: -18px; }
+@media (min-width: 1024px) { .flecha { display: flex; } }
+
+/* ── Tarjeta de restaurante ─────────────────────────────────────────────────── */
+
+.grilla-restos { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+@media (min-width: 768px) { .grilla-restos { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1024px) { .grilla-restos { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+.resto {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px; min-height: 80px; min-width: 0;
+  background: var(--white); border: 1px solid var(--border); border-radius: 12px;
+  transition: border-color .15s, box-shadow .15s;
+}
+a.resto:hover { border-color: rgba(232, 86, 58, 0.3); box-shadow: 0 4px 16px rgba(232, 86, 58, 0.1); }
+.resto-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.resto-nombre {
+  font: 700 15px/1.25 var(--font-title); color: var(--text);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.resto-dir {
+  display: flex; align-items: flex-start; gap: 5px;
+  font: 400 12.5px/1.35 var(--font-text); color: var(--text-sub);
+}
+.resto-dir svg { flex: none; margin-top: 2px; }
+.resto-dir span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.resto-dir.vacia { color: var(--gray); font-style: italic; }
+.chip-ofertas {
+  align-self: flex-start; margin-top: 3px;
+  background: var(--orange-soft); color: var(--orange);
+  font: 700 11px var(--font-title); padding: 3px 9px; border-radius: 999px; white-space: nowrap;
+}
+.resto .chevron { flex: none; color: var(--gray); }
+
+/* ── Avisos y estados ───────────────────────────────────────────────────────── */
+
+/* Banner de error (el de EntradaPage e IngresoManualPage) */
+.banner-error {
+  background: var(--orange-soft); border: 1px solid var(--orange);
+  border-radius: 10px; padding: 12px 16px;
+  font: 400 13px/1.45 var(--font-text); color: var(--error);
+}
+
+.estado {
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+  padding: 40px 24px 32px; gap: 8px;
+}
+.estado .icono {
+  width: 72px; height: 72px; border-radius: 50%; background: var(--orange-soft);
+  display: flex; align-items: center; justify-content: center; margin-bottom: 8px;
+}
+.estado h2 { font: 800 18px var(--font-title); color: var(--navy); letter-spacing: -0.01em; }
+.estado p { font: 400 14px/1.5 var(--font-text); color: var(--text-sub); max-width: 320px; }
+.estado .btn-chico { margin-top: 12px; }
+
+/* Esqueletos de carga: grises con el pulso de Tailwind (animate-pulse) */
+@keyframes pulso { 50% { opacity: 0.5; } }
+.sk { background: var(--border); border-radius: 8px; animation: pulso 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+.sk-oferta { background: var(--white); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.sk-oferta .sk-foto { padding-bottom: 80%; border-radius: 0; }
+.sk-oferta .sk-lineas { padding: 12px 11px 14px; display: flex; flex-direction: column; gap: 8px; }
+.sk-resto { display: flex; align-items: center; gap: 12px; padding: 12px; min-height: 80px; background: var(--white); border: 1px solid var(--border); border-radius: 12px; }
+.sk-resto .sk-logo { width: 56px; height: 56px; border-radius: 12px; flex: none; }
+.sk-resto .sk-lineas { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+
+.buscando { display: flex; align-items: center; gap: 8px; font: 500 13px var(--font-text); color: var(--text-sub); margin: 14px 0 4px; }
+.giro { width: 16px; height: 16px; animation: giro 1s linear infinite; color: var(--orange); }
+@keyframes giro { to { transform: rotate(360deg); } }
+.atenuado { opacity: 0.45; pointer-events: none; }
+
+/* ── Discovery ──────────────────────────────────────────────────────────────── */
+
+.hero { padding: 24px 0 20px; }
+.hero h1 { font: 800 26px/1.15 var(--font-title); letter-spacing: -0.02em; color: var(--navy); margin-bottom: 8px; }
+.hero > p { font: 400 14px/1.5 var(--font-text); color: var(--text-sub); margin-bottom: 16px; max-width: 520px; }
+@media (min-width: 768px) {
+  .hero { padding: 40px 0 28px; text-align: center; }
+  .hero h1 { font-size: 28px; }
+  .hero > p { margin: 0 auto 20px; }
+  .hero .buscador { margin: 0 auto; }
+}
+/* Atajo al escáner: debajo del buscador y siempre centrado */
+.atajo-qr {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; max-width: 560px; min-height: 44px; margin: 4px auto 0;
+  font: 600 13px var(--font-title); color: var(--navy);
+}
+.atajo-qr svg { color: var(--orange); }
+.atajo-qr:hover { color: var(--orange); }
+.resumen-busqueda { font: 400 13px var(--font-text); color: var(--text-sub); margin: 0 0 20px; }
+.resumen-busqueda b { color: var(--text); font-weight: 600; }
+@media (min-width: 768px) { .resumen-busqueda { text-align: center; } }
+
+/* ── Pantalla del restaurante ──────────────────────────────────────────────── */
+
+.resto-pagina { padding-bottom: 40px; }
+.resto-disposicion { display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px; align-items: start; }
+.resto-hero {
+  background: var(--white); border: 1px solid var(--border); border-radius: 16px;
+  padding: 24px 20px 20px; text-align: center;
+  display: flex; flex-direction: column; align-items: center; min-width: 0;
+}
+.resto-hero h1 {
+  font: 800 24px/1.2 var(--font-title); letter-spacing: -0.02em; color: var(--navy);
+  margin: 16px 0 8px; overflow-wrap: anywhere;
+}
+.resto-hero .dir { font: 400 14px/1.45 var(--font-text); color: var(--text-sub); margin-bottom: 24px; overflow-wrap: anywhere; }
+.resto-hero .dir svg { display: inline-block; vertical-align: -2px; margin-right: 6px; }
+.resto-hero .dir.vacia { color: var(--gray); font-style: italic; }
+.resto-hero .opciones { width: 100%; display: flex; flex-direction: column; gap: 6px; }
+.resto-hero .ayuda { font: 400 13px/1.45 var(--font-text); color: var(--text-sub); margin-bottom: 14px; }
+.resto-hero .ayuda:last-child { margin-bottom: 0; }
+@media (min-width: 768px) {
+  .resto-disposicion { justify-items: center; }
+  .resto-hero { width: 100%; max-width: 440px; padding: 28px 28px 24px; }
+  /* con ofertas: la tarjeta a la izquierda y las ofertas a la derecha */
+  .resto-disposicion.con-ofertas { grid-template-columns: 340px minmax(0, 1fr); gap: 24px; justify-items: stretch; }
+  .resto-disposicion.con-ofertas .resto-hero { max-width: none; position: sticky; top: 76px; padding: 24px 20px 20px; }
+  .resto-disposicion.con-ofertas .grilla-ofertas { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (min-width: 1024px) {
+  .resto-disposicion.con-ofertas { grid-template-columns: 400px minmax(0, 1fr); gap: 28px; }
+  .resto-disposicion.con-ofertas .resto-hero { padding: 28px 28px 24px; }
+  .resto-disposicion.con-ofertas .grilla-ofertas { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+/* Las ofertas de esta pantalla no se tocan (la carta en modo vista no abre detalle) */
+.oferta.fija { cursor: default; }
+
+/* ── Ingreso a mesa ─────────────────────────────────────────────────────────── */
+
+.mesa-pagina { padding-bottom: 40px; }
+.mesa-columna { width: 100%; max-width: 428px; margin: 0 auto; padding: 0 24px; }
+.mesa-resto {
+  display: flex; align-items: center; gap: 12px; padding: 10px 12px; margin: 4px 0 24px;
+  background: var(--white); border: 1px solid var(--border); border-radius: 12px;
+}
+.mesa-resto small { display: block; font: 600 10px var(--font-title); letter-spacing: 0.08em; text-transform: uppercase; color: var(--gray); margin-bottom: 2px; }
+.mesa-resto strong { display: block; font: 700 14px/1.25 var(--font-title); color: var(--text); overflow-wrap: anywhere; }
+.mesa-resto > div { min-width: 0; flex: 1; }
+.mesa-icono {
+  width: 64px; height: 64px; border-radius: 50%; background: var(--orange-soft);
+  display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;
+}
+.mesa-tarjeta h1 { font: 800 26px/1.15 var(--font-title); letter-spacing: -0.02em; color: var(--navy); text-align: center; margin-bottom: 8px; }
+.mesa-tarjeta .sub { font: 400 15px/1.5 var(--font-text); color: var(--text-sub); text-align: center; margin: 0 auto 24px; max-width: 300px; }
+.mesa-tarjeta .banner-error, .mesa-tarjeta .banner-info { margin-bottom: 20px; }
+/* Aviso que no es un error (por ejemplo, cuando la cámara no anduvo y se pasa al PIN) */
+.banner-info {
+  background: var(--white); border: 1px solid var(--border-input); border-radius: 10px; padding: 12px 16px;
+  font: 400 13px/1.45 var(--font-text); color: var(--text-sub);
+}
+/* El PIN no se ofrece de entrada: solo aparece al tocar este texto chico */
+.pin-enlace {
+  display: block; width: 100%; margin-top: 8px; padding: 14px 4px;
+  background: none; border: none; text-align: center;
+  font: 400 12.5px/1.4 var(--font-text); color: var(--text-sub);
+}
+.pin-enlace b { color: var(--navy); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; white-space: nowrap; }
+.pin-enlace:hover b { color: var(--orange); }
+.pin-panel { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--border); }
+.campo label { display: block; font: 600 13px var(--font-text); color: var(--text); margin-bottom: 6px; }
+.campo input {
+  width: 100%; height: 56px; padding: 0 14px;
+  background: var(--white); border: 1.5px solid var(--border-input); border-radius: 10px;
+  font: 700 20px var(--font-text); letter-spacing: 0.2em; text-align: center; color: var(--text);
+  outline: none; transition: border-color .15s; -webkit-appearance: none; appearance: none;
+}
+.campo input::placeholder { color: var(--gray); font-weight: 400; letter-spacing: 0.1em; }
+.campo input:focus { border-color: var(--orange); }
+.campo input.con-error { border-color: var(--orange); }
+.campo input:disabled { background: var(--bg); color: var(--gray); }
+.campo .btn { margin-top: 12px; }
+@media (min-width: 768px) {
+  .mesa-columna { padding-top: 8px; }
+  .mesa-tarjeta { padding: 28px 32px 32px; background: var(--white); border: 1px solid var(--border); border-radius: 16px; }
+  .mesa-tarjeta .mesa-resto { background: var(--bg); }
+}
+
+/* ── Escáner de QR: el de hoy (fondo oscuro, recuadro con esquinas naranjas) con los estados nuevos ─────── */
+
+.overlay {
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(0, 0, 0, 0.92);
+  display: flex; flex-direction: column; align-items: center;
+  gap: 20px; padding: 24px 24px calc(24px + env(safe-area-inset-bottom));
+  text-align: center; overflow-y: auto;
+}
+/* Centrado vertical que no esconde el principio cuando el contenido es más alto que la pantalla (se puede deslizar) */
+.overlay > :first-child { margin-top: auto; }
+.overlay > :last-child { margin-bottom: auto; }
+.overlay h1 { font: 700 18px/1.3 var(--font-title); color: var(--white); max-width: 320px; }
+.overlay p { font: 400 14px/1.5 var(--font-text); color: rgba(255, 255, 255, 0.72); max-width: 320px; }
+.overlay .chico { font-size: 13px; }
+
+.visor { position: relative; width: 260px; height: 260px; flex: none; }
+.visor .imagen { width: 100%; height: 100%; border-radius: 16px; overflow: hidden; background: #2b2a2f; }
+.visor .imagen svg { display: block; width: 100%; height: 100%; }
+.visor .esquina { position: absolute; width: 28px; height: 28px; border: 0 solid var(--orange); }
+.visor .tl { top: 4px; left: 4px; border-top-width: 3px; border-left-width: 3px; border-top-left-radius: 6px; }
+.visor .tr { top: 4px; right: 4px; border-top-width: 3px; border-right-width: 3px; border-top-right-radius: 6px; }
+.visor .bl { bottom: 4px; left: 4px; border-bottom-width: 3px; border-left-width: 3px; border-bottom-left-radius: 6px; }
+.visor .br { bottom: 4px; right: 4px; border-bottom-width: 3px; border-right-width: 3px; border-bottom-right-radius: 6px; }
+
+.overlay .icono-camara {
+  width: 76px; height: 76px; border-radius: 50%; flex: none;
+  background: rgba(232, 86, 58, 0.18);
+  display: flex; align-items: center; justify-content: center;
+}
+.overlay .icono-camara.espera { background: rgba(255, 255, 255, 0.1); }
+
+.overlay .acciones { width: 100%; max-width: 320px; display: flex; flex-direction: column; gap: 10px; }
+.btn-ov {
+  display: flex; align-items: center; justify-content: center; width: 100%; min-height: 48px; padding: 0 20px;
+  font: 600 15px var(--font-title); color: var(--white);
+  background: rgba(255, 255, 255, 0.12); border: 1.5px solid rgba(255, 255, 255, 0.25); border-radius: 10px;
+}
+.btn-ov.principal { background: var(--orange); border-color: var(--orange); }
+.btn-ov.principal:hover { background: var(--orange-hover); }
+.btn-ov.texto { background: none; border-color: transparent; color: rgba(255, 255, 255, 0.8); min-height: 44px; font-weight: 500; font-size: 14px; }
+/* Recomendación cuando falla la cámara del navegador: usar la cámara del celular con el QR impreso */
+.overlay .consejo {
+  width: 100%; max-width: 320px; display: flex; align-items: flex-start; gap: 12px; text-align: left;
+  background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.16); border-radius: 12px; padding: 12px 14px;
+}
+.overlay .consejo p { font: 400 13px/1.5 var(--font-text); color: rgba(255, 255, 255, 0.85); max-width: none; margin: 0; }
+.overlay .consejo b { color: var(--white); font-weight: 600; }
+.overlay .consejo-icono {
+  width: 36px; height: 36px; border-radius: 50%; flex: none;
+  background: rgba(232, 86, 58, 0.18); display: flex; align-items: center; justify-content: center;
+}
+.overlay .aviso-boton { font: 400 12.5px/1.4 var(--font-text); color: rgba(255, 255, 255, 0.65); margin-top: -2px; }
+.overlay details { width: 100%; max-width: 320px; text-align: left; }
+.overlay summary {
+  display: flex; align-items: center; justify-content: center; min-height: 44px; cursor: pointer; list-style: none;
+  font: 500 13px var(--font-text); color: rgba(255, 255, 255, 0.8); text-decoration: underline; text-underline-offset: 3px;
+}
+.overlay summary::-webkit-details-marker { display: none; }
+.overlay details ul { margin: 4px 0 0; padding: 12px 14px 12px 30px; background: rgba(255, 255, 255, 0.08); border-radius: 10px; }
+.overlay details li { font: 400 13px/1.5 var(--font-text); color: rgba(255, 255, 255, 0.8); margin-bottom: 8px; }
+.overlay details li:last-child { margin-bottom: 0; }
+.overlay details li b { color: var(--white); font-weight: 600; }
+.giro-blanco { width: 22px; height: 22px; animation: giro 1s linear infinite; color: var(--white); }
+
+/* ── Muestras del header (header.html): a todo el ancho, como el header real, una abajo de la otra ───────── */
+
+.muestras-header { padding: 20px 0 40px; }
+.muestras-header h1 { font: 800 22px/1.2 var(--font-title); color: var(--navy); margin: 0 14px 6px; }
+.muestras-header > p { font: 400 14px/1.5 var(--font-text); color: var(--text-sub); margin: 0 14px 18px; max-width: 640px; }
+.especimen { margin-bottom: 16px; }
+.especimen small { display: block; font: 600 11px/1.35 var(--font-title); letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-sub); margin: 0 14px 6px; pointer-events: none; }
+.especimen .appheader { position: static; box-shadow: none; border-left: 0; border-right: 0; border-top: 1px solid #ECECEE; }
