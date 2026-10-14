@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { usePublicMenuStore } from '../../store/publicMenuStore'
 import { useSessionStore } from '../../store/sessionStore'
-import { crearMenu, crearPlato, crearPlatoEnDescuento } from '../../test/fixtures'
+import { crearMenu, crearPlato, crearPlatoEnDescuento, crearTokenJwt } from '../../test/fixtures'
 import { ClienteMenuPage } from './ClienteMenuPage'
 
 vi.mock('../../services/api', () => ({
@@ -69,6 +69,24 @@ describe('ClienteMenuPage', () => {
     Element.prototype.scrollIntoView = vi.fn()
     useSessionStore.setState({ restauranteId: 'rest-1', sesionId: null, mesaId: null, jwt: null, numeroMesa: null })
     usePublicMenuStore.setState({ menu: null, loading: false, error: null })
+  })
+
+  describe('saludo del menú lateral', () => {
+    afterEach(() => localStorage.clear())
+
+    it('saluda por el primer nombre del cliente con sesión, con los acentos y la Ñ bien', () => {
+      localStorage.setItem('menyu_access_token', crearTokenJwt({ tipo: 'cliente', nombre: 'Ñandú Gómez' }))
+
+      renderMenu(menuCompleto())
+
+      expect(screen.getByText('¡Hola, Ñandú!')).toBeInTheDocument()
+    })
+
+    it('sin sesión de cliente no hay saludo', () => {
+      renderMenu(menuCompleto())
+
+      expect(screen.queryByText(/^¡Hola,/)).not.toBeInTheDocument()
+    })
   })
 
   describe('sección Descuentos', () => {

@@ -7,6 +7,7 @@ import { useComensalStore } from '../../store/comensalStore'
 import { Spinner } from '@menyu/ui'
 import { api } from '../../services/api'
 import { ItemCard } from '../../components/ItemCard'
+import { decodificarPayloadJwt } from '../../utils/jwt'
 import type { MenuPublicoItem } from '@menyu/types'
 
 // ── Palette ───────────────────────────────────────────────────────────────────
@@ -172,12 +173,8 @@ export function ClienteMenuPage() {
     try {
       const token = localStorage.getItem('menyu_access_token')
       if (!token) return null
-      const payload = JSON.parse(atob(token.split('.')[1])) as {
-        tipo: string
-        nombre?: string
-        email?: string
-      }
-      if (payload.tipo !== 'cliente') return null
+      const payload = decodificarPayloadJwt(token) as { tipo?: string; nombre?: string; email?: string } | null
+      if (!payload || payload.tipo !== 'cliente') return null
       return { nombre: payload.nombre ?? payload.email ?? 'Cliente', email: payload.email ?? '' }
     } catch {
       return null

@@ -73,3 +73,10 @@ export function crearSesionAbierta(parcial: Partial<RespuestaSesion> = {}): Resp
     ...parcial,
   }
 }
+
+/** JWT de mentira con ese contenido, codificado como el real (JSON en UTF-8, base64url): sirve para probar nombres con acentos. */
+export function crearTokenJwt(payload: Record<string, unknown>): string {
+  const base64url = (texto: string) =>
+    btoa(String.fromCharCode(...new TextEncoder().encode(texto))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+  return `${base64url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))}.${base64url(JSON.stringify(payload))}.firma`
+}
