@@ -5,6 +5,7 @@ import { TituloSeccion } from '../../components/TituloSeccion'
 import { BloqueEstado } from '../../components/discovery/BloqueEstado'
 import { CarruselOfertas } from '../../components/discovery/CarruselOfertas'
 import { EsqueletosHome } from '../../components/discovery/EsqueletosHome'
+import { Girando } from '../../components/discovery/Girando'
 import { Icono } from '../../components/discovery/Icono'
 import { TarjetaOferta } from '../../components/discovery/TarjetaOferta'
 import { TarjetaRestaurante } from '../../components/discovery/TarjetaRestaurante'
@@ -25,15 +26,6 @@ function Seccion({ titulo, id, children }: { titulo: string; id?: string; childr
       <TituloSeccion>{titulo}</TituloSeccion>
       {children}
     </section>
-  )
-}
-
-function Girando() {
-  return (
-    <svg className="animate-spin" width="16" height="16" viewBox="0 0 24 24" fill="none" style={{ color: C.orange }} aria-hidden="true">
-      <circle opacity=".25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-      <path opacity=".75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-    </svg>
   )
 }
 
