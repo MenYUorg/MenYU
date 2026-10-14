@@ -24,6 +24,7 @@ const mockPrisma = {
     findUnique: jest.fn(),
     create:     jest.fn(),
     update:     jest.fn(),
+    findMany:   jest.fn(),
   },
   sesionMesaCliente: {
     findUnique: jest.fn(),
@@ -45,6 +46,9 @@ const mockPrisma = {
     findUnique: jest.fn(),
   },
   adminRestaurante: {
+    findUnique: jest.fn(),
+  },
+  mozo: {
     findUnique: jest.fn(),
   },
   $transaction: jest.fn(),
@@ -622,6 +626,163 @@ describe('SessionsService', () => {
         ...tx.pago.create.mock.calls,
       ]
       expect(JSON.stringify(consultas)).not.toContain('comensalId')
+    })
+
+    // ── atribución del cobro (autoría desde el JWT) ───────────────────────
+
+    describe('atribución del cobro', () => {
+      const USER_MOZO_OTRO_LOCAL: JwtPayload = { sub: 'mozo-9', tipo: 'mozo', restauranteId: 'rest-2' }
+      const USER_ADMIN: JwtPayload = { sub: 'admin-1', tipo: 'admin', rol: 'ROOT' }
+
+      // Cobro completo: total 1000, sin pagos previos ni MP pendientes, el nuevo cubre todo.
+      function cobroCompleto() {
+        mockDivision.calcularTotalSesion.mockResolvedValue(1000)
+        tx.pago.findMany
+          .mockResolvedValueOnce([]) // aprobados previos
+          .mockResolvedValueOnce([]) // sin MP pendientes
+          .mockResolvedValueOnce([{ id: 'pago-nuevo', monto: 1000 }]) // aprobados post-insert
+        tx.pago.create.mockResolvedValue({ id: 'pago-nuevo' })
+      }
+
+      it('mozo de otro restaurante → ForbiddenException y no se toca ningún pago', async () => {
+        await expect(
+          service.registrarCobro('sesion-1', DTO_BASE, USER_MOZO_OTRO_LOCAL),
+        ).rejects.toThrow(ForbiddenException)
+
+        expect(mockPrisma.$transaction).not.toHaveBeenCalled()
+        expect(tx.pago.create).not.toHaveBeenCalled()
+        expect(tx.pago.update).not.toHaveBeenCalled()
+      })
+
+      it('mozo que manda un mozoId ajeno en el body → se guarda el propio, adminId null', async () => {
+        cobroCompleto()
+
+        await service.registrarCobro('sesion-1', { ...DTO_BASE, mozoId: 'mozo-ajeno' }, USER_MOZO)
+
+        expect(tx.pago.create).toHaveBeenCalledWith({
+          data: expect.objectContaining({ mozoId: 'mozo-1', adminId: null }),
+        })
+        expect(mockPrisma.mozo.findUnique).not.toHaveBeenCalled()
+      })
+
+      it('admin sin mozoId → adminId = su sub y mozoId null', async () => {
+        cobroCompleto()
+
+        await service.registrarCobro('sesion-1', DTO_BASE, USER_ADMIN)
+
+        expect(tx.pago.create).toHaveBeenCalledWith({
+          data: expect.objectContaining({ mozoId: null, adminId: 'admin-1' }),
+        })
+      })
+
+      it('admin con mozoId de su restaurante → se guardan los dos', async () => {
+        cobroCompleto()
+        mockPrisma.mozo.findUnique.mockResolvedValue({ restauranteId: 'rest-1' })
+
+        await service.registrarCobro('sesion-1', { ...DTO_BASE, mozoId: 'mozo-7' }, USER_ADMIN)
+
+        expect(tx.pago.create).toHaveBeenCalledWith({
+          data: expect.objectContaining({ mozoId: 'mozo-7', adminId: 'admin-1' }),
+        })
+      })
+
+      it('efectivo pendiente reutilizado → el update lleva la misma atribución', async () => {
+        cobroCompleto()
+        tx.pago.findFirst.mockResolvedValue({ id: 'pago-ef' })
+        tx.pago.update.mockResolvedValue({ id: 'pago-ef' })
+
+        await service.registrarCobro('sesion-1', { ...DTO_BASE, mozoId: 'mozo-ajeno' }, USER_MOZO)
+
+        expect(tx.pago.create).not.toHaveBeenCalled()
+        expect(tx.pago.update).toHaveBeenCalledWith({
+          where: { id: 'pago-ef' },
+          data: expect.objectContaining({ mozoId: 'mozo-1', adminId: null }),
+        })
+      })
+
+      it('admin con mozoId inválido → 400 (inexistente) / 403 (de otro restaurante) antes de abrir la transacción', async () => {
+        mockPrisma.mozo.findUnique.mockResolvedValueOnce(null)
+        await expect(
+          service.registrarCobro('sesion-1', { ...DTO_BASE, mozoId: 'no-existe' }, USER_ADMIN),
+        ).rejects.toThrow(BadRequestException)
+
+        mockPrisma.mozo.findUnique.mockResolvedValueOnce({ restauranteId: 'rest-2' })
+        await expect(
+          service.registrarCobro('sesion-1', { ...DTO_BASE, mozoId: 'mozo-de-rest-2' }, USER_ADMIN),
+        ).rejects.toThrow(ForbiddenException)
+
+        expect(mockPrisma.$transaction).not.toHaveBeenCalled()
+      })
+    })
+  })
+
+  // ── lectura de cobradoPorNombre ────────────────────────────────────────
+
+  describe('getSessionesPagadas · cobradoPorNombre', () => {
+    const USER_ROOT: JwtPayload = { sub: 'admin-1', tipo: 'admin', rol: 'ROOT' }
+
+    const sesionConPago = (pago: Record<string, unknown>) => ({
+      id: 'sesion-1',
+      cerradaEn: new Date('2026-10-12T15:00:00.000Z'),
+      mesa: { numero: '5' },
+      pedidos: [],
+      pagos: [
+        {
+          id: 'pago-1',
+          metodo: 'efectivo',
+          estado: 'aprobado',
+          cobradoPorNombre: null,
+          referenciaExterna: null,
+          fechaCobro: new Date('2026-10-12T15:00:00.000Z'),
+          mozo: null,
+          admin: null,
+          ...pago,
+        },
+      ],
+    })
+
+    const nombreDe = async (pago: Record<string, unknown>) => {
+      mockPrisma.sesionMesa.findMany.mockResolvedValue([sesionConPago(pago)])
+      const [res] = await service.getSessionesPagadas('rest-1', undefined, USER_ROOT)
+      return res.cobradoPorNombre
+    }
+
+    it('sin cobradoPorNombre ni mozo, con admin → el email del admin', async () => {
+      expect(await nombreDe({ admin: { email: 'gerente@menyu.test' } })).toBe('gerente@menyu.test')
+    })
+
+    it('el mozo le gana al admin', async () => {
+      expect(
+        await nombreDe({ mozo: { nombre: 'Ana' }, admin: { email: 'gerente@menyu.test' } }),
+      ).toBe('Ana')
+    })
+
+    it('cobradoPorNombre le gana al mozo y al admin', async () => {
+      expect(
+        await nombreDe({
+          cobradoPorNombre: 'Mercado Pago',
+          mozo: { nombre: 'Ana' },
+          admin: { email: 'gerente@menyu.test' },
+        }),
+      ).toBe('Mercado Pago')
+    })
+
+    it('el select de la consulta incluye al admin', async () => {
+      mockPrisma.sesionMesa.findMany.mockResolvedValue([])
+      await service.getSessionesPagadas('rest-1', undefined, USER_ROOT)
+
+      expect(mockPrisma.sesionMesa.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          include: expect.objectContaining({
+            pagos: {
+              include: {
+                mozo: { select: { nombre: true } },
+                admin: { select: { email: true } },
+              },
+            },
+          }),
+        }),
+      )
     })
   })
 })

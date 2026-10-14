@@ -18,6 +18,7 @@ import { RegistrarCobroDto } from './dto/registrar-cobro.dto'
 import { DivisionService } from '../comensales/division.service'
 import { runSerializableTransaction } from '../common/run-serializable-transaction'
 import { assertStaffAccess } from '../common/assert-staff-access'
+import { resolveCobroAtribucion } from '../common/resolve-cobro-atribucion'
 import {
   ESTADO_PAGO_APROBADO,
   ESTADO_PAGO_PENDIENTE,
@@ -423,7 +424,12 @@ export class SessionsService {
             items: { select: { cantidad: true, cantidadEditada: true, precioUnitario: true } },
           },
         },
-        pagos: { include: { mozo: { select: { nombre: true } } } },
+        pagos: {
+          include: {
+            mozo: { select: { nombre: true } },
+            admin: { select: { email: true } },
+          },
+        },
       },
       orderBy: { cerradaEn: 'desc' },
     })
@@ -447,7 +453,8 @@ export class SessionsService {
       if (pagosAprobados.length === 1) {
         const pago = pagosAprobados[0]
         metodoPago = pago.metodo
-        cobradoPorNombre = pago.cobradoPorNombre ?? pago.mozo?.nombre ?? null
+        // Admin no tiene nombre en el schema: se muestra su email.
+        cobradoPorNombre = pago.cobradoPorNombre ?? pago.mozo?.nombre ?? pago.admin?.email ?? null
         referenciaExterna = pago.referenciaExterna ?? null
         fechaCobro = pago.fechaCobro?.toISOString() ?? s.cerradaEn?.toISOString() ?? ''
       } else if (pagosAprobados.length > 1) {
@@ -615,6 +622,15 @@ export class SessionsService {
 
     await assertStaffAccess(this.prisma, sesion.mesa.restauranteId, user)
 
+    // La autoría sale del JWT; dto.mozoId solo cuenta para un admin y se valida contra el restaurante.
+    // Va antes de la transacción: si el mozoId es inválido no se abre ni se toca nada.
+    const { mozoId, adminId } = await resolveCobroAtribucion(
+      this.prisma,
+      user,
+      sesion.mesa.restauranteId,
+      dto.mozoId,
+    )
+
     const fechaCobro = new Date()
     const ahora = fechaCobro.getTime()
 
@@ -660,7 +676,8 @@ export class SessionsService {
             estado: ESTADO_PAGO_APROBADO,
             monto: saldoPendiente,
             metodo: dto.metodoPago,
-            mozoId: dto.mozoId || null,
+            mozoId,
+            adminId,
             cobradoPorNombre: dto.cobradoPorNombre,
             referenciaExterna: dto.referenciaExterna,
             fechaCobro,
@@ -673,7 +690,8 @@ export class SessionsService {
             monto: saldoPendiente,
             metodo: dto.metodoPago,
             estado: ESTADO_PAGO_APROBADO,
-            mozoId: dto.mozoId || null,
+            mozoId,
+            adminId,
             cobradoPorNombre: dto.cobradoPorNombre,
             referenciaExterna: dto.referenciaExterna,
             fechaCobro,

@@ -13,6 +13,7 @@ import { DivisionService } from '../comensales/division.service'
 import { PaymentStatus } from './providers/payment-provider.interface'
 import { isAllowedOrigin } from '../common/is-allowed-origin'
 import { assertStaffAccess } from '../common/assert-staff-access'
+import { resolveCobroAtribucion } from '../common/resolve-cobro-atribucion'
 import { JwtPayload } from '../auth/auth.service'
 import { runSerializableTransaction } from '../common/run-serializable-transaction'
 import {
@@ -234,13 +235,16 @@ export class PaymentsService {
     }
     await assertStaffAccess(this.prisma, pago.sesion.mesa.restauranteId, user)
 
-    // Provisorio: la atribución completa (mozo/admin) llega con el commit de atribución desde el JWT.
-    const mozoId = user.tipo === 'mozo' ? user.sub : undefined
+    const { mozoId, adminId } = await resolveCobroAtribucion(
+      this.prisma,
+      user,
+      pago.sesion.mesa.restauranteId,
+    )
 
     return runSerializableTransaction(this.prisma, async (tx) => {
       await tx.pago.update({
         where: { id: pagoId },
-        data: { estado: 'aprobado', fechaCobro, ...(mozoId ? { mozoId } : {}) },
+        data: { estado: 'aprobado', fechaCobro, mozoId, adminId },
       })
 
       const totalSesion = await this.divisionService.calcularTotalSesion(tx, pago.sesionId)

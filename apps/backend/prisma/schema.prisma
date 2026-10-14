@@ -77,6 +77,7 @@ model Admin {
   marca        Marca?             @relation(fields: [marcaId], references: [id])
   restaurantes AdminRestaurante[]
   ediciones    PedidoEdicion[]
+  pagos        Pago[]
 
   @@map("admin")
 }
@@ -472,12 +473,14 @@ model Pago {
   estado            String    @default("pendiente")
   referenciaExterna String?   @map("referencia_externa")
   mozoId            String?   @map("mozo_id")
+  adminId           String?   @map("admin_id")
   cobradoPorNombre  String?   @map("cobrado_por_nombre")
   fechaCobro        DateTime? @map("fecha_cobro") @db.Timestamptz
   createdAt         DateTime  @default(now()) @map("created_at")
 
   sesion   SesionMesa @relation(fields: [sesionId], references: [id])
   mozo     Mozo?      @relation(fields: [mozoId], references: [id])
+  admin    Admin?     @relation(fields: [adminId], references: [id], onDelete: SetNull)
 
   @@map("pago")
 }

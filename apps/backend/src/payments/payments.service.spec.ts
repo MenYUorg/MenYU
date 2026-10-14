@@ -336,7 +336,7 @@ describe('PaymentsService', () => {
       expect(tx.pago.update).not.toHaveBeenCalled()
     })
 
-    it('mozo del restaurante → el pago queda a nombre del mozo del JWT', async () => {
+    it('mozo del restaurante → el pago queda a nombre del mozo del JWT, adminId null', async () => {
       mockDivision.calcularTotalSesion.mockResolvedValue(1000)
       tx.pago.findMany.mockResolvedValue([{ monto: 1000 }])
 
@@ -344,18 +344,20 @@ describe('PaymentsService', () => {
 
       expect(tx.pago.update).toHaveBeenCalledWith({
         where: { id: 'pago-ef' },
-        data: expect.objectContaining({ estado: 'aprobado', mozoId: 'mozo-1' }),
+        data: expect.objectContaining({ estado: 'aprobado', mozoId: 'mozo-1', adminId: null }),
       })
     })
 
-    it('admin → confirma sin atribuir mozoId', async () => {
+    it('admin → el pago queda con su adminId y sin mozoId', async () => {
       mockDivision.calcularTotalSesion.mockResolvedValue(1000)
       tx.pago.findMany.mockResolvedValue([{ monto: 1000 }])
 
       await service.confirmarEfectivo('pago-ef', USER_ROOT)
 
-      const data = tx.pago.update.mock.calls[0][0].data
-      expect(data).not.toHaveProperty('mozoId')
+      expect(tx.pago.update).toHaveBeenCalledWith({
+        where: { id: 'pago-ef' },
+        data: expect.objectContaining({ estado: 'aprobado', mozoId: null, adminId: 'admin-1' }),
+      })
     })
 
     it('cierre por confirmarEfectivo: cancela los pagos pendientes restantes (p. ej. un MP)', async () => {
