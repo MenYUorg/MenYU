@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '@menyu/auth'
+import { LogoMenYuOscuro } from '@menyu/ui'
 import { useContextStore } from '../../store/contextStore'
 import { useMediaQuery } from '../../hooks/useMediaQuery'
 import {
@@ -217,32 +218,6 @@ function DisabledNavItem({
   )
 }
 
-const Shield = () => (
-  <div
-    style={{
-      width:          26,
-      height:         26,
-      borderRadius:   6,
-      background:     '#E8563A',
-      display:        'flex',
-      alignItems:     'center',
-      justifyContent: 'center',
-      flexShrink:     0,
-    }}
-  >
-    <span
-      style={{
-        color:      'white',
-        fontFamily: 'Montserrat, sans-serif',
-        fontWeight: 800,
-        fontSize:   13,
-      }}
-    >
-      U
-    </span>
-  </div>
-)
-
 /* ── layout ────────────────────────────────────────────────────────────────── */
 export function AdminLayout() {
   const { user, logout } = useAuth()
@@ -415,21 +390,7 @@ export function AdminLayout() {
               flexShrink:     0,
             }}
           >
-            {sidebarOpen && (
-              <span
-                style={{
-                  color:         'white',
-                  fontFamily:    'Montserrat, sans-serif',
-                  fontWeight:    800,
-                  fontSize:      17,
-                  letterSpacing: '-0.02em',
-                  whiteSpace:    'nowrap',
-                }}
-              >
-                MENY
-              </span>
-            )}
-            <Shield />
+            <LogoMenYuOscuro alto={sidebarOpen ? 20 : 26} soloU={!sidebarOpen} />
           </div>
 
           {/* Brand + restaurant selector — hidden when collapsed */}

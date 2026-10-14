@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@menyu/auth'
+import { LogoMenYuOscuro } from '@menyu/ui'
 import { useMozoStore } from '../../store/mozoStore'
 import { ChefHat, CreditCard, LogOut, UtensilsCrossed } from 'lucide-react'
 
@@ -168,25 +169,7 @@ export function SelectorPage() {
         flexShrink:     0,
       }}>
         {/* Logo */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{
-            width:          34,
-            height:         34,
-            borderRadius:   9,
-            background:     '#E8563A',
-            display:        'flex',
-            alignItems:     'center',
-            justifyContent: 'center',
-            flexShrink:     0,
-          }}>
-            <span style={{ fontFamily: 'Montserrat, sans-serif', fontWeight: 800, fontSize: 15, color: 'white' }}>
-              M
-            </span>
-          </div>
-          <span style={{ fontFamily: 'Montserrat, sans-serif', fontWeight: 800, fontSize: 19, color: 'white' }}>
-            Men<span style={{ color: '#F2A28F' }}>Yu</span>
-          </span>
-        </div>
+        <LogoMenYuOscuro alto={22} />
 
         {/* Botón salir */}
         <LogoutBtn onClick={logout} />
