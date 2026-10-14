@@ -1,6 +1,6 @@
 # Mockups de Discovery (Fase 6)
 
-Prototipos en HTML de las pantallas nuevas de `web-cliente`: el home con ofertas y restaurantes, la búsqueda, la pantalla del restaurante, el ingreso a una mesa con QR (el PIN queda escondido) y el escáner de QR con sus estados (si falla, recomienda escanear con la cámara del celular o usar el PIN). Fueron aprobados antes de implementar la Fase 6 (decisión D14 de [`../plan-discovery-descuentos.md`](../plan-discovery-descuentos.md)). No forman parte de ninguna app ni del build.
+Prototipos en HTML de las pantallas nuevas de `web-cliente`: el home con ofertas y restaurantes, la búsqueda, la pantalla del restaurante, el ingreso a una mesa con QR (el PIN queda escondido), el escáner de QR con sus estados (si falla, recomienda escanear con la cámara del celular o usar el PIN) y las pantallas de `/check-in` (adonde llega la cámara del celular: "Abriendo tu mesa…" y el aviso con la opción del PIN si falla). Fueron aprobados antes de implementar la Fase 6 (decisión D14 de [`../plan-discovery-descuentos.md`](../plan-discovery-descuentos.md)). No forman parte de ninguna app ni del build.
 
 ## Cómo verlos
 
@@ -20,8 +20,9 @@ El buscador del home funciona con los datos de ejemplo (ignora acentos y mayúsc
 | `header.html` | El header, sin sesión y con sesión (nombre corto, con apellido, largo y larguísimo). |
 | `discovery.html` | Home y búsqueda. `?estado=` `normal`, `cargando`, `error`, `vacio`, `sin-ofertas`, `muchas`, `limite`, `buscando`, `error-busqueda`; `?q=` el texto buscado; `?usuario=` con sesión iniciada. |
 | `restaurante.html` | Pantalla del restaurante. `?id=` `parrilla`, `fiore`, `burger-palermo`, `almendra`, `kaori`, `rincon`, `larga`, `mesa7`; `?estado=` `cargando`, `error`. |
-| `mesa.html` | Ingreso a una mesa. `?id=` igual que arriba; `?estado=` `pin`, `pin-escrito`, `abriendo`, `error-pin`, `error-qr`, `pin-desde-camara`, `cargando`, `error`. |
+| `mesa.html` | Ingreso a una mesa. `?id=` igual que arriba; `?estado=` `pin`, `pin-escrito`, `abriendo`, `error-pin`, `error-qr`, `pin-desde-camara`, `pin-desde-qr`, `cargando`, `error`. |
 | `escaner.html` | El escáner de QR (cámara). `?origen=` `mesa` (con `?id=`) o `home`; `?estado=` `esperando`, `escaneando`, `denegado`, `sin-camara`, `sin-soporte`. |
+| `checkin.html` | `/check-in`, adonde llega la cámara del celular con el QR de la mesa (es la tarjeta azul del modo seguro). `?estado=` `abriendo`, `error-qr`, `error-red`; `?restaurante=no` para un link sin restaurante; `?id=` el restaurante del link. |
 | `mockups.css` | Estilos. Los colores son los de `apps/web-cliente/src/theme.ts`; las medidas son las de `EntradaPage`, `IngresoManualPage`, `AppHeader`, `ClienteMenuPage` e `ItemCard`. |
 | `mockups.js` | Datos de ejemplo (todo inventado) y piezas de HTML compartidas. |
 

@@ -6,6 +6,7 @@
   'use strict';
 
   const RUTA_LOGO = '../../apps/web-cliente/public/logo.png';
+  const RUTA_LOGO_OSCURO = '../../apps/web-cliente/public/LogoParaOscuro.png';
   const RUTA_PLACEHOLDER = '../../packages/ui/src/assets/item-placeholder.png';
 
   // ── Utilidades ──────────────────────────────────────────────────────────────
@@ -175,21 +176,28 @@
 
   // ── Piezas de HTML ──────────────────────────────────────────────────────────
 
-  // Si el nombre es largo se muestra solo el primer nombre: nunca se corta con "...".
-  const MAX_NOMBRE_SALUDO = 16;
-  function nombreSaludo(nombre) {
-    const limpio = nombre.trim().replace(/\s+/g, ' ');
-    return limpio.length > MAX_NOMBRE_SALUDO ? limpio.split(' ')[0] : limpio;
-  }
-
+  // El nombre se muestra tal cual viene: hoy el cliente se guarda en un único campo `nombre` y no se adivina dónde termina
+  // el nombre y empieza el apellido. Si algún día vienen separados, se muestra solo el nombre. Nunca se corta con "...":
+  // si no entra, pasa a la línea de abajo.
   function appHeader(usuario) {
     const acciones = usuario
-      ? `<div class="sesion"><span class="saludo">Hola, <b>${esc(nombreSaludo(usuario))}</b></span><button class="btn-h salir" type="button">Cerrar sesión</button></div>`
+      ? `<div class="sesion"><span class="saludo">Hola, <b>${esc(usuario.trim().replace(/\s+/g, ' '))}</b></span><button class="btn-h salir" type="button">Cerrar sesión</button></div>`
       : '<button class="btn-h" type="button">Ingresar</button><button class="btn-h primario" type="button">Registrarme</button>';
     return `<header class="appheader">
       <a class="marca" href="discovery.html"><img src="${RUTA_LOGO}" alt="MenYU"></a>
       <div class="acciones">${acciones}</div>
     </header>`;
+  }
+
+  /**
+   * El logo de MenYu para fondos oscuros (LogoParaOscuro.png), recortado como el componente LogoMenYuOscuro de @menyu/ui:
+   * el PNG trae aire transparente alrededor de las letras (2172 × 724 px) y `alto` es el alto real de las letras.
+   */
+  function logoOscuro(alto, soloU) {
+    const escala = alto / 380;
+    const x = soloU ? 1718 : 120;
+    const ancho = (soloU ? 334 : 1932) * escala;
+    return `<span class="logo-oscuro" style="width:${ancho}px;height:${alto}px"><img src="${RUTA_LOGO_OSCURO}" alt="MenYU" style="left:${-x * escala}px;top:${-165 * escala}px;width:${2172 * escala}px;height:${724 * escala}px"></span>`;
   }
 
   /** Lo que se ve de la cámara en el escáner: una mesa oscura con un QR de mentira (solo para el mockup). */
@@ -327,10 +335,10 @@
   }
 
   window.MK = {
-    RUTA_LOGO, RUTA_PLACEHOLDER, LOGOS, TODOS, NORMALES, LIMITE,
+    RUTA_LOGO, RUTA_LOGO_OSCURO, RUTA_PLACEHOLDER, LOGOS, TODOS, NORMALES, LIMITE,
     esc, sinAcentos, peso, plural, iniciales, icono,
     datos, buscar, restauranteDe, ofertasDe, todasLasOfertas,
-    appHeader, nombreSaludo, imagenCamara, logo, tituloSeccion, seccion, direccion, cardResto, cardOferta, carrusel, activarCarrusel,
+    appHeader, logoOscuro, imagenCamara, logo, tituloSeccion, seccion, direccion, cardResto, cardOferta, carrusel, activarCarrusel,
     esqueletoHome, esqueletoOferta, esqueletoResto, bloqueEstado, spinner,
   };
 })();

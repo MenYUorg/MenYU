@@ -44,11 +44,11 @@ h1, h2, h3, p { margin: 0; }
 
 .appheader {
   position: fixed; top: 0; left: 0; right: 0;
-  height: 60px;
+  min-height: 60px;
   background: var(--white);
   border-bottom: 1px solid #ECECEE;
   display: flex; align-items: center; justify-content: space-between;
-  padding: 0 20px;
+  padding: 6px 20px;
   z-index: 100;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
 }
@@ -68,7 +68,8 @@ h1, h2, h3, p { margin: 0; }
 /* Con sesión: el saludo y el botón de cerrar sesión, uno al lado del otro */
 .appheader .sesion { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .appheader .saludo { font: 400 13px/1.3 var(--font-text); color: var(--text-sub); overflow-wrap: anywhere; }
-.appheader .saludo b { color: var(--navy); font-weight: 600; word-break: break-all; }
+/* Se parte en los espacios; solo una palabra que no entra sola se corta (overflow-wrap), nunca con "..." */
+.appheader .saludo b { color: var(--navy); font-weight: 600; overflow-wrap: anywhere; }
 
 /*
  * Cambios propuestos para celular (no existen hoy), en la pantalla de menos de 640 px:
@@ -76,12 +77,13 @@ h1, h2, h3, p { margin: 0; }
  *   ancho y queda deformado; a 320 px queda en 76 px). Debajo de 385 px el logo baja a 24 px de alto, siempre con
  *   su proporción.
  * - Los botones son más chicos y entre el logo y los botones queda siempre un espacio de 16 px o más.
- * - Con sesión, el saludo va arriba y el botón de cerrar sesión debajo, apilados y alineados a la derecha. Si el
- *   nombre es largo se muestra solo el primer nombre (en lugar de cortarlo con "..."): lo resuelve mockups.js.
+ * - Con sesión, el saludo va arriba y el botón de cerrar sesión debajo, apilados y alineados a la derecha. El
+ *   nombre se muestra entero, tal cual viene (no se adivina cuál es el apellido); si no entra pasa a la línea de abajo
+ *   en lugar de cortarse con "...", y el header crece lo necesario (60 px es el mínimo).
  * - Los botones se ven chicos pero se pueden tocar cómodo: el área de toque llega a 44 px de alto.
  */
 @media (max-width: 639px) {
-  .appheader { padding: 0 16px; }
+  .appheader { padding: 6px 16px; }
   .appheader .acciones { margin-left: 16px; gap: 6px; }
   .appheader .btn-h { font-size: 12px; padding: 5px 10px; border-radius: 7px; }
   .appheader .btn-h::after { inset: -10px -2px; }
@@ -94,7 +96,7 @@ h1, h2, h3, p { margin: 0; }
   .appheader .marca img { height: 24px; }
 }
 @media (max-width: 339px) {
-  .appheader { padding: 0 12px; }
+  .appheader { padding: 6px 12px; }
   .appheader .acciones { margin-left: 12px; gap: 5px; }
   .appheader .marca img { height: 20px; }
   .appheader .btn-h { padding: 5px 8px; font-size: 11.5px; }
@@ -440,7 +442,7 @@ a.resto:hover { border-color: rgba(232, 86, 58, 0.3); box-shadow: 0 4px 16px rgb
 
 .overlay {
   position: fixed; inset: 0; z-index: 200;
-  background: rgba(0, 0, 0, 0.92);
+  background: rgba(0, 0, 0, 0.96);
   display: flex; flex-direction: column; align-items: center;
   gap: 20px; padding: 24px 24px calc(24px + env(safe-area-inset-bottom));
   text-align: center; overflow-y: auto;
@@ -509,3 +511,36 @@ a.resto:hover { border-color: rgba(232, 86, 58, 0.3); box-shadow: 0 4px 16px rgb
 .especimen { margin-bottom: 16px; }
 .especimen small { display: block; font: 600 11px/1.35 var(--font-title); letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-sub); margin: 0 14px 6px; pointer-events: none; }
 .especimen .appheader { position: static; box-shadow: none; border-left: 0; border-right: 0; border-top: 1px solid #ECECEE; }
+
+/*
+ * ── /check-in: lo que ve quien llega con la cámara del celular ─────────────────────────────────────────────────
+ * Es la tarjeta azul de SesionSeguraModals (la del anfitrión y la del código de la mesa), así que de "Abriendo tu
+ * mesa…" al código de la mesa no hay saltos visuales. Sin AppHeader, como esas pantallas.
+ */
+
+.shell {
+  min-height: 100dvh; display: flex; align-items: center; justify-content: center; padding: 16px;
+  background: linear-gradient(135deg, var(--navy) 0%, #1e254a 100%);
+}
+.shell-tarjeta { width: 100%; max-width: 360px; border-radius: 20px; overflow: hidden; box-shadow: 0 24px 64px rgba(0, 0, 0, 0.35); }
+.shell-banda { background: var(--navy); padding: 28px 32px 20px; text-align: center; }
+/* El logo real para fondos oscuros, recortado (ver MK.logoOscuro en mockups.js) */
+.logo-oscuro { display: block; position: relative; overflow: hidden; flex: none; margin: 0 auto; }
+.logo-oscuro img { position: absolute; max-width: none; user-select: none; }
+.shell-banda p { margin-top: 8px; font: 400 13px var(--font-text); color: rgba(255, 255, 255, 0.55); }
+.shell-cuerpo { background: var(--white); padding: 24px 28px 28px; display: flex; flex-direction: column; align-items: center; gap: 16px; text-align: center; }
+.shell-cuerpo .giro { width: 36px; height: 36px; }
+.shell-icono { width: 56px; height: 56px; border-radius: 50%; background: var(--orange-soft); display: flex; align-items: center; justify-content: center; flex: none; }
+.shell-titulo { font: 800 18px/1.25 var(--font-title); color: var(--navy); }
+.shell-texto { font: 400 14px/1.5 var(--font-text); color: var(--text-sub); }
+.shell-ayuda { font: 400 12.5px/1.4 var(--font-text); color: var(--text-sub); margin-top: -8px; }
+.shell-btn {
+  display: flex; align-items: center; justify-content: center; width: 100%; min-height: 44px; padding: 0 20px;
+  border-radius: 10px; border: 1.5px solid transparent; font: 700 14px var(--font-title); text-align: center;
+}
+.shell-btn.principal { background: var(--orange); color: var(--white); }
+.shell-btn.principal:hover { background: var(--orange-hover); }
+.shell-btn.contorno { background: var(--white); color: var(--navy); border-color: var(--border-input); }
+.shell-btn.contorno:hover { border-color: var(--navy); }
+.shell-enlace { display: flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 12px; margin-top: -8px; font: 500 13px var(--font-text); color: var(--text-sub); }
+.shell-enlace:hover { color: var(--navy); }
