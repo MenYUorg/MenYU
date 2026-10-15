@@ -167,14 +167,7 @@ createCliente(data)
 
 *Pendiente de proteger antes de producción.
 
-**Endpoints temporales de desarrollo** (eliminar antes de producción):
-
-| Método | Ruta | Descripción |
-|---|---|---|
-| POST | `/api/auth/dev/seed` | Crea Marca + Restaurante + Admin + Mozo de prueba |
-| POST | `/api/auth/dev/admin` | Crea un Admin con los datos que le mandás |
-| POST | `/api/auth/dev/mozo` | Crea un Mozo con los datos que le mandás |
-| POST | `/api/auth/dev/root` | Crea el Admin ROOT de la plataforma (sin restaurante) |
+**Endpoints de desarrollo:** no hay. Los `/api/auth/dev/*` (seed, admin, mozo y root) se eliminaron porque creaban usuarios, incluido un ROOT con contraseña conocida, sin autenticación. Para tener datos y usuarios en local se usa el seed (`pnpm --filter @menyu/api seed`).
 
 ### El payload del JWT
 
@@ -275,7 +268,7 @@ Ningún módulo borra registros de la DB. En cambio usa el patrón soft delete: 
 
 El admin ROOT pertenece a MenYU (la empresa dueña de la plataforma), no a ningún restaurante. Para permitir esto se hizo `restauranteId` nullable en el modelo `Admin`. Los métodos que intentan derivar un restaurante desde un admin (`getMarcaIdForAdmin`, `getRestauranteIdForAdmin`) tiran `NotFoundException('Admin sin restaurante asignado')` si el admin no tiene restaurante — lo cual nunca debería ocurrir porque ROOT toma el path separado en los services.
 
-Credenciales ROOT para desarrollo: `root@menyu.com` / `root1234` (creados vía `POST /api/auth/dev/root`).
+Credenciales ROOT para desarrollo: `root@menyu.com` / `root1234`, solo en la base local (las crea el seed; nunca existen ni se usan en staging o producción).
 
 ---
 
@@ -516,7 +509,6 @@ Se resolvió con inicialización diferida: `api.ts` expone `configureApiAuth()`,
 
 | Tarea | Por qué importa |
 |---|---|
-| Eliminar los endpoints `/auth/dev/*` | Cualquiera podría crear admins o ROOT sin autenticación |
 | Agregar `@UseGuards(JwtAuthGuard)` al endpoint `/auth/logout` | Hoy cualquiera puede cerrar la sesión de otro si conoce el refreshToken |
 | Crear DB de producción separada en Supabase | Hoy tests manuales y dev comparten la misma DB |
 | Mover `JWT_SECRET` a variable de entorno segura en Railway | El placeholder actual no es apto para producción |
