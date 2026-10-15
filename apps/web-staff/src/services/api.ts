@@ -338,7 +338,7 @@ export const api = {
       return authFetch<SesionPagadaItem[]>(`/sessions/pagadas?${params.toString()}`)
     },
 
-    registrarCobro: (sesionId: string, body: { metodoPago: string; mozoId?: string; cobradoPorNombre?: string; referenciaExterna?: string; confirmarCancelacionPagosPendientes?: boolean }) =>
+    registrarCobro: (sesionId: string, body: { metodoPago: string; cobradoPorNombre?: string; referenciaExterna?: string; confirmarCancelacionPagosPendientes?: boolean }) =>
       authFetch<{ ok: boolean }>(`/sessions/${sesionId}/cobro`, {
         method: 'PATCH',
         body: JSON.stringify(body),

@@ -232,7 +232,7 @@ export function PagosMozo() {
       {modalSesion && (
         <CobroModal
           sesion={modalSesion}
-          cobradoPor={{ modo: 'mozo-actual', mozoId: user?.sub ?? '' }}
+          cobradoPor={{ modo: 'mozo' }}
           onClose={() => setModalSesion(null)}
           onDone={handleCobroDone}
         />

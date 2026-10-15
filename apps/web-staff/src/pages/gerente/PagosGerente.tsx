@@ -366,7 +366,7 @@ export function PagosGerente() {
       {modalSesion && (
         <CobroModal
           sesion={modalSesion}
-          cobradoPor={{ modo: 'elegir', gerenteNombre: user?.nombre ?? user?.email ?? 'Gerente' }}
+          cobradoPor={{ modo: 'gerente', gerenteNombre: user?.nombre ?? user?.email ?? 'Gerente' }}
           onClose={() => setModalSesion(null)}
           onDone={handleCobroDone}
         />

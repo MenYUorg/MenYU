@@ -4,11 +4,10 @@ import { api, ApiError } from '../services/api'
 import type { SesionActivaItem } from '../services/api'
 
 type MetodoPago = 'efectivo' | 'debito' | 'credito' | 'transferencia' | 'mercadopago'
-type CobradoPorTipo = 'mozo' | 'gerente'
-
+// Quién cobra lo decide el backend a partir del usuario logueado (JWT); el modal solo lo muestra.
 export type CobradoPor =
-  | { modo: 'mozo-actual'; mozoId: string }
-  | { modo: 'elegir'; gerenteNombre: string }
+  | { modo: 'mozo' }
+  | { modo: 'gerente'; gerenteNombre: string }
 
 const C = {
   orange:   '#E8563A',
@@ -42,28 +41,12 @@ interface CobroModalProps {
 
 export function CobroModal({ sesion, cobradoPor, onClose, onDone }: CobroModalProps) {
   const [metodo,            setMetodo]            = useState<MetodoPago | null>(null)
-  const [cobradoPorTipo,    setCobradoPorTipo]    = useState<CobradoPorTipo | null>(null)
-  const [mozoId,            setMozoId]            = useState('')
   const [referenciaExterna, setReferenciaExterna] = useState('')
   const [loading,           setLoading]           = useState(false)
   const [error,             setError]             = useState<string | null>(null)
   const [advertencia,       setAdvertencia]       = useState<string | null>(null)
 
-  const canConfirm = !!metodo && (
-    cobradoPor.modo === 'mozo-actual' ||
-    metodo === 'mercadopago' ||
-    cobradoPorTipo === 'gerente' ||
-    (cobradoPorTipo === 'mozo' && !!mozoId)
-  )
-
-  // Quién responde por el cobro, según el rol y las opciones elegidas.
-  function datosCobrador(): { mozoId?: string; cobradoPorNombre?: string } {
-    if (cobradoPor.modo === 'mozo-actual') return cobradoPor.mozoId ? { mozoId: cobradoPor.mozoId } : {}
-    if (metodo === 'mercadopago') return { cobradoPorNombre: 'Mercado Pago' }
-    if (cobradoPorTipo === 'mozo' && mozoId) return { mozoId }
-    if (cobradoPorTipo === 'gerente') return { cobradoPorNombre: cobradoPor.gerenteNombre }
-    return {}
-  }
+  const canConfirm = !!metodo
 
   async function cobrarMesa(confirmarCancelacion = false) {
     if (!canConfirm || !metodo) return
@@ -73,7 +56,6 @@ export function CobroModal({ sesion, cobradoPor, onClose, onDone }: CobroModalPr
     try {
       await api.sesiones.registrarCobro(sesion.id, {
         metodoPago: metodo,
-        ...datosCobrador(),
         ...(metodo === 'mercadopago' && referenciaExterna.trim() ? { referenciaExterna: referenciaExterna.trim() } : {}),
         ...(confirmarCancelacion ? { confirmarCancelacionPagosPendientes: true } : {}),
       })
@@ -132,7 +114,7 @@ export function CobroModal({ sesion, cobradoPor, onClose, onDone }: CobroModalPr
             return (
               <button
                 key={key}
-                onClick={() => { setMetodo(key); setCobradoPorTipo(null); setMozoId(''); setAdvertencia(null) }}
+                onClick={() => { setMetodo(key); setAdvertencia(null) }}
                 style={{
                   padding: '10px 14px', borderRadius: 8,
                   border: `1.5px solid ${sel ? C.orange : C.border}`,
@@ -148,57 +130,19 @@ export function CobroModal({ sesion, cobradoPor, onClose, onDone }: CobroModalPr
           })}
         </div>
 
-        {/* Cobrado por — solo si elige (gerente) y NO es MP */}
-        {cobradoPor.modo === 'elegir' && metodo && metodo !== 'mercadopago' && (
+        {/* Cobrado por — el gerente cobra como sí mismo */}
+        {cobradoPor.modo === 'gerente' && metodo && (
           <>
             <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 8 }}>
               Cobrado por
             </p>
-            <div style={{ display: 'flex', gap: 8, marginBottom: cobradoPorTipo ? 12 : 22 }}>
-              {(['mozo', 'gerente'] as const).map((tipo) => {
-                const sel = cobradoPorTipo === tipo
-                return (
-                  <button
-                    key={tipo}
-                    onClick={() => { setCobradoPorTipo(tipo); setMozoId(''); setAdvertencia(null) }}
-                    style={{
-                      flex: 1, padding: '9px 0', borderRadius: 8,
-                      border: `1.5px solid ${sel ? C.orange : C.border}`,
-                      background: sel ? C.orangeBg : C.white,
-                      color: sel ? C.orange : '#374151',
-                      fontFamily: 'Inter,sans-serif', fontSize: 13, fontWeight: sel ? 600 : 400,
-                      cursor: 'pointer', transition: 'all 0.13s',
-                    }}
-                  >
-                    {tipo === 'mozo' ? 'Mozo' : 'Gerente (yo)'}
-                  </button>
-                )
-              })}
+            <div style={{
+              padding: '10px 12px', borderRadius: 8, marginBottom: 22,
+              background: C.chipBg, border: `1px solid ${C.border}`,
+              fontFamily: 'Inter,sans-serif', fontSize: 13, color: C.navy,
+            }}>
+              {cobradoPor.gerenteNombre}
             </div>
-            {cobradoPorTipo === 'mozo' && (
-              <select
-                value={mozoId}
-                onChange={(e) => { setMozoId(e.target.value); setAdvertencia(null) }}
-                style={{
-                  width: '100%', padding: '10px 12px', borderRadius: 8,
-                  border: `1px solid ${C.border}`, fontFamily: 'Inter,sans-serif', fontSize: 13,
-                  color: mozoId ? '#374151' : C.textMut,
-                  background: C.white, outline: 'none', boxSizing: 'border-box',
-                  marginBottom: 22,
-                }}
-              >
-                <option value="">Seleccionar mozo…</option>
-              </select>
-            )}
-            {cobradoPorTipo === 'gerente' && (
-              <div style={{
-                padding: '10px 12px', borderRadius: 8, marginBottom: 22,
-                background: C.chipBg, border: `1px solid ${C.border}`,
-                fontFamily: 'Inter,sans-serif', fontSize: 13, color: C.navy,
-              }}>
-                {cobradoPor.gerenteNombre}
-              </div>
-            )}
           </>
         )}
 

@@ -366,8 +366,6 @@ export const api = {
     pagos: {
       listSesiones: (restauranteId: string) =>
         req<SesionResumen[]>('GET', `/payments/sesiones?restauranteId=${encodeURIComponent(restauranteId)}`),
-      confirmarEfectivo: (sesionId: string) =>
-        req<{ sesionId: string; estado: string }>('POST', '/payments/confirmar-efectivo', { sesionId }),
     },
 
     sessions: {
