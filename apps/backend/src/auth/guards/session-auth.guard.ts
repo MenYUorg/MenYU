@@ -9,6 +9,8 @@ import { JwtService } from '@nestjs/jwt'
 export interface SessionJwtPayload {
   sub: string
   tipo: 'cliente'
+  /** Distingue el token de sesión del de login de cliente. Opcional: los emitidos antes de agregarlo no lo traen. */
+  typ?: 'session'
   sesionId: string
   mesaId: string
   restauranteId: string

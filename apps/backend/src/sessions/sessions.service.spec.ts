@@ -408,6 +408,28 @@ describe('SessionsService', () => {
       expect(mockUsers.createCliente).not.toHaveBeenCalled()
       expect(result.clienteId).toBe('cli-1')
     })
+
+    it('el token de sesión emitido trae typ: "session" junto a los claims de la sesión', async () => {
+      mockPrisma.mesa.findFirst.mockResolvedValue(MESA_ABIERTA)
+      mockPrisma.sesionMesa.findFirst.mockResolvedValue(null)
+      mockPrisma.$transaction.mockResolvedValue([
+        { id: 'nueva-sesion', codigoSesion: '042' },
+        { id: 'mesa-1', estado: 'ocupada' },
+      ])
+      mockUsers.createCliente.mockResolvedValue(INVITADO)
+
+      const result = await service.open({ tableCode: 'qr-abc' })
+
+      expect(mockJwt.sign).toHaveBeenCalledWith({
+        sub: INVITADO.id,
+        tipo: 'cliente',
+        typ: 'session',
+        sesionId: 'nueva-sesion',
+        mesaId: MESA_ABIERTA.id,
+        restauranteId: MESA_ABIERTA.restauranteId,
+      })
+      expect(result.jwt).toBe('mock.session.jwt')
+    })
   })
 
   // ── registrarCobro ───────────────────────────────────────────────────

@@ -89,7 +89,7 @@ export class WaiterCallsService {
     })
 
     // c. Emitir evento al mozo
-    this.gateway.emitMozoCalled(restauranteId, {
+    await this.gateway.emitMozoCalled(restauranteId, sesion.mesaId, {
       llamadoId: llamado.id,
       sesionId: dto.sesionId,
       mesaNumero: sesion.mesa.numero,

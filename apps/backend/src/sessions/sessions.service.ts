@@ -215,6 +215,7 @@ export class SessionsService {
     const payload: SessionJwtPayload = {
       sub: clienteId,
       tipo: 'cliente',
+      typ: 'session',
       sesionId,
       mesaId: mesa.id,
       restauranteId: mesa.restauranteId,
@@ -249,7 +250,7 @@ export class SessionsService {
       }),
     ])
 
-    this.gateway.emitSesionCerrada(payload.restauranteId, payload.sesionId)
+    await this.gateway.emitSesionCerrada(payload.restauranteId, payload.mesaId, payload.sesionId)
 
     return { ok: true }
   }
@@ -275,7 +276,7 @@ export class SessionsService {
       }),
     ])
 
-    this.gateway.emitSesionCerrada(mesa.restauranteId, sesion.id)
+    await this.gateway.emitSesionCerrada(mesa.restauranteId, mesaId, sesion.id)
 
     return { ok: true }
   }
@@ -706,7 +707,7 @@ export class SessionsService {
     }, 'registrarCobro')
 
     if (sesionCerrada) {
-      this.gateway.emitSesionCobrada(sesion.mesa.restauranteId, {
+      await this.gateway.emitSesionCobrada(sesion.mesa.restauranteId, {
         sesionId,
         mesaId: sesion.mesaId,
         mesaNumero: sesion.mesa.numero,

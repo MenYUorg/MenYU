@@ -161,7 +161,7 @@ export class PedidosService {
       })
     })
 
-    this.gateway.emitOrderNew(restauranteId, pedido)
+    await this.gateway.emitOrderNew(restauranteId, pedido)
 
     return pedido
   }
@@ -259,7 +259,7 @@ export class PedidosService {
       })
     })
 
-    this.gateway.emitOrderNew(restauranteId, pedido)
+    await this.gateway.emitOrderNew(restauranteId, pedido)
     return pedido
   }
 
@@ -371,7 +371,7 @@ export class PedidosService {
     })
 
     // d. Emitir a cocina/mozo
-    this.gateway.emitOrderUpdated(pedido.mesa.restauranteId, actualizado)
+    await this.gateway.emitOrderUpdated(pedido.mesa.restauranteId, actualizado)
 
     return actualizado
   }
@@ -471,7 +471,7 @@ export class PedidosService {
     })
 
     const resultado = await this.getPedidoConEdiciones(id)
-    this.gateway.emitOrderEdited(pedido.mesa.restauranteId, resultado)
+    await this.gateway.emitOrderEdited(pedido.mesa.restauranteId, resultado)
     return resultado
   }
 

@@ -157,14 +157,14 @@ export class PaymentsService {
 
     const { sesion, pago, llamado, totalAcumulado } = resultado
 
-    this.gateway.emitMozoCalled(sesion.mesa.restauranteId, {
+    await this.gateway.emitMozoCalled(sesion.mesa.restauranteId, sesion.mesa.id, {
       llamadoId: llamado.id,
       sesionId,
       mesaNumero: sesion.mesa.numero,
       motivo: 'pedir_cuenta',
     })
 
-    this.gateway.emitQuierePagar(sesion.mesa.restauranteId, {
+    await this.gateway.emitQuierePagar(sesion.mesa.restauranteId, {
       sesionId,
       mesaId: sesion.mesa.id,
       mesaNumero: sesion.mesa.numero,
@@ -197,14 +197,14 @@ export class PaymentsService {
       0,
     )
 
-    this.gateway.emitMozoCalled(sesion.mesa.restauranteId, {
+    await this.gateway.emitMozoCalled(sesion.mesa.restauranteId, sesion.mesa.id, {
       llamadoId: llamado.id,
       sesionId,
       mesaNumero: sesion.mesa.numero,
       motivo: 'pedir_cuenta',
     })
 
-    this.gateway.emitQuierePagar(sesion.mesa.restauranteId, {
+    await this.gateway.emitQuierePagar(sesion.mesa.restauranteId, {
       sesionId,
       mesaId: sesion.mesa.id,
       mesaNumero: sesion.mesa.numero,
@@ -466,7 +466,7 @@ export class PaymentsService {
         select: { mesa: { select: { id: true, numero: true } } },
       })
       if (sesion) {
-        this.gateway.emitSesionCobrada(restauranteId, {
+        await this.gateway.emitSesionCobrada(restauranteId, {
           sesionId: pagoActual.sesionId,
           mesaId: sesion.mesa.id,
           mesaNumero: sesion.mesa.numero,

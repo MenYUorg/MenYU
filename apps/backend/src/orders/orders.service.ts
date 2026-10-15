@@ -117,7 +117,7 @@ export class OrdersService {
       return created
     })
 
-    this.gateway.emitOrderNew(restauranteId, pedido)
+    await this.gateway.emitOrderNew(restauranteId, pedido)
 
     return pedido
   }
