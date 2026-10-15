@@ -1,5 +1,5 @@
 import type { MenuPublico } from '@menyu/types'
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { api } from '../../services/api'
@@ -13,6 +13,7 @@ vi.mock('../../services/api', () => ({
   api: {
     menu: { publico: vi.fn() },
     waiterCalls: { llamar: vi.fn() },
+    orders: { list: vi.fn() },
   },
 }))
 
@@ -87,6 +88,7 @@ describe('ClienteMenuPage', () => {
       useSessionStore.setState(mesa)
       useCarritoStore.getState().vaciar()
       vi.mocked(api.waiterCalls.llamar).mockReset().mockResolvedValue(undefined as never)
+      vi.mocked(api.orders.list).mockReset().mockResolvedValue([])
     })
 
     afterEach(() => {
@@ -98,7 +100,7 @@ describe('ClienteMenuPage', () => {
       it('muestra el nombre del restaurante y el número de la mesa', () => {
         renderMenu(menuCompleto())
 
-        expect(screen.getByText('La Parrilla')).toBeInTheDocument()
+        expect(screen.getByRole('banner')).toHaveTextContent('La Parrilla')
         expect(screen.getByText('Mesa 5')).toBeInTheDocument()
       })
 
@@ -186,6 +188,24 @@ describe('ClienteMenuPage', () => {
       })
     })
 
+    describe('el restaurante en el header y en el menú lateral', () => {
+      it('el logo es el botón del header y la dirección está en el menú lateral', () => {
+        renderMenu(crearMenu({
+          restaurante: { id: 'rest-1', nombre: 'La Parrilla', logoUrl: 'https://x/logo-parrilla.png', direccion: 'Av. Alicia Moreau de Justo 1150, Puerto Madero' },
+          categorias: [{ id: 'cat-1', nombre: 'Principales', orden: 1, itemsDirectos: [flan] }],
+        }))
+
+        expect(screen.getByRole('button', { name: 'Abrir el menú' }).querySelector('img')).toHaveAttribute('src', 'https://x/logo-parrilla.png')
+        expect(screen.getByText('Av. Alicia Moreau de Justo 1150, Puerto Madero')).toBeInTheDocument()
+      })
+
+      it('sin logo muestra el de MenYU en el header', () => {
+        renderMenu(menuCompleto())
+
+        expect(screen.getByRole('button', { name: 'Abrir el menú' }).querySelector('img')).toHaveAttribute('src', '/logo-u.png')
+      })
+    })
+
     describe('platos y carrito', () => {
       it('cada plato tiene su botón "+" y tocarlo abre el detalle', () => {
         const { container } = renderMenu(menuCompleto())
@@ -244,22 +264,89 @@ describe('ClienteMenuPage', () => {
         expect(screen.getByText('Pantalla de ingreso')).toBeInTheDocument()
       })
 
-      it('con cuenta: muestra el email, "Mis puntos" y "Cerrar sesión" borra la sesión de cliente', () => {
-        localStorage.setItem('menyu_access_token', crearTokenJwt({ tipo: 'cliente', nombre: 'Ana Gómez', email: 'ana@mail.com' }))
-        localStorage.setItem('menyu_refresh_token', 'refresh')
+      describe('con cuenta', () => {
+        beforeEach(() => {
+          localStorage.setItem('menyu_access_token', crearTokenJwt({ tipo: 'cliente', nombre: 'Ana Gómez', email: 'ana@mail.com' }))
+          localStorage.setItem('menyu_refresh_token', 'refresh')
+        })
+
+        // Se abre desde el botón del header (el logo del restaurante), como en la app.
+        const abrirMenu = () => fireEvent.click(screen.getByRole('button', { name: 'Abrir el menú' }))
+        const cerrarSesion = () => screen.queryByRole('button', { name: 'Cerrar sesión' })
+        const esperar = () => act(async () => { await new Promise((r) => setTimeout(r, 20)) })
+
+        it('muestra el saludo con el nombre completo y el email, en lugar de iniciar sesión o crear una cuenta', () => {
+          renderMenu(menuCompleto())
+
+          expect(screen.getByText('¡Hola, Ana Gómez!')).toBeInTheDocument()
+          expect(screen.getByText('ana@mail.com')).toBeInTheDocument()
+          expect(screen.getByText('Mis puntos')).toBeInTheDocument()
+          expect(screen.queryByRole('button', { name: 'Iniciar sesión' })).not.toBeInTheDocument()
+          expect(screen.queryByRole('button', { name: 'Crear cuenta gratis' })).not.toBeInTheDocument()
+        })
+
+        it('si la mesa todavía no pidió nada ofrece "Cerrar sesión", que borra la sesión de cliente', async () => {
+          renderMenu(menuCompleto())
+          abrirMenu()
+
+          fireEvent.click(await screen.findByRole('button', { name: 'Cerrar sesión' }))
+
+          expect(api.orders.list).toHaveBeenCalledWith('jwt')
+          expect(localStorage.getItem('menyu_access_token')).toBeNull()
+          expect(localStorage.getItem('menyu_refresh_token')).toBeNull()
+          expect(screen.getByRole('button', { name: 'Iniciar sesión' })).toBeInTheDocument()
+        })
+
+        it('si la mesa ya pidió algo no ofrece "Cerrar sesión" (y el saludo sigue)', async () => {
+          vi.mocked(api.orders.list).mockResolvedValue([{ id: 'p1', estado: 'en_preparacion' }])
+          renderMenu(menuCompleto())
+          abrirMenu()
+          await esperar()
+
+          expect(api.orders.list).toHaveBeenCalledTimes(1)
+          expect(cerrarSesion()).not.toBeInTheDocument()
+          expect(screen.getByText('¡Hola, Ana Gómez!')).toBeInTheDocument()
+        })
+
+        it('si lo único que pidió la mesa fue anulado, sí ofrece "Cerrar sesión"', async () => {
+          vi.mocked(api.orders.list).mockResolvedValue([{ id: 'p1', estado: 'anulado' }])
+          renderMenu(menuCompleto())
+          abrirMenu()
+
+          expect(await screen.findByRole('button', { name: 'Cerrar sesión' })).toBeInTheDocument()
+        })
+
+        it('si no se puede saber si la mesa pidió algo, no lo ofrece', async () => {
+          vi.mocked(api.orders.list).mockRejectedValue(new Error('sin conexión'))
+          renderMenu(menuCompleto())
+          abrirMenu()
+          await esperar()
+
+          expect(cerrarSesion()).not.toBeInTheDocument()
+        })
+
+        it('mientras se averigua tampoco se ofrece (para que no aparezca y desaparezca)', async () => {
+          vi.mocked(api.orders.list).mockReturnValue(new Promise(() => {}))
+          renderMenu(menuCompleto())
+          abrirMenu()
+          await esperar()
+
+          expect(cerrarSesion()).not.toBeInTheDocument()
+        })
+
+        it('no consulta los pedidos hasta que se abre el menú lateral', async () => {
+          renderMenu(menuCompleto())
+          await esperar()
+
+          expect(api.orders.list).not.toHaveBeenCalled()
+        })
+      })
+
+      it('sin cuenta no se consultan los pedidos', () => {
         renderMenu(menuCompleto())
+        fireEvent.click(screen.getByRole('button', { name: 'Abrir el menú' }))
 
-        expect(screen.getByText('ana@mail.com')).toBeInTheDocument()
-        expect(screen.getByText('Mis puntos')).toBeInTheDocument()
-        expect(screen.queryByRole('button', { name: 'Iniciar sesión' })).not.toBeInTheDocument()
-
-        // Se abre desde el botón del header (las iniciales del restaurante), como en la app.
-        fireEvent.click(screen.getByRole('button', { name: /LP/ }))
-        fireEvent.click(screen.getByRole('button', { name: 'Cerrar sesión' }))
-
-        expect(localStorage.getItem('menyu_access_token')).toBeNull()
-        expect(localStorage.getItem('menyu_refresh_token')).toBeNull()
-        expect(screen.getByRole('button', { name: 'Iniciar sesión' })).toBeInTheDocument()
+        expect(api.orders.list).not.toHaveBeenCalled()
       })
 
       it('un invitado con nombre de comensal es saludado por ese nombre', async () => {
@@ -313,12 +400,12 @@ describe('ClienteMenuPage', () => {
   describe('saludo del menú lateral', () => {
     afterEach(() => localStorage.clear())
 
-    it('saluda por el primer nombre del cliente con sesión, con los acentos y la Ñ bien', () => {
+    it('saluda por el nombre completo del cliente con sesión, con los acentos y la Ñ bien', () => {
       localStorage.setItem('menyu_access_token', crearTokenJwt({ tipo: 'cliente', nombre: 'Ñandú Gómez' }))
 
       renderMenu(menuCompleto())
 
-      expect(screen.getByText('¡Hola, Ñandú!')).toBeInTheDocument()
+      expect(screen.getByText('¡Hola, Ñandú Gómez!')).toBeInTheDocument()
     })
 
     it('sin sesión de cliente no hay saludo', () => {

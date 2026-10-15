@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Spinner } from '@menyu/ui'
 import type { MenuPublicoItem } from '@menyu/types'
+import { usePuedeCerrarSesion } from '../../hooks/usePuedeCerrarSesion'
 import { menuEsDe, usePublicMenuStore } from '../../store/publicMenuStore'
 import { useComensalStore } from '../../store/comensalStore'
 import { decodificarPayloadJwt } from '../../utils/jwt'
@@ -76,6 +77,8 @@ export function MenuView({ modo, restauranteId }: MenuViewProps) {
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({})
 
   const user = leerUsuario()
+  // "Cerrar sesión" no se ofrece si la mesa en la que está ya pidió algo.
+  const puedeCerrarSesion = usePuedeCerrarSesion({ abierto: drawerOpen, conCuenta: !!user })
 
   useEffect(() => {
     if (restauranteId && !menu) void fetchMenu(restauranteId)
@@ -254,12 +257,16 @@ export function MenuView({ modo, restauranteId }: MenuViewProps) {
         onCerrar={() => setDrawerOpen(false)}
         modo={modo}
         restauranteId={restauranteId}
+        nombreRestaurante={menu.restaurante.nombre}
+        direccion={menu.restaurante.direccion}
+        logoUrl={menu.restaurante.logoUrl}
         usuario={user}
         comensalNombre={comensalNombre}
+        puedeCerrarSesion={puedeCerrarSesion}
         onCerrarSesion={cerrarSesion}
       />
 
-      <MenuHeader nombre={menu.restaurante.nombre} modo={modo} onAbrirMenu={() => setDrawerOpen(true)} />
+      <MenuHeader nombre={menu.restaurante.nombre} logoUrl={menu.restaurante.logoUrl} modo={modo} onAbrirMenu={() => setDrawerOpen(true)} />
 
       <BarraBusqueda
         buscar={buscar}

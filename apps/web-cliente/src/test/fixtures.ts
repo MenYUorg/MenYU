@@ -47,9 +47,19 @@ export function crearExtra(parcial: Partial<ItemIngrediente> = {}): ItemIngredie
   }
 }
 
-export function crearMenu(parcial: Partial<MenuPublico> = {}): MenuPublico {
+type ParcialDeMenu = Omit<Partial<MenuPublico>, 'restaurante'> & { restaurante?: Partial<MenuPublico['restaurante']> }
+
+/** Menú público. Por defecto: el restaurante "La Parrilla" con dirección y sin logo (ni propio ni de marca), sin platos. */
+export function crearMenu({ restaurante, ...parcial }: ParcialDeMenu = {}): MenuPublico {
   return {
-    restaurante: { id: 'rest-1', nombre: 'La Parrilla', nombreSeccionRecomendados: 'RECOMENDACIONES' },
+    restaurante: {
+      id: 'rest-1',
+      nombre: 'La Parrilla',
+      nombreSeccionRecomendados: 'RECOMENDACIONES',
+      direccion: 'Av. Alicia Moreau de Justo 1150, Puerto Madero',
+      logoUrl: null,
+      ...restaurante,
+    },
     categorias: [],
     recomendados: [],
     descuentos: [],

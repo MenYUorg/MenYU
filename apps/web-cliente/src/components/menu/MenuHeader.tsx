@@ -1,15 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../../services/api'
 import { useSessionStore } from '../../store/sessionStore'
-import { iniciales } from '../../utils/iniciales'
+import { ImagenLogo } from './ImagenLogo'
 import type { ModoMenu } from './modo'
 import { CM } from './paleta'
 
 function HamburgerBadge() {
   return (
     <span style={{
-      position: 'absolute', bottom: -3, right: -3,
-      width: 15, height: 15, borderRadius: '50%',
+      position: 'absolute', bottom: -4, right: -4, zIndex: 1,
+      width: 16, height: 16, borderRadius: '50%',
       background: 'white', border: `2px solid ${CM.navy}`,
       display: 'flex', flexDirection: 'column',
       alignItems: 'center', justifyContent: 'center', gap: 2,
@@ -22,14 +22,47 @@ function HamburgerBadge() {
   )
 }
 
-/** "Mozo" y el número de la mesa (con el código si la mesa está en modo seguro): lo que solo tiene el menú de una sesión. */
+const PILL: React.CSSProperties = {
+  borderRadius: 999,
+  fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 12,
+  textAlign: 'center', whiteSpace: 'nowrap',
+}
+
+/** "Mesa N", y debajo "PIN xxx" si la mesa está en modo seguro: apilados para dejarle lugar al nombre del restaurante. */
+function MesaYCodigo() {
+  const numeroMesa = useSessionStore((s) => s.numeroMesa)
+  const codigoSesion = useSessionStore((s) => s.codigoSesion)
+  const modoSesion = useSessionStore((s) => s.modoSesion)
+  const conCodigo = modoSesion === 'seguro' && !!codigoSesion
+
+  if (!conCodigo) {
+    // Sin código, solo la mesa, como siempre.
+    return (
+      <span style={{ ...PILL, flexShrink: 0, background: CM.orange, color: 'white', padding: '6px 11px' }}>
+        Mesa {numeroMesa ?? ''}
+      </span>
+    )
+  }
+
+  // Los dos con el mismo borde (uno lo lleva visible y el otro no) para que midan lo mismo.
+  const apilada: React.CSSProperties = { ...PILL, padding: '2px 11px', lineHeight: 1.3, border: '1.5px solid transparent' }
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 3, flexShrink: 0 }}>
+      <span style={{ ...apilada, background: CM.orange, borderColor: CM.orange, color: 'white' }}>
+        Mesa {numeroMesa ?? ''}
+      </span>
+      <span style={{ ...apilada, borderColor: 'rgba(255,255,255,0.5)', color: 'white' }}>
+        PIN {codigoSesion}
+      </span>
+    </div>
+  )
+}
+
+/** "Mozo" y la mesa (con el código si está en modo seguro): lo que solo tiene el menú de una sesión. */
 function MozoYMesa() {
   const sesionId = useSessionStore((s) => s.sesionId)
   const mesaId = useSessionStore((s) => s.mesaId)
   const jwt = useSessionStore((s) => s.jwt)
-  const numeroMesa = useSessionStore((s) => s.numeroMesa)
-  const codigoSesion = useSessionStore((s) => s.codigoSesion)
-  const modoSesion = useSessionStore((s) => s.modoSesion)
   const [mozoStatus, setMozoStatus] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle')
   const mozoTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -74,64 +107,52 @@ function MozoYMesa() {
         </button>
       )}
 
-      {mesaId && (
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
-          <span style={{
-            background: CM.orange, color: 'white',
-            padding: '6px 11px', borderRadius: 999,
-            fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 12,
-          }}>
-            Mesa {numeroMesa ?? ''}
-          </span>
-          {modoSesion === 'seguro' && codigoSesion && (
-            <span style={{
-              color: 'white',
-              padding: '6px 11px', borderRadius: 999,
-              fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 12,
-              border: '1.5px solid rgba(255,255,255,0.5)',
-            }}>
-              PIN {codigoSesion}
-            </span>
-          )}
-        </div>
-      )}
+      {mesaId && <MesaYCodigo />}
     </>
   )
 }
 
 interface MenuHeaderProps {
   nombre: string
+  /** El logo del restaurante (o el de su marca) ya resuelto; `null` si ninguno tiene: se muestra el de MenYU. */
+  logoUrl: string | null
   modo: ModoMenu
   /** Abre el menú lateral. */
   onAbrirMenu: () => void
 }
 
-/** La barra de arriba del menú: el botón del menú lateral, el nombre del restaurante y, en la mesa, "Mozo" y la mesa. */
-export function MenuHeader({ nombre, modo, onAbrirMenu }: MenuHeaderProps) {
+/**
+ * La barra de arriba del menú: el logo del restaurante (que es el botón del menú lateral), su nombre y, en la mesa,
+ * "Mozo" y la mesa. El nombre puede ocupar dos líneas.
+ */
+export function MenuHeader({ nombre, logoUrl, modo, onAbrirMenu }: MenuHeaderProps) {
   return (
     <header style={{
       background: CM.navy, padding: '12px 14px',
       display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0,
     }}>
+      {/* Se ve de 40 px y se toca como uno de 44 (el ::after) */}
       <button
         onClick={onAbrirMenu}
+        aria-label="Abrir el menú"
+        className="after:absolute after:-inset-0.5 after:content-['']"
         style={{
-          width: 38, height: 38, borderRadius: 10, flexShrink: 0,
-          background: `linear-gradient(135deg, ${CM.orange} 0%, #ff7a5e 100%)`,
-          border: 'none', cursor: 'pointer', position: 'relative',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontFamily: 'Montserrat,sans-serif', fontWeight: 800, fontSize: 14, color: 'white',
+          width: 40, height: 40, padding: 4, borderRadius: 10, flexShrink: 0, boxSizing: 'border-box',
+          background: 'white', border: 'none', cursor: 'pointer', position: 'relative',
           boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
         }}
       >
-        {iniciales(nombre)}
+        <ImagenLogo logoUrl={logoUrl} />
         <HamburgerBadge />
       </button>
 
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 14, color: 'white', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          {nombre}
-        </div>
+      <div style={{
+        flex: 1, minWidth: 0,
+        fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 14, lineHeight: 1.2, color: 'white',
+        overflowWrap: 'anywhere',
+        display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+      }}>
+        {nombre}
       </div>
 
       {modo === 'mesa' && <MozoYMesa />}
