@@ -759,14 +759,14 @@ One restaurant and its offers. It is what the restaurant screen of `web-cliente`
 
 | Param | Type |
 |---|---|
-| `id` | UUID of the restaurant |
+| `id` | Id of the restaurant: 1 to 64 letters, digits, `-` or `_`. Usually a UUID, but legacy ids such as `r-001` work too |
 
 **Responses**
 
 | Status | Description |
 |---|---|
 | 200 | The restaurant and its offers |
-| 404 | The restaurant does not exist, is not active, or its brand is not active. An `id` that is not shaped like a UUID also answers 404 |
+| 404 | The restaurant does not exist, is not active, or its brand is not active. An `id` that does not have that shape (other characters, or more than 64) also answers 404 without reaching the database |
 
 **Response body (shape)**
 

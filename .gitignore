@@ -45,3 +45,10 @@ apps/backend/prisma/migrations/*.sql.bak
 .claude/skills/
 .claude/settings.local.json
 .patches/
+
+# Archivos de agentes de IA (locales, no se versionan)
+/.agents/
+/AGENTS.md
+
+# Guías de prueba personales (no se versionan)
+/docs/guia-prueba-celulares.md

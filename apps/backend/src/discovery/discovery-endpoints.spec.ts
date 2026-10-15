@@ -146,12 +146,30 @@ describe('endpoints de Discovery', () => {
       expect(mockDiscovery.getRestaurante).toHaveBeenCalledWith(ID)
     })
 
+    // La base tiene restaurantes cuyo id no es un UUID (`r-001`): tienen que llegar al servicio como cualquier otro.
     it.each([
-      ['un texto cualquiera', 'abc'],
+      ['un id con forma de UUID', '020b3956-19b0-4388-b336-6be5f93834a8'],
+      ['un UUID con otra versión', '11111111-1111-1111-1111-111111111111'],
+      ['un id viejo que no es un UUID', 'r-001'],
+      ['un id con guiones bajos y mayúsculas', 'Burger_Lab-2'],
+      ['un id de un solo carácter', 'a'],
       ['un número', '123'],
-      ['un id con guiones pero sin forma de UUID', 'e2e-disc-r1'],
+      ['un id de 64 caracteres (el máximo)', 'a'.repeat(64)],
+    ])('%s: le llega al servicio tal cual', async (_descripcion, id) => {
+      const res = await restaurante(id)
+
+      expect(res.status).toBe(200)
+      expect(mockDiscovery.getRestaurante).toHaveBeenCalledWith(id)
+    })
+
+    it.each([
       ['un id con el carácter nulo (PostgreSQL no lo acepta)', 'ab%00c'],
       ['un intento de inyección SQL', encodeURIComponent("' OR 1=1 --")],
+      ['un id con espacios', encodeURIComponent('r 001')],
+      ['un id con una barra', 'a%2Fb'],
+      ['un id con un punto', 'a.b'],
+      ['un id con letras con acento', encodeURIComponent('ñandú')],
+      ['un id de 65 caracteres (uno más del máximo)', 'a'.repeat(65)],
     ])('%s: 404, igual que un restaurante que no existe, y no llega al servicio', async (_descripcion, id) => {
       const res = await restaurante(id)
 

@@ -1,6 +1,6 @@
 # Plan: logo y dirección, descuentos y Discovery de restaurantes
 
-**Estado:** en ejecución: `fix/endpoints-get-id`, `feat/logo-direccion` (Fases 1.0 y 1, PR #364), `feat/descuentos` (Fases 2, 3 y 4, PR #365) y la Fase 5 de `feat/discovery` (API pública, con los mockups; PR #366) ya están en `main`. En la rama `feat/discovery` están hechas las Fases 6 y 7 (Discovery como home, restaurante, ingreso a mesa, escáner, `/check-in`, carta en modo vista y el header con logo y menú lateral) y de la Fase 8 el seed, la documentación y la verificación contra el backend real. Falta el PR contra `main`, el QA en staging y en celulares reales (`docs/checklist-qa-staging.md`) y el tag de producción, que decide el equipo · **Actualizado:** 2026-10-14 · **Base:** `main` al 2026-10-13 (merge ae36522)
+**Estado:** en ejecución: `fix/endpoints-get-id`, `feat/logo-direccion` (Fases 1.0 y 1, PR #364), `feat/descuentos` (Fases 2, 3 y 4, PR #365) y `feat/discovery` (Fases 5 a 8, PRs #366 y #367) ya están en `main`; `main` está desplegado en staging. En producción solo está el hotfix v1.0.5, que sacó los endpoints `/auth/dev/*` (PRs #368 y #369): lo nuevo todavía no tiene tag. Falta el QA en staging y en celulares reales (`docs/checklist-qa-staging.md`), arreglar lo que apareció en el QA de staging (11.3), el tag v1.1.0 con todo lo nuevo (el equipo lo hace otro día) y, después de terminar todo lo del plan de Discovery, la consola de ROOT (11.2), que es la próxima tarea; de seguridad (11.1) se decidió no cambiar cuentas ni sesiones · **Actualizado:** 2026-10-15 · **Base:** `main` al 2026-10-13 (merge ae36522)
 **Equipo:** De Marcos, Ojeda, Strumia Carrara
 
 Este documento es la referencia del trabajo: qué se construye, qué decidimos, cómo se parte en ramas y fases y cómo se prueba cada una. Si una decisión cambia, se actualiza acá (sección 3) y se anota en la fase afectada.
@@ -17,6 +17,7 @@ Este documento es la referencia del trabajo: qué se construye, qué decidimos, 
 8. [Cómo probar en celular](#8-cómo-probar-en-celular)
 9. [Riesgos y notas operativas](#9-riesgos-y-notas-operativas)
 10. [Pendientes y su resolución](#10-pendientes-y-su-resolución)
+11. [Próximos pasos](#11-próximos-pasos)
 - [Apéndice A: permisos de ROOT en el código existente](#apéndice-a-permisos-de-root-en-el-código-existente)
 - [Apéndice B: backlog diferido](#apéndice-b-backlog-diferido)
 
@@ -197,7 +198,7 @@ Todo es aditivo y nullable:
 | `GET /menu/:restauranteId` | público | 2 y 7 | Fase 2: `precioDescuento`, `porcentajeDescuento`, `precioVigente` en cada ítem y `descuentos[]`. Fase 7: `restaurante.logoUrl` ya resuelto. |
 | `GET /discovery` | público | 5 | restaurantes y ofertas |
 | `GET /discovery/buscar?q=` | público | 5 | ofertas, restaurantes y restaurantes con platos, en el orden en que se muestran (D29) |
-| `GET /discovery/restaurantes/:id` | público | 5 | un restaurante activo con sus ofertas (hasta 30); 404 si no existe, no está activo o el id no es un UUID (D24) |
+| `GET /discovery/restaurantes/:id` | público | 5 | un restaurante activo con sus ofertas (hasta 30); 404 si no existe, no está activo o el id no tiene la forma de un id de restaurante (de 1 a 64 letras, números, `-` o `_`; no se exige UUID, ver 11.3) (D24) |
 | `POST /sessions/open` | público | 6 | `restauranteId` opcional junto con `tableCode` (D11) |
 
 Reglas de los endpoints públicos nuevos: `select` explícito (nunca devolver filas completas), solo restaurantes y marcas activos, solo ítems disponibles, límites duros y mínimo de 2 caracteres en la búsqueda.
@@ -506,7 +507,7 @@ Tamaños relativos (no son horas): Fase 0 S · fix S · 1.0 M · 1 M · 2 M · 3
     - Un restaurante aparece en un solo grupo: si coincide su nombre o el de su marca va en `restaurantes`; si no, y tiene algún plato disponible que coincide, en `restaurantesConPlatos`. Ese grupo no informa qué platos coincidieron ni cuántos (la consulta solo pregunta si existe alguno, con `EXISTS`): con muchos platos el resultado quedaría larguísimo y la pantalla no los muestra (D29).
     - Los grupos salen en el orden en que se muestran: ofertas, restaurantes y restaurantes con platos.
     - Restaurantes ordenados por nombre y ofertas por porcentaje mayor (desempate por nombre), con los topes de 50 y 30.
-    - `GET /discovery/restaurantes/:id`: un id sin forma de UUID (o con el carácter nulo) responde 404, igual que un restaurante que no existe, no está activo o tiene la marca inactiva. Trae hasta 30 ofertas de ese restaurante por porcentaje mayor.
+    - `GET /discovery/restaurantes/:id`: un id con otros caracteres (el nulo, comillas, espacios, barras…) o de más de 64 responde 404 (al principio se exigía un UUID, pero hay restaurantes con ids como `r-001`: ver 11.3), igual que un restaurante que no existe, no está activo o tiene la marca inactiva. Trae hasta 30 ofertas de ese restaurante por porcentaje mayor.
   - Tests: api 552 (22 suites), todos en verde, con `typecheck` limpio. Nuevos: `discovery.service.spec` (logo restaurante → marca → `null`, solo activos y disponibles, topes, `select` sin datos sensibles, los tres grupos, el restaurante por id, el SQL de cada consulta y el escape de comodines) y `discovery-endpoints.spec` (supertest con el `ValidationPipe` real: endpoints públicos, validación de `q` y de `:id`). Cada regla se verificó rompiéndola a propósito (45 mutaciones): los tests fallan.
   - Verificado con un script e2e local contra un backend temporal y la base local (no está en CI): 88 verificaciones con filas propias (acentos, restaurante inactivo, marca inactiva, plato no disponible y un token de Mercado Pago que no tiene que filtrarse). Las filas se borran al terminar y la base queda con los mismos conteos.
 
@@ -622,6 +623,7 @@ Implementación en commits, de a uno (varios archivos se tocan en más de un com
   - **Hallazgos (ya estaban antes de esta rama), arreglados el 2026-10-15:** web-cliente no mandaba el token de la cuenta en `POST /sessions/open`, así que quien inició sesión y entraba a una mesa quedaba como "Invitado" en la sesión del servidor; y la carta de un restaurante sin menú decía "No hay ítems en esta categoría". Los dos arreglos están en los dos puntos que siguen.
 - [x] **La mesa queda a nombre de la cuenta (2026-10-15):** `api.sessions.open` manda el token de la cuenta (`utils/tokenCuenta.ts`, que lee `menyu_access_token`) solo si es de un cliente y no venció; si no hay cuenta, el token venció o no es un token, no manda nada y la persona entra como invitada, sin error. El servidor ya lo soportaba (`resolveClienteId`, con tests de token válido, vencido e inválido) y no se tocó. Un token que parece vigente pero tiene la firma falsa sí se manda (el navegador no puede verificar la firma) y el servidor lo ignora: entra como invitada y nadie se hace pasar por la cuenta. **Qué cambia en el servidor** (medido contra el backend real, 23 verificaciones): la sesión (`sesion_mesa.cliente_id`) y el participante son la cuenta, el JWT de la mesa lleva el id de la cuenta y los ítems de los pedidos (`pedido_item.cliente_id`) quedan a su nombre. **Qué no cambia:** el nombre que ve el mozo (sale del "Elegir nombre" de cada persona, el `comensal`; el servidor no devuelve el nombre de la cuenta), "Mis pedidos" (lista todos los pedidos de la mesa, pida quien pida) ni la regla de "Cerrar sesión". **Dos efectos para tener presentes:** la misma cuenta desde dos dispositivos, en la misma mesa, es **una** persona (`cantidadPersonas`, que el mozo y el admin ven como "N pers." o "N clientes", cuenta 1 y no 2) y vuelve a la misma sesión; y si la persona cierra sesión con la mesa abierta (antes de pedir), la mesa sigue a nombre de esa cuenta hasta cerrarse. Tests: `tokenCuenta.spec` (15) y 6 casos nuevos de `api.spec`; 12 mutaciones detectadas.
 - [x] **Texto de la carta sin platos (2026-10-15):** un restaurante que no cargó ningún plato dice "Este restaurante todavía no cargó su carta" (antes, "No hay ítems en esta categoría"), en la carta y también en el menú de la mesa, que es la misma pieza (`SeccionesMenu`). Con una búsqueda o un filtro de dietas siguen los textos de siempre. Tests: `SeccionesMenu.spec` (8) y un caso en `CartaPage.spec` y otro en `ClienteMenuPage.spec`; 6 mutaciones detectadas. web-cliente pasa a 644 tests.
+- [x] **Chequeo de staging, solo lectura (2026-10-15)**, con `https://menyu-backend-staging.up.railway.app` y `https://menyu-cliente-staging.vercel.app`: 22 verificaciones en verde y 1 falla (ver 11.3). En verde: Discovery, la búsqueda sin acentos (`unaccent` funciona), el menú con dirección y logo, el CORS del web de staging, ninguna ruta `/dev` (el hotfix también llegó a staging) y las rutas nuevas; el web responde en `/`, `/restaurante/:id/carta` y `/check-in`, y su bundle apunta al backend de staging e incluye las pantallas nuevas. Staging tiene 6 restaurantes, 0 ofertas y 0 logos: faltan datos para el QA.
 - [ ] **QA en staging y en celulares reales:** `docs/checklist-qa-staging.md` reúne lo que solo se puede probar ahí (la extensión `unaccent` en Supabase, el Storage de logos, la cámara de verdad en Android y en iPhone, el teclado abierto y el responsive en pantallas reales). Se corre después de mergear (sección 8, camino 5).
 - [ ] Recién ahí, el tag de producción (lo decide el equipo).
 
@@ -700,9 +702,73 @@ Todos los pendientes se resolvieron el 2026-10-09 con la opción por defecto. P5
 
 ---
 
+## 11. Próximos pasos
+
+Lo que sigue después de `feat/discovery` (mergeada en `main` el 2026-10-15, PR #367). El QA en staging y en celulares reales y el tag de producción con todo lo nuevo siguen en la Fase 8 (`docs/checklist-qa-staging.md`). **Orden acordado (2026-10-15):** primero terminar todo lo de Discovery (11.3, el QA en staging y en celulares reales y el tag v1.1.0, que el equipo hace otro día) y después la consola de ROOT (11.2).
+
+### 11.1 Seguridad de producción: los endpoints `/auth/dev/*` (hotfix v1.0.5)
+
+**Qué se encontró (2026-10-15).** Leyendo el Swagger público (`/docs-json`) del backend de producción (`menyu-backend-production.up.railway.app`; la URL de la documentación, `menyuapi-production…`, ya no existe) seguían `POST /api/auth/dev/seed`, `/admin`, `/mozo` y `/root`. No tenían guard ni chequeo de entorno: creaban datos y usuarios, incluso un ROOT con contraseña conocida y sus tokens, para quien los llamara. Estaban en todos los tags (v1.0.0 a v1.0.4) y en `main`, y la documentación del repo, que es público, lista las credenciales. Producción corría código de v1.0.4 (sus 107 rutas eran exactamente las de ese tag). Solo se leyó la especificación: no se llamó a ninguna de las rutas.
+
+**Qué se hizo.**
+- **Hotfix desde v1.0.4:** rama `hotfix/quitar-endpoints-dev` (PR #368) y tag **v1.0.5**, desplegado a producción el 2026-10-15 (workflow `Deploy — Production` en verde). Solo saca los endpoints: sin migraciones ni nada de lo nuevo. Con v1.0.4 más el cambio: 128 tests del backend, typecheck y build en verde.
+- **El mismo arreglo en `main`** (`fix/quitar-endpoints-dev`, PR #369): se sacaron del controller las 4 rutas y del service sus 4 métodos, y se sumó `sin-endpoints-dev.spec.ts` (11 tests), que falla si alguien vuelve a declarar una ruta `dev` en cualquier controller o un método `dev*` en `AuthService`. `v1.0.5` quedó en la historia de `main`.
+- **Verificado en producción después del deploy** (solo lectura): el Swagger pasó de 75 a 71 rutas y ninguna es `/dev`.
+
+**Qué quedó abierto.** Sacar los endpoints no revoca ni borra lo que ya se creó con ellos:
+- **El ROOT de producción y otras cuentas conocidas: se decidió no cambiarlas (2026-10-15).** Queda asumido que `root@menyu.com` (`root1234`), `admin@test.com` y `mozo@test.com` (`password123`) pueden existir en la base de producción con esas contraseñas, que están en la documentación de un repo público: ROOT entra con el login normal. Mirar qué cuentas hay (un SELECT sobre `admin` y `mozo`) no cambia nada y sigue disponible.
+- **Sesiones de admin: se decidió no rotar `JWT_SECRET` ni revocar sesiones (2026-10-15).** Quien ya haya conseguido tokens de ROOT con los endpoints viejos los conserva: los access tokens duran 8 horas y los refresh tokens, 7 días, y cada uso los renueva. La alternativa, por si cambia la decisión, es `update refresh_token set revoked_at = now() where revoked_at is null and user_tipo = 'admin';` (los admins vuelven a iniciar sesión).
+- [ ] **Logs de Railway:** buscar `POST /api/auth/dev/` para saber si alguien los usó.
+- [ ] **Staging:** tuvo los mismos endpoints hasta el deploy del PR #369. Revisar igual sus cuentas.
+- [ ] **Swagger (`/docs`) público en producción:** muestra toda la API a cualquiera. Apagarlo con una variable de entorno (por ejemplo `ENABLE_DOCS`) es un cambio chico.
+- [ ] **Base de producción fuera de sincronía con el código.** Tiene aplicada `20260709120000_change_default_nombre_seccion_recomendados` (se aplicó el 2026-07-09 desde una máquina de desarrollo, minutos antes del commit que la agrega) y las columnas `item_menu.recomendado_en` y `restaurante.nombre_seccion_recomendados`, que el código de v1.0.4 ignora. No bloquea: `prisma migrate deploy` de v1.0.4 y de `main` corre bien contra un historial así (se probó en una base local, también con la fila fallida y revertida de `20260515000000`). Falta confirmar que ningún `.env` del equipo apunte hoy a la base de producción.
+- [ ] **Antes del tag v1.1.0** (el que lleve todo lo de `main`; el equipo lo hace otro día): backup de la base de producción y ensayo del `migrate deploy` con una copia. Llegan 13 migraciones y una es irreversible (`eliminar_pago_por_comensal`).
+- [x] **`QR_BASE_URL`:** puesta en staging por el equipo (2026-10-15) y documentada en `apps/backend/.env.example`. Sin ella el QR lleva al web-cliente de producción (`https://menyu-cliente.vercel.app`, el valor por defecto, que es el correcto en producción). Falta mirar, al escanear, que el link del QR de staging sea el de staging.
+- [x] **Documentación con la URL vieja** del backend (`menyuapi-production…`): corregida en `Documentacion/` (`sprint8-resumen.md` y `sesion-pedidos-kanban-flujo-completo.md`).
+
+### 11.2 Consola de ROOT y permisos de ROOT
+
+**La regla** (sección 2.1, D16). ROOT hace administración general: **solo crea y elimina marcas, restaurantes y usuarios OWNER y GERENTE**. No toma decisiones sobre marcas ni restaurantes y no ve sus datos privados (menú y precios, mesas con QR y PIN, mozos, pedidos, reportes ni caja).
+
+**Lo que falta.** Hoy no se cumple en el código viejo, que este plan no tocó (Apéndice A):
+1. **Una interfaz propia para ROOT.** No hay pantalla para crear ni eliminar marcas, restaurantes ni cuentas (solo API), y ROOT entra a web-admin con las pantallas de OWNER y GERENTE. La consola mínima: listar, crear y eliminar marcas, sus restaurantes y los usuarios OWNER y GERENTE (con su marca o sus restaurantes asignados). Decisión abierta: rutas `/root/*` dentro de web-admin con un `RoleGuard` solo para ROOT (lo más barato: ROOT ya inicia sesión ahí) o una cuarta app.
+2. **Sacarle a ROOT lo que sobra en el backend.** Unos 35 `@Roles(…ROOT…)` en 11 controllers y unas 15 comparaciones `user.rol === 'ROOT'` en services y helpers (`assert-staff-access.ts`). Conviene centralizar el chequeo de acceso en un solo servicio. Además `POST /admins` solo crea GERENTE y, cuando lo usa ROOT, sin marca: tiene que recibir `rol` y `marcaId`. Decisión pendiente (Apéndice A): `PATCH /admins/:id` cambia hoy el email y la contraseña de cualquier admin, OWNER incluido; dejar crear y borrar y sacar el cambio de credenciales ajenas.
+3. **Sacarle a ROOT lo que sobra en las apps.** `isOwner = OWNER || ROOT` y `canEdit = GERENTE || ROOT` en unas 6 pantallas de web-admin, los `RoleGuard` de `App.tsx`, el menú de ROOT (`NAV_BY_ROL['ROOT']`) y el campo de restaurante que ROOT tipea en web-staff (`SelectorPage`).
+4. **Tests.** Se invierten los specs de lo viejo que prueban que ROOT puede (`mesas`, `marca`, `users`…, unas 40 menciones en 8 specs; los del código nuevo, como `descuento-endpoints`, `logo-endpoints` y `assert-owner-access`, ya prueban ROOT → 403) y se suma un "ROOT → 403" por cada endpoint que se cierre.
+
+**Estimación** (orden de magnitud, una persona; no son las horas del plan):
+
+| Parte | Estimación |
+|---|---|
+| Backend: sacar los permisos de más, centralizar el acceso, `POST /admins` con rol y marca, y los tests | 1,5 a 2 días |
+| web-admin y web-staff: sacar a ROOT de las pantallas de OWNER y GERENTE | 1 a 1,5 días |
+| Verificación contra el backend real y QA de lo anterior | 0,5 a 1 día |
+| **Subtotal: sacarle los permisos de más** | **3 a 4 días** |
+| Consola mínima de ROOT (marcas, restaurantes, OWNER y GERENTE: lista, alta y baja) con su responsive y sus tests | 3 a 4 días |
+| **Total con la consola** | **6 a 8 días** |
+
+**Riesgos que se encontraron.**
+- **Sacarle los permisos sin la consola deja a ROOT sin nada que hacer** en web-admin: las dos cosas van juntas, o ROOT queda sin acceso hasta que exista la consola.
+- **ROOT deja de servir para soporte.** Hoy entra a cualquier marca; después, la ayuda pasa por el OWNER o por la base.
+- **Cada marca de producción tiene que tener un OWNER antes del cambio**, si no nadie podría administrar su menú. Los que falten se crean con la consola, no con endpoints de desarrollo.
+- **Es un cambio incompatible** para quien use ROOT hoy (seeds, scripts de prueba, `root@menyu.com` en `datos-de-prueba-local.md`): se prueba en staging y se despliega con aviso y tag propio.
+- **No es un agujero explotable desde afuera** (hace falta una cuenta ROOT), pero un ROOT comprometido da acceso total: por eso 11.1 va primero.
+- **Hay deuda hermana** (Apéndice B): endpoints que no validan pertenencia entre marcas. Conviene revisarlos en la misma pasada, con el mismo servicio de acceso.
+
+**Decisión (2026-10-15):** la consola de ROOT es **la próxima tarea después de terminar todo lo del plan de Discovery** (11.3, el QA en staging y en celulares reales y el tag v1.1.0). Antes no se toca. De 11.1 solo quedan sin cambios las cuentas y las sesiones de admin, que se decidió no tocar; ahí el riesgo de un ROOT comprometido sigue siendo el de arriba.
+
+### 11.3 Hallazgos del QA en staging (antes del tag v1.1.0)
+
+- [x] **Bug: los restaurantes con un id que no es UUID daban 404 en su pantalla (arreglado el 2026-10-15).** `GET /api/discovery/restaurantes/:id` validaba el id con `ParseUUIDPipe` (D24: un id sin forma de UUID es un 404), pero la base tiene restaurantes con ids `r-001`, `r-002` y `r-003` (los tres "BurgerLab"), **en staging y en producción**: aparecían en el home, pero al tocarlos la pantalla decía "No encontramos este restaurante" y "Ingresar a una mesa" tampoco andaba (carga el mismo endpoint). La carta sí andaba (`/menu/:id` no valida) y el QR de la mesa también. En producción eran 3 de unos 15 restaurantes. **Arreglo:** `IdRestaurantePipe` valida solo la forma del id (de 1 a 64 caracteres `[A-Za-z0-9_-]`) y sigue respondiendo 404 al carácter nulo, a las comillas, los espacios, las barras y los textos larguísimos, que era el motivo del pipe. Tests: `id-restaurante.pipe.spec` (25) y los casos nuevos de `discovery-endpoints.spec` (ids válidos que llegan al servicio e inválidos que dan 404); backend 624 tests en verde y 17 mutaciones detectadas. Probado contra el backend real con un restaurante `r-001` temporal (14 verificaciones, base local sin cambios). **Falta probarlo con `r-001` en staging después del deploy.** El seed local usa UUID y por eso no apareció antes.
+- [ ] **Otras validaciones `@IsUUID()` con restaurantes de id viejo.** Los DTO de alta de ítems, categorías e ingredientes (`CreateItemDto`, `CreateCategoriaDto` y `CreateIngredienteDto`) y el de clasificaciones validan `restauranteId` con `@IsUUID()`: para los restaurantes `r-001`, `r-002` y `r-003` esas altas darían 400, así que sus administradores probablemente no pueden crear ítems, categorías ni ingredientes desde web-admin. No se probó ni se tocó. Hay que decidir si esos tres restaurantes pasan a tener un UUID (hay que migrar también sus claves foráneas) o si se relajan esas validaciones como la de Discovery.
+- [ ] **Datos de staging para el QA** (`docs/checklist-qa-staging.md`, sección 0): hoy hay 6 restaurantes, 0 ofertas y 0 logos. Cargar desde web-admin un logo propio, uno heredado de la marca y un restaurante sin ninguno, dos platos en descuento, un restaurante con el menú vacío y uno en modo seguro.
+- [ ] **Seguir con el checklist de QA en staging y la pasada en celulares reales** una vez cargados los datos.
+
+---
+
 ## Apéndice A: permisos de ROOT en el código existente
 
-Relevado el 2026-10-06 y re-verificado parcialmente el 2026-10-08. **No se cambia nada en este plan**: es la lista para decidir qué se hace con la regla de 2.1. El módulo de pagos se reescribió después del relevamiento y hay que re-revisarlo (Mercado Pago lo informa el equipo por su cuenta).
+Relevado el 2026-10-06 y re-verificado parcialmente el 2026-10-08. **No se cambia nada en este plan**: es la lista para decidir qué se hace con la regla de 2.1. El seguimiento (la consola de ROOT y sacarle lo que sobra) está en la sección 11.2. El módulo de pagos se reescribió después del relevamiento y hay que re-revisarlo (Mercado Pago lo informa el equipo por su cuenta).
 
 Hoy `common/assert-staff-access.ts` centraliza el chequeo para sesiones y pagos. El resto (items, categorías, ingredientes, clasificaciones, mozos, mesas, pedidos, restaurante y admin-restaurante) tiene su propia copia con `if (user.rol === 'ROOT') return`. Si se decide excluir a ROOT, conviene centralizar todo en un solo servicio de acceso.
 
@@ -731,10 +797,11 @@ Documentación que lo describe como acceso libre: `Documentacion/modulo-menu.md`
 
 ## Apéndice B: backlog diferido
 
-- Los endpoints `/auth/dev/*` no tienen guards: crean admins con el rol que se pida y devuelven tokens de ROOT. Confirmar que no están en el build de producción y eliminarlos antes de taguear.
 - Varios endpoints no validan pertenencia entre marcas (reportes, `GET /pedidos`, `GET /pedidos/auditoria`, edición de pedidos, alta de mesas, `GET /waiter-calls`): un OWNER o GERENTE de otra marca podría leer u operar otro restaurante.
 - `PedidosService.confirmar` resta el precio extra en `QUITAR` y los otros dos cálculos de cobro no. `POST /pedidos` no parece usarse desde web-cliente (usa `/orders`).
 - `Documentacion/Doc_DB.md` describe `item_sucursal`, que ya no existe.
 - Responsive de las pantallas existentes de admin y staff que este plan no toca.
 - Inputs existentes con `font-size` menor a 16px (zoom en iOS al enfocar).
 - Peso de `favicon.png` (4,9 MB por app).
+- web-admin, menú lateral colapsado: el botón de expandir se monta sobre el logo (ya pasaba con el cuadro naranja anterior; con el tenedor real se nota más). Falta decidir si el botón se mueve (por ejemplo, debajo del logo) o si se corre el logo.
+- web-cliente: el saludo "¡Hola, X!" del header y del menú lateral sale del token guardado y no mira si venció (ni `AppHeader` ni `MenuView.leerUsuario` revisan `exp`). Con el token vencido sigue saludando y ofreciendo "Cerrar sesión", aunque el servidor ya trata a la persona como invitada (desde el 2026-10-15 `POST /sessions/open` no manda un token vencido). Hoy web-cliente guarda el refresh token pero no lo usa. Falta decidir qué pasa cuando el token venció: pedir que inicie sesión de nuevo, renovarlo con el refresh token o mostrarla como invitada.
