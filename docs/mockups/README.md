@@ -23,7 +23,7 @@ El buscador del home funciona con los datos de ejemplo (ignora acentos y mayúsc
 | `mesa.html` | Ingreso a una mesa. `?id=` igual que arriba; `?estado=` `pin`, `pin-escrito`, `abriendo`, `error-pin`, `error-qr`, `pin-desde-camara`, `pin-desde-qr`, `cargando`, `error`. |
 | `escaner.html` | El escáner de QR (cámara). `?origen=` `mesa` (con `?id=`) o `home`; `?estado=` `esperando`, `escaneando`, `denegado`, `sin-camara`, `sin-soporte`. |
 | `checkin.html` | `/check-in`, adonde llega la cámara del celular con el QR de la mesa (es la tarjeta azul del modo seguro). `?estado=` `abriendo`, `error-qr`, `error-red`; `?restaurante=no` para un link sin restaurante; `?id=` el restaurante del link. |
-| `menu-header.html` | **Fase 7, para aprobar:** el header del menú (mesa y carta) con el logo del restaurante como botón del menú lateral. `?modo=` `mesa` o `carta`; `?vista=` `logos` (los distintos logos), `angosto` (la mesa con "Mozo", mesa y código en celulares de 320 y 360 px; con la propuesta de la campana sola) o `pantalla` (el header en contexto). |
+| `menu-header.html` | **Fase 7, para aprobar:** el header del menú (mesa y carta) con el logo del restaurante como botón del menú lateral. `?modo=` `mesa` o `carta`; `?vista=` `logos` (los distintos logos), `codigo` (la mesa con el código: "Mesa N" y "PIN xxx" apilados), `lateral` (el menú lateral con el restaurante arriba y su animación) o `pantalla` (el header en contexto). |
 | `mockups.css` | Estilos. Los colores son los de `apps/web-cliente/src/theme.ts`; las medidas son las de `EntradaPage`, `IngresoManualPage`, `AppHeader`, `ClienteMenuPage` e `ItemCard`. |
 | `mockups.js` | Datos de ejemplo (todo inventado) y piezas de HTML compartidas. |
 

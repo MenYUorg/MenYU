@@ -213,15 +213,19 @@
         ] },
         { nombre: 'Header del menú (Fase 7, para aprobar)', items: [
           { id: 'menu-carta-logos', titulo: 'Carta · los logos', src: MENU_HEADER + '?modo=carta&vista=logos', nuevo: true,
-            nota: '<b>Para aprobar.</b> El botón de las iniciales, el que abre el menú lateral, pasa a ser <b>el logo del restaurante</b> (propio; si no tiene, el de su marca; si tampoco, el de MenYU): un cuadro blanco de 40 px (se toca como uno de 44) con el logo entero, sin recortarlo ni deformarlo, y el indicador de las tres rayitas de siempre. Se ven un logo cuadrado, uno redondo, uno muy ancho, uno muy alto, uno de fondo oscuro, el de la marca, el de MenYU (la U con el tenedor) y, como otra opción, el logo completo de MenYU. El nombre puede ocupar dos líneas. En la carta no hay "Mozo" ni mesa.' },
+            nota: '<b>Para aprobar.</b> El botón de las iniciales, el que abre el menú lateral, pasa a ser <b>el logo del restaurante</b> (propio; si no tiene, el de su marca; si tampoco, el de MenYU): un cuadro blanco de 40 px (se toca como uno de 44) con el logo entero, sin recortarlo ni deformarlo, y el indicador de las tres rayitas de siempre. Se ven un logo cuadrado, uno redondo, uno muy ancho, uno muy alto, uno de fondo oscuro, el de la marca y el de MenYU (la U con el tenedor). El nombre puede ocupar dos líneas. En la carta no hay "Mozo" ni mesa.' },
           { id: 'menu-mesa-logos', titulo: 'Mesa · los logos', src: MENU_HEADER + '?modo=mesa&vista=logos', nuevo: true,
             nota: 'Lo mismo en el menú de la mesa, con "Mozo" y el número de la mesa (y el código si está en modo seguro). Arriba, <b>cómo es hoy</b> (las iniciales) para comparar.' },
-          { id: 'menu-angosto', titulo: 'Mesa en celular angosto', src: MENU_HEADER + '?modo=mesa&vista=angosto', nuevo: true,
-            nota: 'Con "Mozo", la mesa y el código, <b>el nombre casi no entra en 320 o 360 px</b> (hoy ya se corta con "La P…"). <b>Propuesta</b> para menos de 400 px: "Mozo" queda como la campana sola (área de toque de 44 px, nombre accesible "Llamar al mozo") y el nombre usa dos líneas. Probalo en <b>320</b>, <b>360</b> y <b>390</b>.' },
+          { id: 'menu-codigo', titulo: 'Mesa con código', src: MENU_HEADER + '?modo=mesa&vista=codigo', nuevo: true,
+            nota: 'Con código (modo seguro), <b>"Mesa N" y "PIN xxx" van en sus mismos pills, uno arriba del otro</b>, y el nombre del restaurante gana el lugar del segundo pill (hoy, a 360 px, se corta con "La P…"). <b>"Mozo" no se toca.</b> Sin código, solo el pill de la mesa, como hoy. Probalo en <b>320</b>, <b>360</b> y <b>390</b>.' },
+          { id: 'menu-lateral-mesa', titulo: 'Menú lateral · mesa', src: MENU_HEADER + '?modo=mesa&vista=lateral', nuevo: true,
+            nota: 'Arriba el restaurante con su logo, su nombre y su dirección; al abrir, <b>el logo se agranda junto con el nombre</b> (animación corta; se apaga con "reducir movimiento"). Con cuenta, el saludo con el nombre completo reemplaza a "Iniciar sesión" y "Crear cuenta", y <b>"Cerrar sesión" solo aparece si la mesa todavía no pidió nada</b>. Las filas de la mesa quedan como hoy. Tocá "Ver la animación de abrir".' },
+          { id: 'menu-lateral-carta', titulo: 'Menú lateral · carta', src: MENU_HEADER + '?modo=carta&vista=lateral', nuevo: true,
+            nota: 'Sin estar en una mesa: iniciar sesión o crear una cuenta (vuelven a la carta), <b>Ingresar a una mesa</b> y <b>Volver al inicio</b> de MenYU. Con cuenta, el saludo y "Cerrar sesión" (salvo que tenga una mesa abierta que ya pidió algo).' },
           { id: 'menu-pantalla-carta', titulo: 'Pantalla de la carta', src: MENU_HEADER + '?modo=carta&vista=pantalla', nuevo: true,
             nota: 'El header en contexto, con el buscador, los chips y las tarjetas. En la carta las tarjetas no llevan el "+" ni se tocan.' },
           { id: 'menu-pantalla-mesa', titulo: 'Pantalla de la mesa', src: MENU_HEADER + '?modo=mesa&vista=pantalla', nuevo: true,
-            nota: 'Igual, en la mesa: con "Mozo" (la campana sola en celular), la mesa con su código, el "+" de las tarjetas y el botón del carrito.' },
+            nota: 'Igual, en la mesa: con "Mozo", la mesa y su código apilados, el "+" de las tarjetas y el botón del carrito.' },
         ] },
       ]
 
