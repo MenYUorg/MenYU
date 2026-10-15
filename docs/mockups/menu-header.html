@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Header del menú · mockup</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="mockups.css" />
+</head>
+<body>
+  <div id="raiz"></div>
+
+  <script src="mockups.js"></script>
+  <script>
+    (function () {
+      var p = new URLSearchParams(location.search);
+      var modo = p.get('modo') === 'carta' ? 'carta' : 'mesa';
+      var vista = ['logos', 'codigo', 'lateral', 'pantalla'].indexOf(p.get('vista')) !== -1 ? p.get('vista') : 'logos';
+      var raiz = document.getElementById('raiz');
+
+      function especimen(titulo, html) {
+        return '<div class="especimen"><small>' + MK.esc(titulo) + '</small>' + html + '</div>';
+      }
+
+      var LARGO = 'El Rincón de los Abuelos — Parrilla, pastas y cocina casera de autor';
+      var DIR_LARGA = 'Av. Gral. Paz esquina Av. Constituyentes, Torre del Parque, Local 14, Villa Urquiza, Ciudad Autónoma de Buenos Aires';
+      var PARRILLA = 'Av. Alicia Moreau de Justo 1150, Puerto Madero';
+
+      // ── Los distintos logos en el header ─────────────────────────────────────
+      if (vista === 'logos') {
+        var pin = modo === 'mesa' ? '731' : null;
+        var CASOS = [
+          ['Hoy (para comparar): las iniciales del restaurante', { hoy: true, nombre: 'La Parrilla del Puerto' }],
+          ['Logo propio del restaurante · cuadrado', { logo: 'parrilla', nombre: 'La Parrilla del Puerto', pin: pin }],
+          ['Logo propio · redondo', { logo: 'vito', nombre: 'Pizzería Don Vito' }],
+          ['Logo propio · muy ancho (4 a 1): entra entero, pero se ve chico', { logo: 'almendra', nombre: 'Café Almendra' }],
+          ['Logo propio · muy alto (1 a 3): entra entero', { logo: 'kaori', nombre: 'Sushi Kaori' }],
+          ['Logo propio · de fondo oscuro', { logo: 'rincon', nombre: 'El Rincón de los Abuelos' }],
+          ['Sin logo propio: usa el de su marca', { logo: 'burger', nombre: 'Burger Lab Palermo' }],
+          ['Sin logo de restaurante ni de marca: el de MenYU (la U con el tenedor)', { menyu: 'u', nombre: 'Heladería Fiore' }],
+          ['Nombre largo: hasta dos líneas y, si todavía no entra, se corta con "…" en la segunda', { logo: 'rincon', nombre: LARGO }],
+          ['Nombre sin espacios: se parte en vez de romper el header', { menyu: 'u', nombre: 'Superlargonombredelrestauranteparaprobarelcortedepalabras' }],
+        ];
+        raiz.innerHTML = '<main class="muestras-header">' +
+          '<h1>Header del menú · ' + (modo === 'mesa' ? 'en la mesa' : 'en la carta') + '</h1>' +
+          '<p>El botón de las iniciales (el que abre el menú lateral) pasa a ser <b>el logo del restaurante</b>: logo propio, si no tiene el de su marca y, si tampoco, el de MenYU (la U con el tenedor). Es el mismo botón: abre el menú lateral y conserva el indicador de las tres rayitas. El logo va en un cuadro blanco de 40 px (se toca como uno de 44) y siempre entra entero, sin recortarse ni deformarse. El nombre puede ocupar dos líneas.' +
+          (modo === 'mesa' ? ' Acá se ven también "Mozo" y la mesa (con el código si la mesa está en modo seguro), que solo existen en la mesa.' : ' En la carta no hay "Mozo" ni mesa: solo el logo y el nombre.') + '</p>' +
+          CASOS.map(function (c) { return especimen(c[0], MK.menuHeader(Object.assign({ modo: modo }, c[1]))); }).join('') +
+          '<p class="mh-nota"><b>Un logo blanco o muy claro sobre transparente</b> no se vería sobre el cuadro blanco: es la misma regla que en Discovery y en la pantalla del restaurante (se suben logos pensados para fondo claro). <b>Los muy anchos</b> se ven chicos en un cuadro de 40 px; conviene subir logos cuadrados.</p>' +
+          '</main>';
+      }
+
+      // ── La mesa con código: "Mesa N" y "PIN xxx" apilados ────────────────────
+      if (vista === 'codigo') {
+        raiz.innerHTML = '<main class="muestras-header">' +
+          '<h1>Header de la mesa con código</h1>' +
+          '<p>Cuando la mesa tiene código (modo seguro), <b>"Mesa N" y "PIN xxx" van en sus mismos pills, uno arriba del otro</b>: así el nombre del restaurante gana el lugar que hoy ocupa el segundo pill (hoy, a 360 px, se corta con "La P…"). <b>"Mozo" no se toca</b>: sigue con su texto y su tamaño. Si la mesa no tiene código, queda solo el pill de la mesa, como hoy. Los pills apilados son más bajos para que el header no crezca. Probalo en <b>320</b>, <b>360</b> y <b>390</b>.</p>' +
+          especimen('Mesa con código · "Mesa 5" y "PIN 731" apilados', MK.menuHeader({ modo: 'mesa', logo: 'parrilla', nombre: 'La Parrilla del Puerto', pin: '731' })) +
+          especimen('Mesa sin código · solo "Mesa 5", como hoy', MK.menuHeader({ modo: 'mesa', logo: 'vito', nombre: 'Pizzería Don Vito' })) +
+          especimen('Nombre largo, con código', MK.menuHeader({ modo: 'mesa', logo: 'rincon', nombre: LARGO, pin: '731' })) +
+          especimen('Nombre largo, sin código', MK.menuHeader({ modo: 'mesa', logo: 'rincon', nombre: LARGO })) +
+          especimen('Sin logo (MenYU), con código', MK.menuHeader({ modo: 'mesa', menyu: 'u', nombre: 'Heladería Fiore', pin: '731' })) +
+          '</main>';
+      }
+
+      // ── El menú lateral ──────────────────────────────────────────────────────
+      if (vista === 'lateral') {
+        var ANA = { nombre: 'Ana Gómez de la Fuente', email: 'ana@mail.com' };
+        var CASOS_L = modo === 'mesa' ? [
+          ['Invitado en la mesa', { modo: 'mesa', logo: 'parrilla', nombre: 'La Parrilla del Puerto', direccion: PARRILLA, comensal: 'Lucía' }],
+          ['Con cuenta · la mesa todavía no pidió nada: saludo con el nombre completo y "Cerrar sesión"', { modo: 'mesa', logo: 'parrilla', nombre: 'La Parrilla del Puerto', direccion: PARRILLA, usuario: ANA, puedeCerrar: true }],
+          ['Con cuenta · la mesa ya pidió algo: el saludo sigue, "Cerrar sesión" no se muestra', { modo: 'mesa', logo: 'parrilla', nombre: 'La Parrilla del Puerto', direccion: PARRILLA, usuario: ANA, puedeCerrar: false }],
+          ['Sin logo (MenYU) y sin dirección cargada: no se muestra una línea vacía', { modo: 'mesa', menyu: true, nombre: 'Heladería Fiore', direccion: null, comensal: 'Lucía' }],
+          ['Nombre y dirección largos: se muestran completos y se parten', { modo: 'mesa', logo: 'rincon', nombre: LARGO, direccion: DIR_LARGA, comensal: 'Lucía' }],
+        ] : [
+          ['Invitado en la carta: iniciar sesión y crear cuenta (vuelven a la carta), entrar a una mesa o volver al inicio', { modo: 'carta', logo: 'parrilla', nombre: 'La Parrilla del Puerto', direccion: PARRILLA }],
+          ['Con cuenta, sin estar en una mesa: saludo con el nombre completo y "Cerrar sesión"', { modo: 'carta', logo: 'parrilla', nombre: 'La Parrilla del Puerto', direccion: PARRILLA, usuario: ANA, puedeCerrar: true }],
+          ['Con cuenta y una mesa abierta que ya pidió algo: sin "Cerrar sesión"', { modo: 'carta', logo: 'parrilla', nombre: 'La Parrilla del Puerto', direccion: PARRILLA, usuario: ANA, puedeCerrar: false }],
+          ['Sin logo (MenYU) y sin dirección cargada', { modo: 'carta', menyu: true, nombre: 'Heladería Fiore', direccion: null }],
+        ];
+        raiz.innerHTML = '<main class="muestras-header">' +
+          '<h1>Menú lateral · ' + (modo === 'mesa' ? 'en la mesa' : 'en la carta') + '</h1>' +
+          '<p>Arriba va <b>el restaurante</b>: su logo grande, su nombre y <b>su dirección</b>, bien clara. <b>Al abrir el menú el logo se agranda junto con el nombre</b> (una animación corta y suave, de 0,3 segundos; con "reducir movimiento" activado en el sistema no hay animación). Probala con el botón de abajo. Después va la cuenta: <b>sin cuenta</b>, iniciar sesión o crear una; <b>con cuenta</b>, esos botones se reemplazan por el saludo con el nombre completo, y <b>"Cerrar sesión" solo si no está en una mesa o si su mesa todavía no pidió nada</b> (un pedido anulado no cuenta). ' +
+          (modo === 'mesa' ? 'Las filas de la mesa quedan como hoy.' : 'Las filas de la carta son entrar a una mesa del restaurante o volver al inicio de MenYU.') + '</p>' +
+          '<button class="dr-repetir" type="button" id="repetir">▶ Ver la animación de abrir</button>' +
+          CASOS_L.map(function (c) { return especimen(c[0], MK.menuLateral(c[1])); }).join('') +
+          '</main>';
+        document.getElementById('repetir').addEventListener('click', function () {
+          var paneles = document.querySelectorAll('.dr');
+          paneles.forEach(function (d) { d.classList.add('cerrado'); });
+          setTimeout(function () { paneles.forEach(function (d) { d.classList.remove('cerrado'); }); }, 350);
+        });
+      }
+
+      // ── La pantalla entera, para ver el header en contexto ───────────────────
+      if (vista === 'pantalla') {
+        var ofertas = MK.ofertasDe('parrilla', MK.todasLasOfertas());
+        var header = MK.menuHeader({ modo: modo, logo: 'parrilla', nombre: 'La Parrilla del Puerto', pin: modo === 'mesa' ? '731' : null });
+        raiz.innerHTML = '<div class="mh-pantalla ' + modo + '">' + header +
+          '<div class="mh-busca"><div class="campo">🔍 Buscar platos...</div><div class="dietas">🥗 Dietas <span style="font-size:9px;opacity:.55">▾</span></div></div>' +
+          '<div class="mh-chips"><div><span class="activo">Descuentos</span><span>RECOMENDACIONES</span><span>Principales</span><span>Postres</span></div></div>' +
+          '<div class="mh-contenido"><section class="seccion">' + MK.tituloSeccion('Descuentos') +
+          '<div class="mh-grilla">' + ofertas.map(function (o) { return MK.cardOferta(o, { sinRestaurante: true, fija: true }); }).join('') + '</div></section></div>' +
+          (modo === 'mesa' ? '<div class="mh-fab">🛒<b>2</b></div>' : '') + '</div>';
+      }
+    })();
+  </script>
+</body>
+</html>

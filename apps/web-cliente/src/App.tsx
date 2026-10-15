@@ -12,9 +12,11 @@ import { PagarPage } from './pages/pago/PagarPage'
 import { EtiquetarPedidosPage } from './pages/etiquetado/EtiquetarPedidosPage'
 import { CantidadComensalesPage } from './pages/dividir/CantidadComensalesPage'
 import { MensajePage } from './pages/dividir/MensajePage'
-import { EntradaPage } from './pages/entrada/EntradaPage'
+import { DiscoveryPage } from './pages/discovery/DiscoveryPage'
 import { ElegirNombrePage } from './pages/entrada/ElegirNombrePage'
-import { IngresoManualPage } from './pages/entrada/IngresoManualPage'
+import { RestaurantePage } from './pages/restaurante/RestaurantePage'
+import { IngresoMesaPage } from './pages/restaurante/IngresoMesaPage'
+import { CartaPage } from './pages/carta/CartaPage'
 import { AuthPage } from './pages/auth/AuthPage'
 import CheckInRedirectPage from './pages/entrada/CheckInRedirectPage'
 import { SesionRequiredRoute } from './SesionRequiredRoute'
@@ -152,8 +154,13 @@ export function App() {
     <BrowserRouter>
       <SessionGuard>
         <Routes>
-          <Route path="/" element={<EntradaPage />} />
-          <Route path="/ingresar-pin" element={<IngresoManualPage />} />
+          <Route path="/" element={<DiscoveryPage />} />
+          <Route path="/restaurante/:restauranteId" element={<RestaurantePage />} />
+          <Route path="/restaurante/:restauranteId/mesa" element={<IngresoMesaPage />} />
+          {/* La carta en modo vista es pública: no pide sesión de mesa. */}
+          <Route path="/restaurante/:restauranteId/carta" element={<CartaPage />} />
+          {/* El PIN se pide dentro del restaurante elegido (D12). */}
+          <Route path="/ingresar-pin" element={<Navigate to="/" replace />} />
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/check-in" element={<CheckInRedirectPage />} />
 

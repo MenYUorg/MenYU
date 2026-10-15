@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { LogoMenYuOscuro } from '@menyu/ui'
 
 const C = {
   orange: '#E8563A',
@@ -8,7 +9,14 @@ const C = {
   border: '#ECECEE',
 } as const
 
-function Shell({ children }: { children: React.ReactNode }) {
+interface ShellProps {
+  children: React.ReactNode
+  /** Lo que va debajo del logo. Sin texto (`null`), queda solo el logo. */
+  subtitulo?: string | null
+}
+
+/** La tarjeta azul con el logo arriba de las pantallas de entrada a una mesa (modo seguro y `/check-in`). */
+export function Shell({ children, subtitulo = 'Abriendo tu mesa…' }: ShellProps) {
   return (
     <div style={{
       minHeight: '100svh', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -16,15 +24,12 @@ function Shell({ children }: { children: React.ReactNode }) {
     }}>
       <div style={{ width: '100%', maxWidth: 360, borderRadius: 20, overflow: 'hidden', boxShadow: '0 24px 64px rgba(0,0,0,0.35)' }}>
         <div style={{ background: C.navy, padding: '28px 32px 20px', textAlign: 'center' }}>
-          <div style={{ display: 'inline-flex', alignItems: 'flex-end', gap: 2, marginBottom: 8 }}>
-            <span style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 800, fontSize: 26, color: 'white', letterSpacing: '-0.01em' }}>
-              MENY
-            </span>
-            <div style={{ width: 14, height: 17, background: C.orange, marginBottom: 3, borderRadius: '3px 3px 50% 50% / 3px 3px 30% 30%' }} />
-          </div>
-          <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 13, color: 'rgba(255,255,255,0.55)', margin: 0 }}>
-            Abriendo tu mesa…
-          </p>
+          <LogoMenYuOscuro alto={24} style={{ display: 'block', margin: subtitulo ? '0 auto 8px' : '0 auto' }} />
+          {subtitulo && (
+            <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 13, color: 'rgba(255,255,255,0.55)', margin: 0 }}>
+              {subtitulo}
+            </p>
+          )}
         </div>
         {children}
       </div>

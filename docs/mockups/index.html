@@ -74,6 +74,7 @@
   <header class="top">
     <strong>Mockups · Discovery</strong>
     <span class="fase">Fase 6 · aprobados</span>
+    <span class="fase">Fase 7 · header del menú para aprobar</span>
     <span class="espacio"></span>
     <div class="anchos" id="anchos" role="group" aria-label="Ancho de pantalla">
       <button type="button" data-ancho="320">320</button>
@@ -100,11 +101,13 @@
       var RESTAURANTE = 'restaurante.html';
       var MESA = 'mesa.html';
       var ESCANER = 'escaner.html';
+      var CHECKIN = 'checkin.html';
+      var MENU_HEADER = 'menu-header.html';
 
       var GRUPOS = [
         { nombre: 'Header', items: [
           { id: 'header', titulo: 'Header, sin y con sesión', src: 'header.html',
-            nota: 'El header de todas las pantallas. <b>Sin sesión:</b> botones más chicos y más espacio entre el logo y los botones. <b>Con sesión:</b> "Hola, [nombre]" arriba y "Cerrar sesión" más chico debajo, apilados; si el nombre es largo se muestra solo el primer nombre (nunca se corta con "..."). Los botones se ven chicos pero se tocan como uno de 44 px. Probalo en <b>320</b>, <b>360</b> y <b>390</b> con los botones de arriba.' },
+            nota: 'El header de todas las pantallas. <b>Sin sesión:</b> botones más chicos y más espacio entre el logo y los botones. <b>Con sesión:</b> "Hola, [nombre]" arriba y "Cerrar sesión" más chico debajo, apilados; el nombre se muestra entero, tal cual viene (no se adivina cuál es el apellido) y, si no entra, pasa a la línea de abajo: nunca se corta con "...". Los botones se ven chicos pero se tocan como uno de 44 px. Probalo en <b>320</b>, <b>360</b> y <b>390</b> con los botones de arriba.' },
         ] },
         { nombre: 'Discovery (home)', items: [
           { id: 'home-normal', titulo: 'Home', src: DISCOVERY + '?estado=normal',
@@ -112,7 +115,7 @@
           { id: 'home-sesion', titulo: 'Con sesión iniciada', src: DISCOVERY + '?usuario=Marina%20Gonz%C3%A1lez',
             nota: 'El header muestra "Hola, [nombre]" y "Cerrar sesión". Después de iniciar sesión se vuelve a esta pantalla.' },
           { id: 'home-sesion-larga', titulo: 'Con sesión · nombre largo', src: DISCOVERY + '?usuario=Marina%20Gonz%C3%A1lez%20de%20la%20Fuente',
-            nota: 'Con un nombre largo se muestra solo el primer nombre, completo.' },
+            nota: 'Con un nombre largo se muestra entero: pasa a la línea de abajo en vez de cortarse con "...".' },
           { id: 'home-cargando', titulo: 'Cargando', src: DISCOVERY + '?estado=cargando',
             nota: 'Esqueletos grises con la forma de las tarjetas: al llegar los datos no se mueve nada.' },
           { id: 'home-error', titulo: 'Error / sin conexión', src: DISCOVERY + '?estado=error',
@@ -176,6 +179,8 @@
             nota: 'El backend valida que el QR sea de una mesa del restaurante elegido (decisión D11). No se crea la sesión y el PIN sigue escondido.' },
           { id: 'mesa-pin-camara', titulo: 'Viniendo de la cámara', src: MESA + '?id=parrilla&estado=pin-desde-camara',
             nota: 'Si la cámara falló y la persona eligió el PIN en el escáner, vuelve acá con el campo del PIN ya abierto y un aviso.' },
+          { id: 'mesa-pin-qr', titulo: 'Viniendo de /check-in', src: MESA + '?id=parrilla&estado=pin-desde-qr',
+            nota: 'Si el QR escaneado con la cámara del celular no abrió la mesa y la persona elige el PIN en <a data-ir="checkin-error-qr">el aviso de /check-in</a>, llega acá con el restaurante del link, el campo del PIN ya abierto y un aviso.' },
           { id: 'mesa-larga', titulo: 'Nombre largo', src: MESA + '?id=rincon&estado=error-qr', nota: 'El nombre del restaurante se parte en varias líneas, sin romper el recuadro.' },
           { id: 'mesa-cargando', titulo: 'Cargando', src: MESA + '?id=parrilla&estado=cargando', nota: 'El recuadro del restaurante carga; el resto ya se puede usar.' },
           { id: 'mesa-error', titulo: 'Restaurante no encontrado', src: MESA + '?id=parrilla&estado=error', nota: 'Link a un restaurante que ya no existe.' },
@@ -196,17 +201,44 @@
           { id: 'escaner-home-denegado', titulo: 'Desde el home: permiso rechazado', src: ESCANER + '?origen=home&estado=denegado',
             nota: 'Desde el home todavía no hay restaurante, así que el PIN no se puede pedir: la opción es <b>elegir el restaurante</b> en la lista e ingresar con el PIN desde su pantalla. La recomendación de la cámara del celular sirve igual: el QR ya dice de qué mesa es.' },
         ] },
+        { nombre: 'Check-in (cámara del celular)', items: [
+          { id: 'checkin-abriendo', titulo: 'Abriendo tu mesa', src: CHECKIN + '?estado=abriendo',
+            nota: 'Cuando la cámara del celular lee el QR de la mesa, el navegador abre <b>/check-in</b> y esa pantalla abre la sesión. <b>Hoy queda en blanco</b> hasta que termina. Ahora muestra la misma tarjeta azul de las pantallas del modo seguro (anfitrión y código de la mesa), con "Abriendo tu mesa…" y un giro. Si la mesa está en modo seguro, después sigue la pantalla del anfitrión o la del código, que ya existen.' },
+          { id: 'checkin-error-qr', titulo: 'El QR no abre una mesa', src: CHECKIN + '?estado=error-qr',
+            nota: '<b>Hoy, si el QR no sirve, la app vuelve al inicio sin avisar nada.</b> Ahora explica qué pasó y la salida principal es <b>el PIN</b>: lleva a la <a data-ir="mesa-pin-qr">pantalla de ingreso a mesa</a> del restaurante del link, con el campo del PIN ya abierto. "Ir al inicio" queda como salida. Un link sin el código de la mesa se trata igual. Acá reintentar no sirve (el servidor ya dijo que esa mesa no existe), así que no se ofrece.' },
+          { id: 'checkin-error-red', titulo: 'Sin conexión', src: CHECKIN + '?estado=error-red',
+            nota: 'Si no hubo respuesta (sin internet o el servidor no contesta), lo primero es <b>Reintentar</b>; el PIN también se ofrece, por si el problema era solo del QR.' },
+          { id: 'checkin-sin-restaurante', titulo: 'Link sin restaurante', src: CHECKIN + '?estado=error-qr&restaurante=no',
+            nota: 'El QR impreso siempre trae el restaurante, pero un link armado a mano puede no traerlo. Sin restaurante no se puede ir directo a su pantalla: el botón pasa a <b>"Elegir mi restaurante"</b> (lleva al inicio) con una línea de ayuda, igual que en el escáner desde el home.' },
+        ] },
+        { nombre: 'Header del menú (Fase 7, para aprobar)', items: [
+          { id: 'menu-carta-logos', titulo: 'Carta · los logos', src: MENU_HEADER + '?modo=carta&vista=logos', nuevo: true,
+            nota: '<b>Para aprobar.</b> El botón de las iniciales, el que abre el menú lateral, pasa a ser <b>el logo del restaurante</b> (propio; si no tiene, el de su marca; si tampoco, el de MenYU): un cuadro blanco de 40 px (se toca como uno de 44) con el logo entero, sin recortarlo ni deformarlo, y el indicador de las tres rayitas de siempre. Se ven un logo cuadrado, uno redondo, uno muy ancho, uno muy alto, uno de fondo oscuro, el de la marca y el de MenYU (la U con el tenedor). El nombre puede ocupar dos líneas. En la carta no hay "Mozo" ni mesa.' },
+          { id: 'menu-mesa-logos', titulo: 'Mesa · los logos', src: MENU_HEADER + '?modo=mesa&vista=logos', nuevo: true,
+            nota: 'Lo mismo en el menú de la mesa, con "Mozo" y el número de la mesa (y el código si está en modo seguro). Arriba, <b>cómo es hoy</b> (las iniciales) para comparar.' },
+          { id: 'menu-codigo', titulo: 'Mesa con código', src: MENU_HEADER + '?modo=mesa&vista=codigo', nuevo: true,
+            nota: 'Con código (modo seguro), <b>"Mesa N" y "PIN xxx" van en sus mismos pills, uno arriba del otro</b>, y el nombre del restaurante gana el lugar del segundo pill (hoy, a 360 px, se corta con "La P…"). <b>"Mozo" no se toca.</b> Sin código, solo el pill de la mesa, como hoy. Probalo en <b>320</b>, <b>360</b> y <b>390</b>.' },
+          { id: 'menu-lateral-mesa', titulo: 'Menú lateral · mesa', src: MENU_HEADER + '?modo=mesa&vista=lateral', nuevo: true,
+            nota: 'Arriba el restaurante con su logo, su nombre y su dirección; al abrir, <b>el logo se agranda junto con el nombre</b> (animación corta; se apaga con "reducir movimiento"). Con cuenta, el saludo con el nombre completo reemplaza a "Iniciar sesión" y "Crear cuenta", y <b>"Cerrar sesión" solo aparece si la mesa todavía no pidió nada</b>. Las filas de la mesa quedan como hoy. Tocá "Ver la animación de abrir".' },
+          { id: 'menu-lateral-carta', titulo: 'Menú lateral · carta', src: MENU_HEADER + '?modo=carta&vista=lateral', nuevo: true,
+            nota: 'Sin estar en una mesa: iniciar sesión o crear una cuenta (vuelven a la carta), <b>Ingresar a una mesa</b> y <b>Volver al inicio</b> de MenYU. Con cuenta, el saludo y "Cerrar sesión" (salvo que tenga una mesa abierta que ya pidió algo).' },
+          { id: 'menu-pantalla-carta', titulo: 'Pantalla de la carta', src: MENU_HEADER + '?modo=carta&vista=pantalla', nuevo: true,
+            nota: 'El header en contexto, con el buscador, los chips y las tarjetas. En la carta las tarjetas no llevan el "+" ni se tocan.' },
+          { id: 'menu-pantalla-mesa', titulo: 'Pantalla de la mesa', src: MENU_HEADER + '?modo=mesa&vista=pantalla', nuevo: true,
+            nota: 'Igual, en la mesa: con "Mozo", la mesa y su código apilados, el "+" de las tarjetas y el botón del carrito.' },
+        ] },
       ]
 
       var DECISIONES = '<h2>Decisiones tomadas</h2><ol>' +
         '<li><b>Atajo "Escanear el QR de mi mesa" en el home:</b> sí, debajo del buscador y centrado en celular. Se ve en <a data-ir="home-normal">Home</a>. La cámara del celular sigue entrando directo por <b>/check-in</b>.</li>' +
         '<li><b>Ofertas dentro de la pantalla del restaurante:</b> sí. Se ve en <a data-ir="resto-parrilla">Con logo y ofertas</a>.</li>' +
         '<li><b>GET /discovery/restaurantes/:id:</b> sí, ya está hecho (Fase 5): la pantalla del restaurante carga sus datos y sus ofertas aunque se entre por un link o se recargue.</li>' +
-        '<li><b>Header en celular:</b> sí, aunque toque las pantallas existentes. Sin sesión, botones más chicos y más espacio con el logo; con sesión, saludo arriba y "Cerrar sesión" debajo; si el nombre es largo, solo el primer nombre. Se ve en <a data-ir="header">Header</a>.</li>' +
+        '<li><b>Header en celular:</b> sí, aunque toque las pantallas existentes. Sin sesión, botones más chicos y más espacio con el logo; con sesión, saludo arriba y "Cerrar sesión" debajo; el nombre se muestra entero (sin adivinar apellidos y sin cortarlo con "..."). Se ve en <a data-ir="header">Header</a>.</li>' +
         '<li><b>Ingreso a mesa:</b> lo principal es el QR. El PIN queda escondido detrás de "¿Pasó algo con tu cámara? Ingresá el PIN de tu mesa". Se ve en <a data-ir="mesa-normal">Solo el QR</a>.</li>' +
         '<li><b>Escaneo desde el celular:</b> pide el permiso de la cámara, anda en Chrome (Android) y Safari (iPhone) y, si el permiso se rechaza o la cámara no anda, muestra un mensaje claro, <b>recomienda escanear el QR con la cámara del celular</b> (que abre el link directo a tu mesa) y ofrece la opción del PIN. Se ve en <a data-ir="escaner-denegado">Permiso rechazado</a>.</li>' +
         '<li><b>Resultados de la búsqueda:</b> primero las ofertas que coinciden, después los restaurantes que coinciden por nombre y al final los restaurantes con platos que coinciden. Estos últimos se ven igual que en la lista general, sin los nombres de los platos ni la cantidad (si fueran muchos, el resultado quedaría larguísimo); la API ya no los devuelve. Se ve en <a data-ir="busca-cafe">Resultados: tres grupos</a>.</li>' +
         '<li><b>Sin cambios sobre lo anterior:</b> esqueletos de carga en lugar del Spinner (que es índigo), restaurantes de la A a la Z y ofertas por % mayor.</li>' +
+        '<li><b>Pantallas de /check-in <span style="color:var(--orange)">(aprobado el 2026-10-14)</span>:</b> adonde llega la cámara del celular. Mientras abre la mesa muestra "Abriendo tu mesa…" (hoy queda en blanco) y, si falla, un aviso con la opción del PIN (hoy vuelve al inicio sin decir nada). Se ve en <a data-ir="checkin-abriendo">Abriendo tu mesa</a> y <a data-ir="checkin-error-qr">El QR no abre una mesa</a>.</li>' +
         '</ol><p class="nota-chica">Todo lo demás sigue el plan: sin combos, búsqueda sin acentos de 2 letras o más, tocar una oferta abre el restaurante, QR o PIN validados contra el restaurante elegido.</p>' +
         '<h2 style="margin-top:18px">Colores y letras</h2>' +
         '<p class="nota-chica" style="margin-bottom:8px">Son los de <b>apps/web-cliente/src/theme.ts</b>. Montserrat (títulos, botones, precios) e Inter (texto), las mismas del resto de la app.</p>' +
@@ -237,10 +269,10 @@
       var ancho = '360';
 
       function pintarLista() {
-        var html = '<h2>Antes de empezar</h2><button type="button" data-id="decidir">Decisiones tomadas<span class="etiqueta">8</span></button>';
+        var html = '<h2>Antes de empezar</h2><button type="button" data-id="decidir">Decisiones tomadas<span class="etiqueta">9</span></button>';
         GRUPOS.forEach(function (g) {
           html += '<h2>' + g.nombre + '</h2>';
-          g.items.forEach(function (i) { html += '<button type="button" data-id="' + i.id + '">' + i.titulo + '</button>'; });
+          g.items.forEach(function (i) { html += '<button type="button" data-id="' + i.id + '">' + i.titulo + (i.nuevo ? '<span class="etiqueta">nuevo</span>' : '') + '</button>'; });
         });
         lista.innerHTML = html;
       }
@@ -291,10 +323,12 @@
         var b = e.target.closest('button[data-id]');
         if (b) ir(b.dataset.id);
       });
-      contenido.addEventListener('click', function (e) {
+      function irDesdeEnlace(e) {
         var a = e.target.closest('a[data-ir]');
         if (a) { e.preventDefault(); ir(a.dataset.ir); }
-      });
+      }
+      contenido.addEventListener('click', irDesdeEnlace);
+      notaEl.addEventListener('click', irDesdeEnlace);
       botonesAncho.forEach(function (b) { b.addEventListener('click', function () { ir(actual, b.dataset.ancho); }); });
       var pendiente = null;
       window.addEventListener('resize', function () { clearTimeout(pendiente); pendiente = setTimeout(pintar, 120); });

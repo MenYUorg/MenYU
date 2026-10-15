@@ -1,14 +1,27 @@
 import type { MenuPublico } from '@menyu/types'
-import { api } from '../services/api'
+import { api, ApiError } from '../services/api'
 import { crearMenu, crearPlato, crearPlatoEnDescuento } from '../test/fixtures'
 import { useCarritoStore } from './carritoStore'
-import { usePublicMenuStore } from './publicMenuStore'
+import { menuEsDe, usePublicMenuStore } from './publicMenuStore'
 
-vi.mock('../services/api', () => ({
+vi.mock('../services/api', async (importarOriginal) => ({
+  ...(await importarOriginal<typeof import('../services/api')>()),
   api: { menu: { publico: vi.fn() } },
 }))
 
 const publico = vi.mocked(api.menu.publico)
+
+/** El menú de un restaurante (para probar que no se mezclan). */
+const menuDe = (id: string, nombre = `Resto ${id}`) =>
+  crearMenu({ restaurante: { id, nombre, nombreSeccionRecomendados: 'RECOMENDACIONES' } })
+
+/** Una promesa que se resuelve o rechaza cuando el test lo decide (para que las respuestas lleguen fuera de orden). */
+function pendiente<T>() {
+  let resolver!: (valor: T) => void
+  let rechazar!: (error: unknown) => void
+  const promesa = new Promise<T>((res, rej) => { resolver = res; rechazar = rej })
+  return { promesa, resolver, rechazar }
+}
 
 const conCategoria = (...platos: ReturnType<typeof crearPlato>[]) => ({
   id: 'cat-1',
@@ -20,9 +33,25 @@ const conCategoria = (...platos: ReturnType<typeof crearPlato>[]) => ({
 describe('publicMenuStore', () => {
   beforeEach(() => {
     publico.mockReset()
-    usePublicMenuStore.setState({ menu: null, loading: false, error: null })
+    usePublicMenuStore.setState({ menu: null, loading: false, error: null, errorStatus: null, cargandoDe: null })
     useCarritoStore.getState().vaciar()
     localStorage.clear()
+  })
+
+  describe('menuEsDe', () => {
+    it('es del restaurante con ese id, sin importar las mayúsculas (los ids son UUID)', () => {
+      expect(menuEsDe(menuDe('abcd-1234'), 'abcd-1234')).toBe(true)
+      expect(menuEsDe(menuDe('abcd-1234'), 'ABCD-1234')).toBe(true)
+      expect(menuEsDe(menuDe('ABCD-1234'), 'abcd-1234')).toBe(true)
+    })
+
+    it('no es de otro restaurante, ni sin menú, ni sin id', () => {
+      expect(menuEsDe(menuDe('rest-1'), 'rest-2')).toBe(false)
+      expect(menuEsDe(null, 'rest-1')).toBe(false)
+      expect(menuEsDe(menuDe('rest-1'), null)).toBe(false)
+      expect(menuEsDe(menuDe('rest-1'), undefined)).toBe(false)
+      expect(menuEsDe(menuDe('rest-1'), '')).toBe(false)
+    })
   })
 
   describe('getItemById', () => {
@@ -136,6 +165,136 @@ describe('publicMenuStore', () => {
       expect(usePublicMenuStore.getState().loading).toBe(false)
     })
 
+    describe('un menú por restaurante', () => {
+      it('al pedir el de otro restaurante, el anterior deja de estar mientras llega el nuevo', async () => {
+        publico.mockResolvedValueOnce(menuDe('rest-1'))
+        await usePublicMenuStore.getState().fetchMenu('rest-1')
+        const { promesa, resolver } = pendiente<MenuPublico>()
+        publico.mockReturnValueOnce(promesa)
+
+        const carga = usePublicMenuStore.getState().fetchMenu('rest-2')
+
+        expect(usePublicMenuStore.getState().menu).toBeNull()
+        expect(usePublicMenuStore.getState().loading).toBe(true)
+
+        resolver(menuDe('rest-2'))
+        await carga
+        expect(usePublicMenuStore.getState().menu?.restaurante.id).toBe('rest-2')
+        expect(usePublicMenuStore.getState().loading).toBe(false)
+      })
+
+      it('al volver a pedir el mismo restaurante, el menú de antes queda mientras se actualiza', async () => {
+        publico.mockResolvedValueOnce(menuDe('rest-1', 'Antes'))
+        await usePublicMenuStore.getState().fetchMenu('rest-1')
+        const { promesa, resolver } = pendiente<MenuPublico>()
+        publico.mockReturnValueOnce(promesa)
+
+        const carga = usePublicMenuStore.getState().fetchMenu('rest-1')
+
+        expect(usePublicMenuStore.getState().menu?.restaurante.nombre).toBe('Antes')
+
+        resolver(menuDe('rest-1', 'Después'))
+        await carga
+        expect(usePublicMenuStore.getState().menu?.restaurante.nombre).toBe('Después')
+      })
+
+      it('si se pide otro restaurante mientras se carga uno, se pide el nuevo (no se queda con el pedido anterior)', async () => {
+        publico.mockReturnValueOnce(new Promise(() => {}))
+        void usePublicMenuStore.getState().fetchMenu('rest-1')
+        publico.mockResolvedValueOnce(menuDe('rest-2'))
+
+        await usePublicMenuStore.getState().fetchMenu('rest-2')
+
+        expect(publico).toHaveBeenCalledTimes(2)
+        expect(usePublicMenuStore.getState().menu?.restaurante.id).toBe('rest-2')
+        expect(usePublicMenuStore.getState().loading).toBe(false)
+      })
+
+      it('si la respuesta del restaurante anterior llega después, se descarta', async () => {
+        const viejo = pendiente<MenuPublico>()
+        publico.mockReturnValueOnce(viejo.promesa).mockResolvedValueOnce(menuDe('rest-2'))
+
+        const cargaVieja = usePublicMenuStore.getState().fetchMenu('rest-1')
+        await usePublicMenuStore.getState().fetchMenu('rest-2')
+        viejo.resolver(menuDe('rest-1'))
+        await cargaVieja
+
+        expect(usePublicMenuStore.getState().menu?.restaurante.id).toBe('rest-2')
+        expect(usePublicMenuStore.getState().loading).toBe(false)
+      })
+
+      it('un error del restaurante anterior que llega después no pisa al nuevo', async () => {
+        const viejo = pendiente<MenuPublico>()
+        publico.mockReturnValueOnce(viejo.promesa).mockResolvedValueOnce(menuDe('rest-2'))
+
+        const cargaVieja = usePublicMenuStore.getState().fetchMenu('rest-1')
+        await usePublicMenuStore.getState().fetchMenu('rest-2')
+        viejo.rechazar(new ApiError('Restaurante no encontrado', 404))
+        await cargaVieja
+
+        expect(usePublicMenuStore.getState().menu?.restaurante.id).toBe('rest-2')
+        expect(usePublicMenuStore.getState().error).toBeNull()
+        expect(usePublicMenuStore.getState().errorStatus).toBeNull()
+      })
+
+      it('mientras se pide uno, la respuesta vieja no apaga el indicador de carga del nuevo', async () => {
+        const viejo = pendiente<MenuPublico>()
+        const nuevo = pendiente<MenuPublico>()
+        publico.mockReturnValueOnce(viejo.promesa).mockReturnValueOnce(nuevo.promesa)
+
+        const cargaVieja = usePublicMenuStore.getState().fetchMenu('rest-1')
+        const cargaNueva = usePublicMenuStore.getState().fetchMenu('rest-2')
+        viejo.resolver(menuDe('rest-1'))
+        await cargaVieja
+
+        expect(usePublicMenuStore.getState().loading).toBe(true)
+        expect(usePublicMenuStore.getState().menu).toBeNull()
+
+        nuevo.resolver(menuDe('rest-2'))
+        await cargaNueva
+        expect(usePublicMenuStore.getState().loading).toBe(false)
+      })
+    })
+
+    describe('el código del error (para distinguir un restaurante que no existe de una falla)', () => {
+      it('guarda el código HTTP: un 404 es "no existe"', async () => {
+        publico.mockRejectedValue(new ApiError('Restaurante no encontrado', 404))
+
+        await usePublicMenuStore.getState().fetchMenu('rest-1')
+
+        expect(usePublicMenuStore.getState().errorStatus).toBe(404)
+        expect(usePublicMenuStore.getState().error).toBe('Restaurante no encontrado')
+      })
+
+      it('sin respuesta del servidor no hay código', async () => {
+        publico.mockRejectedValue(new TypeError('Failed to fetch'))
+
+        await usePublicMenuStore.getState().fetchMenu('rest-1')
+
+        expect(usePublicMenuStore.getState().error).toBe('Failed to fetch')
+        expect(usePublicMenuStore.getState().errorStatus).toBeNull()
+      })
+
+      it('un código que no es un número no se guarda', async () => {
+        publico.mockRejectedValue(Object.assign(new Error('raro'), { status: '404' }))
+
+        await usePublicMenuStore.getState().fetchMenu('rest-1')
+
+        expect(usePublicMenuStore.getState().errorStatus).toBeNull()
+      })
+
+      it('un pedido nuevo borra el error y el código del anterior', async () => {
+        publico.mockRejectedValueOnce(new ApiError('Restaurante no encontrado', 404))
+        await usePublicMenuStore.getState().fetchMenu('rest-1')
+        publico.mockResolvedValueOnce(menuDe('rest-1'))
+
+        await usePublicMenuStore.getState().fetchMenu('rest-1')
+
+        expect(usePublicMenuStore.getState().error).toBeNull()
+        expect(usePublicMenuStore.getState().errorStatus).toBeNull()
+      })
+    })
+
     it('si falla, guarda el error y no toca el carrito', async () => {
       useCarritoStore.getState().agregar({
         itemMenuId: 'plato-1',
@@ -156,11 +315,12 @@ describe('publicMenuStore', () => {
   })
 
   it('clear descarta el menú y el error', () => {
-    usePublicMenuStore.setState({ menu: crearMenu(), error: 'algo' })
+    usePublicMenuStore.setState({ menu: crearMenu(), error: 'algo', errorStatus: 500 })
 
     usePublicMenuStore.getState().clear()
 
     expect(usePublicMenuStore.getState().menu).toBeNull()
     expect(usePublicMenuStore.getState().error).toBeNull()
+    expect(usePublicMenuStore.getState().errorStatus).toBeNull()
   })
 })

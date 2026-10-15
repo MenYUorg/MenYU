@@ -6,6 +6,7 @@
   'use strict';
 
   const RUTA_LOGO = '../../apps/web-cliente/public/logo.png';
+  const RUTA_LOGO_OSCURO = '../../apps/web-cliente/public/LogoParaOscuro.png';
   const RUTA_PLACEHOLDER = '../../packages/ui/src/assets/item-placeholder.png';
 
   // ── Utilidades ──────────────────────────────────────────────────────────────
@@ -175,21 +176,94 @@
 
   // ── Piezas de HTML ──────────────────────────────────────────────────────────
 
-  // Si el nombre es largo se muestra solo el primer nombre: nunca se corta con "...".
-  const MAX_NOMBRE_SALUDO = 16;
-  function nombreSaludo(nombre) {
-    const limpio = nombre.trim().replace(/\s+/g, ' ');
-    return limpio.length > MAX_NOMBRE_SALUDO ? limpio.split(' ')[0] : limpio;
-  }
-
+  // El nombre se muestra tal cual viene: hoy el cliente se guarda en un único campo `nombre` y no se adivina dónde termina
+  // el nombre y empieza el apellido. Si algún día vienen separados, se muestra solo el nombre. Nunca se corta con "...":
+  // si no entra, pasa a la línea de abajo.
   function appHeader(usuario) {
     const acciones = usuario
-      ? `<div class="sesion"><span class="saludo">Hola, <b>${esc(nombreSaludo(usuario))}</b></span><button class="btn-h salir" type="button">Cerrar sesión</button></div>`
+      ? `<div class="sesion"><span class="saludo">Hola, <b>${esc(usuario.trim().replace(/\s+/g, ' '))}</b></span><button class="btn-h salir" type="button">Cerrar sesión</button></div>`
       : '<button class="btn-h" type="button">Ingresar</button><button class="btn-h primario" type="button">Registrarme</button>';
     return `<header class="appheader">
       <a class="marca" href="discovery.html"><img src="${RUTA_LOGO}" alt="MenYU"></a>
       <div class="acciones">${acciones}</div>
     </header>`;
+  }
+
+  /**
+   * El logo de MenYu para fondos oscuros (LogoParaOscuro.png), recortado como el componente LogoMenYuOscuro de @menyu/ui:
+   * el PNG trae aire transparente alrededor de las letras (2172 × 724 px) y `alto` es el alto real de las letras.
+   */
+  function logoOscuro(alto, soloU) {
+    const escala = alto / 380;
+    const x = soloU ? 1718 : 120;
+    const ancho = (soloU ? 334 : 1932) * escala;
+    return `<span class="logo-oscuro" style="width:${ancho}px;height:${alto}px"><img src="${RUTA_LOGO_OSCURO}" alt="MenYU" style="left:${-x * escala}px;top:${-165 * escala}px;width:${2172 * escala}px;height:${724 * escala}px"></span>`;
+  }
+
+  /**
+   * El logo de MenYu para fondos claros (logo.png: letras naranjas y el tenedor azul en la U, 7030 × 1398 px, con las
+   * letras de y = 10 a 1397 y la U de x = 5813 a 7029). `alto` es el alto de las letras; con `soloU`, solo la U con el
+   * tenedor. En la app va una versión liviana de este PNG (el original pesa 1,5 MB).
+   */
+  function logoClaro(alto, soloU) {
+    const escala = alto / 1388;
+    const x = soloU ? 5813 : 0;
+    const ancho = (soloU ? 1217 : 7030) * escala;
+    return `<span class="logo-oscuro" style="width:${ancho}px;height:${alto}px"><img src="${RUTA_LOGO}" alt="MenYU" style="left:${-x * escala}px;top:${-10 * escala}px;width:${7030 * escala}px;height:${1398 * escala}px"></span>`;
+  }
+
+  /**
+   * El header del menú (ClienteMenuPage) con el logo del restaurante como botón del menú lateral (propuesta de la Fase 7).
+   * `o`: nombre; `logo` (clave de LOGOS) o `menyu` ('u' o 'completo'); `hoy` para el botón de iniciales de hoy;
+   * `modo` ('mesa' o 'carta'); `pin` (código de la mesa en modo seguro: se apila debajo de la mesa).
+   */
+  function menuHeader(o) {
+    const hamburguesa = '<span class="mh-badge" aria-hidden="true"><i></i><i></i><i></i></span>';
+    let boton;
+    if (o.hoy) boton = `<button class="mh-boton hoy" type="button" aria-label="Abrir el menú">${esc(iniciales(o.nombre))}${hamburguesa}</button>`;
+    else if (o.menyu === 'u') boton = `<button class="mh-boton" type="button" aria-label="Abrir el menú">${logoClaro(26, true)}${hamburguesa}</button>`;
+    else if (o.menyu === 'completo') boton = `<button class="mh-boton ancho" type="button" aria-label="Abrir el menú">${logoClaro(15)}${hamburguesa}</button>`;
+    else boton = `<button class="mh-boton" type="button" aria-label="Abrir el menú"><img src="${LOGOS[o.logo]}" alt="">${hamburguesa}</button>`;
+    // En la mesa: "Mozo" (con su texto, sin achicar) y la mesa. Con código (modo seguro) "Mesa N" y "PIN xxx" van
+    // uno arriba del otro, en sus mismos pills; sin código, solo la mesa, como hoy.
+    const mesa = o.modo === 'mesa'
+      ? `<button class="mh-mozo" type="button" aria-label="Llamar al mozo"><span aria-hidden="true">🔔</span><span class="txt">Mozo</span></button>` +
+        (o.pin
+          ? `<div class="mh-mesas apilado"><span class="mh-mesa">Mesa ${o.mesa || 5}</span><span class="mh-pin">PIN ${o.pin}</span></div>`
+          : `<div class="mh-mesas"><span class="mh-mesa">Mesa ${o.mesa || 5}</span></div>`)
+      : '';
+    return `<header class="mh">${boton}<div class="mh-nombre">${esc(o.nombre)}</div>${mesa}</header>`;
+  }
+
+  /**
+   * El menú lateral abierto (propuesta de la Fase 7): arriba el restaurante (logo grande, nombre y dirección), después la
+   * cuenta (sin ella, iniciar sesión o crear una; con ella, el saludo con el nombre y "Cerrar sesión" si se puede) y las
+   * filas de cada pantalla. `o`: modo, nombre, direccion, logo / menyu, usuario ({ nombre, email }), comensal, puedeCerrar, cerrado.
+   */
+  function menuLateral(o) {
+    const logoImg = o.menyu ? `<span class="dr-logo menyu">${logoClaro(54, true)}</span>` : `<span class="dr-logo"><img src="${LOGOS[o.logo]}" alt=""></span>`;
+    const direccion = o.direccion ? `<div class="dr-dir">${icono('pin', 14)}<span>${esc(o.direccion)}</span></div>` : '';
+    let cuenta;
+    if (o.usuario) {
+      cuenta = `<div class="dr-hola">¡Hola, ${esc(o.usuario.nombre)}!</div><div class="dr-sub">${esc(o.usuario.email)}</div>` +
+        (o.puedeCerrar ? '<div class="dr-botones"><span class="dr-btn vidrio">Cerrar sesión</span></div>' : '');
+    } else {
+      cuenta = `<div class="dr-hola">${o.modo === 'mesa' && o.comensal ? '¡Hola, ' + esc(o.comensal) + '!' : '¡Hola!'}</div><div class="dr-sub">Estás navegando como invitado</div>` +
+        '<div class="dr-botones"><span class="dr-btn naranja">Iniciar sesión</span><span class="dr-btn vidrio">Crear cuenta gratis</span></div>';
+    }
+    const fila = (ic, texto, primaria, badge) => `<div class="dr-fila${primaria ? ' primaria' : ''}"><i>${ic}</i><span>${texto}</span>${badge ? '<small>' + badge + '</small>' : ''}</div>`;
+    const filas = o.modo === 'mesa'
+      ? fila('🏷️', 'Etiquetar pedidos') + fila('📋', 'Mis pedidos', true) + (o.usuario ? fila('⭐', 'Mis puntos', false, 'Próximamente') : '') + fila('💳', 'Pagar la cuenta')
+      : fila('🍽️', 'Ingresar a una mesa', true) + fila('🏠', 'Volver al inicio');
+    return `<div class="dr-fondo"><aside class="dr${o.cerrado ? ' cerrado' : ''}">
+      <div class="dr-cabeza">
+        <div class="dr-resto">${logoImg}<div class="dr-texto"><div class="dr-nombre">${esc(o.nombre)}</div>${direccion}</div></div>
+        <div class="dr-linea"></div>
+        ${cuenta}
+      </div>
+      <div class="dr-cuerpo">${filas}</div>
+      <div class="dr-pie"><span>v1.0</span><span>powered by<b>MENY</b></span></div>
+    </aside></div>`;
   }
 
   /** Lo que se ve de la cámara en el escáner: una mesa oscura con un QR de mentira (solo para el mockup). */
@@ -327,10 +401,10 @@
   }
 
   window.MK = {
-    RUTA_LOGO, RUTA_PLACEHOLDER, LOGOS, TODOS, NORMALES, LIMITE,
+    RUTA_LOGO, RUTA_LOGO_OSCURO, RUTA_PLACEHOLDER, LOGOS, TODOS, NORMALES, LIMITE,
     esc, sinAcentos, peso, plural, iniciales, icono,
     datos, buscar, restauranteDe, ofertasDe, todasLasOfertas,
-    appHeader, nombreSaludo, imagenCamara, logo, tituloSeccion, seccion, direccion, cardResto, cardOferta, carrusel, activarCarrusel,
+    appHeader, logoOscuro, logoClaro, menuHeader, menuLateral, imagenCamara, logo, tituloSeccion, seccion, direccion, cardResto, cardOferta, carrusel, activarCarrusel,
     esqueletoHome, esqueletoOferta, esqueletoResto, bloqueEstado, spinner,
   };
 })();

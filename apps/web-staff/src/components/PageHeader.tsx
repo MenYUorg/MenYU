@@ -1,4 +1,5 @@
 import { ChevronLeft, RefreshCw } from 'lucide-react'
+import { LogoMenYuOscuro } from '@menyu/ui'
 
 interface PageHeaderProps {
   title: string
@@ -38,37 +39,7 @@ export function PageHeader({
       }}
     >
       {/* Marca */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-        <div
-          style={{
-            width: 32, height: 32, borderRadius: 8,
-            background: '#E8563A',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}
-        >
-          <span
-            style={{
-              fontFamily: 'Montserrat, sans-serif',
-              fontWeight: 800,
-              fontSize: 17,
-              color: '#ffffff',
-              lineHeight: 1,
-            }}
-          >
-            M
-          </span>
-        </div>
-        <span
-          style={{
-            fontFamily: 'Montserrat, sans-serif',
-            fontWeight: 800,
-            fontSize: 18,
-            color: '#ffffff',
-          }}
-        >
-          Men<span style={{ color: '#F2A28F' }}>Yu</span>
-        </span>
-      </div>
+      <LogoMenYuOscuro alto={20} />
 
       {/* Separador */}
       <div

@@ -18,6 +18,8 @@ interface SessionStore {
   esAnfitrion: boolean
   loading: boolean
   error: string | null
+  /** Código HTTP del último error al abrir la sesión; `null` si no hubo respuesta del servidor (sin conexión). */
+  errorStatus: number | null
   openSession: (params: { restauranteId?: string; pin?: string; qrToken?: string; codigoSesion?: string }) => Promise<OpenSessionReturn | undefined>
   setRestauranteId: (id: string) => void
   clear: () => void
@@ -43,9 +45,10 @@ export const useSessionStore = create<SessionStore>()((set) => ({
   esAnfitrion:   sessionStorage.getItem(ANFITRION_KEY) === 'true',
   loading: false,
   error: null,
+  errorStatus: null,
 
   openSession: async (params) => {
-    set({ loading: true, error: null })
+    set({ loading: true, error: null, errorStatus: null })
     try {
       const result = await api.sessions.open(params)
       sessionStorage.setItem(SESION_KEY, result.sesionId)
@@ -71,7 +74,11 @@ export const useSessionStore = create<SessionStore>()((set) => ({
       if (e instanceof Error && e.message.includes('requiere código de sesión')) {
         return { error: 'REQUIERE_CODIGO_SESION' as const }
       }
-      set({ error: e instanceof Error ? e.message : 'Error al abrir la sesión' })
+      const status = (e as { status?: unknown } | null)?.status
+      set({
+        error: e instanceof Error ? e.message : 'Error al abrir la sesión',
+        errorStatus: typeof status === 'number' ? status : null,
+      })
       return undefined
     } finally {
       set({ loading: false })

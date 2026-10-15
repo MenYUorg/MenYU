@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Check-in · mockup</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="mockups.css" />
+</head>
+<body>
+  <main class="shell"><div class="shell-tarjeta" id="tarjeta"></div></main>
+
+  <script src="mockups.js"></script>
+  <script>
+    (function () {
+      var p = new URLSearchParams(location.search);
+      var ESTADOS = ['abriendo', 'error-qr', 'error-red'];
+      var estado = ESTADOS.indexOf(p.get('estado')) !== -1 ? p.get('estado') : 'abriendo';
+      var id = p.get('id') || 'parrilla';
+      // El link del QR trae el restaurante (?restaurantId=…). Sin él no se sabe de quién es la mesa.
+      var sinRestaurante = p.get('restaurante') === 'no';
+
+      // La salida con el PIN: con el restaurante del link va directo a su pantalla de ingreso a mesa, con el campo del PIN
+      // ya abierto; sin restaurante hay que elegirlo primero en la lista.
+      function botonPin(principal) {
+        var clase = 'shell-btn ' + (principal ? 'principal' : 'contorno');
+        if (sinRestaurante) {
+          return '<a class="' + clase + '" href="discovery.html">Elegir mi restaurante</a>' +
+            '<p class="shell-ayuda">Elegí tu restaurante en la lista e ingresá con el PIN de tu mesa.</p>';
+        }
+        return '<a class="' + clase + '" href="mesa.html?id=' + encodeURIComponent(id) + '&estado=pin-desde-qr">Ingresar con el PIN de mi mesa</a>';
+      }
+
+      var icono = '<div class="shell-icono">' + MK.icono('aviso', 28, 'var(--orange)', 2) + '</div>';
+      var irAlInicio = '<a class="shell-enlace" href="discovery.html">Ir al inicio</a>';
+      var reintentar = '<a class="shell-btn principal" href="checkin.html?estado=abriendo&id=' + encodeURIComponent(id) + (sinRestaurante ? '&restaurante=no' : '') + '">Reintentar</a>';
+
+      var PANTALLAS = {
+        // Mientras se abre la sesión (hoy la pantalla queda en blanco).
+        abriendo: {
+          subtitulo: 'Abriendo tu mesa…',
+          cuerpo: '<div class="shell-cuerpo" role="status" aria-live="polite">' + MK.spinner() +
+            '<p class="shell-texto">Esto tarda solo unos segundos.</p></div>',
+        },
+        // El servidor respondió que esa mesa no existe (o el link no trae el código de la mesa): reintentar no sirve.
+        'error-qr': {
+          subtitulo: '',
+          cuerpo: '<div class="shell-cuerpo" role="alert">' + icono +
+            '<div><h1 class="shell-titulo">No pudimos abrir tu mesa</h1>' +
+            '<p class="shell-texto" style="margin-top:8px">El QR no corresponde a una mesa activa: puede ser un QR viejo o que la mesa ya no esté habilitada. Ingresá el PIN que aparece en tu mesa para entrar.</p></div>' +
+            botonPin(true) + irAlInicio + '</div>',
+        },
+        // No hubo respuesta (sin internet, servidor caído): lo primero es volver a intentar.
+        'error-red': {
+          subtitulo: '',
+          cuerpo: '<div class="shell-cuerpo" role="alert">' + icono +
+            '<div><h1 class="shell-titulo">No pudimos conectarnos</h1>' +
+            '<p class="shell-texto" style="margin-top:8px">Revisá tu conexión a internet y volvé a intentar. Si el problema sigue, podés entrar con el PIN de tu mesa.</p></div>' +
+            reintentar + botonPin(false) + irAlInicio + '</div>',
+        },
+      };
+
+      var e = PANTALLAS[estado];
+      document.getElementById('tarjeta').innerHTML =
+        '<div class="shell-banda">' + MK.logoOscuro(24) +
+        (e.subtitulo ? '<p>' + MK.esc(e.subtitulo) + '</p>' : '') + '</div>' + e.cuerpo;
+    })();
+  </script>
+</body>
+</html>

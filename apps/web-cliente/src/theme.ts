@@ -10,4 +10,6 @@ export const C = {
   border:      '#E5E7EB',
   borderInput: '#DDDDE0',
   white:       '#FFFFFF',
+  // El texto rojo de los avisos de error (antes estaba escrito suelto en cada pantalla).
+  error:       '#c0392b',
 } as const

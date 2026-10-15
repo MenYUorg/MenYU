@@ -600,9 +600,11 @@ Open or join a table session. The client either:
 - Provides `tableCode` (the `qrToken` scanned from a QR)
 - Provides `restauranteId` + `pin` (manual entry in secure mode)
 
+`restauranteId` can also come together with `tableCode`: the table has to belong to that restaurant (the app sends it when the person already chose a restaurant). The table is looked up before anything is created, so a wrong QR or PIN does not leave a guest client behind.
+
 If the restaurant is in `seguro` mode and a session already exists, `codigoSesion` is required to join it.
 
-**Auth:** Optional JWT in `Authorization: Bearer <token>`. If absent, the backend auto-creates a guest token.
+**Auth:** Optional JWT in `Authorization: Bearer <token>`. With a valid client token the session is registered under that account: the response `clienteId` is the account id, and the same account joining again (for example from a second device) is still one participant. Without a token, or with an expired or invalid one (it is ignored, no error), a guest client ("Invitado") is created. The web client sends the token whenever a customer is logged in.
 
 **Request body**
 
@@ -618,7 +620,7 @@ If the restaurant is in `seguro` mode and a session already exists, `codigoSesio
 | Field | Type | Required |
 |---|---|---|
 | `tableCode` | string | one of `tableCode` or `restauranteId+pin` |
-| `restauranteId` | string | — |
+| `restauranteId` | string | required with `pin`; optional with `tableCode` (then the table must belong to it) |
 | `pin` | string | — |
 | `codigoSesion` | string | required only to join an existing session in secure mode |
 
@@ -629,6 +631,7 @@ If the restaurant is in `seguro` mode and a session already exists, `codigoSesio
 | 200 | Session opened or joined |
 | 403 | Secure mode — `codigoSesion` required |
 | 404 | Table not found |
+| 409 | The QR belongs to a table of another restaurant than `restauranteId` |
 
 ---
 
@@ -682,12 +685,20 @@ Returns the full public menu for a restaurant — categories, items, ingredients
 
 ```json
 {
-  "restaurante": { "id": "uuid", "nombre": "Restaurante Seed", "nombreSeccionRecomendados": "Recomendaciones del chef" },
+  "restaurante": {
+    "id": "uuid",
+    "nombre": "Restaurante Seed",
+    "nombreSeccionRecomendados": "Recomendaciones del chef",
+    "direccion": "Av. Siempreviva 742",
+    "logoUrl": "https://…/logos/… o null"
+  },
   "categorias": [{ "id": "uuid", "nombre": "Principales", "orden": 2, "itemsDirectos": [ /* items */ ] }],
   "recomendados": [ /* items */ ],
   "descuentos": [ /* items */ ]
 }
 ```
+
+`restaurante.logoUrl` ya viene resuelto: el logo propio del restaurante o, si no tiene, el de su marca; `null` si ninguno tiene (la app muestra el de MenYU). `restaurante.direccion` es `null` si no está cargada. El header y el menú lateral del menú (mesa y carta) usan los dos.
 
 Every item carries its prices already calculated, so the apps never calculate prices or percentages:
 

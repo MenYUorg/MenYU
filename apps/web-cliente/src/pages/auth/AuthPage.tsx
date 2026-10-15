@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { AppHeader } from '../../components/AppHeader'
 import { api } from '../../services/api'
 import { resolveAppUrl } from '../../utils/resolveAppUrl'
+import { rutaInterna } from '../../utils/rutaInterna'
 import { useSessionStore } from '../../store/sessionStore'
 
 const C = {
@@ -36,9 +37,15 @@ function storeTokens(accessToken: string, refreshToken: string) {
   localStorage.setItem(REFRESH_KEY, refreshToken)
 }
 
+/** A dónde va un cliente después de iniciar sesión o registrarse: a donde estaba (`?volver=`), o al menú si tiene mesa, o al inicio. */
+function destinoDespuesDeIngresar(volver: string | null): string {
+  if (volver) return volver
+  return useSessionStore.getState().sesionId ? '/menu' : '/'
+}
+
 // ── Login form ────────────────────────────────────────────────────────────────
 
-function LoginForm() {
+function LoginForm({ volver }: { volver: string | null }) {
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -62,8 +69,7 @@ function LoginForm() {
         })
         window.location.href = `${baseUrl}?${params.toString()}`
       } else {
-        const { sesionId } = useSessionStore.getState()
-        navigate(sesionId ? '/menu' : '/')
+        navigate(destinoDespuesDeIngresar(volver))
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Credenciales incorrectas. Verificá e intentá de nuevo.')
@@ -110,7 +116,7 @@ function LoginForm() {
 
 // ── Register form ─────────────────────────────────────────────────────────────
 
-function RegisterForm() {
+function RegisterForm({ volver }: { volver: string | null }) {
   const navigate = useNavigate()
   const [nombre, setNombre] = useState('')
   const [email, setEmail] = useState('')
@@ -137,8 +143,7 @@ function RegisterForm() {
     try {
       const data = await api.auth.register(nombre, email, password, telefono || undefined)
       storeTokens(data.accessToken, data.refreshToken)
-      const { sesionId } = useSessionStore.getState()
-      navigate(sesionId ? '/menu' : '/')
+      navigate(destinoDespuesDeIngresar(volver))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo crear la cuenta. El email puede estar en uso.')
     } finally {
@@ -244,6 +249,8 @@ export function AuthPage() {
   const [searchParams] = useSearchParams()
   const initialTab: Tab = searchParams.get('tab') === 'register' ? 'register' : 'login'
   const [activeTab, setActiveTab] = useState<Tab>(initialTab)
+  // A dónde volver al terminar (la carta pide iniciar sesión y vuelve a la carta). Solo rutas de la app.
+  const volver = rutaInterna(searchParams.get('volver'))
 
   return (
     <div style={{ minHeight: '100vh', background: C.bg }}>
@@ -301,7 +308,7 @@ export function AuthPage() {
             ))}
           </div>
 
-          {activeTab === 'login' ? <LoginForm /> : <RegisterForm />}
+          {activeTab === 'login' ? <LoginForm volver={volver} /> : <RegisterForm volver={volver} />}
         </div>
       </div>
     </div>

@@ -118,7 +118,14 @@ export interface MenuPublicoCategoria {
 }
 
 export interface MenuPublico {
-  restaurante: { id: string; nombre: string; nombreSeccionRecomendados: string }
+  restaurante: {
+    id: string
+    nombre: string
+    nombreSeccionRecomendados: string
+    direccion: string | null
+    /** El logo propio del restaurante o, si no tiene, el de su marca; `null` si ninguno tiene (la app muestra el de MenYU). */
+    logoUrl: string | null
+  }
   categorias: MenuPublicoCategoria[]
   recomendados: MenuPublicoItem[]
   descuentos: MenuPublicoItem[]

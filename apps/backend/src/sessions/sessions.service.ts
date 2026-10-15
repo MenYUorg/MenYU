@@ -147,8 +147,9 @@ export class SessionsService {
       throw new BadRequestException('Debe proveer tableCode o restauranteId + pin')
     }
 
-    const clienteId = await this.resolveClienteId(authHeader)
+    // Primero la mesa: si no existe (o es de otro restaurante) no se crea un cliente "Invitado" de más.
     const mesa = await this.resolveMesa(dto)
+    const clienteId = await this.resolveClienteId(authHeader)
 
     const sesionActiva = await this.prisma.sesionMesa.findFirst({
       where: { mesaId: mesa.id, estado: 'activa' },
@@ -734,6 +735,11 @@ export class SessionsService {
     return guest.id
   }
 
+  /**
+   * La mesa por el código del QR (`tableCode`) o por el PIN del restaurante. Si junto con el QR llega `restauranteId`
+   * (la persona eligió un restaurante en la app), la mesa tiene que ser de ese restaurante. El PIN ya se busca dentro
+   * del restaurante.
+   */
   private async resolveMesa(dto: OpenSessionDto) {
     const where = dto.tableCode
       ? { qrToken: dto.tableCode, activo: true }
@@ -745,6 +751,9 @@ export class SessionsService {
     })
 
     if (!mesa) throw new NotFoundException('Mesa no encontrada')
+    if (dto.tableCode && dto.restauranteId && mesa.restauranteId !== dto.restauranteId) {
+      throw new ConflictException('Ese QR no es de este restaurante')
+    }
     return mesa
   }
 

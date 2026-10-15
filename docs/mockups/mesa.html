@@ -42,7 +42,7 @@
       }
 
       // El PIN no se ofrece de entrada: el panel arranca cerrado y se abre al tocar el texto chico.
-      var panelAbierto = ['pin', 'pin-escrito', 'abriendo', 'error-pin', 'pin-desde-camara'].indexOf(estado) !== -1;
+      var panelAbierto = ['pin', 'pin-escrito', 'abriendo', 'error-pin', 'pin-desde-camara', 'pin-desde-qr'].indexOf(estado) !== -1;
       var conPin = estado === 'pin-escrito' || estado === 'abriendo' || estado === 'error-pin';
       var abriendo = estado === 'abriendo';
       var errorPin = estado === 'error-pin';
@@ -54,6 +54,8 @@
         aviso = '<div class="banner-error" role="alert">' + MK.esc('Ese QR no es de ' + r.nombre + '. Escaneá el QR de una de sus mesas.') + '</div>';
       } else if (estado === 'pin-desde-camara') {
         aviso = '<div class="banner-info" role="status">No pudimos usar tu cámara. Ingresá el PIN que aparece en tu mesa.</div>';
+      } else if (estado === 'pin-desde-qr') {
+        aviso = '<div class="banner-info" role="status">No pudimos abrir tu mesa con el QR. Ingresá el PIN que aparece en tu mesa.</div>';
       }
 
       var contexto = estado === 'cargando'
