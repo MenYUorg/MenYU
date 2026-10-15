@@ -200,6 +200,37 @@
     return `<span class="logo-oscuro" style="width:${ancho}px;height:${alto}px"><img src="${RUTA_LOGO_OSCURO}" alt="MenYU" style="left:${-x * escala}px;top:${-165 * escala}px;width:${2172 * escala}px;height:${724 * escala}px"></span>`;
   }
 
+  /**
+   * El logo de MenYu para fondos claros (logo.png: letras naranjas y el tenedor azul en la U, 7030 × 1398 px, con las
+   * letras de y = 10 a 1397 y la U de x = 5813 a 7029). `alto` es el alto de las letras; con `soloU`, solo la U con el
+   * tenedor. En la app va una versión liviana de este PNG (el original pesa 1,5 MB).
+   */
+  function logoClaro(alto, soloU) {
+    const escala = alto / 1388;
+    const x = soloU ? 5813 : 0;
+    const ancho = (soloU ? 1217 : 7030) * escala;
+    return `<span class="logo-oscuro" style="width:${ancho}px;height:${alto}px"><img src="${RUTA_LOGO}" alt="MenYU" style="left:${-x * escala}px;top:${-10 * escala}px;width:${7030 * escala}px;height:${1398 * escala}px"></span>`;
+  }
+
+  /**
+   * El header del menú (ClienteMenuPage) con el logo del restaurante como botón del menú lateral (propuesta de la Fase 7).
+   * `o`: nombre; `logo` (clave de LOGOS) o `menyu` ('u' o 'completo'); `hoy` para el botón de iniciales de hoy;
+   * `modo` ('mesa' o 'carta'); `pin` (código de la mesa en modo seguro); `compacto` (Mozo solo con la campana).
+   */
+  function menuHeader(o) {
+    const hamburguesa = '<span class="mh-badge" aria-hidden="true"><i></i><i></i><i></i></span>';
+    let boton;
+    if (o.hoy) boton = `<button class="mh-boton hoy" type="button" aria-label="Abrir el menú">${esc(iniciales(o.nombre))}${hamburguesa}</button>`;
+    else if (o.menyu === 'u') boton = `<button class="mh-boton" type="button" aria-label="Abrir el menú">${logoClaro(26, true)}${hamburguesa}</button>`;
+    else if (o.menyu === 'completo') boton = `<button class="mh-boton ancho" type="button" aria-label="Abrir el menú">${logoClaro(15)}${hamburguesa}</button>`;
+    else boton = `<button class="mh-boton" type="button" aria-label="Abrir el menú"><img src="${LOGOS[o.logo]}" alt="">${hamburguesa}</button>`;
+    const mesa = o.modo === 'mesa'
+      ? `<button class="mh-mozo" type="button" aria-label="Llamar al mozo"><span aria-hidden="true">🔔</span><span class="txt">Mozo</span></button>` +
+        `<div class="mh-mesas"><span class="mh-mesa">Mesa ${o.mesa || 5}</span>${o.pin ? `<span class="mh-pin">PIN ${o.pin}</span>` : ''}</div>`
+      : '';
+    return `<header class="mh${o.compacto ? ' compacto' : ''}">${boton}<div class="mh-nombre">${esc(o.nombre)}</div>${mesa}</header>`;
+  }
+
   /** Lo que se ve de la cámara en el escáner: una mesa oscura con un QR de mentira (solo para el mockup). */
   function imagenCamara() {
     const n = 25;
@@ -338,7 +369,7 @@
     RUTA_LOGO, RUTA_LOGO_OSCURO, RUTA_PLACEHOLDER, LOGOS, TODOS, NORMALES, LIMITE,
     esc, sinAcentos, peso, plural, iniciales, icono,
     datos, buscar, restauranteDe, ofertasDe, todasLasOfertas,
-    appHeader, logoOscuro, imagenCamara, logo, tituloSeccion, seccion, direccion, cardResto, cardOferta, carrusel, activarCarrusel,
+    appHeader, logoOscuro, logoClaro, menuHeader, imagenCamara, logo, tituloSeccion, seccion, direccion, cardResto, cardOferta, carrusel, activarCarrusel,
     esqueletoHome, esqueletoOferta, esqueletoResto, bloqueEstado, spinner,
   };
 })();

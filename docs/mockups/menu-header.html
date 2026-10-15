@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Header del menú · mockup</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="mockups.css" />
+</head>
+<body>
+  <div id="raiz"></div>
+
+  <script src="mockups.js"></script>
+  <script>
+    (function () {
+      var p = new URLSearchParams(location.search);
+      var modo = p.get('modo') === 'carta' ? 'carta' : 'mesa';
+      var vista = ['logos', 'angosto', 'pantalla'].indexOf(p.get('vista')) !== -1 ? p.get('vista') : 'logos';
+      var raiz = document.getElementById('raiz');
+
+      function especimen(titulo, html) {
+        return '<div class="especimen"><small>' + MK.esc(titulo) + '</small>' + html + '</div>';
+      }
+
+      // ── Los distintos logos en el header ─────────────────────────────────────
+      if (vista === 'logos') {
+        var pin = modo === 'mesa' ? '731' : null;
+        var CASOS = [
+          ['Hoy (para comparar): las iniciales del restaurante', { hoy: true, nombre: 'La Parrilla del Puerto' }],
+          ['Logo propio del restaurante · cuadrado', { logo: 'parrilla', nombre: 'La Parrilla del Puerto', pin: pin }],
+          ['Logo propio · redondo', { logo: 'vito', nombre: 'Pizzería Don Vito' }],
+          ['Logo propio · muy ancho (4 a 1): entra entero, pero se ve chico', { logo: 'almendra', nombre: 'Café Almendra' }],
+          ['Logo propio · muy alto (1 a 3): entra entero', { logo: 'kaori', nombre: 'Sushi Kaori' }],
+          ['Logo propio · de fondo oscuro', { logo: 'rincon', nombre: 'El Rincón de los Abuelos' }],
+          ['Sin logo propio: usa el de su marca', { logo: 'burger', nombre: 'Burger Lab Palermo' }],
+          ['Sin logo de restaurante ni de marca: el de MenYU (la U con el tenedor)', { menyu: 'u', nombre: 'Heladería Fiore' }],
+          ['Otra opción para MenYU: el logo completo (el cuadro se ensancha)', { menyu: 'completo', nombre: 'Heladería Fiore' }],
+          ['Nombre largo: hasta dos líneas y, si todavía no entra, se corta con "…" en la segunda', { logo: 'rincon', nombre: 'El Rincón de los Abuelos — Parrilla, pastas y cocina casera de autor' }],
+          ['Nombre sin espacios: se parte en vez de romper el header', { menyu: 'u', nombre: 'Superlargonombredelrestauranteparaprobarelcortedepalabras' }],
+        ];
+        raiz.innerHTML = '<main class="muestras-header">' +
+          '<h1>Header del menú · ' + (modo === 'mesa' ? 'en la mesa' : 'en la carta') + '</h1>' +
+          '<p>El botón de las iniciales (el que abre el menú lateral) pasa a ser <b>el logo del restaurante</b>: logo propio, si no tiene el de su marca y, si tampoco, el de MenYU. Es el mismo botón: abre el menú lateral y conserva el indicador de las tres rayitas. El logo va en un cuadro blanco de 40 px (se toca como uno de 44) y siempre entra entero, sin recortarse ni deformarse.' +
+          (modo === 'mesa' ? ' Acá se ven también "Mozo" y la mesa (con el código si la mesa está en modo seguro), que solo existen en la mesa.' : ' En la carta no hay "Mozo" ni mesa: solo el logo y el nombre.') + '</p>' +
+          CASOS.map(function (c) { return especimen(c[0], MK.menuHeader(Object.assign({ modo: modo }, c[1]))); }).join('') +
+          '<p class="mh-nota"><b>Un logo blanco o muy claro sobre transparente</b> no se vería sobre el cuadro blanco: es la misma regla que en Discovery y en la pantalla del restaurante (se suben logos pensados para fondo claro). <b>Los muy anchos</b> se ven chicos en un cuadro de 40 px; conviene subir logos cuadrados.</p>' +
+          '</main>';
+      }
+
+      // ── La mesa con el código en celulares angostos ──────────────────────────
+      if (vista === 'angosto') {
+        raiz.innerHTML = '<main class="muestras-header">' +
+          '<h1>Header de la mesa en celulares angostos</h1>' +
+          '<p>En la mesa el header lleva el logo, el nombre, "Mozo", la mesa y, en modo seguro, el código. En un celular de 320 o 360 px <b>el nombre casi no entra</b> (hoy ya se corta con "La P…"). <b>Propuesta</b> para los celulares de menos de 400 px: <b>"Mozo" queda como la campana sola</b> (con el área de toque de 44 px y el nombre accesible "Llamar al mozo") y el nombre puede ocupar dos líneas. Desde 400 px sigue "Mozo" con su texto. Probalo en <b>320</b>, <b>360</b> y <b>390</b>.</p>' +
+          especimen('Mesa en modo seguro · sin cambios en los botones', MK.menuHeader({ modo: 'mesa', logo: 'parrilla', nombre: 'La Parrilla del Puerto', pin: '731' })) +
+          especimen('Mesa en modo seguro · propuesta: "Mozo" con la campana sola', MK.menuHeader({ modo: 'mesa', logo: 'parrilla', nombre: 'La Parrilla del Puerto', pin: '731', compacto: true })) +
+          especimen('Mesa en modo abierto (sin código) · sin cambios', MK.menuHeader({ modo: 'mesa', logo: 'vito', nombre: 'Pizzería Don Vito' })) +
+          especimen('Mesa en modo abierto · propuesta', MK.menuHeader({ modo: 'mesa', logo: 'vito', nombre: 'Pizzería Don Vito', compacto: true })) +
+          especimen('Nombre largo en modo seguro · sin cambios', MK.menuHeader({ modo: 'mesa', logo: 'rincon', nombre: 'El Rincón de los Abuelos — Parrilla, pastas y cocina casera de autor', pin: '731' })) +
+          especimen('Nombre largo en modo seguro · propuesta', MK.menuHeader({ modo: 'mesa', logo: 'rincon', nombre: 'El Rincón de los Abuelos — Parrilla, pastas y cocina casera de autor', pin: '731', compacto: true })) +
+          '</main>';
+      }
+
+      // ── La pantalla entera, para ver el header en contexto ───────────────────
+      if (vista === 'pantalla') {
+        var ofertas = MK.ofertasDe('parrilla', MK.todasLasOfertas());
+        var header = MK.menuHeader({ modo: modo, logo: 'parrilla', nombre: 'La Parrilla del Puerto', pin: modo === 'mesa' ? '731' : null, compacto: modo === 'mesa' && window.innerWidth < 400 });
+        raiz.innerHTML = '<div class="mh-pantalla ' + modo + '">' + header +
+          '<div class="mh-busca"><div class="campo">🔍 Buscar platos...</div><div class="dietas">🥗 Dietas <span style="font-size:9px;opacity:.55">▾</span></div></div>' +
+          '<div class="mh-chips"><div><span class="activo">Descuentos</span><span>RECOMENDACIONES</span><span>Principales</span><span>Postres</span></div></div>' +
+          '<div class="mh-contenido"><section class="seccion">' + MK.tituloSeccion('Descuentos') +
+          '<div class="mh-grilla">' + ofertas.map(function (o) { return MK.cardOferta(o, { sinRestaurante: true, fija: true }); }).join('') + '</div></section></div>' +
+          (modo === 'mesa' ? '<div class="mh-fab">🛒<b>2</b></div>' : '') + '</div>';
+      }
+    })();
+  </script>
+</body>
+</html>

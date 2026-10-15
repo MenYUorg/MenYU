@@ -74,6 +74,7 @@
   <header class="top">
     <strong>Mockups · Discovery</strong>
     <span class="fase">Fase 6 · aprobados</span>
+    <span class="fase">Fase 7 · header del menú para aprobar</span>
     <span class="espacio"></span>
     <div class="anchos" id="anchos" role="group" aria-label="Ancho de pantalla">
       <button type="button" data-ancho="320">320</button>
@@ -101,6 +102,7 @@
       var MESA = 'mesa.html';
       var ESCANER = 'escaner.html';
       var CHECKIN = 'checkin.html';
+      var MENU_HEADER = 'menu-header.html';
 
       var GRUPOS = [
         { nombre: 'Header', items: [
@@ -208,6 +210,18 @@
             nota: 'Si no hubo respuesta (sin internet o el servidor no contesta), lo primero es <b>Reintentar</b>; el PIN también se ofrece, por si el problema era solo del QR.' },
           { id: 'checkin-sin-restaurante', titulo: 'Link sin restaurante', src: CHECKIN + '?estado=error-qr&restaurante=no',
             nota: 'El QR impreso siempre trae el restaurante, pero un link armado a mano puede no traerlo. Sin restaurante no se puede ir directo a su pantalla: el botón pasa a <b>"Elegir mi restaurante"</b> (lleva al inicio) con una línea de ayuda, igual que en el escáner desde el home.' },
+        ] },
+        { nombre: 'Header del menú (Fase 7, para aprobar)', items: [
+          { id: 'menu-carta-logos', titulo: 'Carta · los logos', src: MENU_HEADER + '?modo=carta&vista=logos', nuevo: true,
+            nota: '<b>Para aprobar.</b> El botón de las iniciales, el que abre el menú lateral, pasa a ser <b>el logo del restaurante</b> (propio; si no tiene, el de su marca; si tampoco, el de MenYU): un cuadro blanco de 40 px (se toca como uno de 44) con el logo entero, sin recortarlo ni deformarlo, y el indicador de las tres rayitas de siempre. Se ven un logo cuadrado, uno redondo, uno muy ancho, uno muy alto, uno de fondo oscuro, el de la marca, el de MenYU (la U con el tenedor) y, como otra opción, el logo completo de MenYU. El nombre puede ocupar dos líneas. En la carta no hay "Mozo" ni mesa.' },
+          { id: 'menu-mesa-logos', titulo: 'Mesa · los logos', src: MENU_HEADER + '?modo=mesa&vista=logos', nuevo: true,
+            nota: 'Lo mismo en el menú de la mesa, con "Mozo" y el número de la mesa (y el código si está en modo seguro). Arriba, <b>cómo es hoy</b> (las iniciales) para comparar.' },
+          { id: 'menu-angosto', titulo: 'Mesa en celular angosto', src: MENU_HEADER + '?modo=mesa&vista=angosto', nuevo: true,
+            nota: 'Con "Mozo", la mesa y el código, <b>el nombre casi no entra en 320 o 360 px</b> (hoy ya se corta con "La P…"). <b>Propuesta</b> para menos de 400 px: "Mozo" queda como la campana sola (área de toque de 44 px, nombre accesible "Llamar al mozo") y el nombre usa dos líneas. Probalo en <b>320</b>, <b>360</b> y <b>390</b>.' },
+          { id: 'menu-pantalla-carta', titulo: 'Pantalla de la carta', src: MENU_HEADER + '?modo=carta&vista=pantalla', nuevo: true,
+            nota: 'El header en contexto, con el buscador, los chips y las tarjetas. En la carta las tarjetas no llevan el "+" ni se tocan.' },
+          { id: 'menu-pantalla-mesa', titulo: 'Pantalla de la mesa', src: MENU_HEADER + '?modo=mesa&vista=pantalla', nuevo: true,
+            nota: 'Igual, en la mesa: con "Mozo" (la campana sola en celular), la mesa con su código, el "+" de las tarjetas y el botón del carrito.' },
         ] },
       ]
 
