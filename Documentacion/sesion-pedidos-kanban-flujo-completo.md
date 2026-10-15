@@ -427,20 +427,20 @@ CORS_ORIGINS=https://cliente.menyu.com,https://staff.menyu.com,https://admin.men
 
 Variables de entorno en el proyecto Vercel:
 ```
-VITE_API_URL=https://menyuapi-production.up.railway.app/api
+VITE_API_URL=https://menyu-backend-production.up.railway.app/api
 ```
 
 ### Vercel — web-staff
 
 ```
-VITE_API_URL=https://menyuapi-production.up.railway.app/api
-VITE_WS_URL=https://menyuapi-production.up.railway.app
+VITE_API_URL=https://menyu-backend-production.up.railway.app/api
+VITE_WS_URL=https://menyu-backend-production.up.railway.app
 ```
 
 ### Vercel — web-admin
 
 ```
-VITE_API_URL=https://menyuapi-production.up.railway.app/api
+VITE_API_URL=https://menyu-backend-production.up.railway.app/api
 ```
 
 ### Apps Expo (apps/cliente, apps/mozo)

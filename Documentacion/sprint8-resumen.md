@@ -86,8 +86,8 @@ El tag dispara automáticamente `deploy-production.yml`, que corre CI completo y
 
 | Variable | web-cliente | web-staff | web-admin |
 |---|---|---|---|
-| `VITE_API_URL` | `https://menyuapi-production.up.railway.app/api` | ídem | ídem |
-| `VITE_WS_URL` | — | `https://menyuapi-production.up.railway.app` | — |
+| `VITE_API_URL` | `https://menyu-backend-production.up.railway.app/api` | ídem | ídem |
+| `VITE_WS_URL` | — | `https://menyu-backend-production.up.railway.app` | — |
 
 **Proceso:** el step `vercel deploy --prod --prebuilt` en `deploy-production.yml` promueve el build a producción en los tres proyectos.
 

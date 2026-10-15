@@ -1,1 +1,2 @@
 *.patch text eol=lf
+apps/backend/prisma/migrations/migration_lock.toml text eol=lf
