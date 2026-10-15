@@ -685,12 +685,20 @@ Returns the full public menu for a restaurant — categories, items, ingredients
 
 ```json
 {
-  "restaurante": { "id": "uuid", "nombre": "Restaurante Seed", "nombreSeccionRecomendados": "Recomendaciones del chef" },
+  "restaurante": {
+    "id": "uuid",
+    "nombre": "Restaurante Seed",
+    "nombreSeccionRecomendados": "Recomendaciones del chef",
+    "direccion": "Av. Siempreviva 742",
+    "logoUrl": "https://…/logos/… o null"
+  },
   "categorias": [{ "id": "uuid", "nombre": "Principales", "orden": 2, "itemsDirectos": [ /* items */ ] }],
   "recomendados": [ /* items */ ],
   "descuentos": [ /* items */ ]
 }
 ```
+
+`restaurante.logoUrl` ya viene resuelto: el logo propio del restaurante o, si no tiene, el de su marca; `null` si ninguno tiene (la app muestra el de MenYU). `restaurante.direccion` es `null` si no está cargada. El header y el menú lateral del menú (mesa y carta) usan los dos.
 
 Every item carries its prices already calculated, so the apps never calculate prices or percentages:
 

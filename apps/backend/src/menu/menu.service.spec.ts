@@ -17,7 +17,15 @@ const mockPrisma = {
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
-const RESTAURANTE = { id: 'rest-1', nombre: 'Restaurante Test', activo: true, nombreSeccionRecomendados: 'Recomendaciones del chef' }
+const RESTAURANTE = {
+  id: 'rest-1',
+  nombre: 'Restaurante Test',
+  activo: true,
+  nombreSeccionRecomendados: 'Recomendaciones del chef',
+  direccion: 'Av. Siempreviva 742',
+  logoUrl: null,
+  marca: { logoUrl: null },
+}
 
 const ING_REMOVIBLE = {
   id: 'ii-pan',
@@ -122,8 +130,69 @@ describe('MenuService', () => {
         id: 'rest-1',
         nombre: 'Restaurante Test',
         nombreSeccionRecomendados: 'Recomendaciones del chef',
+        direccion: 'Av. Siempreviva 742',
+        logoUrl: null,
       })
       expect(result.categorias).toEqual([])
+    })
+
+    describe('logo y dirección del restaurante (para el header y el menú lateral)', () => {
+      it('con logo propio devuelve ese, aunque la marca tenga otro', async () => {
+        mockPrisma.restaurante.findUnique.mockResolvedValue({ ...RESTAURANTE, logoUrl: 'https://x/propio.png', marca: { logoUrl: 'https://x/marca.png' } })
+
+        const result = await service.getMenuPublico('rest-1', {})
+
+        expect(result.restaurante.logoUrl).toBe('https://x/propio.png')
+      })
+
+      it('sin logo propio devuelve el de su marca', async () => {
+        mockPrisma.restaurante.findUnique.mockResolvedValue({ ...RESTAURANTE, logoUrl: null, marca: { logoUrl: 'https://x/marca.png' } })
+
+        const result = await service.getMenuPublico('rest-1', {})
+
+        expect(result.restaurante.logoUrl).toBe('https://x/marca.png')
+      })
+
+      it('sin logo propio ni de marca devuelve null (la app muestra el de MenYU)', async () => {
+        mockPrisma.restaurante.findUnique.mockResolvedValue({ ...RESTAURANTE, logoUrl: null, marca: { logoUrl: null } })
+
+        const result = await service.getMenuPublico('rest-1', {})
+
+        expect(result.restaurante.logoUrl).toBeNull()
+      })
+
+      it('una marca sin datos no rompe: devuelve null', async () => {
+        mockPrisma.restaurante.findUnique.mockResolvedValue({ ...RESTAURANTE, marca: undefined })
+
+        const result = await service.getMenuPublico('rest-1', {})
+
+        expect(result.restaurante.logoUrl).toBeNull()
+      })
+
+      it('devuelve la dirección tal cual y null si no está cargada', async () => {
+        expect((await service.getMenuPublico('rest-1', {})).restaurante.direccion).toBe('Av. Siempreviva 742')
+
+        mockPrisma.restaurante.findUnique.mockResolvedValue({ ...RESTAURANTE, direccion: null })
+
+        expect((await service.getMenuPublico('rest-1', {})).restaurante.direccion).toBeNull()
+      })
+
+      it('pide a la base solo lo necesario del restaurante y de su marca (sin datos sensibles)', async () => {
+        await service.getMenuPublico('rest-1', {})
+
+        expect(mockPrisma.restaurante.findUnique).toHaveBeenCalledWith({
+          where: { id: 'rest-1' },
+          select: {
+            id: true,
+            nombre: true,
+            activo: true,
+            nombreSeccionRecomendados: true,
+            direccion: true,
+            logoUrl: true,
+            marca: { select: { logoUrl: true } },
+          },
+        })
+      })
     })
 
     // 2. Todos los ítems de una categoría aparecen en itemsDirectos

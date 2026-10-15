@@ -41,7 +41,15 @@ export class MenuService {
   async getMenuPublico(restauranteId: string, filtros: MenuFiltros) {
     const restaurante = await this.prisma.restaurante.findUnique({
       where: { id: restauranteId },
-      select: { id: true, nombre: true, activo: true, nombreSeccionRecomendados: true },
+      select: {
+        id: true,
+        nombre: true,
+        activo: true,
+        nombreSeccionRecomendados: true,
+        direccion: true,
+        logoUrl: true,
+        marca: { select: { logoUrl: true } },
+      },
     })
     if (!restaurante || !restaurante.activo) throw new NotFoundException('Restaurante no encontrado')
 
@@ -103,6 +111,9 @@ export class MenuService {
         id: restaurante.id,
         nombre: restaurante.nombre,
         nombreSeccionRecomendados: restaurante.nombreSeccionRecomendados,
+        direccion: restaurante.direccion,
+        // El logo propio del restaurante manda; si no tiene, el de su marca; si tampoco, `null` (la app muestra el de MenYU).
+        logoUrl: restaurante.logoUrl ?? restaurante.marca?.logoUrl ?? null,
       },
       categorias: result,
       recomendados,
