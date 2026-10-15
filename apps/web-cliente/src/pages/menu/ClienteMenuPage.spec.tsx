@@ -509,6 +509,15 @@ describe('ClienteMenuPage', () => {
     })
   })
 
+  describe('un restaurante que no cargó ningún plato', () => {
+    it('el menú dice que todavía no cargó su carta, no que una categoría está vacía', () => {
+      renderMenu(crearMenu())
+
+      expect(screen.getByText('Este restaurante todavía no cargó su carta')).toBeInTheDocument()
+      expect(screen.queryByText(/No hay ítems en esta categoría/)).not.toBeInTheDocument()
+    })
+  })
+
   describe('buscador', () => {
     it('también filtra los descuentos', async () => {
       const user = userEvent.setup()

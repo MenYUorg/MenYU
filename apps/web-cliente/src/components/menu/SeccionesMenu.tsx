@@ -12,7 +12,7 @@ function EmptyState({ buscar, hayDietas, onClear }: { buscar: string; hayDietas:
           ? `No hay platos que coincidan con "${buscar}"`
           : hayDietas
             ? 'Ningún plato cumple todos los filtros de dieta'
-            : 'No hay ítems en esta categoría'}
+            : 'Este restaurante todavía no cargó su carta'}
       </p>
       {(buscar || hayDietas) && (
         <button

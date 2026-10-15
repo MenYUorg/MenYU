@@ -273,6 +273,23 @@ describe('CartaPage (la carta en modo vista)', () => {
       expect(screen.getByText('No hay platos que coincidan con "zzz"')).toBeInTheDocument()
     })
 
+    it('un restaurante que no cargó ningún plato lo dice con un texto propio', async () => {
+      pedirMenu.mockResolvedValue(crearMenu({ restaurante: { id: 'rest-1', nombre: 'La Parrilla' } }))
+      renderCarta()
+      await cargada()
+
+      expect(screen.getByText('Este restaurante todavía no cargó su carta')).toBeInTheDocument()
+      expect(screen.queryByText(/No hay ítems en esta categoría/)).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Limpiar filtros' })).not.toBeInTheDocument()
+    })
+
+    it('el aviso de que no cargó su carta no aparece en un restaurante con platos', async () => {
+      renderCarta()
+      await cargada()
+
+      expect(screen.queryByText(/todavía no cargó su carta/)).not.toBeInTheDocument()
+    })
+
     it('el filtro de dietas deja solo los platos compatibles', async () => {
       renderCarta()
       await cargada()
