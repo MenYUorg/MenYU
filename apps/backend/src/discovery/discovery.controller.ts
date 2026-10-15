@@ -1,12 +1,8 @@
-import { Controller, Get, NotFoundException, Param, ParseUUIDPipe, Query } from '@nestjs/common'
+import { Controller, Get, Param, Query } from '@nestjs/common'
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger'
 import { DiscoveryService } from './discovery.service'
 import { BuscarDiscoveryDto } from './dto/buscar-discovery.dto'
-
-// Un id que no tiene forma de UUID no puede ser de ningún restaurante: se responde igual que uno que no existe.
-const restauranteIdPipe = new ParseUUIDPipe({
-  exceptionFactory: () => new NotFoundException('Restaurante no encontrado'),
-})
+import { IdRestaurantePipe } from './id-restaurante.pipe'
 
 // Endpoints públicos y anónimos: la pantalla de inicio de web-cliente los usa sin iniciar sesión.
 @ApiTags('discovery')
@@ -36,7 +32,7 @@ export class DiscoveryController {
   @ApiOperation({ summary: 'Un restaurante y sus ofertas (público)' })
   @ApiResponse({ status: 200, description: 'El restaurante y hasta 30 de sus ofertas, por porcentaje de descuento mayor' })
   @ApiResponse({ status: 404, description: 'El restaurante no existe, no está activo o su marca no está activa' })
-  getRestaurante(@Param('id', restauranteIdPipe) id: string) {
+  getRestaurante(@Param('id', IdRestaurantePipe) id: string) {
     return this.discovery.getRestaurante(id)
   }
 }
