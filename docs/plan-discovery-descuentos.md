@@ -1,6 +1,6 @@
 # Plan: logo y dirección, descuentos y Discovery de restaurantes
 
-**Estado:** en ejecución: `fix/endpoints-get-id`, `feat/logo-direccion` (Fases 1.0 y 1, PR #364), `feat/descuentos` (Fases 2, 3 y 4, PR #365) y la Fase 5 de `feat/discovery` (API pública, con los mockups; PR #366) ya están en `main`. En la rama `feat/discovery` están hechas las Fases 6 y 7 (Discovery como home, restaurante, ingreso a mesa, escáner, `/check-in`, carta en modo vista y el header con logo y menú lateral) y de la Fase 8 el seed, la documentación y la verificación contra el backend real. Falta el PR contra `main`, el QA en staging y en celulares reales (`docs/checklist-qa-staging.md`) y el tag de producción, que decide el equipo · **Actualizado:** 2026-10-14 · **Base:** `main` al 2026-10-13 (merge ae36522)
+**Estado:** en ejecución: `fix/endpoints-get-id`, `feat/logo-direccion` (Fases 1.0 y 1, PR #364), `feat/descuentos` (Fases 2, 3 y 4, PR #365) y `feat/discovery` (Fases 5 a 8, PRs #366 y #367) ya están en `main`; `main` está desplegado en staging. En producción solo está el hotfix v1.0.5, que sacó los endpoints `/auth/dev/*` (PRs #368 y #369): lo nuevo todavía no tiene tag. Falta el QA en staging y en celulares reales (`docs/checklist-qa-staging.md`), cerrar lo que quedó abierto de seguridad (11.1), el tag de producción con todo lo nuevo (lo decide el equipo) y, después, la consola de ROOT (11.2) · **Actualizado:** 2026-10-15 · **Base:** `main` al 2026-10-13 (merge ae36522)
 **Equipo:** De Marcos, Ojeda, Strumia Carrara
 
 Este documento es la referencia del trabajo: qué se construye, qué decidimos, cómo se parte en ramas y fases y cómo se prueba cada una. Si una decisión cambia, se actualiza acá (sección 3) y se anota en la fase afectada.
@@ -17,6 +17,7 @@ Este documento es la referencia del trabajo: qué se construye, qué decidimos, 
 8. [Cómo probar en celular](#8-cómo-probar-en-celular)
 9. [Riesgos y notas operativas](#9-riesgos-y-notas-operativas)
 10. [Pendientes y su resolución](#10-pendientes-y-su-resolución)
+11. [Próximos pasos](#11-próximos-pasos)
 - [Apéndice A: permisos de ROOT en el código existente](#apéndice-a-permisos-de-root-en-el-código-existente)
 - [Apéndice B: backlog diferido](#apéndice-b-backlog-diferido)
 
@@ -700,9 +701,65 @@ Todos los pendientes se resolvieron el 2026-10-09 con la opción por defecto. P5
 
 ---
 
+## 11. Próximos pasos
+
+Lo que sigue después de `feat/discovery` (mergeada en `main` el 2026-10-15, PR #367). El QA en staging y en celulares reales y el tag de producción con todo lo nuevo siguen en la Fase 8 (`docs/checklist-qa-staging.md`).
+
+### 11.1 Seguridad de producción: los endpoints `/auth/dev/*` (hotfix v1.0.5)
+
+**Qué se encontró (2026-10-15).** Leyendo el Swagger público (`/docs-json`) del backend de producción (`menyu-backend-production.up.railway.app`; la URL de la documentación, `menyuapi-production…`, ya no existe) seguían `POST /api/auth/dev/seed`, `/admin`, `/mozo` y `/root`. No tenían guard ni chequeo de entorno: creaban datos y usuarios, incluso un ROOT con contraseña conocida y sus tokens, para quien los llamara. Estaban en todos los tags (v1.0.0 a v1.0.4) y en `main`, y la documentación del repo, que es público, lista las credenciales. Producción corría código de v1.0.4 (sus 107 rutas eran exactamente las de ese tag). Solo se leyó la especificación: no se llamó a ninguna de las rutas.
+
+**Qué se hizo.**
+- **Hotfix desde v1.0.4:** rama `hotfix/quitar-endpoints-dev` (PR #368) y tag **v1.0.5**, desplegado a producción el 2026-10-15 (workflow `Deploy — Production` en verde). Solo saca los endpoints: sin migraciones ni nada de lo nuevo. Con v1.0.4 más el cambio: 128 tests del backend, typecheck y build en verde.
+- **El mismo arreglo en `main`** (`fix/quitar-endpoints-dev`, PR #369): se sacaron del controller las 4 rutas y del service sus 4 métodos, y se sumó `sin-endpoints-dev.spec.ts` (11 tests), que falla si alguien vuelve a declarar una ruta `dev` en cualquier controller o un método `dev*` en `AuthService`. `v1.0.5` quedó en la historia de `main`.
+- **Verificado en producción después del deploy** (solo lectura): el Swagger pasó de 75 a 71 rutas y ninguna es `/dev`.
+
+**Qué quedó abierto.** Sacar los endpoints no revoca ni borra lo que ya se creó con ellos:
+- [ ] **El ROOT de producción y otras cuentas conocidas.** Auditar `admin` y `mozo` en la base de producción (solo SELECT): `root@menyu.com` (contraseña `root1234`), `admin@test.com` y `mozo@test.com` (`password123`) y cualquier admin que no se reconozca (`dev/admin` creaba uno con el rol y la contraseña que se pidieran). Si existen, cambiarles la contraseña (con un hash bcrypt) o borrarlas: ROOT entra con el login normal aunque los endpoints ya no existan.
+- [ ] **Sesiones de admin.** Se decidió **no rotar `JWT_SECRET`**. Quien ya haya conseguido tokens de ROOT los conserva: los access tokens duran 8 horas y los refresh tokens, 7 días, y cada uso los renueva. Alternativa sin tocar el secreto: `update refresh_token set revoked_at = now() where revoked_at is null and user_tipo = 'admin';` (los admins vuelven a iniciar sesión y los access tokens vigentes vencen solos en 8 horas). Falta decidirlo y ejecutarlo.
+- [ ] **Logs de Railway:** buscar `POST /api/auth/dev/` para saber si alguien los usó.
+- [ ] **Staging:** tuvo los mismos endpoints hasta el deploy del PR #369. Revisar igual sus cuentas.
+- [ ] **Swagger (`/docs`) público en producción:** muestra toda la API a cualquiera. Apagarlo con una variable de entorno (por ejemplo `ENABLE_DOCS`) es un cambio chico.
+- [ ] **Base de producción fuera de sincronía con el código.** Tiene aplicada `20260709120000_change_default_nombre_seccion_recomendados` (se aplicó el 2026-07-09 desde una máquina de desarrollo, minutos antes del commit que la agrega) y las columnas `item_menu.recomendado_en` y `restaurante.nombre_seccion_recomendados`, que el código de v1.0.4 ignora. No bloquea: `prisma migrate deploy` de v1.0.4 y de `main` corre bien contra un historial así (se probó en una base local, también con la fila fallida y revertida de `20260515000000`). Falta confirmar que ningún `.env` del equipo apunte hoy a la base de producción.
+- [ ] **Antes del próximo tag completo** (el que lleve todo lo de `main`): backup de la base de producción y ensayo del `migrate deploy` con una copia. Llegan 13 migraciones y una es irreversible (`eliminar_pago_por_comensal`). Poner `QR_BASE_URL` en staging (por defecto vale el web-cliente de producción y no está en `.env.example`).
+- [ ] **Documentación con la URL vieja** del backend (`menyuapi-production…`) en `Documentacion/` (por ejemplo `sprint8-resumen.md`).
+
+### 11.2 Consola de ROOT y permisos de ROOT
+
+**La regla** (sección 2.1, D16). ROOT hace administración general: **solo crea y elimina marcas, restaurantes y usuarios OWNER y GERENTE**. No toma decisiones sobre marcas ni restaurantes y no ve sus datos privados (menú y precios, mesas con QR y PIN, mozos, pedidos, reportes ni caja).
+
+**Lo que falta.** Hoy no se cumple en el código viejo, que este plan no tocó (Apéndice A):
+1. **Una interfaz propia para ROOT.** No hay pantalla para crear ni eliminar marcas, restaurantes ni cuentas (solo API), y ROOT entra a web-admin con las pantallas de OWNER y GERENTE. La consola mínima: listar, crear y eliminar marcas, sus restaurantes y los usuarios OWNER y GERENTE (con su marca o sus restaurantes asignados). Decisión abierta: rutas `/root/*` dentro de web-admin con un `RoleGuard` solo para ROOT (lo más barato: ROOT ya inicia sesión ahí) o una cuarta app.
+2. **Sacarle a ROOT lo que sobra en el backend.** Unos 35 `@Roles(…ROOT…)` en 11 controllers y unas 15 comparaciones `user.rol === 'ROOT'` en services y helpers (`assert-staff-access.ts`). Conviene centralizar el chequeo de acceso en un solo servicio. Además `POST /admins` solo crea GERENTE y, cuando lo usa ROOT, sin marca: tiene que recibir `rol` y `marcaId`. Decisión pendiente (Apéndice A): `PATCH /admins/:id` cambia hoy el email y la contraseña de cualquier admin, OWNER incluido; dejar crear y borrar y sacar el cambio de credenciales ajenas.
+3. **Sacarle a ROOT lo que sobra en las apps.** `isOwner = OWNER || ROOT` y `canEdit = GERENTE || ROOT` en unas 6 pantallas de web-admin, los `RoleGuard` de `App.tsx`, el menú de ROOT (`NAV_BY_ROL['ROOT']`) y el campo de restaurante que ROOT tipea en web-staff (`SelectorPage`).
+4. **Tests.** Se invierten los specs de lo viejo que prueban que ROOT puede (`mesas`, `marca`, `users`…, unas 40 menciones en 8 specs; los del código nuevo, como `descuento-endpoints`, `logo-endpoints` y `assert-owner-access`, ya prueban ROOT → 403) y se suma un "ROOT → 403" por cada endpoint que se cierre.
+
+**Estimación** (orden de magnitud, una persona; no son las horas del plan):
+
+| Parte | Estimación |
+|---|---|
+| Backend: sacar los permisos de más, centralizar el acceso, `POST /admins` con rol y marca, y los tests | 1,5 a 2 días |
+| web-admin y web-staff: sacar a ROOT de las pantallas de OWNER y GERENTE | 1 a 1,5 días |
+| Verificación contra el backend real y QA de lo anterior | 0,5 a 1 día |
+| **Subtotal: sacarle los permisos de más** | **3 a 4 días** |
+| Consola mínima de ROOT (marcas, restaurantes, OWNER y GERENTE: lista, alta y baja) con su responsive y sus tests | 3 a 4 días |
+| **Total con la consola** | **6 a 8 días** |
+
+**Riesgos que se encontraron.**
+- **Sacarle los permisos sin la consola deja a ROOT sin nada que hacer** en web-admin: las dos cosas van juntas, o ROOT queda sin acceso hasta que exista la consola.
+- **ROOT deja de servir para soporte.** Hoy entra a cualquier marca; después, la ayuda pasa por el OWNER o por la base.
+- **Cada marca de producción tiene que tener un OWNER antes del cambio**, si no nadie podría administrar su menú. Los que falten se crean con la consola, no con endpoints de desarrollo.
+- **Es un cambio incompatible** para quien use ROOT hoy (seeds, scripts de prueba, `root@menyu.com` en `datos-de-prueba-local.md`): se prueba en staging y se despliega con aviso y tag propio.
+- **No es un agujero explotable desde afuera** (hace falta una cuenta ROOT), pero un ROOT comprometido da acceso total: por eso 11.1 va primero.
+- **Hay deuda hermana** (Apéndice B): endpoints que no validan pertenencia entre marcas. Conviene revisarlos en la misma pasada, con el mismo servicio de acceso.
+
+**Recomendación** (decide el equipo): después del tag de producción con lo nuevo, salvo que se exija antes. Antes del tag alcanza con cerrar lo abierto de 11.1: el ROOT de producción con una contraseña fuerte (o borrado) y las sesiones de admin revocadas.
+
+---
+
 ## Apéndice A: permisos de ROOT en el código existente
 
-Relevado el 2026-10-06 y re-verificado parcialmente el 2026-10-08. **No se cambia nada en este plan**: es la lista para decidir qué se hace con la regla de 2.1. El módulo de pagos se reescribió después del relevamiento y hay que re-revisarlo (Mercado Pago lo informa el equipo por su cuenta).
+Relevado el 2026-10-06 y re-verificado parcialmente el 2026-10-08. **No se cambia nada en este plan**: es la lista para decidir qué se hace con la regla de 2.1. El seguimiento (la consola de ROOT y sacarle lo que sobra) está en la sección 11.2. El módulo de pagos se reescribió después del relevamiento y hay que re-revisarlo (Mercado Pago lo informa el equipo por su cuenta).
 
 Hoy `common/assert-staff-access.ts` centraliza el chequeo para sesiones y pagos. El resto (items, categorías, ingredientes, clasificaciones, mozos, mesas, pedidos, restaurante y admin-restaurante) tiene su propia copia con `if (user.rol === 'ROOT') return`. Si se decide excluir a ROOT, conviene centralizar todo en un solo servicio de acceso.
 
@@ -731,10 +788,11 @@ Documentación que lo describe como acceso libre: `Documentacion/modulo-menu.md`
 
 ## Apéndice B: backlog diferido
 
-- Los endpoints `/auth/dev/*` no tienen guards: crean admins con el rol que se pida y devuelven tokens de ROOT. Confirmar que no están en el build de producción y eliminarlos antes de taguear.
 - Varios endpoints no validan pertenencia entre marcas (reportes, `GET /pedidos`, `GET /pedidos/auditoria`, edición de pedidos, alta de mesas, `GET /waiter-calls`): un OWNER o GERENTE de otra marca podría leer u operar otro restaurante.
 - `PedidosService.confirmar` resta el precio extra en `QUITAR` y los otros dos cálculos de cobro no. `POST /pedidos` no parece usarse desde web-cliente (usa `/orders`).
 - `Documentacion/Doc_DB.md` describe `item_sucursal`, que ya no existe.
 - Responsive de las pantallas existentes de admin y staff que este plan no toca.
 - Inputs existentes con `font-size` menor a 16px (zoom en iOS al enfocar).
 - Peso de `favicon.png` (4,9 MB por app).
+- web-admin, menú lateral colapsado: el botón de expandir se monta sobre el logo (ya pasaba con el cuadro naranja anterior; con el tenedor real se nota más). Falta decidir si el botón se mueve (por ejemplo, debajo del logo) o si se corre el logo.
+- web-cliente: el saludo "¡Hola, X!" del header y del menú lateral sale del token guardado y no mira si venció (ni `AppHeader` ni `MenuView.leerUsuario` revisan `exp`). Con el token vencido sigue saludando y ofreciendo "Cerrar sesión", aunque el servidor ya trata a la persona como invitada (desde el 2026-10-15 `POST /sessions/open` no manda un token vencido). Hoy web-cliente guarda el refresh token pero no lo usa. Falta decidir qué pasa cuando el token venció: pedir que inicie sesión de nuevo, renovarlo con el refresh token o mostrarla como invitada.
