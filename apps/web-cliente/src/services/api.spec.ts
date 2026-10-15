@@ -1,3 +1,4 @@
+import { crearTokenJwt } from '../test/fixtures'
 import { api, ApiError } from './api'
 
 const fetchFalso = vi.fn()
@@ -87,6 +88,70 @@ describe('api', () => {
 
       expect(error).toBeInstanceOf(TypeError)
       expect((error as { status?: unknown }).status).toBeUndefined()
+    })
+
+    describe('con o sin una cuenta iniciada', () => {
+      const encabezadosEnviados = () => fetchFalso.mock.calls[0]?.[1]?.headers as Record<string, string>
+      const enUnaHora = () => Math.floor(Date.now() / 1000) + 3600
+      const guardar = (token: string) => localStorage.setItem('menyu_access_token', token)
+
+      beforeEach(() => localStorage.clear())
+      afterEach(() => localStorage.clear())
+
+      it('con la cuenta iniciada manda su token, así la mesa queda a su nombre', async () => {
+        const token = crearTokenJwt({ sub: 'cli-1', tipo: 'cliente', nombre: 'Ana', exp: enUnaHora() })
+        guardar(token)
+        fetchFalso.mockResolvedValue(respuesta(200, { sesionId: 's' }))
+
+        await api.sessions.open({ qrToken: 'qr-1', restauranteId: 'rest-1' })
+
+        expect(encabezadosEnviados()['Authorization']).toBe(`Bearer ${token}`)
+        expect(cuerpoEnviado()).toEqual({ tableCode: 'qr-1', restauranteId: 'rest-1' })
+      })
+
+      it('también lo manda al entrar con el PIN', async () => {
+        const token = crearTokenJwt({ sub: 'cli-1', tipo: 'cliente', exp: enUnaHora() })
+        guardar(token)
+        fetchFalso.mockResolvedValue(respuesta(200, { sesionId: 's' }))
+
+        await api.sessions.open({ pin: '4821', restauranteId: 'rest-1' })
+
+        expect(encabezadosEnviados()['Authorization']).toBe(`Bearer ${token}`)
+      })
+
+      it('sin cuenta no manda ningún token: se entra como invitado', async () => {
+        fetchFalso.mockResolvedValue(respuesta(200, { sesionId: 's' }))
+
+        await api.sessions.open({ qrToken: 'qr-1' })
+
+        expect(encabezadosEnviados()).not.toHaveProperty('Authorization')
+      })
+
+      it('con el token vencido no lo manda y entra igual, sin error', async () => {
+        guardar(crearTokenJwt({ sub: 'cli-1', tipo: 'cliente', exp: Math.floor(Date.now() / 1000) - 60 }))
+        fetchFalso.mockResolvedValue(respuesta(200, { sesionId: 's' }))
+
+        const resultado = await api.sessions.open({ qrToken: 'qr-1' })
+
+        expect(encabezadosEnviados()).not.toHaveProperty('Authorization')
+        expect(resultado).toEqual({ sesionId: 's' })
+      })
+
+      it('con algo que no es un token guardado, tampoco lo manda y entra igual', async () => {
+        guardar('esto-no-es-un-token')
+        fetchFalso.mockResolvedValue(respuesta(200, { sesionId: 's' }))
+
+        await expect(api.sessions.open({ qrToken: 'qr-1' })).resolves.toEqual({ sesionId: 's' })
+
+        expect(encabezadosEnviados()).not.toHaveProperty('Authorization')
+      })
+
+      it('un error del servidor con la cuenta iniciada llega igual que sin ella', async () => {
+        guardar(crearTokenJwt({ sub: 'cli-1', tipo: 'cliente', exp: enUnaHora() }))
+        fetchFalso.mockResolvedValue(respuesta(404, { message: 'Mesa no encontrada' }))
+
+        await expect(api.sessions.open({ qrToken: 'qr-malo' })).rejects.toMatchObject({ status: 404, message: 'Mesa no encontrada' })
+      })
     })
   })
 })

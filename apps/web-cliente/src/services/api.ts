@@ -1,4 +1,5 @@
 import type { DiscoveryBusquedaResponse, DiscoveryResponse, DiscoveryRestauranteDetalle, MenuPublico } from '@menyu/types'
+import { leerTokenDeCuenta } from '../utils/tokenCuenta'
 
 const BASE = import.meta.env.VITE_API_URL ?? ''
 
@@ -62,6 +63,8 @@ export const api = {
   },
 
   sessions: {
+    // Con una cuenta iniciada se manda su token: el servidor registra la mesa a su nombre y no como "Invitado". Sin
+    // cuenta, o con un token que ya no sirve, no se manda y la persona entra como invitada.
     open: (data: {
       qrToken?: string
       restauranteId?: string
@@ -72,6 +75,7 @@ export const api = {
         'POST',
         '/sessions/open',
         { tableCode: data.qrToken, restauranteId: data.restauranteId, pin: data.pin, codigoSesion: data.codigoSesion },
+        leerTokenDeCuenta(),
       ),
   },
 
