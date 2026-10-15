@@ -1,4 +1,4 @@
-import { TOKEN_KEY, REFRESH_KEY, resolveLoginUrl } from '@menyu/auth'
+import { TOKEN_KEY, REFRESH_KEY, resolveLoginUrl, refrescarTokens } from '@menyu/auth'
 import type {
   Marca,
   Restaurante,
@@ -7,7 +7,6 @@ import type {
   Ingrediente,
   ClasificacionDieta,
   LogoResponse,
-  TokenPair,
   UpdateItemDescuentoRequest,
 } from '@menyu/types'
 
@@ -26,25 +25,6 @@ const BASE = import.meta.env.VITE_API_URL ?? ''
 let isRefreshing = false
 let refreshQueue: Array<(token: string | null) => void> = []
 
-async function tryRefresh(): Promise<string | null> {
-  const refreshToken = localStorage.getItem(REFRESH_KEY)
-  if (!refreshToken) return null
-  try {
-    const res = await fetch(`${BASE}/auth/refresh`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refreshToken }),
-    })
-    if (!res.ok) return null
-    const data = (await res.json()) as TokenPair
-    localStorage.setItem(TOKEN_KEY, data.accessToken)
-    localStorage.setItem(REFRESH_KEY, data.refreshToken)
-    return data.accessToken
-  } catch {
-    return null
-  }
-}
-
 async function req<T>(method: string, path: string, body?: unknown, isRetry = false): Promise<T> {
   const token = localStorage.getItem(TOKEN_KEY)
   const headers: Record<string, string> = {}
@@ -60,7 +40,7 @@ async function req<T>(method: string, path: string, body?: unknown, isRetry = fa
   if (res.status === 401 && !isRetry) {
     if (!isRefreshing) {
       isRefreshing = true
-      const newToken = await tryRefresh()
+      const newToken = await refrescarTokens()
       isRefreshing = false
       refreshQueue.forEach((cb) => cb(newToken))
       refreshQueue = []

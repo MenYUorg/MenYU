@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom'
-import { io } from 'socket.io-client'
+import { AvisoSinTiempoReal } from '@menyu/ui'
 import { ClienteMenuPage } from './pages/menu/ClienteMenuPage'
 import { ItemDetailPage } from './pages/menu/ItemDetailPage'
 import { CarritoPage } from './pages/carrito/CarritoPage'
@@ -23,13 +23,19 @@ import { SesionRequiredRoute } from './SesionRequiredRoute'
 import { ComensalRequiredRoute } from './ComensalRequiredRoute'
 import { useSessionStore } from './store/sessionStore'
 import { usePublicMenuStore } from './store/publicMenuStore'
+import { useTiempoRealStore } from './store/tiempoRealStore'
+import * as socketCliente from './services/socket'
 import { GraciasCard } from './components/GraciasCard'
 
-const WS_BASE = (import.meta.env.VITE_WS_URL as string) ??
-  ((import.meta.env.VITE_API_URL as string) ?? '').replace('/api', '')
+function AvisoTiempoReal() {
+  const visible = useTiempoRealStore((s) => s.sinTiempoReal && !s.avisoOculto)
+  const ocultar = useTiempoRealStore((s) => s.ocultarAviso)
+  return <AvisoSinTiempoReal visible={visible} onCerrar={ocultar} />
+}
 
 function SessionGuard({ children }: { children: React.ReactNode }) {
   const restauranteId = useSessionStore((s) => s.restauranteId)
+  const jwt           = useSessionStore((s) => s.jwt)
   const sesionId      = useSessionStore((s) => s.sesionId)
   const clear         = useSessionStore((s) => s.clear)
   const navigate      = useNavigate()
@@ -42,23 +48,23 @@ function SessionGuard({ children }: { children: React.ReactNode }) {
   useEffect(() => { sesionIdRef.current = sesionId }, [sesionId])
 
   useEffect(() => {
-    if (!restauranteId) return
-    const socket = io(`${WS_BASE}/ws`, { transports: ['websocket'] })
-    socket.on('connect', () => socket.emit('session:join', { restauranteId }))
-    socket.on('sesion:cerrada', ({ sesionId: sid }: { sesionId: string }) => {
-      if (sesionIdRef.current && sid === sesionIdRef.current) setShowGracias(true)
-    })
-    socket.on('sesion:cobrada', ({ sesionId: sid }: { sesionId: string }) => {
-      if (sesionIdRef.current && sid === sesionIdRef.current) setShowGracias(true)
-    })
-    socket.on('menu:updated', ({ restauranteId: rid }: { restauranteId: string }) => {
-      if (rid !== restauranteId) return
-      const { clear: clearMenu, fetchMenu } = usePublicMenuStore.getState()
-      clearMenu()
-      void fetchMenu(rid)
-    })
-    return () => { socket.off('sesion:cobrada'); socket.disconnect() }
-  }, [restauranteId])
+    if (!restauranteId || !jwt) return
+    const unsubs = [
+      socketCliente.onSesionCerrada(({ sesionId: sid }) => {
+        if (sesionIdRef.current && sid === sesionIdRef.current) setShowGracias(true)
+      }),
+      socketCliente.onSesionCobrada(({ sesionId: sid }) => {
+        if (sesionIdRef.current && sid === sesionIdRef.current) setShowGracias(true)
+      }),
+      socketCliente.onMenuActualizado(({ restauranteId: rid }) => {
+        if (rid !== restauranteId) return
+        const { clear: clearMenu, fetchMenu } = usePublicMenuStore.getState()
+        clearMenu()
+        void fetchMenu(rid)
+      }),
+    ]
+    return () => unsubs.forEach((unsub) => unsub())
+  }, [restauranteId, jwt])
 
   const handleAceptar = () => {
     clear()
@@ -68,6 +74,7 @@ function SessionGuard({ children }: { children: React.ReactNode }) {
 
   return (
     <>
+      <AvisoTiempoReal />
       {showGracias && (
         <div style={{
           position: 'fixed',

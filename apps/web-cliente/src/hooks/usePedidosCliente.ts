@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { io } from 'socket.io-client'
 import { api } from '../services/api'
+import * as socketCliente from '../services/socket'
 import { useSessionStore } from '../store/sessionStore'
 
 export interface PedidoCliente {
@@ -14,9 +14,6 @@ export interface PedidoCliente {
     item: { nombre: string }
   }>
 }
-
-const BASE    = (import.meta.env.VITE_API_URL as string) ?? ''
-const WS_BASE = (import.meta.env.VITE_WS_URL as string) ?? BASE.replace('/api', '')
 
 export function usePedidosCliente() {
   const jwt           = useSessionStore((s) => s.jwt)
@@ -50,20 +47,10 @@ export function usePedidosCliente() {
 
     if (!restauranteId) return
 
-    const socket = io(`${WS_BASE}/ws`, { transports: ['websocket'] })
-
-    socket.on('connect', () => {
-      socket.emit('session:join', { restauranteId })
-    })
-
-    socket.on('order:updated', (pedido: PedidoCliente) => {
+    return socketCliente.onPedidoActualizado<PedidoCliente>((pedido) => {
       if (pedido.sesionId !== sesionId) return
       setPedidos((prev) => prev.map((p) => (p.id === pedido.id ? pedido : p)))
     })
-
-    return () => {
-      socket.disconnect()
-    }
   }, [jwt, sesionId, restauranteId])
 
   return { pedidos, loading, error }

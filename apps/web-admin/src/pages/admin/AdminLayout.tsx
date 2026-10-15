@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '@menyu/auth'
-import { LogoMenYuOscuro } from '@menyu/ui'
+import { AvisoSinTiempoReal, LogoMenYuOscuro } from '@menyu/ui'
 import { useContextStore } from '../../store/contextStore'
+import { useTiempoRealStore } from '../../store/tiempoRealStore'
 import { useMediaQuery } from '../../hooks/useMediaQuery'
 import {
   LayoutDashboard,
@@ -219,6 +220,12 @@ function DisabledNavItem({
 }
 
 /* ── layout ────────────────────────────────────────────────────────────────── */
+function AvisoTiempoReal() {
+  const visible = useTiempoRealStore((s) => s.sinTiempoReal && !s.avisoOculto)
+  const ocultar = useTiempoRealStore((s) => s.ocultarAviso)
+  return <AvisoSinTiempoReal visible={visible} onCerrar={ocultar} />
+}
+
 export function AdminLayout() {
   const { user, logout } = useAuth()
   const navSections = NAV_BY_ROL[user?.rol ?? 'GERENTE'] ?? NAV_BY_ROL['GERENTE']
@@ -287,6 +294,7 @@ export function AdminLayout() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50" style={{ height: '100dvh' }}>
+      <AvisoTiempoReal />
 
       {/* ── Overlay del drawer (solo celular) ── */}
       {!isDesktop && (

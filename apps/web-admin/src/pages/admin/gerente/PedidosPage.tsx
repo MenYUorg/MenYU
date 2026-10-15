@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { io, Socket } from 'socket.io-client'
-import { TOKEN_KEY } from '@menyu/auth'
+import type { Socket } from 'socket.io-client'
 import { api, PedidoAdmin } from '../../../services/api'
+import { conectarComoAdmin, cerrarConexionAdmin } from '../../../services/socket'
 import { useContextStore } from '../../../store/contextStore'
 import { ClipboardList, Clock, ChevronRight, RefreshCw, AlertTriangle, X } from 'lucide-react'
 
@@ -21,10 +21,6 @@ const C = {
   red:       '#dc2626',
   redBg:     '#fee2e2',
 }
-
-const WS_URL: string =
-  (import.meta.env.VITE_WS_URL as string | undefined) ??
-  (import.meta.env.VITE_API_URL as string | undefined)?.replace('/api', '') ?? ''
 
 type EstadoPedido = 'pendiente' | 'en_preparacion' | 'listo'
 
@@ -601,15 +597,8 @@ export function PedidosPage() {
 
   useEffect(() => {
     if (!selectedRestauranteId) return
-    const socket: Socket = io(`${WS_URL}/ws`, {
-      auth:       { token: localStorage.getItem(TOKEN_KEY) },
-      transports: ['websocket'],
-    })
+    const socket = conectarComoAdmin(selectedRestauranteId)
     socketRef.current = socket
-
-    socket.on('connect', () => {
-      socket.emit('cocina:join', { restauranteId: selectedRestauranteId })
-    })
 
     socket.on('order:new', (pedido: PedidoAdmin) => {
       setPedidos((prev) => {
@@ -633,7 +622,7 @@ export function PedidosPage() {
     })
 
     return () => {
-      socket.disconnect()
+      cerrarConexionAdmin(socket)
       socketRef.current = null
     }
   }, [selectedRestauranteId])

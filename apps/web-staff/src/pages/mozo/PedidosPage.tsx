@@ -1,13 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { io, type Socket } from 'socket.io-client'
 import { AlertTriangle, ChevronRight, ClipboardList, Clock, RefreshCw, X } from 'lucide-react'
 import { useAuth } from '@menyu/auth'
-import { getToken, api } from '../../services/api'
+import { api } from '../../services/api'
 import type { PedidoRico, EditarItemBody } from '../../services/api'
 import { useMozoStore } from '../../store/mozoStore'
 import { PageHeader } from '../../components/PageHeader'
 import { conectarImpresora, impresoraConectada, imprimirPedido, testPrint } from '../../services/impresora'
+import * as socketService from '../../services/socket'
 
 function getInitials(name?: string): string {
   if (!name) return '?'
@@ -32,10 +32,6 @@ const C = {
   redBg:     '#fee2e2',
 } as const
 
-const WS_URL: string =
-  (import.meta.env.VITE_WS_URL as string | undefined) ??
-  (import.meta.env.VITE_API_URL as string | undefined)?.replace('/api', '') ??
-  ''
 
 type EstadoPedido = 'pendiente' | 'en_preparacion' | 'listo'
 
@@ -329,7 +325,6 @@ export function PedidosPage() {
   const [error,         setError]         = useState<string | null>(null)
   const [editingPedido, setEditingPedido] = useState<PedidoRico | null>(null)
   const [conectada,     setConectada]     = useState<boolean>(impresoraConectada())
-  const socketRef = useRef<Socket | null>(null)
 
   const handleConectarImpresora = useCallback(async () => {
     try {
@@ -359,14 +354,14 @@ export function PedidosPage() {
 
   useEffect(() => {
     if (!restauranteId) return
-    const socket: Socket = io(`${WS_URL}/ws`, { auth: { token: getToken() }, transports: ['websocket'] })
-    socketRef.current = socket
-    socket.on('connect', () => { socket.emit('cocina:join', { restauranteId }) })
-    socket.on('order:new', (pedido: PedidoRico) => {
+    socketService.joinRestauranteComoMozo(restauranteId)
+    const unsubNuevo = socketService.onPedidoNuevo((p) => {
+      const pedido = p as unknown as PedidoRico
       imprimirPedido(pedido).catch(console.error)
-      setPedidos((prev) => prev.some((p) => p.id === pedido.id) ? prev : [pedido, ...prev])
+      setPedidos((prev) => prev.some((x) => x.id === pedido.id) ? prev : [pedido, ...prev])
     })
-    socket.on('order:updated', (pedido: PedidoRico) => {
+    const unsubActualizado = socketService.onPedidoActualizado((p) => {
+      const pedido = p as unknown as PedidoRico
       setPedidos((prev) => {
         const estado = pedido.estado as string
         if (!ESTADOS.includes(estado as EstadoPedido)) return prev.filter((p) => p.id !== pedido.id)
@@ -375,7 +370,7 @@ export function PedidosPage() {
         const next = [...prev]; next[idx] = pedido; return next
       })
     })
-    return () => { socket.disconnect(); socketRef.current = null }
+    return () => { unsubNuevo(); unsubActualizado() }
   }, [restauranteId])
 
   const handleAvanzar = useCallback(async (id: string, nuevoEstado: EstadoPedido) => {

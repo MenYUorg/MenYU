@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { io, type Socket } from 'socket.io-client'
 import type { Mesa } from '@menyu/types'
 import { Bell, Clock, DollarSign, DoorOpen, LayoutGrid, ShoppingBag, Users } from 'lucide-react'
 import { useAuth } from '@menyu/auth'
 import { useMozoStore } from '../../store/mozoStore'
-import { api, getToken } from '../../services/api'
+import { api } from '../../services/api'
 import type { SesionActivaRico, WaiterCallRico } from '../../services/api'
 import { PageHeader } from '../../components/PageHeader'
+import * as socketService from '../../services/socket'
 
 function getInitials(name?: string): string {
   if (!name) return '?'
@@ -46,11 +46,6 @@ const C = {
   textMuted:    '#9ca3af',
   red:          '#dc2626',
 } as const
-
-const WS_URL: string =
-  (import.meta.env.VITE_WS_URL as string | undefined) ??
-  (import.meta.env.VITE_API_URL as string | undefined)?.replace('/api', '') ??
-  ''
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function tiempoTranscurrido(creadaEn: string): string {
@@ -234,8 +229,10 @@ export function MesasPage() {
 
   const mesasRef    = useRef<Mesa[]>([])
   const sesionesRef = useRef<Map<string, SesionActivaRico>>(new Map())
+  const sesionDetalleRef = useRef<SesionActivaRico | null>(null)
   useEffect(() => { mesasRef.current = mesas },       [mesas])
   useEffect(() => { sesionesRef.current = sesiones }, [sesiones])
+  useEffect(() => { sesionDetalleRef.current = sesionDetalle }, [sesionDetalle])
 
   const cargarSesiones = useCallback(async (ocupadas: Mesa[]) => {
     if (ocupadas.length === 0) return
@@ -292,20 +289,14 @@ export function MesasPage() {
     return () => clearInterval(id)
   }, [restauranteId, cargarSesiones, cargarLlamados])
 
-  // WebSocket
+  // WebSocket (conexión compartida de services/socket.ts)
   useEffect(() => {
     if (!restauranteId) return
-    const socket: Socket = io(`${WS_URL}/ws`, {
-      auth:       { token: getToken() },
-      transports: ['websocket'],
-    })
-    socket.on('connect', () => {
-      socket.emit('mozo:join', { restauranteId })
-    })
-    socket.on('waiter:called', () => {
+    socketService.joinRestauranteComoMozo(restauranteId)
+    const unsubLlamado = socketService.onMozoCalled(() => {
       void cargarLlamados()
     })
-    const onSesionCerrada = ({ sesionId }: { sesionId: string }) => {
+    const unsubCerrada = socketService.onSesionCerrada(({ sesionId }) => {
       setMesas((prev) => prev.map((m) => {
         const s = sesionesRef.current.get(m.id)
         return s?.sesionId === sesionId ? { ...m, estado: 'libre' } : m
@@ -317,12 +308,10 @@ export function MesasPage() {
         }
         return next
       })
-      if (sesionDetalle?.sesionId === sesionId) setSesionDetalle(null)
-    }
-    socket.on('sesion:cerrada', onSesionCerrada)
-    socket.on('session:closed', onSesionCerrada)
-    return () => { socket.disconnect() }
-  }, [restauranteId, cargarLlamados, sesionDetalle?.sesionId])
+      if (sesionDetalleRef.current?.sesionId === sesionId) setSesionDetalle(null)
+    })
+    return () => { unsubLlamado(); unsubCerrada() }
+  }, [restauranteId, cargarLlamados])
 
   const mesasConLlamado = useMemo(
     () => new Set(llamados.map((l) => l.sesion.mesa.numero)),

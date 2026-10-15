@@ -1,8 +1,10 @@
 import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom'
 import { ProtectedRoute } from '@menyu/auth'
+import { AvisoSinTiempoReal } from '@menyu/ui'
 import { LoginPage } from './pages/login/LoginPage'
 import { MozoNotifications } from './components/MozoNotifications'
+import { useTiempoRealStore } from './store/tiempoRealStore'
 
 const MozoPanel         = lazy(() => import('./pages/mozo/MozoPanel').then((m) => ({ default: m.MozoPanel })))
 const MesasPage         = lazy(() => import('./pages/mozo/MesasPage').then((m) => ({ default: m.MesasPage })))
@@ -22,6 +24,12 @@ function MozoLayout() {
   )
 }
 
+function AvisoTiempoReal() {
+  const visible = useTiempoRealStore((s) => s.sinTiempoReal && !s.avisoOculto)
+  const ocultar = useTiempoRealStore((s) => s.ocultarAviso)
+  return <AvisoSinTiempoReal visible={visible} onCerrar={ocultar} />
+}
+
 function Loader() {
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#f9fafb' }}>
@@ -33,6 +41,7 @@ function Loader() {
 export function App() {
   return (
     <BrowserRouter>
+      <AvisoTiempoReal />
       <Suspense fallback={<Loader />}>
         <Routes>
           <Route path="/login" element={<LoginPage />} />

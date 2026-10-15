@@ -4,10 +4,9 @@ import {
   AlertTriangle, Bell, ClipboardList, Clock, CreditCard,
   DollarSign, DoorOpen, Printer, QrCode, Users, X,
 } from 'lucide-react'
-import { TOKEN_KEY } from '@menyu/auth'
-import { io, type Socket } from 'socket.io-client'
 import { useContextStore } from '../../../store/contextStore'
 import { api } from '../../../services/api'
+import { conectarComoAdmin, cerrarConexionAdmin } from '../../../services/socket'
 import type { MesaConQr, SesionActiva } from '../../../services/api'
 
 // ── Bell shake animation ───────────────────────────────────────────────────────
@@ -43,11 +42,6 @@ const C = {
   textMuted:     '#9ca3af',
   red:           '#dc2626',
 } as const
-
-const WS_URL: string =
-  (import.meta.env.VITE_WS_URL as string | undefined) ??
-  (import.meta.env.VITE_API_URL as string | undefined)?.replace('/api', '') ??
-  ''
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 function tiempoTranscurrido(creadaEn: string): string {
@@ -423,13 +417,7 @@ export function GerenceMesasPage() {
   // WebSocket
   useEffect(() => {
     if (!selectedRestauranteId) return
-    const socket: Socket = io(`${WS_URL}/ws`, {
-      auth:       { token: localStorage.getItem(TOKEN_KEY) },
-      transports: ['websocket'],
-    })
-    socket.on('connect', () => {
-      socket.emit('cocina:join', { restauranteId: selectedRestauranteId })
-    })
+    const socket = conectarComoAdmin(selectedRestauranteId)
     socket.on('waiter:called', (data: { llamadoId: string; sesionId: string; mesaNumero: string; motivo: string }) => {
       setSesiones((prev) => {
         const next = new Map(prev)
@@ -458,8 +446,7 @@ export function GerenceMesasPage() {
       })
     }
     socket.on('sesion:cerrada', onSesionCerrada)
-    socket.on('session:closed', onSesionCerrada)
-    return () => { socket.disconnect() }
+    return () => { cerrarConexionAdmin(socket) }
   }, [selectedRestauranteId])
 
   const handleCerrarSesion = async () => {

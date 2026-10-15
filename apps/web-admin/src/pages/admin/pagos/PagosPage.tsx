@@ -3,9 +3,10 @@ import { useNavigate } from 'react-router-dom'
 import { Bell, CheckCircle, RefreshCw, X } from 'lucide-react'
 import { TOKEN_KEY } from '@menyu/auth'
 import { useAuth } from '@menyu/auth'
-import { io, type Socket } from 'socket.io-client'
+import type { Socket } from 'socket.io-client'
 import { useContextStore } from '../../../store/contextStore'
 import { api } from '../../../services/api'
+import { conectarComoAdmin, cerrarConexionAdmin } from '../../../services/socket'
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 const C = {
@@ -26,11 +27,6 @@ const C = {
 // ── Config ────────────────────────────────────────────────────────────────────
 const BASE: string =
   (import.meta.env.VITE_API_URL as string | undefined) ?? ''
-
-const WS_URL: string =
-  (import.meta.env.VITE_WS_URL as string | undefined) ??
-  (import.meta.env.VITE_API_URL as string | undefined)?.replace('/api', '') ??
-  ''
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface SesionActiva {
@@ -474,15 +470,8 @@ export function PagosPage() {
   useEffect(() => {
     if (!selectedRestauranteId) return
 
-    const socket: Socket = io(`${WS_URL}/ws`, {
-      auth:       { token: localStorage.getItem(TOKEN_KEY) },
-      transports: ['websocket'],
-    })
+    const socket = conectarComoAdmin(selectedRestauranteId)
     socketRef.current = socket
-
-    socket.on('connect', () => {
-      socket.emit('cocina:join', { restauranteId: selectedRestauranteId })
-    })
 
     socket.on('sesion:quierePagar', ({ sesionId }: { sesionId: string }) => {
       if (!esGerenteRef.current) return
@@ -503,7 +492,7 @@ export function PagosPage() {
     })
 
     return () => {
-      socket.disconnect()
+      cerrarConexionAdmin(socket)
       socketRef.current = null
     }
   }, [selectedRestauranteId])
