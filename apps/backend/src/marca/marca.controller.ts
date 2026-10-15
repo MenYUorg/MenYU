@@ -8,14 +8,17 @@ import {
   Param,
   Patch,
   Post,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common'
-import { ApiBearerAuth } from '@nestjs/swagger'
+import { ApiBearerAuth, ApiBody, ApiConsumes } from '@nestjs/swagger'
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'
 import { RolesGuard } from '../common/guards/roles.guard'
 import { Roles } from '../common/decorators/roles.decorator'
 import { CurrentUser } from '../common/decorators/current-user.decorator'
 import { JwtPayload } from '../auth/auth.service'
+import { logoFilePipe, logoInterceptor } from '../storage/logo-upload'
 import { MarcaService } from './marca.service'
 import { CreateMarcaDto } from './dto/create-marca.dto'
 import { UpdateMarcaDto } from './dto/update-marca.dto'
@@ -60,5 +63,28 @@ export class MarcaController {
   @HttpCode(HttpStatus.NO_CONTENT)
   async remove(@Param('id') id: string) {
     await this.marcas.remove(id)
+  }
+
+  // ── Logo: solo el OWNER de la marca (ni ROOT ni GERENTE) ─────────────────
+
+  @Post(':id/logo')
+  @Roles('OWNER')
+  @UseInterceptors(logoInterceptor())
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: { type: 'object', properties: { logo: { type: 'string', format: 'binary' } } },
+  })
+  uploadLogo(
+    @Param('id') id: string,
+    @UploadedFile(logoFilePipe()) file: Express.Multer.File,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.marcas.uploadLogo(id, file, user)
+  }
+
+  @Delete(':id/logo')
+  @Roles('OWNER')
+  removeLogo(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.marcas.removeLogo(id, user)
   }
 }

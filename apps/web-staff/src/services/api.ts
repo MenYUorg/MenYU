@@ -11,6 +11,13 @@ export function getToken(): string | null {
 
 // ── Base fetch ────────────────────────────────────────────────────────────────
 
+export class ApiError extends Error {
+  constructor(message: string, public readonly status: number) {
+    super(message)
+    this.name = 'ApiError'
+  }
+}
+
 async function authFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getToken()
   const headers: Record<string, string> = {
@@ -25,8 +32,9 @@ async function authFetch<T>(path: string, options: RequestInit = {}): Promise<T>
 
   if (!res.ok) {
     const err = (await res.json().catch(() => ({}))) as Record<string, unknown>
-    throw new Error(
+    throw new ApiError(
       typeof err['message'] === 'string' ? err['message'] : `Error ${res.status}`,
+      res.status,
     )
   }
 
@@ -98,6 +106,11 @@ export interface MenuItem {
   nombre: string
   descripcion: string | null
   precioBase: number
+  // El backend siempre manda los tres datos del descuento, ya calculados. Son opcionales por si la API
+  // todavía no está actualizada: sin ellos el plato se cobra a precioBase.
+  precioDescuento?: number | null
+  porcentajeDescuento?: number | null
+  precioVigente?: number
   imagenUrl: string | null
   disponible: boolean
   ingredientes: MenuIngrediente[]
@@ -112,6 +125,8 @@ export interface MenuCategoria {
 
 export interface MenuResponse {
   categorias: MenuCategoria[]
+  recomendados: MenuItem[]
+  restaurante: { id: string; nombre: string; nombreSeccionRecomendados: string }
 }
 
 export interface WaiterCallRico {
@@ -185,6 +200,14 @@ export interface SesionPagadaItem {
   cobradoPorNombre: string | null
   referenciaExterna: string | null
   fechaCobro: string | null
+  pagos?: {
+    id: string
+    metodo: string
+    estado: string
+    cobradoPorNombre: string | null
+    referenciaExterna: string | null
+    fechaCobro: string | null
+  }[]
 }
 
 export interface MozoSimple {
@@ -315,7 +338,7 @@ export const api = {
       return authFetch<SesionPagadaItem[]>(`/sessions/pagadas?${params.toString()}`)
     },
 
-    registrarCobro: (sesionId: string, body: { metodoPago: string; mozoId?: string; cobradoPorNombre?: string; referenciaExterna?: string }) =>
+    registrarCobro: (sesionId: string, body: { metodoPago: string; mozoId?: string; cobradoPorNombre?: string; referenciaExterna?: string; confirmarCancelacionPagosPendientes?: boolean }) =>
       authFetch<{ ok: boolean }>(`/sessions/${sesionId}/cobro`, {
         method: 'PATCH',
         body: JSON.stringify(body),

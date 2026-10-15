@@ -6,6 +6,10 @@ import { useAuth } from '@menyu/auth'
 import { useContextStore } from '../../../store/contextStore'
 import { useMenuStore } from '../../../store/menuStore'
 import { ItemFormModal } from './ItemFormModal'
+import { api } from '../../../services/api'
+import { useMediaQuery } from '../../../hooks/useMediaQuery'
+import { ItemRow } from './ItemRow'
+import { DescuentoModal } from './DescuentoModal'
 
 type CatalogTab = 'categorias' | 'ingredientes' | 'dietas'
 
@@ -13,38 +17,6 @@ const matchesBusqueda = (nombre: string, buscar: string): boolean => {
   if (!buscar.trim()) return true
   const query = buscar.toLowerCase().trim()
   return nombre.toLowerCase().split(/\s+/).some((palabra) => palabra.startsWith(query))
-}
-
-/* ─── ToggleSwitch ──────────────────────────────────────────────────────── */
-function ToggleSwitch({ value, onChange }: { value: boolean; onChange: () => void }) {
-  return (
-    <div
-      role="switch"
-      aria-checked={value}
-      onClick={(e) => { e.stopPropagation(); onChange() }}
-      style={{
-        width:        44,
-        height:       24,
-        borderRadius: 999,
-        background:   value ? '#E8563A' : '#d1d5db',
-        cursor:       'pointer',
-        transition:   'background 200ms',
-        position:     'relative',
-        flexShrink:   0,
-      }}
-    >
-      <div style={{
-        width:        20,
-        height:       20,
-        borderRadius: '50%',
-        background:   'white',
-        position:     'absolute',
-        top:          2,
-        left:         value ? 22 : 2,
-        transition:   'left 200ms',
-      }} />
-    </div>
-  )
 }
 
 /* ─── TabList (ingredientes + dietas) ───────────────────────────────────── */
@@ -272,6 +244,16 @@ function CategoriasTabContent({
   onNewNameChange,
   creating,
   canDelete = true,
+  isOwner = false,
+  nombreSeccionRecomendados = '',
+  editandoNombreRecomendados = false,
+  nombreRecomendadosInput = '',
+  guardandoNombreRecomendados = false,
+  errorNombreRecomendados = null,
+  onEditarNombreRecomendados,
+  onCambiarNombreRecomendadosInput,
+  onGuardarNombreRecomendados,
+  onCancelarNombreRecomendados,
 }: {
   categorias:      { id: string; nombre: string; orden?: number }[]
   onDelete:        (id: string, nombre: string) => void
@@ -281,6 +263,16 @@ function CategoriasTabContent({
   onNewNameChange: (v: string) => void
   creating:        boolean
   canDelete?:      boolean
+  isOwner?:        boolean
+  nombreSeccionRecomendados?:        string
+  editandoNombreRecomendados?:       boolean
+  nombreRecomendadosInput?:          string
+  guardandoNombreRecomendados?:      boolean
+  errorNombreRecomendados?:          string | null
+  onEditarNombreRecomendados?:       () => void
+  onCambiarNombreRecomendadosInput?: (v: string) => void
+  onGuardarNombreRecomendados?:      () => void
+  onCancelarNombreRecomendados?:     () => void
 }) {
   const { updateCategoria } = useMenuStore()
   const sortByOrden = (cats: typeof propCats) =>
@@ -337,6 +329,101 @@ function CategoriasTabContent({
 
   return (
     <div>
+      {isOwner && (
+        <>
+          <div style={{ marginBottom: 12 }}>
+            {editandoNombreRecomendados ? (
+              <div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  value={nombreRecomendadosInput}
+                  onChange={(e) => onCambiarNombreRecomendadosInput?.(e.target.value)}
+                  placeholder="Nombre de la sección de recomendados"
+                  autoFocus
+                  style={{
+                    flex:         1,
+                    border:       '1px solid #e5e7eb',
+                    borderRadius: 8,
+                    padding:      '8px 12px',
+                    fontFamily:   'Inter, sans-serif',
+                    fontSize:     13,
+                    color:        '#111827',
+                    outline:      'none',
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => onGuardarNombreRecomendados?.()}
+                  disabled={!nombreRecomendadosInput.trim() || guardandoNombreRecomendados}
+                  style={{
+                    background:   '#2D3561',
+                    color:        'white',
+                    border:       'none',
+                    borderRadius: 8,
+                    padding:      '8px 16px',
+                    cursor:       !nombreRecomendadosInput.trim() || guardandoNombreRecomendados ? 'not-allowed' : 'pointer',
+                    fontFamily:   'Inter, sans-serif',
+                    fontSize:     13,
+                    fontWeight:   600,
+                    opacity:      !nombreRecomendadosInput.trim() || guardandoNombreRecomendados ? 0.5 : 1,
+                    whiteSpace:   'nowrap',
+                  }}
+                >
+                  {guardandoNombreRecomendados ? '…' : 'Guardar'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onCancelarNombreRecomendados?.()}
+                  style={{
+                    background:   'none',
+                    color:        '#6b7280',
+                    border:       '1px solid #e5e7eb',
+                    borderRadius: 8,
+                    padding:      '8px 16px',
+                    cursor:       'pointer',
+                    fontFamily:   'Inter, sans-serif',
+                    fontSize:     13,
+                    whiteSpace:   'nowrap',
+                  }}
+                >
+                  Cancelar
+                </button>
+              </div>
+              {errorNombreRecomendados && (
+                <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, color: '#dc2626', margin: '6px 0 0' }}>
+                  {errorNombreRecomendados}
+                </p>
+              )}
+              </div>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#6b7280', flex: 1 }}>
+                  Sección de recomendados: <strong style={{ color: '#111827' }}>{nombreSeccionRecomendados}</strong>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => onEditarNombreRecomendados?.()}
+                  style={{
+                    background:   'none',
+                    color:        '#E8563A',
+                    border:       '1px solid #E8563A',
+                    borderRadius: 8,
+                    padding:      '6px 12px',
+                    cursor:       'pointer',
+                    fontFamily:   'Inter, sans-serif',
+                    fontSize:     12,
+                    fontWeight:   500,
+                    whiteSpace:   'nowrap',
+                  }}
+                >
+                  Cambiar nombre de recomendaciones
+                </button>
+              </div>
+            )}
+          </div>
+          <div style={{ borderBottom: '1px solid #e5e7eb', marginBottom: 12 }} />
+        </>
+      )}
       <form onSubmit={onCreate} style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
         <input
           value={newName}
@@ -522,7 +609,8 @@ function CategoriasTabContent({
 function CatalogModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { user } = useAuth()
   const isOwner = user?.rol === 'OWNER' || user?.rol === 'ROOT'
-  const { selectedRestauranteId } = useContextStore()
+  const { selectedRestauranteId, restaurantes, loadContext } = useContextStore()
+  const restaurante = restaurantes.find((r) => r.id === selectedRestauranteId)
   const {
     categorias, ingredientes, clasificaciones,
     createCategoria, updateCategoria, deleteCategoria,
@@ -540,7 +628,38 @@ function CatalogModal({ open, onClose }: { open: boolean; onClose: () => void })
   const [dietaCreating, setDietaCreating] = useState(false)
   const [ingBusqueda, setIngBusqueda]     = useState('')
 
+  const [editandoNombreRecomendados, setEditandoNombreRecomendados] = useState(false)
+  const [nombreRecomendadosInput, setNombreRecomendadosInput]       = useState('')
+  const [guardandoNombreRecomendados, setGuardandoNombreRecomendados] = useState(false)
+  const [errorNombreRecomendados, setErrorNombreRecomendados]       = useState<string | null>(null)
+
   if (!open) return null
+
+  const handleEditarNombreRecomendados = () => {
+    setNombreRecomendadosInput(restaurante?.nombreSeccionRecomendados ?? '')
+    setErrorNombreRecomendados(null)
+    setEditandoNombreRecomendados(true)
+  }
+
+  const handleCancelarNombreRecomendados = () => {
+    setErrorNombreRecomendados(null)
+    setEditandoNombreRecomendados(false)
+  }
+
+  const handleGuardarNombreRecomendados = async () => {
+    if (!selectedRestauranteId || !nombreRecomendadosInput.trim()) return
+    setGuardandoNombreRecomendados(true)
+    setErrorNombreRecomendados(null)
+    try {
+      await api.restaurantes.update(selectedRestauranteId, { nombreSeccionRecomendados: nombreRecomendadosInput.trim() })
+      await loadContext()
+      setEditandoNombreRecomendados(false)
+    } catch (e) {
+      setErrorNombreRecomendados(e instanceof Error ? e.message : 'Error al guardar')
+    } finally {
+      setGuardandoNombreRecomendados(false)
+    }
+  }
 
   const TABS: { id: CatalogTab; label: string }[] = [
     { id: 'categorias',   label: 'Categorías'   },
@@ -701,6 +820,16 @@ function CatalogModal({ open, onClose }: { open: boolean; onClose: () => void })
               onNewNameChange={setCatName}
               creating={catCreating}
               canDelete={isOwner}
+              isOwner={isOwner}
+              nombreSeccionRecomendados={restaurante?.nombreSeccionRecomendados ?? ''}
+              editandoNombreRecomendados={editandoNombreRecomendados}
+              nombreRecomendadosInput={nombreRecomendadosInput}
+              guardandoNombreRecomendados={guardandoNombreRecomendados}
+              errorNombreRecomendados={errorNombreRecomendados}
+              onEditarNombreRecomendados={handleEditarNombreRecomendados}
+              onCambiarNombreRecomendadosInput={setNombreRecomendadosInput}
+              onGuardarNombreRecomendados={handleGuardarNombreRecomendados}
+              onCancelarNombreRecomendados={handleCancelarNombreRecomendados}
             />
           )}
           {tab === 'ingredientes' && (
@@ -769,17 +898,23 @@ function CatalogModal({ open, onClose }: { open: boolean; onClose: () => void })
 export function AdminMenuPage() {
   const { user } = useAuth()
   const isOwner = user?.rol === 'OWNER' || user?.rol === 'ROOT'
+  // Los descuentos los ponen el OWNER y el GERENTE; ROOT no (administra marcas y usuarios, no el menú).
+  const puedeGestionarDescuento = user?.rol === 'OWNER' || user?.rol === 'GERENTE'
+  const esEscritorio = useMediaQuery('(min-width: 768px)')
   const { selectedRestauranteId } = useContextStore()
   const {
     items, categorias, loading,
     fetchItems, fetchCategorias, fetchIngredientes, fetchClasificaciones,
-    updateItem, error, clearError,
+    updateItem, setDescuento, quitarDescuento, error, clearError,
   } = useMenuStore()
 
   const [busqueda, setBusqueda]   = useState('')
   const [catalogOpen, setCatalogOpen] = useState(false)
   const [optimistic, setOptimistic]   = useState<Record<string, boolean>>({})
+  const [optimisticRecomendado, setOptimisticRecomendado] = useState<Record<string, boolean>>({})
   const [itemModal, setItemModal]     = useState<{ open: boolean; item: ItemMenu | null }>({ open: false, item: null })
+  const [descuentoId, setDescuentoId]  = useState<string | null>(null)
+  const descuentoItem = descuentoId ? items.find((i) => i.id === descuentoId) ?? null : null
   const [categoriaActiva, setCategoriaActiva] = useState<string | null>(null)
 
   const scrollContainerRef = useRef<HTMLDivElement>(null)
@@ -815,6 +950,17 @@ export function AdminMenuPage() {
         items: sinCategoria,
       })
     }
+
+    const recomendados = items.filter(
+      (item) => item.esRecomendado && matchesBusqueda(item.nombre, busqueda),
+    )
+    if (recomendados.length > 0) {
+      grupos.unshift({
+        categoria: { id: '__recomendados__', nombre: '⭐ Recomendaciones', orden: -1 } as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+        items: recomendados,
+      })
+    }
+
     return grupos
   }, [items, categorias, busqueda])
 
@@ -864,11 +1010,33 @@ export function AdminMenuPage() {
     }
   }
 
+  /* ── Toggle recomendado ── */
+  function getRecomendado(item: ItemMenu): boolean {
+    return item.id in optimisticRecomendado ? optimisticRecomendado[item.id] : !!item.esRecomendado
+  }
+
+  async function handleToggleRecomendado(item: ItemMenu) {
+    const current = getRecomendado(item)
+    const next = !current
+    setOptimisticRecomendado((prev) => ({ ...prev, [item.id]: next }))
+    try {
+      await updateItem(item.id, { esRecomendado: next })
+    } catch {
+      setOptimisticRecomendado((prev) => ({ ...prev, [item.id]: current }))
+    } finally {
+      setOptimisticRecomendado((prev) => {
+        const copy = { ...prev }
+        delete copy[item.id]
+        return copy
+      })
+    }
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
 
       {/* ── Fixed header block ── */}
-      <div style={{ flexShrink: 0, padding: '24px 28px 0' }}>
+      <div style={{ flexShrink: 0, padding: esEscritorio ? '24px 28px 0' : '16px 14px 0' }}>
 
         {/* Error banner */}
         {error && (
@@ -895,7 +1063,7 @@ export function AdminMenuPage() {
         )}
 
         {/* Topbar */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 20 }}>
           <h1 style={{
             fontFamily: 'Montserrat, sans-serif',
             fontWeight: 700,
@@ -905,7 +1073,7 @@ export function AdminMenuPage() {
           }}>
             Menú
           </h1>
-          <div style={{ display: 'flex', gap: 10 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
             <button
               onClick={() => setCatalogOpen(true)}
               style={{
@@ -913,6 +1081,7 @@ export function AdminMenuPage() {
                 color:        '#2D3561',
                 border:       '1px solid #2D3561',
                 borderRadius: 10,
+                minHeight:    esEscritorio ? undefined : 44,
                 padding:      '9px 16px',
                 cursor:       'pointer',
                 fontFamily:   'Inter, sans-serif',
@@ -932,6 +1101,7 @@ export function AdminMenuPage() {
                 color:        'white',
                 border:       'none',
                 borderRadius: 10,
+                minHeight:    esEscritorio ? undefined : 44,
                 padding:      '9px 16px',
                 cursor:       'pointer',
                 fontFamily:   'Montserrat, sans-serif',
@@ -997,6 +1167,7 @@ export function AdminMenuPage() {
                   color:        active ? 'white' : '#374151',
                   border:       `1px solid ${active ? '#2D3561' : '#e5e7eb'}`,
                   borderRadius: 999,
+                  minHeight:    esEscritorio ? undefined : 44,
                   padding:      '8px 18px',
                   fontFamily:   active ? 'Montserrat, sans-serif' : 'Inter, sans-serif',
                   fontWeight:   active ? 700 : 400,
@@ -1023,7 +1194,7 @@ export function AdminMenuPage() {
           Cargando…
         </div>
       ) : (
-        <div ref={scrollContainerRef} style={{ flex: 1, overflowY: 'auto', padding: '0 28px 24px' }}>
+        <div ref={scrollContainerRef} style={{ flex: 1, overflowY: 'auto', padding: esEscritorio ? '0 28px 24px' : '0 14px 24px' }}>
           {categoriasFiltradas.length === 0 ? (
             <p style={{ textAlign: 'center', fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#9CA3AF', padding: '48px 0', margin: 0 }}>
               {busqueda ? `Sin resultados para "${busqueda}"` : 'No hay platos en el catálogo.'}
@@ -1063,67 +1234,19 @@ export function AdminMenuPage() {
 
                 {/* Item rows */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  {grupoItems.map((item) => {
-                    const disponible = getDisponible(item)
-                    return (
-                      <div
-                        key={item.id}
-                        style={{
-                          background:   'white',
-                          border:       '1px solid #e5e7eb',
-                          borderRadius: 12,
-                          padding:      '12px 16px',
-                          display:      'flex',
-                          alignItems:   'center',
-                          gap:          16,
-                          opacity:      disponible ? 1 : 0.55,
-                          transition:   'opacity 200ms',
-                        }}
-                      >
-                        {item.imagenUrl ? (
-                          <img
-                            src={item.imagenUrl}
-                            alt={item.nombre}
-                            style={{ width: 64, height: 64, borderRadius: 10, objectFit: 'cover', flexShrink: 0 }}
-                          />
-                        ) : (
-                          <div style={{ width: 64, height: 64, borderRadius: 10, background: '#f3f4f6', flexShrink: 0 }} />
-                        )}
-
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <p style={{
-                            fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: 15,
-                            color: '#111827', margin: '0 0 3px',
-                            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                          }}>
-                            {item.nombre}
-                          </p>
-                          <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#6b7280', margin: 0 }}>
-                            ${Number(item.precioBase).toLocaleString('es-AR')}
-                            {!disponible && <span style={{ color: '#dc2626' }}> · Sin stock</span>}
-                          </p>
-                        </div>
-
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
-                          <button
-                            onClick={() => setItemModal({ open: true, item })}
-                            style={{
-                              background: 'white', color: '#374151',
-                              border: '1px solid #e5e7eb', borderRadius: 8,
-                              padding: '6px 14px', cursor: 'pointer',
-                              fontFamily: 'Inter, sans-serif', fontSize: 13,
-                              transition: 'border-color 150ms, color 150ms',
-                            }}
-                            onMouseEnter={(e) => { const b = e.currentTarget as HTMLButtonElement; b.style.borderColor = '#2D3561'; b.style.color = '#2D3561' }}
-                            onMouseLeave={(e) => { const b = e.currentTarget as HTMLButtonElement; b.style.borderColor = '#e5e7eb'; b.style.color = '#374151' }}
-                          >
-                            Editar
-                          </button>
-                          <ToggleSwitch value={disponible} onChange={() => handleToggle(item)} />
-                        </div>
-                      </div>
-                    )
-                  })}
+                  {grupoItems.map((item) => (
+                    <ItemRow
+                      key={item.id}
+                      item={item}
+                      disponible={getDisponible(item)}
+                      recomendado={getRecomendado(item)}
+                      puedeGestionarDescuento={puedeGestionarDescuento}
+                      onEditar={() => setItemModal({ open: true, item })}
+                      onDescuento={() => setDescuentoId(item.id)}
+                      onToggleDisponible={() => handleToggle(item)}
+                      onToggleRecomendado={() => handleToggleRecomendado(item)}
+                    />
+                  ))}
                 </div>
               </div>
             ))
@@ -1137,6 +1260,14 @@ export function AdminMenuPage() {
         item={itemModal.item}
         canDelete={isOwner}
       />
+      {puedeGestionarDescuento && (
+        <DescuentoModal
+          item={descuentoItem}
+          onClose={() => setDescuentoId(null)}
+          onGuardar={setDescuento}
+          onQuitar={quitarDescuento}
+        />
+      )}
       <CatalogModal open={catalogOpen} onClose={() => setCatalogOpen(false)} />
     </div>
   )

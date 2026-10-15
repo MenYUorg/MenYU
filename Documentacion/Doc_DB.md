@@ -51,6 +51,7 @@ El schema se organiza en torno a dos entidades raíz:
 | **Cantidades** | `Decimal(10, 3)` — para ingredientes con fracciones |
 | **Soft delete** | No hay borrado físico. Los registros se desactivan con campos `activo` o `disponible` |
 | **Foreign keys** | Nombradas `entidad_id` en BD (ej: `restaurante_id`, `mesa_id`) |
+| **Extensiones** | `unaccent` (la búsqueda de Discovery ignora los acentos), creada por la migración `enable_unaccent` |
 
 ---
 
@@ -69,6 +70,7 @@ Entidad que representa una marca gastronómica. Puede tener múltiples sucursale
 | `id` | `uuid` PK | Identificador único de la marca |
 | `nombre` | `string` | Nombre comercial de la marca |
 | `slug` | `string` UNIQUE | Versión URL-friendly del nombre (ej: `la-parrilla-de-juan`). Se usa para armar las rutas de la app y los QR |
+| `logo_url` | `string?` | URL pública del logo de la marca en Supabase Storage (PNG, JPEG o WebP de hasta 2 MB; lleva `?v=<timestamp>` para saltar la caché). Lo usan los restaurantes que no tienen logo propio. `null` si no tiene |
 | `created_at` | `timestamp` | Fecha y hora de alta en el sistema |
 
 ---
@@ -83,7 +85,7 @@ Representa cada sucursal física de una marca. Es el punto de partida de toda co
 | `marca_id` | `uuid` FK → `marca` | Marca a la que pertenece esta sucursal |
 | `nombre` | `string` | Nombre comercial de la sucursal |
 | `direccion` | `string?` | Dirección física del local |
-| `qr_base_url` | `string?` | URL base que se imprime en los QR de las mesas (ej: `https://tuapp.com/r/la-parrilla`) |
+| `logo_url` | `string?` | URL pública del logo propio de la sucursal en Supabase Storage. Si es `null` se usa el de la marca y, si tampoco hay, el de MenYu |
 | `created_at` | `timestamp` | Fecha y hora de alta en el sistema |
 
 ---
@@ -251,6 +253,7 @@ Cada plato, bebida o producto del menú. Pertenece a una `Marca` y puede estar d
 | `precio_base` | `Decimal(10,2)` | Precio base a nivel de marca. Puede ser sobreescrito por sucursal en `item_sucursal` |
 | `disponible` | `boolean` | Si está activo en carta. Permite desactivarlo sin borrarlo. Default: `true` |
 | `imagen_url` | `string?` | Link a la foto del plato almacenada en Supabase Storage |
+| `precio_descuento` | `integer?` | Precio con descuento, entero. `null` si el plato no está en descuento. CHECK `item_menu_precio_descuento_check`: mayor a 0 y menor que `precio_base`. El porcentaje no se guarda: se calcula al leer. El precio que se cobra es `precio_descuento` si hay, si no `precio_base` |
 
 ---
 

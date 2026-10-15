@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Discovery · mockup</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="mockups.css" />
+</head>
+<body>
+  <div id="cabecera"></div>
+
+  <main class="pagina">
+    <div class="contenedor">
+      <section class="hero">
+        <h1>Descubrí dónde comer</h1>
+        <p>Ofertas y restaurantes. Elegí uno para ver su carta o ingresar a tu mesa.</p>
+
+        <div class="buscador" id="buscador">
+          <span class="lupa" aria-hidden="true">🔍</span>
+          <input id="q" type="text" inputmode="search" enterkeyhint="search" autocomplete="off"
+                 placeholder="Buscar restaurantes o platos" aria-label="Buscar restaurantes o platos" />
+          <button class="limpiar" id="limpiar" type="button" aria-label="Borrar búsqueda">×</button>
+        </div>
+        <p class="ayuda-busqueda" id="ayuda" hidden>Escribí al menos 2 letras para buscar.</p>
+        <a class="atajo-qr" id="atajo-qr" href="escaner.html?origen=home"></a>
+      </section>
+
+      <div id="contenido"></div>
+    </div>
+  </main>
+
+  <script src="mockups.js"></script>
+  <script>
+    (function () {
+      var p = new URLSearchParams(location.search);
+      var estado = p.get('estado') || 'normal';
+      var usuario = p.get('usuario');
+      // "buscando" y "error-busqueda" son estados de la búsqueda: la home de fondo es la normal
+      var d = MK.datos(estado === 'buscando' || estado === 'error-busqueda' ? 'normal' : estado);
+
+      var input = document.getElementById('q');
+      var caja = document.getElementById('buscador');
+      var ayuda = document.getElementById('ayuda');
+      var contenido = document.getElementById('contenido');
+
+      document.getElementById('cabecera').innerHTML = MK.appHeader(usuario);
+
+      // Acceso rápido al escáner de QR (el QR ya identifica la mesa y el restaurante)
+      document.getElementById('atajo-qr').innerHTML = MK.icono('escanear', 20, 'currentColor', 2.2) + ' Escanear el QR de mi mesa';
+
+      function home() {
+        var html = '';
+        if (d.ofertas.length) html += MK.seccion('Ofertas', MK.carrusel(d.ofertas));
+        if (d.restaurantes.length) {
+          html += MK.seccion('Restaurantes', '<div class="grilla-restos">' + d.restaurantes.map(function (r) { return MK.cardResto(r, d); }).join('') + '</div>');
+        } else {
+          html += MK.bloqueEstado({ icono: 'local', titulo: 'Todavía no hay restaurantes', texto: 'Cuando se sumen, los vas a ver acá.' });
+        }
+        return html;
+      }
+
+      function resultados(q) {
+        var r = MK.buscar(q, d);
+        var total = r.ofertas.length + r.restaurantes.length + r.conPlatos.length;
+        if (!total) {
+          return MK.bloqueEstado({ icono: 'lupa', titulo: 'No encontramos nada para “' + q + '”', texto: 'Revisá cómo lo escribiste o probá con otra palabra.', boton: 'Borrar búsqueda', contorno: true, accion: 'borrar' });
+        }
+        var html = '<p class="resumen-busqueda">Resultados para <b>“' + MK.esc(q) + '”</b></p>';
+        // Los grupos van en este orden: primero las ofertas, después los restaurantes y al final los restaurantes con
+        // platos que coinciden (que se ven como cualquier otro restaurante, sin decir qué platos).
+        if (r.ofertas.length) {
+          html += MK.seccion('Ofertas', '<div class="grilla-ofertas">' + r.ofertas.map(function (o) { return MK.cardOferta(o); }).join('') + '</div>');
+        }
+        if (r.restaurantes.length) {
+          html += MK.seccion('Restaurantes', '<div class="grilla-restos">' + r.restaurantes.map(function (x) { return MK.cardResto(x, d); }).join('') + '</div>');
+        }
+        if (r.conPlatos.length) {
+          html += MK.seccion('Con platos que coinciden', '<div class="grilla-restos">' + r.conPlatos.map(function (x) { return MK.cardResto(x, d); }).join('') + '</div>');
+        }
+        if (estado === 'buscando') {
+          html = '<div class="buscando">' + MK.spinner() + ' Buscando…</div><div class="atenuado">' + html + '</div>';
+        }
+        return html;
+      }
+
+      function pintar() {
+        var q = input.value;
+        var t = q.trim();
+        caja.classList.toggle('con-texto', q.length > 0);
+        ayuda.hidden = t.length !== 1;
+
+        var html;
+        if (estado === 'cargando') {
+          html = MK.esqueletoHome();
+        } else if (estado === 'error') {
+          html = MK.bloqueEstado({ icono: 'aviso', titulo: 'No pudimos cargar los restaurantes', texto: 'Revisá tu conexión e intentá de nuevo.', boton: 'Reintentar', rol: 'alert', accion: 'reintentar' });
+        } else if (MK.sinAcentos(t).length >= 2) {
+          html = estado === 'error-busqueda'
+            ? MK.bloqueEstado({ icono: 'aviso', titulo: 'No pudimos buscar', texto: 'Revisá tu conexión e intentá de nuevo.', boton: 'Reintentar', rol: 'alert', accion: 'reintentar' })
+            : resultados(t);
+        } else {
+          html = home();
+        }
+        contenido.innerHTML = html;
+        MK.activarCarrusel(contenido);
+
+        var borrar = contenido.querySelector('[data-accion="borrar"]');
+        if (borrar) borrar.addEventListener('click', limpiar);
+      }
+
+      function limpiar() { input.value = ''; pintar(); input.focus(); }
+
+      input.value = p.get('q') || '';
+      input.addEventListener('input', pintar);
+      document.getElementById('limpiar').addEventListener('click', limpiar);
+      pintar();
+    })();
+  </script>
+</body>
+</html>

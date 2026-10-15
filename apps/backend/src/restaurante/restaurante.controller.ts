@@ -8,14 +8,17 @@ import {
   Param,
   Patch,
   Post,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common'
-import { ApiBearerAuth } from '@nestjs/swagger'
+import { ApiBearerAuth, ApiBody, ApiConsumes } from '@nestjs/swagger'
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'
 import { RolesGuard } from '../common/guards/roles.guard'
 import { Roles } from '../common/decorators/roles.decorator'
 import { CurrentUser } from '../common/decorators/current-user.decorator'
 import { JwtPayload } from '../auth/auth.service'
+import { logoFilePipe, logoInterceptor } from '../storage/logo-upload'
 import { RestauranteService } from './restaurante.service'
 import { CreateRestauranteDto } from './dto/create-restaurante.dto'
 import { UpdateRestauranteDto } from './dto/update-restaurante.dto'
@@ -60,5 +63,28 @@ export class RestauranteController {
   @HttpCode(HttpStatus.NO_CONTENT)
   async remove(@Param('id') id: string) {
     await this.restaurantes.remove(id)
+  }
+
+  // ── Logo: solo el OWNER de la marca (ni ROOT ni GERENTE) ─────────────────
+
+  @Post(':id/logo')
+  @Roles('OWNER')
+  @UseInterceptors(logoInterceptor())
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: { type: 'object', properties: { logo: { type: 'string', format: 'binary' } } },
+  })
+  uploadLogo(
+    @Param('id') id: string,
+    @UploadedFile(logoFilePipe()) file: Express.Multer.File,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.restaurantes.uploadLogo(id, file, user)
+  }
+
+  @Delete(':id/logo')
+  @Roles('OWNER')
+  removeLogo(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.restaurantes.removeLogo(id, user)
   }
 }

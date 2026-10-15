@@ -5,11 +5,13 @@
     "build": "turbo run build",
     "dev": "turbo run dev",
     "lint": "turbo run lint",
+    "sonar": "sonar-scanner-npm",
     "typecheck": "turbo run typecheck"
   },
   "devDependencies": {
     "react": "19.0.0",
     "react-dom": "19.0.0",
+    "sonarqube-scanner": "^5.0.0",
     "turbo": "^2.5.4"
   },
   "engines": {
@@ -26,9 +28,6 @@
     "overrides": {
       "react-native>@types/react": "~19.0.14",
       "react-native-web": "0.20.0"
-    },
-    "patchedDependencies": {
-      "@expo/metro-config@0.20.18": "patches/@expo__metro-config@0.20.18.patch"
     }
   }
 }

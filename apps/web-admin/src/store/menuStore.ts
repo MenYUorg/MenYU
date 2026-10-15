@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { api } from '../services/api'
-import type { ItemMenu, CategoriaMenu, Ingrediente, ClasificacionDieta } from '@menyu/types'
+import type { ItemMenu, CategoriaMenu, Ingrediente, ClasificacionDieta, UpdateItemDescuentoRequest } from '@menyu/types'
 import type { CreateItemInput, UpdateItemInput } from '../services/api'
 
 interface MenuStore {
@@ -19,6 +19,8 @@ interface MenuStore {
   createItem: (data: CreateItemInput) => Promise<ItemMenu>
   updateItem: (id: string, data: UpdateItemInput) => Promise<void>
   deleteItem: (id: string) => Promise<void>
+  setDescuento: (id: string, data: UpdateItemDescuentoRequest) => Promise<ItemMenu>
+  quitarDescuento: (id: string) => Promise<ItemMenu>
   uploadItemImage: (id: string, file: File) => Promise<void>
   deleteItemImage: (id: string) => Promise<void>
 
@@ -96,6 +98,20 @@ export const useMenuStore = create<MenuStore>()((set) => ({
     try { await api.items.delete(id); set((s) => ({ items: s.items.filter((i) => i.id !== id) })) }
     catch (e) { set({ error: e instanceof Error ? e.message : 'Error al eliminar ítem' }); throw e }
     finally { set({ loading: false }) }
+  },
+
+  // El descuento no usa `loading` ni `error` del store: la lista no tiene que parpadear con "Cargando…" y el
+  // motivo de un rechazo lo muestra el modal del descuento, que recibe el error.
+  setDescuento: async (id, data) => {
+    const u = await api.items.setDescuento(id, data)
+    set((s) => ({ items: s.items.map((i) => (i.id === id ? u : i)) }))
+    return u
+  },
+
+  quitarDescuento: async (id) => {
+    const u = await api.items.quitarDescuento(id)
+    set((s) => ({ items: s.items.map((i) => (i.id === id ? u : i)) }))
+    return u
   },
 
   uploadItemImage: async (id, file) => {

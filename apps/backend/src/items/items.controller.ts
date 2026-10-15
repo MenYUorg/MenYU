@@ -11,6 +11,7 @@ import {
   ParseFilePipe,
   Patch,
   Post,
+  Put,
   Query,
   UploadedFile,
   UseGuards,
@@ -34,6 +35,7 @@ import { JwtPayload } from '../auth/auth.service'
 import { ItemsService } from './items.service'
 import { CreateItemDto } from './dto/create-item.dto'
 import { UpdateItemDto } from './dto/update-item.dto'
+import { SetDescuentoDto } from './dto/set-descuento.dto'
 import { AddIngredienteDto } from './dto/add-ingrediente.dto'
 import { UpdateIngredienteItemDto } from './dto/update-ingrediente-item.dto'
 
@@ -98,6 +100,35 @@ export class ItemsController {
   @ApiResponse({ status: 404, description: 'Ítem no encontrado' })
   async remove(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     await this.items.remove(id, user)
+  }
+
+  // ── Descuento: OWNER de la marca y GERENTE asignado (ROOT no) ───────────
+
+  @Put(':id/descuento')
+  @Roles('OWNER', 'GERENTE')
+  @ApiOperation({
+    summary: 'Poner un ítem en descuento, por precio o por porcentaje (solo uno de los dos)',
+  })
+  @ApiResponse({ status: 200, description: 'Ítem con el descuento aplicado' })
+  @ApiResponse({ status: 400, description: 'Descuento inválido' })
+  @ApiResponse({ status: 403, description: 'Sin permisos (ROOT no puede)' })
+  @ApiResponse({ status: 404, description: 'Ítem no encontrado' })
+  setDescuento(
+    @Param('id') id: string,
+    @Body() dto: SetDescuentoDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.items.setDescuento(id, dto, user)
+  }
+
+  @Delete(':id/descuento')
+  @Roles('OWNER', 'GERENTE')
+  @ApiOperation({ summary: 'Quitar el descuento de un ítem' })
+  @ApiResponse({ status: 200, description: 'Ítem sin descuento' })
+  @ApiResponse({ status: 403, description: 'Sin permisos (ROOT no puede)' })
+  @ApiResponse({ status: 404, description: 'Ítem no encontrado' })
+  removeDescuento(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.items.removeDescuento(id, user)
   }
 
   // ── Imagen ─────────────────────────────────────────────────────────────

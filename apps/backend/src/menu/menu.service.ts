@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
+import { derivarDescuento } from '../items/descuento.util'
 
 export interface MenuFiltros {
   categoriaId?: string
@@ -21,6 +22,18 @@ const ITEM_INCLUDE = {
   },
 }
 
+// Orden de las secciones Recomendados y Descuentos: por el orden de la categoría del ítem (los que no
+// tienen categoría al final) y después por nombre.
+function porCategoriaYNombre(
+  a: { nombre: string; categoria?: { orden: number } | null },
+  b: { nombre: string; categoria?: { orden: number } | null },
+): number {
+  const ordenA = a.categoria?.orden ?? Number.MAX_SAFE_INTEGER
+  const ordenB = b.categoria?.orden ?? Number.MAX_SAFE_INTEGER
+  if (ordenA !== ordenB) return ordenA - ordenB
+  return a.nombre.localeCompare(b.nombre)
+}
+
 @Injectable()
 export class MenuService {
   constructor(private readonly prisma: PrismaService) {}
@@ -28,7 +41,15 @@ export class MenuService {
   async getMenuPublico(restauranteId: string, filtros: MenuFiltros) {
     const restaurante = await this.prisma.restaurante.findUnique({
       where: { id: restauranteId },
-      select: { id: true, nombre: true, activo: true },
+      select: {
+        id: true,
+        nombre: true,
+        activo: true,
+        nombreSeccionRecomendados: true,
+        direccion: true,
+        logoUrl: true,
+        marca: { select: { logoUrl: true } },
+      },
     })
     if (!restaurante || !restaurante.activo) throw new NotFoundException('Restaurante no encontrado')
 
@@ -62,9 +83,41 @@ export class MenuService {
       }))
       .filter((cat) => cat.itemsDirectos.length > 0)
 
+    const recomendadosRaw = await this.prisma.itemMenu.findMany({
+      where: { restauranteId, disponible: true, recomendadoEn: { not: null }, ...buscarWhere },
+      orderBy: { nombre: 'asc' },
+      include: { ...ITEM_INCLUDE, categoria: { select: { orden: true } } },
+    })
+
+    const recomendados = recomendadosRaw
+      .filter((item) => this.pasaFiltros(item, filtros))
+      .sort(porCategoriaYNombre)
+      .map((item) => ({ ...this.serializeItem(item), esRecomendado: true }))
+
+    // Ítems en descuento (solo disponibles), en el mismo orden que los recomendados.
+    const descuentosRaw = await this.prisma.itemMenu.findMany({
+      where: { restauranteId, disponible: true, precioDescuento: { not: null }, ...buscarWhere },
+      orderBy: { nombre: 'asc' },
+      include: { ...ITEM_INCLUDE, categoria: { select: { orden: true } } },
+    })
+
+    const descuentos = descuentosRaw
+      .filter((item) => item.precioDescuento != null && this.pasaFiltros(item, filtros))
+      .sort(porCategoriaYNombre)
+      .map((item) => this.serializeItem(item))
+
     return {
-      restaurante: { id: restaurante.id, nombre: restaurante.nombre },
+      restaurante: {
+        id: restaurante.id,
+        nombre: restaurante.nombre,
+        nombreSeccionRecomendados: restaurante.nombreSeccionRecomendados,
+        direccion: restaurante.direccion,
+        // El logo propio del restaurante manda; si no tiene, el de su marca; si tampoco, `null` (la app muestra el de MenYU).
+        logoUrl: restaurante.logoUrl ?? restaurante.marca?.logoUrl ?? null,
+      },
       categorias: result,
+      recomendados,
+      descuentos,
     }
   }
 
@@ -91,6 +144,8 @@ export class MenuService {
       nombre: item.nombre,
       descripcion: item.descripcion,
       precioBase: Number(item.precioBase),
+      // precioDescuento, porcentajeDescuento y precioVigente: ya calculados, las apps no calculan precios.
+      ...derivarDescuento(item.precioBase, item.precioDescuento),
       imagenUrl: item.imagenUrl,
       ingredientes: item.ingredientes.map((ii: any) => ({
         id: ii.id,

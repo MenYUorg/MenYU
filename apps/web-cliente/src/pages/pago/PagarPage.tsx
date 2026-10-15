@@ -1,23 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { io } from 'socket.io-client'
 import { Spinner } from '@menyu/ui'
 import { useSessionStore } from '../../store/sessionStore'
-import { usePagoStore } from '../../store/pagoStore'
 import { api } from '../../services/api'
-
-const WS_BASE = (import.meta.env.VITE_WS_URL as string) ??
-  ((import.meta.env.VITE_API_URL as string) ?? '').replace('/api', '')
-
-const C = {
-  orange:     '#E8563A',
-  navy:       '#2D3561',
-  orangeSoft: '#FDE5DF',
-  bg:         '#F7F7F8',
-  text:       '#1A1A2E',
-  gray:       '#9CA3AF',
-  border:     '#E5E7EB',
-}
+import { C } from '../../theme'
 
 interface PedidoSesion {
   id: string
@@ -30,28 +16,33 @@ interface PedidoSesion {
 }
 
 export function PagarPage() {
-  const navigate      = useNavigate()
+  const navigate       = useNavigate()
   const jwt           = useSessionStore((s) => s.jwt)
   const sesionId      = useSessionStore((s) => s.sesionId)
   const numeroMesa    = useSessionStore((s) => s.numeroMesa)
-  const restauranteId = useSessionStore((s) => s.restauranteId)
-  const { estado: estadoPago, error: errorPago, solicitarEfectivo, reset: resetPago } = usePagoStore()
 
   const [pedidos, setPedidos] = useState<PedidoSesion[]>([])
   const [loading, setLoading] = useState(true)
   const [error,   setError]   = useState<string | null>(null)
 
-  useEffect(() => { resetPago() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  const [saldoPendiente, setSaldoPendiente] = useState<number | null>(null)
+
+  const [modalMensajeAbierto, setModalMensajeAbierto] = useState(false)
+
+  const [pagandoTotal, setPagandoTotal] = useState<'efectivo' | 'mercadopago' | null>(null)
+  const [pagoTotalConfirmado, setPagoTotalConfirmado] = useState(false)
+  const [errorPagoTotal, setErrorPagoTotal] = useState<string | null>(null)
 
   useEffect(() => {
-    if (estadoPago !== 'mp_redirect' || !restauranteId || !sesionId) return
-    const socket = io(`${WS_BASE}/ws`, { transports: ['websocket'] })
-    socket.on('connect', () => { socket.emit('session:join', { restauranteId }) })
-    socket.on('payment:approved', ({ sesionId: sid }: { sesionId: string }) => {
-      if (sid === sesionId) navigate('/pago/exitoso')
-    })
-    return () => { socket.disconnect() }
-  }, [estadoPago, restauranteId, sesionId, navigate])
+    if (sesionId) {
+      // Fallo silencioso: si esto no llega, los botones de "toda la cuenta" quedan
+      // habilitados (no bloqueamos por una falla de red puntual) y el error real,
+      // si lo hay, sale recién al intentar pagar.
+      if (jwt) {
+        void api.sesiones.saldo(jwt, sesionId).then((s) => setSaldoPendiente(s.saldoPendiente)).catch(() => {})
+      }
+    }
+  }, [sesionId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function cargar() {
     if (!jwt) { setLoading(false); setError('No hay sesión activa'); return }
@@ -72,8 +63,6 @@ export function PagarPage() {
     .flatMap((p) => p.items)
     .reduce((acc, i) => acc + Number(i.precioUnitario) * i.cantidad, 0)
 
-  const pedidoId = pedidos[pedidos.length - 1]?.id ?? ''
-
   const itemsAgrupados = Object.values(
     pedidos.flatMap((p) => p.items).reduce<Record<string, { nombre: string; precioUnitario: number; cantidad: number }>>(
       (acc, i) => {
@@ -86,15 +75,34 @@ export function PagarPage() {
     ),
   )
 
-  // TODO: reactivar cuando MP esté funcionando
-  // function handleMP() {
-  //   if (!jwt || !sesionId || !restauranteId || !pedidoId) return
-  //   void initiarPagoMP(jwt, sesionId, restauranteId, pedidoId, total)
-  // }
+  const bloqueadoPorSaldo = saldoPendiente !== null && saldoPendiente <= 0
 
-  function handleEfectivo() {
-    if (!jwt || !sesionId || !pedidoId) return
-    void solicitarEfectivo(jwt, sesionId, pedidoId, total)
+  async function handlePagarTodoEfectivo() {
+    if (!sesionId || !jwt || pagandoTotal !== null || bloqueadoPorSaldo) return
+    setPagandoTotal('efectivo')
+    setErrorPagoTotal(null)
+    try {
+      await api.payments.solicitarEfectivo(jwt, sesionId)
+      setPagoTotalConfirmado(true)
+    } catch (e) {
+      // Por ejemplo, "ya está completamente pagada" (400) llega acá con su mensaje.
+      setErrorPagoTotal(e instanceof Error ? e.message : 'Error al registrar el pago en efectivo')
+    } finally {
+      setPagandoTotal(null)
+    }
+  }
+
+  async function handlePagarTodoMercadoPago() {
+    if (!sesionId || !jwt || pagandoTotal !== null || bloqueadoPorSaldo) return
+    setPagandoTotal('mercadopago')
+    setErrorPagoTotal(null)
+    try {
+      const { initPoint } = await api.payments.pagarConMercadoPago(jwt, sesionId)
+      window.location.href = initPoint
+    } catch (e) {
+      setErrorPagoTotal(e instanceof Error ? e.message : 'Error al iniciar el pago con Mercado Pago')
+      setPagandoTotal(null)
+    }
   }
 
   const header = (
@@ -135,76 +143,63 @@ export function PagarPage() {
 
   let bottomContent: React.ReactNode
 
-  if (estadoPago === 'efectivo_solicitado') {
+  if (pagoTotalConfirmado) {
     bottomContent = (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
         <span style={{ fontSize: 32 }}>✅</span>
         <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: C.text, margin: 0, textAlign: 'center' }}>
-          El mozo se acercará a tu mesa en breve.
+          El mozo se va a acercar a la mesa a cobrar el total.
         </p>
       </div>
     )
-  } else if (estadoPago === 'error') {
+  } else if (bloqueadoPorSaldo) {
     bottomContent = (
-      <>
-        <p style={{
-          fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#DC2626',
-          background: '#FEF2F2', border: '1px solid #FECACA',
-          borderRadius: 10, padding: '10px 12px', textAlign: 'center', margin: 0,
-        }}>
-          {errorPago}
-        </p>
-        <button
-          onClick={resetPago}
-          style={{
-            width: '100%', padding: '14px 16px',
-            background: C.orange, color: 'white', border: 'none',
-            borderRadius: 14, fontFamily: 'Montserrat, sans-serif',
-            fontWeight: 700, fontSize: 15, cursor: 'pointer',
-          }}
-        >
-          Reintentar
-        </button>
-      </>
-    )
-  } else if (estadoPago === 'loading' || estadoPago === 'mp_redirect') {
-    bottomContent = (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
-        <Spinner size="md" />
-        <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: C.gray, margin: 0 }}>
-          Conectando con Mercado Pago...
-        </p>
-      </div>
+      <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: C.gray, margin: 0, textAlign: 'center' }}>
+        Esta cuenta ya está saldada.
+      </p>
     )
   } else {
+    const disabledTotal = pagandoTotal !== null
     bottomContent = (
       <>
-        {/* TODO: reactivar cuando MP esté funcionando
+        {errorPagoTotal && (
+          <p style={{
+            fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#DC2626',
+            background: '#FEF2F2', border: '1px solid #FECACA',
+            borderRadius: 10, padding: '10px 12px', textAlign: 'center', margin: 0,
+          }}>
+            {errorPagoTotal}
+          </p>
+        )}
         <button
-          onClick={handleMP}
-          style={{
-            width: '100%', padding: '14px 16px',
-            background: '#009EE3', color: 'white', border: 'none',
-            borderRadius: 14, fontFamily: 'Montserrat, sans-serif',
-            fontWeight: 700, fontSize: 15, cursor: 'pointer',
-            transition: 'background 0.2s',
-          }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = '#0088c7' }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = '#009EE3' }}
-        >
-          Pagar con Mercado Pago
-        </button>
-        */}
-        <button
-          onClick={handleEfectivo}
+          onClick={handlePagarTodoEfectivo}
+          disabled={disabledTotal}
           style={{
             width: '100%', padding: '14px 16px',
             background: C.navy, color: 'white', border: 'none',
             borderRadius: 14, fontFamily: 'Montserrat, sans-serif',
-            fontWeight: 700, fontSize: 15, cursor: 'pointer',
+            fontWeight: 700, fontSize: 15,
+            cursor: disabledTotal ? 'not-allowed' : 'pointer',
+            opacity: disabledTotal ? 0.5 : 1,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
           }}
         >
-          Llamar al mozo para pagar
+          {pagandoTotal === 'efectivo' ? <Spinner size="sm" /> : 'Pagar toda la cuenta en efectivo'}
+        </button>
+        <button
+          onClick={handlePagarTodoMercadoPago}
+          disabled={disabledTotal}
+          style={{
+            width: '100%', padding: '14px 16px',
+            background: C.orange, color: 'white', border: 'none',
+            borderRadius: 14, fontFamily: 'Montserrat, sans-serif',
+            fontWeight: 700, fontSize: 15,
+            cursor: disabledTotal ? 'not-allowed' : 'pointer',
+            opacity: disabledTotal ? 0.5 : 1,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+          }}
+        >
+          {pagandoTotal === 'mercadopago' ? <Spinner size="sm" /> : 'Pagar toda la cuenta con Mercado Pago'}
         </button>
       </>
     )
@@ -284,6 +279,77 @@ export function PagarPage() {
         Ver menú
       </button>
     </div>,
+  )
+
+  /* ── resumen de "Total a pagar" ── */
+  const totalAPagarContent = (
+    <>
+      <div style={{ textAlign: 'right' }}>
+        <span style={{ fontFamily: 'Montserrat, sans-serif', fontWeight: 800, fontSize: 26, color: C.navy }}>
+          {saldoPendiente !== null ? `$${saldoPendiente.toFixed(2)}` : '—'}
+        </span>
+      </div>
+      <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, color: C.gray, margin: '10px 0 0' }}>
+        ¿Van a dividir la cuenta entre varios?
+      </p>
+      <button
+        type="button"
+        onClick={() => setModalMensajeAbierto(true)}
+        style={{
+          width: '100%', marginTop: 10, padding: '12px 14px',
+          background: 'white', color: C.orange, border: `1.5px solid ${C.orange}`,
+          borderRadius: 12, fontFamily: 'Montserrat, sans-serif', fontWeight: 700, fontSize: 14, cursor: 'pointer',
+        }}
+      >
+        Armar mensaje
+      </button>
+    </>
+  )
+
+  /* ── modal "Generador de mensaje" ── */
+  const modalBtnStyle: React.CSSProperties = {
+    width: '100%', padding: '14px 16px', textAlign: 'left',
+    borderRadius: 12, border: `1.5px solid ${C.border}`, background: 'white',
+    fontFamily: 'Montserrat, sans-serif', fontWeight: 700, fontSize: 14, color: C.text,
+    cursor: 'pointer',
+  }
+
+  const modal = modalMensajeAbierto && (
+    <div
+      onClick={() => setModalMensajeAbierto(false)}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 1000,
+        background: 'rgba(45, 53, 97, 0.85)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: 24,
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: 'white', borderRadius: 16, padding: 24,
+          width: 320, maxWidth: '90vw', display: 'flex', flexDirection: 'column', gap: 10,
+        }}
+      >
+        <p style={{ fontFamily: 'Montserrat, sans-serif', fontWeight: 700, fontSize: 15, color: C.text, margin: '0 0 4px' }}>
+          Generador de mensaje
+        </p>
+        <button type="button" onClick={() => navigate('/dividir/cantidad')} style={modalBtnStyle}>
+          Partes iguales
+        </button>
+        <button type="button" onClick={() => navigate('/etiquetar?destino=mensaje')} style={modalBtnStyle}>
+          Por consumo
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setModalMensajeAbierto(false)}
+          style={{ width: '100%', padding: '10px 0', border: 'none', background: 'none', color: C.gray, fontFamily: 'Inter, sans-serif', fontSize: 13, cursor: 'pointer', marginTop: 4 }}
+        >
+          Cancelar
+        </button>
+      </div>
+    </div>
   )
 
   /* ── cuenta ── */
@@ -378,9 +444,22 @@ export function PagarPage() {
             </span>
           </div>
         </div>
+
+        <div style={{
+          border: `1px solid ${C.border}`, borderRadius: 12, padding: 16, marginTop: 16,
+        }}>
+          <p style={{
+            fontFamily: 'Montserrat, sans-serif', fontWeight: 700,
+            fontSize: 15, color: C.text, margin: '0 0 14px',
+          }}>
+            Total a pagar
+          </p>
+          {totalAPagarContent}
+        </div>
       </div>
 
       {bottomPanel}
+      {modal}
     </>,
   )
 }

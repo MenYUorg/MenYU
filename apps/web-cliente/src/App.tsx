@@ -9,12 +9,21 @@ import { PagoFallidoPage } from './pages/pago/PagoFallidoPage'
 import { PagoPendientePage } from './pages/pago/PagoPendientePage'
 import { MisPedidosPage } from './pages/pedidos/MisPedidosPage'
 import { PagarPage } from './pages/pago/PagarPage'
-import { EntradaPage } from './pages/entrada/EntradaPage'
-import { IngresoManualPage } from './pages/entrada/IngresoManualPage'
+import { EtiquetarPedidosPage } from './pages/etiquetado/EtiquetarPedidosPage'
+import { CantidadComensalesPage } from './pages/dividir/CantidadComensalesPage'
+import { MensajePage } from './pages/dividir/MensajePage'
+import { DiscoveryPage } from './pages/discovery/DiscoveryPage'
+import { ElegirNombrePage } from './pages/entrada/ElegirNombrePage'
+import { RestaurantePage } from './pages/restaurante/RestaurantePage'
+import { IngresoMesaPage } from './pages/restaurante/IngresoMesaPage'
+import { CartaPage } from './pages/carta/CartaPage'
 import { AuthPage } from './pages/auth/AuthPage'
 import CheckInRedirectPage from './pages/entrada/CheckInRedirectPage'
+import { SesionRequiredRoute } from './SesionRequiredRoute'
+import { ComensalRequiredRoute } from './ComensalRequiredRoute'
 import { useSessionStore } from './store/sessionStore'
 import { usePublicMenuStore } from './store/publicMenuStore'
+import { GraciasCard } from './components/GraciasCard'
 
 const WS_BASE = (import.meta.env.VITE_WS_URL as string) ??
   ((import.meta.env.VITE_API_URL as string) ?? '').replace('/api', '')
@@ -70,67 +79,10 @@ function SessionGuard({ children }: { children: React.ReactNode }) {
           justifyContent: 'center',
           padding: 24,
         }}>
-          <div style={{
-            background: 'white',
-            borderRadius: 16,
-            padding: '40px 32px',
-            maxWidth: 340,
-            width: '100%',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: 16,
-            boxShadow: '0 8px 28px rgba(0,0,0,0.10)',
-          }}>
-            <div style={{
-              width: 64, height: 64, borderRadius: '50%',
-              background: '#FDF0ED',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none"
-                stroke="#E8563A" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-            </div>
-            <p style={{
-              fontFamily: 'Montserrat, sans-serif',
-              fontWeight: 800, fontSize: 22,
-              color: '#2D3561', margin: 0,
-              letterSpacing: '-0.01em',
-              textAlign: 'center',
-            }}>
-              ¡Gracias por su visita!
-            </p>
-            <p style={{
-              fontFamily: 'Inter, sans-serif',
-              fontSize: 14, color: '#6B7280',
-              margin: 0, textAlign: 'center',
-              lineHeight: 1.5,
-            }}>
-              Su sesión ha sido cerrada. Esperamos verle pronto.
-            </p>
-            <button
-              onClick={() => { setShowGracias(false); clear(); navigate('/') }}
-              onMouseEnter={e => e.currentTarget.style.background = '#d34a30'}
-              onMouseLeave={e => e.currentTarget.style.background = '#E8563A'}
-              style={{
-                marginTop: 8,
-                width: '100%',
-                padding: '14px 0',
-                background: '#E8563A',
-                color: 'white',
-                border: 'none',
-                borderRadius: 12,
-                fontFamily: 'Montserrat, sans-serif',
-                fontWeight: 700,
-                fontSize: 15,
-                cursor: 'pointer',
-                transition: 'background .14s',
-              }}
-            >
-              Salir
-            </button>
-          </div>
+          <GraciasCard
+            subtitulo="Su sesión ha sido cerrada. Esperamos verle pronto."
+            onSalir={() => { setShowGracias(false); clear(); navigate('/') }}
+          />
         </div>
       )}
       {children}
@@ -202,18 +154,34 @@ export function App() {
     <BrowserRouter>
       <SessionGuard>
         <Routes>
-          <Route path="/" element={<EntradaPage />} />
-          <Route path="/ingresar-pin" element={<IngresoManualPage />} />
+          <Route path="/" element={<DiscoveryPage />} />
+          <Route path="/restaurante/:restauranteId" element={<RestaurantePage />} />
+          <Route path="/restaurante/:restauranteId/mesa" element={<IngresoMesaPage />} />
+          {/* La carta en modo vista es pública: no pide sesión de mesa. */}
+          <Route path="/restaurante/:restauranteId/carta" element={<CartaPage />} />
+          {/* El PIN se pide dentro del restaurante elegido (D12). */}
+          <Route path="/ingresar-pin" element={<Navigate to="/" replace />} />
           <Route path="/auth" element={<AuthPage />} />
-          <Route path="/menu" element={<ClienteMenuPage />} />
-          <Route path="/menu/:itemId" element={<ItemDetailPage />} />
-          <Route path="/carrito" element={<CarritoPage />} />
-          <Route path="/pago/exitoso" element={<PagoExitosoPage />} />
-          <Route path="/pago/fallido" element={<PagoFallidoPage />} />
-          <Route path="/pago/pendiente" element={<PagoPendientePage />} />
-          <Route path="/pedidos" element={<MisPedidosPage />} />
-          <Route path="/pagar" element={<PagarPage />} />
           <Route path="/check-in" element={<CheckInRedirectPage />} />
+
+          <Route element={<SesionRequiredRoute />}>
+            <Route path="/elegir-nombre" element={<ElegirNombrePage />} />
+
+            <Route element={<ComensalRequiredRoute />}>
+              <Route path="/menu" element={<ClienteMenuPage />} />
+              <Route path="/menu/:itemId" element={<ItemDetailPage />} />
+              <Route path="/carrito" element={<CarritoPage />} />
+              <Route path="/pago/exitoso" element={<PagoExitosoPage />} />
+              <Route path="/pago/fallido" element={<PagoFallidoPage />} />
+              <Route path="/pago/pendiente" element={<PagoPendientePage />} />
+              <Route path="/pedidos" element={<MisPedidosPage />} />
+              <Route path="/pagar" element={<PagarPage />} />
+              <Route path="/etiquetar" element={<EtiquetarPedidosPage />} />
+              <Route path="/dividir/cantidad" element={<CantidadComensalesPage />} />
+              <Route path="/dividir/mensaje" element={<MensajePage />} />
+            </Route>
+          </Route>
+
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </SessionGuard>

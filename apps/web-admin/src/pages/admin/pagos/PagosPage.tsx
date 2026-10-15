@@ -52,6 +52,14 @@ interface SesionPagada {
   cobradoPorNombre: string | null
   referenciaExterna: string | null
   fechaCobro: string | null
+  pagos?: {
+    id: string
+    metodo: string
+    estado: string
+    cobradoPorNombre: string | null
+    referenciaExterna: string | null
+    fechaCobro: string | null
+  }[]
 }
 
 type MetodoPago = 'efectivo' | 'debito' | 'credito' | 'transferencia'

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@menyu/auth'
+import { LogoMenYuOscuro } from '@menyu/ui'
 import {
   ArrowRight, Bell, ChefHat, CheckCircle, ClipboardList, CreditCard,
   History, LayoutGrid, LogOut,
@@ -405,23 +406,7 @@ export function MozoPanel() {
         flexShrink:     0,
       }}>
         {/* Logo */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{
-            width:          32,
-            height:         32,
-            borderRadius:   8,
-            background:     '#E8563A',
-            display:        'flex',
-            alignItems:     'center',
-            justifyContent: 'center',
-            flexShrink:     0,
-          }}>
-            <span style={{ fontFamily: 'Montserrat, sans-serif', fontWeight: 800, fontSize: 17, color: 'white' }}>M</span>
-          </div>
-          <span style={{ fontFamily: 'Montserrat, sans-serif', fontWeight: 800, fontSize: 18, color: 'white' }}>
-            Men<span style={{ color: '#F2A28F' }}>Yu</span>
-          </span>
-        </div>
+        <LogoMenYuOscuro alto={22} />
 
         {/* Right: who + logout */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>

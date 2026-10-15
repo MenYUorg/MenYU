@@ -65,14 +65,12 @@ export interface UpdateMarcaRequest {
 export interface CreateRestauranteRequest {
   marcaId: string
   nombre: string
-  direccion?: string
-  qrBaseUrl?: string
+  direccion: string
 }
 
 export interface UpdateRestauranteRequest {
   nombre?: string
   direccion?: string
-  qrBaseUrl?: string
   modoSesion?: ModoSesion
 }
 
@@ -108,6 +106,14 @@ export interface UpdateItemRequest {
   comandaId?: string
   disponible?: boolean
   imagenUrl?: string
+}
+
+/** Descuento de un ítem (PUT /items/:id/descuento). Se manda exactamente uno de los dos: el backend calcula el otro. */
+export interface UpdateItemDescuentoRequest {
+  /** Precio con descuento, en pesos enteros. */
+  precioDescuento?: number
+  /** Porcentaje de descuento, entero de 1 a 99. */
+  porcentaje?: number
 }
 
 export interface AddIngredienteRequest {

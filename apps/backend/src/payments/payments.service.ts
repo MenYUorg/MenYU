@@ -1,30 +1,29 @@
 import {
   BadRequestException,
-  Inject,
   Injectable,
-  InternalServerErrorException,
+  Logger,
   NotFoundException,
-  UnauthorizedException,
 } from '@nestjs/common'
-import { JwtService } from '@nestjs/jwt'
+import { Prisma } from '@prisma/client'
 import { PrismaService } from '../prisma/prisma.service'
-import { CryptoService } from '../common/crypto.service'
 import { MenyuGateway } from '../gateway/menyu.gateway'
-import { PaymentProvider } from './providers/payment-provider.interface'
-import { InitiatePaymentDto } from './dto/initiate-payment.dto'
+import { MercadoPagoProvider } from './providers/mercado-pago.provider'
+import { MercadoPagoOAuthService } from './mercado-pago-oauth.service'
+import { DivisionService } from '../comensales/division.service'
+import { PaymentStatus } from './providers/payment-provider.interface'
+import { isAllowedOrigin } from '../common/is-allowed-origin'
+import { runSerializableTransaction } from '../common/run-serializable-transaction'
+import {
+  ESTADO_PAGO_PENDIENTE,
+  ESTADO_PAGO_APROBADO,
+  ESTADO_PAGO_CANCELADO,
+} from '../common/estado-pago.constant'
 
-interface SessionJwt {
-  sub: string
-  tipo: string
-  sesionId: string
-  mesaId: string
-  restauranteId: string
-}
-
-interface MpTokenResponse {
-  access_token: string
-  refresh_token: string
-  user_id: number | string
+const MP_STATUS_MAP: Record<PaymentStatus, string> = {
+  APROBADO: 'aprobado',
+  PENDIENTE: 'pendiente',
+  RECHAZADO: 'rechazado',
+  EN_PROCESO: 'pendiente',
 }
 
 export interface SesionResumen {
@@ -33,219 +32,21 @@ export interface SesionResumen {
   estado: 'activa' | 'efectivo_solicitado' | 'mp_pendiente' | 'cerrada'
   total: number
   pedidos: { id: string; total: number; estado: string }[]
-  pago?: { id: string; metodo: string; estado: string }
+  pagos: { id: string; metodo: string; estado: string; monto: number }[]
   cerradaEn?: string
 }
 
 @Injectable()
 export class PaymentsService {
+  private readonly logger = new Logger(PaymentsService.name)
+
   constructor(
-    @Inject('PAYMENT_PROVIDER') private readonly provider: PaymentProvider,
-    private readonly jwt: JwtService,
     private readonly prisma: PrismaService,
-    private readonly crypto: CryptoService,
     private readonly gateway: MenyuGateway,
+    private readonly mpProvider: MercadoPagoProvider,
+    private readonly mpOAuth: MercadoPagoOAuthService,
+    private readonly divisionService: DivisionService,
   ) {}
-
-  async initiatePayment(authHeader: string | undefined, dto: InitiatePaymentDto) {
-    if (!authHeader?.startsWith('Bearer ')) {
-      throw new UnauthorizedException('Session JWT requerido')
-    }
-
-    let payload: SessionJwt
-    try {
-      payload = this.jwt.verify<SessionJwt>(authHeader.slice(7))
-    } catch {
-      throw new UnauthorizedException('Session JWT inválido o expirado')
-    }
-
-    if (payload.tipo !== 'cliente') {
-      throw new UnauthorizedException('Solo clientes pueden iniciar pagos')
-    }
-
-    const restaurante = await this.prisma.restaurante.findUnique({
-      where: { id: dto.restauranteId },
-      select: { mpAccessToken: true },
-    })
-
-    if (!restaurante?.mpAccessToken) {
-      throw new BadRequestException('El restaurante no tiene Mercado Pago configurado')
-    }
-
-    const externalReference = `${dto.sesionId}-${Date.now()}`
-
-    const ALLOWED_ORIGINS: (RegExp | string)[] = [
-      /^https:\/\/menyu-cliente(-[a-z0-9]+)?\.vercel\.app$/,
-      // branch previews:  menyu-cliente-git-<branch>-men-yu-s-projects.vercel.app
-      // deploy previews:  menyu-cliente-<hash>-men-yu-s-projects.vercel.app
-      /^https:\/\/menyu-cliente-[a-z0-9-]+-men-yu-s-projects\.vercel\.app$/,
-    ]
-    if (process.env.MP_SUCCESS_URL) {
-      try {
-        ALLOWED_ORIGINS.push(new URL(process.env.MP_SUCCESS_URL).origin)
-      } catch {
-        // ignore malformed env URL
-      }
-    }
-
-    let successUrl: string | undefined
-    let failureUrl: string | undefined
-    let pendingUrl: string | undefined
-
-    if (dto.returnBaseUrl) {
-      const allowed = ALLOWED_ORIGINS.some((rule) =>
-        rule instanceof RegExp ? rule.test(dto.returnBaseUrl!) : rule === dto.returnBaseUrl,
-      )
-      if (!allowed) {
-        throw new BadRequestException('returnBaseUrl no permitido')
-      }
-      successUrl = `${dto.returnBaseUrl}/pago/exitoso`
-      failureUrl = `${dto.returnBaseUrl}/pago/fallido`
-      pendingUrl = `${dto.returnBaseUrl}/pago/pendiente`
-    } else {
-      successUrl = process.env.MP_SUCCESS_URL
-      failureUrl = process.env.MP_FAILURE_URL
-      pendingUrl = process.env.MP_PENDING_URL
-    }
-
-    const decryptedToken = this.crypto.decrypt(restaurante.mpAccessToken)
-
-    console.log('[MP] initiatePayment debug', {
-      restauranteId: dto.restauranteId,
-      monto: dto.monto,
-      monto_type: typeof dto.monto,
-      isTestToken: decryptedToken.startsWith('TEST-'),
-      isSandbox: process.env.MP_ENV === 'sandbox',
-      hasReturnBaseUrl: !!dto.returnBaseUrl,
-      successUrl: successUrl ?? '(no definida)',
-    })
-
-    const preference = await this.provider.createPreference({
-      sesionId: dto.sesionId,
-      monto: dto.monto,
-      descripcion: dto.descripcion,
-      externalReference,
-      accessToken: decryptedToken,
-      successUrl,
-      failureUrl,
-      pendingUrl,
-    })
-
-    const pago = await this.prisma.pago.create({
-      data: {
-        pedidoId: dto.pedidoId,
-        monto: dto.monto,
-        metodo: 'mercadopago',
-        estado: 'pendiente',
-        referenciaExterna: preference.externalReference,
-      },
-    })
-
-    return { ...preference, pagoId: pago.id }
-  }
-
-  async handleWebhook(payload: unknown) {
-    const result = await this.provider.processWebhook(payload)
-
-    if (result.status !== 'APROBADO' || !result.externalReference) {
-      return { sesionId: null, estado: result.status }
-    }
-
-    const pago = await this.prisma.pago.findFirst({
-      where: { referenciaExterna: result.externalReference },
-    })
-
-    if (!pago) {
-      throw new NotFoundException('Pago no encontrado para esa referencia')
-    }
-
-    const pedido = await this.prisma.pedido.findUnique({
-      where: { id: pago.pedidoId },
-      select: {
-        sesionId: true,
-        sesion: { select: { mesa: { select: { restauranteId: true } } } },
-      },
-    })
-
-    await this.prisma.$transaction([
-      this.prisma.pago.update({
-        where: { id: pago.id },
-        data: { estado: 'aprobado' },
-      }),
-      this.prisma.sesionMesa.update({
-        where: { id: pedido!.sesionId },
-        data: { estado: 'cerrada', cerradaEn: new Date() },
-      }),
-    ])
-
-    const restauranteId = pedido!.sesion.mesa.restauranteId
-    this.gateway.emitPaymentApproved(restauranteId, pedido!.sesionId)
-
-    return { sesionId: pedido!.sesionId, estado: 'cerrada' }
-  }
-
-  async getStatus(externalId: string) {
-    return this.provider.getPaymentStatus(externalId)
-  }
-
-  async getMpAuthUrl(restauranteId: string): Promise<{ url: string }> {
-    const params = new URLSearchParams({
-      client_id: process.env.MP_CLIENT_ID!,
-      response_type: 'code',
-      platform_id: 'mp',
-      redirect_uri: process.env.MP_REDIRECT_URI!,
-      state: restauranteId,
-    })
-    return { url: `https://auth.mercadopago.com/authorization?${params}` }
-  }
-
-  async handleMpCallback(
-    code: string,
-    restauranteId: string,
-  ): Promise<{ restauranteId: string; mpUserId: string; conectado: boolean }> {
-    const body = new URLSearchParams({
-      client_id: process.env.MP_CLIENT_ID!,
-      client_secret: process.env.MP_CLIENT_SECRET!,
-      grant_type: 'authorization_code',
-      code,
-      redirect_uri: process.env.MP_REDIRECT_URI!,
-    })
-
-    if (process.env.MP_ENV === 'sandbox') {
-      body.set('test_token', 'true')
-    }
-
-    const response = await fetch('https://api.mercadopago.com/oauth/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: body.toString(),
-    })
-
-    if (!response.ok) {
-      const errorBody = await response.text()
-      console.error('MP OAuth falló', {
-        status: response.status,
-        statusText: response.statusText,
-        body: errorBody,
-      })
-      throw new InternalServerErrorException('MP OAuth falló')
-    }
-
-    const tokenData = (await response.json()) as MpTokenResponse
-
-    await this.prisma.restaurante.update({
-      where: { id: restauranteId },
-      data: {
-        mpAccessToken: this.crypto.encrypt(tokenData.access_token),
-        mpRefreshToken: tokenData.refresh_token
-          ? this.crypto.encrypt(tokenData.refresh_token)
-          : null,
-        mpUserId: String(tokenData.user_id),
-      },
-    })
-
-    return { restauranteId, mpUserId: String(tokenData.user_id), conectado: true }
-  }
 
   async getSesiones(restauranteId: string): Promise<SesionResumen[]> {
     const sesiones = await this.prisma.sesionMesa.findMany({
@@ -254,10 +55,10 @@ export class PaymentsService {
         mesa: { select: { numero: true } },
         pedidos: {
           include: {
-            pago: true,
             items: true,
           },
         },
+        pagos: true,
       },
       orderBy: { iniciadaEn: 'desc' },
       take: 100,
@@ -274,14 +75,14 @@ export class PaymentsService {
         0,
       )
 
-      const pago = sesion.pedidos.flatMap((p) => (p.pago ? [p.pago] : []))[0]
-
       let estado: SesionResumen['estado']
       if (sesion.estado === 'cerrada') {
         estado = 'cerrada'
-      } else if (pago && pago.estado === 'pendiente' && pago.metodo === 'mercadopago') {
+      } else if (
+        sesion.pagos.some((p) => p.estado === 'pendiente' && p.metodo === 'mercadopago')
+      ) {
         estado = 'mp_pendiente'
-      } else if (pago && pago.metodo === 'efectivo') {
+      } else if (sesion.pagos.some((p) => p.metodo === 'efectivo' && p.estado !== 'aprobado')) {
         estado = 'efectivo_solicitado'
       } else {
         estado = 'activa'
@@ -300,20 +101,80 @@ export class PaymentsService {
           ),
           estado: p.estado,
         })),
-        pago: pago ? { id: pago.id, metodo: pago.metodo, estado: pago.estado } : undefined,
+        pagos: sesion.pagos.map((p) => ({
+          id: p.id,
+          metodo: p.metodo,
+          estado: p.estado,
+          monto: Number(p.monto),
+        })),
         cerradaEn: sesion.cerradaEn?.toISOString(),
       }
     })
   }
 
-  async solicitarEfectivo(sesionId: string, pedidoId: string, monto: number) {
-    const existing = await this.prisma.pago.findFirst({
-      where: { pedidoId, metodo: 'efectivo' },
-    })
-    if (existing) {
-      return { pagoId: existing.id, sesionId, estado: 'efectivo_solicitado' }
+  async solicitarEfectivo(sesionId: string) {
+    // Serializable: dos pedidos de efectivo simultáneos no pueden crear dos filas. El segundo
+    // choca (P2034), se reintenta una vez y ahí ya ve el pendiente del primero.
+    // Sin I/O externa adentro: los eventos de socket salen después del commit.
+    const resultado = await runSerializableTransaction(
+      this.prisma,
+      async (tx) => {
+        const sesion = await tx.sesionMesa.findUnique({
+          where: { id: sesionId },
+          include: { mesa: { select: { id: true, numero: true, restauranteId: true } } },
+        })
+        if (!sesion) throw new NotFoundException('Sesión no encontrada')
+        if (sesion.cerradaEn !== null) throw new BadRequestException('La sesión ya fue cerrada')
+
+        // Un efectivo ya pedido y sin cobrar se reutiliza; uno aprobado o cancelado no cuenta.
+        const existing = await tx.pago.findFirst({
+          where: { sesionId, metodo: 'efectivo', estado: ESTADO_PAGO_PENDIENTE },
+        })
+        if (existing) return { creado: false as const, pagoId: existing.id }
+
+        const { total, saldo: monto } = await this.saldoPendienteSesion(sesionId, tx)
+
+        const pago = await tx.pago.create({
+          data: { sesionId, monto, metodo: 'efectivo', estado: ESTADO_PAGO_PENDIENTE },
+        })
+
+        // Reemplazar cualquier llamado pendiente y crear uno con motivo pedir_cuenta
+        await tx.llamadoMozo.deleteMany({
+          where: { sesionId, estado: 'pendiente' },
+        })
+        const llamado = await tx.llamadoMozo.create({
+          data: { sesionId, motivo: 'pedir_cuenta' },
+        })
+
+        return { creado: true as const, sesion, pago, llamado, totalAcumulado: total }
+      },
+      'solicitarEfectivo',
+    )
+
+    if (!resultado.creado) {
+      return { pagoId: resultado.pagoId, sesionId, estado: 'efectivo_solicitado' }
     }
 
+    const { sesion, pago, llamado, totalAcumulado } = resultado
+
+    this.gateway.emitMozoCalled(sesion.mesa.restauranteId, {
+      llamadoId: llamado.id,
+      sesionId,
+      mesaNumero: sesion.mesa.numero,
+      motivo: 'pedir_cuenta',
+    })
+
+    this.gateway.emitQuierePagar(sesion.mesa.restauranteId, {
+      sesionId,
+      mesaId: sesion.mesa.id,
+      mesaNumero: sesion.mesa.numero,
+      totalAcumulado,
+    })
+
+    return { pagoId: pago.id, sesionId, estado: 'efectivo_solicitado' }
+  }
+
+  async avisarMozoPedidoDeCuenta(sesionId: string) {
     const sesion = await this.prisma.sesionMesa.findUnique({
       where: { id: sesionId },
       include: {
@@ -322,15 +183,6 @@ export class PaymentsService {
       },
     })
     if (!sesion) throw new NotFoundException('Sesión no encontrada')
-
-    const pago = await this.prisma.pago.create({
-      data: {
-        pedidoId,
-        monto,
-        metodo: 'efectivo',
-        estado: 'pendiente',
-      },
-    })
 
     // Reemplazar cualquier llamado pendiente y crear uno con motivo pedir_cuenta
     await this.prisma.llamadoMozo.deleteMany({
@@ -359,65 +211,267 @@ export class PaymentsService {
       totalAcumulado,
     })
 
-    return { pagoId: pago.id, sesionId, estado: 'efectivo_solicitado' }
+    return { sesionId, estado: 'mozo_llamado' }
   }
 
-  async confirmarEfectivo(sesionId: string, mozoId?: string) {
+  async confirmarEfectivo(pagoId: string, mozoId?: string) {
     const fechaCobro = new Date()
 
-    const pedidoConEfectivo = await this.prisma.pedido.findFirst({
-      where: { sesionId, pago: { metodo: 'efectivo' } },
-      include: { pago: true },
-      orderBy: { createdAt: 'desc' },
+    const pago = await this.prisma.pago.findUnique({
+      where: { id: pagoId },
+      include: { sesion: { select: { mesaId: true } } },
     })
-
-    if (pedidoConEfectivo?.pago) {
-      await this.prisma.$transaction([
-        this.prisma.pago.update({
-          where: { id: pedidoConEfectivo.pago.id },
-          data: { estado: 'aprobado', fechaCobro, ...(mozoId ? { mozoId } : {}) },
-        }),
-        this.prisma.sesionMesa.update({
-          where: { id: sesionId },
-          data: { estado: 'cerrada', cerradaEn: fechaCobro },
-        }),
-      ])
-      return { sesionId, estado: 'cerrada' }
+    if (!pago || pago.metodo !== 'efectivo') {
+      throw new NotFoundException('Pago en efectivo no encontrado')
     }
 
-    // No hay registro de pago en efectivo — crear uno al confirmar
-    const pedidos = await this.prisma.pedido.findMany({
-      where: { sesionId },
-      include: { items: true },
-      orderBy: { createdAt: 'desc' },
+    return runSerializableTransaction(this.prisma, async (tx) => {
+      await tx.pago.update({
+        where: { id: pagoId },
+        data: { estado: 'aprobado', fechaCobro, ...(mozoId ? { mozoId } : {}) },
+      })
+
+      const totalSesion = await this.divisionService.calcularTotalSesion(tx, pago.sesionId)
+      const pagosAprobados = await tx.pago.findMany({
+        where: { sesionId: pago.sesionId, estado: 'aprobado' },
+      })
+      const totalCubierto = pagosAprobados.reduce((acc, p) => acc + Number(p.monto), 0)
+      const sesionCubierta = totalCubierto >= totalSesion
+
+      if (sesionCubierta) {
+        // La mesa quedó cobrada: cualquier pago que siga pendiente (p. ej. un MP que un
+        // comensal inició) ya no se va a cobrar. El pago de este cobro ya está aprobado, no entra.
+        await tx.pago.updateMany({
+          where: { sesionId: pago.sesionId, estado: ESTADO_PAGO_PENDIENTE },
+          data: { estado: ESTADO_PAGO_CANCELADO },
+        })
+        await tx.sesionMesa.update({
+          where: { id: pago.sesionId },
+          data: { estado: 'cerrada', cerradaEn: fechaCobro },
+        })
+        await tx.mesa.update({
+          where: { id: pago.sesion.mesaId },
+          data: { estado: 'libre' },
+        })
+      }
+
+      return { sesionId: pago.sesionId, estado: sesionCubierta ? 'cerrada' : 'activa' }
+    }, 'confirmarEfectivo')
+  }
+
+  async crearPreferenciaMercadoPago(sesionId: string, origin?: string) {
+    // Antes de crear nada: si la sesión no existe o el restaurante no conectó Mercado Pago,
+    // se falla acá y no queda ninguna fila pendiente.
+    const sesionPrevia = await this.prisma.sesionMesa.findUnique({
+      where: { id: sesionId },
+      select: { mesa: { select: { restauranteId: true } } },
     })
+    if (!sesionPrevia) throw new NotFoundException('Sesión no encontrada')
+    const restauranteId = sesionPrevia.mesa.restauranteId
+    const accessToken = await this.mpOAuth.getAccessTokenDecrypted(restauranteId)
+    const frontendOrigin = this.resolveFrontendOrigin(origin)
 
-    const ultimo = pedidos[0]
-    if (!ultimo) throw new NotFoundException('No se encontraron pedidos para esta sesión')
-
-    const monto = pedidos.reduce(
-      (acc, p) =>
-        acc + p.items.reduce((s, i) => s + Number(i.precioUnitario) * i.cantidad, 0),
-      0,
+    // Fase 1: transacción serializable, sin I/O externa adentro (un reintento por P2034
+    // repetiría la llamada HTTP). Nunca se reutiliza una fila: cada intento cancela los MP
+    // pendientes de la sesión y crea uno nuevo con el saldo actual.
+    const { pago, monto } = await runSerializableTransaction(
+      this.prisma,
+      async (tx) => {
+        const { saldo: monto } = await this.saldoPendienteSesion(sesionId, tx)
+        await tx.pago.updateMany({
+          where: { sesionId, metodo: 'mercadopago', estado: ESTADO_PAGO_PENDIENTE },
+          data: { estado: ESTADO_PAGO_CANCELADO },
+        })
+        const pago = await tx.pago.create({
+          data: { sesionId, monto, metodo: 'mercadopago', estado: ESTADO_PAGO_PENDIENTE },
+        })
+        return { pago, monto }
+      },
+      'crearPreferenciaMercadoPago',
     )
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.pago.create({
+    // Fase 2: I/O externa (Mercado Pago), fuera de la transacción. Si falla, la fila nueva
+    // quedaría pendiente sin preferencia: se cancela para no dejar un MP fantasma.
+    try {
+      const preference = await this.mpProvider.createPreference({
+        restauranteId,
+        sesionId,
+        pagoId: pago.id,
+        monto,
+        descripcion: `Pago ${pago.id}`,
+        externalReference: pago.id,
+        accessToken,
+        ...(frontendOrigin
+          ? {
+              successUrl: `${frontendOrigin}/pago/exitoso`,
+              failureUrl: `${frontendOrigin}/pago/fallido`,
+              pendingUrl: `${frontendOrigin}/pago/pendiente`,
+            }
+          : {}),
+      })
+      return { initPoint: preference.initPoint, preferenceId: preference.id }
+    } catch (err) {
+      await this.prisma.pago
+        .updateMany({
+          where: { id: pago.id, estado: ESTADO_PAGO_PENDIENTE },
+          data: { estado: ESTADO_PAGO_CANCELADO },
+        })
+        .catch((e) =>
+          this.logger.error(
+            `crearPreferenciaMercadoPago: no se pudo cancelar el pago ${pago.id} tras el fallo de MP`,
+            e,
+          ),
+        )
+      throw err
+    }
+  }
+
+  // Deriva las back_urls del Origin del request (validado contra la misma whitelist que CORS)
+  // en vez de una FRONTEND_URL fija, para no depender de la URL de preview de Vercel de cada rama de QA.
+  private resolveFrontendOrigin(origin?: string): string | undefined {
+    if (!origin) {
+      this.logger.debug('crearPreferenciaMercadoPago: sin header Origin, uso fallback FRONTEND_URL')
+      return undefined
+    }
+    const cleanOrigin = origin.replace(/\/+$/, '')
+    if (!isAllowedOrigin(cleanOrigin)) {
+      this.logger.debug(
+        `crearPreferenciaMercadoPago: origin "${cleanOrigin}" no matchea la whitelist de CORS, uso fallback FRONTEND_URL`,
+      )
+      return undefined
+    }
+    return cleanOrigin
+  }
+
+  private async saldoPendienteSesion(
+    sesionId: string,
+    client: Prisma.TransactionClient = this.prisma,
+  ): Promise<{ total: number; saldo: number }> {
+    const total = await this.divisionService.calcularTotalSesion(client, sesionId)
+
+    const pagosAprobados = await client.pago.findMany({
+      where: { sesionId, estado: 'aprobado' },
+    })
+    const totalYaCobrado = pagosAprobados.reduce((acc, p) => acc + Number(p.monto), 0)
+
+    const saldo = total - totalYaCobrado
+    if (saldo <= 0) {
+      throw new BadRequestException('Esta sesión ya está completamente pagada')
+    }
+    return { total, saldo }
+  }
+
+  async procesarWebhookMercadoPago(
+    restauranteId: string,
+    pagoId: string,
+    query: Record<string, string>,
+  ) {
+    const accessToken = await this.mpOAuth.getAccessTokenDecrypted(restauranteId)
+    const resultado = await this.mpProvider.processWebhook(query, accessToken)
+    const estadoInterno = MP_STATUS_MAP[resultado.status]
+
+    const pagoActual = await this.prisma.pago.findUnique({
+      where: { id: pagoId },
+      include: { sesion: { select: { mesaId: true } } },
+    })
+    if (!pagoActual) {
+      this.logger.warn(`procesarWebhookMercadoPago: pago ${pagoId} no encontrado, ignorando notificación`)
+      return
+    }
+
+    // La notificación tiene que ser de ESTE pago y el pago tiene que ser de Mercado Pago.
+    // Va antes de la transacción: externalReference viene del request y metodo no cambia
+    // mientras el pago está en este flujo. Con el provider actual, las notificaciones de
+    // relleno (tópico desconocido, payment sin order) traen externalReference '' y caen acá.
+    if (resultado.externalReference !== pagoId) {
+      this.logger.warn(
+        `procesarWebhookMercadoPago: externalReference "${resultado.externalReference}" no coincide con pagoId ${pagoId}, ` +
+          `ignorando notificación (sesionId=${pagoActual.sesionId}, merchantOrderId=${resultado.externalId})`,
+      )
+      return
+    }
+    if (pagoActual.metodo !== 'mercadopago') {
+      this.logger.warn(
+        `procesarWebhookMercadoPago: el pago ${pagoId} no es de Mercado Pago (metodo=${pagoActual.metodo}), ` +
+          `ignorando notificación (sesionId=${pagoActual.sesionId}, merchantOrderId=${resultado.externalId})`,
+      )
+      return
+    }
+
+    if (pagoActual.referenciaExterna === resultado.externalId && pagoActual.estado === estadoInterno) {
+      return
+    }
+
+    const sesionCerrada = await runSerializableTransaction(this.prisma, async (tx) => {
+      // Estados finales: aprobado y cancelado no los cambia el webhook (ni siquiera
+      // referenciaExterna). Se lee acá, dentro de la tx, porque registrarCobro puede
+      // cancelar el pago entre la lectura de arriba y este punto.
+      const actual = await tx.pago.findUnique({ where: { id: pagoId }, select: { estado: true } })
+      if (
+        actual &&
+        (actual.estado === ESTADO_PAGO_APROBADO || actual.estado === ESTADO_PAGO_CANCELADO)
+      ) {
+        if (actual.estado !== estadoInterno) {
+          const detalle = `sesionId=${pagoActual.sesionId}, pagoId=${pagoId}, merchantOrderId=${resultado.externalId}`
+          this.logger.warn(
+            actual.estado === ESTADO_PAGO_CANCELADO && estadoInterno === ESTADO_PAGO_APROBADO
+              ? `procesarWebhookMercadoPago: MP informó aprobado para un pago cancelado; devolución manual pendiente (${detalle})`
+              : `procesarWebhookMercadoPago: transición ignorada ${actual.estado} → ${estadoInterno} (${detalle})`,
+          )
+        }
+        return false
+      }
+
+      await tx.pago.update({
+        where: { id: pagoId },
         data: {
-          pedidoId: ultimo.id,
-          monto,
-          metodo: 'efectivo',
-          estado: 'aprobado',
-          fechaCobro,
-          ...(mozoId ? { mozoId } : {}),
+          estado: estadoInterno,
+          referenciaExterna: resultado.externalId,
+          ...(estadoInterno === 'aprobado' ? { fechaCobro: new Date() } : {}),
         },
       })
-      await tx.sesionMesa.update({
-        where: { id: sesionId },
-        data: { estado: 'cerrada', cerradaEn: fechaCobro },
-      })
-    })
 
-    return { sesionId, estado: 'cerrada' }
+      if (estadoInterno !== 'aprobado') return false
+
+      const totalSesion = await this.divisionService.calcularTotalSesion(tx, pagoActual.sesionId)
+      const pagosAprobados = await tx.pago.findMany({
+        where: { sesionId: pagoActual.sesionId, estado: 'aprobado' },
+      })
+      const totalCubierto = pagosAprobados.reduce((acc, p) => acc + Number(p.monto), 0)
+      const sesionCubierta = totalCubierto >= totalSesion
+
+      if (sesionCubierta) {
+        // La mesa quedó cobrada: cualquier pago que siga pendiente (p. ej. un efectivo que un
+        // comensal pidió) ya no se va a cobrar. El pago de este webhook ya está aprobado, no entra.
+        await tx.pago.updateMany({
+          where: { sesionId: pagoActual.sesionId, estado: ESTADO_PAGO_PENDIENTE },
+          data: { estado: ESTADO_PAGO_CANCELADO },
+        })
+        await tx.sesionMesa.update({
+          where: { id: pagoActual.sesionId },
+          data: { estado: 'cerrada', cerradaEn: new Date() },
+        })
+        await tx.mesa.update({
+          where: { id: pagoActual.sesion.mesaId },
+          data: { estado: 'libre' },
+        })
+      }
+
+      return sesionCubierta
+    }, 'procesarWebhookMercadoPago')
+
+    if (sesionCerrada) {
+      const sesion = await this.prisma.sesionMesa.findUnique({
+        where: { id: pagoActual.sesionId },
+        select: { mesa: { select: { id: true, numero: true } } },
+      })
+      if (sesion) {
+        this.gateway.emitSesionCobrada(restauranteId, {
+          sesionId: pagoActual.sesionId,
+          mesaId: sesion.mesa.id,
+          mesaNumero: sesion.mesa.numero,
+        })
+      }
+    }
   }
 }

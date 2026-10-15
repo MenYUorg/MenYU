@@ -1,6 +1,16 @@
-import type { MenuPublico } from '@menyu/types'
+import type { DiscoveryBusquedaResponse, DiscoveryResponse, DiscoveryRestauranteDetalle, MenuPublico } from '@menyu/types'
+import { leerTokenDeCuenta } from '../utils/tokenCuenta'
 
 const BASE = import.meta.env.VITE_API_URL ?? ''
+
+export class ApiError extends Error {
+  status: number
+  constructor(message: string, status: number) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+  }
+}
 
 async function req<T>(method: string, path: string, body?: unknown, token?: string): Promise<T> {
   const headers: Record<string, string> = {}
@@ -13,8 +23,9 @@ async function req<T>(method: string, path: string, body?: unknown, token?: stri
   })
   if (!res.ok) {
     const err = (await res.json().catch(() => ({}))) as Record<string, unknown>
-    throw new Error(
+    throw new ApiError(
       typeof err['message'] === 'string' ? err['message'] : `Error ${res.status}`,
+      res.status,
     )
   }
   if (res.status === 204) return undefined as T
@@ -42,7 +53,18 @@ export const api = {
     },
   },
 
+  // Públicos: sin token.
+  discovery: {
+    listar: () => req<DiscoveryResponse>('GET', '/discovery'),
+    buscar: (texto: string) =>
+      req<DiscoveryBusquedaResponse>('GET', `/discovery/buscar?q=${encodeURIComponent(texto)}`),
+    restaurante: (id: string) =>
+      req<DiscoveryRestauranteDetalle>('GET', `/discovery/restaurantes/${encodeURIComponent(id)}`),
+  },
+
   sessions: {
+    // Con una cuenta iniciada se manda su token: el servidor registra la mesa a su nombre y no como "Invitado". Sin
+    // cuenta, o con un token que ya no sirve, no se manda y la persona entra como invitada.
     open: (data: {
       qrToken?: string
       restauranteId?: string
@@ -53,6 +75,7 @@ export const api = {
         'POST',
         '/sessions/open',
         { tableCode: data.qrToken, restauranteId: data.restauranteId, pin: data.pin, codigoSesion: data.codigoSesion },
+        leerTokenDeCuenta(),
       ),
   },
 
@@ -89,6 +112,102 @@ export const api = {
         'POST',
         '/payments/initiate',
         { ...data, returnBaseUrl: window.location.origin },
+        jwt,
+      ),
+    solicitarEfectivo: (jwt: string, sesionId: string) =>
+      req<{ pagoId: string; sesionId: string; estado: string }>(
+        'POST',
+        '/payments/solicitar-efectivo',
+        { sesionId },
+        jwt,
+      ),
+    pagarConMercadoPago: (jwt: string, sesionId: string) =>
+      req<{ initPoint: string; preferenceId: string }>(
+        'POST',
+        '/payments/mercadopago/crear-preferencia',
+        { sesionId },
+        jwt,
+      ),
+  },
+
+  comensales: {
+    crear: (jwt: string, sesionId: string, nombre: string, esOwner: boolean, creadoPorComensalId?: string) =>
+      req<{ id: string; sesionId: string; nombre: string; esOwner: boolean; creadoPorComensalId: string | null }>(
+        'POST',
+        `/sesiones/${sesionId}/comensales`,
+        { nombre, esOwner, ...(creadoPorComensalId ? { creadoPorComensalId } : {}) },
+        jwt,
+      ),
+    reclamar: (jwt: string, sesionId: string, nombre: string, pin: string) =>
+      req<{
+        id: string
+        sesionId: string
+        clienteId: string | null
+        nombre: string
+        esOwner: boolean
+        createdAt: string
+      }>(
+        'POST',
+        `/sesiones/${sesionId}/comensales/reclamar`,
+        { nombre, pin },
+        jwt,
+      ),
+    listar: (jwt: string, sesionId: string) =>
+      req<Array<{
+        id: string
+        sesionId: string
+        clienteId: string | null
+        nombre: string
+        esOwner: boolean
+        creadoPorComensalId: string | null
+        createdAt: string
+      }>>('GET', `/sesiones/${sesionId}/comensales`, undefined, jwt),
+    calcularPorConsumo: (jwt: string, sesionId: string) =>
+      req<{
+        partes: Array<{ comensalId: string; nombre: string; montoCentavos: number; monto: number }>
+        huerfanos: {
+          items: Array<{ pedidoItemId: string; nombre: string; montoCentavos: number; monto: number }>
+          totalCentavos: number
+          total: number
+        }
+      }>('GET', `/sesiones/${sesionId}/comensales/division/por-consumo`, undefined, jwt),
+    etiquetar: (jwt: string, sesionId: string, pedidoItemId: string, comensalId: string) =>
+      req<{ id: string; pedidoItemId: string; comensalId: string; createdAt: string }>(
+        'POST',
+        `/sesiones/${sesionId}/comensales/etiquetas`,
+        { pedidoItemId, comensalId },
+        jwt,
+      ),
+    desetiquetar: (jwt: string, sesionId: string, pedidoItemId: string, comensalId: string) =>
+      req<void>(
+        'DELETE',
+        `/sesiones/${sesionId}/comensales/etiquetas/${pedidoItemId}/${comensalId}`,
+        undefined,
+        jwt,
+      ),
+    listarEtiquetasDeItem: (jwt: string, sesionId: string, pedidoItemId: string) =>
+      req<Array<{
+        id: string
+        pedidoItemId: string
+        comensalId: string
+        createdAt: string
+        comensal: { id: string; sesionId: string; clienteId: string | null; nombre: string; esOwner: boolean; creadoPorComensalId: string | null; createdAt: string }
+      }>>('GET', `/sesiones/${sesionId}/comensales/etiquetas/${pedidoItemId}`, undefined, jwt),
+    borrarComensal: (jwt: string, sesionId: string, comensalId: string, solicitante: string) =>
+      req<{ id: string }>(
+        'DELETE',
+        `/sesiones/${sesionId}/comensales/${comensalId}?solicitante=${encodeURIComponent(solicitante)}`,
+        undefined,
+        jwt,
+      ),
+  },
+
+  sesiones: {
+    saldo: (jwt: string, sesionId: string) =>
+      req<{ totalSesion: number; totalCobrado: number; saldoPendiente: number }>(
+        'GET',
+        `/sesiones/${sesionId}/saldo`,
+        undefined,
         jwt,
       ),
   },

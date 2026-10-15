@@ -1,4 +1,5 @@
-import { IsNotEmpty, IsOptional, IsString, IsUUID } from 'class-validator'
+import { Transform } from 'class-transformer'
+import { IsNotEmpty, IsString, IsUUID, MaxLength } from 'class-validator'
 
 export class CreateRestauranteDto {
   @IsUUID()
@@ -8,8 +9,9 @@ export class CreateRestauranteDto {
   @IsNotEmpty()
   nombre!: string
 
+  @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()
-  @IsOptional()
-  direccion?: string
-
+  @IsNotEmpty()
+  @MaxLength(200)
+  direccion!: string
 }

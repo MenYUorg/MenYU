@@ -1,10 +1,11 @@
 import { create } from 'zustand'
 import { api } from '../services/api'
 import { useCarritoStore } from './carritoStore'
+import { useComensalStore } from './comensalStore'
 
 type OpenSessionReturn =
   | { error: 'REQUIERE_CODIGO_SESION' }
-  | { error?: undefined; sesionId: string; mesaId: string; restauranteId: string; jwt: string; numeroMesa: string; codigoSesion: string; modoSesion: string }
+  | { error?: undefined; sesionId: string; mesaId: string; restauranteId: string; jwt: string; numeroMesa: string; codigoSesion: string; modoSesion: string; esAnfitrion: boolean }
 
 interface SessionStore {
   sesionId: string | null
@@ -14,8 +15,11 @@ interface SessionStore {
   numeroMesa: string | null
   codigoSesion: string | null
   modoSesion: string | null
+  esAnfitrion: boolean
   loading: boolean
   error: string | null
+  /** Código HTTP del último error al abrir la sesión; `null` si no hubo respuesta del servidor (sin conexión). */
+  errorStatus: number | null
   openSession: (params: { restauranteId?: string; pin?: string; qrToken?: string; codigoSesion?: string }) => Promise<OpenSessionReturn | undefined>
   setRestauranteId: (id: string) => void
   clear: () => void
@@ -28,6 +32,7 @@ const JWT_KEY         = 'menyu_sesion_jwt'
 const NUMERO_MESA_KEY = 'menyu_numero_mesa'
 const CODIGO_KEY      = 'menyu_codigo_sesion'
 const MODO_KEY        = 'menyu_modo_sesion'
+const ANFITRION_KEY   = 'menyu_es_anfitrion'
 
 export const useSessionStore = create<SessionStore>()((set) => ({
   sesionId:      sessionStorage.getItem(SESION_KEY),
@@ -37,11 +42,13 @@ export const useSessionStore = create<SessionStore>()((set) => ({
   numeroMesa:    sessionStorage.getItem(NUMERO_MESA_KEY),
   codigoSesion:  sessionStorage.getItem(CODIGO_KEY),
   modoSesion:    sessionStorage.getItem(MODO_KEY),
+  esAnfitrion:   sessionStorage.getItem(ANFITRION_KEY) === 'true',
   loading: false,
   error: null,
+  errorStatus: null,
 
   openSession: async (params) => {
-    set({ loading: true, error: null })
+    set({ loading: true, error: null, errorStatus: null })
     try {
       const result = await api.sessions.open(params)
       sessionStorage.setItem(SESION_KEY, result.sesionId)
@@ -50,6 +57,7 @@ export const useSessionStore = create<SessionStore>()((set) => ({
       sessionStorage.setItem(NUMERO_MESA_KEY, result.numeroMesa)
       sessionStorage.setItem(CODIGO_KEY, result.codigoSesion)
       sessionStorage.setItem(MODO_KEY, result.modoSesion)
+      sessionStorage.setItem(ANFITRION_KEY, String(result.esAnfitrion))
       if (result.restauranteId) sessionStorage.setItem(RESTAURANTE_KEY, result.restauranteId)
       set({
         sesionId:      result.sesionId,
@@ -59,13 +67,18 @@ export const useSessionStore = create<SessionStore>()((set) => ({
         numeroMesa:    result.numeroMesa,
         codigoSesion:  result.codigoSesion,
         modoSesion:    result.modoSesion,
+        esAnfitrion:   result.esAnfitrion,
       })
       return result
     } catch (e) {
       if (e instanceof Error && e.message.includes('requiere código de sesión')) {
         return { error: 'REQUIERE_CODIGO_SESION' as const }
       }
-      set({ error: e instanceof Error ? e.message : 'Error al abrir la sesión' })
+      const status = (e as { status?: unknown } | null)?.status
+      set({
+        error: e instanceof Error ? e.message : 'Error al abrir la sesión',
+        errorStatus: typeof status === 'number' ? status : null,
+      })
       return undefined
     } finally {
       set({ loading: false })
@@ -85,7 +98,9 @@ export const useSessionStore = create<SessionStore>()((set) => ({
     sessionStorage.removeItem(NUMERO_MESA_KEY)
     sessionStorage.removeItem(CODIGO_KEY)
     sessionStorage.removeItem(MODO_KEY)
-    set({ sesionId: null, mesaId: null, restauranteId: null, jwt: null, numeroMesa: null, codigoSesion: null, modoSesion: null })
+    sessionStorage.removeItem(ANFITRION_KEY)
+    set({ sesionId: null, mesaId: null, restauranteId: null, jwt: null, numeroMesa: null, codigoSesion: null, modoSesion: null, esAnfitrion: false })
     useCarritoStore.getState().vaciar()
+    useComensalStore.getState().reset()
   },
 }))

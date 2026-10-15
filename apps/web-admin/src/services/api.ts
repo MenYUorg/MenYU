@@ -6,7 +6,9 @@ import type {
   CategoriaMenu,
   Ingrediente,
   ClasificacionDieta,
+  LogoResponse,
   TokenPair,
+  UpdateItemDescuentoRequest,
 } from '@menyu/types'
 
 export class ApiError extends Error {
@@ -124,6 +126,7 @@ export interface UpdateItemInput {
   descripcion?: string
   categoriaId?: string | null
   disponible?: boolean
+  esRecomendado?: boolean
 }
 
 export interface SesionResumen {
@@ -270,12 +273,19 @@ export interface SesionHistorial {
 export const api = {
   marcas: {
     list: () => req<Marca[]>('GET', '/marcas'),
+    uploadLogo: (id: string, file: File) => upload<LogoResponse>(`/marcas/${id}/logo`, 'logo', file),
+    deleteLogo: (id: string) => req<LogoResponse>('DELETE', `/marcas/${id}/logo`),
   },
 
   restaurantes: {
     list: () => req<Restaurante[]>('GET', '/restaurantes'),
-    update: (id: string, data: { modoSesion?: string }) =>
-      req<Restaurante>('PATCH', `/restaurantes/${id}`, data),
+    update: (
+      id: string,
+      data: { modoSesion?: string; nombreSeccionRecomendados?: string; direccion?: string },
+    ) => req<Restaurante>('PATCH', `/restaurantes/${id}`, data),
+    uploadLogo: (id: string, file: File) =>
+      upload<LogoResponse>(`/restaurantes/${id}/logo`, 'logo', file),
+    deleteLogo: (id: string) => req<LogoResponse>('DELETE', `/restaurantes/${id}/logo`),
   },
 
   items: {
@@ -285,6 +295,9 @@ export const api = {
     create: (data: CreateItemInput) => req<ItemMenu>('POST', '/items', data),
     update: (id: string, data: UpdateItemInput) => req<ItemMenu>('PATCH', `/items/${id}`, data),
     delete: (id: string) => req<void>('DELETE', `/items/${id}`),
+    setDescuento: (id: string, data: UpdateItemDescuentoRequest) =>
+      req<ItemMenu>('PUT', `/items/${id}/descuento`, data),
+    quitarDescuento: (id: string) => req<ItemMenu>('DELETE', `/items/${id}/descuento`),
     uploadImage: (id: string, file: File) =>
       upload<ItemMenu>(`/items/${id}/imagen`, 'imagen', file),
     deleteImage: (id: string) => req<ItemMenu>('DELETE', `/items/${id}/imagen`),

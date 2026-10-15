@@ -7,6 +7,7 @@ export interface Marca {
   id: string
   nombre: string
   slug: string
+  logoUrl: string | null
   activo: boolean
   createdAt: string
 }
@@ -16,10 +17,11 @@ export interface Restaurante {
   marcaId: string
   nombre: string
   direccion: string | null
-  qrBaseUrl: string | null
+  logoUrl: string | null
   modoSesion: string
   activo: boolean
   createdAt: string
+  nombreSeccionRecomendados: string
   marca?: Marca | null
 }
 
@@ -65,7 +67,11 @@ export interface ItemMenu {
   nombre: string
   descripcion: string | null
   precioBase: number
+  precioDescuento: number | null
+  porcentajeDescuento: number | null
+  precioVigente: number
   disponible: boolean
+  esRecomendado?: boolean
   imagenUrl: string | null
   ingredientes?: ItemIngrediente[]
   clasificaciones?: { clasificacionId: string; clasificacion: ClasificacionDieta }[]
@@ -92,9 +98,16 @@ export interface MenuPublicoItem {
   nombre: string
   descripcion: string | null
   precioBase: number
+  /** Precio con descuento en pesos enteros, o null si el ítem no está en descuento. */
+  precioDescuento: number | null
+  /** Porcentaje entero de 1 a 99 calculado por el backend, o null si no hay descuento. */
+  porcentajeDescuento: number | null
+  /** Lo que se cobra por el ítem sin extras: precioDescuento si lo tiene, si no precioBase. */
+  precioVigente: number
   imagenUrl: string | null
   ingredientes: ItemIngrediente[]
   clasificaciones: ClasificacionDieta[]
+  esRecomendado?: boolean
 }
 
 export interface MenuPublicoCategoria {
@@ -105,6 +118,15 @@ export interface MenuPublicoCategoria {
 }
 
 export interface MenuPublico {
-  restaurante: { id: string; nombre: string }
+  restaurante: {
+    id: string
+    nombre: string
+    nombreSeccionRecomendados: string
+    direccion: string | null
+    /** El logo propio del restaurante o, si no tiene, el de su marca; `null` si ninguno tiene (la app muestra el de MenYU). */
+    logoUrl: string | null
+  }
   categorias: MenuPublicoCategoria[]
+  recomendados: MenuPublicoItem[]
+  descuentos: MenuPublicoItem[]
 }

@@ -19,15 +19,23 @@ function makeJwt(payload: Record<string, unknown>): string {
   return `header.${btoa(JSON.stringify(payload))}.signature`
 }
 
-const MARCA_X = { id: 'marca-1', nombre: 'Marca X', slug: 'marca-x', activo: true, createdAt: '2024-01-01' }
+const MARCA_X = {
+  id: 'marca-1',
+  nombre: 'Marca X',
+  slug: 'marca-x',
+  logoUrl: null,
+  activo: true,
+  createdAt: '2024-01-01',
+}
 
 const RESTAURANTE_BASE = {
   marcaId: 'marca-1',
   direccion: null,
-  qrBaseUrl: null,
+  logoUrl: null,
   modoSesion: 'abierto',
   activo: true,
   createdAt: '2024-01-01',
+  nombreSeccionRecomendados: 'Recomendaciones del chef',
   marca: MARCA_X,
 }
 

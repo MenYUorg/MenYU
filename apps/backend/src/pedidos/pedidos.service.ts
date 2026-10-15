@@ -13,6 +13,7 @@ import { JwtPayload } from '../auth/auth.service'
 import { CreatePedidoDto } from './dto/create-pedido.dto'
 import { UpdateEstadoPedidoDto } from './dto/update-estado-pedido.dto'
 import { EditPedidoDto } from './dto/edit-pedido.dto'
+import { precioVigente } from '../items/descuento.util'
 
 interface SessionJwt {
   sub: string
@@ -76,7 +77,7 @@ export class PedidosService {
           throw new NotFoundException(`Ítem ${itemDto.itemId} no encontrado en este restaurante`)
         }
 
-        let precioUnitario = Number(dbItem.precioBase)
+        let precioUnitario = precioVigente(dbItem) // con descuento si lo tiene; los extras, a precio normal
         const modsData: Array<{ itemIngredienteId: string; accion: string; cantidad: number }> = []
 
         for (const mod of itemDto.mods ?? []) {
@@ -193,7 +194,7 @@ export class PedidosService {
         })
         if (!dbItem) throw new NotFoundException(`Ítem ${itemDto.itemId} no encontrado en este restaurante`)
 
-        let precioUnitario = Number(dbItem.precioBase)
+        let precioUnitario = precioVigente(dbItem) // con descuento si lo tiene; los extras, a precio normal
         const modsData: Array<{ itemIngredienteId: string; accion: string; cantidad: number }> = []
 
         for (const mod of itemDto.mods ?? []) {
@@ -289,11 +290,11 @@ export class PedidosService {
   }
 
   async listarPorEstado(restauranteId: string, estado: string) {
-    return this.prisma.pedido.findMany({
+    const pedidos = await this.prisma.pedido.findMany({
       where: { mesa: { restauranteId }, estado },
       include: {
         mesa: { select: { numero: true } },
-        pago: { select: { estado: true } },
+        sesion: { select: { pagos: { where: { estado: 'aprobado' }, select: { id: true } } } },
         items: {
           include: {
             item: { select: { nombre: true } },
@@ -309,6 +310,13 @@ export class PedidosService {
       },
       orderBy: { createdAt: 'asc' },
     })
+
+    // `pagado`: la sesión del pedido ya tiene un cobro aprobado. `sesion` es solo para
+    // calcularlo y no se devuelve.
+    return pedidos.map(({ sesion, ...pedido }) => ({
+      ...pedido,
+      pagado: pedido.items.length > 0 && sesion.pagos.length > 0,
+    }))
   }
 
   async actualizarEstado(
@@ -381,6 +389,7 @@ export class PedidosService {
       where: { id },
       include: {
         mesa: { select: { restauranteId: true } },
+        sesion: { select: { pagos: { where: { estado: 'aprobado' }, select: { id: true } } } },
         items: { include: { item: { select: { nombre: true } } } },
       },
     })
@@ -389,25 +398,26 @@ export class PedidosService {
       throw new BadRequestException('No se puede editar un pedido anulado')
     }
 
-    // 2. Verificar pago aprobado
-    const pagoAprobado = await this.prisma.pago.findFirst({
-      where: { pedidoId: id, estado: 'aprobado' },
-    })
-    if (pagoAprobado) throw new BadRequestException('Este pedido ya fue pagado')
-
-    // 3. Validar justificación
+    // 2. Validar justificación
     const trimmed = dto.justificacion.trim()
     if (!trimmed) throw new BadRequestException('La justificación es requerida')
     if (trimmed.split(/\s+/).length > 50) {
       throw new BadRequestException('La justificación no puede superar 50 palabras')
     }
 
-    // 4. Validar que todos los pedidoItemId pertenecen al pedido
+    // 3. Validar que todos los pedidoItemId pertenecen al pedido
     const itemMap = new Map(pedido.items.map((i) => [i.id, i]))
     for (const ed of dto.ediciones) {
       if (!itemMap.has(ed.pedidoItemId)) {
         throw new BadRequestException(`El ítem ${ed.pedidoItemId} no pertenece a este pedido`)
       }
+    }
+
+    // 4. Un pedido de una sesión con un cobro aprobado no se puede editar
+    if (pedido.sesion.pagos.length > 0) {
+      throw new BadRequestException(
+        'La mesa ya tiene un cobro registrado y el pedido no puede editarse.',
+      )
     }
 
     // 5. Validar cantidadNueva < cantidadActual para cada ítem editado

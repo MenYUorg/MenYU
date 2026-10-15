@@ -20,6 +20,8 @@ import { PedidosModule } from './pedidos/pedidos.module'
 import { WaiterCallsModule } from './waiter-calls/waiter-calls.module'
 import { ReportesModule } from './reportes/reportes.module'
 import { AdminsModule } from './admins/admins.module'
+import { ComensalesModule } from './comensales/comensales.module'
+import { DiscoveryModule } from './discovery/discovery.module'
 import { HealthController } from './health/health.controller'
 
 @Module({
@@ -45,6 +47,8 @@ import { HealthController } from './health/health.controller'
     WaiterCallsModule,
     ReportesModule,
     AdminsModule,
+    ComensalesModule,
+    DiscoveryModule,
   ],
   controllers: [HealthController],
 })

@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Header · mockup</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="mockups.css" />
+</head>
+<body>
+  <main class="muestras-header">
+    <h1>Header (AppHeader)</h1>
+    <p>El mismo header de todas las pantallas, sin y con sesión iniciada. En celular los botones son más chicos y hay más aire entre el logo y los botones; con sesión, el saludo va arriba y "Cerrar sesión" debajo.</p>
+    <div id="muestras"></div>
+  </main>
+
+  <script src="mockups.js"></script>
+  <script>
+    (function () {
+      var CASOS = [
+        ['Sin sesión', null],
+        ['Con sesión · nombre corto', 'Marina'],
+        ['Con sesión · nombre y apellido en un solo campo (se muestra tal cual, no se adivina el apellido)', 'Marina González'],
+        ['Con sesión · nombre largo: se muestra entero y, si no entra, pasa a la línea de abajo', 'Marina González de la Fuente'],
+        ['Con sesión · otro nombre largo', 'Maximiliano Alejandro'],
+        ['Con sesión · un solo nombre larguísimo, sin espacios (se parte, nunca se corta con "...")', 'Superlargonombredeusuariosinespacios'],
+      ];
+      document.getElementById('muestras').innerHTML = CASOS.map(function (c) {
+        return '<div class="especimen"><small>' + MK.esc(c[0]) + '</small>' + MK.appHeader(c[1]) + '</div>';
+      }).join('');
+    })();
+  </script>
+</body>
+</html>

@@ -3,6 +3,8 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { usePublicMenuStore } from '../../store/publicMenuStore'
 import { useSessionStore } from '../../store/sessionStore'
 import { useCarritoStore } from '../../store/carritoStore'
+import { DescuentoBadge, MenuItemImage, PrecioConDescuento } from '@menyu/ui'
+import { formatearPrecio, precioVigenteDe, tieneDescuento } from '../../utils/precio'
 import type { MenuPublicoItem } from '@menyu/types'
 
 const C = {
@@ -99,7 +101,9 @@ export function ItemDetailPage() {
     const ing = item.ingredientes?.find((ii) => ii.id === id)
     return acc + (ing ? Number(ing.precioExtra) * qty : 0)
   }, 0)
-  const precioTotal = Number(item.precioBase) + precioModificaciones
+  // Se parte del precio vigente (con descuento si lo tiene); los extras se cobran a precio normal.
+  const precioTotal = precioVigenteDe(item) + precioModificaciones
+  const enDescuento = tieneDescuento(item)
 
   const toggleRemovido = (id: string) => {
     setRemovidos((prev) => {
@@ -140,15 +144,10 @@ export function ItemDetailPage() {
 
           {/* Hero image */}
           <div style={{ position: 'relative', width: '100%', aspectRatio: '16 / 9', overflow: 'hidden', flexShrink: 0 }}>
-            {item.imagenUrl ? (
-              <img
-                src={item.imagenUrl}
-                alt={item.nombre}
-                style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-              />
-            ) : (
-              <div style={{ width: '100%', height: '100%', background: `linear-gradient(135deg, ${C.orangeSoft} 0%, #F0CEC2 100%)`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <span style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 800, fontSize: 15, color: 'rgba(232,86,58,0.35)', letterSpacing: '0.12em' }}>MENYU</span>
+            <MenuItemImage src={item.imagenUrl} alt={item.nombre} />
+            {enDescuento && (
+              <div style={{ position: 'absolute', top: 16, right: 16 }}>
+                <DescuentoBadge porcentaje={item.porcentajeDescuento} tamano={44} />
               </div>
             )}
             {/* Back button — overlaid */}
@@ -175,6 +174,19 @@ export function ItemDetailPage() {
             <h1 style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 800, fontSize: 24, color: C.text, margin: '0 0 8px', lineHeight: 1.2 }}>
               {item.nombre}
             </h1>
+
+            {/* Precio con descuento: original tachado y precio vigente */}
+            {enDescuento && (
+              <div style={{ margin: '0 0 12px' }}>
+                <PrecioConDescuento
+                  variante="detalle"
+                  precioBase={Number(item.precioBase)}
+                  precioVigente={precioVigenteDe(item)}
+                  formatear={formatearPrecio}
+                  estilo={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 800, fontSize: 24, color: C.orange }}
+                />
+              </div>
+            )}
 
             {/* Description */}
             {item.descripcion && (
@@ -340,7 +352,8 @@ export function ItemDetailPage() {
         </div>
 
         {/* ── Bottom bar ────────────────────────────────────────────────────── */}
-        <div style={{ flexShrink: 0, padding: '12px 16px 20px', background: 'white', borderTop: `1px solid ${C.border}`, display: 'flex', alignItems: 'stretch', gap: 10 }}>
+        {/* Si la cantidad y el botón no entran en una fila (menos de ~460 px) se apilan: así el rótulo no se parte y el precio no se corta. */}
+        <div style={{ flexShrink: 0, padding: '12px 16px 20px', background: 'white', borderTop: `1px solid ${C.border}`, display: 'flex', flexWrap: 'wrap', alignItems: 'stretch', gap: 10 }}>
 
           {/* Dish quantity */}
           <div style={{ background: 'white', border: '1px solid #DCDEE7', borderRadius: 14, display: 'flex', alignItems: 'center', padding: '0 4px 0 12px', gap: 2, flexShrink: 0 }}>
@@ -405,7 +418,7 @@ export function ItemDetailPage() {
               navigate('/carrito')
             }}
             style={{
-              flex: 1, background: C.orange, color: 'white',
+              flex: '1 1 300px', background: C.orange, color: 'white',
               borderRadius: 14, padding: '14px 18px', border: 'none',
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 15,

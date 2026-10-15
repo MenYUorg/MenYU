@@ -61,6 +61,7 @@ apps/backend/
     ├── tables/           (module, controller, service)
     ├── sessions/         (module, controller, service, gateway.ts)
     ├── menu/             (module, controller, service)
+    ├── discovery/        (module, controller, service, dto/ — público, sin guards)
     ├── orders/           (module, controller, service, gateway.ts)
     ├── waiter-calls/     (module, controller, service, gateway.ts)
     ├── payments/
@@ -89,7 +90,7 @@ packages/types/src/
 ### Roles de administración (enum `RolAdmin` en DB)
 | Rol | Descripción |
 |---|---|
-| `ROOT` | Dueños del sistema MenYu — bypass total, acceso a todo |
+| `ROOT` | Administración general del sistema MenYu: crea y elimina marcas, restaurantes y usuarios OWNER y GERENTE. **No** decide sobre marcas ni restaurantes y **no** accede a sus datos privados. No es un bypass |
 | `OWNER` | Dueño de una marca — acceso a toda su marca y sus restaurantes |
 | `GERENTE` | Gerente de restaurantes específicos, asignados via tabla `AdminRestaurante` |
 
@@ -103,6 +104,7 @@ packages/types/src/
 ### Guards NestJS
 - `@Roles(RolAdmin.ROOT)` — solo ROOT
 - `@Roles(RolAdmin.OWNER, RolAdmin.GERENTE)` — panel admin
+- ROOT no es un bypass: el código nuevo no lo incluye en `@Roles(...)` ni en los chequeos de pertenencia (OWNER de la marca, GERENTE asignado). Varios services existentes todavía tienen `if (user.rol === 'ROOT') return`: ver el Apéndice A de `docs/plan-discovery-descuentos.md`
 - Mozos y cocina usan sus propios guards separados del enum RolAdmin
 - El comensal no usa guards de admin — se autentica por sesión de mesa
 
@@ -249,6 +251,37 @@ export interface ClientToServerEvents {
 
 ---
 
+## Discovery, logo, dirección y descuentos
+
+Detalle, decisiones (D1 a D31) y checklists: `docs/plan-discovery-descuentos.md`. Mockups en `docs/mockups/`. Para probar en staging: `docs/checklist-qa-staging.md`.
+
+**API** (prefijo `/api`):
+
+| Ruta | Quién | Qué hace |
+|---|---|---|
+| `GET /discovery` | público | Hasta 50 restaurantes activos de marcas activas (por nombre; `logoUrl` = el del restaurante, si no el de su marca, si no `null`) y hasta 30 platos en oferta (por porcentaje de descuento mayor) |
+| `GET /discovery/buscar?q=` | público | `q` de 2 a 60 caracteres. Ignora mayúsculas y acentos (extensión de PostgreSQL `unaccent`). Devuelve `{ ofertas, restaurantes, restaurantesConPlatos }` |
+| `GET /discovery/restaurantes/:id` | público | Un restaurante y sus ofertas. 404 si no existe, no está activo o su marca no lo está |
+| `GET /menu/:restauranteId` | público | Suma `restaurante.direccion`, `restaurante.logoUrl` (resuelto igual que en Discovery) y `descuentos[]` |
+| `POST /sessions/open` | público | Con `tableCode` y `restauranteId` valida que la mesa sea de ese restaurante (409 si no); también acepta `restauranteId` + `pin` |
+| `POST` y `DELETE /marcas/:id/logo` y `/restaurantes/:id/logo` | OWNER de la marca | Sube o quita el logo (PNG, JPEG o WebP de hasta 2 MB, en Supabase Storage) |
+| `PATCH /restaurantes/:id` con `direccion` | OWNER de la marca | GERENTE y ROOT reciben 403 si envían `direccion` |
+| `PUT` y `DELETE /items/:id/descuento` | OWNER o GERENTE asignado | `precioDescuento` (precio entero) o `porcentaje` (1 a 99), uno solo. ROOT recibe 403 |
+
+Un descuento se guarda como `precio_descuento` (entero, con un CHECK en la base: mayor a 0 y menor que `precio_base`); el porcentaje no se guarda, se calcula. `precioVigente` es `precioDescuento` si hay, si no `precioBase`: con ese precio cobra el backend (los extras se suman a precio normal) y se reprecia el carrito de web-cliente.
+
+**Rutas de web-cliente**:
+- `/` es Discovery, el home público. `/ingresar-pin` redirige a `/`.
+- `/restaurante/:id` es la pantalla del restaurante; `/restaurante/:id/mesa`, el ingreso a mesa (escáner de QR; el PIN queda detrás de un texto chico y `?pin` lo abre); `/restaurante/:id/carta`, la carta en modo vista (sin sesión y sin pedir).
+- `/check-in?restaurantId=…&tableCode=…` es lo que codifica el QR impreso de cada mesa: abre la sesión y sigue al menú; si falla, ofrece el PIN.
+- `/auth` acepta `?volver=` (solo rutas internas de la app).
+
+**web-admin**: `/admin/marca` ("Marca y sucursales", solo OWNER) con el logo de la marca, el de cada sucursal y su dirección. El botón "Descuento" de la lista del menú lo ven OWNER y GERENTE.
+
+**Fuera de alcance:** combos, fidelización, vigencia o programación de descuentos.
+
+---
+
 ## Comandos útiles
 
 ```bash
@@ -291,9 +324,9 @@ pnpm typecheck
 
 ## Scope v1.0 (MVP — semanas 1-7)
 
-Incluye: auth, sesión de mesa vía QR interno, menú digital, pedidos con modificación de ingredientes, llamado al mozo, pago con Mercado Pago, panel de cocina en tiempo real, panel de admin (CRUD menú, mesas, mozos).
+Incluye: auth, sesión de mesa vía QR interno, menú digital, pedidos con modificación de ingredientes, llamado al mozo, pago con Mercado Pago, panel de cocina en tiempo real, panel de admin (CRUD menú, mesas, mozos), logo y dirección de marcas y restaurantes, descuentos en ítems y Discovery (home público y anónimo con restaurantes y platos en oferta, búsqueda sin acentos, carta en solo lectura e ingreso a mesa desde la app; issues #350 a #354, #104 y #110).
 
-**No incluye en v1.0:** pagos divididos, programa de fidelización, motor de recomendaciones, chatbot. Esas son v2.0.
+**No incluye en v1.0:** pagos divididos, combos (tampoco como promos en Discovery), motor de recomendaciones, chatbot. Esas son v2.0.
 
 ---
 
@@ -304,8 +337,8 @@ La gestión del proyecto se realiza íntegramente en GitHub. Jira es usado por l
 - **Organización:** `MenYUorg`
 - **Repositorio:** `MenYUorg/MenYU`
 - **Handle del autor principal:** `lautiod`
-- **Project ID (GraphQL):** `PVT_kwHOB57las4BUwQe`
-- **Project número:** `#1` bajo el usuario `lautiod`
+- **Project ID (GraphQL):** `PVT_kwDOEHoLEs4BU0UP`
+- **Project número:** `#1` bajo la organización `MenYUorg`
 
 ### Vistas del board
 - **Kanban:** gestión día a día de tareas del equipo
