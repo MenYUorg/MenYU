@@ -29,7 +29,15 @@ pnpm --filter @menyu/api seed
 | 101 | `9996` | `TEST-QR-SEED-101` |
 | 1 (Restaurante Seed 2) | `9995` | `TEST-QR-SEED-201` |
 
-El comensal entra por **web-cliente → Ingresar con PIN**, elige el restaurante del seed y pone el PIN de la mesa (no hace falta escanear el QR real en local).
+El comensal entra por **web-cliente**: en el home (Discovery) elige el restaurante → "Ingresar a una mesa" → "Escanear QR" o, detrás del texto chico "¿Pasó algo con tu cámara?", el PIN de la mesa. No hace falta escanear un QR real en local:
+
+- Ingreso con PIN directo: `http://localhost:5176/restaurante/<id>/mesa?pin` (los ids están más abajo).
+- El link que codifica el QR de una mesa: `http://localhost:5176/check-in?restaurantId=<id>&tableCode=<qrToken>`. Por ejemplo, la mesa 100: `http://localhost:5176/check-in?restaurantId=22222222-2222-4222-a222-222222222222&tableCode=TEST-QR-SEED-100`.
+
+| Restaurante | id |
+|---|---|
+| Restaurante Seed | `22222222-2222-4222-a222-222222222222` |
+| Restaurante Seed 2 | `eeeeeeee-0002-4002-a002-000000000002` |
 
 ## Puertos en desarrollo local
 
@@ -44,8 +52,10 @@ Para levantar todo: `pnpm dev` desde la raíz (turbo corre las 4 apps en paralel
 
 ## Otros datos del seed
 
-- Restaurante y marca del seed usan IDs fijos (`REST_ID`, `MARCA_ID`) definidos al principio de `seed.ts` — no hace falta memorizarlos, los devuelve la API (`/api/marca/publicas`) al elegir restaurante desde el login con PIN.
+- Restaurante y marca del seed usan IDs fijos (`REST_ID`, `MARCA_ID`) definidos al principio de `seed.ts`. No hace falta memorizarlos: la API los devuelve en `GET /api/discovery`, que es lo que lista el home de web-cliente.
 - Hay una segunda marca ("Marca Seed 2") con "Restaurante Seed 2" y una mesa (PIN `9995`), sin logo ni menú. Sirve para probar los permisos entre marcas y el caso de un restaurante sin logo.
 - Los dos restaurantes tienen dirección cargada y ninguno tiene logo: se sube desde web-admin, en "Marca y sucursales" (solo OWNER). El seed solo carga la dirección si el restaurante todavía no tiene una.
 - Dos ítems de "Restaurante Seed" vienen en descuento: **Milanesa Napo** ($4.200 → $3.360, 20 %) y **Cerveza Artesanal** ($2.600 → $1.950, 25 %). Los pedidos de esos ítems se cobran al precio con descuento. Solo se cargan si el ítem todavía no tiene un descuento, así que volver a correr el seed no pisa uno cargado a mano; se sacan o se cambian desde web-admin (Menú) con OWNER o GERENTE. ROOT no puede.
+- En el home de web-cliente (`/`) se ven los dos restaurantes y las ofertas del seed (Milanesa Napo y Cerveza Artesanal; si se cargó otro descuento a mano, también ese). **Restaurante Seed 2 no tiene menú**: sirve para ver la carta vacía de `/restaurante/<id>/carta` (hoy dice "No hay ítems en esta categoría", el texto de siempre del menú). Como ninguno tiene logo, el header y el menú lateral muestran el de MenYu hasta que se suba uno desde web-admin.
+- Para probar el modo seguro (el anfitrión ve un código de 3 dígitos y los demás lo piden) hay que pasar el restaurante a modo `seguro`: desde web-admin, en Mesas (con OWNER o GERENTE), o con `modo_sesion` en la base. El seed lo deja en `abierto`.
 - El seed no crea ningún `Comensal` — los comensales se crean en tiempo real cuando alguien entra a una mesa y elige su nombre.
