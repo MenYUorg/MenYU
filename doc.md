@@ -604,7 +604,7 @@ Open or join a table session. The client either:
 
 If the restaurant is in `seguro` mode and a session already exists, `codigoSesion` is required to join it.
 
-**Auth:** Optional JWT in `Authorization: Bearer <token>`. If absent, the backend auto-creates a guest token.
+**Auth:** Optional JWT in `Authorization: Bearer <token>`. With a valid client token the session is registered under that account: the response `clienteId` is the account id, and the same account joining again (for example from a second device) is still one participant. Without a token, or with an expired or invalid one (it is ignored, no error), a guest client ("Invitado") is created. The web client sends the token whenever a customer is logged in.
 
 **Request body**
 

@@ -63,13 +63,14 @@ Se corre **después de mergear `feat/discovery` a `main`**: el deploy de staging
 - [ ] `/check-in` con un QR que no existe: aviso con el PIN, sin volver al inicio en silencio. Sin conexión: "Reintentar".
 - [ ] El PIN desde el texto chico "¿Pasó algo con tu cámara?": el campo aparece solo al tocarlo, y con el teclado abierto se ve el botón.
 - [ ] QR o PIN de otro restaurante: mensaje con el nombre del restaurante y no se crea la sesión.
+- [ ] Con una cuenta iniciada, la mesa queda a nombre de la cuenta (en la base, `sesion_mesa.cliente_id` es el id de la cuenta y no aparece un "Invitado" nuevo). Sin cuenta, o con la sesión vencida, entra como invitado y sin error.
 - [ ] Modo seguro: el anfitrión ve el código de 3 dígitos; el segundo comensal lo pide y un código equivocado da error.
 
 ## 5. Carta en modo vista (`/restaurante/:id/carta`)
 
 - [ ] Sin sesión: abrir la carta, buscar, ver Descuentos y tocar una tarjeta (no pasa nada; no hay "+", carrito, "Mozo" ni mesa).
 - [ ] La carta es un solo scroll y el buscador solo filtra los platos.
-- [ ] Un restaurante sin menú no rompe la pantalla (hoy dice "No hay ítems en esta categoría"; ver el hallazgo en el Apéndice B del plan).
+- [ ] Un restaurante sin menú dice "Este restaurante todavía no cargó su carta".
 - [ ] Pasar de la carta de un restaurante a la de otro no mezcla menús.
 
 ## 6. Header y menú lateral del menú
