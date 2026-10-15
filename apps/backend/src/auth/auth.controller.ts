@@ -9,7 +9,6 @@ import { RefreshTokenDto } from './dto/refresh-token.dto'
 import { RegisterDto } from './dto/register.dto'
 
 // TODO: proteger logout con JwtAuthGuard cuando se terminen las pruebas
-// TODO: eliminar todos los endpoints /dev antes de producción
 
 interface RequestWithUser extends Request {
   user: JwtPayload
@@ -75,67 +74,5 @@ export class AuthController {
   @ApiResponse({ status: 401, description: 'Token inválido o expirado' })
   me(@Req() req: RequestWithUser) {
     return req.user
-  }
-
-  // ── Dev (solo para pruebas — eliminar antes de producción) ──
-
-  @Post('dev/seed')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: '[DEV] Crear datos de prueba (marca, restaurante, admin, mozo)' })
-  @ApiResponse({ status: 200, description: 'Seed ejecutado' })
-  devSeed() {
-    return this.auth.devSeed()
-  }
-
-  @Post('dev/admin')
-  @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: '[DEV] Crear usuario admin' })
-  @ApiBody({
-    schema: {
-      properties: {
-        email:    { type: 'string', example: 'admin@menyu.com' },
-        password: { type: 'string', example: 'Admin1234!' },
-        rol:      { type: 'string', example: 'GERENTE', enum: ['ROOT', 'OWNER', 'GERENTE'] },
-        marcaId:  { type: 'string', example: 'uuid-de-la-marca' },
-      },
-      required: ['email', 'password', 'rol', 'marcaId'],
-    },
-  })
-  @ApiResponse({ status: 201, description: 'Admin creado' })
-  @ApiResponse({ status: 409, description: 'Email ya registrado' })
-  devCreateAdmin(
-    @Body() body: { email: string; password: string; rol: string; marcaId: string },
-  ) {
-    return this.auth.devCreateAdmin(body.email, body.password, body.rol as import('./auth.service').RolAdmin, body.marcaId)
-  }
-
-  @Post('dev/mozo')
-  @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: '[DEV] Crear usuario mozo' })
-  @ApiBody({
-    schema: {
-      properties: {
-        nombre:        { type: 'string', example: 'Carlos Mozo' },
-        email:         { type: 'string', example: 'mozo@menyu.com' },
-        password:      { type: 'string', example: 'Mozo1234!' },
-        restauranteId: { type: 'string', example: 'uuid-del-restaurante' },
-      },
-      required: ['nombre', 'email', 'password', 'restauranteId'],
-    },
-  })
-  @ApiResponse({ status: 201, description: 'Mozo creado' })
-  @ApiResponse({ status: 409, description: 'Email ya registrado' })
-  devCreateMozo(
-    @Body() body: { nombre: string; email: string; password: string; restauranteId: string },
-  ) {
-    return this.auth.devCreateMozo(body.nombre, body.email, body.password, body.restauranteId)
-  }
-
-  @Post('dev/root')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: '[DEV] Crear usuario ROOT (root@menyu.com / root1234)' })
-  @ApiResponse({ status: 200, description: 'ROOT creado o tokens renovados' })
-  devCreateRoot() {
-    return this.auth.devCreateRoot()
   }
 }

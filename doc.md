@@ -216,61 +216,9 @@ Return the JWT payload of the authenticated user.
 
 ---
 
-### DEV endpoints — remove before production
+### No development endpoints
 
-> These endpoints exist for local testing only. They are not protected.
-
-#### `POST /api/auth/dev/seed`
-
-Creates a seed `Marca`, `Restaurante`, `Admin`, and `Mozo` with known credentials.
-
-**Response 200** — returns the created objects with plain-text passwords.
-
----
-
-#### `POST /api/auth/dev/admin`
-
-Creates an `Admin` user.
-
-**Request body**
-
-```json
-{
-  "email": "admin@menyu.com",
-  "password": "Admin1234!",
-  "rol": "ADMIN",
-  "marcaId": "uuid-de-la-marca"
-}
-```
-
-**Responses:** 201 created · 409 email already taken
-
----
-
-#### `POST /api/auth/dev/mozo`
-
-Creates a `Mozo` user.
-
-**Request body**
-
-```json
-{
-  "nombre": "Carlos Mozo",
-  "email": "mozo@menyu.com",
-  "password": "Mozo1234!",
-  "restauranteId": "uuid-del-restaurante"
-}
-```
-
-**Responses:** 201 created · 409 email already taken
-
----
-
-#### `POST /api/auth/dev/root`
-
-Creates or refreshes the ROOT account (`root@menyu.com` / `root1234`).
-
-**Response 200** — returns `{ mensaje, accessToken, refreshToken }`
+There are no `/api/auth/dev/*` endpoints (they used to create users, even a ROOT, without authentication, and were removed). To get users and data in a local database run the seed (`pnpm --filter @menyu/api seed`); the credentials are in `Documentacion/datos-de-prueba-local.md`. The seed is never run in staging or production: there, accounts are created with the authenticated endpoints.
 
 ---
 
