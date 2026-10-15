@@ -17,6 +17,12 @@ const TRAZOS = {
       <path d="M14 14h3v3h-3zM17 17h3v3h-3zM14 20h3" />
     </>
   ),
+  carta: (
+    <>
+      <path d="M2 4h6a4 4 0 0 1 4 4v12a3 3 0 0 0-3-3H2z" />
+      <path d="M22 4h-6a4 4 0 0 0-4 4v12a3 3 0 0 1 3-3h7z" />
+    </>
+  ),
   aviso: (
     <>
       <circle cx="12" cy="12" r="10" />

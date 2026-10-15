@@ -40,6 +40,7 @@ function renderPagina(id = 'parrilla') {
         <Route path="/" element={<p>inicio</p>} />
         <Route path="/restaurante/:restauranteId" element={<RestaurantePage />} />
         <Route path="/restaurante/:restauranteId/mesa" element={<p>ingreso a la mesa</p>} />
+        <Route path="/restaurante/:restauranteId/carta" element={<p>carta</p>} />
       </Routes>
     </MemoryRouter>,
   )
@@ -93,11 +94,33 @@ describe('RestaurantePage', () => {
       expect(screen.getByText('inicio')).toBeInTheDocument()
     })
 
-    it('todavía no ofrece "Ver la carta" (llega con la carta en modo vista)', async () => {
+    it('"Ver la carta" lleva a la carta de ese restaurante, sin ingresar a una mesa', async () => {
       renderPagina()
-      await screen.findByRole('heading', { level: 1 })
 
-      expect(screen.queryByText('Ver la carta')).not.toBeInTheDocument()
+      const enlace = await screen.findByRole('link', { name: 'Ver la carta' })
+
+      expect(enlace).toHaveAttribute('href', '/restaurante/parrilla/carta')
+      expect(screen.getByText('Mirá los platos y los precios sin ingresar a una mesa.')).toBeInTheDocument()
+      fireEvent.click(enlace)
+      expect(screen.getByText('carta')).toBeInTheDocument()
+    })
+
+    it('"Ingresar a una mesa" sigue siendo el botón principal y "Ver la carta" el secundario', async () => {
+      renderPagina()
+
+      const mesa = await screen.findByRole('link', { name: 'Ingresar a una mesa' })
+      const carta = screen.getByRole('link', { name: 'Ver la carta' })
+
+      expect(mesa).toHaveStyle({ backgroundColor: 'rgb(232, 86, 58)' })
+      expect(carta).toHaveStyle({ backgroundColor: 'rgb(255, 255, 255)' })
+    })
+
+    it('el id del restaurante se escribe seguro en los dos links', async () => {
+      pedirRestaurante.mockResolvedValue({ ...PARRILLA, restaurante: crearRestaurante({ id: 'a/b c', nombre: 'Raro' }) })
+      renderPagina('a%2Fb%20c')
+
+      expect(await screen.findByRole('link', { name: 'Ver la carta' })).toHaveAttribute('href', '/restaurante/a%2Fb%20c/carta')
+      expect(screen.getByRole('link', { name: 'Ingresar a una mesa' })).toHaveAttribute('href', '/restaurante/a%2Fb%20c/mesa')
     })
   })
 

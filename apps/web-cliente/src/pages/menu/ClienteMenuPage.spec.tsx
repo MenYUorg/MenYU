@@ -1,7 +1,9 @@
 import type { MenuPublico } from '@menyu/types'
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { api } from '../../services/api'
+import { useCarritoStore } from '../../store/carritoStore'
 import { usePublicMenuStore } from '../../store/publicMenuStore'
 import { useSessionStore } from '../../store/sessionStore'
 import { crearMenu, crearPlato, crearPlatoEnDescuento, crearTokenJwt } from '../../test/fixtures'
@@ -43,6 +45,11 @@ function renderMenu(menu: MenuPublico) {
       <Routes>
         <Route path="/menu" element={<ClienteMenuPage />} />
         <Route path="/menu/:itemId" element={<p>Detalle del plato</p>} />
+        <Route path="/carrito" element={<p>Pantalla del carrito</p>} />
+        <Route path="/etiquetar" element={<p>Pantalla de etiquetar</p>} />
+        <Route path="/pedidos" element={<p>Pantalla de pedidos</p>} />
+        <Route path="/pagar" element={<p>Pantalla de pagar</p>} />
+        <Route path="/auth" element={<p>Pantalla de ingreso</p>} />
       </Routes>
     </MemoryRouter>,
   )
@@ -69,6 +76,238 @@ describe('ClienteMenuPage', () => {
     Element.prototype.scrollIntoView = vi.fn()
     useSessionStore.setState({ restauranteId: 'rest-1', sesionId: null, mesaId: null, jwt: null, numeroMesa: null })
     usePublicMenuStore.setState({ menu: null, loading: false, error: null })
+  })
+
+  // Lo que la carta en modo vista (sin pedir) no tiene y el menú de la mesa sí: se prueba acá para que, al compartir
+  // las piezas entre los dos modos, el de la mesa no cambie.
+  describe('modo mesa', () => {
+    const mesa = { sesionId: 'ses-1', mesaId: 'mesa-1', jwt: 'jwt', numeroMesa: '5', modoSesion: 'abierto', codigoSesion: '042' }
+
+    beforeEach(() => {
+      useSessionStore.setState(mesa)
+      useCarritoStore.getState().vaciar()
+      vi.mocked(api.waiterCalls.llamar).mockReset().mockResolvedValue(undefined as never)
+    })
+
+    afterEach(() => {
+      localStorage.clear()
+      useCarritoStore.getState().vaciar()
+    })
+
+    describe('header', () => {
+      it('muestra el nombre del restaurante y el número de la mesa', () => {
+        renderMenu(menuCompleto())
+
+        expect(screen.getByText('La Parrilla')).toBeInTheDocument()
+        expect(screen.getByText('Mesa 5')).toBeInTheDocument()
+      })
+
+      it('en una mesa en modo seguro también muestra el código (PIN)', () => {
+        useSessionStore.setState({ modoSesion: 'seguro', codigoSesion: '731' })
+        renderMenu(menuCompleto())
+
+        expect(screen.getByText('PIN 731')).toBeInTheDocument()
+      })
+
+      it('en modo abierto no muestra el código', () => {
+        renderMenu(menuCompleto())
+
+        expect(screen.queryByText(/^PIN /)).not.toBeInTheDocument()
+      })
+
+      it('"Mozo" llama al mozo de la mesa y avisa que está en camino', async () => {
+        renderMenu(menuCompleto())
+
+        fireEvent.click(screen.getByRole('button', { name: /Mozo/ }))
+
+        expect(await screen.findByRole('button', { name: /¡En camino!/ })).toBeDisabled()
+        expect(api.waiterCalls.llamar).toHaveBeenCalledWith('ses-1', 'jwt')
+      })
+
+      it('si el llamado falla, lo dice', async () => {
+        vi.mocked(api.waiterCalls.llamar).mockRejectedValue(new Error('sin conexión'))
+        renderMenu(menuCompleto())
+
+        fireEvent.click(screen.getByRole('button', { name: /Mozo/ }))
+
+        expect(await screen.findByRole('button', { name: /Error/ })).toBeInTheDocument()
+      })
+
+      it('sin una sesión de mesa no hay botón del mozo ni número de mesa', () => {
+        useSessionStore.setState({ sesionId: null, mesaId: null, jwt: null, numeroMesa: null })
+        renderMenu(menuCompleto())
+
+        expect(screen.queryByRole('button', { name: /Mozo/ })).not.toBeInTheDocument()
+        expect(screen.queryByText(/^Mesa /)).not.toBeInTheDocument()
+      })
+    })
+
+    describe('cuando no se puede cargar el menú', () => {
+      const pedirOriginal = usePublicMenuStore.getState().fetchMenu
+      // El pedido no hace nada: así el error que se deja puesto en el store es el que se ve.
+      const conError = (errorStatus: number | null, fetchMenu = vi.fn().mockResolvedValue(undefined)) => {
+        usePublicMenuStore.setState({ menu: null, loading: false, error: 'No se pudo', errorStatus, fetchMenu })
+        return fetchMenu
+      }
+
+      // Se desmonta la pantalla antes de devolver el pedido de verdad, para que el cambio no llegue a una pantalla abierta.
+      afterEach(() => {
+        cleanup()
+        usePublicMenuStore.setState({ fetchMenu: pedirOriginal })
+      })
+
+      it.each([[null], [404], [500]])('con el código %s avisa "No se pudo cargar el menú" y deja reintentar (nunca dice "no existe")', (status) => {
+        conError(status)
+        render(
+          <MemoryRouter initialEntries={['/menu']}>
+            <Routes><Route path="/menu" element={<ClienteMenuPage />} /></Routes>
+          </MemoryRouter>,
+        )
+
+        expect(screen.getByText('No se pudo cargar el menú')).toBeInTheDocument()
+        expect(screen.queryByText('No encontramos este restaurante')).not.toBeInTheDocument()
+        // "Volver al restaurante" es de la carta: la mesa ya tiene su restaurante.
+        expect(screen.queryByText('Volver al restaurante')).not.toBeInTheDocument()
+      })
+
+      it('"Reintentar" vuelve a pedir el menú del restaurante de la mesa', () => {
+        const pedir = conError(500)
+        render(
+          <MemoryRouter initialEntries={['/menu']}>
+            <Routes><Route path="/menu" element={<ClienteMenuPage />} /></Routes>
+          </MemoryRouter>,
+        )
+        pedir.mockClear()
+
+        fireEvent.click(screen.getByRole('button', { name: 'Reintentar' }))
+
+        expect(pedir).toHaveBeenCalledTimes(1)
+        expect(pedir).toHaveBeenCalledWith('rest-1')
+      })
+    })
+
+    describe('platos y carrito', () => {
+      it('cada plato tiene su botón "+" y tocarlo abre el detalle', () => {
+        const { container } = renderMenu(menuCompleto())
+
+        fireEvent.click(within(seccion(container, 'cat-2')!).getByRole('button', { name: 'Agregar Flan' }))
+
+        expect(screen.getByText('Detalle del plato')).toBeInTheDocument()
+      })
+
+      it('con platos en el carrito aparece el botón flotante con la cantidad y lleva al carrito', () => {
+        useCarritoStore.getState().agregar({ itemMenuId: 'flan', nombre: 'Flan', precioUnitario: 700, cantidad: 1, modificaciones: [] })
+        useCarritoStore.getState().agregar({ itemMenuId: 'ens', nombre: 'Ensalada', precioUnitario: 900, cantidad: 1, modificaciones: [] })
+        renderMenu(menuCompleto())
+
+        const carrito = screen.getByRole('button', { name: /🛒/ })
+        expect(carrito).toHaveTextContent('2')
+        fireEvent.click(carrito)
+
+        expect(screen.getByText('Pantalla del carrito')).toBeInTheDocument()
+      })
+
+      it('con el carrito vacío no hay botón flotante', () => {
+        renderMenu(menuCompleto())
+
+        expect(screen.queryByRole('button', { name: /🛒/ })).not.toBeInTheDocument()
+      })
+    })
+
+    describe('menú lateral', () => {
+      it.each([
+        ['Etiquetar pedidos', 'Pantalla de etiquetar'],
+        ['Mis pedidos', 'Pantalla de pedidos'],
+        ['Pagar la cuenta', 'Pantalla de pagar'],
+      ])('"%s" lleva a su pantalla', (fila, pantalla) => {
+        renderMenu(menuCompleto())
+
+        fireEvent.click(screen.getByText(fila))
+
+        expect(screen.getByText(pantalla)).toBeInTheDocument()
+      })
+
+      it('sin cuenta ofrece iniciar sesión y crear una', () => {
+        renderMenu(menuCompleto())
+
+        expect(screen.getByText('Estás navegando como invitado')).toBeInTheDocument()
+        fireEvent.click(screen.getByRole('button', { name: 'Iniciar sesión' }))
+
+        expect(screen.getByText('Pantalla de ingreso')).toBeInTheDocument()
+      })
+
+      it('"Crear cuenta gratis" abre el registro', () => {
+        renderMenu(menuCompleto())
+
+        fireEvent.click(screen.getByRole('button', { name: 'Crear cuenta gratis' }))
+
+        expect(screen.getByText('Pantalla de ingreso')).toBeInTheDocument()
+      })
+
+      it('con cuenta: muestra el email, "Mis puntos" y "Cerrar sesión" borra la sesión de cliente', () => {
+        localStorage.setItem('menyu_access_token', crearTokenJwt({ tipo: 'cliente', nombre: 'Ana Gómez', email: 'ana@mail.com' }))
+        localStorage.setItem('menyu_refresh_token', 'refresh')
+        renderMenu(menuCompleto())
+
+        expect(screen.getByText('ana@mail.com')).toBeInTheDocument()
+        expect(screen.getByText('Mis puntos')).toBeInTheDocument()
+        expect(screen.queryByRole('button', { name: 'Iniciar sesión' })).not.toBeInTheDocument()
+
+        // Se abre desde el botón del header (las iniciales del restaurante), como en la app.
+        fireEvent.click(screen.getByRole('button', { name: /LP/ }))
+        fireEvent.click(screen.getByRole('button', { name: 'Cerrar sesión' }))
+
+        expect(localStorage.getItem('menyu_access_token')).toBeNull()
+        expect(localStorage.getItem('menyu_refresh_token')).toBeNull()
+        expect(screen.getByRole('button', { name: 'Iniciar sesión' })).toBeInTheDocument()
+      })
+
+      it('un invitado con nombre de comensal es saludado por ese nombre', async () => {
+        const { useComensalStore } = await import('../../store/comensalStore')
+        useComensalStore.setState({ nombre: 'Lucía' })
+        const { unmount } = renderMenu(menuCompleto())
+
+        expect(screen.getByText('¡Hola, Lucía!')).toBeInTheDocument()
+        // Se desmonta antes de limpiar el nombre: así el cambio no llega a una pantalla que sigue abierta.
+        unmount()
+        useComensalStore.getState().reset()
+      })
+    })
+
+    describe('filtro de dietas', () => {
+      const vegano = { id: 'veg', nombre: 'Vegano' }
+      const menuConDietas = () => crearMenu({
+        categorias: [{ id: 'cat-1', nombre: 'Principales', orden: 1, itemsDirectos: [
+          crearPlato({ id: 'ens', nombre: 'Ensalada', clasificaciones: [vegano] }),
+          crearPlato({ id: 'bife', nombre: 'Bife' }),
+        ] }],
+      })
+
+      it('lista las clasificaciones con la cantidad de platos y aplica la elegida', () => {
+        renderMenu(menuConDietas())
+
+        fireEvent.click(screen.getByRole('button', { name: /Dietas/ }))
+        expect(screen.getByText('Vegano')).toBeInTheDocument()
+        fireEvent.click(screen.getByText('Vegano'))
+        fireEvent.click(screen.getByRole('button', { name: 'Aplicar (1)' }))
+
+        expect(screen.getByText('Ensalada')).toBeInTheDocument()
+        expect(screen.queryByText('Bife')).not.toBeInTheDocument()
+        expect(screen.getByRole('button', { name: /Dietas/ })).toHaveTextContent('1')
+      })
+
+      it('"Limpiar" vuelve a mostrar todos los platos', () => {
+        renderMenu(menuConDietas())
+        fireEvent.click(screen.getByRole('button', { name: /Dietas/ }))
+        fireEvent.click(screen.getByText('Vegano'))
+        fireEvent.click(screen.getByRole('button', { name: 'Aplicar (1)' }))
+
+        fireEvent.click(screen.getByRole('button', { name: /Dietas/ }))
+        fireEvent.click(screen.getByRole('button', { name: 'Limpiar' }))
+
+        expect(screen.getByText('Bife')).toBeInTheDocument()
+      })
+    })
   })
 
   describe('saludo del menú lateral', () => {

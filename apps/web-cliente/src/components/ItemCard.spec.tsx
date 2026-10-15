@@ -3,6 +3,49 @@ import { crearPlato, crearPlatoEnDescuento } from '../test/fixtures'
 import { ItemCard } from './ItemCard'
 
 describe('ItemCard', () => {
+  describe('con y sin "onPress" (mesa y carta)', () => {
+    it('con onPress tiene el botón "+" y tocar la tarjeta o el botón la abre (una sola vez por toque)', () => {
+      const alTocar = vi.fn()
+      const { container } = render(<ItemCard item={crearPlato({ nombre: 'Flan' })} onPress={alTocar} />)
+
+      fireEvent.click(container.firstElementChild as HTMLElement)
+      expect(alTocar).toHaveBeenCalledTimes(1)
+
+      fireEvent.click(screen.getByRole('button', { name: 'Agregar Flan' }))
+      expect(alTocar).toHaveBeenCalledTimes(2)
+      expect(container.firstElementChild).toHaveStyle({ cursor: 'pointer' })
+    })
+
+    it('sin onPress es de solo lectura: sin botón "+", sin botones y sin cursor de poder tocarse', () => {
+      const { container } = render(<ItemCard item={crearPlato({ nombre: 'Flan' })} />)
+
+      expect(screen.queryByRole('button')).not.toBeInTheDocument()
+      expect(container.firstElementChild).toHaveStyle({ cursor: 'default' })
+    })
+
+    it('sin onPress tocarla no hace nada y pasar el mouse no la resalta', () => {
+      const { container } = render(<ItemCard item={crearPlato({ nombre: 'Flan' })} />)
+      const tarjeta = container.firstElementChild as HTMLElement
+
+      expect(() => fireEvent.click(tarjeta)).not.toThrow()
+      fireEvent.mouseEnter(tarjeta)
+
+      expect(tarjeta.style.boxShadow).not.toContain('rgba(232,86,58')
+      expect(tarjeta.style.borderColor).not.toContain('rgba(232, 86, 58')
+    })
+
+    it('sin onPress igual muestra el descuento, el precio y la descripción', () => {
+      const { container } = render(
+        <ItemCard item={crearPlatoEnDescuento({ nombre: 'Hamburguesa', descripcion: 'Con queso', precioBase: 1500, precioDescuento: 1200 })} />,
+      )
+
+      expect(screen.getByRole('img', { name: '20% de descuento' })).toBeInTheDocument()
+      expect(container.querySelector('s')).toHaveTextContent('$1500.00')
+      expect(screen.getByText('$1200.00')).toBeInTheDocument()
+      expect(screen.getByText('Con queso')).toBeInTheDocument()
+    })
+  })
+
   describe('sin descuento', () => {
     it('muestra el nombre, la descripción y el precio', () => {
       render(<ItemCard item={crearPlato({ nombre: 'Milanesa', descripcion: 'Con papas fritas', precioBase: 1000 })} onPress={vi.fn()} />)

@@ -9,8 +9,11 @@ const C = {
   border:    '#ECECEE',
 } as const
 
-/** Tarjeta de un plato en la grilla del menú. Si está en descuento muestra el círculo con el porcentaje y los dos precios. */
-export function ItemCard({ item, onPress }: { item: MenuPublicoItem; onPress: () => void }) {
+/**
+ * Tarjeta de un plato en la grilla del menú. Si está en descuento muestra el círculo con el porcentaje y los dos precios.
+ * Con `onPress` se toca (y tiene el botón "+"); sin él es de solo lectura, como en la carta en modo vista.
+ */
+export function ItemCard({ item, onPress }: { item: MenuPublicoItem; onPress?: () => void }) {
   const enDescuento = tieneDescuento(item)
 
   return (
@@ -20,18 +23,18 @@ export function ItemCard({ item, onPress }: { item: MenuPublicoItem; onPress: ()
       style={{
         background: 'white', borderRadius: 12, border: `1px solid ${C.border}`,
         overflow: 'hidden', display: 'flex', flexDirection: 'column',
-        cursor: 'pointer', transition: 'border-color .15s, box-shadow .15s',
+        cursor: onPress ? 'pointer' : 'default', transition: 'border-color .15s, box-shadow .15s',
       }}
-      onMouseEnter={(e) => {
+      onMouseEnter={onPress ? (e) => {
         const el = e.currentTarget as HTMLDivElement
         el.style.borderColor = 'rgba(232,86,58,0.3)'
         el.style.boxShadow = '0 4px 16px rgba(232,86,58,0.1)'
-      }}
-      onMouseLeave={(e) => {
+      } : undefined}
+      onMouseLeave={onPress ? (e) => {
         const el = e.currentTarget as HTMLDivElement
         el.style.borderColor = C.border
         el.style.boxShadow = 'none'
-      }}
+      } : undefined}
     >
       <div style={{ position: 'relative', width: '100%', paddingBottom: '80%', overflow: 'hidden', flexShrink: 0 }}>
         <MenuItemImage
@@ -67,18 +70,20 @@ export function ItemCard({ item, onPress }: { item: MenuPublicoItem; onPress: ()
             formatear={formatearPrecio}
             estilo={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 14, color: C.orange }}
           />
-          <button
-            onClick={(e) => { e.stopPropagation(); onPress() }}
-            aria-label={`Agregar ${item.nombre}`}
-            style={{
-              width: 28, height: 28, borderRadius: '50%',
-              background: C.orange, color: 'white', border: 'none',
-              fontSize: 18, lineHeight: 1, display: 'flex',
-              alignItems: 'center', justifyContent: 'center',
-              boxShadow: '0 2px 6px rgba(232,86,58,0.35)',
-              cursor: 'pointer', flexShrink: 0,
-            }}
-          >+</button>
+          {onPress && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onPress() }}
+              aria-label={`Agregar ${item.nombre}`}
+              style={{
+                width: 28, height: 28, borderRadius: '50%',
+                background: C.orange, color: 'white', border: 'none',
+                fontSize: 18, lineHeight: 1, display: 'flex',
+                alignItems: 'center', justifyContent: 'center',
+                boxShadow: '0 2px 6px rgba(232,86,58,0.35)',
+                cursor: 'pointer', flexShrink: 0,
+              }}
+            >+</button>
+          )}
         </div>
       </div>
     </div>

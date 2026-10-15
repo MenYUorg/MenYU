@@ -14,7 +14,7 @@ import { C } from '../../theme'
 
 /**
  * Pantalla de un restaurante: su logo, nombre y dirección, "Ingresar a una mesa" y sus ofertas. Carga sus datos por id,
- * así que también anda al entrar por un link o al recargar. ("Ver la carta" se suma con la carta en modo vista.)
+ * así que también anda al entrar por un link o al recargar. "Ver la carta" abre el menú en modo vista, sin pedir.
  */
 export function RestaurantePage() {
   const { restauranteId = '' } = useParams()
@@ -91,9 +91,13 @@ export function RestaurantePage() {
           </p>
 
           <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <BotonGrande to={`/restaurante/${restaurante.id}/mesa`} icono="escanear">Ingresar a una mesa</BotonGrande>
-            <p style={{ margin: 0, fontFamily: 'Inter, sans-serif', fontSize: 13, lineHeight: 1.45, color: C.textSub }}>
+            <BotonGrande to={`/restaurante/${encodeURIComponent(restaurante.id)}/mesa`} icono="escanear">Ingresar a una mesa</BotonGrande>
+            <p style={{ margin: '0 0 14px', fontFamily: 'Inter, sans-serif', fontSize: 13, lineHeight: 1.45, color: C.textSub }}>
               Escaneá el QR o ingresá el PIN de tu mesa.
+            </p>
+            <BotonGrande to={`/restaurante/${encodeURIComponent(restaurante.id)}/carta`} icono="carta" variante="secundario">Ver la carta</BotonGrande>
+            <p style={{ margin: 0, fontFamily: 'Inter, sans-serif', fontSize: 13, lineHeight: 1.45, color: C.textSub }}>
+              Mirá los platos y los precios sin ingresar a una mesa.
             </p>
           </div>
         </section>
