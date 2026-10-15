@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mockups de la consola de ROOT</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --orange: #E8563A; --orange-soft: #FDE5DF; --navy: #2D3561; --bg: #F7F7F8;
+      --text: #1A1A2E; --text-sub: #6B7280; --border: #E5E7EB; --white: #FFFFFF;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 400 14px/1.5 Inter, sans-serif; display: flex; flex-direction: column; }
+    h1, h2, h3, p { margin: 0; }
+
+    .top { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding: 10px 16px; background: var(--navy); color: #fff; }
+    .top strong { font: 800 16px Montserrat, sans-serif; letter-spacing: -0.01em; }
+    .top .fase { font: 600 11px Montserrat, sans-serif; background: var(--orange); border-radius: 999px; padding: 3px 10px; }
+    .top .espacio { flex: 1; }
+    .anchos { display: flex; gap: 6px; flex-wrap: wrap; }
+    .anchos button, .top a.abrir {
+      font: 600 12px Montserrat, sans-serif; color: #fff; background: rgba(255,255,255,.1);
+      border: 1.5px solid rgba(255,255,255,.25); border-radius: 8px; padding: 6px 12px; cursor: pointer; text-decoration: none;
+    }
+    .anchos button[aria-pressed="true"] { background: #fff; color: var(--navy); border-color: #fff; }
+
+    .cuerpo { flex: 1; min-height: 0; display: grid; grid-template-columns: 290px minmax(0, 1fr); }
+    .lista { overflow-y: auto; background: var(--white); border-right: 1px solid var(--border); padding: 10px 8px 24px; }
+    .lista h2 { font: 800 11px Montserrat, sans-serif; letter-spacing: .1em; text-transform: uppercase; color: var(--navy); padding: 14px 10px 6px; }
+    .lista button {
+      display: block; width: 100%; text-align: left; background: none; border: none; border-radius: 8px;
+      padding: 7px 10px; font: 400 13px Inter, sans-serif; color: var(--text); cursor: pointer;
+    }
+    .lista button:hover { background: var(--bg); }
+    .lista button[aria-current="true"] { background: var(--orange-soft); color: var(--orange); font-weight: 600; }
+    .lista .etiqueta { font: 600 10px Montserrat, sans-serif; color: var(--orange); background: var(--orange-soft); border-radius: 999px; padding: 1px 7px; margin-left: 6px; }
+    .lista button[aria-current="true"] .etiqueta { background: #fff; }
+
+    .vista { overflow: auto; padding: 16px 20px 40px; min-width: 0; }
+    .encabezado { max-width: 880px; margin-bottom: 14px; }
+    .encabezado h1 { font: 800 20px Montserrat, sans-serif; color: var(--navy); letter-spacing: -0.01em; margin-bottom: 4px; }
+    .encabezado p { color: var(--text-sub); }
+    .encabezado p b { color: var(--text); font-weight: 600; }
+
+    .lienzo { display: flex; gap: 24px; align-items: flex-start; flex-wrap: nowrap; }
+    .marco { flex: none; }
+    .marco figcaption { font: 600 11px Montserrat, sans-serif; color: var(--text-sub); letter-spacing: .06em; margin-bottom: 6px; }
+    .marco iframe { display: block; border: 1px solid #c9ccd6; border-radius: 6px; background: #fff; box-shadow: 0 6px 24px rgba(45,53,97,.12); }
+
+    .texto { max-width: 880px; background: var(--white); border: 1px solid var(--border); border-radius: 12px; padding: 18px 22px 8px; }
+    .texto h2 { font: 800 15px Montserrat, sans-serif; color: var(--navy); margin: 0 0 8px; }
+    .texto ol, .texto ul { margin: 0 0 12px; padding-left: 20px; }
+    .texto li { margin-bottom: 10px; }
+    .texto li b { font-weight: 600; }
+    .texto a { color: var(--orange); font-weight: 600; cursor: pointer; text-decoration: none; }
+    .texto a:hover { text-decoration: underline; }
+    .texto .nota-chica { color: var(--text-sub); font-size: 13px; margin-bottom: 12px; }
+    .pregunta { display: inline-block; font: 700 10px Montserrat, sans-serif; letter-spacing: .06em; color: #92400e; background: #fef3c7; border-radius: 999px; padding: 1px 8px; margin-right: 6px; vertical-align: 1px; }
+
+    @media (max-width: 900px) {
+      .cuerpo { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); }
+      .lista { max-height: 210px; border-right: none; border-bottom: 1px solid var(--border); }
+    }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <strong>Mockups · Consola de ROOT</strong>
+    <span class="fase">Aprobado el 2026-10-15</span>
+    <span class="fase">Novedades para aprobar</span>
+    <span class="espacio"></span>
+    <div class="anchos" id="anchos" role="group" aria-label="Ancho de pantalla">
+      <button type="button" data-ancho="320">320</button>
+      <button type="button" data-ancho="360">Celular 360</button>
+      <button type="button" data-ancho="390">390</button>
+      <button type="button" data-ancho="768">Tablet 768</button>
+      <button type="button" data-ancho="1280">Escritorio 1280</button>
+      <button type="button" data-ancho="todos">Los tres</button>
+    </div>
+    <a class="abrir" id="abrir" href="#" target="_blank" rel="noopener">Abrir sola ↗</a>
+  </header>
+
+  <div class="cuerpo">
+    <nav class="lista" id="lista" aria-label="Pantallas"></nav>
+    <main class="vista">
+      <div class="encabezado"><h1 id="titulo"></h1><p id="nota"></p></div>
+      <div id="contenido"></div>
+    </main>
+  </div>
+
+  <script>
+    (function () {
+      var P = 'pantalla.html';
+
+      var GRUPOS = [
+        { nombre: 'Marcas (la lista)', items: [
+          { id: 'marcas', titulo: 'Lista de marcas', src: P + '?vista=marcas',
+            nota: 'La pantalla de entrada de ROOT. Cada fila: la marca, su identificador, cuántos restaurantes y dueños tiene y su estado. <b>"Sin dueño"</b> avisa que nadie administra esa marca. Se ven solo las <b>activas</b>; el interruptor suma las dadas de baja. Arriba, la búsqueda (ignora acentos y mayúsculas) y <b>Nueva marca</b>. Tocá una fila para abrirla. <b>Todo es interactivo</b>: los botones abren los diálogos; no se guarda nada.' },
+          { id: 'marcas-bajas', titulo: 'Con las dadas de baja', src: P + '?vista=marcas&bajas=1',
+            nota: 'Interruptor activado: aparece <b>Café del Puerto</b>, de baja (nombre y siglas en gris). También un nombre y un identificador larguísimos: el nombre pasa a dos líneas y el identificador se corta con "…".' },
+          { id: 'marcas-buscando', titulo: 'Buscando', src: P + '?vista=marcas&q=fiore', nota: 'La búsqueda filtra por nombre o identificador.' },
+          { id: 'marcas-sin-resultados', titulo: 'Sin resultados', src: P + '?vista=marcas&q=zzz', nota: 'Mensaje con lo que se buscó y qué probar.' },
+          { id: 'marcas-muchas', titulo: 'Muchas marcas', src: P + '?vista=marcas&estado=muchas&bajas=1', nota: 'Una lista larga (la pantalla scrollea; el menú lateral y la barra de arriba quedan fijos).' },
+          { id: 'marcas-vacio', titulo: 'Primera vez (vacío)', src: P + '?vista=marcas&estado=vacio', nota: 'Todavía no hay ninguna marca: invita a crear la primera.' },
+          { id: 'marcas-cargando', titulo: 'Cargando', src: P + '?vista=marcas&estado=cargando', nota: 'Esqueletos con la forma de las filas.' },
+          { id: 'marcas-error', titulo: 'Error', src: P + '?vista=marcas&estado=error', nota: 'Mensaje y "Reintentar".' },
+          { id: 'marcas-sin-red', titulo: 'Sin conexión', src: P + '?vista=marcas&estado=sin-conexion', nota: 'Igual, con el texto de conexión.' },
+        ] },
+        { nombre: 'Una marca', items: [
+          { id: 'marca', titulo: 'Detalle de una marca', src: P + '?vista=marca&id=m1',
+            nota: 'Es la pantalla donde ROOT trabaja: <b>los datos</b> (nombre, identificador, estado) con <b>Editar</b> y <b>Dar de baja</b>; <b>los dueños</b> de la marca con su menú de acciones (⋮); y <b>los restaurantes</b>, con su dirección <b>solo de lectura</b> y su estado. Abajo, el recordatorio de lo que ROOT <b>no</b> ve ni decide. No hay nada de menú, mesas, pedidos ni precios.' },
+          { id: 'marca-acciones-dueno', titulo: 'Acciones de un dueño', src: P + '?vista=marca&id=m2&pop=dd2',
+            nota: 'El menú ⋮ de un dueño: <b>Restablecer contraseña</b>, <b>Cambiar email</b> y <b>Eliminar cuenta</b>. Esta cuenta tiene el aviso <b>"Contraseña temporal"</b>: todavía no la cambió (ver "Para confirmar" 8).' },
+          { id: 'marca-acciones-rest', titulo: 'Acciones de un restaurante', src: P + '?vista=marca&id=m1&pop=rr1', nota: 'El menú ⋮ de un restaurante activo: <b>Editar nombre</b> y <b>Dar de baja</b>. En uno de baja la acción es <b>Reactivar</b> (mirá "La Parrilla Villa Allende").' },
+          { id: 'marca-sin-dueno', titulo: 'Sin dueño (BurgerLab)', src: P + '?vista=marca&id=m3',
+            nota: 'Una marca sin ninguna cuenta de dueño: aviso arriba con el botón <b>Agregar dueño</b>. Es el caso de la marca de demostración <b>BurgerLab</b>, a la que se le va a <b>dar de baja</b>.' },
+          { id: 'marca-baja', titulo: 'Marca de baja', src: P + '?vista=marca&id=m4',
+            nota: 'El aviso dice qué pasa con una marca de baja y ofrece <b>Reactivar</b>. Desaparece "Dar de baja" y "Agregar restaurante".' },
+          { id: 'marca-larga', titulo: 'Nombres larguísimos', src: P + '?vista=marca&id=m5', nota: 'Nombre de marca, identificador, restaurante, dirección y email enormes: se parten, no rompen la pantalla.' },
+          { id: 'marca-cargando', titulo: 'Cargando', src: P + '?vista=marca&id=m1&estado=cargando', nota: 'Esqueleto de la cabecera y de las listas.' },
+          { id: 'marca-error', titulo: 'Error', src: P + '?vista=marca&id=m1&estado=error', nota: 'Mensaje y "Reintentar".' },
+        ] },
+        { nombre: 'Dueños (todas las marcas)', items: [
+          { id: 'duenos', titulo: 'Lista de dueños', src: P + '?vista=duenos',
+            nota: 'Todas las cuentas de dueño, con su marca (se toca para abrirla) y el mismo menú de acciones. Sirve para <b>buscar una cuenta por email</b> sin saber de qué marca es. <span class="pregunta">OPCIONAL</span> Si preferís una consola más corta, esta pantalla se puede dejar para después: todo lo demás se hace desde el detalle de la marca.' },
+          { id: 'duenos-buscando', titulo: 'Buscando', src: P + '?vista=duenos&q=fiore', nota: 'Filtra por email o por nombre de marca.' },
+          { id: 'duenos-vacio', titulo: 'Vacío', src: P + '?vista=duenos&estado=vacio', nota: 'Todavía no hay dueños.' },
+          { id: 'duenos-cargando', titulo: 'Cargando', src: P + '?vista=duenos&estado=cargando', nota: 'Esqueletos.' },
+        ] },
+        { nombre: 'Cuentas ROOT (novedad)', items: [
+          { id: 'roots', titulo: 'Lista de cuentas ROOT', src: P + '?vista=roots',
+            nota: '<b>Novedad.</b> Las cuentas ROOT del equipo, una por integrante; con <b>Nueva cuenta ROOT</b>. "Vos" marca la propia y "Contraseña temporal" avisa que todavía no la cambió. <b>No hay "Eliminar":</b> ninguna cuenta ROOT se borra desde la consola; se retira con un script del equipo y nunca la última (decisión 15). Está en un grupo aparte del menú, "Sistema".' },
+          { id: 'roots-acciones', titulo: 'Acciones de otra cuenta', src: P + '?vista=roots&pop=oro2', nota: 'Un ROOT puede <b>restablecer la contraseña de otro ROOT</b> (decisión 19). Queda en el historial.' },
+          { id: 'roots-yo', titulo: 'Acciones de la propia cuenta', src: P + '?vista=roots&pop=oro1', nota: 'En la propia cuenta, el menú ofrece <b>cambiar mi contraseña</b>.' },
+          { id: 'roots-cargando', titulo: 'Cargando', src: P + '?vista=roots&estado=cargando', nota: 'Esqueletos.' },
+          { id: 'roots-error', titulo: 'Error', src: P + '?vista=roots&estado=error', nota: 'Mensaje y "Reintentar".' },
+        ] },
+        { nombre: 'Historial de acciones de ROOT (novedad)', items: [
+          { id: 'historial', titulo: 'Historial', src: P + '?vista=historial',
+            nota: '<b>Novedad.</b> Todo lo que hace un ROOT queda registrado: <b>quién</b>, <b>qué</b>, <b>sobre qué</b> (marca, restaurante, dueño u otro ROOT) y <b>cuándo</b>, incluidos crear una cuenta ROOT y restablecer contraseñas. <b>No se puede editar ni borrar</b>, ni desde la consola ni desde la API, y la base de datos también lo impide. Nunca guarda una contraseña. <b>Lo ven todos los ROOT.</b> Se agrupa por día, lo más nuevo arriba.' },
+          { id: 'historial-detalle', titulo: 'Con el detalle abierto', src: P + '?vista=historial&abierto=h1,h5', nota: 'La flecha de cada fila muestra <b>qué cambió</b>: antes y después. Una contraseña nunca aparece ("no se registra"). Las acciones del script (la primera cuenta ROOT, retirar <code>root@menyu.com</code>) figuran como <b>Script</b>, con la persona que lo corrió.' },
+          { id: 'historial-persona', titulo: 'Filtrado por persona', src: P + '?vista=historial&actor=bruno@ejemplo.com', nota: 'Filtros por <b>quién</b>, <b>sobre qué</b> (marcas, restaurantes, dueños, cuentas ROOT) y fechas <b>desde</b> y <b>hasta</b>. Con filtros aparece "Limpiar filtros".' },
+          { id: 'historial-script', titulo: 'Las acciones del script', src: P + '?vista=historial&actor=script&abierto=h12', nota: 'Filtrado por "Script (línea de comandos)".' },
+          { id: 'historial-fechas', titulo: 'Un día y un tipo', src: P + '?vista=historial&desde=2026-10-16&hasta=2026-10-16&tipo=OWNER', nota: 'Fechas y tipo combinados.' },
+          { id: 'historial-sin-resultados', titulo: 'Sin resultados', src: P + '?vista=historial&actor=carla@ejemplo.com&tipo=MARCA&desde=2026-10-16', nota: 'Ninguna acción coincide: mensaje y botón para limpiar.' },
+          { id: 'historial-muchas', titulo: 'Muchas acciones', src: P + '?vista=historial&estado=muchas', nota: 'Se cargan de a poco: <b>Cargar más</b> al final, hasta llegar al principio.' },
+          { id: 'historial-vacio', titulo: 'Vacío', src: P + '?vista=historial&estado=vacio', nota: 'Todavía no hay acciones registradas.' },
+          { id: 'historial-cargando', titulo: 'Cargando', src: P + '?vista=historial&estado=cargando', nota: 'Esqueletos.' },
+          { id: 'historial-error', titulo: 'Error', src: P + '?vista=historial&estado=error', nota: 'Mensaje y "Reintentar".' },
+        ] },
+        { nombre: 'Primer ingreso (contraseña temporal)', items: [
+          { id: 'primer-ingreso', titulo: 'Elegí tu contraseña', src: P + '?vista=primer-ingreso',
+            nota: '<b>Novedad (etapa 3).</b> Lo que ve un dueño o un ROOT la primera vez que entra con una contraseña temporal, y de nuevo cada vez que se la restablecen: una pantalla sola, sin menú lateral, hasta que elige la suya (decisión 8). Al menos 12 caracteres y distinta de la temporal. Se puede mostrar lo escrito.' },
+          { id: 'primer-ingreso-corta', titulo: 'Contraseña corta', src: P + '?vista=primer-ingreso&error=corta', nota: 'Menos de 12 caracteres.' },
+          { id: 'primer-ingreso-no-coincide', titulo: 'No coinciden', src: P + '?vista=primer-ingreso&error=sin-coincidir', nota: 'La repetición no es igual.' },
+          { id: 'primer-ingreso-igual', titulo: 'Igual a la temporal', src: P + '?vista=primer-ingreso&error=igual', nota: 'No se acepta la misma contraseña que le pasaron.' },
+        ] },
+        { nombre: 'Celular: menú lateral', items: [
+          { id: 'menu-lateral', titulo: 'Menú lateral abierto', src: P + '?vista=marcas&menu=1',
+            nota: 'El mismo menú lateral que web-admin: en celular es un cajón que se abre con las tres rayitas y se cierra tocando afuera, la X o Escape. Probalo en <b>360</b> o <b>390</b>. En escritorio está siempre a la vista. En vez del selector de marca y restaurante (ROOT no opera ninguno), dice <b>"Administración"</b> y recuerda que ROOT no ve los datos de las marcas.' },
+        ] },
+        { nombre: 'Diálogos · marcas', items: [
+          { id: 'd-nueva-marca', titulo: 'Nueva marca', src: P + '?vista=marcas&dialogo=nueva-marca',
+            nota: 'Nombre e <b>identificador</b> (interno, único; se arma solo con el nombre y se puede cambiar). En celular el diálogo es una <b>hoja que sube desde abajo</b>; en escritorio, una ventana al centro. Probalo en 360 y en 1280.' },
+          { id: 'd-nueva-marca-slug', titulo: 'Identificador repetido', src: P + '?vista=marcas&dialogo=nueva-marca&error=slug', nota: 'El servidor responde 409 si ya hay una marca con ese identificador: el error se muestra en el campo.' },
+          { id: 'd-editar-marca', titulo: 'Editar marca', src: P + '?vista=marca&id=m1&dialogo=editar-marca', nota: 'ROOT cambia nombre e identificador. El logo no: lo carga el dueño.' },
+          { id: 'd-baja-marca', titulo: 'Dar de baja una marca', src: P + '?vista=marca&id=m3&dialogo=baja-marca',
+            nota: '<span class="pregunta">PARA CONFIRMAR 5 y 6</span> Dice <b>qué pasa</b> (los restaurantes dejan de estar disponibles, nadie de la marca puede entrar, no se borra ningún dato) y pide <b>escribir el nombre de la marca</b> para habilitar el botón. Es reversible.' },
+          { id: 'd-baja-marca-escrito', titulo: 'Baja con el nombre escrito', src: P + '?vista=marca&id=m3&dialogo=baja-marca&dato=escrito', nota: 'Con el nombre escrito, el botón se habilita.' },
+          { id: 'd-reactivar-marca', titulo: 'Reactivar una marca', src: P + '?vista=marca&id=m4&dialogo=reactivar-marca', nota: 'Vuelve todo como estaba.' },
+        ] },
+        { nombre: 'Diálogos · restaurantes', items: [
+          { id: 'd-nuevo-restaurante', titulo: 'Nuevo restaurante', src: P + '?vista=marca&id=m1&dialogo=nuevo-restaurante',
+            nota: '<span class="pregunta">PARA CONFIRMAR 4</span> La <b>dirección</b> se pide acá, una sola vez (hoy el backend la exige al crear, decisión D2); después <b>solo la cambia el dueño</b>. Si preferís que ROOT no la cargue, se puede dejar vacía al crear y que la complete el dueño.' },
+          { id: 'd-editar-restaurante', titulo: 'Editar un restaurante', src: P + '?vista=marca&id=m1&dialogo=editar-restaurante&dato=r2', nota: 'ROOT solo cambia el <b>nombre</b>. La dirección se muestra bloqueada, con el aviso de que la cambia el dueño. No se puede mover un restaurante a otra marca.' },
+          { id: 'd-baja-restaurante', titulo: 'Dar de baja un restaurante', src: P + '?vista=marca&id=m1&dialogo=baja-restaurante&dato=r1', nota: 'Mismo criterio que la marca, sin pedir el nombre.' },
+        ] },
+        { nombre: 'Diálogos · dueños', items: [
+          { id: 'd-nuevo-dueno', titulo: 'Nuevo dueño (desde una marca)', src: P + '?vista=marca&id=m1&dialogo=nuevo-dueno',
+            nota: '<span class="pregunta">PARA CONFIRMAR 7 y 8</span> Solo <b>email</b> y <b>contraseña inicial</b>: la cuenta de admin no tiene nombre. La contraseña <b>la genera el sistema</b> (se puede generar otra) y se muestra una sola vez; el dueño la tiene que cambiar en su primer ingreso. La marca viene fija.' },
+          { id: 'd-nuevo-dueno-global', titulo: 'Nuevo dueño (desde Dueños)', src: P + '?vista=duenos&dialogo=nuevo-dueno&dato=desde-duenos', nota: 'Desde la lista general hay que elegir la marca.' },
+          { id: 'd-nuevo-dueno-email', titulo: 'Email repetido', src: P + '?vista=marca&id=m1&dialogo=nuevo-dueno&error=email', nota: 'Ya existe una cuenta con ese email (los emails son únicos en todo el sistema).' },
+          { id: 'd-dueno-creado', titulo: 'Cuenta creada', src: P + '?vista=marca&id=m1&dialogo=dueno-creado', nota: 'La contraseña se muestra <b>una sola vez</b>, con un botón para copiar el email y la contraseña y pasárselos al dueño. Al cerrar no hay forma de volver a verla (solo restablecerla).' },
+          { id: 'd-restablecer', titulo: 'Restablecer contraseña', src: P + '?vista=marca&id=m2&dialogo=restablecer&dato=d2', nota: 'Para quien olvidó la contraseña (no hay mail de recuperación). La anterior deja de servir.' },
+          { id: 'd-restablecido', titulo: 'Contraseña nueva generada', src: P + '?vista=marca&id=m2&dialogo=restablecido&dato=d2', nota: 'Igual que al crear: se muestra una vez.' },
+          { id: 'd-cambiar-email', titulo: 'Cambiar email', src: P + '?vista=marca&id=m2&dialogo=cambiar-email&dato=d3', nota: 'La contraseña no cambia.' },
+          { id: 'd-eliminar-dueno', titulo: 'Eliminar cuenta', src: P + '?vista=marca&id=m2&dialogo=eliminar-dueno&dato=d3', nota: 'Esta marca tiene dos dueños: se puede eliminar uno. Las cuentas se eliminan de verdad (son solo credenciales).' },
+          { id: 'd-ultimo-dueno', titulo: 'No se puede eliminar al último', src: P + '?vista=marca&id=m1&dialogo=ultimo-dueno', nota: '<span class="pregunta">PARA CONFIRMAR 7</span> Una marca activa no puede quedarse sin dueño: primero se crea el reemplazo. Probalo desde el detalle de "La Parrilla de Juan": ⋮ → Eliminar cuenta.' },
+        ] },
+        { nombre: 'Diálogos · cuentas ROOT (novedad)', items: [
+          { id: 'd-nuevo-root', titulo: 'Nueva cuenta ROOT', src: P + '?vista=roots&dialogo=nuevo-root', nota: 'Email y contraseña inicial generada, igual que un dueño. La persona la cambia en su primer ingreso.' },
+          { id: 'd-nuevo-root-email', titulo: 'Email repetido', src: P + '?vista=roots&dialogo=nuevo-root&error=email', nota: 'Ya existe una cuenta con ese email.' },
+          { id: 'd-root-creado', titulo: 'Cuenta ROOT creada', src: P + '?vista=roots&dialogo=root-creado', nota: 'La contraseña se muestra una sola vez. Dice que la acción quedó registrada en el historial.' },
+          { id: 'd-restablecer-root', titulo: 'Restablecer contraseña de un ROOT', src: P + '?vista=roots&dialogo=restablecer-root&dato=ro2', nota: 'Cierra las sesiones de esa cuenta y la obliga a cambiarla al entrar. Los diálogos que cambian algo avisan <b>"Esta acción queda registrada en el historial"</b>.' },
+          { id: 'd-restablecido-root', titulo: 'Contraseña nueva generada', src: P + '?vista=roots&dialogo=restablecido-root&dato=ro2', nota: 'Se muestra una vez.' },
+          { id: 'd-cambiar-password', titulo: 'Cambiar mi contraseña', src: P + '?vista=roots&dialogo=cambiar-password', nota: 'La contraseña actual y la nueva dos veces. Cierra las demás sesiones de la propia cuenta.' },
+          { id: 'd-baja-aviso', titulo: 'Aviso del historial en otro diálogo', src: P + '?vista=marca&id=m3&dialogo=baja-marca', nota: 'Ahora todos los diálogos que cambian algo (marcas, restaurantes, dueños y cuentas ROOT) llevan el aviso del historial, arriba de los botones.' },
+        ] },
+      ]
+
+      var DECISIONES = '<h2>Aprobado el 2026-10-15</h2>' +
+        '<p class="nota-chica">Los mockups originales y los nueve supuestos del plan, <b>incluidos el 6 (la baja corta de verdad) y el 8 (contraseña generada con cambio obligatorio en el primer ingreso)</b>. La etapa 4, sacarle a ROOT los permisos viejos, va al final.</p>' +
+        '<h2>Se agregó el mismo día, a pedido del equipo</h2><ol start="13">' +
+        '<li><b>Un ROOT crea otras cuentas ROOT</b> desde la consola (una por integrante: tres). <a data-ir="roots">Cuentas ROOT</a>.</li>' +
+        '<li><b>El primer ROOT se crea con un script</b> que corre el equipo, con la contraseña elegida al correrlo (sin eco; no queda escrita en el repo). Ya está hecho: <code>apps/backend/scripts/cuentas-root.ts</code>.</li>' +
+        '<li><b>Las cuentas ROOT no se pueden borrar:</b> ni a sí mismo ni el último. Se ve en <a data-ir="roots">Cuentas ROOT</a>: no hay "Eliminar".</li>' +
+        '<li><b><code>root@menyu.com</code> se retira</b> de staging y de producción cuando las cuentas personales anden bien (etapa 5 del plan). Se ve en <a data-ir="historial-detalle">el historial</a>, como acción del script.</li>' +
+        '<li><b>Historial de acciones de ROOT:</b> quién, qué, sobre qué y cuándo, incluidos crear un ROOT y restablecer contraseñas. No se puede editar ni borrar (ni la app, ni la API, ni la base), y todos los ROOT lo ven. <a data-ir="historial">Historial</a>.</li></ol>' +
+        '<h2>Para confirmar (suposiciones mías sobre eso)</h2><ol start="15">' +
+        '<li><b>15 · Cómo leí "las cuentas root no se pueden borrar":</b> ninguna cuenta ROOT se borra desde la consola ni desde la API; la única vía es el script, que nunca borra al último, y la base de datos también lo impide. Si querías que un ROOT pueda borrar a otro (menos a sí mismo y al último), es un cambio chico.</li>' +
+        '<li><b>18 · Qué se registra:</b> todo cambio que haga un ROOT (crear, editar, dar de baja, reactivar, restablecer, eliminar un dueño). Mirar listas no. Cada registro se guarda en la <b>misma transacción</b> que el cambio (si no se puede registrar, el cambio no se hace), con el email de quien lo hizo copiado (para que siga ahí aunque esa cuenta se retire) y sin contraseñas. <b>Opcional:</b> registrar también los inicios de sesión de ROOT.</li>' +
+        '<li><b>19 · Un ROOT puede restablecer la contraseña de otro ROOT</b> (queda registrado; la otra persona la cambia al entrar). Lo necesitan si alguien la olvida.</li>' +
+        '<li><b>20 · Mínimo de 12 caracteres</b> al elegir la contraseña en el primer ingreso, para dueños y ROOT (hoy los dueños tienen 8 como mínimo al crear la cuenta). <a data-ir="primer-ingreso">Se ve acá</a>.</li></ol>' +
+        '<h2>Lo que ROOT hace y lo que no</h2><ul>' +
+        '<li><b>Crea, edita y da de baja</b> marcas y restaurantes; <b>crea, edita y elimina</b> cuentas de dueño; <b>crea</b> otras cuentas ROOT. <a data-ir="marca">Detalle de una marca</a>.</li>' +
+        '<li><b>Los gerentes no los crea ROOT:</b> los crea el dueño desde su panel.</li>' +
+        '<li><b>ROOT no ve ni decide</b> sobre menú, precios, descuentos, mesas, mozos, pedidos, reportes ni caja, y <b>no cambia el logo ni la dirección</b>.</li></ul>' +
+        '<h2>Colores y letras</h2><p class="nota-chica">Los de <b>web-admin</b> (<code>AdminLayout.tsx</code> y <code>pages/admin/marca/estilos.ts</code>): azul <b>#2D3561</b>, naranja <b>#E8563A</b>, bordes <b>#e5e7eb</b>, fondo <b>#f9fafb</b>, rojo <b>#dc2626</b> y verde <b>#16a34a</b>. Montserrat e Inter. Botones y áreas táctiles de al menos 44 px y campos de 16 px. Detalle técnico, etapas y estimación: <b>docs/plan-consola-root.md</b>.</p>'
+
+      var DISPOSITIVOS = {
+        320: { alto: 640, nombre: 'Celular chico' },
+        360: { alto: 740, nombre: 'Celular' },
+        390: { alto: 844, nombre: 'Celular' },
+        768: { alto: 900, nombre: 'Tablet' },
+        1280: { alto: 800, nombre: 'Escritorio' },
+      };
+
+      var lista = document.getElementById('lista');
+      var contenido = document.getElementById('contenido');
+      var tituloEl = document.getElementById('titulo');
+      var notaEl = document.getElementById('nota');
+      var abrir = document.getElementById('abrir');
+      var botonesAncho = Array.prototype.slice.call(document.querySelectorAll('#anchos button'));
+
+      var todos = [{ id: 'decidir', titulo: 'Qué se aprobó y qué confirmar', texto: true }];
+      GRUPOS.forEach(function (g) { g.items.forEach(function (i) { todos.push(i); }); });
+
+      var actual = 'decidir';
+      var ancho = '390';
+
+      function pintarLista() {
+        var html = '<h2>Antes de empezar</h2><button type="button" data-id="decidir">Qué se aprobó y qué confirmar<span class="etiqueta">4</span></button>';
+        GRUPOS.forEach(function (g) {
+          html += '<h2>' + g.nombre + '</h2>';
+          g.items.forEach(function (i) { html += '<button type="button" data-id="' + i.id + '">' + i.titulo + '</button>'; });
+        });
+        lista.innerHTML = html;
+      }
+
+      function marco(anchoPx, src, zoom) {
+        var d = DISPOSITIVOS[anchoPx];
+        var pct = zoom && zoom < 0.995 ? ' · al ' + Math.round(zoom * 100) + '%' : '';
+        return '<figure class="marco" style="margin:0' + (zoom && zoom < 0.995 ? ';zoom:' + zoom : '') + '"><figcaption>' + d.nombre.toUpperCase() + ' · ' + anchoPx + ' × ' + d.alto + pct + '</figcaption>' +
+          '<iframe title="' + d.nombre + ' ' + anchoPx + '" src="' + src + '" style="width:' + anchoPx + 'px;height:' + d.alto + 'px"></iframe></figure>';
+      }
+
+      function pintar() {
+        var item = todos.filter(function (i) { return i.id === actual; })[0] || todos[0];
+        Array.prototype.forEach.call(lista.querySelectorAll('button'), function (b) {
+          if (b.dataset.id === item.id) { b.setAttribute('aria-current', 'true'); } else { b.removeAttribute('aria-current'); }
+        });
+        botonesAncho.forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.ancho === ancho)); });
+
+        tituloEl.textContent = item.titulo;
+        if (item.texto) {
+          notaEl.textContent = '';
+          contenido.innerHTML = '<div class="texto">' + DECISIONES + '</div>';
+          abrir.style.display = 'none';
+          return;
+        }
+        abrir.style.display = '';
+        abrir.href = item.src;
+        notaEl.innerHTML = item.nota;
+
+        if (ancho === 'todos') {
+          var disponible = contenido.parentElement.clientWidth - 40 - 48;
+          var zoom = Math.min(1, disponible / (360 + 768 + 1280));
+          contenido.innerHTML = '<div class="lienzo">' + marco(360, item.src, zoom) + marco(768, item.src, zoom) + marco(1280, item.src, zoom) + '</div>';
+        } else {
+          var libre = contenido.parentElement.clientWidth - 40;
+          contenido.innerHTML = '<div class="lienzo">' + marco(Number(ancho), item.src, Math.min(1, libre / Number(ancho))) + '</div>';
+        }
+      }
+
+      function ir(id, nuevoAncho) {
+        actual = id;
+        if (nuevoAncho) ancho = nuevoAncho;
+        history.replaceState(null, '', '#' + actual + ':' + ancho);
+        pintar();
+      }
+
+      lista.addEventListener('click', function (e) {
+        var b = e.target.closest('button[data-id]');
+        if (b) ir(b.dataset.id);
+      });
+      function irDesdeEnlace(e) {
+        var a = e.target.closest('a[data-ir]');
+        if (!a) return;
+        e.preventDefault();
+        var destino = a.dataset.ir;
+        ir(destino === 'marca' ? 'marca' : destino);
+      }
+      contenido.addEventListener('click', irDesdeEnlace);
+      notaEl.addEventListener('click', irDesdeEnlace);
+      botonesAncho.forEach(function (b) { b.addEventListener('click', function () { ir(actual, b.dataset.ancho); }); });
+      var pendiente = null;
+      window.addEventListener('resize', function () { clearTimeout(pendiente); pendiente = setTimeout(pintar, 120); });
+      document.addEventListener('keydown', function (e) {
+        if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+        if (e.target.closest && e.target.closest('iframe, input')) return;
+        var pos = todos.findIndex(function (i) { return i.id === actual; });
+        var sig = todos[pos + (e.key === 'ArrowDown' ? 1 : -1)];
+        if (sig) { e.preventDefault(); ir(sig.id); }
+      });
+
+      var hash = location.hash.replace('#', '').split(':');
+      if (hash[0] && todos.some(function (i) { return i.id === hash[0]; })) actual = hash[0];
+      if (hash[1] && (hash[1] === 'todos' || DISPOSITIVOS[hash[1]])) ancho = hash[1];
+
+      pintarLista();
+      pintar();
+    })();
+  </script>
+</body>
+</html>
