@@ -22,7 +22,7 @@ Registro de lo que se hizo para poner SonarCloud en el CI de MenYU y tomar la l�
 1. **Cambiar el código nuevo de `main`** en SonarCloud (Administration → New Code) a "Number of days" o "Reference branch". Hoy la referencia queda fija en el análisis automático del 17/10 (`7072d67`), que tuvo otro alcance y no tuvo cobertura, y como no se manda `projectVersion` nunca avanza. Después del cambio, verificar por API en el próximo análisis de `main` (`api/qualitygates/project_status?projectKey=MenYUorg_MenYU&branch=main`, campo `periods`).
 2. **Subir los umbrales del gate el 23/10/2026.**
 3. **Confirmar la Deployment Protection de las previews de Vercel** (queda a cargo del equipo). En el run `39032870161` los tres frontends respondieron 200, así que hoy no hay protección que bloquee el smoke.
-4. **Producción:** commiteado en `ci/smoke-production` (`fcc6b39`), falta pushear y abrir el PR. Antes del primer smoke de producción hay que cargar las variables de repo `PROD_WEB_ADMIN_URL`, `PROD_WEB_CLIENTE_URL` y `PROD_WEB_STAFF_URL` (las URLs de admin y staff las pasa Constanza).
+4. **Producción:** PR #377 abierto (`ci/smoke-production`). Antes del primer smoke de producción hay que cargar las variables de repo `PROD_WEB_ADMIN_URL`, `PROD_WEB_CLIENTE_URL` y `PROD_WEB_STAFF_URL` (las URLs de admin y staff las pasa Constanza).
 5. Opcionales que salieron en el camino:
    - Fijar la versión de `@railway/cli` en los workflows (hoy `@latest` en el `variable set` y en el `up`).
    - Revisar en Railway (Settings → Healthcheck Path) si el servicio tiene healthcheck en `/health`. No cambia nada hoy, porque `/health` responde siempre 200.
@@ -129,7 +129,8 @@ Registro de lo que se hizo para poner SonarCloud en el CI de MenYU y tomar la l�
 
 ### 17/10/2026: CI en verde, `APP_COMMIT_SHA` y smoke en producción (`ci/smoke-production`)
 
-- Commit `fcc6b39` sobre `main` (`beb2d18`). **Sin pushear todavía.**
+- PR #377, abierto el 17/10/2026. Commits `fcc6b39` (sobre `main`, `beb2d18`) y `500649c` (validación de las variables `PROD_WEB_*`).
+- **Decisión:** las variables `PROD_WEB_*_URL` se validan en `check-ci`, antes del deploy, para que un tag con una variable faltante nunca toque producción (`smoke-production` repite el chequeo como segunda red).
 - `deploy-production.yml`:
   - **`check-ci`** (primer job): consulta con `gh api` el check "CI — typecheck, lint, test, build" del commit del tag y toma el run más reciente de GitHub Actions. Si está en cola o en curso, espera (cada 20 s, hasta 15 min). Si terminó sin `success` o no hay run, falla enseguida y no se despliega. Es la decisión D10 del plan en PDF del equipo (no está en el repo): producción solo con el CI del mismo SHA en verde. Pide solo `checks: read`.
   - **`deploy-production`**: `needs: check-ci` y solo en push de tag. Setea `APP_COMMIT_SHA` con `--skip-deploys` antes del `railway up`, con los secretos de producción.
