@@ -4,10 +4,52 @@ on:
   push:
     tags:
       - 'v*.*.*'
+  # Solo la verificación del CI y el smoke contra producción, sin desplegar. En "Use workflow from"
+  # elegir el tag desplegado: el smoke espera que /health muestre el SHA de ese ref.
+  workflow_dispatch:
 
 jobs:
+  # ── CI en verde para este commit ─────────────────────────
+  check-ci:
+    name: CI en verde para este commit
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      checks: read
+
+    # Si el CI del commit está en cola o en curso, espera (cada 20 s, hasta 15 min).
+    # Falla enseguida si terminó con otro resultado que success o si no hay run.
+    steps:
+      - name: Check CI result for this commit
+        run: |
+          fin=$((SECONDS + 900))
+          while :; do
+            resultado=$(gh api -X GET "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/check-runs" \
+              -f check_name="$CHECK" \
+              --jq '[.check_runs[] | select(.app.slug == "github-actions")] | sort_by(.started_at) | last | if . == null then "sin run" else "\(.status)/\(.conclusion)" end')
+            echo "\"$CHECK\" en $GITHUB_SHA: $resultado"
+            case "$resultado" in
+              completed/success) exit 0 ;;
+              queued/* | in_progress/* | waiting/* | requested/* | pending/*) ;;
+              *)
+                echo "::error::El CI de $GITHUB_SHA no está en verde ($resultado). No se despliega ni se corre el smoke."
+                exit 1
+                ;;
+            esac
+            if [ "$SECONDS" -ge "$fin" ]; then
+              echo "::error::El CI de $GITHUB_SHA sigue sin terminar después de 15 min ($resultado). No se despliega ni se corre el smoke."
+              exit 1
+            fi
+            sleep 20
+          done
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CHECK: CI — typecheck, lint, test, build
+
   deploy-production:
     name: Deploy to production
+    needs: check-ci
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
 
     steps:
@@ -30,6 +72,14 @@ jobs:
         run: pnpm turbo build --filter=@menyu/api --filter=@menyu/web-admin --filter=@menyu/web-cliente --filter=@menyu/web-staff
 
       # ── Railway production ────────────────────────────────────
+      # El SHA que muestra /health. RAILWAY_GIT_COMMIT_SHA solo llega en deploys disparados
+      # desde GitHub, no con `railway up`. --skip-deploys: el deploy lo hace el paso siguiente.
+      - name: Set APP_COMMIT_SHA on Railway production
+        run: npx @railway/cli@latest variable set "APP_COMMIT_SHA=$GIT_SHA" --service ${{ secrets.RAILWAY_SERVICE_ID_PROD }} --skip-deploys
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN_PROD }}
+          GIT_SHA: ${{ github.sha }}
+
       - name: Deploy backend to Railway production
         uses: nick-fields/retry@v3
         with:
@@ -82,3 +132,47 @@ jobs:
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_STAFF }}
+
+  # ── Smoke post-deploy (solo lectura) ─────────────────────────
+  smoke-production:
+    name: Smoke de producción
+    needs: [check-ci, deploy-production]
+    # Con workflow_dispatch el deploy se saltea y el smoke corre igual.
+    if: ${{ !cancelled() && needs.check-ci.result == 'success' && (needs.deploy-production.result == 'success' || needs.deploy-production.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # La URL del backend es la VITE_API_URL de production de web-cliente en Vercel: se lee solo esa
+      # línea, el archivo no se imprime ni se sube y se borra al terminar el paso.
+      - name: Resolve production API URL
+        run: |
+          dir="$RUNNER_TEMP/vercel-cliente"
+          trap 'rm -rf "$dir"' EXIT
+          mkdir -p "$dir"
+          npx vercel@54.6.1 pull --yes --environment=production --cwd "$dir" --token ${{ secrets.VERCEL_TOKEN }}
+          node scripts/smoke/leer-api-url.mjs "$dir/.vercel/.env.production.local"
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_CLIENTE }}
+
+      - name: Wait for /health to show this commit
+        run: node scripts/smoke/esperar-sha.mjs
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+
+      # Los frontends de producción tienen URL estable (deploy con --prod): salen de variables del repo.
+      - name: Smoke
+        run: node scripts/smoke/smoke.mjs
+        env:
+          WEB_ADMIN_URL: ${{ vars.PROD_WEB_ADMIN_URL }}
+          WEB_CLIENTE_URL: ${{ vars.PROD_WEB_CLIENTE_URL }}
+          WEB_STAFF_URL: ${{ vars.PROD_WEB_STAFF_URL }}

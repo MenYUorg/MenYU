@@ -1,4 +1,4 @@
-// Tests del smoke de staging: node --test scripts/smoke/lib.test.mjs
+// Tests del smoke post-deploy: node --test scripts/smoke/lib.test.mjs
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import { correrSmoke, esperarSha, leerVariable, requerirEnv, urlBackend } from './lib.mjs'
@@ -210,7 +210,7 @@ describe('correrSmoke', () => {
         ['backend /api/discovery', false, 'respuesta sin restaurantes u ofertas'],
         ['web-admin', false, 'HTTP 401'],
         ['web-cliente', false, 'error de red (TypeError)'],
-        ['web-staff', false, 'falta la URL del deploy'],
+        ['web-staff', false, 'falta la URL'],
       ],
     )
   })

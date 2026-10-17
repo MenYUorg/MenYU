@@ -1,4 +1,4 @@
-// Smoke de staging. Solo lectura: todas las requests son GET. No imprime secretos.
+// Smoke post-deploy de staging y producción. Solo lectura: todas las requests son GET. No imprime secretos.
 
 export const INTERVALO_MS = 10_000
 export const LIMITE_MS = 8 * 60_000
@@ -103,7 +103,7 @@ export async function correrSmoke({ apiUrl, frontends, fetchFn = fetch }) {
 
   for (const [nombre, url] of Object.entries(frontends)) {
     if (!url) {
-      resultados.push({ nombre, ok: false, detalle: 'falta la URL del deploy' })
+      resultados.push({ nombre, ok: false, detalle: 'falta la URL' })
       continue
     }
     resultados.push(
