@@ -18,6 +18,7 @@ import { RegistrarCobroDto } from './dto/registrar-cobro.dto'
 import { DivisionService } from '../comensales/division.service'
 import { runSerializableTransaction } from '../common/run-serializable-transaction'
 import { assertStaffAccess } from '../common/assert-staff-access'
+import { LimiteIntentos } from '../common/limite-intentos'
 import {
   ESTADO_PAGO_APROBADO,
   ESTADO_PAGO_PENDIENTE,
@@ -28,6 +29,14 @@ import {
 // checkout abierto: cobrar la mesa lo cancela, así que se pide confirmación al mozo.
 // Más viejo que esto se considera abandonado y se cancela sin aviso.
 const VENTANA_MP_PENDIENTE_MS = 10 * 60 * 1000
+
+// Límite de intentos fallidos al entrar a una mesa (fuerza bruta). Se cuentan fallos, no requests
+// por IP: el proxy de Railway y el wifi compartido de un local harían bloquear a todos.
+// El PIN (4 dígitos) se cuenta por restaurante y el código de sesión (3 dígitos) por mesa.
+// El ingreso por QR (un UUID) no se limita. Ver las limitaciones en LimiteIntentos.
+const MINUTO_MS = 60_000
+export const LIMITE_PIN = { maxFallos: 10, ventanaMs: 10 * MINUTO_MS, bloqueoMs: 15 * MINUTO_MS }
+export const LIMITE_CODIGO_SESION = { maxFallos: 5, ventanaMs: 10 * MINUTO_MS, bloqueoMs: 15 * MINUTO_MS }
 
 function haceMinutos(createdAt: Date, ahora: number): string {
   const min = Math.floor((ahora - createdAt.getTime()) / 60_000)
@@ -88,6 +97,8 @@ export interface SessionActivaResult {
 @Injectable()
 export class SessionsService {
   private readonly logger = new Logger(SessionsService.name)
+  private readonly intentosPin = new LimiteIntentos(LIMITE_PIN)
+  private readonly intentosCodigoSesion = new LimiteIntentos(LIMITE_CODIGO_SESION)
 
   constructor(
     private readonly prisma: PrismaService,
@@ -148,7 +159,7 @@ export class SessionsService {
     }
 
     // Primero la mesa: si no existe (o es de otro restaurante) no se crea un cliente "Invitado" de más.
-    const mesa = await this.resolveMesa(dto)
+    const mesa = await this.resolveMesaContandoFallosDePin(dto)
     const clienteId = await this.resolveClienteId(authHeader)
 
     const sesionActiva = await this.prisma.sesionMesa.findFirst({
@@ -195,7 +206,9 @@ export class SessionsService {
         if (!dto.codigoSesion) {
           throw new ForbiddenException('Esta mesa requiere código de sesión para unirse')
         }
+        this.intentosCodigoSesion.verificar(mesa.id)
         if (dto.codigoSesion !== codigoSesion) {
+          this.intentosCodigoSesion.registrarFallo(mesa.id)
           throw new ForbiddenException('Código de sesión incorrecto')
         }
       }
@@ -733,6 +746,23 @@ export class SessionsService {
     }
     const guest = await this.users.createCliente({ nombre: 'Invitado' })
     return guest.id
+  }
+
+  /**
+   * resolveMesa, con el límite de intentos del PIN: si el restaurante está bloqueado responde 429 sin
+   * buscar la mesa, y un PIN que no existe cuenta como fallo. El ingreso por QR no pasa por el límite.
+   */
+  private async resolveMesaContandoFallosDePin(dto: OpenSessionDto) {
+    if (dto.tableCode) return this.resolveMesa(dto)
+
+    const restauranteId = dto.restauranteId!
+    this.intentosPin.verificar(restauranteId)
+    try {
+      return await this.resolveMesa(dto)
+    } catch (e) {
+      if (e instanceof NotFoundException) this.intentosPin.registrarFallo(restauranteId)
+      throw e
+    }
   }
 
   /**
