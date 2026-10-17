@@ -37,4 +37,17 @@ describe('AdminRestauranteService.asignar: marca del restaurante', () => {
     await expect(asignacion).rejects.toThrow(ForbiddenException)
     expect(prisma.adminRestaurante.create).not.toHaveBeenCalled()
   })
+
+  it('un restaurante de la misma marca se sigue asignando', async () => {
+    // Arrange
+    prisma.restaurante.findUnique.mockResolvedValue({ id: 'rest-propio', activo: true, marcaId: 'marca-1' })
+    prisma.adminRestaurante.create.mockResolvedValue({ adminId: 'gerente-1', restauranteId: 'rest-propio' })
+
+    // Act
+    const asignacion = await service.asignar('gerente-1', 'rest-propio', OWNER)
+
+    // Assert
+    expect(asignacion).toEqual({ adminId: 'gerente-1', restauranteId: 'rest-propio' })
+    expect(prisma.adminRestaurante.create).toHaveBeenCalledWith({ data: { adminId: 'gerente-1', restauranteId: 'rest-propio' } })
+  })
 })

@@ -20,6 +20,10 @@ export class AdminRestauranteService {
 
     const restaurante = await this.prisma.restaurante.findUnique({ where: { id: restauranteId } })
     if (!restaurante || !restaurante.activo) throw new NotFoundException('Restaurante no encontrado')
+    // Un gerente solo puede tener restaurantes de su marca (que es la del OWNER que asigna).
+    if (restaurante.marcaId !== gerente.marcaId) {
+      throw new ForbiddenException('El restaurante no es de la marca del gerente')
+    }
 
     const existing = await this.prisma.adminRestaurante.findUnique({
       where: { adminId_restauranteId: { adminId, restauranteId } },
