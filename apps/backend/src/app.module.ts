@@ -22,7 +22,7 @@ import { ReportesModule } from './reportes/reportes.module'
 import { AdminsModule } from './admins/admins.module'
 import { ComensalesModule } from './comensales/comensales.module'
 import { DiscoveryModule } from './discovery/discovery.module'
-import { HealthController } from './health/health.controller'
+import { HealthModule } from './health/health.module'
 
 @Module({
   imports: [
@@ -49,7 +49,7 @@ import { HealthController } from './health/health.controller'
     AdminsModule,
     ComensalesModule,
     DiscoveryModule,
+    HealthModule,
   ],
-  controllers: [HealthController],
 })
 export class AppModule {}
