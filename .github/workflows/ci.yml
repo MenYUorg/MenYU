@@ -3,6 +3,8 @@ name: CI
 on:
   pull_request:
     branches: [main]
+  push:
+    branches: [main]
 
 jobs:
   ci:
@@ -12,6 +14,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # historial completo: SonarCloud lo usa para el blame y para detectar el código nuevo
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -79,6 +83,11 @@ jobs:
           path: apps/web-staff/coverage/
           if-no-files-found: ignore
           retention-days: 14
+
+      - name: SonarCloud
+        uses: SonarSource/sonarqube-scan-action@d209202bc7d53ff1cc128f7f907dac145c9d6ae9 # v8.3.0
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
       - name: Build
         run: pnpm turbo build --filter=@menyu/api --filter=@menyu/web-admin --filter=@menyu/web-cliente --filter=@menyu/web-staff
