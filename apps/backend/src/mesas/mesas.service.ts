@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common'
-import { randomUUID } from 'crypto'
+import { randomInt, randomUUID } from 'crypto'
 import * as QRCode from 'qrcode'
 import { PrismaService } from '../prisma/prisma.service'
 import { JwtPayload } from '../auth/auth.service'
@@ -138,7 +138,7 @@ export class MesasService {
 
   private async generatePin(restauranteId: string): Promise<string> {
     for (let attempt = 0; attempt < 100; attempt++) {
-      const pin = String(Math.floor(Math.random() * 9999) + 1).padStart(4, '0')
+      const pin = String(randomInt(1, 10000)).padStart(4, '0')
       const exists = await this.prisma.mesa.findFirst({ where: { restauranteId, pin } })
       if (!exists) return pin
     }
