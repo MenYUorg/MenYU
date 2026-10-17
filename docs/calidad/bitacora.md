@@ -22,7 +22,7 @@ Registro de lo que se hizo para poner SonarCloud en el CI de MenYU y tomar la l�
 1. **Cambiar el código nuevo de `main`** en SonarCloud (Administration → New Code) a "Number of days" o "Reference branch". Hoy la referencia queda fija en el análisis automático del 17/10 (`7072d67`), que tuvo otro alcance y no tuvo cobertura, y como no se manda `projectVersion` nunca avanza. Después del cambio, verificar por API en el próximo análisis de `main` (`api/qualitygates/project_status?projectKey=MenYUorg_MenYU&branch=main`, campo `periods`).
 2. **Subir los umbrales del gate el 23/10/2026.**
 3. **Confirmar la Deployment Protection de las previews de Vercel** (queda a cargo del equipo). En el run `39032870161` los tres frontends respondieron 200, así que hoy no hay protección que bloquee el smoke.
-4. **Producción:** PR #377 abierto (`ci/smoke-production`). Antes del primer smoke de producción hay que cargar las variables de repo `PROD_WEB_ADMIN_URL`, `PROD_WEB_CLIENTE_URL` y `PROD_WEB_STAFF_URL` (las URLs de admin y staff las pasa Constanza).
+4. **Producción:** PR #377 abierto (`ci/smoke-production`). Variables `PROD_WEB_*_URL` cargadas el 17/10/2026. No crear tags de producción hasta que el #377 esté mergeado.
 5. Opcionales que salieron en el camino:
    - Fijar la versión de `@railway/cli` en los workflows (hoy `@latest` en el `variable set` y en el `up`).
    - Revisar en Railway (Settings → Healthcheck Path) si el servicio tiene healthcheck en `/health`. No cambia nada hoy, porque `/health` responde siempre 200.
@@ -131,8 +131,17 @@ Registro de lo que se hizo para poner SonarCloud en el CI de MenYU y tomar la l�
 
 - PR #377, abierto el 17/10/2026. Commits `fcc6b39` (sobre `main`, `beb2d18`) y `500649c` (validación de las variables `PROD_WEB_*`).
 - **Decisión:** las variables `PROD_WEB_*_URL` se validan en `check-ci`, antes del deploy, para que un tag con una variable faltante nunca toque producción (`smoke-production` repite el chequeo como segunda red).
+- **Variables de repo cargadas el 17/10/2026** (13:06 UTC, con `gh variable set`; son variables, no secretos). Antes de cargarlas, cada frontend respondió `200` a un GET real con `curl -L`, sin redirigir a login ni dar 401:
+
+| Variable | Valor |
+|---|---|
+| `PROD_WEB_CLIENTE_URL` | `https://menyu-cliente.vercel.app` |
+| `PROD_WEB_ADMIN_URL` | `https://menyu-admin.vercel.app` |
+| `PROD_WEB_STAFF_URL` | `https://menyu-staff.vercel.app` |
+
+No hay variable para la API: el workflow la resuelve desde `VITE_API_URL` de production de web-cliente. La API de producción (`https://menyu-backend-production.up.railway.app`) respondió `200` en `/health`, todavía con el formato viejo.
 - `deploy-production.yml`:
-  - **`check-ci`** (primer job): consulta con `gh api` el check "CI — typecheck, lint, test, build" del commit del tag y toma el run más reciente de GitHub Actions. Si está en cola o en curso, espera (cada 20 s, hasta 15 min). Si terminó sin `success` o no hay run, falla enseguida y no se despliega. Es la decisión D10 del plan en PDF del equipo (no está en el repo): producción solo con el CI del mismo SHA en verde. Pide solo `checks: read`.
+  - **`check-ci`** (primer job): consulta con `gh api` el check "CI — typecheck, lint, test, build" del commit del tag y toma el run más reciente de GitHub Actions. Si está en cola o en curso, espera (cada 20 s, hasta 15 min). Si terminó sin `success` o no hay run, falla enseguida y no se despliega. Es la decisión D10 del plan en PDF del equipo (no está en el repo): producción solo con el CI del mismo SHA en verde. Pide `checks: read` y `contents: read` (por el checkout).
   - **`deploy-production`**: `needs: check-ci` y solo en push de tag. Setea `APP_COMMIT_SHA` con `--skip-deploys` antes del `railway up`, con los secretos de producción.
   - **`smoke-production`**: lee `VITE_API_URL` del `vercel pull --environment=production` de web-cliente, espera el SHA en `/health` y corre `scripts/smoke`. Los frontends de producción tienen URL estable (`--prod`): salen de las variables de repo `PROD_WEB_ADMIN_URL`, `PROD_WEB_CLIENTE_URL` y `PROD_WEB_STAFF_URL`.
   - **`workflow_dispatch`**: corre solo `check-ci` y el smoke, sin desplegar, para probar antes de la demo. Hay que lanzarlo desde el tag desplegado ("Use workflow from"): el smoke espera el SHA de ese ref.
