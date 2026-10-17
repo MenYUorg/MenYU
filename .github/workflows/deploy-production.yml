@@ -9,17 +9,34 @@ on:
   workflow_dispatch:
 
 jobs:
-  # ── CI en verde para este commit ─────────────────────────
+  # ── Precondiciones: variables de producción y CI en verde ──
   check-ci:
-    name: CI en verde para este commit
+    name: Variables de producción y CI en verde
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
+      contents: read
       checks: read
 
-    # Si el CI del commit está en cola o en curso, espera (cada 20 s, hasta 15 min).
-    # Falla enseguida si terminó con otro resultado que success o si no hay run.
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # Sin las URLs de los frontends el smoke no puede chequear nada: corta antes de desplegar.
+      - name: Check production URL variables
+        run: node scripts/smoke/verificar-urls.mjs PROD_WEB_ADMIN_URL PROD_WEB_CLIENTE_URL PROD_WEB_STAFF_URL
+        env:
+          PROD_WEB_ADMIN_URL: ${{ vars.PROD_WEB_ADMIN_URL }}
+          PROD_WEB_CLIENTE_URL: ${{ vars.PROD_WEB_CLIENTE_URL }}
+          PROD_WEB_STAFF_URL: ${{ vars.PROD_WEB_STAFF_URL }}
+
+      # Si el CI del commit está en cola o en curso, espera (cada 20 s, hasta 15 min).
+      # Falla enseguida si terminó con otro resultado que success o si no hay run.
       - name: Check CI result for this commit
         run: |
           fin=$((SECONDS + 900))
@@ -150,6 +167,14 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+
+      # Segunda red: el mismo chequeo que en check-ci.
+      - name: Check production URL variables
+        run: node scripts/smoke/verificar-urls.mjs PROD_WEB_ADMIN_URL PROD_WEB_CLIENTE_URL PROD_WEB_STAFF_URL
+        env:
+          PROD_WEB_ADMIN_URL: ${{ vars.PROD_WEB_ADMIN_URL }}
+          PROD_WEB_CLIENTE_URL: ${{ vars.PROD_WEB_CLIENTE_URL }}
+          PROD_WEB_STAFF_URL: ${{ vars.PROD_WEB_STAFF_URL }}
 
       # La URL del backend es la VITE_API_URL de production de web-cliente en Vercel: se lee solo esa
       # línea, el archivo no se imprime ni se sube y se borra al terminar el paso.
