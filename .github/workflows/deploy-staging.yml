@@ -8,6 +8,10 @@ jobs:
   deploy-staging:
     name: Deploy to staging
     runs-on: ubuntu-latest
+    outputs:
+      web_admin_url: ${{ steps.vercel-admin.outputs.url }}
+      web_cliente_url: ${{ steps.vercel-cliente.outputs.url }}
+      web_staff_url: ${{ steps.vercel-staff.outputs.url }}
 
     steps:
       - name: Checkout
@@ -49,6 +53,7 @@ jobs:
 
       # ── Vercel staging (preview, sin --prod) ─────────────────
       - name: Deploy web-admin to Vercel staging
+        id: vercel-admin
         uses: nick-fields/retry@v3
         with:
           timeout_minutes: 10
@@ -57,12 +62,13 @@ jobs:
           command: |
             npx vercel@54.6.1 pull --yes --environment=preview --token ${{ secrets.VERCEL_TOKEN }}
             npx vercel@54.6.1 build --token ${{ secrets.VERCEL_TOKEN }}
-            npx vercel@54.6.1 deploy --prebuilt --token ${{ secrets.VERCEL_TOKEN }}
+            url=$(npx vercel@54.6.1 deploy --prebuilt --token ${{ secrets.VERCEL_TOKEN }}) && echo "url=$url" >> "$GITHUB_OUTPUT"
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_ADMIN }}
 
       - name: Deploy web-cliente to Vercel staging
+        id: vercel-cliente
         uses: nick-fields/retry@v3
         with:
           timeout_minutes: 10
@@ -71,12 +77,13 @@ jobs:
           command: |
             npx vercel@54.6.1 pull --yes --environment=preview --token ${{ secrets.VERCEL_TOKEN }}
             npx vercel@54.6.1 build --token ${{ secrets.VERCEL_TOKEN }}
-            npx vercel@54.6.1 deploy --prebuilt --token ${{ secrets.VERCEL_TOKEN }}
+            url=$(npx vercel@54.6.1 deploy --prebuilt --token ${{ secrets.VERCEL_TOKEN }}) && echo "url=$url" >> "$GITHUB_OUTPUT"
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_CLIENTE }}
 
       - name: Deploy web-staff to Vercel staging
+        id: vercel-staff
         uses: nick-fields/retry@v3
         with:
           timeout_minutes: 10
@@ -85,7 +92,48 @@ jobs:
           command: |
             npx vercel@54.6.1 pull --yes --environment=preview --token ${{ secrets.VERCEL_TOKEN }}
             npx vercel@54.6.1 build --token ${{ secrets.VERCEL_TOKEN }}
-            npx vercel@54.6.1 deploy --prebuilt --token ${{ secrets.VERCEL_TOKEN }}
+            url=$(npx vercel@54.6.1 deploy --prebuilt --token ${{ secrets.VERCEL_TOKEN }}) && echo "url=$url" >> "$GITHUB_OUTPUT"
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_STAFF }}
+
+  # ── Smoke post-deploy (solo lectura) ─────────────────────────
+  smoke-staging:
+    name: Smoke de staging
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # La URL del backend es la VITE_API_URL de preview de web-cliente en Vercel: se lee solo esa
+      # línea, el archivo no se imprime ni se sube y se borra al terminar el paso.
+      - name: Resolve staging API URL
+        run: |
+          dir="$RUNNER_TEMP/vercel-cliente"
+          trap 'rm -rf "$dir"' EXIT
+          mkdir -p "$dir"
+          npx vercel@54.6.1 pull --yes --environment=preview --cwd "$dir" --token ${{ secrets.VERCEL_TOKEN }}
+          node scripts/smoke/leer-api-url.mjs "$dir/.vercel/.env.preview.local"
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_CLIENTE }}
+
+      - name: Wait for /health to show this commit
+        run: node scripts/smoke/esperar-sha.mjs
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+
+      - name: Smoke
+        run: node scripts/smoke/smoke.mjs
+        env:
+          WEB_ADMIN_URL: ${{ needs.deploy-staging.outputs.web_admin_url }}
+          WEB_CLIENTE_URL: ${{ needs.deploy-staging.outputs.web_cliente_url }}
+          WEB_STAFF_URL: ${{ needs.deploy-staging.outputs.web_staff_url }}

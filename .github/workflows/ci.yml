@@ -44,6 +44,9 @@ jobs:
       - name: Test
         run: pnpm turbo test --filter=@menyu/api --filter=@menyu/web-admin --filter=@menyu/web-cliente --filter=@menyu/web-staff
 
+      - name: Test — smoke scripts
+        run: node --test scripts/smoke/lib.test.mjs
+
       - name: Coverage
         run: pnpm turbo test:coverage --filter=@menyu/api --filter=@menyu/web-admin --filter=@menyu/web-cliente --filter=@menyu/web-staff
 
