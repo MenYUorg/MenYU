@@ -18,7 +18,7 @@ export const USUARIOS = {
   GERENTE: { sub: 'gerente-1', tipo: 'admin', rol: 'GERENTE' },
   ROOT: { sub: 'root-1', tipo: 'admin', rol: 'ROOT' },
   MOZO: { sub: 'mozo-1', tipo: 'mozo', restauranteId: 'rest-1' },
-  COCINA: { sub: 'cocina-1', tipo: 'cocina', restauranteId: 'rest-1' },
+  CLIENTE: { sub: 'cliente-1', tipo: 'cliente' },
 } as const
 
 export const SESION_CLIENTE = {
@@ -42,7 +42,7 @@ const autenticacionFalsa = {
 }
 
 export interface OpcionesPedido {
-  /** Usuario de JWT de admin, mozo o cocina (JwtAuthGuard). */
+  /** Usuario del JWT de staff o de un comensal (JwtAuthGuard). */
   usuario?: object
   /** Payload de la sesión de mesa del comensal (SessionAuthGuard). */
   sesion?: object

@@ -71,9 +71,9 @@ describe('endpoints de mesas', () => {
       expect(mesas.findAll).toHaveBeenCalledWith(REST_ID, USUARIOS.MOZO)
     })
 
-    it('un usuario de cocina no puede (403)', async () => {
+    it('un JWT de comensal no puede (403)', async () => {
       // Act
-      const res = await api.pedir('get', '/mesas', { usuario: USUARIOS.COCINA, query: { restauranteId: REST_ID } })
+      const res = await api.pedir('get', '/mesas', { usuario: USUARIOS.CLIENTE, query: { restauranteId: REST_ID } })
 
       // Assert
       expect(res.status).toBe(403)

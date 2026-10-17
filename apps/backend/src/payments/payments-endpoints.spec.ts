@@ -97,9 +97,9 @@ describe('endpoints de pagos', () => {
       expect(payments.confirmarEfectivo).toHaveBeenCalledWith('pago-1', 'mozo-1')
     })
 
-    it('un usuario de cocina no puede confirmar pagos (403)', async () => {
+    it('un JWT de comensal no puede confirmar pagos (403)', async () => {
       // Act
-      const res = await api.pedir('post', '/payments/confirmar-efectivo', { usuario: USUARIOS.COCINA, body: { pagoId: 'pago-1' } })
+      const res = await api.pedir('post', '/payments/confirmar-efectivo', { usuario: USUARIOS.CLIENTE, body: { pagoId: 'pago-1' } })
 
       // Assert
       expect(res.status).toBe(403)

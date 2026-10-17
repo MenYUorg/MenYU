@@ -61,9 +61,9 @@ describe('endpoints de ingredientes', () => {
     expect(baja.status).toBe(204)
   })
 
-  it('un usuario de cocina no accede (403)', async () => {
+  it('un JWT de comensal no accede (403)', async () => {
     // Act
-    const res = await api.pedir('get', '/ingredientes/ing-1', { usuario: USUARIOS.COCINA })
+    const res = await api.pedir('get', '/ingredientes/ing-1', { usuario: USUARIOS.CLIENTE })
 
     // Assert
     expect(res.status).toBe(403)

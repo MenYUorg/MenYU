@@ -62,7 +62,7 @@ describe('endpoints de pedidos', () => {
       pedidos.listarPorEstado.mockResolvedValue([])
 
       // Act
-      const res = await api.pedir('get', '/pedidos', { usuario: USUARIOS.COCINA, query: { restauranteId: 'rest-1', estado: 'pendiente' } })
+      const res = await api.pedir('get', '/pedidos', { usuario: USUARIOS.MOZO, query: { restauranteId: 'rest-1', estado: 'pendiente' } })
 
       // Assert
       expect(res.status).toBe(200)
@@ -94,7 +94,7 @@ describe('endpoints de pedidos', () => {
       pedidos.actualizarEstado.mockResolvedValue({ id: 'pedido-1', estado: 'listo' })
 
       // Act
-      const res = await api.pedir('patch', '/pedidos/pedido-1/estado', { usuario: USUARIOS.COCINA, body: { estado: 'listo' } })
+      const res = await api.pedir('patch', '/pedidos/pedido-1/estado', { usuario: USUARIOS.MOZO, body: { estado: 'listo' } })
 
       // Assert
       expect(res.status).toBe(200)
@@ -104,7 +104,7 @@ describe('endpoints de pedidos', () => {
 
     it('PATCH /pedidos/:id/estado con un estado fuera de la lista responde 400', async () => {
       // Act
-      const res = await api.pedir('patch', '/pedidos/pedido-1/estado', { usuario: USUARIOS.COCINA, body: { estado: 'cancelado' } })
+      const res = await api.pedir('patch', '/pedidos/pedido-1/estado', { usuario: USUARIOS.MOZO, body: { estado: 'cancelado' } })
 
       // Assert
       expect(res.status).toBe(400)
