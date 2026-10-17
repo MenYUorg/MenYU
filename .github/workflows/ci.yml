@@ -44,9 +44,8 @@ jobs:
       - name: Test
         run: pnpm turbo test --filter=@menyu/api --filter=@menyu/web-admin --filter=@menyu/web-cliente --filter=@menyu/web-staff
 
-      - name: Coverage (informativo)
+      - name: Coverage
         run: pnpm turbo test:coverage --filter=@menyu/api --filter=@menyu/web-admin --filter=@menyu/web-cliente --filter=@menyu/web-staff
-        continue-on-error: true
 
       - name: Upload coverage — backend
         uses: actions/upload-artifact@v4
@@ -88,6 +87,9 @@ jobs:
         uses: SonarSource/sonarqube-scan-action@d209202bc7d53ff1cc128f7f907dac145c9d6ae9 # v8.3.0
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          # Espera el resultado del quality gate y falla el job si no pasa (hasta 5 minutos)
+          args: -Dsonar.qualitygate.wait=true -Dsonar.qualitygate.timeout=300
 
       - name: Build
         run: pnpm turbo build --filter=@menyu/api --filter=@menyu/web-admin --filter=@menyu/web-cliente --filter=@menyu/web-staff
