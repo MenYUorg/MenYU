@@ -1,5 +1,6 @@
 import { Test } from '@nestjs/testing'
 import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common'
+import { randomInt } from 'crypto'
 import { MesasService } from './mesas.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { JwtPayload } from '../auth/auth.service'
@@ -11,6 +12,8 @@ jest.mock('qrcode', () => ({
 jest.mock('crypto', () => ({
   ...jest.requireActual('crypto'),
   randomUUID: jest.fn().mockReturnValue('nuevo-uuid-generado'),
+  // Espía sobre el randomInt real: los tests pueden fijar el valor con mockReturnValueOnce.
+  randomInt: jest.fn(jest.requireActual('crypto').randomInt),
 }))
 
 const ROOT: JwtPayload = { sub: 'root-1', tipo: 'admin', rol: 'ROOT' }
@@ -239,6 +242,35 @@ describe('MesasService', () => {
       mockPrisma.mesa.findFirst.mockResolvedValue({ id: 'mesa-existente' })
       await expect((service as any).generatePin('rest-1')).rejects.toThrow(ConflictException)
       expect(mockPrisma.mesa.findFirst).toHaveBeenCalledTimes(100)
+    })
+  })
+
+  // ── PIN de la mesa: generador criptográfico (Sonar S2245) ──────────────
+  // El PIN permite entrar a la sesión de una mesa: tiene que salir de un generador
+  // criptográficamente seguro (crypto.randomInt), no de Math.random, que es predecible.
+
+  describe('PIN de la mesa', () => {
+    let mathRandom: jest.SpyInstance
+
+    afterEach(() => {
+      mathRandom?.mockRestore()
+    })
+
+    it('al crear la mesa, el PIN sale de crypto.randomInt (1 a 9999) y no de Math.random', async () => {
+      // Arrange
+      mockPrisma.restaurante.findUnique.mockResolvedValue(RESTAURANTE)
+      mockPrisma.mesa.findFirst.mockResolvedValue(null)
+      mockPrisma.mesa.create.mockImplementation(({ data }) => Promise.resolve({ ...MESA, ...data }))
+      ;(randomInt as unknown as jest.Mock).mockReturnValueOnce(42)
+      mathRandom = jest.spyOn(Math, 'random')
+
+      // Act
+      const mesa = await service.create({ numero: '1', restauranteId: 'rest-1' })
+
+      // Assert
+      expect(randomInt).toHaveBeenCalledWith(1, 10000)
+      expect(mathRandom).not.toHaveBeenCalled()
+      expect(mesa.pin).toBe('0042')
     })
   })
 
