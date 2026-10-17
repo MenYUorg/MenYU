@@ -1,4 +1,4 @@
-// Smoke de staging. Solo lectura: todas las requests son GET. No imprime secretos.
+// Smoke post-deploy de staging y producción. Solo lectura: todas las requests son GET. No imprime secretos.
 
 export const INTERVALO_MS = 10_000
 export const LIMITE_MS = 8 * 60_000
@@ -9,6 +9,20 @@ export function requerirEnv(nombre, env = process.env) {
   const valor = env[nombre]?.trim()
   if (!valor) throw new Error(`Falta la variable de entorno ${nombre}`)
   return valor
+}
+
+/**
+ * Errores de las variables con URLs (`nombres` en `env`): que falte, esté vacía o no empiece con https://.
+ * Lista vacía si están todas bien. No incluye los valores en los mensajes.
+ */
+export function validarUrls(nombres, env = process.env) {
+  const errores = []
+  for (const nombre of nombres) {
+    const valor = env[nombre]?.trim()
+    if (!valor) errores.push(`Falta la variable de repo ${nombre} (o está vacía)`)
+    else if (!valor.startsWith('https://')) errores.push(`La variable de repo ${nombre} no empieza con https://`)
+  }
+  return errores
 }
 
 /** Valor de `nombre` en el contenido de un .env (como el que genera `vercel pull`), o null. */
@@ -101,9 +115,10 @@ export async function correrSmoke({ apiUrl, frontends, fetchFn = fetch }) {
     }),
   ]
 
-  for (const [nombre, url] of Object.entries(frontends)) {
+  for (const [nombre, valor] of Object.entries(frontends)) {
+    const url = valor?.trim()
     if (!url) {
-      resultados.push({ nombre, ok: false, detalle: 'falta la URL del deploy' })
+      resultados.push({ nombre, ok: false, detalle: 'falta la URL' })
       continue
     }
     resultados.push(

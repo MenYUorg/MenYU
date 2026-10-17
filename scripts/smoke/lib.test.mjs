@@ -1,7 +1,7 @@
-// Tests del smoke de staging: node --test scripts/smoke/lib.test.mjs
+// Tests del smoke post-deploy: node --test scripts/smoke/lib.test.mjs
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { correrSmoke, esperarSha, leerVariable, requerirEnv, urlBackend } from './lib.mjs'
+import { correrSmoke, esperarSha, leerVariable, requerirEnv, urlBackend, validarUrls } from './lib.mjs'
 
 const API = 'https://api.staging.test/api'
 const BACKEND = 'https://api.staging.test'
@@ -42,6 +42,59 @@ describe('requerirEnv', () => {
     // Act / Assert
     assert.throws(() => requerirEnv('FALTA', env), /Falta la variable de entorno FALTA/)
     assert.throws(() => requerirEnv('VACIA', env), /Falta la variable de entorno VACIA/)
+  })
+})
+
+describe('validarUrls', () => {
+  const NOMBRES = ['PROD_WEB_ADMIN_URL', 'PROD_WEB_CLIENTE_URL', 'PROD_WEB_STAFF_URL']
+
+  it('sin errores si las tres existen y empiezan con https://', () => {
+    // Arrange
+    const env = {
+      PROD_WEB_ADMIN_URL: 'https://admin.test',
+      PROD_WEB_CLIENTE_URL: ' https://cliente.test ',
+      PROD_WEB_STAFF_URL: 'https://staff.test',
+    }
+
+    // Act
+    const errores = validarUrls(NOMBRES, env)
+
+    // Assert
+    assert.deepEqual(errores, [])
+  })
+
+  it('nombra cada variable que falta, está vacía o tiene solo espacios', () => {
+    // Arrange
+    const env = { PROD_WEB_CLIENTE_URL: '', PROD_WEB_STAFF_URL: '   ' }
+
+    // Act
+    const errores = validarUrls(NOMBRES, env)
+
+    // Assert
+    assert.deepEqual(errores, [
+      'Falta la variable de repo PROD_WEB_ADMIN_URL (o está vacía)',
+      'Falta la variable de repo PROD_WEB_CLIENTE_URL (o está vacía)',
+      'Falta la variable de repo PROD_WEB_STAFF_URL (o está vacía)',
+    ])
+  })
+
+  it('rechaza las que no empiezan con https://, sin incluir el valor en el mensaje', () => {
+    // Arrange
+    const env = {
+      PROD_WEB_ADMIN_URL: 'http://admin.test',
+      PROD_WEB_CLIENTE_URL: 'cliente.test',
+      PROD_WEB_STAFF_URL: 'https://staff.test',
+    }
+
+    // Act
+    const errores = validarUrls(NOMBRES, env)
+
+    // Assert
+    assert.deepEqual(errores, [
+      'La variable de repo PROD_WEB_ADMIN_URL no empieza con https://',
+      'La variable de repo PROD_WEB_CLIENTE_URL no empieza con https://',
+    ])
+    assert.ok(errores.every((e) => !e.includes('admin.test') && !e.includes('cliente.test')))
   })
 })
 
@@ -210,7 +263,7 @@ describe('correrSmoke', () => {
         ['backend /api/discovery', false, 'respuesta sin restaurantes u ofertas'],
         ['web-admin', false, 'HTTP 401'],
         ['web-cliente', false, 'error de red (TypeError)'],
-        ['web-staff', false, 'falta la URL del deploy'],
+        ['web-staff', false, 'falta la URL'],
       ],
     )
   })
@@ -224,5 +277,19 @@ describe('correrSmoke', () => {
 
     // Assert
     assert.equal(discovery.detalle, 'HTTP 500')
+  })
+
+  it('una URL de frontend con solo espacios cuenta como faltante, y una con espacios alrededor se recorta', async () => {
+    // Arrange
+    const fetchFn = fetchFalso(TODO_OK)
+    const frontends = { ...FRONTENDS, 'web-admin': '  https://admin.vercel.test  ', 'web-staff': '   ' }
+
+    // Act
+    const resultados = await correrSmoke({ apiUrl: API, frontends, fetchFn })
+
+    // Assert
+    assert.deepEqual(resultados.find((r) => r.nombre === 'web-staff'), { nombre: 'web-staff', ok: false, detalle: 'falta la URL' })
+    assert.equal(resultados.find((r) => r.nombre === 'web-admin').ok, true)
+    assert.ok(fetchFn.llamadas.includes('https://admin.vercel.test'))
   })
 })

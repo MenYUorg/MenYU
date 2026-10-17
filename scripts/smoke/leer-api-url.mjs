@@ -1,6 +1,6 @@
-// Lee VITE_API_URL del .env que genera `vercel pull` de web-cliente y la deja en $GITHUB_ENV como STAGING_API_URL.
+// Lee VITE_API_URL del .env que genera `vercel pull` de web-cliente (preview o production) y la deja en $GITHUB_ENV como SMOKE_API_URL.
 // No imprime el archivo: solo usa esa línea.
-// Uso: node scripts/smoke/leer-api-url.mjs <ruta a .vercel/.env.preview.local>
+// Uso: node scripts/smoke/leer-api-url.mjs <ruta a .vercel/.env.preview.local o .env.production.local>
 import { appendFileSync, readFileSync } from 'node:fs'
 import { leerVariable } from './lib.mjs'
 
@@ -15,13 +15,13 @@ try {
 
 const apiUrl = leerVariable(contenido, 'VITE_API_URL')
 if (!apiUrl?.startsWith('https://')) {
-  console.error('::error::VITE_API_URL no está (o no es https) en las variables de preview de web-cliente en Vercel')
+  console.error(`::error::VITE_API_URL no está (o no es https) en las variables de web-cliente en Vercel (${ruta})`)
   process.exit(1)
 }
 
 if (process.env.GITHUB_ENV) {
-  appendFileSync(process.env.GITHUB_ENV, `STAGING_API_URL=${apiUrl}\n`)
-  console.log('STAGING_API_URL tomada de VITE_API_URL de web-cliente')
+  appendFileSync(process.env.GITHUB_ENV, `SMOKE_API_URL=${apiUrl}\n`)
+  console.log('SMOKE_API_URL tomada de VITE_API_URL de web-cliente')
 } else {
   console.log(apiUrl)
 }
