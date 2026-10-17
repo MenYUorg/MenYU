@@ -16,17 +16,18 @@ Registro de lo que se hizo para poner SonarCloud en el CI de MenYU y tomar la l�
 | Definición de código nuevo de `main` | **Pendiente**: hoy es "Previous version" |
 | `/health` con SHA (PR #374) | Mergeado (17/10/2026, merge `90bbb81`). Staging muestra ese SHA |
 | Smoke post-deploy en staging (PR #375) | Mergeado (17/10/2026, merge `beb2d18`). Primer run (`39032870161`): smoke en verde |
+| CI en verde y smoke en producción (PR #377) | Mergeado (17/10/2026, merge `8dc7c72`). Staging posterior al merge en verde (run `39036386891`). Falta el tag de ensayo |
 
 ## Pendientes
 
 1. **Cambiar el código nuevo de `main`** en SonarCloud (Administration → New Code) a "Number of days" o "Reference branch". Hoy la referencia queda fija en el análisis automático del 17/10 (`7072d67`), que tuvo otro alcance y no tuvo cobertura, y como no se manda `projectVersion` nunca avanza. Después del cambio, verificar por API en el próximo análisis de `main` (`api/qualitygates/project_status?projectKey=MenYUorg_MenYU&branch=main`, campo `periods`).
 2. **Subir los umbrales del gate el 23/10/2026.**
 3. **Confirmar la Deployment Protection de las previews de Vercel** (queda a cargo del equipo). En el run `39032870161` los tres frontends respondieron 200, así que hoy no hay protección que bloquee el smoke.
-4. **Producción:** PR #377 abierto (`ci/smoke-production`). Variables `PROD_WEB_*_URL` cargadas el 17/10/2026. No crear tags de producción hasta que el #377 esté mergeado.
+4. **Producción:** #377 mergeado y variables `PROD_WEB_*_URL` cargadas (17/10/2026). Falta el tag de ensayo y anotar su resultado (`check-ci`, deploy, smoke y el SHA de `/health` de producción).
 5. Opcionales que salieron en el camino:
    - Fijar la versión de `@railway/cli` en los workflows (hoy `@latest` en el `variable set` y en el `up`).
    - Revisar en Railway (Settings → Healthcheck Path) si el servicio tiene healthcheck en `/health`. No cambia nada hoy, porque `/health` responde siempre 200.
-   - Revisar la vulnerabilidad de `apps/backend/src/mesas/mesas.service.ts:141`: el PIN de mesa se genera con `Math.random()`. Es la única de las 6 vulnerabilidades (regla S2245) que puede ser un riesgo real. La de `sessions.service.ts:761` depende de para qué se usa ese código. Las 4 de los frontends son ids de UI.
+   - Vulnerabilidades S2245 (`Math.random`): la del PIN de mesa se corrige en el PR #379. Las demás quedan registradas en Jira.
    - `verify-carrito.js` y `verify-carrito.mjs` (raíz del repo, público) tienen un JWT de desarrollo hardcodeado. Se decodificó: solo trae UUIDs de comensal, sesión, mesa y restaurante, sin datos personales, apunta a `localhost` y venció el 26/05/2026.
 
 ## Qué se hizo
@@ -129,7 +130,7 @@ Registro de lo que se hizo para poner SonarCloud en el CI de MenYU y tomar la l�
 
 ### 17/10/2026: CI en verde, `APP_COMMIT_SHA` y smoke en producción (`ci/smoke-production`)
 
-- PR #377, abierto el 17/10/2026. Commits `fcc6b39` (sobre `main`, `beb2d18`) y `500649c` (validación de las variables `PROD_WEB_*`).
+- PR #377, abierto el 17/10/2026. Commits `fcc6b39` (sobre `main`, `beb2d18`) y `500649c` (validación de las variables `PROD_WEB_*`). Antes del merge se actualizó con "Update branch" desde GitHub (`61ca1f5`, merge de `main` en la rama), sin rebase, así que `fcc6b39` y `500649c` siguen siendo los mismos commits. Mergeado el 17/10/2026 a las 13:23:51 UTC (merge `8dc7c72`).
 - **Decisión:** las variables `PROD_WEB_*_URL` se validan en `check-ci`, antes del deploy, para que un tag con una variable faltante nunca toque producción (`smoke-production` repite el chequeo como segunda red).
 - **Variables de repo cargadas el 17/10/2026** (13:06 UTC, con `gh variable set`; son variables, no secretos). Antes de cargarlas, cada frontend respondió `200` a un GET real con `curl -L`, sin redirigir a login ni dar 401:
 
@@ -149,6 +150,11 @@ No hay variable para la API: el workflow la resuelve desde `VITE_API_URL` de pro
 - Validado con `yaml.safe_load`, `actionlint` 1.7.12 (exit 0 en los 3 workflows) y una simulación del loop de `check-ci` (en cola → en curso → success, failure, cancelled, sin run y timeout).
 - Se decidió no pasar el smoke a un workflow reutilizable por ahora (queda repetido entre staging y producción).
 - Producción hoy responde el `/health` viejo (`{"status":"ok"}`, último tag `v1.0.5`): un `workflow_dispatch` antes de taggear una versión con el `/health` nuevo falla en la espera del SHA.
+- **Staging después del merge del #377** (`8dc7c72`), para confirmar que el cambio de `scripts/smoke` no rompió staging:
+  - CI de `main`: run `39036386888`, en verde.
+  - Deploy — Staging: run `39036386891`, en verde. Job de deploy `117406966224` (13:23:57 a 13:26:36 UTC) y job de smoke `117407542611` (13:26:38 a 13:27:05 UTC).
+  - Smoke: `SMOKE_API_URL` tomada de `VITE_API_URL` de web-cliente; `/health` mostró `8dc7c72` en el intento 1; los 5 chequeos en OK (`/health`, `/api/discovery`, web-admin, web-cliente y web-staff).
+  - `/health` de staging: `{"status":"ok","sha":"8dc7c72a35eed1aa1bf29029d822148dd1389303","db":"ok","uptime":301,"version":"0.0.1"}`.
 
 ## Datos útiles
 
@@ -163,3 +169,59 @@ No hay variable para la API: el workflow la resuelve desde `VITE_API_URL` de pro
   - Hallazgos: `api/issues/search?componentKeys=MenYUorg_MenYU&branch=main&types=BUG,VULNERABILITY&resolved=false`
 - Sin token, la API **no** muestra la definición del quality gate ni del código nuevo ("not member of organization"). Eso se ve en la UI.
 - Entorno local: si la cobertura de web-cliente falla con `Failed to resolve import "jsqr"`, el `node_modules` está desactualizado. Se arregla con `pnpm install --frozen-lockfile`.
+
+### 17/10/2026: fase de calidad, plan y defectos (SCRUM-18)
+
+**Cobertura local contra SonarCloud** (`main` = `8dc7c72`, análisis del 17/10 13:26:54 UTC): la diferencia es de 0,2 puntos o menos en las 4 apps.
+
+| App | Local (líneas) | SonarCloud (líneas) |
+|---|---|---|
+| backend | 1.134 / 2.367 = 47,9 % | 1.161 / 2.416 = 48,1 % |
+| web-cliente | 4.246 / 6.699 = 63,38 % | 4.247 / 6.700 = 63,4 % |
+| web-admin | 3.467 / 12.374 = 28,01 % | 3.468 / 12.374 = 28,0 % |
+| web-staff | 652 / 4.810 = 13,55 % | 652 / 4.810 = 13,6 % |
+
+Total en SonarCloud: 9.528 / 26.300 = 36,2 %. Para el 80 % (21.040 líneas) faltan 11.512. Estimación: entre 72 % y 76 % para el jueves 22/10 con tests que se puedan defender.
+
+**Defecto: PIN de mesa con `Math.random` (`mesas.service.ts:141`, S2245), PR #379**
+
+| Paso | Commit | Run | Resultado |
+|---|---|---|---|
+| Rojo (solo el test) | `fdd4ed702a1aaed74279aa1e1068466891da9664` | [`39037725031`](https://github.com/MenYUorg/MenYU/actions/runs/39037725031) | failure en Test: 1 fallado, 635 pasados (`Expected: 1, 10000` / `Number of calls: 0`) |
+| Verde (fix) | `9aed16c6d41c2b4929236dded7a4eb04de2288c4` | [`39037887375`](https://github.com/MenYUorg/MenYU/actions/runs/39037887375) | success: 636 pasados, quality gate PASSED |
+
+**`reduce` de `sessions.service.ts:40` (S6959):** latente. El único llamador lo invoca con la lista no vacía, así que no se reproduce por la API pública. Queda pendiente decidir cómo tratarlo.
+
+**Candidatos a defecto:** 7, registrados en Jira (5 de autorización).
+
+**Endurecimiento del `reduce` (`sessions.service.ts:40`), PR #380:** sin ciclo rojo/verde porque el defecto es latente. La precondición queda explícita (error claro sin pagos) y el `reduce` tiene valor inicial. Test nuevo: tres pagos con el más reciente primero. Mutación (`<` en vez de `>`): el test falla con "hace 8 minutos". CI: run [`39038583947`](https://github.com/MenYUorg/MenYU/actions/runs/39038583947) (`152c106`), success.
+
+**Backend, lote 1** (rama local `test/backend-cobertura`, commit `7d9f4d4`): helper `src/test/prisma-mock.ts` y specs de 7 servicios que estaban en 0 % (mozos, clasificaciones, categorías, llamados al mozo, admins, ingredientes, admin-restaurante), todos en 100 % de líneas. Backend local: 47,9 % → 61,42 % (1.468/2.390); 743 tests en 21,4 s. Mutaciones detectadas: guardar la contraseña en claro (mozos), sacar el `id: { not }` de la búsqueda de duplicados (categorías) y sacar el chequeo de sesión activa (llamados).
+
+**Auditoría de archivos sin lógica en el denominador:** solo `backend/common/estado-pago.constant.ts` (4 líneas, ya cubiertas). No hay nada para proponer como exclusión.
+
+
+### 17/10/2026 (tarde): defectos, backend lotes 1 y 2, incidente de Vercel
+
+**PRs**
+
+| PR | Rama | Estado al cortar | Notas |
+|---|---|---|---|
+| #379 | `fix/pin-mesa-crypto` | Mergeado 14:16 UTC | PIN de mesa con `crypto.randomInt`. Rojo `39037725031`, verde `39037887375` |
+| #380 | `fix/reduce-pagos-mp` | Mergeado 14:23 UTC (merge `838b9be`) | Endurecimiento del `reduce` (sin rojo/verde) |
+| #381 | `test/backend-cobertura` | Abierto | En GitHub solo está el lote 1 (`747c419`). Los lotes 2a (`70b2546`) y 2b (`d0dbb79`) están **commiteados en local, sin pushear** |
+| #382 | `fix/asignar-restaurante-marca` | Abierto, CI en verde | Un gerente solo recibe restaurantes de su marca. Rojo `b24589a` (run `39040126713`, 1 fallado y 636 pasados), verde `086a82b` (run `39040298430`, 638 pasados, gate PASSED) |
+| #383 | `fix/fuerza-bruta-sesion` | Abierto | Límite de intentos de PIN (por restaurante) y de código de sesión (por mesa). Rojo `ac87891` (run `39040373763`: `Expected: 429` / `Received: 404`), verde `8444681` (run `39040558892`, success). El último commit (`0ca2f8d`, script de staging) falló el CI en un test intermitente de web-cliente (`QrScanner.spec.tsx` › "con el permiso muestra la imagen de la cámara…"), que no toca ese commit: hay que relanzar el job |
+
+**Backend local:** 47,9 % → **79,75 %** de líneas (1.927/2.416), 904 tests en 14,3 s. Helpers compartidos: `src/test/prisma-mock.ts` y `src/test/app-endpoints.ts`. Mutaciones: 3 por lote (lote 1, 2a y 2b) y 3 en el #383, todas detectadas y revertidas.
+
+**Candidatos a defecto:** registrados en Jira (detalle fuera del repo, que es público).
+
+**Incidente de infraestructura (17/10/2026):** el límite de Vercel del plan Hobby (100 deployments por 24 h) cortó `deploy-staging` en `main`. Los cuatro proyectos (menyu-admin, menyu-cliente, menyu-cliente-staging, menyu-staff) respondieron "Deployment rate limited — retry in 24 hours". En el run [`39040516003`](https://github.com/MenYUorg/MenYU/actions/runs/39040516003) (merge del #380, `838b9be`), el backend sí se desplegó en Railway: `Set APP_COMMIT_SHA` y `Deploy backend` en success. Falló `Deploy web-admin to Vercel staging`, los otros dos frontends quedaron en skipped y el smoke también. `/health` de staging reportó `838b9bed345da92015bf7a53e2414cf8fce2f2d9` (el merge del #380). Causa de infraestructura, no de código.
+
+**Pendiente al retomar**
+1. PR `ci/reducir-deployments` (todavía no empezado): `ignoreCommand: "npx turbo-ignore"` en los `vercel.json` y `paths-ignore` en `deploy-staging.yml`.
+2. Relanzar el CI del #383 (test intermitente) y correr `scripts/staging/fuerza-bruta.mjs` contra staging antes de un tag (falta un restaurante de staging y su PIN).
+3. Pushear los lotes 2a y 2b del backend al #381 juntos (para no gastar deploys).
+4. Backend: sigue `mercado-pago-oauth`, gateway, `pedidos.service`, `items.service`, `payments.service`. Después web-cliente, web-staff y web-admin.
+5. web-cliente ante un 429 al ingresar por PIN: muestra el texto genérico "PIN incorrecto o mesa no encontrada…", no el mensaje del servidor. En la pantalla del código de sesión sí muestra el mensaje del servidor. Sin cambios todavía.
