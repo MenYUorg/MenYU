@@ -230,12 +230,11 @@ describe('MesasService', () => {
     })
 
     it('tiene padding con ceros — "0001" no "1"', async () => {
-      // floor(0 * 9999) + 1 = 1 → padStart(4, '0') = '0001'
-      jest.spyOn(Math, 'random').mockReturnValue(0)
+      // randomInt(1, 10000) = 1 → padStart(4, '0') = '0001'
+      ;(randomInt as unknown as jest.Mock).mockReturnValueOnce(1)
       mockPrisma.mesa.findFirst.mockResolvedValue(null)
       const pin = await (service as any).generatePin('rest-1')
       expect(pin).toBe('0001')
-      jest.spyOn(Math, 'random').mockRestore()
     })
 
     it('lanza ConflictException si todos los PINs están ocupados (100 colisiones seguidas)', async () => {
