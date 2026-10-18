@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { crearLector } from '../utils/lectorQr'
 import { QrScanner } from './QrScanner'
 
@@ -64,6 +64,8 @@ describe('QrScanner', () => {
   })
 
   afterEach(() => {
+    // Desmontar antes de restaurar los mocks: si un efecto del video quedó pendiente, corre todavía con `play` simulado.
+    cleanup()
     vi.useRealTimers()
     vi.restoreAllMocks()
     Reflect.deleteProperty(navigator, 'mediaDevices')
