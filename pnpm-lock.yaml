@@ -497,12 +497,27 @@ importers:
         specifier: workspace:*
         version: link:../types
     devDependencies:
+      '@testing-library/dom':
+        specifier: 10.4.2
+        version: 10.4.2
+      '@testing-library/jest-dom':
+        specifier: 7.0.1
+        version: 7.0.1(@testing-library/dom@10.4.2)(vitest@3.2.7(@types/node@25.6.0)(jiti@2.6.1)(jsdom@26.1.0)(lightningcss@1.27.0)(terser@5.46.2))
+      '@testing-library/react':
+        specifier: 16.3.3
+        version: 16.3.3(@testing-library/dom@10.4.2)(@types/react-dom@19.2.3(@types/react@19.0.14))(@types/react@19.0.14)(react-dom@19.0.0(react@19.0.0))(react@19.0.0)
       '@types/react':
         specifier: ^19.0.0
         version: 19.0.14
       '@types/react-dom':
         specifier: ^19.0.0
         version: 19.2.3(@types/react@19.0.14)
+      '@vitest/coverage-v8':
+        specifier: 3.2.7
+        version: 3.2.7(vitest@3.2.7(@types/node@25.6.0)(jiti@2.6.1)(jsdom@26.1.0)(lightningcss@1.27.0)(terser@5.46.2))
+      jsdom:
+        specifier: ^26.0.0
+        version: 26.1.0
       lucide-react:
         specifier: ^1.16.0
         version: 1.16.0(react@19.0.0)
@@ -515,6 +530,9 @@ importers:
       typescript:
         specifier: ~5.8.0
         version: 5.8.3
+      vitest:
+        specifier: 3.2.7
+        version: 3.2.7(@types/node@25.6.0)(jiti@2.6.1)(jsdom@26.1.0)(lightningcss@1.27.0)(terser@5.46.2)
 
 packages:
 
