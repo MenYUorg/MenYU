@@ -82,7 +82,7 @@ describe('endpoints de pagos', () => {
 
       // Assert
       expect(res.status).toBe(200)
-      expect(payments.getSesiones).toHaveBeenCalledWith('rest-1')
+      expect(payments.getSesiones.mock.calls[0][0]).toBe('rest-1')
     })
 
     it('POST /payments/confirmar-efectivo pasa el pago y el mozo (200)', async () => {
@@ -94,7 +94,7 @@ describe('endpoints de pagos', () => {
 
       // Assert
       expect(res.status).toBe(200)
-      expect(payments.confirmarEfectivo).toHaveBeenCalledWith('pago-1', 'mozo-1')
+      expect(payments.confirmarEfectivo.mock.calls[0].slice(0, 2)).toEqual(['pago-1', 'mozo-1'])
     })
 
     it('un JWT de comensal no puede confirmar pagos (403)', async () => {

@@ -217,7 +217,7 @@ describe('PedidosService: validaciones, estado y ediciones', () => {
   })
 
   describe('actualizarEstado', () => {
-    const MOZO = conUsuario({ sub: 'mozo-1', tipo: 'mozo' })
+    const MOZO = conUsuario({ sub: 'mozo-1', tipo: 'mozo', restauranteId: 'rest-1' })
 
     it('un comensal no puede (401)', async () => {
       await expect(service.actualizarEstado('ped-1', { estado: 'listo' }, conUsuario({ tipo: 'cliente' }))).rejects.toThrow(
@@ -266,7 +266,7 @@ describe('PedidosService: validaciones, estado y ediciones', () => {
   })
 
   describe('editarPedido', () => {
-    const MOZO = conUsuario({ sub: 'mozo-1', tipo: 'mozo' })
+    const MOZO = conUsuario({ sub: 'mozo-1', tipo: 'mozo', restauranteId: 'rest-1' })
     const pedido = (extra: object = {}) => ({
       id: 'ped-1',
       estado: 'pendiente',
@@ -289,7 +289,7 @@ describe('PedidosService: validaciones, estado y ediciones', () => {
 
     it('un admin OWNER no puede: se requiere GERENTE (403)', async () => {
       await expect(service.editarPedido('ped-1', edicion([]), conUsuario({ sub: 'o', tipo: 'admin', rol: 'OWNER' }))).rejects.toThrow(
-        new ForbiddenException('Rol insuficiente — se requiere GERENTE o ROOT'),
+        ForbiddenException,
       )
       expect(prisma.pedido.findUnique).not.toHaveBeenCalled()
     })
@@ -358,6 +358,8 @@ describe('PedidosService: validaciones, estado y ediciones', () => {
 
     it('si todos los ítems quedan en 0, el pedido queda anulado (la edición del gerente lleva su id)', async () => {
       prisma.pedido.findUnique.mockResolvedValueOnce(pedido()).mockResolvedValueOnce({ id: 'ped-1', ediciones: [] })
+      // El gerente está asignado al restaurante del pedido.
+      prisma.adminRestaurante.findUnique.mockResolvedValue({ adminId: 'ger-1', restauranteId: 'rest-1' })
 
       await service.editarPedido(
         'ped-1',

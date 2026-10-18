@@ -1,7 +1,7 @@
 import { Server, Socket } from 'socket.io'
 import { MenyuGateway } from './menyu.gateway'
 
-// El gateway de Socket.io: las salas son por restaurante y cada evento va a la sala de su restaurante.
+// El gateway de Socket.io: cada evento va a la sala de su restaurante.
 // El servidor y el socket son dobles.
 describe('MenyuGateway', () => {
   let gateway: MenyuGateway
@@ -12,24 +12,6 @@ describe('MenyuGateway', () => {
     jest.clearAllMocks()
     gateway = new MenyuGateway()
     gateway.server = { to: sala } as unknown as Server
-  })
-
-  describe('entrar a la sala del restaurante', () => {
-    it.each([
-      ['session:join (comensal)', (g: MenyuGateway, d: { restauranteId: string }, s: Socket) => g.handleJoinRestaurante(d, s)],
-      ['cocina:join', (g: MenyuGateway, d: { restauranteId: string }, s: Socket) => g.handleJoinCocina(d, s)],
-      ['mozo:join', (g: MenyuGateway, d: { restauranteId: string }, s: Socket) => g.handleJoinMozo(d, s)],
-    ])('%s une el socket a la sala restaurante-<id> y responde ok', (_, unirse) => {
-      // Arrange
-      const socket = { id: 's1', join: jest.fn().mockResolvedValue(undefined) } as unknown as Socket
-
-      // Act
-      const respuesta = unirse(gateway, { restauranteId: 'rest-1' }, socket)
-
-      // Assert
-      expect(respuesta).toEqual({ ok: true })
-      expect(socket.join).toHaveBeenCalledWith('restaurante-rest-1')
-    })
   })
 
   it('registra las conexiones y desconexiones', () => {

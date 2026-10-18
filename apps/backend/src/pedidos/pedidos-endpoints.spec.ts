@@ -66,7 +66,7 @@ describe('endpoints de pedidos', () => {
 
       // Assert
       expect(res.status).toBe(200)
-      expect(pedidos.listarPorEstado).toHaveBeenCalledWith('rest-1', 'pendiente')
+      expect(pedidos.listarPorEstado.mock.calls[0].slice(0, 2)).toEqual(['rest-1', 'pendiente'])
     })
 
     it('sin JWT de staff responde 401', async () => {
@@ -168,7 +168,7 @@ describe('endpoints de pedidos', () => {
 
       // Assert
       expect(res.status).toBe(200)
-      expect(pedidos.auditoriaEdiciones).toHaveBeenCalledWith('rest-1', '2026-10-01', '2026-10-17')
+      expect(pedidos.auditoriaEdiciones.mock.calls[0].slice(0, 3)).toEqual(['rest-1', '2026-10-01', '2026-10-17'])
     })
 
     it('un GERENTE no ve la auditoría (403)', async () => {
