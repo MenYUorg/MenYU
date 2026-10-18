@@ -589,6 +589,33 @@ describe('SessionsService', () => {
       expect(tx.pago.updateMany).not.toHaveBeenCalled()
     })
 
+    it('varios MP pendientes recientes en cualquier orden → el 409 toma como "más reciente" al de menos minutos', async () => {
+      // Arrange: el más reciente (1 min) viene primero en la lista y el más viejo (8 min) en el medio.
+      mockDivision.calcularTotalSesion.mockResolvedValue(1000)
+      tx.pago.findMany
+        .mockResolvedValueOnce([]) // aprobados previos
+        .mockResolvedValueOnce([
+          pagoMp('pago-mp1', 100, hace(1)),
+          pagoMp('pago-mp2', 150, hace(8)),
+          pagoMp('pago-mp3', 250, hace(4)),
+        ])
+
+      // Act
+      let error: unknown
+      try {
+        await service.registrarCobro('sesion-1', DTO_BASE, USER_MOZO)
+      } catch (e) {
+        error = e
+      }
+
+      // Assert
+      expect(error).toBeInstanceOf(ConflictException)
+      expect((error as Error).message).toBe(
+        'Hay 3 pagos por MercadoPago sin terminar por un total de $500.00 (el más reciente hace 1 minuto). Si cobrás la mesa, se cancelan.',
+      )
+      expect(tx.pago.updateMany).not.toHaveBeenCalled()
+    })
+
     it('MP pendiente viejo (11 min) sin flag → se cancela sin aviso y el cobro se registra', async () => {
       mockDivision.calcularTotalSesion.mockResolvedValue(1000)
       tx.pago.findMany
