@@ -117,8 +117,9 @@ describe('TablesPage', () => {
     })
 
     it('sin mesas invita a crear la primera', async () => {
+      // Con 0 mesas el encabezado "0 mesas · 0 ocupadas" ya se ve mientras carga: hay que esperar la grilla.
       await abrir([])
-      expect(screen.getByText('No hay mesas. Creá la primera.')).toBeInTheDocument()
+      expect(await screen.findByText('No hay mesas. Creá la primera.')).toBeInTheDocument()
     })
 
     it('si la carga falla muestra el error', async () => {

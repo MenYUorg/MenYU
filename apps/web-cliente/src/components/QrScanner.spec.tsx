@@ -264,6 +264,8 @@ describe('QrScanner', () => {
       const { pista } = instalarCamara()
       renderEscaner()
       await screen.findByRole('heading', { name: 'Apuntá la cámara al QR de la mesa' })
+      // El aviso de corte se engancha en un efecto posterior al título: esperar a que esté antes de cortar.
+      await vi.waitFor(() => expect(pista.addEventListener).toHaveBeenCalledWith('ended', expect.any(Function)))
 
       act(() => pista.cortar())
 
