@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { crearLector } from '../utils/lectorQr'
 import { QrScanner } from './QrScanner'
 
@@ -64,6 +64,9 @@ describe('QrScanner', () => {
   })
 
   afterEach(() => {
+    // Primero se desmonta (el cleanup de Testing Library corre después de este afterEach): si quedó pendiente
+    // el efecto del visor, corre ahora con play() simulado y no después, contra el play() de jsdom.
+    cleanup()
     vi.useRealTimers()
     vi.restoreAllMocks()
     Reflect.deleteProperty(navigator, 'mediaDevices')
@@ -123,11 +126,14 @@ describe('QrScanner', () => {
     })
 
     it('con el permiso muestra la imagen de la cámara con las instrucciones', async () => {
+      // srcObject y play() los pone un efecto del visor. Con findByRole el test seguía apenas aparecía
+      // el título, y en un runner lento ese efecto todavía no había corrido: la cámara responde dentro del act.
+      vi.useFakeTimers()
       const { flujo } = instalarCamara()
 
-      renderEscaner()
+      await abrirYEmpezar()
 
-      expect(await screen.findByRole('heading', { name: 'Apuntá la cámara al QR de la mesa' })).toBeInTheDocument()
+      expect(screen.getByRole('heading', { name: 'Apuntá la cámara al QR de la mesa' })).toBeInTheDocument()
       expect(screen.getByText(/Mantené el celular firme/)).toBeInTheDocument()
       expect(estado()).toBe('escaneando')
       const video = screen.getByLabelText('Imagen de la cámara') as HTMLVideoElement
@@ -261,9 +267,10 @@ describe('QrScanner', () => {
     })
 
     it('si la cámara se corta sola (otra aplicación la tomó), lo avisa y la apaga', async () => {
+      // El aviso de "ended" se engancha en un efecto: igual que arriba, la cámara responde dentro del act.
+      vi.useFakeTimers()
       const { pista } = instalarCamara()
-      renderEscaner()
-      await screen.findByRole('heading', { name: 'Apuntá la cámara al QR de la mesa' })
+      await abrirYEmpezar()
 
       act(() => pista.cortar())
 
