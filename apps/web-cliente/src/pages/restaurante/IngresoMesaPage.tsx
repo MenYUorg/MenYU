@@ -27,6 +27,8 @@ const TEXTO_MOTIVO: Record<Exclude<MotivoPin, null>, string> = {
 function mensajeDeFallo(intento: Intento, fallo: FalloDeEntrada, restaurante: string): string {
   // Sin respuesta del servidor: no es el QR ni el PIN.
   if (fallo.status === null) return 'No pudimos conectarnos. Revisá tu conexión e intentá de nuevo.'
+  // 429: demasiados intentos fallidos. El servidor dice cuánto esperar; no es que el PIN o el QR estén mal.
+  if (fallo.status === 429 && fallo.mensaje) return fallo.mensaje
   if (intento === 'pin') return `PIN incorrecto o mesa no encontrada en ${restaurante}. Verificá e intentá de nuevo.`
   // 409: el servidor encontró la mesa pero es de otro restaurante.
   if (fallo.status === 409) return `Ese QR no es de ${restaurante}. Escaneá el QR de una de sus mesas.`
