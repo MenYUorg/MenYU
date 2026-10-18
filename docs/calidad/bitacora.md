@@ -192,7 +192,7 @@ Total en SonarCloud: 9.528 / 26.300 = 36,2 %. Para el 80 % (21.040 líneas) falt
 
 **`reduce` de `sessions.service.ts:40` (S6959):** latente. El único llamador lo invoca con la lista no vacía, así que no se reproduce por la API pública. Queda pendiente decidir cómo tratarlo.
 
-**Candidatos a defecto:** 7, registrados en Jira (5 de autorización).
+**Candidatos a defecto:** registrados en Jira (detalle fuera del repo).
 
 **Endurecimiento del `reduce` (`sessions.service.ts:40`), PR #380:** sin ciclo rojo/verde porque el defecto es latente. La precondición queda explícita (error claro sin pagos) y el `reduce` tiene valor inicial. Test nuevo: tres pagos con el más reciente primero. Mutación (`<` en vez de `>`): el test falla con "hace 8 minutos". CI: run [`39038583947`](https://github.com/MenYUorg/MenYU/actions/runs/39038583947) (`152c106`), success.
 
@@ -219,9 +219,29 @@ Total en SonarCloud: 9.528 / 26.300 = 36,2 %. Para el 80 % (21.040 líneas) falt
 
 **Incidente de infraestructura (17/10/2026):** el límite de Vercel del plan Hobby (100 deployments por 24 h) cortó `deploy-staging` en `main`. Los cuatro proyectos (menyu-admin, menyu-cliente, menyu-cliente-staging, menyu-staff) respondieron "Deployment rate limited — retry in 24 hours". En el run [`39040516003`](https://github.com/MenYUorg/MenYU/actions/runs/39040516003) (merge del #380, `838b9be`), el backend sí se desplegó en Railway: `Set APP_COMMIT_SHA` y `Deploy backend` en success. Falló `Deploy web-admin to Vercel staging`, los otros dos frontends quedaron en skipped y el smoke también. `/health` de staging reportó `838b9bed345da92015bf7a53e2414cf8fce2f2d9` (el merge del #380). Causa de infraestructura, no de código.
 
+### 18/10/2026: menos deployments, lotes 2 y 3 del backend, QrScanner y 429 en web-cliente
+
+**PRs**
+
+| PR | Rama | Estado | Notas |
+|---|---|---|---|
+| #381 | `test/backend-cobertura` | Mergeado 12:54 UTC (merge `de2ebd0`) | Solo con el lote 1: se mergeó antes de pushear los lotes 2a y 2b |
+| #382 | `fix/asignar-restaurante-marca` | Mergeado 13:01 UTC (merge `eb544fd`) | Merge de `main` `7e47220` (run `39129264269`, success) |
+| #383 | `fix/fuerza-bruta-sesion` | Abierto | Merge de `main` `98b6aa9` (run `39129744685`, success) |
+| #384 | `ci/reducir-deployments` | Abierto, CI en verde (run `39130390166`) | `ignoreCommand` con `scripts/vercel/ignorar-build.sh` (turbo-ignore en previews; producción de menyu-admin/cliente/staff sigue sin construir desde Git, menyu-cliente-staging sí) y `paths-ignore` en `deploy-staging.yml` |
+| #385 | `test/backend-cobertura-2` | Abierto | Lotes 2a (`70b2546`) y 2b (`d0dbb79`), merge de `main` (`9f62d80`, CI `39130480372` en verde) y lote 3 (`126511f`) |
+| #386 | `fix/web-cliente-qr-y-429` | Abierto, CI en verde (run `39131194129`) | QrScanner sin test intermitente (`86fdcf4`) y mensaje del servidor ante un 429 (rojo `b564c81`, verde `0257fe2`) |
+
+**Vercel:** el cupo se liberó el 18/10 (previews en success desde las 13:01 UTC). Las previews del #383 (`98b6aa9`) y de los PRs nuevos gastaron 4 deployments por push. Los proyectos menyu-admin, menyu-cliente y menyu-staff ya tenían un Ignored Build Step en el panel que cancela producción ("Canceled by Ignored Build Step" en `a96d538`, `ae36522` y `53199f9`); el `ignoreCommand` del `vercel.json` lo reemplaza, por eso el script repite esa regla.
+
+**QrScanner.spec.tsx (test intermitente):** falló en el run [`39040637177`](https://github.com/MenYUorg/MenYU/actions/runs/39040637177) (`0ca2f8d`, #383) y pasó con el cambio en el run [`39131194129`](https://github.com/MenYUorg/MenYU/actions/runs/39131194129) (#386). Causa: la cámara simulada responde fuera de `act`; `findByRole` sigue apenas React pinta el título y el efecto del visor (`srcObject` y `play()`) corre en otra tarea del Scheduler cuando el render pasa el corte de 5 ms. Además, el `afterEach` del spec restauraba los dobles antes del `cleanup` de Testing Library. Se reproduce siempre con `performance.now` avanzando 10 ms por llamada (fallaban 2 tests y había una fuga en un tercero); con el cambio, 41/41.
+
+**Backend local:** 79,79 % → **91,77 %** de líneas (2.221/2.420), 57 suites y 1.035 tests.
+
+**Candidatos a defecto:** los nuevos se registraron en Jira (detalle fuera del repo).
+
 **Pendiente al retomar**
-1. PR `ci/reducir-deployments` (todavía no empezado): `ignoreCommand: "npx turbo-ignore"` en los `vercel.json` y `paths-ignore` en `deploy-staging.yml`.
-2. Relanzar el CI del #383 (test intermitente) y correr `scripts/staging/fuerza-bruta.mjs` contra staging antes de un tag (falta un restaurante de staging y su PIN).
-3. Pushear los lotes 2a y 2b del backend al #381 juntos (para no gastar deploys).
-4. Backend: sigue `mercado-pago-oauth`, gateway, `pedidos.service`, `items.service`, `payments.service`. Después web-cliente, web-staff y web-admin.
-5. web-cliente ante un 429 al ingresar por PIN: muestra el texto genérico "PIN incorrecto o mesa no encontrada…", no el mensaje del servidor. En la pantalla del código de sesión sí muestra el mensaje del servidor. Sin cambios todavía.
+1. Revisión y merge de #384 (antes de mergear, mirar el Ignored Build Step del panel de Vercel), #385 y #386.
+2. Probar el #384 con un push que solo toque el backend: las previews de menyu-admin, menyu-cliente y menyu-staff tienen que cancelarse.
+3. Correr `scripts/staging/fuerza-bruta.mjs` contra staging antes de un tag (falta un restaurante de staging y su PIN).
+4. Cobertura: web-cliente (63,4 % local), después web-staff y web-admin.
