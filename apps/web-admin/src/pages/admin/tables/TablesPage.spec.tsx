@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import type { Restaurante } from '@menyu/types'
 import { api, type MesaConQr, type SesionActiva } from '../../../services/api'
 import { TablesPage } from './TablesPage'
 
@@ -68,7 +69,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   useContextStore.setState({
     selectedRestauranteId: 'rest-1',
-    restaurantes: [{ id: 'rest-1', nombre: 'La Parrilla', modoSesion: 'abierto' }],
+    restaurantes: [{ id: 'rest-1', nombre: 'La Parrilla', modoSesion: 'abierto' } as unknown as Restaurante],
   })
   sesionesApi.mesaActiva.mockResolvedValue(sesion(3, 75, 12500))
 })
