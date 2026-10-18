@@ -240,8 +240,39 @@ Total en SonarCloud: 9.528 / 26.300 = 36,2 %. Para el 80 % (21.040 líneas) falt
 
 **Candidatos a defecto:** los nuevos se registraron en Jira (detalle fuera del repo).
 
+**Pendiente al retomar:** se actualizó en la entrada del 18/10 (noche).
+
+### 18/10/2026 (noche): cobertura al 83 %, PR de tests unificado, refactor 1 y rama de integración
+
+**PRs**
+
+| PR | Rama | Estado | Notas |
+|---|---|---|---|
+| #384 | `ci/reducir-deployments` | Mergeado 13:42 UTC (`2e3e87a`) | Solo turbo-ignore y `paths-ignore` |
+| #387 | `ci/vercel-solo-main` | Mergeado (`7fa697b`) | `git.deploymentEnabled`: web-admin y web-staff `false`; web-cliente `{ main: true, "**": false }`. Desde entonces los PRs no generan deployments de Vercel |
+| #388 | `fix/mp-conexion-cuenta` | Abierto | Conexión de la cuenta de Mercado Pago: `conectar` exige OWNER o GERENTE con acceso y el `state` es un JWT propio de 10 min. Rojo `1104156` (run [`39152161470`](https://github.com/MenYUorg/MenYU/actions/runs/39152161470), 9 fallados), verde `11c7b5d` (run [`39152391662`](https://github.com/MenYUorg/MenYU/actions/runs/39152391662)) |
+| #386 | `fix/web-cliente-qr-y-429` | Abierto | Suma `313edcb` (pantalla del código de sesión ante un 429). Run rojo del 429 tomado en una rama descartable: [`39152185716`](https://github.com/MenYUorg/MenYU/actions/runs/39152185716) (PR borrador #389, cerrado) |
+| #393 | `test/cobertura-frontend-backend` | Abierto, CI y Sonar en verde | Une #385, #390, #391 y #392 (cerrados apuntando a él): 47 archivos, solo specs y el helper de tests |
+| #383 | `fix/fuerza-bruta-sesion` | Abierto | Head `b099249` (merge de `main`) |
+
+**Cobertura** (local, tests del #393): backend 91,1 %, web-admin 83,7 %, web-cliente 85,8 %, web-staff 74,8 %; repo **83,3 %** (21.908/26.303). 2.335 tests. Cada spec de página pasó 3 mutaciones de control y 3 corridas seguidas sin fallas; los specs están en `sonar.exclusions`.
+
+**Sonar sobre `main`** (antes del #393): cobertura 41,8 % (37,4 % de líneas, 26.304 líneas a cubrir, el mismo universo que el lcov local) y duplicación **8,4 %** (3.335 líneas, 138 bloques). Los bloques más grandes: historial de sesiones admin ↔ staff (≈460 líneas por lado), el modal "Editar pedido" (admin `PedidosPage` ↔ `HistorialPage`), `TomaPedidosPage` admin ↔ staff y el cascarón de pantallas de web-cliente.
+
+**Refactor 1 (historial de sesiones compartido):** commit local `f58f069` en `refactor/historial-sesiones-compartido`, sin PR (espera al #393). Mueve la vista a `@menyu/ui/historial` (subpath fuera del índice: el bundle de web-cliente no lo incluye) y `SesionHistorial` a `@menyu/types`; el botón "Editar pedido" entra por `accionPedido`. 593 líneas agregadas y 1.116 borradas. Specs de las dos páginas sin cambios y en verde; HTML de 13 estados idéntico antes y después (snapshots temporales, no commiteados). Hubo que alinear `react` 19 en `packages/ui`: pnpm resolvía su `lucide-react` contra React 18.
+- **Decisión pendiente:** `packages/ui` está fuera de `sonar.sources` y del `coverage.include` de las apps, así que el código compartido deja de medirse (web-admin −423 y web-staff −368 líneas a cubrir). Opción A: dejarlo así. Opción B: medirlo (agregar `packages/ui/src` a Sonar y a la cobertura de vitest; con `allowExternal` el informe salió vacío, falta encontrar la configuración).
+
+**Rama de integración** (`test/integracion-todo`, worktree `../MenYU-integracion`, solo local y sin upstream): `main` + #393 + #383 + #388 + #386 + refactor 1, con `--no-ff` y sin conflictos.
+- Install con lockfile congelado, typecheck, lint, tests y build de las 4 apps en verde.
+- Tests: backend 1.052, web-admin 487, web-cliente 705, web-staff 120; **2.364** (2.335 + 16 de #383 + 9 de #388 + 4 de #386).
+- Cobertura de la unión: backend 2.273/2.472, web-admin 9.935/11.951, web-cliente 5.752/6.701, web-staff 3.228/4.442; repo **82,9 %** (21.188/25.566). Baja del 83,3 % por el refactor 1 (salen 791 líneas casi todas cubiertas); sin él daría 83,4 %.
+- jscpd (referencia, no es Sonar): 5,05 % con 100 tokens y 10,2 % con 50; sobre `main` da 4,8 % y 10,0 % contra el 8,4 % de Sonar, así que no está calibrado.
+
+**Candidatos a defecto:** los nuevos se registraron en Jira (detalle fuera del repo).
+
 **Pendiente al retomar**
-1. Revisión y merge de #384 (antes de mergear, mirar el Ignored Build Step del panel de Vercel), #385 y #386.
-2. Probar el #384 con un push que solo toque el backend: las previews de menyu-admin, menyu-cliente y menyu-staff tienen que cancelarse.
-3. Correr `scripts/staging/fuerza-bruta.mjs` contra staging antes de un tag (falta un restaurante de staging y su PIN).
-4. Cobertura: web-cliente (63,4 % local), después web-staff y web-admin.
+1. Decidir A o B sobre la medición de `packages/ui`.
+2. Merge del #393; después leer Sonar (cobertura de líneas, duplicación, diferencia con el lcov) y confirmar que los specs no suman duplicación.
+3. Refactores en PRs separados y en orden: historial (con la decisión del punto 1), modal "Editar pedido", cascarón de web-cliente. Frenar si tras los dos primeros la duplicación no baja a 5,5 % o menos.
+4. Revisión y merge de #383, #386 y #388.
+5. Correr `scripts/staging/fuerza-bruta.mjs` contra staging antes de un tag.
