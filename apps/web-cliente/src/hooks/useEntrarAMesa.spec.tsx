@@ -205,6 +205,20 @@ describe('useEntrarAMesa', () => {
       expect(screen.queryByText(/^menú/)).not.toBeInTheDocument()
     })
 
+    it('con demasiados códigos incorrectos (429) muestra el mensaje del servidor y sigue en la pantalla del código', async () => {
+      abrir.mockRejectedValueOnce(exigeCodigo())
+      abrir.mockRejectedValueOnce(new ApiError('Demasiados intentos fallidos. Probá de nuevo en 15 minutos.', 429))
+      renderArnes(QR)
+
+      tocarEntrar()
+      await screen.findByText('Mesa en modo seguro')
+      fireEvent.change(screen.getByPlaceholderText('000'), { target: { value: '999' } })
+      fireEvent.click(screen.getByRole('button', { name: 'Unirme a la mesa' }))
+
+      expect(await screen.findByText('Demasiados intentos fallidos. Probá de nuevo en 15 minutos.')).toBeInTheDocument()
+      expect(screen.getByText('Mesa en modo seguro')).toBeInTheDocument()
+    })
+
     it('"Volver" cierra la pantalla del código y avisa a la página', async () => {
       abrir.mockRejectedValueOnce(exigeCodigo())
       const alVolver = vi.fn()
