@@ -12,6 +12,8 @@ export type DatosEntrada = { qrToken: string; restauranteId?: string } | { pin: 
 /** Por qué falló: el código HTTP de la respuesta, o `null` si no hubo respuesta (sin conexión o servidor caído). */
 export interface FalloDeEntrada {
   status: number | null
+  /** El mensaje del servidor; `null` si no hubo respuesta. */
+  mensaje: string | null
 }
 
 type Resultado = Awaited<ReturnType<ReturnType<typeof useSessionStore.getState>['openSession']>>
@@ -53,7 +55,8 @@ export function useEntrarAMesa({ reemplazar = false, alFallar, alVolver }: Opcio
     } else if (resultado?.error === 'REQUIERE_CODIGO_SESION') {
       setVista('codigo')
     } else {
-      alFallar?.({ status: useSessionStore.getState().errorStatus })
+      const { errorStatus, error } = useSessionStore.getState()
+      alFallar?.({ status: errorStatus, mensaje: errorStatus === null ? null : error })
     }
   }
 

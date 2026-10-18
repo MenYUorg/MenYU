@@ -64,7 +64,8 @@ describe('QrScanner', () => {
   })
 
   afterEach(() => {
-    // Desmontar antes de restaurar los mocks: si un efecto del video quedó pendiente, corre todavía con `play` simulado.
+    // Primero se desmonta (el cleanup de Testing Library corre después de este afterEach): si quedó pendiente
+    // el efecto del visor, corre ahora con play() simulado y no después, contra el play() de jsdom.
     cleanup()
     vi.useRealTimers()
     vi.restoreAllMocks()
@@ -125,11 +126,14 @@ describe('QrScanner', () => {
     })
 
     it('con el permiso muestra la imagen de la cámara con las instrucciones', async () => {
+      // srcObject y play() los pone un efecto del visor. Con findByRole el test seguía apenas aparecía
+      // el título, y en un runner lento ese efecto todavía no había corrido: la cámara responde dentro del act.
+      vi.useFakeTimers()
       const { flujo } = instalarCamara()
 
-      renderEscaner()
+      await abrirYEmpezar()
 
-      expect(await screen.findByRole('heading', { name: 'Apuntá la cámara al QR de la mesa' })).toBeInTheDocument()
+      expect(screen.getByRole('heading', { name: 'Apuntá la cámara al QR de la mesa' })).toBeInTheDocument()
       expect(screen.getByText(/Mantené el celular firme/)).toBeInTheDocument()
       expect(estado()).toBe('escaneando')
       const video = screen.getByLabelText('Imagen de la cámara') as HTMLVideoElement
@@ -263,11 +267,10 @@ describe('QrScanner', () => {
     })
 
     it('si la cámara se corta sola (otra aplicación la tomó), lo avisa y la apaga', async () => {
+      // El aviso de "ended" se engancha en un efecto: igual que arriba, la cámara responde dentro del act.
+      vi.useFakeTimers()
       const { pista } = instalarCamara()
-      renderEscaner()
-      await screen.findByRole('heading', { name: 'Apuntá la cámara al QR de la mesa' })
-      // El aviso de corte se engancha en un efecto posterior al título: esperar a que esté antes de cortar.
-      await vi.waitFor(() => expect(pista.addEventListener).toHaveBeenCalledWith('ended', expect.any(Function)))
+      await abrirYEmpezar()
 
       act(() => pista.cortar())
 
