@@ -242,6 +242,17 @@ describe('IngresoMesaPage', () => {
       expect(screen.queryByText(/Ese QR no es de/)).not.toBeInTheDocument()
     })
 
+    it('si el servidor corta por demasiados intentos (429), muestra su mensaje y no dice que el PIN está mal', async () => {
+      abrir.mockRejectedValue(new ApiError('Demasiados intentos fallidos. Probá de nuevo en 15 minutos.', 429))
+      renderPagina()
+
+      await cargada()
+      ingresarPin('0000')
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('Demasiados intentos fallidos. Probá de nuevo en 15 minutos.')
+      expect(screen.queryByText(/PIN incorrecto/)).not.toBeInTheDocument()
+    })
+
     it('sin conexión no dice que el PIN está mal', async () => {
       abrir.mockRejectedValue(new TypeError('Failed to fetch'))
       renderPagina()
@@ -316,6 +327,16 @@ describe('IngresoMesaPage', () => {
       escanear()
 
       expect(await screen.findByRole('alert')).toHaveTextContent('No pudimos abrir tu mesa con ese QR. Probá de nuevo o ingresá el PIN de tu mesa.')
+    })
+
+    it('con un QR, un 429 también muestra el mensaje del servidor', async () => {
+      abrir.mockRejectedValue(new ApiError('Demasiados intentos fallidos. Probá de nuevo en 1 minuto.', 429))
+      renderPagina()
+
+      await cargada()
+      escanear()
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('Demasiados intentos fallidos. Probá de nuevo en 1 minuto.')
     })
 
     it('sin conexión no culpa al QR', async () => {
