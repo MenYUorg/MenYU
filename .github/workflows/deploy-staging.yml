@@ -3,6 +3,20 @@ name: Deploy — Staging
 on:
   push:
     branches: [main]
+    # Si el push solo trae estos archivos no se despliega: no cambian lo que se construye y
+    # cada deploy gasta 3 de los 100 deployments diarios de Vercel Hobby. Con un solo archivo
+    # fuera de la lista, el deploy corre igual.
+    paths-ignore:
+      - 'docs/**'
+      - 'Documentacion/**'
+      - '**/*.md'
+      - '**/*.spec.ts'
+      - '**/*.spec.tsx'
+      - '**/*.test.ts'
+      - '**/*.test.tsx'
+      - 'apps/backend/test/**'
+      - '.github/workflows/ci.yml'
+      - 'sonar-project.properties'
 
 jobs:
   deploy-staging:
