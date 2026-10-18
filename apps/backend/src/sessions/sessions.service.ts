@@ -36,8 +36,11 @@ function haceMinutos(createdAt: Date, ahora: number): string {
 }
 
 function mensajePagosMpRecientes(pagos: Pick<Pago, 'monto' | 'createdAt'>[], ahora: number): string {
+  // Precondición: se llama solo con al menos un pago (registrarCobro lo garantiza).
+  const [primero, ...resto] = pagos
+  if (!primero) throw new Error('mensajePagosMpRecientes necesita al menos un pago')
   const total = pagos.reduce((acc, p) => acc + Number(p.monto), 0).toFixed(2)
-  const masReciente = pagos.reduce((a, b) => (b.createdAt > a.createdAt ? b : a))
+  const masReciente = resto.reduce((a, b) => (b.createdAt > a.createdAt ? b : a), primero)
   if (pagos.length === 1) {
     return `Un comensal inició un pago por MercadoPago de $${total} ${haceMinutos(masReciente.createdAt, ahora)}. Si cobrás la mesa, ese pago se cancela.`
   }
