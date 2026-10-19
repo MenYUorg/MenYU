@@ -485,3 +485,72 @@ Los de 0 ms y el del audio son inofensivos. Los que importan son los que actuali
    - el siguiente refactor de duplicación: `TomaPedidosPage` (web-admin 198 y web-staff 152).
 5. **SCRUM-37:** queda para otro día.
 6. Siguen igual los puntos 6 a 9 de la lista anterior: el script de fuerza bruta para Coty, el **ensayo de producción del jueves 22/10**, los **umbrales del gate el viernes 23/10** y el PR único de esta bitácora.
+
+> Esta lista quedó superada: ver "Pendiente al retomar" en la sección del 19/10 (noche).
+
+### 19/10/2026 (noche, UTC): merges de #398 y #399, Sonar, código nuevo y plan de SCRUM-37
+
+Horas en UTC. Solo lectura, salvo la corrección de esta bitácora (`b4ff0a5`: los estados del DOM del refactor 3 pasan a 101 y 223; ya no queda ningún "165"). No se mergeó nada desde esta sesión.
+
+**Merges**
+
+| PR | Merge | SHA | Último CI verde de la rama | CI de `main` |
+|---|---|---|---|---|
+| #395 | 19:20:58 | `78be010` | | `39310239261` |
+| #396 | 19:29:52 | `a4c4c53` | | `39311475842` |
+| #397 | **Abierto** | | `39329007639` (`9873452`) | |
+| #398 | 21:11:07 | `6b680c4` | `39314277183` (`3488702`) | `39325483016` |
+| #399 | 21:26:48 | `032f919` | `39325519021` (`ce4ba8f`, con `main` mergeado) | `39327555239` |
+
+- El #397 tiene `main` mergeado (`9873452`, 21:37), CI y Sonar en verde. La rama local de `../MenYU-pr383` quedó 8 commits atrás; no se hizo pull.
+
+**Sonar sobre `main` en `032f919`** (análisis de las 21:30; gate OK)
+- Duplicación **4,8 %** (1.880 líneas, 101 bloques); cobertura de líneas **81,6 %** (4.740 sin cubrir de 25.804) y mixta **83,5 %**.
+- El ≈ 3,9 % depende del #397, que todavía no entró.
+
+**Por qué la cobertura de líneas bajó de 82,0 % a 81,6 % con el #395** (lcov de los runs `39180630317` y `39310239261`): ningún archivo perdió cobertura. Las líneas sin cubrir pasan de 4.735 a 4.734; el #395 sacó unas 520 líneas cubiertas (las copias del modal), y por eso las mismas líneas sin cubrir pesan más. Los únicos archivos que cambian son los del refactor, más `packages/ui/editar-pedido/index.ts` (0/1, la línea del `export`). El #397 va a tener el mismo efecto.
+
+**Código nuevo y gate** (API pública de Sonar, sin cambiar nada)
+- **Definición:** `previous_version` en el proyecto y en `main`, heredada de la instancia (`parentOrigin: INSTANCE`). El período arranca el 17/10/2026 a las 00:10:40.
+- **Condiciones:** las 6 de siempre (calificaciones A de confiabilidad, seguridad y mantenibilidad; `new_coverage` < 30; `new_duplicated_lines_density` > 10; hotspots revisados al 100 %). El nombre del gate no se puede leer sin ser miembro de la organización.
+- **Valores en `main`:** `new_coverage` **99,1 %** (líneas 99,6 %: 809 a cubrir, 3 sin cubrir, las tres en `packages/ui`); `new_duplicated_lines_density` **0,1 %** (14 líneas sobre 14.002). El divisor incluye los specs: solo con los fuentes son 1.184 líneas nuevas, y la densidad da 1,2 %.
+- **Con 80 % y 5 % pasaría hoy:** margen de 19,1 pp en cobertura y 4,9 pp en duplicación (3,8 pp contando solo fuentes).
+- **"Reference branch":** no aplica a `main`, que no puede compararse contra sí misma.
+- **"Number of days"**, simulado con `git blame` sobre el lcov de `032f919` y contando desde el viernes 23/10. El método reproduce el corte actual: 826 líneas y 99,6 %, contra 809 y 99,6 % de Sonar.
+
+| Días | Líneas a cubrir | Cobertura de líneas | Qué la baja |
+|---|---|---|---|
+| 7 | 826 | 99,6 % | igual que hoy |
+| 14 | 5.697 | 95,9 % | `packages/ui`: `ItemMenuFila` 71, `PrecioConDescuento` 46 |
+| 30 | 6.183 | 91,5 % | web-staff `CobroModal.tsx`, 247 sin cubrir |
+| 90 | 7.731 | 89,9 % | más `ElegirNombrePage` y `useEtiquetado` |
+
+  - Es cobertura de líneas; la mixta que mira el gate da algo menos (hoy, medio punto). La duplicación con ventanas largas no se simuló; probablemente sube.
+- **Alternativa:** dejar "Previous version" y mandar `sonar.projectVersion` con el tag del deploy, para que el código nuevo sea "desde el último release". Empezaría con el ensayo del jueves.
+
+**SCRUM-37: plan** (no se implementó)
+- **Specs:** 1 archivo, `apps/backend/src/sessions/sessions.e2e-spec.ts`, con 9 tests de `POST /api/sessions/open` (`jest.e2e.config.js`, `--runInBand`).
+- **CI:** un job `e2e-backend` en paralelo al `ci`, con `services: postgres` (imagen oficial, misma versión mayor que Supabase, a confirmar) y healthcheck `pg_isready`. `DATABASE_URL` y `DIRECT_URL` a `localhost` y un `JWT_SECRET` de test. `StorageService` crea el cliente de Supabase recién cuando se usa, así que no hace falta para arrancar.
+- **Migraciones:** `pnpm --filter @menyu/api exec prisma migrate deploy` antes de los tests, no `db push`, para comprobar que las 31 migraciones se aplican desde cero. `unaccent` y `gen_random_uuid` existen en la imagen oficial.
+  - **Riesgo:** las migraciones de drift (`fix_drift_completo`, `reconcile_schema_drift`, `baseline_…`) y los 3 `.sql` sueltos en `prisma/`. Primer paso: aplicarlas sobre un Postgres vacío y comparar con `prisma migrate diff` para confirmar que no queda drift.
+- **Tiempo (estimado, sin medir):** 1 a 1,5 min el job. En paralelo no alarga el CI (hoy ≈ 7 min, Sonar sola 197 s); en el mismo job sumaría ≈ 1 min.
+- **Hallazgo:** `clearE2eData` borra **todos** los clientes invitados de la base (`email: null, passwordHash: null`), no solo los del test. Hoy los e2e corren contra la base Supabase compartida.
+
+**Worktrees**
+- `../MenYU-pr383`: #397 (local atrás del remoto; no se hizo pull).
+- `../MenYU-fix-pagos` y `../MenYU-fix-pagado`: #398 y #399 ya mergeados, se pueden borrar.
+- `../MenYU-bitacora`: `docs/bitacora-ensayo-produccion`, con `b4ff0a5` y esta entrada, sin push.
+
+**Pendiente al retomar** (en este orden)
+1. **Coty:** mergear el #397. Después, leer Sonar de `main` y comparar la duplicación con el ≈ 3,9 % esperado.
+2. **#399 en Jira:** pasar merge (`032f919`, 21:26:48), runs (rojo `39314307287`, verde `39314661875` y `39325519021`, `main` `39327555239`) a Jira y a `privado/jira-bloque.md`.
+3. **Antes del viernes, decidir la definición de código nuevo:** "Number of days" (con 30 días, ≈ 91,5 % de líneas) o `sonar.projectVersion` desde el tag. "Reference branch" no aplica a `main`.
+4. **Decidir:**
+   - un PR rojo/verde para los timers de `PagosGerente` y `PagosMozo` (`PagosMozo` no tiene spec);
+   - el PR de accesibilidad de los 4 code smells;
+   - el siguiente refactor de duplicación, `TomaPedidosPage` (web-admin 198 y web-staff 152).
+5. **SCRUM-37:** plan arriba. Primer paso: migraciones sobre un Postgres vacío y `prisma migrate diff`. Decidir qué hacer con `clearE2eData`.
+6. Pasarle a Coty las variables y el comando de `scripts/staging/fuerza-bruta.mjs`, sin valores.
+7. **Jueves 22/10:** ensayo de producción con un tag `vX.Y.Z`. Anotar `check-ci`, deploy, smoke y el SHA de `/health`.
+8. **Viernes 23/10:** subir los umbrales del gate (80 % y 5 % sobre código nuevo) y aplicar la definición de código nuevo elegida en el punto 3.
+9. Abrir el PR único de esta bitácora después del ensayo.
