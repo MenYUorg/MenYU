@@ -25,7 +25,7 @@ Registro de lo que se hizo para poner SonarCloud en el CI de MenYU y tomar la l�
 3. **Confirmar la Deployment Protection de las previews de Vercel** (queda a cargo del equipo). En el run `39032870161` los tres frontends respondieron 200, así que hoy no hay protección que bloquee el smoke.
 4. **Producción:** #377 mergeado y variables `PROD_WEB_*_URL` cargadas (17/10/2026). Falta el tag de ensayo y anotar su resultado (`check-ci`, deploy, smoke y el SHA de `/health` de producción).
 5. Opcionales que salieron en el camino:
-   - Fijar la versión de `@railway/cli` en los workflows: en el PR #396 (`@5.70.0`), abierto el 19/10.
+   - Fijar la versión de `@railway/cli` en los workflows: hecho en el PR #396 (`@5.70.0`), mergeado el 19/10 (`a4c4c53`). El deploy de staging `39311475958` ya lo usó.
    - Revisar en Railway (Settings → Healthcheck Path) si el servicio tiene healthcheck en `/health`. No cambia nada hoy, porque `/health` responde siempre 200.
    - Vulnerabilidades S2245 (`Math.random`): la del PIN de mesa se corrige en el PR #379. Las demás quedan registradas en Jira.
    - `verify-carrito.js` y `verify-carrito.mjs` (raíz del repo, público) tienen un JWT de desarrollo hardcodeado. Se decodificó: solo trae UUIDs de comensal, sesión, mesa y restaurante, sin datos personales, apunta a `localhost` y venció el 26/05/2026.
@@ -385,3 +385,103 @@ El CI de `main` falló una vez, en `52a5448` (merge del #383), por el test inter
 7. **Jueves 22/10:** ensayo de producción con un tag `vX.Y.Z`. Anotar `check-ci`, deploy, smoke y el SHA de `/health`.
 8. **Viernes 23/10:** subir los umbrales del gate (80 % de cobertura y 5 % de duplicación sobre código nuevo) y cambiar la definición de código nuevo (Pendientes, puntos 1 y 2).
 9. Abrir el PR único de esta bitácora después del ensayo.
+
+> Esta lista quedó superada: ver "Pendiente al retomar" en la sección del 19/10 (tarde).
+
+### 19/10/2026 (tarde, UTC): merges de #395 y #396, Sonar, refactor 3 y dos PRs rojo/verde
+
+Horas en UTC. No se mergeó nada desde esta sesión; los merges los hizo Coty.
+
+**Merges y estado de `main`** (`a4c4c53`)
+- #395 mergeado a las 19:20 (`78be010`). CI `39310239261` y Deploy Staging `39310238882`, verdes.
+- #396 mergeado a las 19:29 (`a4c4c53`). CI `39311475842` verde (con SonarCloud y el quality gate). Deploy Staging `39311475958` verde, con smoke; el log muestra `npx @railway/cli@5.70.0`, así que el pin funciona.
+
+**Sonar sobre `main` después del #395** (análisis de `78be010`, 19:24; el de `a4c4c53`, 19:34, da lo mismo; gate OK)
+
+| | `8f56bd0` (#394) | `78be010` / `a4c4c53` | Diferencia |
+|---|---|---|---|
+| Duplicación | 6,1 % | **4,8 %** | −1,3 pp |
+| Líneas duplicadas | 2.419 | **1.880** | −539 |
+| Bloques | 115 | **101** | −14 |
+| Cobertura de líneas | 82,0 % | **81,6 %** | |
+| Cobertura mixta | 83,8 % | **83,5 %** | |
+
+Dio el ≈ 4,8 % esperado. **Ranking de duplicación** (líneas / bloques):
+1. web-admin `gerente/TomaPedidosPage` 198 / 9
+2. web-admin `menu/AdminMenuPage` 182 / 4
+3. web-staff `mozo/TomaPedidosPage` 152 / 6
+4. web-admin `mozos/MozosPage` 124 / 4
+5. web-cliente `EtiquetarPedidosPage` 114 / 4
+6. web-cliente `MisPedidosPage` 111 / 3
+7. web-staff `mozo/PedidosPage` 80 / 5
+8. web-staff `cocina/CocinaPage` 73 / 5
+9. web-admin `gerente/PedidosPage` 73 / 4
+10. web-staff `gerente/PagosGerente` 71 / 4
+
+**PRs abiertos hoy** (los tres con CI y Sonar en verde; falta que Coty los revise y los mergee)
+
+| PR | Rama | Worktree | Commits | CI |
+|---|---|---|---|---|
+| #397 refactor 3 | `refactor/pantalla-comensal` | `../MenYU-pr383` | `b84a5c9` | `39313433271` ✅ |
+| #398 timer de `PagosPage` | `fix/pagos-page-timer-desmontaje` | `../MenYU-fix-pagos` | rojo `33d6146` · verde `3488702` | rojo `39313815527` ❌ · verde `39314277183` ✅ |
+| #399 aviso de pedido pagado | `fix/pedido-pagado-desde-api` | `../MenYU-fix-pagado` | rojo `bdc1318` · verde `cbd66b0` | rojo `39314307287` ❌ · verde `39314661875` ✅ |
+
+El CI solo corre en `pull_request` y en `push` a `main`: para obtener el run rojo hay que abrir el PR con el commit rojo y pushear el verde después.
+
+**Refactor 3 (#397):** rebase limpio sobre `main` (`8edc3de` → `b84a5c9`). Mismo diff: 8 archivos, −627 / +402, **225 líneas netas menos**. No toca ningún spec.
+- web-cliente: typecheck y lint ok, 705 tests en verde.
+- **Snapshots del DOM:** no se pudo volver a llegar a los 165 estados del 19/10 a la madrugada, porque cómo se contaban se perdió con el scratchpad. Se compararon dos variantes, y en las dos los 65 tests dan el mismo DOM antes y después, con captura determinista:
+  - **A**, la receta de abajo tal cual (estados volcados en `afterEach`): **101 estados**, idénticos incluso sin normalizar.
+  - **B**, con el observer vivo hasta que el `cleanup` de Testing Library desmonta: **223 estados**, idénticos.
+- **Control negativo:** cambiar 1 px un ancho en `PantallaComensal` cambia el DOM de 35 tests, y los 65 tests siguen verdes.
+- **Sonar del PR:** 100 % de cobertura y 0,0 % de duplicación en código nuevo (268 líneas). Las 6 pantallas suman 355 de las 1.880 líneas duplicadas: si desaparecen, `main` queda en **≈ 3,9 %**.
+
+**Timer de `PagosPage` (#398):** era la causa del test inestable de web-admin (ver la sección anterior).
+- Rojo: test nuevo en `PagosPage.spec.tsx`. Registra un pago, desmonta con `cleanup()`, avanza el reloj falso 2,5 s y exige `vi.getTimerCount() === 0`. Falla con 1, en el paso Test del CI.
+- Verde: `useEffect(() => () => clearTimeout(toastTimer.current), [])`, como `MensajePage`. web-admin queda con 488 tests.
+
+**Aviso de pedido pagado (#399):** es el candidato registrado en Jira el 18/10. `GET /api/pedidos` manda `pagado: boolean`, pero las pantallas leían `pago?.estado`.
+- Rojo: los fixtures pasan a `pagado`. Además se suma `pagado?: boolean` a `PedidoAdmin` y `PedidoRico`, porque el typecheck (que también compila los specs) corre antes que los tests: sin ese campo, el CI fallaba por tipos y no por el test.
+  - En local fallan 3 tests: web-admin `PedidosPage` e `HistorialPage`, y web-staff `PedidosPage`.
+  - En el CI turbo corta en la primera falla, la de web-staff.
+- Verde: las pantallas leen `pedido.pagado === true` y `pago` sale de los dos tipos. Pasan 487 tests de web-admin y 120 de web-staff.
+- Ni los commits ni el PR mencionan otros candidatos.
+- **Falta:** cargar los SHAs y los runs en Jira y en `privado/jira-bloque.md`.
+
+**Escaneo de timers (solo lectura, sobre `a4c4c53`):** web-admin, web-staff y web-cliente tienen 24 `setTimeout`/`setInterval`; 14 se limpian al desmontar. Estos 10 no:
+
+| Archivo:línea | Qué hace | Test que desmonte |
+|---|---|---|
+| web-admin `pagos/PagosPage.tsx:518` | oculta el aviso (2,5 s) | Sí desde #398 |
+| web-admin `gerente/TomaPedidosPage.tsx:701` | vuelve a mesas y recarga (2 s) | No |
+| web-admin `mozos/MozosPage.tsx:1128` | cierra el alta de gerente (1,5 s) | No |
+| web-admin `tables/TablesPage.tsx:564` | oculta "guardado" (2 s) | Desmonta en otro escenario |
+| web-staff `gerente/PagosGerente.tsx:258` | oculta el aviso (2,5 s) | Desmonta sin el aviso activo |
+| web-staff `mozo/PagosMozo.tsx:177` | oculta el aviso (2,5 s) | No hay spec |
+| web-staff `mozo/TomaPedidosPage.tsx:520` | vuelve a mesas y recarga (2 s) | No |
+| web-staff `cocina/CocinaPage.tsx:94` | cierra el `AudioContext` (1,2 s), sin estado de React | No lo cubre |
+| web-cliente `discovery/DiscoveryPage.tsx:83` | scroll (0 ms, con `?.`) | No |
+| web-cliente `restaurante/IngresoMesaPage.tsx:76` | foco en el PIN (0 ms, con `?.`) | Desmonta en otro escenario |
+
+Los de 0 ms y el del audio son inofensivos. Los que importan son los que actualizan estado: `PagosGerente` y `PagosMozo` repiten el patrón de `PagosPage`. No se tocó nada.
+
+**SCRUM-37** ("Tests e2e del backend en CI con Postgres efímero"): **no existe**. El ticket está en "Por hacer" y sin asignar. Los e2e (`jest.e2e.config.js`, `sessions.e2e-spec.ts`) corren contra la base Supabase compartida, y `ci.yml` no tiene un service de Postgres ni un job de e2e.
+
+**Worktrees**
+- `../MenYU-pr383`: #397.
+- `../MenYU-fix-pagos`: #398, nuevo.
+- `../MenYU-fix-pagado`: #399, nuevo.
+- `../MenYU-ci`: no se toca.
+- El checkout principal sigue en `refactor/historial-sesiones-compartido`, con `Documentacion/datos-de-prueba-local.md` modificado y sin commitear; no se tocó.
+- Después de los merges se pueden borrar `../MenYU-fix-pagos` y `../MenYU-fix-pagado`.
+
+**Pendiente al retomar** (en este orden)
+1. **Coty:** revisar y mergear #397, #398 y #399. Tocan archivos distintos; #398 y #399 los dos tocan web-admin, pero en pantallas distintas.
+2. **Con el #397 en `main`:** leer Sonar de `main` y comparar la duplicación con el ≈ 3,9 % esperado.
+3. **Con el #399 en `main`:** pasar SHAs, runs y merge a Jira y a `privado/jira-bloque.md`.
+4. **Decidir:**
+   - un PR rojo/verde para los timers de `PagosGerente` y `PagosMozo`, con el mismo patrón que el #398 (`PagosMozo` no tiene spec);
+   - el PR de accesibilidad de los 4 code smells (sigue pendiente de la sección anterior);
+   - el siguiente refactor de duplicación: `TomaPedidosPage` (web-admin 198 y web-staff 152).
+5. **SCRUM-37:** queda para otro día.
+6. Siguen igual los puntos 6 a 9 de la lista anterior: el script de fuerza bruta para Coty, el **ensayo de producción del jueves 22/10**, los **umbrales del gate el viernes 23/10** y el PR único de esta bitácora.
