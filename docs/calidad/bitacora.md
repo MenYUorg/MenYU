@@ -25,7 +25,7 @@ Registro de lo que se hizo para poner SonarCloud en el CI de MenYU y tomar la l�
 3. **Confirmar la Deployment Protection de las previews de Vercel** (queda a cargo del equipo). En el run `39032870161` los tres frontends respondieron 200, así que hoy no hay protección que bloquee el smoke.
 4. **Producción:** #377 mergeado y variables `PROD_WEB_*_URL` cargadas (17/10/2026). Falta el tag de ensayo y anotar su resultado (`check-ci`, deploy, smoke y el SHA de `/health` de producción).
 5. Opcionales que salieron en el camino:
-   - Fijar la versión de `@railway/cli` en los workflows (hoy `@latest` en el `variable set` y en el `up`).
+   - Fijar la versión de `@railway/cli` en los workflows: en el PR #396 (`@5.70.0`), abierto el 19/10.
    - Revisar en Railway (Settings → Healthcheck Path) si el servicio tiene healthcheck en `/health`. No cambia nada hoy, porque `/health` responde siempre 200.
    - Vulnerabilidades S2245 (`Math.random`): la del PIN de mesa se corrige en el PR #379. Las demás quedan registradas en Jira.
    - `verify-carrito.js` y `verify-carrito.mjs` (raíz del repo, público) tienen un JWT de desarrollo hardcodeado. Se decodificó: solo trae UUIDs de comensal, sesión, mesa y restaurante, sin datos personales, apunta a `localhost` y venció el 26/05/2026.
@@ -270,9 +270,118 @@ Total en SonarCloud: 9.528 / 26.300 = 36,2 %. Para el 80 % (21.040 líneas) falt
 
 **Candidatos a defecto:** los nuevos se registraron en Jira (detalle fuera del repo).
 
-**Pendiente al retomar**
-1. Decidir A o B sobre la medición de `packages/ui`.
-2. Merge del #393; después leer Sonar (cobertura de líneas, duplicación, diferencia con el lcov) y confirmar que los specs no suman duplicación.
-3. Refactores en PRs separados y en orden: historial (con la decisión del punto 1), modal "Editar pedido", cascarón de web-cliente. Frenar si tras los dos primeros la duplicación no baja a 5,5 % o menos.
-4. Revisión y merge de #383, #386 y #388.
-5. Correr `scripts/staging/fuerza-bruta.mjs` contra staging antes de un tag.
+**Pendiente al retomar:** se actualizó en la entrada del 18/10 (cierre). Los puntos que había acá quedaron resueltos ahí (B elegida, #393 mergeado y leído en Sonar, refactor 1 mergeado, #383, #386 y #388 mergeados) o pasaron a la lista nueva (refactores 2 y 3, script de staging).
+
+### 18/10/2026 (cierre) y 19/10 (madrugada, UTC): merges, Sonar sobre `main`, refactores 1 a 3 y PR de deploy
+
+Horas en UTC.
+
+**PRs**
+
+| PR | Rama | Estado | Notas |
+|---|---|---|---|
+| #393 | `test/cobertura-frontend-backend` | Mergeado 22:46 (`e000a81`) | Tests unificados |
+| #383 | `fix/fuerza-bruta-sesion` | Mergeado 23:06 (`52a5448`) | Antes del merge, `eefc043` estabilizó dos tests de frontend que fallaban por tiempos en el CI: `TablesPage` (con 0 mesas, el encabezado "0 mesas · 0 ocupadas" ya se ve mientras carga, así que el test no esperaba la grilla) y `QrScanner` ("se corta sola": cortaba la cámara antes de que el efecto enganchara el listener de `ended`) |
+| #388 | `fix/mp-conexion-cuenta` | Mergeado 23:23 (`40bbf50`) | `ead7439`: `QrScanner.spec` desmonta antes de restaurar los mocks (un efecto pendiente corría contra el `play()` de jsdom) |
+| #386 | `fix/web-cliente-qr-y-429` | Mergeado 23:35 (`6438e72`) | Merge de `main` `a7681c2`: el conflicto en `QrScanner.spec.tsx` se resolvió con la versión del #386, que ya cubría los dos parches de #383 y #388 |
+| #394 | `refactor/historial-sesiones-compartido` | Mergeado 19/10 00:24 (`8f56bd0`, merge commit) | Refactor 1 + `packages/ui` medido en Sonar (opción B) |
+| #395 | `refactor/editar-pedido-compartido` | **Abierto**, CI y Sonar en verde | Refactor 2 |
+| #396 | `ci/endurecer-deploy-produccion` | **Abierto**, CI y Sonar en verde | Pin del CLI de Railway, tags, rollback y script de staging. Tiene que estar en `main` antes del ensayo del jueves 22/10 |
+
+El CI de `main` falló una vez, en `52a5448` (merge del #383), por el test intermitente de `QrScanner` ("con el permiso muestra la imagen de la cámara…") que corrige el #386. Los merges siguientes pasaron.
+
+**Sonar sobre `main` en `6438e72`** (después de #393, #383, #388 y #386; análisis de las 23:39): líneas **83,4 %** (21.981/26.359), cobertura mixta **84,9 %** (ramas 91,1 %), duplicación **8,4 %** (3.335 líneas, 138 bloques), gate OK.
+- El 83,3 % era el lcov del merge del #393 (`e000a81`, 83,31 %). Con #383, #388 y #386, el lcov de `main` da 83,41 % (26.357 líneas, 4.372 sin cubrir).
+- Sonar da 83,39 % por tres diferencias con el lcov: `backend/src/test/app-endpoints.ts` y `prisma-mock.ts` están en el lcov (49 líneas cubiertas) pero Sonar los excluye; `web-cliente/.../menu/modo.ts` no está en el lcov y Sonar lo cuenta como 1 línea sin cubrir; y en 17 services del backend Sonar cuenta 50 líneas más que las `DA` de jest (por ejemplo, `pedidos.service` 180 contra 172).
+- Los specs no suman duplicación: de los 34 archivos con líneas duplicadas, ninguno es un spec (están en `sonar.exclusions`).
+
+**Refactor 1 (PR #394):** el commit `f58f069` se pasó a `main` como `e492883`, sin conflictos.
+- **Medición de `packages/ui` (opción B):** `packages/ui` tiene su propio `vitest.config.ts` con lcov (rutas desde la raíz del monorepo). `packages/ui/src` entra en `sonar.sources` y `sonar.tests`, y su lcov en `sonar.javascript.lcov.reportPaths`, con los mismos patrones de specs que las apps. El CI corre `--filter=@menyu/ui` en Test y Coverage y sube el artefacto `coverage-ui`. Sin cambios de umbrales ni de exclusiones.
+- **Tests nuevos (23):** `precio.ts`, los helpers del historial y `BadgeEstado`, `PedidoEnSesion`, `SesionDetalleModal` y `SesionCard`. Hicieron falta los de componentes: solo con los helpers, `HistorialSesiones.tsx` entraba con 14,7 % y el gate pide 30 % sobre código nuevo; con ellos queda en 99,7 %. Las horas y fechas se comparan por contenido, porque el relleno con cero y el "a. m." cambian según el ICU de cada runtime.
+- **Mutaciones:** `getPeriodBounds` con 7 días en vez de 6, `calcDuracion` con `<= 60` y "En preparacion" sin tilde. Cada una rompe al menos un test; todas se revirtieron.
+- **Sin cambios de comportamiento:** los specs de las dos pantallas quedaron intactos y el `body.innerHTML` final de sus 25 tests es idéntico antes y después.
+- **Sonar del PR:** 99,4 % de cobertura y 1,7 % de duplicación en código nuevo. Marcó 2 code smells de accesibilidad (S6848, un `div` clickeable) en `SesionDetalleModal` y `SesionCard`; ya estaban en las apps y el refactor solo los movió.
+
+**Sonar sobre `main` en `8f56bd0`** (después del #394; análisis de las 00:28):
+
+| | `6438e72` | `8f56bd0` |
+|---|---|---|
+| Líneas | 83,4 % | **82,0 %** (21.582/26.323) |
+| Cobertura mixta | 84,9 % | **83,8 %** |
+| Duplicación | 8,4 % (3.335 líneas, 138 bloques) | **6,1 %** (2.419 líneas, 115 bloques) |
+
+- **Cobertura:** baja como se esperaba. Las apps pierden 791 líneas que ya estaban cubiertas y `packages/ui` suma 744; los componentes que ya estaban en `packages/ui` (`Badge`, `Button`, `Modal`, etc.: 369 líneas, 361 sin cubrir) nunca se habían medido.
+- **Ranking de duplicación:**
+  1. web-admin `gerente/PedidosPage` 320
+  2. web-admin `gerente/HistorialPage` 296
+  3. web-admin `gerente/TomaPedidosPage` 198
+  4. web-admin `menu/AdminMenuPage` 182
+  5. web-staff `mozo/TomaPedidosPage` 152
+  6. web-admin `mozos/MozosPage` 124
+  7. web-cliente `EtiquetarPedidosPage` 114
+  8. web-cliente `MisPedidosPage` 111
+  9. web-staff `mozo/PedidosPage` 80
+  10. web-staff `cocina/CocinaPage` 73
+- **Entre `packages/ui` y las apps:** solo 14 líneas, `getPeriodBounds` (`HistorialSesiones.tsx:28-41`) contra la copia propia de `AuditoriaPage.tsx:25-38`. No la creó el refactor: ya estaba.
+
+**Refactor 2 (PR #395):** `EditarPedidoModal` en `@menyu/ui/editar-pedido` reemplaza las 4 copias del modal: web-admin `gerente/PedidosPage`, `HistorialPage` y `HistorialSesionesPage`, y web-staff `mozo/PedidosPage`.
+- Cada pantalla pasa `onGuardar` con su endpoint, el código ya formateado (el `shortId` no es igual en todas) y si el pedido está pagado.
+- Las copias tenían dos diseños, el del historial de sesiones y el de pedidos. El modal recibe una `apariencia` para que cada pantalla se vea igual que antes; la del mozo es la de pedidos sin transiciones. Unificar el aspecto es una decisión aparte.
+- **Sin cambios de comportamiento:** se registró **cada estado del DOM** con un `MutationObserver`, no solo el final: 65 tests y 27 estados con el modal abierto, incluido el aviso de pedido pagado. Antes y después son idénticos, con las horas normalizadas (los specs muestran horas relativas a "ahora").
+- **Tests:** spec propio del modal, 12 tests, 99,6 % de cobertura. Mutaciones detectadas: dejar pasar 51 palabras, mandar ítems sin cambios y dejar guardar un pedido pagado.
+- **Sonar del PR:** 99,1 % de cobertura y 0 líneas duplicadas en código nuevo. Marcó 2 code smells de accesibilidad (S6853, un `label` sin control asociado, y S6848), heredados de las copias.
+- **Duplicación esperada:** las copias del modal concentran 529 de las 2.419 líneas duplicadas de `main` (242 + 253 + 34; la del mozo está escrita compacta y Sonar no la empareja). Después del merge: **≈ 4,8 %**.
+
+**Refactor 3** (rama local `refactor/pantalla-comensal`, `8edc3de`, sobre la rama del #395; sin PR): `components/PantallaComensal.tsx` (`EncabezadoPantalla`, `InsigniaMesa`, `MarcoPantalla`) y `components/estadosPantalla.tsx` (`estadoCargando`, `estadoError`, `estadoVacio`) en web-cliente, porque solo lo usa esa app.
+- **Pantallas:** Etiquetar, Mis pedidos, Carrito (solo el encabezado; su marco y su estado vacío tienen otros estilos), Pagar, ¿Cuántos son? y Armar mensaje.
+- **Tamaño:** −627 y +213 líneas en las pantallas, +188 en los componentes.
+- **Verificación:** specs sin tocar, 705 tests de web-cliente en verde, typecheck y lint ok; los componentes nuevos quedan al 100 % con los specs existentes.
+- **Snapshots:** 165 estados del DOM en 65 tests, idénticos.
+- **Lo que detectaron los snapshots:** con los estados como componentes, React desmontaba y montaba el `<div>` al pasar de "cargando" a "error" en vez de reutilizarlo como antes, y cambiaba el orden de las propiedades de `style`. Por eso los estados son funciones que devuelven el elemento.
+- **Duplicación:** las 6 pantallas suman 355 líneas duplicadas en `main`. Objetivo: **≈ 4,0 %**.
+
+**PR #396 (`ci: endurecer deploy a producción`):**
+- **Commit 1** (`ba61590`):
+  - `@railway/cli@latest` → `@5.70.0` (la versión del último deploy de staging exitoso) en los dos workflows.
+  - `on.push.tags` pasa de `v*.*.*` a un solo patrón, `v[0-9]+.[0-9]+.[0-9]+`; el anterior aceptaba también `v1.0.6-rc.1` o `v1.2.3.4`.
+  - Primer paso de `check-ci`: corta si el tag no es `vX.Y.Z`. Con `workflow_dispatch` no corre.
+  - `docs/calidad/plan-rollback.md`.
+- **Commit 2** (`f610ef4`): `scripts/staging/fuerza-bruta.mjs` con lista blanca. Exige `STAGING_API_HOST` y `CONFIRMAR_STAGING=si`, rechaza cualquier otro host, no imprime el PIN, el JWT ni el restaurante, y cierra la sesión aunque falle un paso. No se ejecutó.
+- **Cómo se probó:** la regex, con 7 tags de ejemplo sin crear tags; el YAML, parseado; y las guardas del script, con hosts ficticios.
+- **CI:** el primer intento falló por un test inestable de web-admin, sin relación con el PR. El intento 2 del run [`39184409337`](https://github.com/MenYUorg/MenYU/actions/runs/39184409337) pasó.
+
+**Test inestable de web-admin (`PagosPage`):** `PagosPage.tsx:518` programa un `setTimeout` de 2,5 s para ocultar el aviso "Pago registrado correctamente" y no lo cancela al desmontar. Si el spec termina antes, el timer dispara con jsdom ya desarmado (`ReferenceError: window is not defined`) y Vitest falla aunque los 487 tests pasen. Propuesta: limpiar el timer en un `useEffect`, como ya hace `MensajePage` en web-cliente, en un PR chico con rojo/verde. Falta decidirlo.
+
+**Deploys de staging:** en las 24 h hasta el merge del #394 hubo 9 ejecuciones de `deploy-staging`, todas exitosas y con los 3 pasos de Vercel: son 27 deployments del cupo de 100. Los 4 merges de la noche (#393, #383, #388 y #386) dispararon 4 de ellas (12 deployments); el #394, una más.
+
+**Candidatos a defecto:** 1 nuevo, funcional, registrado en Jira. Se corrige con rojo/verde en un PR propio después del merge del #395.
+
+**Cómo se verificaron los refactores (para repetirlo):** los scripts quedaron en el scratchpad de la sesión, que no se conserva. Se rearman así:
+1. Agregar temporalmente al final de cada spec de las pantallas un `MutationObserver` sobre `document.body`, registrado en un `beforeEach`. Guarda `innerHTML` en cada cambio, sin repetir estados consecutivos.
+2. En un `afterEach`, escribir todos los estados del test en un archivo propio.
+3. Correr los specs con el código de `main` y con el de la rama, y restaurar los specs con `git checkout`.
+4. Normalizar horas y fechas (`HH:MM`, `a. m.`/`p. m.`, `DD/MM`) y comparar con `diff -r`.
+5. Antes de comparar, correr dos veces sobre el mismo código para confirmar que la captura es determinista.
+
+**Worktrees y ramas**
+- `../MenYU-pr383`: `refactor/pantalla-comensal`, el refactor 3.
+- `../MenYU-ci-deploy`: `ci/endurecer-deploy-produccion`, el #396.
+- `../MenYU-ci`: `ci/vercel-solo-main`, no se toca.
+- `../MenYU-integracion`: `test/integracion-todo`, quedó vieja y es descartable.
+- En el checkout principal, la rama local `refactor/historial-sesiones-compartido` (`f58f069`) quedó vieja; la borra Coty. También sobra la local `wip/refactor-historial` (en `../MenYU-pr383`), que ya está en `main` por el #394.
+
+**Pendiente al retomar** (en este orden)
+1. **Merge de #395 y #396.** El orden da igual: tocan archivos distintos. El #396 tiene que estar en `main` antes del ensayo del jueves 22/10.
+2. **Con el #395 en `main`:**
+   - Leer Sonar de `main`: duplicación real contra el ≈ 4,8 % esperado, y si apareció duplicación nueva entre `packages/ui` y las apps.
+   - En `../MenYU-pr383`, rebasear `refactor/pantalla-comensal` sobre `origin/main`. Si el #395 entra como merge commit, alcanza `git rebase origin/main`.
+   - Repetir typecheck, lint, tests y snapshots, y abrir el PR del refactor 3. En el cuerpo: las 6 pantallas, specs intactos, 165 estados idénticos y el ≈ 4,0 % esperado.
+3. **Con el #395 en `main`:** PR rojo/verde del candidato nuevo, con el detalle en Jira. En el PR y en los commits no va ningún otro candidato.
+4. **Decidir:**
+   - el PR chico del timer de `PagosPage` (rojo/verde);
+   - un PR de accesibilidad con los 4 code smells (S6848 en `SesionDetalleModal`, `SesionCard` y el fondo de `EditarPedidoModal`; S6853 en su `label`). Cambian el HTML.
+5. Si después del refactor 3 la duplicación no queda cerca del 4 %, el siguiente candidato es `TomaPedidosPage` (web-admin 198 y web-staff 152).
+6. **Con todo mergeado:** pasarle a Coty las variables y el comando de `scripts/staging/fuerza-bruta.mjs`, sin valores, para que lo corra ella contra staging como evidencia del #383.
+7. **Jueves 22/10:** ensayo de producción con un tag `vX.Y.Z`. Anotar `check-ci`, deploy, smoke y el SHA de `/health`.
+8. **Viernes 23/10:** subir los umbrales del gate (80 % de cobertura y 5 % de duplicación sobre código nuevo) y cambiar la definición de código nuevo (Pendientes, puntos 1 y 2).
+9. Abrir el PR único de esta bitácora después del ensayo.
