@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { io } from 'socket.io-client'
 import { api } from '../../../services/api'
@@ -291,6 +291,21 @@ describe('PagosPage (caja)', () => {
       fireEvent.click(within(modal).getByRole('button', { name: 'Débito' }))
       await act(async () => { fireEvent.click(within(modal).getByRole('button', { name: 'Confirmar pago' })) })
       expect(screen.getByText('Pago registrado correctamente')).toBeInTheDocument()
+    })
+
+    it('al salir de la pantalla con el aviso visible, cancela el timer que lo oculta', async () => {
+      respuestas['/sessions/ses-4/cobro'] = json({ ok: true })
+      const modal = await abrirCobro()
+      vi.useFakeTimers({ shouldAdvanceTime: true })
+      fireEvent.click(within(modal).getByRole('button', { name: 'Efectivo' }))
+      await act(async () => { fireEvent.click(within(modal).getByRole('button', { name: 'Confirmar pago' })) })
+      expect(screen.getByText('Pago registrado correctamente')).toBeInTheDocument()
+
+      cleanup()
+      const timersVivos = vi.getTimerCount()
+      await vi.advanceTimersByTimeAsync(2500)
+
+      expect(timersVivos).toBe(0)
     })
 
     it('si el servidor rechaza muestra el error y deja reintentar', async () => {

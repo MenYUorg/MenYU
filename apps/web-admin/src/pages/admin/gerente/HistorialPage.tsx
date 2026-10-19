@@ -88,7 +88,7 @@ function PedidoCard({
   const [editions, setEditions] = useState<EdicionAdmin[] | null>(null)
   const [loadingEd, setLoadingEd] = useState(false)
   const total = calcTotal(pedido)
-  const isPagado = pedido.pago?.estado === 'aprobado'
+  const isPagado = pedido.pagado === true
 
   async function handleToggle() {
     if (!expanded && editions === null) {
@@ -619,7 +619,7 @@ export function HistorialPage() {
         <EditarPedidoModal
           codigo={shortId(editingPedido.id)}
           items={itemsEditables(editingPedido)}
-          pagado={editingPedido.pago?.estado === 'aprobado'}
+          pagado={editingPedido.pagado === true}
           apariencia={APARIENCIA_PEDIDOS}
           onGuardar={async (edicion) => { await api.pedidos.editar(editingPedido.id, edicion); handleEditDone() }}
           onClose={() => setEditingPedido(null)}

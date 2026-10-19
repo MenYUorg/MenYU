@@ -372,7 +372,7 @@ export function PedidosPage() {
         <EditarPedidoModal
           codigo={shortId(editingPedido.id)}
           items={itemsEditables(editingPedido)}
-          pagado={editingPedido.pago?.estado === 'aprobado'}
+          pagado={editingPedido.pagado === true}
           apariencia={APARIENCIA_MOZO}
           onGuardar={async (edicion) => handleEditDone(await api.pedidos.editarItem(editingPedido.id, edicion))}
           onClose={() => setEditingPedido(null)}

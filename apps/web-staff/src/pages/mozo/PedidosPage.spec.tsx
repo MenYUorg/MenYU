@@ -47,7 +47,7 @@ function pedido(id: string, estado: string, extra: Partial<PedidoRico> = {}): Pe
     createdAt: hace(5),
     updatedAt: hace(5),
     mesa: { numero: id.slice(-1) },
-    pago: null,
+    pagado: false,
     items: [
       { id: `${id}-1`, itemId: 'it-1', cantidad: 2, cantidadEditada: null, precioUnitario: 1000, notas: 'bien cocida', item: { nombre: 'Milanesa' }, mods: [mod('QUITAR', 'Cebolla'), mod('AGREGAR', 'Queso', 2), mod('AGREGAR', 'Huevo'), mod('QUITAR')] },
       { id: `${id}-2`, itemId: 'it-2', cantidad: 1, cantidadEditada: null, precioUnitario: 500, notas: null, item: { nombre: 'Agua' }, mods: [] },
@@ -309,7 +309,7 @@ describe('PedidosPage (mozo)', () => {
     })
 
     it('un pedido pagado no se puede editar; se cierra con "Cancelar", la X o tocando afuera', async () => {
-      await abrirCon([{ ...PENDIENTE, pago: { estado: 'aprobado' } }], [EN_PREP], [])
+      await abrirCon([{ ...PENDIENTE, pagado: true }], [EN_PREP], [])
 
       fireEvent.click(within(tarjeta('1')).getByRole('button', { name: 'Editar pedido' }))
       expect(screen.getByText('Este pedido ya fue pagado y no puede editarse.')).toBeInTheDocument()
