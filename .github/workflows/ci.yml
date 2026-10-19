@@ -42,13 +42,13 @@ jobs:
         run: pnpm turbo lint --filter=@menyu/api --filter=@menyu/web-admin --filter=@menyu/web-cliente --filter=@menyu/web-staff
 
       - name: Test
-        run: pnpm turbo test --filter=@menyu/api --filter=@menyu/web-admin --filter=@menyu/web-cliente --filter=@menyu/web-staff
+        run: pnpm turbo test --filter=@menyu/api --filter=@menyu/web-admin --filter=@menyu/web-cliente --filter=@menyu/web-staff --filter=@menyu/ui
 
       - name: Test — smoke scripts
         run: node --test scripts/smoke/lib.test.mjs
 
       - name: Coverage
-        run: pnpm turbo test:coverage --filter=@menyu/api --filter=@menyu/web-admin --filter=@menyu/web-cliente --filter=@menyu/web-staff
+        run: pnpm turbo test:coverage --filter=@menyu/api --filter=@menyu/web-admin --filter=@menyu/web-cliente --filter=@menyu/web-staff --filter=@menyu/ui
 
       - name: Upload coverage — backend
         uses: actions/upload-artifact@v4
@@ -83,6 +83,15 @@ jobs:
         with:
           name: coverage-web-staff
           path: apps/web-staff/coverage/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload coverage — ui
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-ui
+          path: packages/ui/coverage/
           if-no-files-found: ignore
           retention-days: 14
 
