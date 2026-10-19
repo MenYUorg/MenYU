@@ -336,7 +336,7 @@ El CI de `main` falló una vez, en `52a5448` (merge del #383), por el test inter
 - **Pantallas:** Etiquetar, Mis pedidos, Carrito (solo el encabezado; su marco y su estado vacío tienen otros estilos), Pagar, ¿Cuántos son? y Armar mensaje.
 - **Tamaño:** −627 y +213 líneas en las pantallas, +188 en los componentes.
 - **Verificación:** specs sin tocar, 705 tests de web-cliente en verde, typecheck y lint ok; los componentes nuevos quedan al 100 % con los specs existentes.
-- **Snapshots:** 165 estados del DOM en 65 tests, idénticos.
+- **Snapshots:** los 65 tests dan el mismo DOM antes y después: 101 estados con la captura al final de cada test y 223 con la captura hasta el desmontaje (recuento verificado en la sección del 19/10, tarde).
 - **Lo que detectaron los snapshots:** con los estados como componentes, React desmontaba y montaba el `<div>` al pasar de "cargando" a "error" en vez de reutilizarlo como antes, y cambiaba el orden de las propiedades de `style`. Por eso los estados son funciones que devuelven el elemento.
 - **Duplicación:** las 6 pantallas suman 355 líneas duplicadas en `main`. Objetivo: **≈ 4,0 %**.
 
@@ -375,7 +375,7 @@ El CI de `main` falló una vez, en `52a5448` (merge del #383), por el test inter
 2. **Con el #395 en `main`:**
    - Leer Sonar de `main`: duplicación real contra el ≈ 4,8 % esperado, y si apareció duplicación nueva entre `packages/ui` y las apps.
    - En `../MenYU-pr383`, rebasear `refactor/pantalla-comensal` sobre `origin/main`. Si el #395 entra como merge commit, alcanza `git rebase origin/main`.
-   - Repetir typecheck, lint, tests y snapshots, y abrir el PR del refactor 3. En el cuerpo: las 6 pantallas, specs intactos, 165 estados idénticos y el ≈ 4,0 % esperado.
+   - Repetir typecheck, lint, tests y snapshots, y abrir el PR del refactor 3. En el cuerpo: las 6 pantallas, specs intactos, DOM idéntico (101 estados al final de cada test, 223 hasta el desmontaje) y el ≈ 4,0 % esperado.
 3. **Con el #395 en `main`:** PR rojo/verde del candidato nuevo, con el detalle en Jira. En el PR y en los commits no va ningún otro candidato.
 4. **Decidir:**
    - el PR chico del timer de `PagosPage` (rojo/verde);
@@ -430,7 +430,7 @@ El CI solo corre en `pull_request` y en `push` a `main`: para obtener el run roj
 
 **Refactor 3 (#397):** rebase limpio sobre `main` (`8edc3de` → `b84a5c9`). Mismo diff: 8 archivos, −627 / +402, **225 líneas netas menos**. No toca ningún spec.
 - web-cliente: typecheck y lint ok, 705 tests en verde.
-- **Snapshots del DOM:** no se pudo volver a llegar a los 165 estados del 19/10 a la madrugada, porque cómo se contaban se perdió con el scratchpad. Se compararon dos variantes, y en las dos los 65 tests dan el mismo DOM antes y después, con captura determinista:
+- **Snapshots del DOM:** no se pudo reproducir el recuento de estados anotado el 19/10 a la madrugada, porque cómo se contaba se perdió con el scratchpad. Se compararon dos variantes, y en las dos los 65 tests dan el mismo DOM antes y después, con captura determinista:
   - **A**, la receta de abajo tal cual (estados volcados en `afterEach`): **101 estados**, idénticos incluso sin normalizar.
   - **B**, con el observer vivo hasta que el `cleanup` de Testing Library desmonta: **223 estados**, idénticos.
 - **Control negativo:** cambiar 1 px un ancho en `PantallaComensal` cambia el DOM de 35 tests, y los 65 tests siguen verdes.
