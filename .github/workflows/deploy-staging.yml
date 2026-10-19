@@ -50,7 +50,7 @@ jobs:
       # El SHA que muestra /health. RAILWAY_GIT_COMMIT_SHA solo llega en deploys disparados
       # desde GitHub, no con `railway up`. --skip-deploys: el deploy lo hace el paso siguiente.
       - name: Set APP_COMMIT_SHA on Railway staging
-        run: npx @railway/cli@latest variable set "APP_COMMIT_SHA=$GIT_SHA" --service ${{ secrets.RAILWAY_SERVICE_ID_STAGING }} --skip-deploys
+        run: npx @railway/cli@5.70.0 variable set "APP_COMMIT_SHA=$GIT_SHA" --service ${{ secrets.RAILWAY_SERVICE_ID_STAGING }} --skip-deploys
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN_STAGING }}
           GIT_SHA: ${{ github.sha }}
@@ -61,7 +61,7 @@ jobs:
           timeout_minutes: 10
           max_attempts: 3
           retry_wait_seconds: 30
-          command: npx @railway/cli@latest up --service ${{ secrets.RAILWAY_SERVICE_ID_STAGING }} --detach
+          command: npx @railway/cli@5.70.0 up --service ${{ secrets.RAILWAY_SERVICE_ID_STAGING }} --detach
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN_STAGING }}
 
