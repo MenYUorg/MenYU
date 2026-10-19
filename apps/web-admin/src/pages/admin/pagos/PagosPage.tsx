@@ -423,6 +423,8 @@ export function PagosPage() {
   const restauranteRef = useRef(selectedRestauranteId)
   useEffect(() => { tabRef.current = tab },                        [tab])
   useEffect(() => { esGerenteRef.current = esGerente },           [esGerente])
+  // Al salir de la pantalla se cancela el timer que oculta el aviso de cobro
+  useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current) }, [])
   useEffect(() => { restauranteRef.current = selectedRestauranteId }, [selectedRestauranteId])
 
   // ── Fetch activas ──────────────────────────────────────────────────────────
