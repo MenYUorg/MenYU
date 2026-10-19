@@ -88,6 +88,8 @@ export interface PedidoRico {
   mesa: { numero: string }
   items: ItemPedidoRico[]
   pago?: { estado: string } | null
+  // La sesión del pedido ya tiene un cobro aprobado (GET /api/pedidos)
+  pagado?: boolean
 }
 
 export interface MenuIngrediente {

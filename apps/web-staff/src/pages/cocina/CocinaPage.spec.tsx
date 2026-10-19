@@ -60,7 +60,7 @@ function pedido(id: string, estado: string, extra: Partial<PedidoRico> = {}): Pe
     createdAt: hace(5),
     updatedAt: hace(5),
     mesa: { numero: id.slice(-1) },
-    pago: null,
+    pagado: false,
     items: [
       { id: `${id}-1`, itemId: 'a', cantidad: 2, cantidadEditada: null, precioUnitario: 1000, notas: 'bien cocida', item: { nombre: 'Milanesa' }, mods: [mod('QUITAR', 'Cebolla'), mod('AGREGAR', 'Queso', 2), mod('AGREGAR', 'Huevo'), mod('QUITAR')] },
       { id: `${id}-2`, itemId: 'b', cantidad: 1, cantidadEditada: null, precioUnitario: 500, notas: '  ', item: { nombre: 'Agua' }, mods: [] },

@@ -41,7 +41,7 @@ function pedido(id: string, extra: Partial<PedidoAdmin> = {}): PedidoAdmin {
     createdAt: haceDias(0, 11),
     updatedAt: haceDias(0, 12),
     mesa: { numero: '4' },
-    pago: null,
+    pagado: false,
     items: [
       { id: `${id}-1`, cantidad: 2, cantidadEditada: null, precioUnitario: 1000, notas: null, item: { nombre: 'Milanesa' }, mods: [mod('QUITAR', 'Cebolla'), mod('AGREGAR', 'Queso', 2), mod('AGREGAR', 'Huevo')] },
       { id: `${id}-2`, cantidad: 1, cantidadEditada: null, precioUnitario: 500, notas: null, item: { nombre: 'Agua' }, mods: [] },
@@ -59,7 +59,7 @@ const EDITADO = pedido('bbbb2222-edit', {
     { id: 'e-2', cantidad: 1, cantidadEditada: 0, precioUnitario: 800, notas: null, item: { nombre: 'Gaseosa' }, mods: [mod('AGREGAR', 'Limón')] },
   ],
 })
-const PAGADO = pedido('cccc3333-pago', { mesa: { numero: '7' }, pago: { estado: 'aprobado' } })
+const PAGADO = pedido('cccc3333-pago', { mesa: { numero: '7' }, pagado: true })
 const ANULADO = pedido('dddd4444-anul', { estado: 'anulado', mesa: { numero: '9' }, updatedAt: haceDias(1) })
 const VIEJO = pedido('eeee5555-viej', { mesa: { numero: '20' }, updatedAt: haceDias(10) })
 

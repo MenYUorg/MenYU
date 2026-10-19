@@ -208,6 +208,8 @@ export interface PedidoAdmin {
   updatedAt: string
   mesa: { numero: string }
   pago?: { estado: string } | null
+  // La sesión del pedido ya tiene un cobro aprobado (GET /api/pedidos)
+  pagado?: boolean
   items: ItemPedidoAdmin[]
 }
 
