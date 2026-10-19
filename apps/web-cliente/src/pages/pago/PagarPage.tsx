@@ -4,6 +4,8 @@ import { Spinner } from '@menyu/ui'
 import { useSessionStore } from '../../store/sessionStore'
 import { api } from '../../services/api'
 import { C } from '../../theme'
+import { EncabezadoPantalla, InsigniaMesa, MarcoPantalla } from '../../components/PantallaComensal'
+import { estadoCargando, estadoError, estadoVacio } from '../../components/estadosPantalla'
 
 interface PedidoSesion {
   id: string
@@ -106,39 +108,12 @@ export function PagarPage() {
   }
 
   const header = (
-    <header style={{
-      background:  C.navy,
-      display:     'flex',
-      alignItems:  'center',
-      padding:     '14px 16px',
-      gap:         12,
-      flexShrink:  0,
-    }}>
-      <button
-        onClick={() => navigate('/menu')}
-        style={{
-          background: 'none', border: 'none', cursor: 'pointer',
-          color: 'white', fontSize: 22, lineHeight: 1,
-          padding: '2px 8px 2px 0', display: 'flex', alignItems: 'center',
-        }}
-        aria-label="Volver al menú"
-      >
-        ←
-      </button>
-      <span style={{
-        flex: 1, fontFamily: 'Montserrat, sans-serif',
-        fontWeight: 700, fontSize: 17, color: 'white', textAlign: 'center',
-      }}>
-        Pagar la cuenta
-      </span>
-      <span style={{
-        background: C.orange, color: 'white',
-        fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: 12,
-        padding: '4px 10px', borderRadius: 20, whiteSpace: 'nowrap',
-      }}>
-        Mesa {numeroMesa ?? ''}
-      </span>
-    </header>
+    <EncabezadoPantalla
+      titulo="Pagar la cuenta"
+      onVolver={() => navigate('/menu')}
+      etiquetaVolver="Volver al menú"
+      derecha={<InsigniaMesa numero={numeroMesa} />}
+    />
   )
 
   let bottomContent: React.ReactNode
@@ -226,60 +201,18 @@ export function PagarPage() {
   )
 
   const wrapper = (children: React.ReactNode) => (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: C.bg }}>
-      <div style={{
-        maxWidth: 520, width: '100%', margin: '0 auto',
-        background: 'white', minHeight: '100vh',
-        display: 'flex', flexDirection: 'column',
-      }}>
-        {header}
-        {children}
-      </div>
-    </div>
+    <MarcoPantalla ancho={520} encabezado={header}>
+      {children}
+    </MarcoPantalla>
   )
 
-  /* ── loading ── */
-  if (loading) return wrapper(
-    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <Spinner size="md" />
-    </div>,
-  )
+  if (loading) return wrapper(estadoCargando())
 
-  /* ── error ── */
-  if (error) return wrapper(
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, padding: 24, textAlign: 'center' }}>
-      <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#DC2626', margin: 0 }}>{error}</p>
-      <button
-        onClick={cargar}
-        style={{
-          background: C.orange, color: 'white', border: 'none',
-          borderRadius: 10, padding: '10px 20px',
-          fontFamily: 'Montserrat, sans-serif', fontWeight: 700, fontSize: 13, cursor: 'pointer',
-        }}
-      >
-        Reintentar
-      </button>
-    </div>,
-  )
+  if (error) return wrapper(estadoError(error, cargar))
 
-  /* ── sin pedidos ── */
-  if (itemsAgrupados.length === 0) return wrapper(
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, padding: 24, textAlign: 'center' }}>
-      <p style={{ fontFamily: 'Montserrat, sans-serif', fontWeight: 700, fontSize: 15, color: C.text, margin: 0 }}>
-        No hay pedidos en esta sesión
-      </p>
-      <button
-        onClick={() => navigate('/menu')}
-        style={{
-          background: C.orange, color: 'white', border: 'none',
-          borderRadius: 12, padding: '12px 24px',
-          fontFamily: 'Montserrat, sans-serif', fontWeight: 700, fontSize: 14, cursor: 'pointer',
-        }}
-      >
-        Ver menú
-      </button>
-    </div>,
-  )
+  if (itemsAgrupados.length === 0) {
+    return wrapper(estadoVacio({ texto: 'No hay pedidos en esta sesión', accion: { texto: 'Ver menú', onClick: () => navigate('/menu') } }))
+  }
 
   /* ── resumen de "Total a pagar" ── */
   const totalAPagarContent = (
