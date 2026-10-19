@@ -5,303 +5,13 @@ import { api } from '../../../services/api'
 import type { SesionHistorial } from '../../../services/api'
 import { ClipboardList, X, Edit, XCircle } from 'lucide-react'
 import { PERIOD_LABELS, SesionCard, SesionDetalleModal, getPeriodBounds, shortId, type AccionPedido, type Period, type SesionPedido } from '@menyu/ui/historial'
+import { APARIENCIA_HISTORIAL, EditarPedidoModal, type ItemEditable } from '@menyu/ui/editar-pedido'
 
 interface PedidoParaEditar {
   id: string
-  items: { id: string; nombre: string; cantidad: number; cantidadEditada: number | null; precioUnitario: number }[]
+  items: ItemEditable[]
 }
 
-function countWords(text: string): number {
-  return text.trim() === '' ? 0 : text.trim().split(/\s+/).length
-}
-
-/* ── StepBtn ─────────────────────────────────────────────────────────────── */
-function StepBtn({
-  label,
-  onClick,
-  disabled,
-}: {
-  label: string
-  onClick: () => void
-  disabled: boolean
-}) {
-  const [hovered, setHovered] = useState(false)
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      onMouseEnter={() => !disabled && setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        width:          28,
-        height:         28,
-        borderRadius:   '50%',
-        border:         `1px solid ${disabled ? '#E5E7EB' : '#D1D5DB'}`,
-        background:     disabled ? '#F9FAFB' : hovered ? '#EEF0F8' : 'white',
-        color:          disabled ? '#D1D5DB' : '#374151',
-        fontFamily:     'Montserrat, sans-serif',
-        fontWeight:     700,
-        fontSize:       16,
-        lineHeight:     1,
-        cursor:         disabled ? 'not-allowed' : 'pointer',
-        display:        'flex',
-        alignItems:     'center',
-        justifyContent: 'center',
-        flexShrink:     0,
-        transition:     'background 0.12s',
-      }}
-    >
-      {label}
-    </button>
-  )
-}
-
-/* ── EditModal ───────────────────────────────────────────────────────────── */
-function EditModal({
-  pedido,
-  onClose,
-  onDone,
-}: {
-  pedido: PedidoParaEditar
-  onClose: () => void
-  onDone: () => void
-}) {
-  const [quantities, setQuantities] = useState<Record<string, number>>(() =>
-    Object.fromEntries(pedido.items.map((i) => [i.id, i.cantidadEditada ?? i.cantidad])),
-  )
-  const [justificacion, setJustificacion] = useState('')
-  const [submitting, setSubmitting]       = useState(false)
-  const [error, setError]                 = useState<string | null>(null)
-
-  const words = countWords(justificacion)
-
-  const ediciones = pedido.items
-    .filter((item) => quantities[item.id] !== (item.cantidadEditada ?? item.cantidad))
-    .map((item) => ({ pedidoItemId: item.id, cantidadNueva: quantities[item.id] }))
-
-  const hasChanges    = ediciones.length > 0
-  const todosAnulados = pedido.items.every((item) => quantities[item.id] === 0)
-  const canSubmit     = hasChanges && justificacion.trim().length > 0 && words <= 50 && !submitting
-
-  function setQty(id: string, val: number) {
-    setQuantities((prev) => ({ ...prev, [id]: val }))
-  }
-
-  async function handleSubmit() {
-    if (!canSubmit) return
-    setSubmitting(true)
-    setError(null)
-    try {
-      await api.pedidos.editar(pedido.id, { justificacion: justificacion.trim(), ediciones })
-      onDone()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Error al editar pedido')
-      setSubmitting(false)
-    }
-  }
-
-  return (
-    <div
-      style={{
-        position:       'fixed',
-        inset:          0,
-        zIndex:         1000,
-        background:     'rgba(45,53,97,0.55)',
-        display:        'flex',
-        alignItems:     'center',
-        justifyContent: 'center',
-        padding:        20,
-      }}
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div
-        style={{
-          background:   'white',
-          borderRadius: 16,
-          width:        '100%',
-          maxWidth:     500,
-          padding:      24,
-          boxShadow:    '0 24px 60px rgba(31,35,51,0.30)',
-          maxHeight:    '90vh',
-          overflowY:    'auto',
-        }}
-      >
-        {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-          <h3 style={{ fontFamily: 'Montserrat, sans-serif', fontWeight: 700, fontSize: 16, color: '#2D3561', margin: 0 }}>
-            Editar pedido {shortId(pedido.id)}
-          </h3>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', padding: 4, display: 'flex' }}>
-            <X size={18} />
-          </button>
-        </div>
-
-        <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, color: '#6B7280', margin: '0 0 16px' }}>
-          Ajustá la cantidad de cada ítem. Solo se registran los ítems que cambian.
-        </p>
-
-        {/* Item rows */}
-        <div style={{ marginBottom: 16 }}>
-          {pedido.items.map((item) => {
-            const max     = item.cantidadEditada ?? item.cantidad
-            const current = quantities[item.id]
-            const changed = current !== max
-            const anulado = current === 0
-
-            let rowBg     = 'transparent'
-            let rowBorder = '1px solid transparent'
-            if (changed && anulado) { rowBg = '#FEE2E2'; rowBorder = '1px solid #FECACA' }
-            else if (changed)       { rowBg = '#FDF0ED'; rowBorder = '1px solid #F6C4B8' }
-
-            return (
-              <div
-                key={item.id}
-                style={{
-                  display:      'flex',
-                  alignItems:   'center',
-                  gap:          12,
-                  padding:      '8px 10px',
-                  borderRadius: 8,
-                  background:   rowBg,
-                  border:       rowBorder,
-                  marginBottom: 4,
-                  transition:   'background 0.15s, border-color 0.15s',
-                }}
-              >
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <span
-                    style={{
-                      fontFamily:     'Inter, sans-serif',
-                      fontSize:       13,
-                      color:          anulado ? '#DC2626' : '#374151',
-                      textDecoration: anulado ? 'line-through' : 'none',
-                    }}
-                  >
-                    {item.nombre}
-                  </span>
-                  {anulado && (
-                    <div>
-                      <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 11, fontWeight: 600, color: '#DC2626' }}>
-                        Ítem anulado
-                      </span>
-                    </div>
-                  )}
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <StepBtn
-                    label="−"
-                    onClick={() => setQty(item.id, Math.max(0, current - 1))}
-                    disabled={current === 0}
-                  />
-                  <span
-                    style={{
-                      fontFamily: 'Montserrat, sans-serif',
-                      fontWeight: 700,
-                      fontSize:   14,
-                      color:      anulado ? '#E8563A' : '#2D3561',
-                      minWidth:   20,
-                      textAlign:  'center',
-                    }}
-                  >
-                    {current}
-                  </span>
-                  <StepBtn
-                    label="+"
-                    onClick={() => setQty(item.id, Math.min(max, current + 1))}
-                    disabled={current === max}
-                  />
-                </div>
-                <span
-                  style={{
-                    fontFamily: 'Inter, sans-serif',
-                    fontSize:   12,
-                    color:      '#6B7280',
-                    minWidth:   56,
-                    textAlign:  'right',
-                    flexShrink: 0,
-                  }}
-                >
-                  ${(current * item.precioUnitario).toFixed(2)}
-                </span>
-              </div>
-            )
-          })}
-        </div>
-
-        {/* Justificación */}
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-            <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, fontWeight: 600, color: '#374151' }}>
-              Justificación
-            </label>
-            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 11, color: words > 50 ? '#E8563A' : '#9CA3AF' }}>
-              {words}/50 palabras
-            </span>
-          </div>
-          <textarea
-            value={justificacion}
-            onChange={(e) => setJustificacion(e.target.value)}
-            rows={3}
-            placeholder="Describí el motivo de la edición…"
-            style={{
-              width:        '100%',
-              padding:      '10px 12px',
-              borderRadius: 8,
-              border:       `1px solid ${words > 50 ? '#E8563A' : '#D1D5DB'}`,
-              fontFamily:   'Inter, sans-serif',
-              fontSize:     13,
-              color:        '#374151',
-              resize:       'vertical',
-              outline:      'none',
-              boxSizing:    'border-box',
-            }}
-          />
-        </div>
-
-        {hasChanges && todosAnulados && (
-          <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, color: '#92400E', background: '#FEF3C7', border: '1px solid #FCD34D', borderRadius: 6, padding: '8px 12px', margin: '0 0 12px' }}>
-            Esto anulará el pedido completo.
-          </p>
-        )}
-
-        {error && (
-          <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, color: '#E8563A', margin: '0 0 12px' }}>
-            {error}
-          </p>
-        )}
-
-        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-          <button
-            onClick={onClose}
-            style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #D1D5DB', background: 'white', fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#374151', cursor: 'pointer' }}
-          >
-            Cancelar
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={!canSubmit}
-            style={{
-              padding:      '8px 16px',
-              borderRadius: 8,
-              border:       'none',
-              background:   canSubmit ? '#E8563A' : '#D1D5DB',
-              fontFamily:   'Inter, sans-serif',
-              fontSize:     13,
-              fontWeight:   600,
-              color:        canSubmit ? 'white' : '#9CA3AF',
-              cursor:       canSubmit ? 'pointer' : 'not-allowed',
-              transition:   'background 0.15s',
-            }}
-          >
-            {submitting ? 'Guardando…' : 'Guardar edición'}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-/* ── BadgeEstado ─────────────────────────────────────────────────────────── */
 /* ── Editar pedido (acción del gerente en el detalle) ────────────────────── */
 function accionEditarPedido(canEdit: boolean, onEdit: (p: PedidoParaEditar) => void): AccionPedido {
   return (pedido: SesionPedido) => {
@@ -310,11 +20,10 @@ function accionEditarPedido(canEdit: boolean, onEdit: (p: PedidoParaEditar) => v
       onEdit({
         id:    pedido.id,
         items: pedido.items.map((i) => ({
-          id:              i.id,
-          nombre:          i.itemNombre,
-          cantidad:        i.cantidad,
-          cantidadEditada: i.cantidadEditada,
-          precioUnitario:  i.precioUnitario,
+          id:             i.id,
+          nombre:         i.itemNombre,
+          cantidadActual: i.cantidadEditada ?? i.cantidad,
+          precioUnitario: i.precioUnitario,
         })),
       })
     }
@@ -594,10 +303,12 @@ export function HistorialSesionesPage() {
 
       {/* Edit modal — z-index 1000, sibling of detail modal */}
       {editingPedido && (
-        <EditModal
-          pedido={editingPedido}
+        <EditarPedidoModal
+          codigo={shortId(editingPedido.id)}
+          items={editingPedido.items}
+          apariencia={APARIENCIA_HISTORIAL}
+          onGuardar={async (edicion) => { await api.pedidos.editar(editingPedido.id, edicion); handleEditDone() }}
           onClose={() => setEditingPedido(null)}
-          onDone={handleEditDone}
         />
       )}
     </div>
