@@ -304,7 +304,12 @@ Orden de magnitud, una persona en días de trabajo enfocado (no son las horas de
 - **Las acciones del script quedan en el historial solo en las bases que ya tienen la migración de E1a.** La cuenta ROOT que se creó en staging antes de E1a no dejó rastro. En producción, hasta el tag que lleve la migración, el script avisa y no registra.
 - **Cambio de comportamiento público (E3):** una marca o restaurante dado de baja deja de abrir mesas y de mostrar su carta. Hoy "borrar" no hacía eso: si alguien depende de eso, se entera acá.
 - **Sesiones ya iniciadas:** los tokens de acceso (8 h) de gente de una marca dada de baja, o de una cuenta cuya contraseña se restableció, siguen valiendo hasta que vencen; lo que se revoca al instante son los refresh tokens. Revocar todo al instante exigiría consultar la base en cada pedido; no se propone.
+<<<<<<< Updated upstream
 - **Migración (E1a, ya escrita y probada):** una sola, con la tabla del historial, los disparadores y la columna de contraseña temporal. Va en el mismo tag que las 13 migraciones pendientes (ahora 14) y **entra en el ensayo con una copia de producción**. El disparador del último ROOT hace que `delete from admin` falle mientras quede un ROOT: las limpiezas de tests usan `session_replication_role = replica`. El historial, en cambio, **no se puede limpiar ni con ese atajo**.
+=======
+- **Migración (E1a):** una sola, con la tabla del historial, los disparadores y la columna de contraseña temporal. Va en el mismo tag que las 13 migraciones pendientes y **entra en el ensayo con una copia de producción**. El disparador del último ROOT hace que `delete from admin` falle mientras quede un ROOT: las limpiezas de tests usan `session_replication_role = replica`.
+- **La consola necesita un web-admin de staging con URL fija.** Hoy no la hay: ver 11.4 del plan de Discovery (la redirección del login lo rompe y manda los tokens por la URL). Se resuelve creando `menyu-admin-staging` y `menyu-staff-staging` en Vercel; lo de fondo es que cada app tenga su propio login.
+>>>>>>> Stashed changes
 - **Cuenta sin dueño:** hoy puede haber marcas sin OWNER (BurgerLab). La consola las marca con "Sin dueño".
 - **Hasta E4** ROOT sigue entrando a las pantallas viejas de web-admin escribiendo la URL. La consola no cierra eso: lo cierra E4.
 - **Compatibilidad:** los scripts de prueba que usan a `root@menyu.com` (`Documentacion/datos-de-prueba-local.md`) siguen sirviendo en local; en staging y producción esa cuenta se retira (E5).
