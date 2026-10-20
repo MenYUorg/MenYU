@@ -20,6 +20,8 @@ Authorization: Bearer <accessToken>
 
 Tokens are obtained from any `/api/auth` endpoint that returns a `TokenPair`.
 
+**Supabase access token (migration in progress, `docs/auth/specs/auth.md`).** `GET /api/auth/me` and `POST /api/auth/invitaciones` take the Supabase access token instead (`Authorization: Bearer <supabase access token>`, Swagger scheme `supabase`). The backend verifies it against the project's JWKS and then looks up the `Usuario` in our database: a Supabase account without an active `Usuario` gets 403. Every other endpoint keeps the legacy JWT until Phase 4.
+
 ### Token pair shape
 
 ```json
@@ -203,16 +205,65 @@ Revoke a refresh token (sign out).
 
 ### `GET /api/auth/me`
 
-Return the JWT payload of the authenticated user.
+Return the user authenticated with Supabase and their memberships (`PerfilUsuario` in `@menyu/types`). An OWNER membership comes with its brand's active restaurants, since it covers all of them.
 
-**Auth required:** `Bearer <accessToken>`
+**Auth required:** `Bearer <Supabase access token>`
+
+**Response 200**
+
+```json
+{
+  "id": "uuid",
+  "email": "ana@menyu.com",
+  "nombre": "Ana",
+  "esRoot": false,
+  "membresias": [
+    { "id": "uuid", "rol": "OWNER", "marca": { "id": "uuid", "nombre": "Marca", "restaurantes": [{ "id": "uuid", "nombre": "Sucursal" }] }, "restaurante": null },
+    { "id": "uuid", "rol": "MOZO", "marca": null, "restaurante": { "id": "uuid", "nombre": "Sucursal", "marcaId": "uuid" } }
+  ]
+}
+```
 
 **Responses**
 
 | Status | Description |
 |---|---|
-| 200 | Returns JWT payload object |
-| 401 | Token invalid or expired |
+| 200 | User and memberships (empty list if none) |
+| 401 | No token, or invalid, expired or from another Supabase project |
+| 403 | The Supabase account has no active `Usuario` in MenYU |
+| 503 | The Supabase JWKS could not be fetched |
+
+---
+
+### `POST /api/auth/invitaciones`
+
+Invite a staff member by email (Supabase invite). Creates the `Usuario`, its `Membresia` and, for `MOZO` and `JEFE_SALON`, the restaurant's `Mozo` (or links the existing one with the same email).
+
+**Auth required:** `Bearer <Supabase access token>`
+
+**Body**
+
+```json
+{ "email": "carlos@restaurante.com", "nombre": "Carlos", "rol": "MOZO", "restauranteId": "uuid" }
+```
+
+`OWNER` goes with `marcaId` (and no `restauranteId`); every other role with `restauranteId` (and no `marcaId`).
+
+Who can invite whom: ROOT → `OWNER` and `GERENTE`; OWNER → any role in their brand; GERENTE → `JEFE_SALON`, `MOZO` and `COCINA` in their restaurants.
+
+If the email already belongs to a `Usuario`, or to a confirmed Supabase account (a registered customer, for example), no email is sent: the membership is added (`invitacionEnviada: false`). An unconfirmed Supabase account with that email is deleted and invited again, because whoever created it may not own the email.
+
+**Response 201:** `{ "usuarioId": "uuid", "membresiaId": "uuid", "invitacionEnviada": true }`
+
+| Status | Description |
+|---|---|
+| 201 | Invitation created |
+| 400 | Invalid body, or `marcaId`/`restauranteId` that doesn't match the role |
+| 401 | No token, or invalid or expired |
+| 403 | No access to MenYU, or not allowed to invite that role there |
+| 404 | Brand or restaurant not found |
+| 409 | The user already has a role there, or is deactivated |
+| 502 | Supabase rejected the invitation |
 
 ---
 

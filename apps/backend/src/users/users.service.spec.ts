@@ -104,7 +104,9 @@ describe('UsersService', () => {
 
       const result = await service.findMozoByEmail('mozo@test.com')
 
-      expect(mockPrisma.mozo.findFirst).toHaveBeenCalledWith({ where: { email: 'mozo@test.com' } })
+      expect(mockPrisma.mozo.findFirst).toHaveBeenCalledWith({
+        where: { email: 'mozo@test.com', passwordHash: { not: null } },
+      })
       expect(result).toEqual(mozo)
     })
 

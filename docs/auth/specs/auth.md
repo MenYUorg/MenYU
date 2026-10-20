@@ -31,9 +31,11 @@ Un login central para el personal del restaurante y para los clientes que quiera
 
 En la misma sesión se decidieron también los puntos **Clientes**, **Convivencia con el modelo actual** y **Cuentas existentes** de Decisiones cerradas.
 
-## Decisión abierta (resolver al planificar la Fase 2)
+## Decisiones de la planificación de la Fase 2 (2026-10-20)
 
-1. **Cuándo pasan los endpoints existentes al guard nuevo.** Hoy hay 43 `@Roles(...)` legacy en 13 controllers, 8 `@RequiresTipo('admin','mozo')`, verificaciones del JWT propio a mano en `orders`, `pedidos` y `waiter-calls`, y los chequeos de pertenencia `assertStaffAccess` y `assertOwnerAccess`. Los frontends siguen mandando el token legacy hasta la Fase 4. Recomendación: migrar los endpoints en la misma entrega que la Fase 4, para que backend y frontends cambien de token a la vez.
+1. **Los endpoints existentes pasan al guard nuevo en la Fase 4**, en la misma entrega que los frontends, para que backend y frontends cambien de token a la vez. Son 43 `@Roles(...)` legacy en 13 controllers, 8 `@RequiresTipo('admin','mozo')`, las verificaciones del JWT propio a mano en `orders`, `pedidos` y `waiter-calls`, y los chequeos de pertenencia (`assertStaffAccess`, `common/assert-owner-access.ts` y los `assertRestauranteOwnership` privados de cada service). En la Fase 2 solo cambia `GET /auth/me`.
+2. **Una cuenta de Supabase sin confirmar no se reutiliza al invitar:** se borra y se manda la invitación normal. Como el registro público está abierto, cualquiera puede crear una cuenta con el email de un empleado; si se usara esa cuenta, quien la creó conocería su contraseña y, cuando el dueño del email la confirmara, entraría con acceso de personal.
+3. **Tests:** además de los 5 del guard, un test de tabla de la matriz de quién invita a quién, que es la parte con más riesgo de escalada de privilegios.
 
 ## Dominios
 
@@ -83,17 +85,18 @@ En la misma sesión se decidieron también los puntos **Clientes**, **Convivenci
 - Migración + seed con un OWNER de prueba con membresía en la marca del restaurante de prueba. En local no hay Supabase Auth: su `supabaseUserId` es un UUID fijo que no existe en ningún proyecto; para iniciar sesión con él hay que reemplazarlo por el id de un usuario real de staging.
 - **Terminado cuando:** la migración corre limpia, el seed crea un OWNER asociado a la marca del restaurante de prueba, y el typecheck y los tests del backend siguen pasando.
 
-### Fase 2 — Backend (NestJS)
+### Fase 2 — Backend (NestJS) ✅ (2026-10-20)
+Hecha con los nombres que propone esta sección: `SupabaseAuthGuard`, `@RequiereRol`, `MembresiaGuard` y `@UsuarioActual()`. Viven en `apps/backend/src/auth/guards/`, `decorators/` y `supabase/`, y las invitaciones en `invitaciones/`. Los permisos los decide `AccesoService`, y el guard deja el usuario en `request.usuario`. La verificación con tokens reales queda para staging (ver "Para tener en cuenta").
 - `SupabaseAuthGuard`: valida el JWT de Supabase con `jose` contra el JWKS del proyecto (`<SUPABASE_URL>/auth/v1/.well-known/jwks.json`, issuer `<SUPABASE_URL>/auth/v1`, audience `authenticated`) y resuelve el `Usuario` por `supabaseUserId`. Usuario inexistente → 403. Usuario inactivo → 403. Token inválido o vencido → 401.
 - Decorador de roles + guard que valida el rol en el restaurante del recurso pedido (una membresía de `OWNER` cubre todos los restaurantes de su marca). `@Roles`, `RolesGuard` y `@CurrentUser` ya existen (legacy, en uso hasta la Fase 5): los nuevos usan otros nombres, por ejemplo `@RequiereRol(...)`, `MembresiaGuard` y `@UsuarioActual()`.
 - Endpoint `GET /auth/me`: devuelve usuario + membresías. Reemplaza al `GET /auth/me` legacy, que ningún frontend usa.
-- Endpoint `POST /auth/invitaciones`: invita por email vía Supabase Admin API, crea el `Usuario` con el `supabaseUserId` devuelto y su `Membresia`. Quién invita a quién: ROOT → OWNER y GERENTE; OWNER → cualquier rol de su marca; GERENTE → JEFE_SALON, MOZO y COCINA de sus restaurantes. Si el email ya tiene cuenta en Supabase (por ejemplo, un cliente registrado), no se reinvita: se usa ese id. Para MOZO y JEFE_SALON crea el `Mozo` del restaurante o vincula el existente con el mismo email.
+- Endpoint `POST /auth/invitaciones`: invita por email vía Supabase Admin API, crea el `Usuario` con el `supabaseUserId` devuelto y su `Membresia`. Quién invita a quién: ROOT → OWNER y GERENTE; OWNER → cualquier rol de su marca; GERENTE → JEFE_SALON, MOZO y COCINA de sus restaurantes. Si el email ya tiene cuenta confirmada en Supabase (por ejemplo, un cliente registrado), no se reinvita: se usa ese id. Si la cuenta existe sin confirmar, se borra y se invita de nuevo (decisión 2 de la planificación de la Fase 2). Para MOZO y JEFE_SALON crea el `Mozo` del restaurante o vincula el existente con el mismo email.
 - Pendientes que dejó la Fase 1:
   - `Usuario.email` es único pero distingue mayúsculas: guardar siempre el email que devuelve Supabase (en minúscula) y comparar en minúscula al vincular un `Mozo`.
   - `Mozo.passwordHash` es obligatorio: hacerlo opcional (migración) para poder crear el `Mozo` de un invitado.
 - CORS: no lleva código, se configura en la Fase 0 con `CORS_ORIGINS` y `CORS_ORIGIN_PATTERNS`. Acá solo verificar que estén los subdominios de `menyu-app.com` (incluido `staging.menyu-app.com`) y, en local, `menyu.local`.
 - Swagger con esquema Bearer.
-- **Tests (solo estos):** token válido, token vencido, token de otro proyecto, usuario sin membresía, rol incorrecto.
+- **Tests (solo estos):** token válido, token vencido, token de otro proyecto, usuario sin membresía, rol incorrecto. Además, un test de tabla de la matriz de invitaciones (decisión 3 de la planificación de la Fase 2).
 - **Terminado cuando:** los tests pasan y un endpoint de prueba protegido responde bien a cada caso.
 
 ### Fase 3 — App web-auth (email + contraseña)
@@ -164,11 +167,21 @@ En la misma sesión se decidieron también los puntos **Clientes**, **Convivenci
 - Las pruebas del revisor en el navegador se hacen solo contra staging o local, nunca contra producción, y con usuarios de prueba.
 
 ## Para tener en cuenta
-Observaciones que dejaron la Fase 1 y la migración de dominios de la Fase 0 (2026-10-20). Revisarlas al arrancar cada fase y borrar las que ya no apliquen.
+Observaciones que dejaron las Fases 0 a 2 (2026-10-20). Revisarlas al arrancar cada fase y borrar las que ya no apliquen.
 
-- **Migración de la Fase 1 en staging:** se aplicó en el deploy del merge de la Fase 1 (`/health` mostró `39522af`, y el contenedor solo arranca si `prisma migrate deploy` no falla). Falta confirmar:
-  - que el backend se conecta con el rol dueño de las tablas: si no, la RLS de `usuario` y `membresia` lo bloquea (se nota en la Fase 2, cuando el guard las lea);
-  - con la publishable key, que `anon` y `authenticated` no pueden leer `usuario` ni `membresia` por la Data API.
+- **Fase 2: verificación en staging, pendiente hasta el merge.** Sin credenciales de Supabase en local, los tokens reales y las invitaciones de punta a punta no se probaron. Después del deploy de staging, con los usuarios y el procedimiento de `docs/auth/usuarios-prueba-staging.md` (el primer ROOT se crea a mano):
+  - `GET /auth/me`: ROOT → 200; token alterado o vencido → 401; cuenta sin `Usuario` → 403.
+  - `POST /auth/invitaciones`: el MOZO invitando a un GERENTE → 403; ROOT → OWNER de "Marca Pruebas Auth" → 201 y llega el mail (depende del SMTP de la Fase 0); repetirla → 409.
+  - La búsqueda de cuentas existentes usa `auth.admin.generateLink({ type: 'recovery' })`: confirmar que una cuenta inexistente da 404 `user_not_found`, que una confirmada se reutiliza (`invitacionEnviada: false`) y que una sin confirmar se borra y se reinvita.
+- **"Confirm email" activo en los dos proyectos de Supabase (Fase 0).** La invitación reutiliza una cuenta confirmada: si la confirmación estuviera apagada, un registro público quedaría confirmado al instante y se le daría acceso de personal a quien lo creó.
+- **Para la Fase 3:** la invitación no manda `redirectTo`, así que el link del mail lleva a la Site URL (`auth.<ambiente>`). web-auth tiene que atender ahí el link de invitación (definir contraseña) o sumar el `redirectTo` en `InvitacionesService`.
+- **Para la Fase 4:**
+  - `@RequiereRol` / `MembresiaGuard` solo sirven para rutas con `:restauranteId`. Las de marca (`/marcas/:id`) y las de un recurso (`/items/:id`) resuelven el restaurante en el service y le preguntan a `AccesoService`.
+  - `AccesoService.rolesEnRestaurante` no mira si el restaurante o la marca están activos (`perfil()` sí filtra los restaurantes inactivos de la marca).
+  - No hay forma de reenviar la invitación a un `Usuario` que todavía no la aceptó.
+- **Migración de la Fase 1 en staging:** se aplicó en el deploy del merge de la Fase 1 (`/health` mostró `39522af`, y el contenedor solo arranca si `prisma migrate deploy` no falla). Falta confirmar (se ve con la verificación de la Fase 2 en staging):
+  - que el backend se conecta con el rol dueño de las tablas: si `GET /auth/me` devuelve 200, la RLS de `usuario` y `membresia` no lo bloquea;
+  - con la publishable key, que `anon` y `authenticated` no pueden leer `usuario` ni `membresia` por la Data API (`curl "$SUPABASE_URL/rest/v1/usuario" -H "apikey: <publishable key>"` no devuelve filas).
 - **Producción, incidente del 2026-10-20:** un cambio manual de `CORS_ORIGINS` en Railway de producción redesplegó el servicio construyendo el último commit de `main` (31 migraciones) en lugar del tag v1.0.5 (18). `prisma migrate deploy` aplicó las migraciones pendientes hasta que `20260906183320_division_pagos_campos` falló (P3009): su índice único `comensal(sesion_id, nombre_normalizado)` chocó con los comensales "Invitado" que el backfill de `20260722175451_split_pagos_comensales` crea uno por pago, como ya había pasado en QA. La base de producción ya no servía para el código de v1.0.5 (`pago.pedido_id` y `restaurante.qr_base_url` se borraron), así que se recuperó hacia adelante: se borraron esos comensales, se marcó la migración como revertida y se desplegó `main` con el tag v1.0.6 (`39522af`, con las 32 migraciones aplicadas y el smoke de producción en verde).
   - En Railway, un cambio de variables redespliega el servicio y corre las migraciones. El servicio de producción quedó desconectado de GitHub (*Settings → Source*) para que salga solo de `deploy-production.yml`: no reconectarlo.
 - **Dominios propios: falta Mercado Pago y `BASE_URL` (2026-10-20).** Staging y producción ya usan `*.menyu-app.com` (v1.0.7, con las variables de `docs/auth/VariablesACambiar.md`), salvo `BASE_URL`, que en los dos ambientes sigue con la URL vieja de Railway: nadie del equipo tiene acceso al panel de la app de Mercado Pago. `BASE_URL` arma el `redirect_uri` del OAuth con el que cada restaurante conecta su cuenta de MP y la `notification_url` de cada pago. MP rechaza un `redirect_uri` que no esté registrado, así que cambiar `BASE_URL` antes de registrarlo rompe la conexión de MP. Mientras tanto todo funciona por la URL vieja, que no hay que dar de baja: las preferencias ya creadas notifican ahí. Cuando haya acceso al panel:
@@ -177,5 +190,5 @@ Observaciones que dejaron la Fase 1 y la migración de dominios de la Fase 0 (20
   3. Cambiar `BASE_URL` en Railway a `https://api.staging.menyu-app.com/api` (staging) y `https://api.menyu-app.com/api` (producción). Cada cambio redespliega el servicio.
   4. Probar desde web-admin → Configuración → Pagos → conectar Mercado Pago: tiene que volver a `https://admin.<ambiente>/configuracion/pagos?mp=conectado`.
 - **Rama `origin/fix/356-mozo-id-desde-jwt` (sin mergear):** trae la migración `20261014222232_add_admin_id_to_pago`, con fecha anterior a la de la Fase 1 y una FK a `admin`. Si se mergea, regenerarla con una fecha posterior y sumar `Pago.adminId` a la Fase 5: pasarlo a `Usuario` antes de quitar `Admin`, igual que `PedidoEdicion.adminId`.
-- **Base local:** en la máquina donde se hizo la Fase 1, `apps/backend/.env` tiene un `DATABASE_URL` de placeholder (`db.[project-ref].supabase.co`) y no tiene `DIRECT_URL`. Los comandos de Prisma se corrieron con las dos variables en línea contra `postgresql://menyu:menyu@localhost:5433/menyu`, como indica el README del backend. Antes de la Fase 2 conviene apuntar el `.env` a `localhost:5433`. La base local quedó con todas las migraciones y el seed.
-- **La API legacy no crea OWNERs:** `POST /admins` siempre crea un GERENTE, y uno creado por ROOT queda sin marca y no se le puede asignar ningún restaurante. Los usuarios de prueba de staging (`docs/auth/usuarios-prueba-staging.md`) se crearon con un INSERT para el OWNER y la API para el resto. En la Fase 2, la invitación de ROOT a OWNER cubre este hueco.
+- **Base local:** `apps/backend/.env` apunta a `postgresql://menyu:menyu@localhost:5433/menyu` (`DATABASE_URL` y `DIRECT_URL`, el Postgres de `apps/backend/docker-compose.yml`) y tiene el `CORS_ORIGIN_PATTERNS` de `*.menyu.local`. Le faltan `MP_ENCRYPTION_KEY` (sin ella el backend no arranca; en la Fase 2 se pasó en línea) y, para probar Supabase Auth, `SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY` del Supabase de staging.
+- **La API legacy no crea OWNERs:** `POST /admins` siempre crea un GERENTE, y uno creado por ROOT queda sin marca y no se le puede asignar ningún restaurante. Los usuarios de prueba de staging (`docs/auth/usuarios-prueba-staging.md`) se crearon con un INSERT para el OWNER y la API para el resto. Con Supabase Auth lo cubre `POST /auth/invitaciones` (ROOT → OWNER).
