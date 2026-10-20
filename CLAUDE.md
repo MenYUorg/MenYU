@@ -90,9 +90,9 @@ packages/types/src/
 ### Roles de administración (enum `RolAdmin` en DB)
 | Rol | Descripción |
 |---|---|
-| `ROOT` | Administración general del sistema MenYu: crea y elimina marcas, restaurantes y usuarios OWNER y GERENTE. **No** decide sobre marcas ni restaurantes y **no** accede a sus datos privados. No es un bypass |
-| `OWNER` | Dueño de una marca — acceso a toda su marca y sus restaurantes |
-| `GERENTE` | Gerente de restaurantes específicos, asignados via tabla `AdminRestaurante` |
+| `ROOT` | Administración general del sistema MenYu: crea, edita y borra marcas, restaurantes y usuarios OWNER (asignados a su marca) y crea otras cuentas ROOT (las cuentas ROOT no se borran desde la app, y la primera de cada entorno sale de `apps/backend/scripts/cuentas-root.ts`). Todo lo que hace queda en un historial que nadie puede editar ni borrar y que ven todos los ROOT. **No** crea GERENTE (los crea el OWNER), **no** decide sobre marcas ni restaurantes (menú, precios, descuentos, mesas, pedidos, logo, dirección…) y **no** accede a sus datos privados. No es un bypass. Su consola (`/root` en web-admin) está en `docs/plan-consola-root.md` |
+| `OWNER` | Dueño de una marca — acceso a toda su marca y sus restaurantes. Lo crea ROOT |
+| `GERENTE` | Gerente de restaurantes específicos, asignados via tabla `AdminRestaurante`. Lo crea el OWNER desde su panel |
 
 ### Tipos de usuario adicionales (tablas separadas, NO son RolAdmin)
 | Tipo | Tabla | App |
@@ -104,7 +104,7 @@ packages/types/src/
 ### Guards NestJS
 - `@Roles(RolAdmin.ROOT)` — solo ROOT
 - `@Roles(RolAdmin.OWNER, RolAdmin.GERENTE)` — panel admin
-- ROOT no es un bypass: el código nuevo no lo incluye en `@Roles(...)` ni en los chequeos de pertenencia (OWNER de la marca, GERENTE asignado). Varios services existentes todavía tienen `if (user.rol === 'ROOT') return`: ver el Apéndice A de `docs/plan-discovery-descuentos.md`
+- ROOT no es un bypass: el código nuevo no lo incluye en `@Roles(...)` ni en los chequeos de pertenencia (OWNER de la marca, GERENTE asignado). Las rutas propias de ROOT van en `/root/*` con `@Roles(RolAdmin.ROOT)` y un `select` explícito en cada consulta. Varios services existentes todavía tienen `if (user.rol === 'ROOT') return`: ver el Apéndice A de `docs/plan-discovery-descuentos.md` y la etapa 4 de `docs/plan-consola-root.md`
 - Mozos y cocina usan sus propios guards separados del enum RolAdmin
 - El comensal no usa guards de admin — se autentica por sesión de mesa
 
