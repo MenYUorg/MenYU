@@ -591,6 +591,7 @@ En los tres, el run verde es del head al merge. Para el #396 se corrigió la sec
   - **Decisión (opción a):** `39e4633` hace que `check-ci` exija los dos checks del commit (`CHECK_CI` y `CHECK_E2E`). Espera hasta 15 min en total y falla enseguida si alguno termina sin `success` o no tiene run. Se simuló con un `gh` falso en 8 casos: los dos en verde, uno en curso y después verde (para cada check), e2e rojo, e2e sin run, ci cancelado, rojo después de esperar y timeout. Los 8 dieron lo esperado y `actionlint` dio exit 0.
   - **Consecuencia:** un tag sobre un commit anterior a este PR no despliega, porque no tiene el check del e2e ("sin run").
   - `ebb6b18`: el `postgres:17.6` del job lleva un comentario para confirmarlo con Supabase.
+  - **PR #408** (head `39e4633`), CI run [`39438348924`](https://github.com/MenYUorg/MenYU/actions/runs/39438348924), todo en verde: `E2E — backend (Postgres efímero)` tardó **66 s** (14:20:41 a 14:21:47; migraciones, drift y 9/9 e2e), el `ci` 5 min 39 s y Sonar pasó. El e2e no alarga el CI.
   - Después de esos commits, `origin/main` seguía en `8a2ac5b` (no hubo nada que rebasear). Se repitió con 17.6: 33/33 migraciones, `migrate diff` con exit 0 y 9/9 e2e.
 - El ruleset de `main` (16770555) exige un solo check: `CI — typecheck, lint, test, build` (integration 15368). Para que un e2e rojo bloquee el merge, Coty tiene que agregar `E2E — backend (Postgres efímero)`. Conviene hacerlo después de que el job haya corrido una vez, para que GitHub lo ofrezca en la lista.
 
