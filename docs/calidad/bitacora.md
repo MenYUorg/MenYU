@@ -348,7 +348,7 @@ El CI de `main` falló una vez, en `52a5448` (merge del #383), por el test inter
   - `docs/calidad/plan-rollback.md`.
 - **Commit 2** (`f610ef4`): `scripts/staging/fuerza-bruta.mjs` con lista blanca. Exige `STAGING_API_HOST` y `CONFIRMAR_STAGING=si`, rechaza cualquier otro host, no imprime el PIN, el JWT ni el restaurante, y cierra la sesión aunque falle un paso. No se ejecutó.
 - **Cómo se probó:** la regex, con 7 tags de ejemplo sin crear tags; el YAML, parseado; y las guardas del script, con hosts ficticios.
-- **CI:** el primer intento falló por un test inestable de web-admin, sin relación con el PR. El intento 2 del run [`39184409337`](https://github.com/MenYUorg/MenYU/actions/runs/39184409337) pasó.
+- **CI:** sobre `f610ef4`, el primer intento falló por un test inestable de web-admin, sin relación con el PR, y el intento 2 del run [`39184409337`](https://github.com/MenYUorg/MenYU/actions/runs/39184409337) pasó. No es el último verde de la rama: ese es el [`39310384767`](https://github.com/MenYUorg/MenYU/actions/runs/39310384767), sobre `7780925` (el head al merge).
 
 **Test inestable de web-admin (`PagosPage`):** `PagosPage.tsx:518` programa un `setTimeout` de 2,5 s para ocultar el aviso "Pago registrado correctamente" y no lo cancela al desmontar. Si el spec termina antes, el timer dispara con jsdom ya desarmado (`ReferenceError: window is not defined`) y Vitest falla aunque los 487 tests pasen. Propuesta: limpiar el timer en un `useEffect`, como ya hace `MensajePage` en web-cliente, en un PR chico con rojo/verde. Falta decidirlo.
 
@@ -497,7 +497,7 @@ Horas en UTC. Solo lectura, salvo la corrección de esta bitácora (`b4ff0a5`: l
 | PR | Merge | SHA | Último CI verde de la rama | CI de `main` |
 |---|---|---|---|---|
 | #395 | 19:20:58 | `78be010` | | `39310239261` |
-| #396 | 19:29:52 | `a4c4c53` | | `39311475842` |
+| #396 | 19:29:52 | `a4c4c53` | `39310384767` (`7780925`) | `39311475842` |
 | #397 | **Abierto** | | `39329007639` (`9873452`) | |
 | #398 | 21:11:07 | `6b680c4` | `39314277183` (`3488702`) | `39325483016` |
 | #399 | 21:26:48 | `032f919` | `39325519021` (`ce4ba8f`, con `main` mergeado) | `39327555239` |
@@ -554,3 +554,56 @@ Horas en UTC. Solo lectura, salvo la corrección de esta bitácora (`b4ff0a5`: l
 7. **Jueves 22/10:** ensayo de producción con un tag `vX.Y.Z`. Anotar `check-ci`, deploy, smoke y el SHA de `/health`.
 8. **Viernes 23/10:** subir los umbrales del gate (80 % y 5 % sobre código nuevo) y aplicar la definición de código nuevo elegida en el punto 3.
 9. Abrir el PR único de esta bitácora después del ensayo.
+
+### 20/10/2026: datos del informe y SCRUM-37 (migraciones y job e2e)
+
+Horas en UTC. No se mergeó ni se pusheó nada desde esta sesión.
+
+**Último CI verde de cada rama**
+
+| PR | Head al merge | Último CI verde de la rama | Merge |
+|---|---|---|---|
+| #394 | `21db047` | `39178833392` (terminó 19/10 00:06:24) | 19/10 00:24:23 (`8f56bd0`) |
+| #395 | `f9e025a` | `39184346017` (terminó 19/10 01:20:31) | 19/10 19:20:58 (`78be010`) |
+| #396 | `7780925` | `39310384767` (terminó 19/10 19:27:45) | 19/10 19:29:52 (`a4c4c53`) |
+
+En los tres, el run verde es del head al merge. Para el #396 se corrigió la sección del 18/10 (cierre): el `39184409337` era de `f610ef4`, no el último verde.
+
+**SCRUM-37, paso 1: migraciones sobre un Postgres vacío** (`main` = `8a2ac5b`, después del #407)
+- Son **33** migraciones, no 31: el #407 sumó `auth_usuario_membresia` y `mozo_password_opcional`.
+- La versión de Supabase no llegó, así que se corrió con `postgres:17.6` (la del `docker-compose.yml` del backend) y con `postgres:15` (la de `Documentacion/Doc_DB.md`), los dos en Docker local.
+- En las dos versiones: `prisma migrate deploy` aplicó las 33 (33 terminadas y 0 revertidas en `_prisma_migrations`), y `prisma migrate diff --from-url … --to-schema-datamodel prisma/schema.prisma --exit-code` salió con exit 0 y una migración vacía. **No queda drift.**
+- Lo que `migrate diff` no ve, revisado aparte en las dos: extensiones `plpgsql` y `unaccent`, y los CHECKs `item_menu` (descuento) y `membresia_ambito_check`. Los 3 `.sql` sueltos de `prisma/` ya están incluidos en las migraciones (`baseline_edicion_cantidad_editada` y `reconcile_schema_drift`): `pedido_edicion`, `pedido.updated_at` y `pedido_edicion_item.item_nombre` existen, y la FK que borra `fix_pedido_edicion_item.sql` no.
+
+**Paso 2: job `e2e-backend`** (rama local `ci/e2e-backend`, worktree `../MenYU-e2e`, sin push)
+- `e841c09`: el e2e mandaba `restaurantId`, pero el DTO es `restauranteId` desde `ddc3151` (15/05). El spec es del 06/05 y, como no corría en el CI, quedó viejo: el test "pin válido con sesión activa" daba 400.
+- `ac05f95`: job nuevo en `ci.yml`, en paralelo al `ci`. Usa `services: postgres` (`postgres:17.6`, a confirmar con Supabase) con `pg_isready`, `timeout-minutes: 15` e instala solo `@menyu/api...`. Pasos: generate, `migrate deploy`, `migrate diff --exit-code` (corta si aparece drift) y `test:e2e`.
+  - Sin secretos: `DATABASE_URL` y `DIRECT_URL` apuntan a `localhost`, y `JWT_SECRET` y `MP_ENCRYPTION_KEY` son de test. `CryptoService` exige `MP_ENCRYPTION_KEY` al arrancar `AppModule`.
+- Verificación:
+  - `actionlint` 1.7.12 dio exit 0.
+  - En local, 9/9 contra 17.6 y contra 15.
+  - Simulación de los pasos en `node:20` (Linux) con una copia limpia de `ac05f95`: 9/9 y exit 0. Los 551 s no sirven de referencia, porque el volumen de Windows es lento.
+- Jest termina con exit 0, pero tarda unos 10 s en salir ("did not exit one second after"): el `Pool` de `pg` de `PrismaService` queda vivo hasta su `idleTimeout`. No se tocó.
+- `clearE2eData` sigue borrando todos los clientes invitados. En el job no importa, porque la base es efímera, pero contra Supabase sí.
+
+**Cómo decide `check-ci` y qué exige el ruleset**
+- `check-ci` (`deploy-production.yml`) no mira la conclusión del workflow: busca el check run con el nombre `CHECK: CI — typecheck, lint, test, build`, que es el del job `ci`. El job nuevo es otro check run (`E2E — backend (Postgres efímero)`), así que **un e2e rojo no frenaba producción**.
+  - **Decisión (opción a):** `39e4633` hace que `check-ci` exija los dos checks del commit (`CHECK_CI` y `CHECK_E2E`). Espera hasta 15 min en total y falla enseguida si alguno termina sin `success` o no tiene run. Se simuló con un `gh` falso en 8 casos: los dos en verde, uno en curso y después verde (para cada check), e2e rojo, e2e sin run, ci cancelado, rojo después de esperar y timeout. Los 8 dieron lo esperado y `actionlint` dio exit 0.
+  - **Consecuencia:** un tag sobre un commit anterior a este PR no despliega, porque no tiene el check del e2e ("sin run").
+  - `ebb6b18`: el `postgres:17.6` del job lleva un comentario para confirmarlo con Supabase.
+  - Después de esos commits, `origin/main` seguía en `8a2ac5b` (no hubo nada que rebasear). Se repitió con 17.6: 33/33 migraciones, `migrate diff` con exit 0 y 9/9 e2e.
+- El ruleset de `main` (16770555) exige un solo check: `CI — typecheck, lint, test, build` (integration 15368). Para que un e2e rojo bloquee el merge, Coty tiene que agregar `E2E — backend (Postgres efímero)`. Conviene hacerlo después de que el job haya corrido una vez, para que GitHub lo ofrezca en la lista.
+
+**Sonar sobre `main` después del #397** (merge `e0f42e3`, 19/10 21:59:29; CI de `main` `39331707435`, en verde, con el gate `PASSED` a las 22:11:42)
+- El análisis de `e0f42e3` ya no figura en Sonar: el housekeeping borró los del 19/10 salvo el de `8f56bd0`. El siguiente que queda es el de `67cb463` (#400, 20/10 03:08), que solo suma archivos fuera de `sonar.sources` (`vercel.json` de web-admin y web-staff, `scripts/vercel/ignorar-build.sh` y `Documentacion/WORKFLOW.md`). Por eso sus números son los del #397.
+
+| | `032f919` (antes del #397) | `67cb463` (= #397) | `8a2ac5b` (hoy, #407) |
+|---|---|---|---|
+| Duplicación | 4,8 % (1.880 líneas, 101 bloques) | **3,9 %** (1.525 líneas, 88 bloques) | 3,9 % (1.525, 88) |
+| Cobertura de líneas | 81,6 % | **81,5 %** (4.740 sin cubrir de 25.574) | 81,3 % (4.817 de 25.767) |
+| Cobertura mixta | 83,5 % | **83,4 %** | 83,1 % |
+| Gate | OK | **OK** | OK |
+
+- Dio el ≈ 3,9 % esperado: salen 355 líneas duplicadas, las de las 6 pantallas.
+- La cobertura de líneas baja 0,1 pp por lo mismo que con el #395: las líneas cubiertas que salen hacen pesar más las que no tienen cobertura (4.740 sin cubrir, igual que antes).
+- Hoy, sobre código nuevo: `new_coverage` 88,0 % y `new_duplicated_lines_density` 0,1 %, con las 6 condiciones en OK. Con el umbral del 80 % pasaría, pero el margen bajó de 19,1 a 8 pp por los merges del 20/10.
