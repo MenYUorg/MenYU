@@ -163,9 +163,12 @@ createCliente(data)
 | POST | `/api/auth/guest` | No | Entrar como invitado (crea un Cliente sin contraseña) |
 | POST | `/api/auth/refresh` | No | Renovar el access token usando el refresh token |
 | POST | `/api/auth/logout` | No* | Cerrar sesión (invalida el refresh token) |
-| GET | `/api/auth/me` | Sí | Devuelve el payload del JWT del usuario logueado |
+| GET | `/api/auth/me` | Sí (token de Supabase) | Devuelve el `Usuario` y sus membresías |
+| POST | `/api/auth/invitaciones` | Sí (token de Supabase) | Invita a alguien del personal por email |
 
 *Pendiente de proteger antes de producción.
+
+`/auth/me` y `/auth/invitaciones` ya usan Supabase Auth (Fase 2 de `docs/auth/specs/auth.md`): `SupabaseAuthGuard`, `@RequiereRol` y `MembresiaGuard`, en `src/auth/guards/` y `src/auth/supabase/`. El resto de esta sección describe el login legacy, que sigue activo hasta la Fase 5.
 
 **Endpoints de desarrollo:** no hay. Los `/api/auth/dev/*` (seed, admin, mozo y root) se eliminaron porque creaban usuarios, incluido un ROOT con contraseña conocida, sin autenticación. Para tener datos y usuarios en local se usa el seed (`pnpm --filter @menyu/api seed`).
 

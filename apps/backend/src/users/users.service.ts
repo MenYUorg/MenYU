@@ -38,7 +38,7 @@ export class UsersService {
   createMozo(data: {
     nombre: string
     email?: string
-    passwordHash: string
+    passwordHash?: string
     telefono?: string
     esJefeSalon?: boolean
     restauranteId: string
