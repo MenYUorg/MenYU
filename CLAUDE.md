@@ -123,9 +123,8 @@ Spec, decisiones y fases: `docs/specs/auth.md` (una fase por sesión; al cerrar 
 apps/web-cliente/   → mesa.menyu-app.com     (comensal)
 apps/web-staff/     → staff.menyu-app.com    (cocina + mozo web)
 apps/web-admin/     → admin.menyu-app.com    (dueño/administrador)
-backend (Railway)   → api.menyu-app.com
 ```
-Staging: `<app>.staging.menyu-app.com`. Local: `<app>.menyu.local` (ver la sección Dominios de `docs/specs/auth.md`). Durante la migración siguen activos los dominios viejos (`menyu-*.vercel.app`, `menyu-backend-*.up.railway.app`): no darlos de baja (QR impresos, webhooks de Mercado Pago). Las variables por plataforma: `docs/VariablesACambiar.md`.
+La API (Railway) está en `api.menyu-app.com`. Staging: `<app>.staging.menyu-app.com`. Local: `<app>.menyu.local` (ver la sección Dominios de `docs/specs/auth.md`). Durante la migración siguen activos los dominios viejos (`menyu-*.vercel.app`, `menyu-backend-*.up.railway.app`): no darlos de baja (QR impresos, webhooks de Mercado Pago). Las variables por plataforma: `docs/VariablesACambiar.md`.
 
 Cada una es un proyecto Vite independiente con su propio deploy en Vercel.
 Un cambio en web-admin no afecta ni rebuilda web-cliente.

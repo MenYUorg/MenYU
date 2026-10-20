@@ -10,20 +10,23 @@ Checklist para pasar las apps a `*.menyu-app.com` (Fase 0 de `docs/specs/auth.md
 | API | `api.menyu-app.com` | `api.staging.menyu-app.com` | `menyu-backend-production.up.railway.app` / `menyu-backend-staging.up.railway.app` |
 | web-auth (Fase 3) | `auth.menyu-app.com` | `auth.staging.menyu-app.com` | — |
 
-Estado al 2026-10-20: los 6 dominios de Vercel ya responden y apuntan a sus proyectos; `api.staging` responde; `api.menyu-app.com` tiene certificado pero la API de producción estaba caída (incidente P3009, ver la spec). El DNS está en Cloudflare, sin proxy: dejarlo así (con proxy, el certificado de Cloudflare no cubre los subdominios de dos niveles como `admin.staging.menyu-app.com`).
+Estado al 2026-10-20: los 6 dominios de Vercel responden y apuntan a sus proyectos. `api.staging.menyu-app.com` y `api.menyu-app.com` responden (producción volvió con v1.0.6 después del incidente P3009, ver la spec). El `CORS_ORIGINS` de producción ya acepta los dominios nuevos y los viejos. El DNS está en Cloudflare, sin proxy: dejarlo así (con proxy, el certificado de Cloudflare no cubre los subdominios de dos niveles como `admin.staging.menyu-app.com`).
 
 ## Reglas
 
+- **El servicio de producción de Railway no tiene que estar conectado a GitHub** (*Settings → Source*: desconectado desde el 2026-10-20). Si lo está, un cambio de variables construye y publica el último commit de `main`: así empezó el incidente del 2026-10-20. Desconectado, el cambio redespliega lo último que subió `deploy-production.yml`.
 - **No borrar los dominios viejos** (`*.vercel.app`, `*.up.railway.app`): los QR impresos llevan a `menyu-cliente.vercel.app`, y las preferencias de Mercado Pago ya creadas notifican a la URL vieja de la API.
 - **Las `VITE_*` se fijan en el build.** Cambiarlas en Vercel no alcanza: hay que volver a desplegar. Los proyectos `*-staging` se reconstruyen con cada merge a `main` (o con *Redeploy* en Vercel); los de producción, solo con un tag `vX.Y.Z`.
-- **En Railway, cada cambio de variables redespliega el servicio**, y el contenedor corre `prisma migrate deploy` al arrancar. Juntar los cambios y desplegar una sola vez.
-- **Producción, recién con la API funcionando** y con el código de dominios ya desplegado (tag `v1.0.7`).
+- **En Railway, cada cambio de variables redespliega el servicio**, y el contenedor corre `prisma migrate deploy` al arrancar. Juntar los cambios de cada paso y desplegar una sola vez.
+- **Producción, con el código de dominios ya desplegado**: el próximo tag (`v1.0.7`), que incluye la rama `fix/dominios-propios`. v1.0.6 (el de la recuperación) no la incluye.
 
 ## Orden
 
 **Staging:** 1. Mercado Pago (redirect URL de staging) → 2. Railway staging → 3. Vercel (proyectos `*-staging` y entorno Preview de los de producción) → 4. volver a desplegar → 5. probar.
 
-**Producción:** 1. Railway `CORS_ORIGINS` → 2. Mercado Pago (redirect URL de producción) → 3. Vercel, entorno Production → 4. tag `v1.0.7` → 5. Railway: el resto → 6. GitHub `PROD_WEB_*_URL`.
+**Producción:** 1. ~~Railway `CORS_ORIGINS`~~ (hecho el 2026-10-20) → 2. Mercado Pago (redirect URL de producción) → 3. Vercel, entorno Production → 4. tag `v1.0.7` → 5. Railway: `BASE_URL`, `FRONTEND_URL`, `FRONTEND_ADMIN_URL` y `QR_BASE_URL`, todas juntas → 6. GitHub `PROD_WEB_*_URL`.
+
+`CORS_ORIGINS` va primero porque los frontends con `VITE_API_URL` nueva (paso 4) llaman a la API desde los dominios nuevos; el resto de las variables de Railway arma URLs hacia esos dominios y va después, en un solo cambio.
 
 ## 1. Mercado Pago
 
@@ -46,7 +49,7 @@ Estado al 2026-10-20: los 6 dominios de Vercel ya responden y apuntan a sus proy
 | `CORS_ORIGIN_PATTERNS` | sin cambios | sin cambios | Cubre los previews de Vercel (`men-yu-s-projects.vercel.app`) |
 | `BASE_URL` | `https://api.staging.menyu-app.com/api` | `https://api.menyu-app.com/api` | **Después** de registrar la redirect URL en Mercado Pago (sección 1) |
 | `FRONTEND_URL` | `https://mesa.staging.menyu-app.com` | `https://mesa.menyu-app.com` | Respaldo de las `back_urls` del pago cuando no llega un `Origin` válido |
-| `FRONTEND_ADMIN_URL` | `https://admin.staging.menyu-app.com` | `https://admin.menyu-app.com` | A dónde vuelve el panel después de conectar Mercado Pago |
+| `FRONTEND_ADMIN_URL` | `https://admin.staging.menyu-app.com` | `https://admin.menyu-app.com` | A dónde vuelve el panel después de conectar Mercado Pago. Tiene un solo valor: quien conecte desde `menyu-admin.vercel.app` vuelve a `admin.menyu-app.com`, donde no tiene sesión (los tokens viven en el localStorage de cada dominio) y pasa por el login sin ver el aviso de conectado. La conexión sí queda guardada |
 | `QR_BASE_URL` | `https://mesa.staging.menyu-app.com` | `https://mesa.menyu-app.com` | En producción hoy no está definida y vale `https://menyu-cliente.vercel.app`. Sin barra final y nunca vacía. Solo cambia los QR que se descarguen de ahí en más |
 
 Las demás variables (`DATABASE_URL`, `SUPABASE_*`, `MP_*`, `JWT_SECRET`) no dependen del dominio. La Fase 2 tampoco suma ninguna: el JWKS sale de `SUPABASE_URL`.
@@ -121,5 +124,5 @@ Los secrets de Railway y Vercel que ya existen no cambian: los dominios no cambi
 ## 5. Desarrollo local (`*.menyu.local`, recién para la Fase 4)
 
 - Archivo hosts: `127.0.0.1 auth.menyu.local admin.menyu.local staff.menyu.local mesa.menyu.local api.menyu.local`.
-- `.env` del backend: `CORS_ORIGIN_PATTERNS=^http://(auth|admin|staff|mesa)\.menyu\.local(:[0-9]+)?$`.
+- `.env` del backend: sumar a `CORS_ORIGIN_PATTERNS` (separado por coma de los que ya tenga) el patrón `^http://(auth|admin|staff|mesa)\.menyu\.local(:[0-9]+)?$`.
 - Los `vite.config.ts` ya aceptan `*.menyu.local`. Cada app sigue en su puerto: `http://admin.menyu.local:5174`, `http://staff.menyu.local:5175`, `http://mesa.menyu.local:5176`.
