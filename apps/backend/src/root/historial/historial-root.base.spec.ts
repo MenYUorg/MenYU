@@ -20,7 +20,7 @@ if (URL_DE_PRUEBA && !['localhost', '127.0.0.1', '::1'].includes(new URL(URL_DE_
 const describeConBase = URL_DE_PRUEBA ? describe : describe.skip
 
 const FILA = `INSERT INTO historial_root (actor_tipo, actor_id, actor_nombre, accion, entidad_tipo, entidad_id, entidad_nombre, detalle)
-  VALUES ('ROOT', 'actor-1', 'ana@ejemplo.com', 'MARCA_CREAR', 'MARCA', 'm-1', 'Marca de prueba', '[]')`
+  VALUES ('ROOT', 'actor-1', 'ana@ejemplo.com', 'MARCA_CREAR', 'MARCA', 'prueba-m1', 'Marca de prueba', '[]')`
 
 describeConBase('historial de ROOT y cuentas ROOT: disparadores de la base', () => {
   let db: Client
@@ -52,13 +52,13 @@ describeConBase('historial de ROOT y cuentas ROOT: disparadores de la base', () 
       // Act
       await db.query(
         `INSERT INTO historial_root (created_at, actor_tipo, actor_id, actor_nombre, accion, entidad_tipo, entidad_id, entidad_nombre)
-         VALUES ('2000-01-01T00:00:00Z', 'ROOT', 'actor-1', 'ana@ejemplo.com', 'MARCA_CREAR', 'MARCA', 'm-1', 'Marca de prueba')`,
+         VALUES ('2000-01-01T00:00:00Z', 'ROOT', 'actor-1', 'ana@ejemplo.com', 'MARCA_CREAR', 'MARCA', 'prueba-m1', 'Marca de prueba')`,
       )
 
       // Assert
       // created_at es timestamptz(3): redondea a milisegundos, mientras que now() trae microsegundos.
       const { rows } = await db.query(
-        `SELECT abs(extract(epoch FROM (now() - created_at))) < 0.001 AS es_la_de_la_base, detalle FROM historial_root`,
+        `SELECT abs(extract(epoch FROM (now() - created_at))) < 0.001 AS es_la_de_la_base, detalle FROM historial_root WHERE entidad_id = 'prueba-m1'`,
       )
       expect(rows[0].es_la_de_la_base).toBe(true)
       expect(rows[0].detalle).toEqual([])
@@ -88,7 +88,7 @@ describeConBase('historial de ROOT y cuentas ROOT: disparadores de la base', () 
       expect(await falla(`UPDATE historial_root SET accion = 'MARCA_BAJA'`)).toMatch(/solo agregar/)
       expect(await falla(`DELETE FROM historial_root`)).toMatch(/solo agregar/)
       expect(await falla(`TRUNCATE historial_root`)).toMatch(/solo agregar/)
-      const { rows } = await db.query(`SELECT count(*)::int AS n FROM historial_root WHERE entidad_id = 'm-1'`)
+      const { rows } = await db.query(`SELECT count(*)::int AS n FROM historial_root WHERE entidad_id = 'prueba-m1'`)
       expect(rows[0].n).toBe(1)
     })
 
@@ -116,9 +116,9 @@ describeConBase('historial de ROOT y cuentas ROOT: disparadores de la base', () 
     it('el script (SCRIPT) puede registrar sin id de cuenta', async () => {
       await db.query(
         `INSERT INTO historial_root (actor_tipo, actor_nombre, accion, entidad_tipo, entidad_id, entidad_nombre)
-         VALUES ('SCRIPT', 'marga', 'ROOT_CREAR', 'ROOT', 'r-1', 'ana@ejemplo.com')`,
+         VALUES ('SCRIPT', 'marga', 'ROOT_CREAR', 'ROOT', 'prueba-r1', 'ana@ejemplo.com')`,
       )
-      const { rows } = await db.query(`SELECT actor_id FROM historial_root`)
+      const { rows } = await db.query(`SELECT actor_id FROM historial_root WHERE entidad_id = 'prueba-r1'`)
       expect(rows[0].actor_id).toBeNull()
     })
   })
@@ -175,7 +175,7 @@ describeConBase('historial de ROOT y cuentas ROOT: disparadores de la base', () 
 
       await db.query(`DELETE FROM admin WHERE id IN ('prueba-o1', 'prueba-g1')`)
 
-      const { rows } = await db.query(`SELECT count(*)::int AS n FROM admin`)
+      const { rows } = await db.query(`SELECT count(*)::int AS n FROM admin WHERE id IN ('prueba-o1', 'prueba-g1')`)
       expect(rows[0].n).toBe(0)
     })
 
