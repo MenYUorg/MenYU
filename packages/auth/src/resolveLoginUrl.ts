@@ -1,6 +1,8 @@
-export function resolveLoginUrl(): string {
-  const hostname = window.location.hostname
+// Dominios propios: admin.<sufijo> y staff.<sufijo> loguean en mesa.<sufijo>. Conviven con los de Vercel
+// mientras dure la migración (docs/specs/auth.md, Fase 0).
+const DOMINIO_PROPIO = /^(admin|staff)\.((staging\.)?menyu-app\.com|menyu\.local)$/
 
+export function resolveLoginUrl(hostname: string = window.location.hostname): string {
   // Local
   if (hostname === 'localhost') {
     return 'http://localhost:5176/auth'
@@ -12,6 +14,13 @@ export function resolveLoginUrl(): string {
     hostname === 'menyu-staff.vercel.app'
   ) {
     return 'https://menyu-cliente.vercel.app/auth'
+  }
+
+  // Dominio propio: menyu-app.com, staging.menyu-app.com o menyu.local (desarrollo, con el puerto de web-cliente)
+  const propio = DOMINIO_PROPIO.exec(hostname)
+  if (propio) {
+    const sufijo = propio[2]
+    return sufijo === 'menyu.local' ? 'http://mesa.menyu.local:5176/auth' : `https://mesa.${sufijo}/auth`
   }
 
   // Staging — URL dinámica de Vercel Preview
