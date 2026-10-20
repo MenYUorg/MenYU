@@ -218,7 +218,106 @@ Return the JWT payload of the authenticated user.
 
 ### No development endpoints
 
-There are no `/api/auth/dev/*` endpoints (they used to create users, even a ROOT, without authentication, and were removed). To get users and data in a local database run the seed (`pnpm --filter @menyu/api seed`); the credentials are in `Documentacion/datos-de-prueba-local.md`. The seed is never run in staging or production: there, accounts are created with the authenticated endpoints.
+There are no `/api/auth/dev/*` endpoints (they used to create users, even a ROOT, without authentication, and were removed). To get users and data in a local database run the seed (`pnpm --filter @menyu/api seed`); the credentials are in `Documentacion/datos-de-prueba-local.md`. The seed is never run in staging or production: there, accounts are created with the authenticated endpoints. The **first** ROOT account of an environment is created with the team script `apps/backend/scripts/cuentas-root.ts` (see [ROOT console](#root-console--apiroot)); the other ones, with `POST /api/root/roots`.
+
+---
+
+## ROOT console — `/api/root`
+
+Plan and decisions: `docs/plan-consola-root.md`. Stage 1a (this section): owner accounts and ROOT accounts. Marcas, restaurantes and `GET /api/root/historial` arrive in stage 1b.
+
+- **Auth:** `Bearer` + role `ROOT`, at controller level. `OWNER`, `GERENTE`, mozo and cliente get **403**; no token, **401**. The routes that change something (`POST`, `PATCH`, `DELETE`) also check, inside the transaction, that the ROOT account of the token still exists and is still ROOT; if not (the token can outlive the account by up to 8 h) they answer **401** and change nothing.
+- **IDs in the path are not required to be UUIDs** (`m-001` works). An id with an impossible shape (`a.b`, spaces…) answers 404.
+- **Every change is recorded in the ROOT history, inside the same database transaction as the change**: if the record cannot be written, the change is not made. The record keeps who (a copy of the ROOT's email), what, on what and when, and **never a password or a hash**. The table is append-only: the database blocks `UPDATE`, `DELETE` and `TRUNCATE` on it, and there is no route that edits it.
+- **Passwords:** the system generates a temporary password (12 characters, no `0 O 1 l I`, from `crypto.randomInt`) and returns it **once**, in `passwordTemporal`. It is stored only as a bcrypt hash. The account is marked `debeCambiarPassword: true` (the person has to change it on first sign-in; the screen and `POST /api/auth/cambiar-password` arrive in stage 3). If you send `password` yourself it must have 12 to 72 bytes, not be a known password and not contain the part of the email before the `@`; in that case `passwordTemporal` is `null`.
+- **Emails** are trimmed and lowercased, and are rejected (409) if any admin, mozo or cliente already uses them (case-insensitive): the login looks in `admin` first and an admin with the same email would shadow them. The message does not say who uses it.
+- **There is no route to delete ROOT accounts** (not even for ROOT). A test walks the whole router and fails if one appears. Once the console exists, ROOT accounts can only be removed with the script, which never removes the last one; the database also refuses to delete (or demote) the last ROOT.
+
+### Endpoint summary
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/root/duenos?q=` | List OWNER accounts with their brand (`q`: email or brand name, up to 100 chars) |
+| `POST` | `/api/root/marcas/:id/duenos` | Create an OWNER in a brand |
+| `PATCH` | `/api/root/duenos/:id` | Change an owner's email |
+| `POST` | `/api/root/duenos/:id/restablecer-password` | Generate a new password for an owner |
+| `DELETE` | `/api/root/duenos/:id` | Delete an owner account |
+| `GET` | `/api/root/roots` | List ROOT accounts |
+| `POST` | `/api/root/roots` | Create a ROOT account |
+| `POST` | `/api/root/roots/:id/restablecer-password` | Generate a new password for **another** ROOT account |
+
+Only accounts with the right role are touched: the owner routes answer 404 for any account that is not an `OWNER`, and the ROOT routes for any that is not `ROOT` (a `GERENTE` is never reachable from here).
+
+### Owner object
+
+```json
+{
+  "id": "9b1c…",
+  "email": "juan@laparrilla.com",
+  "debeCambiarPassword": true,
+  "marca": { "id": "m-001", "nombre": "La Parrilla", "activo": true }
+}
+```
+
+`marca` is `null` for an owner without a brand. No other field is ever returned (no hash, no `marcaId`, no role).
+
+### `POST /api/root/marcas/:id/duenos`
+
+```json
+{ "email": "Juan@LaParrilla.com" }
+```
+
+| Field | Type | Required |
+|---|---|---|
+| `email` | string, valid email, up to 254 chars | yes |
+| `password` | string, 12 to 72 bytes | no (generated when missing) |
+
+**201** — the owner object plus the password, **only in this response**:
+
+```json
+{
+  "id": "9b1c…",
+  "email": "juan@laparrilla.com",
+  "debeCambiarPassword": true,
+  "marca": { "id": "m-001", "nombre": "La Parrilla", "activo": true },
+  "passwordTemporal": "Kq7mTb4xWzNe"
+}
+```
+
+**Errors:** 400 invalid email or weak password · 404 the brand does not exist · 409 email in use, or the brand is deactivated (`activo = false`).
+History: `DUENO_CREAR`.
+
+### `PATCH /api/root/duenos/:id`
+
+```json
+{ "email": "administracion@laparrilla.com" }
+```
+
+Changes the email only (never the password). Same email as today → 200 and nothing is recorded. **Responses:** 200 the owner object · 400 · 404 · 409 email in use. History: `DUENO_CAMBIAR_EMAIL` with the email before and after.
+
+### `POST /api/root/duenos/:id/restablecer-password`
+
+No body. Generates a new password, marks the account `debeCambiarPassword: true` and revokes its refresh tokens (an access token already issued lasts until it expires, up to 8 h). **Responses:** 200 the owner object plus `passwordTemporal` (once) · 404. History: `DUENO_RESTABLECER` (the password shows as "no se registra").
+
+### `DELETE /api/root/duenos/:id`
+
+Deletes the account and revokes its refresh tokens. The brand and its restaurants are not touched. **Responses:** 204 · 404 · **409 if it is the only owner of an active brand** (create another owner first, or deactivate the brand). History: `DUENO_ELIMINAR`.
+
+### `GET /api/root/roots`
+
+```json
+[{ "id": "3f2a…", "email": "ana@ejemplo.com", "debeCambiarPassword": false, "esPropia": true }]
+```
+
+`esPropia` is `true` for the caller's own account. **Responses:** 200.
+
+### `POST /api/root/roots`
+
+Same body and behavior as creating an owner (no brand). **201** — `{ id, email, debeCambiarPassword: true, esPropia: false, passwordTemporal }`. **Errors:** 400 · 409 email in use. History: `ROOT_CREAR`.
+
+### `POST /api/root/roots/:id/restablecer-password`
+
+Generates a new password for **another** ROOT account, marks it temporary and revokes its refresh tokens. **Responses:** 200 `{ id, email, debeCambiarPassword: true, esPropia: false, passwordTemporal }` · **400 if `:id` is the caller's own account** (changing your own password is a different flow, stage 3) · 404 not a ROOT account. History: `ROOT_RESTABLECER`.
 
 ---
 
