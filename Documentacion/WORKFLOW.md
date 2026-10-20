@@ -89,7 +89,10 @@ Si cualquier paso falla, el merge queda bloqueado.
 
 1. Corre los mismos checks que CI
 2. Despliega el backend a **Railway staging**
-3. Despliega los frontends a **Vercel** (ambiente preview)
+3. Hace un deploy *preview* con la CLI en los proyectos de Vercel originales (`menyu-cliente`, `menyu-admin` y `menyu-staff`): no toca producción y es el que usa el smoke
+4. Smoke de solo lectura contra staging
+
+Los frontends de staging con dominio fijo (`menyu-*-staging`) no los despliega este workflow: los construye Vercel desde Git en cada merge a `main` (ver "Frontends en Vercel", más abajo).
 
 ---
 
@@ -106,11 +109,29 @@ Si cualquier paso falla, el merge queda bloqueado.
 
 | Ambiente | Trigger | Backend | Frontend | Base de datos |
 |---|---|---|---|---|
-| **Preview** | Push a rama `feat/*` | — | Vercel Preview URL | — |
-| **Staging** | Merge a `main` | Railway staging | Vercel preview | Supabase staging |
+| **Preview** | Push a rama `feat/*` | — | — (Vercel no construye ramas) | — |
+| **Staging** | Merge a `main` | Railway staging | Proyectos `menyu-*-staging` de Vercel | Supabase staging |
 | **Producción** | Tag `v*.*.*` | Railway prod | Vercel production | Supabase prod |
 
 Las variables de entorno de cada ambiente están configuradas en Railway y en Vercel por separado. Nunca se comparten datos entre staging y producción.
+
+### Frontends en Vercel: qué proyecto se construye cuándo
+
+| Proyecto | Es | Cuándo se actualiza |
+|---|---|---|
+| `menyu-cliente`, `menyu-admin`, `menyu-staff` | Producción (`menyu-cliente.vercel.app`, `menyu-admin.vercel.app`, `menyu-staff.vercel.app`) | **Solo con el tag** `v*.*.*`, con la CLI (`deploy-production.yml`). **Nunca desde Git.** En cada merge a `main`, `deploy-staging.yml` además les hace un deploy *preview* con la CLI (no toca producción). |
+| `menyu-cliente-staging`, `menyu-admin-staging`, `menyu-staff-staging` | Staging, con dominio fijo (`<proyecto>.vercel.app`) | **Cada merge a `main`**, desde Git, si cambió la app o un paquete del que depende (`turbo-ignore`). |
+
+**Cómo se logra la diferencia.** Los `apps/web-*/vercel.json` son los mismos para el proyecto de producción y el de staging de cada app: dejan construir solo `main` (`git.deploymentEnabled`) y corren `scripts/vercel/ignorar-build.sh` como `ignoreCommand`. El script decide por el nombre del proyecto (el principio de `VERCEL_URL`): en cualquier proyecto que **no** sea de staging cancela todo build de Git; en los de staging construye si hubo cambios, y el primer deploy de `main` de un proyecto nuevo siempre construye. Los deploys de la CLI no pasan por ahí.
+
+**Crear un proyecto de staging nuevo (a mano en Vercel):**
+
+1. *Add New → Project*, importar `MenYUorg/MenYU` con el nombre exacto `menyu-<app>-staging`. De ese nombre sale el dominio `menyu-<app>-staging.vercel.app`, y el login entre apps (`resolveAppUrl` y `resolveLoginUrl`) depende de él.
+2. *Settings → General:* Root Directory `apps/web-<app>`, "Include source files outside of the Root Directory" activado, y el resto (framework, comandos, Node) igual que `menyu-cliente-staging`.
+3. *Settings → Git:* rama de producción `main`.
+4. *Settings → Environment Variables*, en el entorno Production: `VITE_API_URL=https://menyu-backend-staging.up.railway.app/api` (y `VITE_WS_URL` sin `/api`, si se quiere; si no está, la app lo deduce de la otra).
+5. *Settings → Deployment Protection:* igual que `menyu-cliente-staging` (sin login de Vercel).
+6. En Railway (backend de staging), sumar `https://menyu-<app>-staging.vercel.app` a `CORS_ORIGINS`.
 
 ---
 
