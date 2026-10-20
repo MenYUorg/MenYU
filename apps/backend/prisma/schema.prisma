@@ -22,6 +22,7 @@ model Marca {
 
   restaurantes Restaurante[]
   admins       Admin[]
+  membresias   Membresia[]
 
   @@map("marca")
 }
@@ -46,6 +47,7 @@ model Restaurante {
   ingredientes  Ingrediente[]
   items         ItemMenu[]
   admins        AdminRestaurante[]
+  membresias    Membresia[]
 
   mpAccessToken     String?   @map("mp_access_token")
   mpRefreshToken    String?   @map("mp_refresh_token")
@@ -134,14 +136,18 @@ model Mozo {
   activo        Boolean  @default(true)
   esJefeSalon   Boolean  @default(false) @map("es_jefe_salon")
   createdAt     DateTime @default(now()) @map("created_at")
+  // Usuario de Supabase dueño de este perfil. Null en los mozos creados con el login propio.
+  usuarioId     String?  @map("usuario_id")
 
   restaurante   Restaurante      @relation(fields: [restauranteId], references: [id])
+  usuario       Usuario?         @relation(fields: [usuarioId], references: [id])
   asignaciones  AsignacionMesa[]
   llamados      LlamadoMozo[]
   mozoMesas     MozoMesa[]
   ediciones     PedidoEdicion[]
   pagos         Pago[]
 
+  @@unique([usuarioId, restauranteId])
   @@map("mozo")
 }
 
@@ -188,6 +194,8 @@ model Cliente {
   passwordHash String?  @map("password_hash")
   telefono     String?
   createdAt    DateTime @default(now()) @map("created_at")
+  // Cuenta opcional del cliente en Supabase Auth.
+  supabaseUserId String? @unique @map("supabase_user_id") @db.Uuid
 
   sesiones       SesionMesa[]
   sesionClientes SesionMesaCliente[]
@@ -562,4 +570,56 @@ model RefreshToken {
   createdAt DateTime  @default(now()) @map("created_at")
 
   @@map("refresh_token")
+}
+
+// ─────────────────────────────────────────────
+// AUTENTICACIÓN (SUPABASE) Y PERMISOS — docs/specs/auth.md
+// ─────────────────────────────────────────────
+
+enum Rol {
+  OWNER
+  GERENTE
+  JEFE_SALON
+  MOZO
+  COCINA
+
+  @@map("rol")
+}
+
+// Supabase Auth dice quién es; Usuario y Membresia dicen qué puede hacer. ROOT no es una
+// membresía: es esRoot.
+model Usuario {
+  id             String   @id @default(uuid())
+  supabaseUserId String   @unique @map("supabase_user_id") @db.Uuid
+  email          String   @unique
+  nombre         String
+  activo         Boolean  @default(true)
+  esRoot         Boolean  @default(false) @map("es_root")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  membresias Membresia[]
+  mozos      Mozo[]
+
+  @@map("usuario")
+}
+
+// OWNER se asocia a una marca; GERENTE, JEFE_SALON, MOZO y COCINA, a un restaurante. El CHECK
+// que lo garantiza vive en la migración, porque Prisma no lo puede expresar.
+model Membresia {
+  id            String   @id @default(uuid())
+  usuarioId     String   @map("usuario_id")
+  rol           Rol
+  marcaId       String?  @map("marca_id")
+  restauranteId String?  @map("restaurante_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  usuario     Usuario      @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  marca       Marca?       @relation(fields: [marcaId], references: [id], onDelete: Cascade)
+  restaurante Restaurante? @relation(fields: [restauranteId], references: [id], onDelete: Cascade)
+
+  @@unique([usuarioId, restauranteId])
+  @@unique([usuarioId, marcaId])
+  @@index([restauranteId])
+  @@index([marcaId])
+  @@map("membresia")
 }
