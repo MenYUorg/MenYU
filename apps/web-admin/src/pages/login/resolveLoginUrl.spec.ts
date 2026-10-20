@@ -7,9 +7,12 @@ describe('resolveLoginUrl', () => {
     ['staff.menyu-app.com', 'https://mesa.menyu-app.com/auth'],
     ['admin.staging.menyu-app.com', 'https://mesa.staging.menyu-app.com/auth'],
     ['staff.staging.menyu-app.com', 'https://mesa.staging.menyu-app.com/auth'],
-    ['admin.menyu.local', 'http://mesa.menyu.local:5176/auth'],
   ])('en el dominio propio %s manda al web-cliente del mismo ambiente', (host, login) => {
-    expect(resolveLoginUrl(host)).toBe(login)
+    expect(resolveLoginUrl(host, 'https:')).toBe(login)
+  })
+
+  it('en admin.menyu.local (desarrollo) usa el protocolo de la página y el puerto de web-cliente', () => {
+    expect(resolveLoginUrl('admin.menyu.local', 'http:')).toBe('http://mesa.menyu.local:5176/auth')
   })
 
   it('en los dominios de Vercel sigue funcionando como antes', () => {

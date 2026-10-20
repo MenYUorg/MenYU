@@ -2,7 +2,11 @@
 // de Vercel mientras dure la migración (docs/specs/auth.md, Fase 0).
 const DOMINIO_PROPIO = /^mesa\.((staging\.)?menyu-app\.com|menyu\.local)$/
 
-export function resolveAppUrl(tipo: 'admin' | 'mozo', hostname: string = window.location.hostname): string {
+export function resolveAppUrl(
+  tipo: 'admin' | 'mozo',
+  hostname: string = window.location.hostname,
+  protocolo: string = window.location.protocol,
+): string {
   // Producción
   if (hostname === 'menyu-cliente.vercel.app') {
     return tipo === 'admin'
@@ -17,12 +21,13 @@ export function resolveAppUrl(tipo: 'admin' | 'mozo', hostname: string = window.
       : 'http://localhost:5175'
   }
 
-  // Dominio propio: menyu-app.com, staging.menyu-app.com o menyu.local (desarrollo, con los puertos de cada app)
+  // Dominio propio: menyu-app.com, staging.menyu-app.com o menyu.local (desarrollo: el protocolo de la página y el
+  // puerto de cada app)
   const propio = DOMINIO_PROPIO.exec(hostname)
   if (propio) {
     const sufijo = propio[1]
     if (sufijo === 'menyu.local') {
-      return tipo === 'admin' ? 'http://admin.menyu.local:5174' : 'http://staff.menyu.local:5175'
+      return tipo === 'admin' ? `${protocolo}//admin.menyu.local:5174` : `${protocolo}//staff.menyu.local:5175`
     }
     return `https://${tipo === 'admin' ? 'admin' : 'staff'}.${sufijo}`
   }
