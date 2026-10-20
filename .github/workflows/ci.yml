@@ -115,7 +115,9 @@ jobs:
 
     services:
       postgres:
-        image: postgres:17.6 # misma versión mayor que Supabase
+        # A confirmar con Supabase (Settings → Infrastructure): tiene que ser su misma versión mayor.
+        # 17.6 es la del docker-compose.yml del backend; las migraciones se probaron también con 15.
+        image: postgres:17.6
         env:
           POSTGRES_USER: test
           POSTGRES_PASSWORD: test
