@@ -73,12 +73,43 @@ model Admin {
   email        String    @unique
   passwordHash String    @map("password_hash")
   rol          RolAdmin
+  // La contraseña la puso otra persona (ROOT): hay que cambiarla en el primer ingreso. Sin efecto en las cuentas que ya existen.
+  debeCambiarPassword Boolean @default(false) @map("debe_cambiar_password")
 
   marca        Marca?             @relation(fields: [marcaId], references: [id])
   restaurantes AdminRestaurante[]
   ediciones    PedidoEdicion[]
 
   @@map("admin")
+}
+
+// Historial de acciones de ROOT (docs/plan-consola-root.md, 7.2). Solo se agregan filas: la base bloquea UPDATE, DELETE y
+// TRUNCATE con disparadores (migración 20261020150000). A propósito NO tiene claves foráneas: guarda copias (email, nombre) de
+// quién y sobre qué, así que retirar una cuenta o una marca no toca el historial. Nunca guarda una contraseña ni un hash.
+model HistorialRoot {
+  id            Int      @id @default(autoincrement())
+  // La hora la pone la base: un disparador BEFORE INSERT pisa lo que mande el cliente con now().
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  // ROOT: lo hizo una cuenta ROOT desde la consola. SCRIPT: lo hizo una persona con scripts/cuentas-root.ts.
+  actorTipo     String   @map("actor_tipo")
+  actorId       String?  @map("actor_id")
+  // Email del ROOT en ese momento; si fue el script, el usuario del sistema operativo de quien lo corrió.
+  actorNombre   String   @map("actor_nombre")
+  accion        String
+  // MARCA | RESTAURANTE | OWNER | ROOT
+  entidadTipo   String   @map("entidad_tipo")
+  entidadId     String   @map("entidad_id")
+  // Nombre (marca, restaurante) o email (cuentas) en ese momento.
+  entidadNombre String   @map("entidad_nombre")
+  // La marca de contexto (para un restaurante o un dueño).
+  marcaId       String?  @map("marca_id")
+  marcaNombre   String?  @map("marca_nombre")
+  // Lista de { campo, antes, despues }.
+  detalle       Json     @default("[]")
+
+  @@index([createdAt])
+  @@index([entidadTipo, entidadId])
+  @@map("historial_root")
 }
 
 model AdminRestaurante {
