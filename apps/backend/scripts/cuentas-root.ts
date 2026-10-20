@@ -24,22 +24,29 @@
  *
  * Opciones: --password-stdin lee la contraseña de la entrada estándar en vez de pedirla en la terminal (para automatizar).
  *
- * Las acciones de este script no pasan por la consola de ROOT: cuando exista el historial de acciones de ROOT
- * (docs/plan-consola-root.md), el script también va a registrarlas.
+ * Historial de ROOT (docs/plan-consola-root.md, 7.2): lo que hace este script queda registrado, igual que lo que hace una cuenta ROOT
+ * en la consola. El actor es "SCRIPT" y el operador es el usuario del sistema operativo de quien lo corrió. El registro se escribe
+ * en la MISMA transacción que el cambio: si no se puede registrar, el cambio no se hace. Nunca guarda una contraseña.
+ * Si la base todavía no tiene la tabla del historial (falta aplicar la migración consola_root_historial), el script lo avisa y la
+ * acción no queda registrada: pasa en producción hasta el tag que lleve la consola.
  */
+import { randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
+import { userInfo } from 'node:os'
 import { createInterface } from 'node:readline'
 import * as bcrypt from 'bcryptjs'
 import { Pool } from 'pg'
 import { PrismaPg } from '@prisma/adapter-pg'
-import type { PrismaClient } from '@prisma/client'
+import type { Prisma, PrismaClient } from '@prisma/client'
+import { MIN_LARGO_PASSWORD, motivoContrasenaDebil } from '../src/root/comun/contrasenas'
+import { CAMBIO_PASSWORD, CambioHistorial, registrarEnHistorial } from '../src/root/historial/registrar-historial'
+
+export { motivoContrasenaDebil }
 
 // Se guarda antes de cargar Prisma: el cliente puede leer el .env y pisar lo que haya en la terminal.
 const URL_DE_LA_TERMINAL = process.env.DATABASE_URL
 
 const BCRYPT_ROUNDS = 12
-const MIN_LARGO = 12
-const CONTRASENAS_CONOCIDAS = ['root1234', 'password123', 'password1234', 'admin1234', 'qwerty123456', '123456789012', 'contrasena123']
 
 export class ErrorDeUso extends Error {}
 
@@ -53,14 +60,33 @@ export function normalizarEmail(texto: string): string {
   return email
 }
 
-/** Devuelve el motivo si la contraseña no sirve para una cuenta ROOT, o null si está bien. */
-export function motivoContrasenaDebil(contrasena: string, email: string): string | null {
-  if (contrasena.length < MIN_LARGO) return `Tiene que tener al menos ${MIN_LARGO} caracteres.`
-  if (new Set(contrasena).size < 5) return 'Repite demasiado los mismos caracteres.'
-  if (CONTRASENAS_CONOCIDAS.includes(contrasena.toLowerCase())) return 'Es una contraseña conocida.'
-  const usuario = email.split('@')[0]
-  if (usuario.length >= 4 && contrasena.toLowerCase().includes(usuario)) return 'Contiene la parte del email antes de la arroba.'
-  return null
+// motivoContrasenaDebil vive en src/root/comun/contrasenas.ts: la misma política para el script y para la consola.
+
+/** El usuario del sistema operativo de quien corre el script: queda en el historial como "operador". */
+export function operadorDelSistema(): string {
+  try {
+    return userInfo().username || 'desconocido'
+  } catch {
+    return process.env.USERNAME ?? process.env.USER ?? 'desconocido'
+  }
+}
+
+/** Qué se escribe en el historial y a nombre de quién. `activo: false` si la base todavía no tiene la tabla. */
+export interface Registro {
+  activo: boolean
+  operador: string
+}
+
+const cambioDelScript = (operador: string): CambioHistorial => ({
+  campo: 'Cómo',
+  antes: null,
+  despues: `script de línea de comandos, operador: ${operador}`,
+})
+
+/** ¿La base ya tiene la tabla del historial de ROOT? (La migración llega a producción con el tag que lleve la consola.) */
+export async function hayHistorial(prisma: Pick<PrismaClient, '$queryRaw'>): Promise<boolean> {
+  const filas = await prisma.$queryRaw<Array<{ existe: boolean }>>`SELECT to_regclass('public.historial_root') IS NOT NULL AS existe`
+  return filas[0]?.existe === true
 }
 
 /** Una URL de conexión sin la clave: servidor, puerto, base y usuario. */
@@ -179,7 +205,7 @@ class Entrada {
 
 async function pedirContrasenaNueva(entrada: Entrada, email: string): Promise<string> {
   for (let intento = 0; intento < 3; intento++) {
-    const una = await entrada.secreto(`Contraseña (al menos ${MIN_LARGO} caracteres): `)
+    const una = await entrada.secreto(`Contraseña (al menos ${MIN_LARGO_PASSWORD} caracteres): `)
     const motivo = motivoContrasenaDebil(una, email)
     if (motivo) {
       console.log(`  No sirve: ${motivo}`)
@@ -209,7 +235,7 @@ async function buscarRoot(prisma: PrismaClient, email: string) {
   return cuenta
 }
 
-async function cerrarSesiones(prisma: Pick<PrismaClient, 'refreshToken'>, adminId: string): Promise<number> {
+async function cerrarSesiones(prisma: Pick<Prisma.TransactionClient, 'refreshToken'>, adminId: string): Promise<number> {
   const { count } = await prisma.refreshToken.updateMany({
     where: { userId: adminId, userTipo: 'admin', revokedAt: null },
     data: { revokedAt: new Date() },
@@ -224,7 +250,7 @@ async function listar(prisma: PrismaClient): Promise<void> {
   console.log(`${roots.length} cuenta(s) ROOT.`)
 }
 
-async function crear(prisma: PrismaClient, entrada: Entrada, base: string, emailCrudo: string | undefined): Promise<void> {
+async function crear(prisma: PrismaClient, entrada: Entrada, base: string, registro: Registro, emailCrudo: string | undefined): Promise<void> {
   if (!emailCrudo) throw new ErrorDeUso('Falta el email: crear <email>')
   const email = normalizarEmail(emailCrudo)
 
@@ -241,12 +267,31 @@ async function crear(prisma: PrismaClient, entrada: Entrada, base: string, email
   await confirmarBase(entrada, base)
   const contrasena = await pedirContrasenaNueva(entrada, email)
   const passwordHash = await bcrypt.hash(contrasena, BCRYPT_ROUNDS)
-  const creada = await prisma.admin.create({ data: { email, passwordHash, rol: 'ROOT' }, select: { id: true, email: true } })
+  // La cuenta y su registro en el historial van en la misma transacción: no queda una sin la otra.
+  const creada = await prisma.$transaction(async (tx) => {
+    // INSERT explícito y no `tx.admin.create`: el cliente de Prisma agrega a cada alta TODAS las columnas con valor por defecto, incluida
+    // `debe_cambiar_password` (migración de la etapa 1a). Con `create` el script no andaría contra una base que todavía no la tiene
+    // (producción, hasta el tag que lleve la consola), y justamente ahí hace falta crear las cuentas personales y retirar `root@menyu.com`.
+    // Así anda con la base vieja y con la nueva (la columna nueva toma su valor por defecto, false).
+    const id = randomUUID()
+    await tx.$executeRaw`INSERT INTO "admin" ("id", "email", "password_hash", "rol") VALUES (${id}, ${email}, ${passwordHash}, 'ROOT'::"rol_admin")`
+    const cuenta = { id, email }
+    if (registro.activo) {
+      await registrarEnHistorial(tx, {
+        actor: { tipo: 'SCRIPT', nombre: registro.operador },
+        accion: 'ROOT_CREAR',
+        entidad: { tipo: 'ROOT', id: cuenta.id, nombre: cuenta.email },
+        cambios: [{ campo: 'Email', antes: null, despues: cuenta.email }, CAMBIO_PASSWORD.elegida, cambioDelScript(registro.operador)],
+      })
+    }
+    return cuenta
+  })
   console.log(`Listo: cuenta ROOT creada para ${creada.email} (${creada.id}).`)
   console.log('La contraseña quedó guardada solo como hash en la base: no se puede volver a ver.')
+  avisarRegistro(registro)
 }
 
-async function restablecer(prisma: PrismaClient, entrada: Entrada, base: string, emailCrudo: string | undefined): Promise<void> {
+async function restablecer(prisma: PrismaClient, entrada: Entrada, base: string, registro: Registro, emailCrudo: string | undefined): Promise<void> {
   if (!emailCrudo) throw new ErrorDeUso('Falta el email: restablecer <email>')
   const email = normalizarEmail(emailCrudo)
   const cuenta = await buscarRoot(prisma, email)
@@ -254,13 +299,29 @@ async function restablecer(prisma: PrismaClient, entrada: Entrada, base: string,
   await confirmarBase(entrada, base)
   const contrasena = await pedirContrasenaNueva(entrada, email)
   const passwordHash = await bcrypt.hash(contrasena, BCRYPT_ROUNDS)
-  await prisma.admin.update({ where: { id: cuenta.id }, data: { passwordHash } })
-  const cerradas = await cerrarSesiones(prisma, cuenta.id)
+  const cerradas = await prisma.$transaction(async (tx) => {
+    // Con `select`, porque sin él Prisma pide todas las columnas, también las que una base sin migrar no tiene.
+    await tx.admin.update({ where: { id: cuenta.id }, data: { passwordHash }, select: { id: true } })
+    const n = await cerrarSesiones(tx, cuenta.id)
+    if (registro.activo) {
+      await registrarEnHistorial(tx, {
+        actor: { tipo: 'SCRIPT', nombre: registro.operador },
+        accion: 'ROOT_RESTABLECER',
+        entidad: { tipo: 'ROOT', id: cuenta.id, nombre: cuenta.email },
+        cambios: [
+          { campo: 'Contraseña', antes: CAMBIO_PASSWORD.restablecida.antes, despues: 'restablecida con el script (no se registra)' },
+          cambioDelScript(registro.operador),
+        ],
+      })
+    }
+    return n
+  })
   console.log(`Listo: contraseña nueva para ${email}. Se cerraron ${cerradas} sesión(es) renovable(s).`)
   console.log('Una sesión ya iniciada puede seguir hasta que venza su token de acceso (hasta 8 horas).')
+  avisarRegistro(registro)
 }
 
-async function eliminar(prisma: PrismaClient, entrada: Entrada, base: string, emailCrudo: string | undefined): Promise<void> {
+async function eliminar(prisma: PrismaClient, entrada: Entrada, base: string, registro: Registro, emailCrudo: string | undefined): Promise<void> {
   if (!emailCrudo) throw new ErrorDeUso('Falta el email: eliminar <email>')
   const email = normalizarEmail(emailCrudo)
   const cuenta = await buscarRoot(prisma, email)
@@ -276,10 +337,26 @@ async function eliminar(prisma: PrismaClient, entrada: Entrada, base: string, em
   await prisma.$transaction(async (tx) => {
     const quedan = await tx.admin.count({ where: { rol: 'ROOT' } })
     if (quedan <= 1) throw new ErrorDeUso(`${email} pasó a ser la única cuenta ROOT: no se elimina.`)
-    await tx.admin.delete({ where: { id: cuenta.id } })
+    await tx.admin.delete({ where: { id: cuenta.id }, select: { id: true } })
     await cerrarSesiones(tx, cuenta.id)
+    if (registro.activo) {
+      await registrarEnHistorial(tx, {
+        actor: { tipo: 'SCRIPT', nombre: registro.operador },
+        accion: 'ROOT_ELIMINAR',
+        entidad: { tipo: 'ROOT', id: cuenta.id, nombre: cuenta.email },
+        cambios: [
+          { campo: 'Cuenta', antes: cuenta.email, despues: `eliminada (quedan ${quedan - 1} cuentas ROOT)` },
+          cambioDelScript(registro.operador),
+        ],
+      })
+    }
   })
   console.log(`Listo: se eliminó la cuenta ROOT ${email}.`)
+  avisarRegistro(registro)
+}
+
+function avisarRegistro(registro: Registro): void {
+  if (registro.activo) console.log(`Quedó registrado en el historial de ROOT (actor: script, operador: ${registro.operador}).`)
 }
 
 // ── Arranque ────────────────────────────────────────────────────────────
@@ -327,10 +404,18 @@ export async function main(argv: string[]): Promise<number> {
     prisma = new Cliente({ adapter: new PrismaPg(pool) })
 
     const entrada = new Entrada(opciones.includes('--password-stdin'))
-    if (comando === 'listar') await listar(prisma)
-    else if (comando === 'crear') await crear(prisma, entrada, base, email)
-    else if (comando === 'restablecer') await restablecer(prisma, entrada, base, email)
-    else await eliminar(prisma, entrada, base, email)
+    if (comando === 'listar') {
+      await listar(prisma)
+      return 0
+    }
+    const registro: Registro = { activo: await hayHistorial(prisma), operador: operadorDelSistema() }
+    if (!registro.activo) {
+      console.log('AVISO: esta base todavía no tiene el historial de ROOT (falta aplicar la migración consola_root_historial).')
+      console.log('       La acción se hace igual, pero NO va a quedar registrada.')
+    }
+    if (comando === 'crear') await crear(prisma, entrada, base, registro, email)
+    else if (comando === 'restablecer') await restablecer(prisma, entrada, base, registro, email)
+    else await eliminar(prisma, entrada, base, registro, email)
     return 0
   } catch (e) {
     console.error(e instanceof ErrorDeUso ? `\n${e.message}` : `\nError inesperado: ${e instanceof Error ? e.message : String(e)}`)
