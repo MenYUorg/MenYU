@@ -1,5 +1,5 @@
 // Dominio propio de web-cliente: mesa.<sufijo> manda al personal a admin.<sufijo> o staff.<sufijo>. Convive con los
-// de Vercel mientras dure la migración (docs/specs/auth.md, Fase 0).
+// de Vercel mientras dure la migración (docs/auth/specs/auth.md, Fase 0).
 const DOMINIO_PROPIO = /^mesa\.((staging\.)?menyu-app\.com|menyu\.local)$/
 
 export function resolveAppUrl(

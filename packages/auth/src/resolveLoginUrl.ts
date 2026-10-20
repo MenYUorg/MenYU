@@ -1,5 +1,5 @@
 // Dominios propios: admin.<sufijo> y staff.<sufijo> loguean en mesa.<sufijo>. Conviven con los de Vercel
-// mientras dure la migración (docs/specs/auth.md, Fase 0).
+// mientras dure la migración (docs/auth/specs/auth.md, Fase 0).
 const DOMINIO_PROPIO = /^(admin|staff)\.((staging\.)?menyu-app\.com|menyu\.local)$/
 
 export function resolveLoginUrl(
