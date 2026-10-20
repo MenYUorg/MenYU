@@ -52,6 +52,12 @@ const CLIENTE2_ID      = 'dddddddd-0005-4005-a005-000000000005'
 const ADMIN_GERENTE_ID = 'dddddddd-0006-4006-a006-000000000006'
 const ADMIN_OWNER2_ID  = 'dddddddd-0007-4007-a007-000000000007'
 
+// Usuarios de Supabase Auth (docs/specs/auth.md). En local no hay Supabase Auth: el supabaseUserId
+// es un UUID fijo que no existe en ningún proyecto. Para iniciar sesión hay que reemplazarlo por el
+// id de un usuario real del Supabase de staging (el upsert no lo pisa).
+const USUARIO_OWNER_ID       = 'ffffffff-0001-4001-a001-000000000001'
+const OWNER_SUPABASE_USER_ID = 'ffffffff-0002-4002-a002-000000000002'
+
 // Credenciales del seed (entorno local — nunca usar en QA ni producción)
 const CRED_ROOT     = { email: 'root@menyu.com',     password: 'root1234'    }
 const CRED_OWNER    = { email: 'owner@menyu.com',    password: 'owner1234'   }
@@ -382,6 +388,25 @@ async function main() {
     },
   })
 
+  // ── Usuarios de Supabase Auth y membresías ───────────────────
+  // OWNER de Marca Seed, la marca de Restaurante Seed. La membresía de OWNER va por marca.
+  const usuarioOwner = await prisma.usuario.upsert({
+    where: { email: CRED_OWNER.email },
+    update: {},
+    create: {
+      id: USUARIO_OWNER_ID,
+      supabaseUserId: OWNER_SUPABASE_USER_ID,
+      email: CRED_OWNER.email,
+      nombre: 'Owner Seed',
+    },
+  })
+
+  await prisma.membresia.upsert({
+    where: { usuarioId_marcaId: { usuarioId: usuarioOwner.id, marcaId: MARCA_ID } },
+    update: {},
+    create: { usuarioId: usuarioOwner.id, marcaId: MARCA_ID, rol: 'OWNER' },
+  })
+
   console.log('\n=== SEED OK ===')
   console.log('Mesa qrToken :', mesa.qrToken)
   console.log('Mesa pin     :', mesa.pin)
@@ -406,6 +431,9 @@ async function main() {
   console.log(`Mozo         : ${CRED_MOZO.email}     / ${CRED_MOZO.password}`)
   console.log(`Cliente 1    : ${CRED_CLIENTE1.email} / ${CRED_CLIENTE1.password}`)
   console.log(`Cliente 2    : ${CRED_CLIENTE2.email} / ${CRED_CLIENTE2.password}`)
+
+  console.log('\n--- Usuarios Supabase (supabaseUserId ficticio: reemplazar para iniciar sesión) ---')
+  console.log(`OWNER        : ${usuarioOwner.email}  (Marca Seed → Restaurante Seed)`)
 
   console.log('\n--- Menú por categoría ---')
   console.log('Entradas    : Empanada de Carne 800 | Provoleta 2300 | Rabas 3100')
