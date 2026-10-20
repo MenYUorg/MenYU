@@ -1,6 +1,6 @@
 # Spec: Autenticación y autorización (MenYU)
 
-> Ubicación: `docs/specs/auth.md`. Claude Code ejecuta UNA fase por sesión.
+> Ubicación: `docs/auth/specs/auth.md`. Claude Code ejecuta UNA fase por sesión.
 > Antes de empezar una fase: leer esta spec completa y el CLAUDE.md.
 > Al terminar una fase: invocar al subagente `revisor`, corregir lo que reporte, marcar la fase como hecha acá y actualizar el CLAUDE.md.
 
@@ -64,7 +64,7 @@ En la misma sesión se decidieron también los puntos **Clientes**, **Convivenci
 ## Fases
 
 ### Fase 0 — Configuración externa (manual, la hace el equipo)
-- Dominio `menyu-app.com`: DNS y dominios custom de producción y staging (ver Dominios): web-auth, web-admin, web-staff y web-cliente en Vercel; la API en Railway. Las variables de cada plataforma (CORS, `BASE_URL`, `FRONTEND_*`, `QR_BASE_URL`, `VITE_API_URL`, `VITE_WS_URL`) y la redirect URL de Mercado Pago: `docs/VariablesACambiar.md`. El CORS es configuración (`CORS_ORIGINS`), no código.
+- Dominio `menyu-app.com`: DNS y dominios custom de producción y staging (ver Dominios): web-auth, web-admin, web-staff y web-cliente en Vercel; la API en Railway. Las variables de cada plataforma (CORS, `BASE_URL`, `FRONTEND_*`, `QR_BASE_URL`, `VITE_API_URL`, `VITE_WS_URL`) y la redirect URL de Mercado Pago: `docs/auth/VariablesACambiar.md`. El CORS es configuración (`CORS_ORIGINS`), no código.
 - Supabase (staging y producción): Site URL = `https://auth.menyu-app.com` (en staging, `https://auth.staging.menyu-app.com`); Redirect URLs para invitación, reset de contraseña, confirmación de email y callback de Google (incluir `http://auth.menyu.local:<puerto>` en staging).
 - Supabase: registro público con email **habilitado** (lo usan los clientes) y con confirmación de email. El personal igual entra solo por invitación: el acceso lo da la `Membresia`.
 - Supabase: JWT Signing Keys asimétricas activas en ambos proyectos (si todavía usan el JWT secret legacy, migrar). Comprobar que `<SUPABASE_URL>/auth/v1/.well-known/jwks.json` devuelve al menos una clave.
@@ -164,3 +164,4 @@ Observaciones que dejaron la Fase 1 y la migración de dominios de la Fase 0 (20
   - En Railway, un cambio de variables redespliega el servicio y corre las migraciones. El servicio de producción quedó desconectado de GitHub (*Settings → Source*) para que salga solo de `deploy-production.yml`: no reconectarlo.
 - **Rama `origin/fix/356-mozo-id-desde-jwt` (sin mergear):** trae la migración `20261014222232_add_admin_id_to_pago`, con fecha anterior a la de la Fase 1 y una FK a `admin`. Si se mergea, regenerarla con una fecha posterior y sumar `Pago.adminId` a la Fase 5: pasarlo a `Usuario` antes de quitar `Admin`, igual que `PedidoEdicion.adminId`.
 - **Base local:** en la máquina donde se hizo la Fase 1, `apps/backend/.env` tiene un `DATABASE_URL` de placeholder (`db.[project-ref].supabase.co`) y no tiene `DIRECT_URL`. Los comandos de Prisma se corrieron con las dos variables en línea contra `postgresql://menyu:menyu@localhost:5433/menyu`, como indica el README del backend. Antes de la Fase 2 conviene apuntar el `.env` a `localhost:5433`. La base local quedó con todas las migraciones y el seed.
+- **La API legacy no crea OWNERs:** `POST /admins` siempre crea un GERENTE, y uno creado por ROOT queda sin marca y no se le puede asignar ningún restaurante. Los usuarios de prueba de staging (`docs/auth/usuarios-prueba-staging.md`) se crearon con un INSERT para el OWNER y la API para el resto. En la Fase 2, la invitación de ROOT a OWNER cubre este hueco.

@@ -109,7 +109,7 @@ packages/types/src/
 - El comensal no usa guards de admin — se autentica por sesión de mesa
 
 ### Autenticación con Supabase (migración en curso)
-Spec, decisiones y fases: `docs/specs/auth.md` (una fase por sesión; al cerrar cada una, el subagente `revisor`). Hecha: Fase 1 (modelo de datos). Sigue: Fase 2 (backend).
+Spec, decisiones y fases: `docs/auth/specs/auth.md` (una fase por sesión; al cerrar cada una, el subagente `revisor`). Hecha: Fase 1 (modelo de datos). Sigue: Fase 2 (backend).
 - Modelos nuevos: `Usuario` (`supabaseUserId`, `esRoot` para ROOT) y `Membresia` con el enum `Rol`: `OWNER` por marca; `GERENTE`, `JEFE_SALON`, `MOZO` y `COCINA` por restaurante (CHECK `membresia_ambito_check` en la migración). Además `Mozo.usuarioId` y `Cliente.supabaseUserId`. `usuario` y `membresia` tienen RLS sin políticas.
 - Todavía no los usa ningún guard ni frontend: hasta las Fases 2 a 5 rige la autenticación actual (JWT propio con `JWT_SECRET`, `Admin`/`AdminRestaurante`/`Mozo`, login en `/auth` de web-cliente).
 - En el seed, el `Usuario` OWNER de Marca Seed (`owner@menyu.com`) tiene un `supabaseUserId` ficticio que no existe en ningún proyecto de Supabase. Para iniciar sesión con él (desde la Fase 2) hay que reemplazarlo por el id de un usuario real del Supabase de staging; el seed no lo pisa.
@@ -124,7 +124,7 @@ apps/web-cliente/   → mesa.menyu-app.com     (comensal)
 apps/web-staff/     → staff.menyu-app.com    (cocina + mozo web)
 apps/web-admin/     → admin.menyu-app.com    (dueño/administrador)
 ```
-La API (Railway) está en `api.menyu-app.com`. Staging: `<app>.staging.menyu-app.com`. Local: `<app>.menyu.local` (ver la sección Dominios de `docs/specs/auth.md`). Durante la migración siguen activos los dominios viejos (`menyu-*.vercel.app`, `menyu-backend-*.up.railway.app`): no darlos de baja (QR impresos, webhooks de Mercado Pago). Las variables por plataforma: `docs/VariablesACambiar.md`.
+La API (Railway) está en `api.menyu-app.com`. Staging: `<app>.staging.menyu-app.com`. Local: `<app>.menyu.local` (ver la sección Dominios de `docs/auth/specs/auth.md`). Durante la migración siguen activos los dominios viejos (`menyu-*.vercel.app`, `menyu-backend-*.up.railway.app`): no darlos de baja (QR impresos, webhooks de Mercado Pago). Las variables por plataforma: `docs/auth/VariablesACambiar.md`.
 
 Cada una es un proyecto Vite independiente con su propio deploy en Vercel.
 Un cambio en web-admin no afecta ni rebuilda web-cliente.

@@ -1,6 +1,6 @@
 # Variables a cambiar: dominios propios (menyu-app.com)
 
-Checklist para pasar las apps a `*.menyu-app.com` (Fase 0 de `docs/specs/auth.md`, sección Dominios) sin dejar de servir los dominios viejos. Acá solo hay nombres de variables y URLs públicas, ningún secreto.
+Checklist para pasar las apps a `*.menyu-app.com` (Fase 0 de `docs/auth/specs/auth.md`, sección Dominios) sin dejar de servir los dominios viejos. Acá solo hay nombres de variables y URLs públicas, ningún secreto.
 
 | App | Producción | Staging | Dominio viejo (sigue activo) |
 |---|---|---|---|
@@ -67,12 +67,12 @@ Y descargar el QR de una mesa en web-admin: el link tiene que empezar con `QR_BA
 
 El entorno **Preview** de estos proyectos es el que usan los previews que `deploy-staging.yml` despliega en cada merge a `main`, y el smoke de staging lee de ahí la `VITE_API_URL` de `menyu-cliente`. Mismos valores en los tres proyectos.
 
-| Variable | Entorno | Valor actual | Valor nuevo | Cuándo |
-|---|---|---|---|---|
-| `VITE_API_URL` | Preview | ver en el panel | `https://api.staging.menyu-app.com/api` | Con staging |
-| `VITE_WS_URL` | Preview | ver en el panel | `https://api.staging.menyu-app.com` | Con staging |
-| `VITE_API_URL` | Production | `https://menyu-backend-production.up.railway.app/api` (visto en el bundle publicado) | `https://api.menyu-app.com/api` | Producción, paso 3 |
-| `VITE_WS_URL` | Production | ver en el panel | `https://api.menyu-app.com` | Producción, paso 3 |
+| Variable       | Entorno    | Valor actual                                                                         | Valor nuevo                             | Cuándo             |
+| -------------- | ---------- | ------------------------------------------------------------------------------------ | --------------------------------------- | ------------------ |
+| `VITE_API_URL` | Preview    | ver en el panel                                                                      | `https://api.staging.menyu-app.com/api` | Con staging        |
+| `VITE_WS_URL`  | Preview    | ver en el panel                                                                      | `https://api.staging.menyu-app.com`     | Con staging        |
+| `VITE_API_URL` | Production | `https://menyu-backend-production.up.railway.app/api` (visto en el bundle publicado) | `https://api.menyu-app.com/api`         | Producción, paso 3 |
+| `VITE_WS_URL`  | Production | ver en el panel                                                                      | `https://api.menyu-app.com`             | Producción, paso 3 |
 
 ### Proyectos de staging: `menyu-cliente-staging`, `menyu-admin-staging`, `menyu-staff-staging`
 
