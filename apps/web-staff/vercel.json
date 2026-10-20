@@ -1,7 +1,10 @@
 {
   "ignoreCommand": "bash ../../scripts/vercel/ignorar-build.sh",
   "git": {
-    "deploymentEnabled": false
+    "deploymentEnabled": {
+      "main": true,
+      "**": false
+    }
   },
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }

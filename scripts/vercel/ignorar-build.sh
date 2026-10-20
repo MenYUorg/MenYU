@@ -7,19 +7,30 @@
 # deploy --prebuilt) y no pasan por acá.
 set -u
 
-# Producción: menyu-admin, menyu-cliente y menyu-staff se despliegan con el tag
-# (deploy-production.yml), nunca desde Git; en el panel de Vercel ya tenían un Ignored Build
-# Step que cancelaba los builds de main, y este archivo lo reemplaza. menyu-cliente-staging
-# usa el mismo vercel.json que menyu-cliente y sí despliega main. VERCEL_URL empieza con el
-# nombre del proyecto (<proyecto>-<hash>-<equipo>.vercel.app).
-if [ "${VERCEL_ENV:-}" = "production" ]; then
-  case "${VERCEL_URL:-}" in
-    menyu-cliente-staging-*) ;;
-    *)
-      echo "Producción se despliega con el tag (deploy-production.yml): no se construye desde Git."
-      exit 0
-      ;;
-  esac
+# Quién construye: VERCEL_URL empieza con el nombre del proyecto
+# (<proyecto>-<hash>-<equipo>.vercel.app). El hash no lleva guiones, así que
+# "menyu-admin-<hash>-..." nunca empieza como "menyu-admin-staging-...".
+#
+# Desde Git solo se construyen los proyectos de STAGING, que despliegan main:
+# menyu-cliente-staging, menyu-admin-staging y menyu-staff-staging. Los de producción
+# (menyu-cliente, menyu-admin y menyu-staff) se despliegan con el tag (deploy-production.yml),
+# nunca desde Git: ni en producción, ni en preview, ni en ninguna rama. Los apps/web-*/vercel.json
+# se comparten entre el proyecto de producción y el de staging de cada app, así que la diferencia
+# la marca este archivo. Si VERCEL_URL no viene, tampoco se construye: ante la duda, no.
+case "${VERCEL_URL:-}" in
+  menyu-cliente-staging-* | menyu-admin-staging-* | menyu-staff-staging-*) ;;
+  *)
+    echo "Los proyectos de producción se despliegan con el tag (deploy-production.yml): no se construyen desde Git."
+    exit 0
+    ;;
+esac
+
+# Primer deploy de main de un proyecto de staging recién creado: Vercel no manda
+# VERCEL_GIT_PREVIOUS_SHA y no hay con qué comparar. Compararlo contra el punto donde main salió
+# de main (el propio commit) daría "sin cambios", y el proyecto nunca tendría su primer deploy.
+if [ -z "${VERCEL_GIT_PREVIOUS_SHA:-}" ] && [ "${VERCEL_GIT_COMMIT_REF:-}" = "main" ]; then
+  echo "Primer deploy de main de este proyecto: se construye."
+  exit 1
 fi
 
 # Primer deploy de una rama: Vercel no manda VERCEL_GIT_PREVIOUS_SHA. Se compara contra el
