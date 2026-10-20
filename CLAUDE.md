@@ -99,7 +99,7 @@ packages/types/src/
 | Tipo | Tabla | App |
 |---|---|---|
 | Mozo | `mozo` | apps/web-staff |
-| Cocina | `cocina` | apps/web-staff |
+| Cocina | — (no hay tabla ni login propio; con Supabase es el rol `COCINA` de `Membresia`) | apps/web-staff |
 | Cliente/Comensal | `cliente` | apps/web-cliente |
 
 ### Guards NestJS
@@ -108,6 +108,12 @@ packages/types/src/
 - ROOT no es un bypass: el código nuevo no lo incluye en `@Roles(...)` ni en los chequeos de pertenencia (OWNER de la marca, GERENTE asignado). Las rutas propias de ROOT van en `/root/*` con `@Roles(RolAdmin.ROOT)` y un `select` explícito en cada consulta. Varios services existentes todavía tienen `if (user.rol === 'ROOT') return`: ver el Apéndice A de `docs/plan-discovery-descuentos.md` y la etapa 4 de `docs/plan-consola-root.md`
 - Mozos y cocina usan sus propios guards separados del enum RolAdmin
 - El comensal no usa guards de admin — se autentica por sesión de mesa
+
+### Autenticación con Supabase (migración en curso)
+Spec, decisiones y fases: `docs/specs/auth.md` (una fase por sesión; al cerrar cada una, el subagente `revisor`). Hecha: Fase 1 (modelo de datos). Sigue: Fase 2 (backend).
+- Modelos nuevos: `Usuario` (`supabaseUserId`, `esRoot` para ROOT) y `Membresia` con el enum `Rol`: `OWNER` por marca; `GERENTE`, `JEFE_SALON`, `MOZO` y `COCINA` por restaurante (CHECK `membresia_ambito_check` en la migración). Además `Mozo.usuarioId` y `Cliente.supabaseUserId`. `usuario` y `membresia` tienen RLS sin políticas.
+- Todavía no los usa ningún guard ni frontend: hasta las Fases 2 a 5 rige la autenticación actual (JWT propio con `JWT_SECRET`, `Admin`/`AdminRestaurante`/`Mozo`, login en `/auth` de web-cliente).
+- En el seed, el `Usuario` OWNER de Marca Seed (`owner@menyu.com`) tiene un `supabaseUserId` ficticio que no existe en ningún proyecto de Supabase. Para iniciar sesión con él (desde la Fase 2) hay que reemplazarlo por el id de un usuario real del Supabase de staging; el seed no lo pisa.
 
 ---
 
