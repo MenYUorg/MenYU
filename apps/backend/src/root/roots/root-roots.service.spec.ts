@@ -26,7 +26,7 @@ describe('RootRootsService', () => {
 
   beforeEach(() => {
     ;({ prisma, tx } = armarTransaccionRoot())
-    servicio = new RootRootsService(comoPrisma(prisma), new HistorialRootService())
+    servicio = new RootRootsService(comoPrisma(prisma), new HistorialRootService(comoPrisma(prisma)))
   })
 
   const nadaPorFuera = () => {

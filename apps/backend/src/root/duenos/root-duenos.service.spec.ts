@@ -30,7 +30,7 @@ describe('RootDuenosService', () => {
 
   beforeEach(() => {
     ;({ prisma, tx } = armarTransaccionRoot())
-    servicio = new RootDuenosService(comoPrisma(prisma), new HistorialRootService())
+    servicio = new RootDuenosService(comoPrisma(prisma), new HistorialRootService(comoPrisma(prisma)))
   })
 
   /** Nada se escribió con el cliente suelto: todo fue por la transacción. */
