@@ -56,10 +56,14 @@ src/
     guards/
       jwt-auth.guard.ts
       tipo.guard.ts
-      rol.guard.ts
+      supabase-auth.guard.ts        ← Supabase Auth (Fase 2)
+      membresia.guard.ts            ← Supabase Auth (Fase 2)
     decorators/
       requires-tipo.decorator.ts
-      requires-rol.decorator.ts
+      requiere-rol.decorator.ts     ← Supabase Auth (Fase 2)
+      usuario-actual.decorator.ts   ← Supabase Auth (Fase 2)
+    supabase/                       ← verificador del token, AccesoService, Admin API
+    invitaciones/                   ← POST /auth/invitaciones
   common/
     guards/roles.guard.ts           ← usado por marca y restaurante
     decorators/
@@ -194,14 +198,13 @@ createCliente(data)
 
 Hay dos sistemas de guards en el proyecto que coexisten y se usan en contextos distintos:
 
-### Sistema 1 — `auth/guards/` (tipo + rol)
+### Sistema 1 — `auth/guards/` (tipo)
 
-Creado en este sprint para proteger rutas según el tipo de usuario (`admin`, `mozo`, `cliente`) y su rol libre. Se usa donde hay lógica que diferencia entre tipos de usuario.
+Creado en este sprint para proteger rutas según el tipo de usuario (`admin`, `mozo`, `cliente`). Se usa donde hay lógica que diferencia entre tipos de usuario. (El `RolGuard` + `@RequiresRol` que lo acompañaba no lo usaba ningún endpoint y se borró en la Fase 2 de auth, para que no se confundiera con `@RequiereRol`.)
 
 ```typescript
-@UseGuards(JwtAuthGuard, TipoGuard, RolGuard)
-@RequiresTipo('admin')
-@RequiresRol('JEFE_SALON')
+@UseGuards(JwtAuthGuard, TipoGuard)
+@RequiresTipo('admin', 'mozo')
 @Post('asignar-mesa')
 ```
 
@@ -488,7 +491,7 @@ El panel admin también necesita listar/editar usuarios. Si todo estuviera en `A
 
 ### Dos sistemas de guards
 
-El sistema de `auth/guards/` (TipoGuard + RolGuard) protege rutas donde la lógica varía por tipo de usuario. El sistema de `common/guards/` (RolesGuard) es más compacto y lo usan los módulos de backoffice. Conviven sin conflicto.
+El sistema de `auth/guards/` (TipoGuard) protege rutas donde la lógica varía por tipo de usuario. El sistema de `common/guards/` (RolesGuard) es más compacto y lo usan los módulos de backoffice. Conviven sin conflicto.
 
 ### ROOT admin sin `restauranteId`
 

@@ -109,9 +109,14 @@ packages/types/src/
 - El comensal no usa guards de admin — se autentica por sesión de mesa
 
 ### Autenticación con Supabase (migración en curso)
-Spec, decisiones y fases: `docs/auth/specs/auth.md` (una fase por sesión; al cerrar cada una, el subagente `revisor`). Hecha: Fase 1 (modelo de datos). Sigue: Fase 2 (backend).
-- Modelos nuevos: `Usuario` (`supabaseUserId`, `esRoot` para ROOT) y `Membresia` con el enum `Rol`: `OWNER` por marca; `GERENTE`, `JEFE_SALON`, `MOZO` y `COCINA` por restaurante (CHECK `membresia_ambito_check` en la migración). Además `Mozo.usuarioId` y `Cliente.supabaseUserId`. `usuario` y `membresia` tienen RLS sin políticas.
-- Todavía no los usa ningún guard ni frontend: hasta las Fases 2 a 5 rige la autenticación actual (JWT propio con `JWT_SECRET`, `Admin`/`AdminRestaurante`/`Mozo`, login en `/auth` de web-cliente).
+Spec, decisiones y fases: `docs/auth/specs/auth.md` (una fase por sesión; al cerrar cada una, el subagente `revisor`). Hechas: Fase 1 (modelo de datos) y Fase 2 (backend; la verificación con tokens reales queda para staging). Sigue: Fase 3 (web-auth).
+- Modelos nuevos: `Usuario` (`supabaseUserId`, `esRoot` para ROOT) y `Membresia` con el enum `Rol`: `OWNER` por marca; `GERENTE`, `JEFE_SALON`, `MOZO` y `COCINA` por restaurante (CHECK `membresia_ambito_check` en la migración). Además `Mozo.usuarioId` (los mozos invitados no tienen `passwordHash`) y `Cliente.supabaseUserId`. `usuario` y `membresia` tienen RLS sin políticas.
+- Backend (en `apps/backend/src/auth/`):
+  - `SupabaseAuthGuard` verifica el access token de Supabase contra el JWKS de `SUPABASE_URL` y deja el `Usuario` en `request.usuario` (lo lee `@UsuarioActual()`).
+  - `@RequiereRol(...)` suma `MembresiaGuard` y exige el rol en el restaurante de `:restauranteId` (la membresía OWNER de la marca cubre sus sucursales).
+  - Los permisos los decide `AccesoService`, que ignora `esRoot`.
+  - Por ahora solo los usan `GET /auth/me` y `POST /auth/invitaciones`.
+- Todo lo demás sigue con la autenticación actual hasta la Fase 4, cuando backend y frontends cambian de token a la vez: JWT propio con `JWT_SECRET`, `@Roles`, `RolesGuard` y `@CurrentUser`, `Admin`/`AdminRestaurante`/`Mozo` y el login en `/auth` de web-cliente. No mezclar los dos sistemas en un mismo endpoint.
 - En el seed, el `Usuario` OWNER de Marca Seed (`owner@menyu.com`) tiene un `supabaseUserId` ficticio que no existe en ningún proyecto de Supabase. Para iniciar sesión con él (desde la Fase 2) hay que reemplazarlo por el id de un usuario real del Supabase de staging; el seed no lo pisa.
 
 ---
