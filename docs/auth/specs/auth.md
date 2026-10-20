@@ -104,7 +104,15 @@ En la misma sesión se decidieron también los puntos **Clientes**, **Convivenci
 - Pantallas de "olvidé mi contraseña" y de aceptar invitación (definir contraseña).
 - Usuario autenticado en Supabase pero sin `Usuario` en la DB (403 en `/auth/me`): pantalla "Tu cuenta no tiene acceso. Pedile una invitación al administrador" + cerrar sesión.
 - El registro y el post-login de clientes quedan para la Fase 4b.
-- **Terminado cuando:** un usuario de cada rol inicia sesión y termina en la app correcta, y el flujo de invitación funciona de punta a punta.
+- **Infra y pipeline.** web-auth es la primera app nueva desde que existe el pipeline. Sin estos pasos funciona en local pero no se despliega (ver `Documentacion/WORKFLOW.md`, "Frontends en Vercel"):
+  - Vercel, a mano: proyectos `menyu-auth` (producción) y `menyu-auth-staging`, creados como los de las otras apps, con los dominios `auth.menyu-app.com` y `auth.staging.menyu-app.com` (registro en Cloudflare, sin proxy) y las variables de la sección Fase 3 de `docs/auth/VariablesACambiar.md`.
+  - `apps/web-auth/vercel.json` igual al de las otras apps (`ignoreCommand`, `git.deploymentEnabled` solo `main`, rewrite a `index.html`).
+  - `scripts/vercel/ignorar-build.sh`: sumar `menyu-auth-staging-*`. Si no, el proyecto de staging nunca construye desde Git.
+  - `deploy-staging.yml` y `deploy-production.yml`: sumar `--filter=@menyu/web-auth` al build y un paso "Deploy web-auth" igual a los otros, con el secret nuevo `VERCEL_PROJECT_ID_AUTH` (el ID de `menyu-auth`; el de staging no lo necesita porque despliega desde Git).
+  - Smoke: variable de repo `PROD_WEB_AUTH_URL` (`https://auth.menyu-app.com`), sumada a `scripts/smoke/verificar-urls.mjs` en los dos pasos que la validan y al smoke (`scripts/smoke/smoke.mjs` y `lib.mjs` aceptan hoy 3 frontends).
+  - CI: sumar `@menyu/web-auth` a los filtros de test y cobertura de `ci.yml`, a la subida de cobertura y a `sonar-project.properties` (`sonar.sources`, `sonar.tests` y `lcov`).
+  - CORS: sumar `https://auth.staging.menyu-app.com` y `https://auth.menyu-app.com` a `CORS_ORIGINS` de cada ambiente.
+- **Terminado cuando:** un usuario de cada rol inicia sesión y termina en la app correcta, y el flujo de invitación funciona de punta a punta. web-auth se despliega sola en staging con cada merge a `main` y en producción con el tag, y el smoke de producción la verifica.
 
 ### Fase 3b — Login con Google
 - Botón "Continuar con Google" en web-auth (`signInWithOAuth`), con callback a `auth.menyu-app.com`.
@@ -124,6 +132,7 @@ En la misma sesión se decidieron también los puntos **Clientes**, **Convivenci
 - Variables de entorno de los frontends: `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `VITE_AUTH_COOKIE_DOMAIN` y `VITE_AUTH_URL`.
 - `@supabase/ssr` 0.12.x pide `@supabase/supabase-js` ^2.114: alinear la versión del backend (hoy 2.105.1).
 - Integrarlo en web-admin y web-staff (con `RequireAuth`) y en web-cliente (solo `useSession`, sin `RequireAuth`: la sesión es opcional).
+- CI: sumar `@menyu/auth-client` a los filtros de test y cobertura de `ci.yml`, a la subida de cobertura y a `sonar-project.properties`, como `@menyu/ui`. Los deploys no cambian: las apps que lo importan se reconstruyen solas cuando cambia (`turbo-ignore` y `dependsOn: ["^build"]`).
 - **Terminado cuando:** login en auth → abrir admin y staff en otras pestañas sin volver a loguear; logout en una → las otras vuelven a web-auth al recuperar foco. Probado en `*.menyu.local` y en staging.
 
 ### Fase 4b — Cuenta de cliente
