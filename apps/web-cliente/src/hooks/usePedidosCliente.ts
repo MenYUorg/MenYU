@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { io } from 'socket.io-client'
+import { urlDelSocket } from '@menyu/ui/socket'
 import { api } from '../services/api'
 import { useSessionStore } from '../store/sessionStore'
 
@@ -16,7 +17,7 @@ export interface PedidoCliente {
 }
 
 const BASE    = (import.meta.env.VITE_API_URL as string) ?? ''
-const WS_BASE = (import.meta.env.VITE_WS_URL as string) ?? BASE.replace('/api', '')
+const WS_BASE = urlDelSocket(import.meta.env.VITE_WS_URL as string | undefined, BASE) ?? ''
 
 export function usePedidosCliente() {
   const jwt           = useSessionStore((s) => s.jwt)
