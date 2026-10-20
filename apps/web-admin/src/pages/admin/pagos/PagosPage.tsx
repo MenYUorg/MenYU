@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Bell, CheckCircle, RefreshCw, X } from 'lucide-react'
 import { TOKEN_KEY } from '@menyu/auth'
 import { useAuth } from '@menyu/auth'
+import { urlDelSocket } from '@menyu/ui/socket'
 import { io, type Socket } from 'socket.io-client'
 import { useContextStore } from '../../../store/contextStore'
 import { api } from '../../../services/api'
@@ -28,8 +29,7 @@ const BASE: string =
   (import.meta.env.VITE_API_URL as string | undefined) ?? ''
 
 const WS_URL: string =
-  (import.meta.env.VITE_WS_URL as string | undefined) ??
-  (import.meta.env.VITE_API_URL as string | undefined)?.replace('/api', '') ??
+  urlDelSocket(import.meta.env.VITE_WS_URL as string | undefined, import.meta.env.VITE_API_URL as string | undefined) ??
   ''
 
 // ── Types ─────────────────────────────────────────────────────────────────────

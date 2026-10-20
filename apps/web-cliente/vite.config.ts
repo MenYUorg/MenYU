@@ -12,8 +12,9 @@ export default defineConfig({
   server: {
     port: Number(process.env.PORT) || 5176,
     // La cámara solo anda en HTTPS (o en localhost): para probar desde un iPhone se abre un túnel de Cloudflare hacia este
-    // servidor. Vite solo contesta a los nombres de host que conoce, así que se permiten los del túnel.
-    allowedHosts: ['.trycloudflare.com'],
+    // servidor. Vite solo contesta a los nombres de host que conoce, así que se permiten los del túnel y
+    // mesa.menyu.local (docs/specs/auth.md, Dominios).
+    allowedHosts: ['.trycloudflare.com', '.menyu.local'],
     // Con VITE_API_URL=/api la app le habla a este mismo servidor, que reenvía al backend: así alcanza un solo túnel.
     proxy: {
       '/api': { target: BACKEND, changeOrigin: true },

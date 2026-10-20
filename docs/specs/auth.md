@@ -64,7 +64,7 @@ En la misma sesión se decidieron también los puntos **Clientes**, **Convivenci
 ## Fases
 
 ### Fase 0 — Configuración externa (manual, la hace el equipo)
-- Dominio `menyu-app.com`: DNS y dominios custom de producción y staging (ver Dominios): web-auth, web-admin, web-staff y web-cliente en Vercel; la API en Railway.
+- Dominio `menyu-app.com`: DNS y dominios custom de producción y staging (ver Dominios): web-auth, web-admin, web-staff y web-cliente en Vercel; la API en Railway. Las variables de cada plataforma (CORS, `BASE_URL`, `FRONTEND_*`, `QR_BASE_URL`, `VITE_API_URL`, `VITE_WS_URL`) y la redirect URL de Mercado Pago: `docs/VariablesACambiar.md`. El CORS es configuración (`CORS_ORIGINS`), no código.
 - Supabase (staging y producción): Site URL = `https://auth.menyu-app.com` (en staging, `https://auth.staging.menyu-app.com`); Redirect URLs para invitación, reset de contraseña, confirmación de email y callback de Google (incluir `http://auth.menyu.local:<puerto>` en staging).
 - Supabase: registro público con email **habilitado** (lo usan los clientes) y con confirmación de email. El personal igual entra solo por invitación: el acceso lo da la `Membresia`.
 - Supabase: JWT Signing Keys asimétricas activas en ambos proyectos (si todavía usan el JWT secret legacy, migrar). Comprobar que `<SUPABASE_URL>/auth/v1/.well-known/jwks.json` devuelve al menos una clave.
@@ -91,7 +91,7 @@ En la misma sesión se decidieron también los puntos **Clientes**, **Convivenci
 - Pendientes que dejó la Fase 1:
   - `Usuario.email` es único pero distingue mayúsculas: guardar siempre el email que devuelve Supabase (en minúscula) y comparar en minúscula al vincular un `Mozo`.
   - `Mozo.passwordHash` es obligatorio: hacerlo opcional (migración) para poder crear el `Mozo` de un invitado.
-- CORS: allowlist de los subdominios de `menyu-app.com` (incluido `staging.menyu-app.com`) y `menyu.local`.
+- CORS: no lleva código, se configura en la Fase 0 con `CORS_ORIGINS` y `CORS_ORIGIN_PATTERNS`. Acá solo verificar que estén los subdominios de `menyu-app.com` (incluido `staging.menyu-app.com`) y, en local, `menyu.local`.
 - Swagger con esquema Bearer.
 - **Tests (solo estos):** token válido, token vencido, token de otro proyecto, usuario sin membresía, rol incorrecto.
 - **Terminado cuando:** los tests pasan y un endpoint de prueba protegido responde bien a cada caso.
@@ -155,12 +155,12 @@ En la misma sesión se decidieron también los puntos **Clientes**, **Convivenci
 - Las pruebas del revisor en el navegador se hacen solo contra staging o local, nunca contra producción, y con usuarios de prueba.
 
 ## Para tener en cuenta
-Observaciones que dejó la Fase 1 (2026-10-20). Revisarlas al arrancar cada fase y borrar las que ya no apliquen.
+Observaciones que dejaron la Fase 1 y la migración de dominios de la Fase 0 (2026-10-20). Revisarlas al arrancar cada fase y borrar las que ya no apliquen.
 
-- **Primer deploy a staging con la migración de la Fase 1:** `20261020013358_auth_usuario_membresia` se aplica sola al arrancar el contenedor (el `Dockerfile` corre `prisma migrate deploy`). Solo se probó en el Postgres local de Docker. En ese deploy, mirar el log de Railway y confirmar:
-  - que la migración no falla porque ya existan en la base un tipo `rol` o tablas `usuario` o `membresia`;
-  - que el backend se conecta con el rol dueño de las tablas: si no, la RLS de `usuario` y `membresia` lo bloquea;
+- **Migración de la Fase 1 en staging:** se aplicó en el deploy del merge de la Fase 1 (`/health` mostró `39522af`, y el contenedor solo arranca si `prisma migrate deploy` no falla). Falta confirmar:
+  - que el backend se conecta con el rol dueño de las tablas: si no, la RLS de `usuario` y `membresia` lo bloquea (se nota en la Fase 2, cuando el guard las lea);
   - con la publishable key, que `anon` y `authenticated` no pueden leer `usuario` ni `membresia` por la Data API.
+- **Producción, incidente del 2026-10-20:** un cambio manual de `CORS_ORIGINS` en Railway de producción redesplegó el servicio construyendo el último commit de `main` (31 migraciones) en lugar del tag v1.0.5 (18). `prisma migrate deploy` aplicó las migraciones pendientes hasta que `20260906183320_division_pagos_campos` falló (P3009): su índice único `comensal(sesion_id, nombre_normalizado)` chocó con los comensales "Invitado" que el backfill de `20260722175451_split_pagos_comensales` crea uno por pago, como ya había pasado en QA. La base de producción ya no servía para el código de v1.0.5 (`pago.pedido_id` y `restaurante.qr_base_url` se borraron), así que se recuperó hacia adelante: se borraron esos comensales, se marcó la migración como revertida y se desplegó `main` con el tag v1.0.6 (`39522af`, con las 32 migraciones aplicadas y el smoke de producción en verde).
+  - En Railway, un cambio de variables redespliega el servicio y corre las migraciones. El servicio de producción quedó desconectado de GitHub (*Settings → Source*) para que salga solo de `deploy-production.yml`: no reconectarlo.
 - **Rama `origin/fix/356-mozo-id-desde-jwt` (sin mergear):** trae la migración `20261014222232_add_admin_id_to_pago`, con fecha anterior a la de la Fase 1 y una FK a `admin`. Si se mergea, regenerarla con una fecha posterior y sumar `Pago.adminId` a la Fase 5: pasarlo a `Usuario` antes de quitar `Admin`, igual que `PedidoEdicion.adminId`.
-- **Subagente `revisor`:** en la sesión de la Fase 1 el tipo `revisor` no estaba disponible (probablemente porque `.claude/agents/revisor.md` se creó con la sesión ya abierta, y los agentes del proyecto se cargan al iniciarla) y se usó un agente general con las instrucciones de `revisor.md`. Al cerrar la próxima fase, confirmar que aparece. Además `.claude/agents/` está sin trackear: el resto del equipo no lo tiene hasta que se commitee.
 - **Base local:** en la máquina donde se hizo la Fase 1, `apps/backend/.env` tiene un `DATABASE_URL` de placeholder (`db.[project-ref].supabase.co`) y no tiene `DIRECT_URL`. Los comandos de Prisma se corrieron con las dos variables en línea contra `postgresql://menyu:menyu@localhost:5433/menyu`, como indica el README del backend. Antes de la Fase 2 conviene apuntar el `.env` a `localhost:5433`. La base local quedó con todas las migraciones y el seed.

@@ -4,6 +4,7 @@ import { io, type Socket } from 'socket.io-client'
 import { AlertTriangle, ChevronRight, ClipboardList, Clock, RefreshCw } from 'lucide-react'
 import { useAuth } from '@menyu/auth'
 import { APARIENCIA_PEDIDOS, EditarPedidoModal, type AparienciaEditarPedido, type ItemEditable } from '@menyu/ui/editar-pedido'
+import { urlDelSocket } from '@menyu/ui/socket'
 import { getToken, api } from '../../services/api'
 import type { PedidoRico } from '../../services/api'
 import { useMozoStore } from '../../store/mozoStore'
@@ -34,8 +35,7 @@ const C = {
 } as const
 
 const WS_URL: string =
-  (import.meta.env.VITE_WS_URL as string | undefined) ??
-  (import.meta.env.VITE_API_URL as string | undefined)?.replace('/api', '') ??
+  urlDelSocket(import.meta.env.VITE_WS_URL as string | undefined, import.meta.env.VITE_API_URL as string | undefined) ??
   ''
 
 type EstadoPedido = 'pendiente' | 'en_preparacion' | 'listo'

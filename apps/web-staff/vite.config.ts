@@ -8,5 +8,7 @@ export default defineConfig({
   },
   server: {
     port: Number(process.env.PORT) || 5175,
+    // Vite solo contesta a los nombres de host que conoce: staff.menyu.local (docs/specs/auth.md, Dominios).
+    allowedHosts: ['.menyu.local'],
   },
 })
