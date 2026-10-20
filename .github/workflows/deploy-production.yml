@@ -46,33 +46,40 @@ jobs:
           PROD_WEB_CLIENTE_URL: ${{ vars.PROD_WEB_CLIENTE_URL }}
           PROD_WEB_STAFF_URL: ${{ vars.PROD_WEB_STAFF_URL }}
 
-      # Si el CI del commit está en cola o en curso, espera (cada 20 s, hasta 15 min).
-      # Falla enseguida si terminó con otro resultado que success o si no hay run.
+      # Exige en verde los dos jobs del CI del commit: el ci y los e2e del backend.
+      # Si alguno está en cola o en curso, espera (cada 20 s, hasta 15 min en total).
+      # Falla enseguida si alguno terminó con otro resultado que success o si no tiene run.
       - name: Check CI result for this commit
         run: |
           fin=$((SECONDS + 900))
           while :; do
-            resultado=$(gh api -X GET "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/check-runs" \
-              -f check_name="$CHECK" \
-              --jq '[.check_runs[] | select(.app.slug == "github-actions")] | sort_by(.started_at) | last | if . == null then "sin run" else "\(.status)/\(.conclusion)" end')
-            echo "\"$CHECK\" en $GITHUB_SHA: $resultado"
-            case "$resultado" in
-              completed/success) exit 0 ;;
-              queued/* | in_progress/* | waiting/* | requested/* | pending/*) ;;
-              *)
-                echo "::error::El CI de $GITHUB_SHA no está en verde ($resultado). No se despliega ni se corre el smoke."
-                exit 1
-                ;;
-            esac
+            en_verde=0
+            pendiente=""
+            for check in "$CHECK_CI" "$CHECK_E2E"; do
+              resultado=$(gh api -X GET "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/check-runs" \
+                -f check_name="$check" \
+                --jq '[.check_runs[] | select(.app.slug == "github-actions")] | sort_by(.started_at) | last | if . == null then "sin run" else "\(.status)/\(.conclusion)" end')
+              echo "\"$check\" en $GITHUB_SHA: $resultado"
+              case "$resultado" in
+                completed/success) en_verde=$((en_verde + 1)) ;;
+                queued/* | in_progress/* | waiting/* | requested/* | pending/*) pendiente="\"$check\" ($resultado)" ;;
+                *)
+                  echo "::error::\"$check\" de $GITHUB_SHA no está en verde ($resultado). No se despliega ni se corre el smoke."
+                  exit 1
+                  ;;
+              esac
+            done
+            [ "$en_verde" -eq 2 ] && exit 0
             if [ "$SECONDS" -ge "$fin" ]; then
-              echo "::error::El CI de $GITHUB_SHA sigue sin terminar después de 15 min ($resultado). No se despliega ni se corre el smoke."
+              echo "::error::El CI de $GITHUB_SHA sigue sin terminar después de 15 min: $pendiente. No se despliega ni se corre el smoke."
               exit 1
             fi
             sleep 20
           done
         env:
           GH_TOKEN: ${{ github.token }}
-          CHECK: CI — typecheck, lint, test, build
+          CHECK_CI: CI — typecheck, lint, test, build
+          CHECK_E2E: E2E — backend (Postgres efímero)
 
   deploy-production:
     name: Deploy to production
