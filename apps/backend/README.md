@@ -45,6 +45,12 @@ Solo para el entorno local.
 | Cliente 1 | cliente1@menyu.com | cliente1234 |
 | Cliente 2 | cliente2@menyu.com | cliente1234 |
 
+Además crea el `Usuario` OWNER de Marca Seed (`owner@menyu.com`) del modelo de
+Supabase Auth, con un `supabaseUserId` ficticio que no existe en ningún proyecto
+de Supabase. Para iniciar sesión con él (desde la Fase 2 de `docs/specs/auth.md`)
+hay que reemplazarlo por el id de un usuario real del Supabase de staging; el
+seed no lo pisa al re-correr.
+
 Mesas: número 99 (pin 9998), 100 (pin 9997), 101 (pin 9996), y la mesa 1 de
 Restaurante Seed 2 (pin 9995), la segunda marca del seed.
 Menú: 3 categorías (Entradas, Principales, Bebidas) con 9 ítems de precios
