@@ -17,13 +17,14 @@ Registro de lo que se hizo para poner SonarCloud en el CI de MenYU y tomar la l�
 | `/health` con SHA (PR #374) | Mergeado (17/10/2026, merge `90bbb81`). Staging muestra ese SHA |
 | Smoke post-deploy en staging (PR #375) | Mergeado (17/10/2026, merge `beb2d18`). Primer run (`39032870161`): smoke en verde |
 | CI en verde y smoke en producción (PR #377) | Mergeado (17/10/2026, merge `8dc7c72`). Staging posterior al merge en verde (run `39036386891`). Falta el tag de ensayo |
+| e2e del backend con Postgres efímero y `check-ci` que los exige (PR #408, SCRUM-37) | **Abierto** (20/10/2026), CI en verde (run `39438348924`, e2e en 66 s). Falta el merge, sumar el check al ruleset y confirmar la versión de Postgres |
 
 ## Pendientes
 
 1. **Cambiar el código nuevo de `main`** en SonarCloud (Administration → New Code) a "Number of days" o "Reference branch". Hoy la referencia queda fija en el análisis automático del 17/10 (`7072d67`), que tuvo otro alcance y no tuvo cobertura, y como no se manda `projectVersion` nunca avanza. Después del cambio, verificar por API en el próximo análisis de `main` (`api/qualitygates/project_status?projectKey=MenYUorg_MenYU&branch=main`, campo `periods`).
 2. **Subir los umbrales del gate el 23/10/2026.**
 3. **Confirmar la Deployment Protection de las previews de Vercel** (queda a cargo del equipo). En el run `39032870161` los tres frontends respondieron 200, así que hoy no hay protección que bloquee el smoke.
-4. **Producción:** #377 mergeado y variables `PROD_WEB_*_URL` cargadas (17/10/2026). Falta el tag de ensayo y anotar su resultado (`check-ci`, deploy, smoke y el SHA de `/health` de producción).
+4. **Producción:** #377 mergeado y variables `PROD_WEB_*_URL` cargadas (17/10/2026). Falta el tag de ensayo y anotar su resultado (`check-ci`, deploy, smoke y el SHA de `/health` de producción). Con el #408, `check-ci` exige también el check del e2e: el tag tiene que ser sobre un commit que lo tenga.
 5. Opcionales que salieron en el camino:
    - Fijar la versión de `@railway/cli` en los workflows: hecho en el PR #396 (`@5.70.0`), mergeado el 19/10 (`a4c4c53`). El deploy de staging `39311475958` ya lo usó.
    - Revisar en Railway (Settings → Healthcheck Path) si el servicio tiene healthcheck en `/health`. No cambia nada hoy, porque `/health` responde siempre 200.
@@ -555,9 +556,11 @@ Horas en UTC. Solo lectura, salvo la corrección de esta bitácora (`b4ff0a5`: l
 8. **Viernes 23/10:** subir los umbrales del gate (80 % y 5 % sobre código nuevo) y aplicar la definición de código nuevo elegida en el punto 3.
 9. Abrir el PR único de esta bitácora después del ensayo.
 
+> Esta lista quedó superada: ver "Pendiente al retomar" en la sección del 20/10.
+
 ### 20/10/2026: datos del informe y SCRUM-37 (migraciones y job e2e)
 
-Horas en UTC. No se mergeó ni se pusheó nada desde esta sesión.
+Horas en UTC. No se mergeó nada desde esta sesión. Se pusheó solo `ci/e2e-backend` y se abrió el PR #408.
 
 **Último CI verde de cada rama**
 
@@ -575,7 +578,7 @@ En los tres, el run verde es del head al merge. Para el #396 se corrigió la sec
 - En las dos versiones: `prisma migrate deploy` aplicó las 33 (33 terminadas y 0 revertidas en `_prisma_migrations`), y `prisma migrate diff --from-url … --to-schema-datamodel prisma/schema.prisma --exit-code` salió con exit 0 y una migración vacía. **No queda drift.**
 - Lo que `migrate diff` no ve, revisado aparte en las dos: extensiones `plpgsql` y `unaccent`, y los CHECKs `item_menu` (descuento) y `membresia_ambito_check`. Los 3 `.sql` sueltos de `prisma/` ya están incluidos en las migraciones (`baseline_edicion_cantidad_editada` y `reconcile_schema_drift`): `pedido_edicion`, `pedido.updated_at` y `pedido_edicion_item.item_nombre` existen, y la FK que borra `fix_pedido_edicion_item.sql` no.
 
-**Paso 2: job `e2e-backend`** (rama local `ci/e2e-backend`, worktree `../MenYU-e2e`, sin push)
+**Paso 2: job `e2e-backend`** (rama `ci/e2e-backend`, worktree `../MenYU-e2e`, PR #408)
 - `e841c09`: el e2e mandaba `restaurantId`, pero el DTO es `restauranteId` desde `ddc3151` (15/05). El spec es del 06/05 y, como no corría en el CI, quedó viejo: el test "pin válido con sesión activa" daba 400.
 - `ac05f95`: job nuevo en `ci.yml`, en paralelo al `ci`. Usa `services: postgres` (`postgres:17.6`, a confirmar con Supabase) con `pg_isready`, `timeout-minutes: 15` e instala solo `@menyu/api...`. Pasos: generate, `migrate deploy`, `migrate diff --exit-code` (corta si aparece drift) y `test:e2e`.
   - Sin secretos: `DATABASE_URL` y `DIRECT_URL` apuntan a `localhost`, y `JWT_SECRET` y `MP_ENCRYPTION_KEY` son de test. `CryptoService` exige `MP_ENCRYPTION_KEY` al arrancar `AppModule`.
@@ -589,14 +592,14 @@ En los tres, el run verde es del head al merge. Para el #396 se corrigió la sec
 **Cómo decide `check-ci` y qué exige el ruleset**
 - `check-ci` (`deploy-production.yml`) no mira la conclusión del workflow: busca el check run con el nombre `CHECK: CI — typecheck, lint, test, build`, que es el del job `ci`. El job nuevo es otro check run (`E2E — backend (Postgres efímero)`), así que **un e2e rojo no frenaba producción**.
   - **Decisión (opción a):** `39e4633` hace que `check-ci` exija los dos checks del commit (`CHECK_CI` y `CHECK_E2E`). Espera hasta 15 min en total y falla enseguida si alguno termina sin `success` o no tiene run. Se simuló con un `gh` falso en 8 casos: los dos en verde, uno en curso y después verde (para cada check), e2e rojo, e2e sin run, ci cancelado, rojo después de esperar y timeout. Los 8 dieron lo esperado y `actionlint` dio exit 0.
-  - **Consecuencia:** un tag sobre un commit anterior a este PR no despliega, porque no tiene el check del e2e ("sin run").
+  - **Consecuencia:** un tag sobre un commit anterior a este PR no despliega, porque no tiene el check del e2e ("sin run"). **El ensayo del jueves 22/10 tiene que ser sobre un commit de `main` con el #408 mergeado.**
   - `ebb6b18`: el `postgres:17.6` del job lleva un comentario para confirmarlo con Supabase.
   - **PR #408** (head `39e4633`), CI run [`39438348924`](https://github.com/MenYUorg/MenYU/actions/runs/39438348924), todo en verde: `E2E — backend (Postgres efímero)` tardó **66 s** (14:20:41 a 14:21:47; migraciones, drift y 9/9 e2e), el `ci` 5 min 39 s y Sonar pasó. El e2e no alarga el CI.
   - Después de esos commits, `origin/main` seguía en `8a2ac5b` (no hubo nada que rebasear). Se repitió con 17.6: 33/33 migraciones, `migrate diff` con exit 0 y 9/9 e2e.
 - El ruleset de `main` (16770555) exige un solo check: `CI — typecheck, lint, test, build` (integration 15368). Para que un e2e rojo bloquee el merge, Coty tiene que agregar `E2E — backend (Postgres efímero)`. Conviene hacerlo después de que el job haya corrido una vez, para que GitHub lo ofrezca en la lista.
 
 **Sonar sobre `main` después del #397** (merge `e0f42e3`, 19/10 21:59:29; CI de `main` `39331707435`, en verde, con el gate `PASSED` a las 22:11:42)
-- El análisis de `e0f42e3` ya no figura en Sonar: el housekeeping borró los del 19/10 salvo el de `8f56bd0`. El siguiente que queda es el de `67cb463` (#400, 20/10 03:08), que solo suma archivos fuera de `sonar.sources` (`vercel.json` de web-admin y web-staff, `scripts/vercel/ignorar-build.sh` y `Documentacion/WORKFLOW.md`). Por eso sus números son los del #397.
+- El análisis de `e0f42e3` ya no figura en Sonar: el housekeeping borró los del 19/10 salvo el de `8f56bd0`. El siguiente que queda es el de `67cb463` (#400, 20/10 03:08; CI de `main` [`39362326456`](https://github.com/MenYUorg/MenYU/actions/runs/39362326456)), que solo suma archivos fuera de `sonar.sources` (`vercel.json` de web-admin y web-staff, `scripts/vercel/ignorar-build.sh` y `Documentacion/WORKFLOW.md`). Por eso sus números son los del #397.
 
 | | `032f919` (antes del #397) | `67cb463` (= #397) | `8a2ac5b` (hoy, #407) |
 |---|---|---|---|
@@ -608,3 +611,35 @@ En los tres, el run verde es del head al merge. Para el #396 se corrigió la sec
 - Dio el ≈ 3,9 % esperado: salen 355 líneas duplicadas, las de las 6 pantallas.
 - La cobertura de líneas baja 0,1 pp por lo mismo que con el #395: las líneas cubiertas que salen hacen pesar más las que no tienen cobertura (4.740 sin cubrir, igual que antes).
 - Hoy, sobre código nuevo: `new_coverage` 88,0 % y `new_duplicated_lines_density` 0,1 %, con las 6 condiciones en OK. Con el umbral del 80 % pasaría, pero el margen bajó de 19,1 a 8 pp por los merges del 20/10.
+
+**Para el informe: run de cada commit del #397**
+
+| Commit | Qué es | CI de `main` | Para qué sirve |
+|---|---|---|---|
+| `e0f42e3` | Merge del #397 (19/10 21:59:29) | [`39331707435`](https://github.com/MenYUorg/MenYU/actions/runs/39331707435) | Gate `PASSED` en el CI del merge |
+| `67cb463` | Merge del #400 (20/10) | [`39362326456`](https://github.com/MenYUorg/MenYU/actions/runs/39362326456) | El análisis de Sonar que quedó con los números del #397 |
+
+Si el informe cita los números de Sonar, hay que nombrar los dos commits: el merge del #397 es `e0f42e3`, no `67cb463`.
+
+**Worktrees**
+- `../MenYU-e2e`: `ci/e2e-backend`, el #408. Se puede borrar después del merge.
+- `../MenYU-fix-pagos` y `../MenYU-fix-pagado` (#398 y #399, ya mergeados), y `../MenYU-pr383` (#397, ya mergeado): se pueden borrar.
+- `../MenYU-bitacora`: `docs/bitacora-ensayo-produccion`, con esta entrada commiteada y sin push.
+- Los contenedores de Postgres de las pruebas (`e2e-pg17`, `e2e-pg15` y `e2e-sim-pg`) y la red `e2e-sim` quedaron borrados. Las imágenes `postgres:15`, `node:20` y `rhysd/actionlint:1.7.12` siguen descargadas.
+
+**Pendiente al retomar** (en este orden)
+1. **Coty:**
+   - revisar y mergear el #408;
+   - después, agregar `E2E — backend (Postgres efímero)` como check requerido en el ruleset de `main` (16770555). Ya corrió una vez, así que GitHub lo ofrece en la lista.
+2. **Versión de Postgres de Supabase:** confirmarla (Settings → Infrastructure, o `select version();`). Si no es 17, cambiar la imagen en `ci.yml`: las migraciones ya se probaron también con 15.
+3. **#399 en Jira:** pasar merge (`032f919`, 21:26:48), runs (rojo `39314307287`, verde `39314661875` y `39325519021`, `main` `39327555239`) a Jira y a `privado/jira-bloque.md`.
+4. **Antes del viernes, decidir la definición de código nuevo:** "Number of days" (con 30 días, ≈ 91,5 % de líneas) o `sonar.projectVersion` desde el tag. El margen sobre código nuevo bajó a 8 pp (88,0 %).
+5. **Decidir:**
+   - un PR rojo/verde para los timers de `PagosGerente` y `PagosMozo` (`PagosMozo` no tiene spec);
+   - el PR de accesibilidad de los 4 code smells;
+   - el siguiente refactor de duplicación, `TomaPedidosPage` (web-admin 198 y web-staff 152);
+   - qué hacer con `clearE2eData` (borra todos los clientes invitados) y con el `Pool` de `pg` que demora el cierre de Jest.
+6. Pasarle a Coty las variables y el comando de `scripts/staging/fuerza-bruta.mjs`, sin valores.
+7. **Jueves 22/10:** ensayo de producción con un tag `vX.Y.Z` **sobre un commit con el #408 mergeado**. Anotar `check-ci` (los dos checks), deploy, smoke y el SHA de `/health`.
+8. **Viernes 23/10:** subir los umbrales del gate (80 % y 5 % sobre código nuevo) y aplicar la definición de código nuevo elegida en el punto 4.
+9. Abrir el PR único de esta bitácora después del ensayo.
