@@ -62,7 +62,7 @@ apps/backend/
     ├── sessions/         (module, controller, service, gateway.ts)
     ├── menu/             (module, controller, service)
     ├── discovery/        (module, controller, service, dto/ — público, sin guards)
-    ├── root/             (consola de ROOT: duenos/, roots/, historial/ — solo ROOT; el historial es de solo agregar)
+    ├── root/             (consola de ROOT: marcas/, restaurantes/, duenos/, roots/, historial/ — solo ROOT; el historial es de solo agregar)
     ├── orders/           (module, controller, service, gateway.ts)
     ├── waiter-calls/     (module, controller, service, gateway.ts)
     ├── payments/

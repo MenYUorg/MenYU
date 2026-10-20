@@ -3,6 +3,7 @@ import { ROLES_KEY } from '../common/decorators/roles.decorator'
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'
 import { RolesGuard } from '../common/guards/roles.guard'
 import { AppModule } from '../app.module'
+import { CamposPermitidosGuard } from './comun/campos-permitidos.guard'
 import { RutaDeLaApp, rutasDe, rutasDeLaApp } from '../test/rutas'
 
 /**
@@ -31,8 +32,46 @@ describe('el enrutador de la aplicación', () => {
         'GET /root/roots',
         'POST /root/roots',
         'POST /root/roots/:id/restablecer-password',
+        'GET /root/marcas',
+        'POST /root/marcas',
+        'GET /root/marcas/:id',
+        'PATCH /root/marcas/:id',
+        'POST /root/marcas/:id/baja',
+        'POST /root/marcas/:id/reactivar',
+        'POST /root/marcas/:id/restaurantes',
+        'PATCH /root/restaurantes/:id',
+        'POST /root/restaurantes/:id/baja',
+        'POST /root/restaurantes/:id/reactivar',
+        'GET /root/historial',
       ].sort(),
     )
+  })
+
+  // Decisión 5: "borrar" una marca o un restaurante es una baja lógica y reversible; no se borra ninguna fila.
+  it('no hay ninguna ruta que borre marcas ni restaurantes (DELETE o PUT) en /root', () => {
+    const borrables = deRoot.filter((r) => ['DELETE', 'PUT'].includes(r.metodo) && /^\/root\/(marcas|restaurantes)(\/|$)/.test(r.ruta))
+
+    expect(borrables.map(texto)).toEqual([])
+  })
+
+  it('los únicos DELETE de /root son los de dueños (las cuentas OWNER sí se eliminan de verdad)', () => {
+    expect(deRoot.filter((r) => r.metodo === 'DELETE').map(texto)).toEqual(['DELETE /root/duenos/:id'])
+  })
+
+  it('el historial solo se lee: su única ruta es GET /root/historial', () => {
+    expect(deRoot.filter((r) => r.ruta.startsWith('/root/historial')).map(texto)).toEqual(['GET /root/historial'])
+  })
+
+  it('las rutas que reciben un cuerpo de ROOT sobre marcas y restaurantes rechazan los campos de más (CamposPermitidos)', () => {
+    const conCuerpo = deRoot.filter(
+      (r) => /^\/root\/(marcas|restaurantes)/.test(r.ruta) && ((r.metodo === 'POST' && !/\/(baja|reactivar|duenos)$/.test(r.ruta)) || r.metodo === 'PATCH'),
+    )
+    expect(conCuerpo.map(texto).sort()).toEqual(['PATCH /root/marcas/:id', 'PATCH /root/restaurantes/:id', 'POST /root/marcas', 'POST /root/marcas/:id/restaurantes'])
+
+    for (const { controller } of conCuerpo) {
+      const guards: unknown[] = Reflect.getMetadata('__guards__', controller) ?? []
+      expect(guards).toContain(CamposPermitidosGuard)
+    }
   })
 
   describe('quién entra a /root', () => {
