@@ -50,6 +50,8 @@ export class InvitacionesService {
 
   async invitar(dto: CrearInvitacionDto, invitador: UsuarioAutenticado): Promise<InvitacionCreada> {
     const ambito = ambitoDe(dto)
+    // Sin esto, ROOT podría hacerse OWNER de cualquier marca invitándose a sí mismo.
+    if (dto.email === invitador.email.toLowerCase()) throw new ForbiddenException('No te podés invitar a vos mismo')
     await this.exigirPermiso(ambito, dto.rol, invitador)
 
     // Ya es parte del personal (de otro restaurante, por ejemplo): solo se suma la membresía.
@@ -106,7 +108,14 @@ export class InvitacionesService {
    *
    * La búsqueda es un link de recuperación que no se manda: no crea usuarios ni envía mails, y responde
    * 404 si no hay cuenta. `inviteUserByEmail` no sirve para eso: a una cuenta sin confirmar la reinvita
-   * sin avisar y le deja la contraseña.
+   * sin avisar y le deja la contraseña; `listUsers` no filtra por email.
+   *
+   * Efectos sobre una cuenta confirmada: queda un token de recuperación válido hasta que vence (por eso
+   * `busqueda.data` nunca se loguea ni se devuelve), reemplaza el link de "olvidé mi contraseña" que
+   * tuviera pendiente y deja un `user_recovery_requested` en el audit log de Supabase.
+   *
+   * Reutilizar la cuenta confirmada es seguro solo con "Confirm email" activo en el proyecto (Fase 0):
+   * si no, un registro público queda confirmado al instante.
    */
   private async cuentaDeSupabase(email: string): Promise<{ cuenta: User; invitacionEnviada: boolean }> {
     const busqueda = await this.supabase.auth.generateLink({ type: 'recovery', email })
