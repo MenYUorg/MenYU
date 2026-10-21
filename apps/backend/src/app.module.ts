@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common'
 import { PrismaModule } from './prisma/prisma.module'
 import { UsersModule } from './users/users.module'
 import { AuthModule } from './auth/auth.module'
+import { SupabaseAuthModule } from './auth/supabase/supabase-auth.module'
+import { InvitacionesModule } from './auth/invitaciones/invitaciones.module'
 import { MarcaModule } from './marca/marca.module'
 import { RestauranteModule } from './restaurante/restaurante.module'
 import { MesasModule } from './mesas/mesas.module'
@@ -30,6 +32,8 @@ import { RootModule } from './root/root.module'
     PrismaModule,
     UsersModule,
     AuthModule,
+    SupabaseAuthModule,
+    InvitacionesModule,
     MarcaModule,
     RestauranteModule,
     MesasModule,

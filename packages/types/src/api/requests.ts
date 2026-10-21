@@ -1,3 +1,4 @@
+import type { Rol } from '../auth.types'
 import type { EstadoMesa, ModoSesion } from '../session.types'
 
 // ── Auth ─────────────────────────────────────────────────────────────────────
@@ -20,6 +21,15 @@ export interface GuestRequest {
 
 export interface RefreshTokenRequest {
   refreshToken: string
+}
+
+/** `POST /auth/invitaciones`. OWNER va con `marcaId`; los demás roles, con `restauranteId`. */
+export interface CrearInvitacionRequest {
+  email: string
+  nombre: string
+  rol: Rol
+  marcaId?: string
+  restauranteId?: string
 }
 
 // ── Sesiones ─────────────────────────────────────────────────────────────────

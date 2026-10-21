@@ -26,8 +26,16 @@ jobs:
       web_admin_url: ${{ steps.vercel-admin.outputs.url }}
       web_cliente_url: ${{ steps.vercel-cliente.outputs.url }}
       web_staff_url: ${{ steps.vercel-staff.outputs.url }}
+      web_auth_url: ${{ steps.vercel-auth.outputs.url }}
 
     steps:
+      # El deploy de web-auth es el último: sin su proyecto de Vercel fallaría con el backend y las otras apps ya
+      # desplegados. Corta antes.
+      - name: Check web-auth Vercel project
+        run: test -n "$VERCEL_PROJECT_ID_AUTH" || { echo "::error::Falta el secret VERCEL_PROJECT_ID_AUTH (Documentacion/WORKFLOW.md)"; exit 1; }
+        env:
+          VERCEL_PROJECT_ID_AUTH: ${{ secrets.VERCEL_PROJECT_ID_AUTH }}
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -44,7 +52,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build
-        run: pnpm turbo build --filter=@menyu/api --filter=@menyu/web-admin --filter=@menyu/web-cliente --filter=@menyu/web-staff
+        run: pnpm turbo build --filter=@menyu/api --filter=@menyu/web-admin --filter=@menyu/web-cliente --filter=@menyu/web-staff --filter=@menyu/web-auth
 
       # ── Railway staging ──────────────────────────────────────
       # El SHA que muestra /health. RAILWAY_GIT_COMMIT_SHA solo llega en deploys disparados
@@ -111,6 +119,21 @@ jobs:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_STAFF }}
 
+      - name: Deploy web-auth to Vercel staging
+        id: vercel-auth
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: |
+            npx vercel@54.6.1 pull --yes --environment=preview --token ${{ secrets.VERCEL_TOKEN }}
+            npx vercel@54.6.1 build --token ${{ secrets.VERCEL_TOKEN }}
+            url=$(npx vercel@54.6.1 deploy --prebuilt --token ${{ secrets.VERCEL_TOKEN }}) && echo "url=$url" >> "$GITHUB_OUTPUT"
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_AUTH }}
+
   # ── Smoke post-deploy (solo lectura) ─────────────────────────
   smoke-staging:
     name: Smoke de staging
@@ -151,3 +174,4 @@ jobs:
           WEB_ADMIN_URL: ${{ needs.deploy-staging.outputs.web_admin_url }}
           WEB_CLIENTE_URL: ${{ needs.deploy-staging.outputs.web_cliente_url }}
           WEB_STAFF_URL: ${{ needs.deploy-staging.outputs.web_staff_url }}
+          WEB_AUTH_URL: ${{ needs.deploy-staging.outputs.web_auth_url }}

@@ -54,3 +54,26 @@ export interface Cliente {
   telefono: string | null
   createdAt: string
 }
+
+// ── Supabase Auth (docs/auth/specs/auth.md) ─────────────────────────────────
+
+/** Rol de una membresía. OWNER es de una marca; los demás, de un restaurante. ROOT no es un rol: es `esRoot`. */
+export type Rol = 'OWNER' | 'GERENTE' | 'JEFE_SALON' | 'MOZO' | 'COCINA'
+
+export interface MembresiaPerfil {
+  id: string
+  rol: Rol
+  /** Solo en la de OWNER, con los restaurantes activos de la marca (la membresía los cubre a todos). */
+  marca: { id: string; nombre: string; restaurantes: { id: string; nombre: string }[] } | null
+  /** En las demás. */
+  restaurante: { id: string; nombre: string; marcaId: string } | null
+}
+
+/** El usuario autenticado con Supabase y sus permisos según nuestra base. */
+export interface PerfilUsuario {
+  id: string
+  email: string
+  nombre: string
+  esRoot: boolean
+  membresias: MembresiaPerfil[]
+}

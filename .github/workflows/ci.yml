@@ -36,19 +36,19 @@ jobs:
           DIRECT_URL: "postgresql://x:x@x:5432/x"
 
       - name: Typecheck
-        run: pnpm turbo typecheck --filter=@menyu/api --filter=@menyu/web-admin --filter=@menyu/web-cliente --filter=@menyu/web-staff
+        run: pnpm turbo typecheck --filter=@menyu/api --filter=@menyu/web-admin --filter=@menyu/web-cliente --filter=@menyu/web-staff --filter=@menyu/web-auth
 
       - name: Lint
-        run: pnpm turbo lint --filter=@menyu/api --filter=@menyu/web-admin --filter=@menyu/web-cliente --filter=@menyu/web-staff
+        run: pnpm turbo lint --filter=@menyu/api --filter=@menyu/web-admin --filter=@menyu/web-cliente --filter=@menyu/web-staff --filter=@menyu/web-auth
 
       - name: Test
-        run: pnpm turbo test --filter=@menyu/api --filter=@menyu/web-admin --filter=@menyu/web-cliente --filter=@menyu/web-staff --filter=@menyu/ui
+        run: pnpm turbo test --filter=@menyu/api --filter=@menyu/web-admin --filter=@menyu/web-cliente --filter=@menyu/web-staff --filter=@menyu/web-auth --filter=@menyu/ui
 
       - name: Test — smoke scripts
         run: node --test scripts/smoke/lib.test.mjs
 
       - name: Coverage
-        run: pnpm turbo test:coverage --filter=@menyu/api --filter=@menyu/web-admin --filter=@menyu/web-cliente --filter=@menyu/web-staff --filter=@menyu/ui
+        run: pnpm turbo test:coverage --filter=@menyu/api --filter=@menyu/web-admin --filter=@menyu/web-cliente --filter=@menyu/web-staff --filter=@menyu/web-auth --filter=@menyu/ui
 
       - name: Upload coverage — backend
         uses: actions/upload-artifact@v4
@@ -86,6 +86,15 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+      - name: Upload coverage — web-auth
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-web-auth
+          path: apps/web-auth/coverage/
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Upload coverage — ui
         uses: actions/upload-artifact@v4
         if: always()
@@ -104,4 +113,4 @@ jobs:
           args: -Dsonar.qualitygate.wait=true -Dsonar.qualitygate.timeout=300
 
       - name: Build
-        run: pnpm turbo build --filter=@menyu/api --filter=@menyu/web-admin --filter=@menyu/web-cliente --filter=@menyu/web-staff
+        run: pnpm turbo build --filter=@menyu/api --filter=@menyu/web-admin --filter=@menyu/web-cliente --filter=@menyu/web-staff --filter=@menyu/web-auth

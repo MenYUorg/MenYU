@@ -22,6 +22,11 @@ async function bootstrap() {
     .setTitle('MenYu API')
     .setVersion('1.0')
     .addBearerAuth()
+    // Access token de Supabase (docs/auth/specs/auth.md). El esquema por defecto es el del JWT legacy.
+    .addBearerAuth(
+      { type: 'http', scheme: 'bearer', bearerFormat: 'JWT', description: 'Access token de Supabase' },
+      'supabase',
+    )
     .build()
   const document = SwaggerModule.createDocument(app, config)
   SwaggerModule.setup('docs', app, document)

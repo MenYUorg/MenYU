@@ -47,7 +47,7 @@ Solo para el entorno local.
 
 Además crea el `Usuario` OWNER de Marca Seed (`owner@menyu.com`) del modelo de
 Supabase Auth, con un `supabaseUserId` ficticio que no existe en ningún proyecto
-de Supabase. Para iniciar sesión con él (desde la Fase 2 de `docs/specs/auth.md`)
+de Supabase. Para iniciar sesión con él (desde la Fase 2 de `docs/auth/specs/auth.md`)
 hay que reemplazarlo por el id de un usuario real del Supabase de staging; el
 seed no lo pisa al re-correr.
 

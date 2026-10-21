@@ -5,6 +5,7 @@ import {
   DollarSign, DoorOpen, Printer, QrCode, Users, X,
 } from 'lucide-react'
 import { TOKEN_KEY } from '@menyu/auth'
+import { urlDelSocket } from '@menyu/ui/socket'
 import { io, type Socket } from 'socket.io-client'
 import { useContextStore } from '../../../store/contextStore'
 import { api } from '../../../services/api'
@@ -45,8 +46,7 @@ const C = {
 } as const
 
 const WS_URL: string =
-  (import.meta.env.VITE_WS_URL as string | undefined) ??
-  (import.meta.env.VITE_API_URL as string | undefined)?.replace('/api', '') ??
+  urlDelSocket(import.meta.env.VITE_WS_URL as string | undefined, import.meta.env.VITE_API_URL as string | undefined) ??
   ''
 
 // ── Helpers ────────────────────────────────────────────────────────────────────

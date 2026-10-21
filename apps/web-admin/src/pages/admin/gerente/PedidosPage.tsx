@@ -5,6 +5,7 @@ import { api, PedidoAdmin } from '../../../services/api'
 import { useContextStore } from '../../../store/contextStore'
 import { ClipboardList, Clock, ChevronRight, RefreshCw, AlertTriangle } from 'lucide-react'
 import { APARIENCIA_PEDIDOS, EditarPedidoModal, type ItemEditable } from '@menyu/ui/editar-pedido'
+import { urlDelSocket } from '@menyu/ui/socket'
 
 const C = {
   navy:      '#2D3561',
@@ -24,8 +25,7 @@ const C = {
 }
 
 const WS_URL: string =
-  (import.meta.env.VITE_WS_URL as string | undefined) ??
-  (import.meta.env.VITE_API_URL as string | undefined)?.replace('/api', '') ?? ''
+  urlDelSocket(import.meta.env.VITE_WS_URL as string | undefined, import.meta.env.VITE_API_URL as string | undefined) ?? ''
 
 type EstadoPedido = 'pendiente' | 'en_preparacion' | 'listo'
 
