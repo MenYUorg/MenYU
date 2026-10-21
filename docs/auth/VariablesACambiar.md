@@ -153,15 +153,15 @@ Los secrets de Railway y Vercel que ya existen no cambian: los dominios no cambi
 
 ## 6. Login con Google (Fase 3b)
 
-Google vuelve a `https://auth.<ambiente>/google?redirect=…` (`apps/web-auth/src/flujo/ingresarConGoogle.ts`). Si esa URL no está en las Redirect URLs de Supabase, Supabase vuelve a la Site URL (`auth.<ambiente>/`): la sesión se abre igual, pero se pierde el `redirect` y no se muestra el error si la vuelta falla. Como la URL lleva query, la entrada termina en `/**`.
+Google vuelve a `https://auth.<ambiente>/google?redirect=…` (`apps/web-auth/src/flujo/useIngresoConGoogle.ts`). Supabase acepta sin más cualquier URL con el mismo esquema, host y puerto que la Site URL (`IsRedirectURLValid` de GoTrue). Como la Site URL ya es `https://auth.<ambiente>` (Fase 0), staging y producción no necesitan una entrada en las Redirect URLs. Desarrollo sí, porque es otro host: si falta, Supabase vuelve a la Site URL de staging y no a la máquina local.
 
 | Dónde | Staging | Producción |
 |---|---|---|
-| Supabase → *Authentication → URL Configuration → Redirect URLs* | `https://auth.staging.menyu-app.com/**` y, para desarrollo, `http://auth.menyu.local:5173/**` | `https://auth.menyu-app.com/**` |
+| Supabase → *Authentication → URL Configuration* | Site URL `https://auth.staging.menyu-app.com` (Fase 0). Redirect URLs: `http://auth.menyu.local:5173/**`, para desarrollo (termina en `/**` porque la URL lleva query) | Site URL `https://auth.menyu-app.com` (Fase 0) |
 | Supabase → *Authentication → Sign In / Providers → Google* | Activo (Fase 0), con el client ID y el secret del cliente OAuth | Ídem |
 | Google Cloud → *APIs y servicios → Credenciales* → el cliente OAuth | URI de redireccionamiento autorizado: `https://<ref de staging>.supabase.co/auth/v1/callback` (Fase 0) | `https://<ref de producción>.supabase.co/auth/v1/callback` (Fase 0) |
 | Google Cloud → *Pantalla de consentimiento de OAuth* | En *Testing* solo entran los usuarios de prueba cargados: sumar las cuentas del equipo | *In production* antes del tag. Con `openid`, `email` y `profile` no hace falta la verificación de Google |
 
 La pantalla de Google muestra `<ref>.supabase.co` como destino. Cambiarlo requiere un dominio propio para Supabase (add-on pago): fuera de alcance.
 
-**Verificar:** en `auth.<ambiente>/?redirect=https://admin.<ambiente>/admin`, "Continuar con Google" con una cuenta invitada: tiene que pasar por `/google` y terminar en `admin.<ambiente>/admin`. Si termina en la app del rol sin pasar por `/google`, falta la Redirect URL.
+**Verificar:** en `auth.<ambiente>/?redirect=https://admin.<ambiente>/admin`, "Continuar con Google" con una cuenta invitada: tiene que pasar por `/google` y terminar en `admin.<ambiente>/admin`. En local, si después de Google se termina en `auth.staging…` y no en `auth.menyu.local:5173/google`, falta la Redirect URL de desarrollo.

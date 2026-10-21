@@ -102,15 +102,26 @@ describe('IngresarPage', () => {
   })
 
   it('si no puede salir a Google muestra el error y deja reintentar', async () => {
-    cliente.actual!.auth.signInWithOAuth.mockResolvedValue({
-      data: { provider: 'google', url: null },
-      error: new AuthApiError('Too many requests', 429, 'over_request_rate_limit'),
-    })
+    // supabase-js falla con una excepción, por ejemplo si no puede guardar el verificador PKCE
+    cliente.actual!.auth.signInWithOAuth.mockRejectedValue(new DOMException('Quota exceeded', 'QuotaExceededError'))
 
     renderizar()
     await continuarConGoogle()
 
-    expect(screen.getByRole('alert')).toHaveTextContent('Hiciste demasiados intentos.')
+    expect(screen.getByRole('alert')).toHaveTextContent('Algo salió mal.')
     expect(screen.getByRole('button', { name: 'Continuar con Google' })).toBeEnabled()
+  })
+
+  it('si la página vuelve desde la bfcache (atrás en Google), los botones se habilitan', async () => {
+    renderizar()
+    await continuarConGoogle()
+    expect(screen.getByRole('button', { name: 'Abriendo Google…' })).toBeDisabled()
+
+    act(() => {
+      window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }))
+    })
+
+    expect(screen.getByRole('button', { name: 'Continuar con Google' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Ingresar' })).toBeEnabled()
   })
 })

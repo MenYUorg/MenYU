@@ -9,8 +9,8 @@ import { Encabezado } from '../components/Encabezado'
 import { Enlace } from '../components/Enlace'
 import { Marco } from '../components/Marco'
 import { Separador } from '../components/Separador'
-import { ingresarConGoogle } from '../flujo/ingresarConGoogle'
 import { conRedirect } from '../flujo/rutas'
+import { useIngresoConGoogle } from '../flujo/useIngresoConGoogle'
 import { usePostLogin } from '../flujo/usePostLogin'
 import { mensajeDeError } from '../lib/mensajes'
 import { supabase } from '../lib/supabase'
@@ -26,7 +26,7 @@ export function IngresarPage() {
   const [contrasena, setContrasena] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [enviando, setEnviando] = useState(false)
-  const [yendoAGoogle, setYendoAGoogle] = useState(false)
+  const { yendoAGoogle, irAGoogle } = useIngresoConGoogle(search)
 
   const revisada = useRef(false)
   useEffect(() => {
@@ -60,17 +60,10 @@ export function IngresarPage() {
     }
   }
 
-  async function irAGoogle() {
+  async function ingresarConGoogle() {
     setError(null)
-    setYendoAGoogle(true)
-    try {
-      const errorDeGoogle = await ingresarConGoogle(search)
-      if (!errorDeGoogle) return // el navegador ya se está yendo a Google
-      setError(mensajeDeError(errorDeGoogle))
-    } catch (e) {
-      setError(mensajeDeError(e))
-    }
-    setYendoAGoogle(false)
+    const errorDeGoogle = await irAGoogle()
+    if (errorDeGoogle) setError(errorDeGoogle)
   }
 
   if (estado.tipo === 'verificando') {
@@ -108,7 +101,7 @@ export function IngresarPage() {
         </div>
       )}
       <BotonGoogle
-        onClick={() => void irAGoogle()}
+        onClick={() => void ingresarConGoogle()}
         cargando={yendoAGoogle && 'Abriendo Google…'}
         disabled={enviando}
       />

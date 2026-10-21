@@ -97,6 +97,17 @@ describe('DefinirContrasenaPage (invitación)', () => {
   })
 })
 
+describe('DefinirContrasenaPage (invitación sin token en la URL)', () => {
+  it('pide abrir de nuevo el link del mail en vez de uno nuevo', () => {
+    cliente.actual = crearSupabaseSimulado()
+    renderizar('/invitacion') // por ejemplo, al volver atrás desde Google
+
+    expect(screen.getByText('Abrí el link del mail')).toBeInTheDocument()
+    expect(screen.queryByText('Pedir un link nuevo')).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Ingresar' })).toHaveAttribute('href', '/')
+  })
+})
+
 describe('DefinirContrasenaPage (recuperación)', () => {
   it('no ofrece Google', () => {
     cliente.actual = crearSupabaseSimulado()

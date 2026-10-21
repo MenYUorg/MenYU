@@ -49,6 +49,12 @@ describe('VolverDeGooglePage', () => {
     expect(cliente.actual!.auth.initialize).not.toHaveBeenCalled()
   })
 
+  it('un rechazo de Supabase con access_denied no se confunde con cancelar', async () => {
+    renderizar('/google?error=access_denied&error_code=user_banned&error_description=User+is+banned')
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Tu cuenta está suspendida.')
+  })
+
   it('si el canje falla muestra el error', async () => {
     cliente.actual!.auth.initialize.mockResolvedValue({
       error: new AuthApiError('invalid flow state, no valid flow state found', 404, 'flow_state_not_found'),

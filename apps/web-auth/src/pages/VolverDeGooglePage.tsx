@@ -10,7 +10,7 @@ import { errorDeOAuth, GOOGLE_SIN_TERMINAR, mensajeDeError } from '../lib/mensaj
 import { supabase } from '../lib/supabase'
 
 /**
- * `/google`: la vuelta del ingreso con Google (src/flujo/ingresarConGoogle.ts). El cliente de Supabase canjea el
+ * `/google`: la vuelta del ingreso con Google (src/flujo/useIngresoConGoogle.ts). El cliente de Supabase canjea el
  * `?code=` solo, al inicializarse, e `initialize()` devuelve cómo salió. El error de OAuth se lee de la URL porque
  * supabase-js lo ignora cuando falta `error_description` (al cancelar en Google, por ejemplo). Si salió bien, sigue a
  * `/`, que con la sesión abierta hace el post-login de siempre.

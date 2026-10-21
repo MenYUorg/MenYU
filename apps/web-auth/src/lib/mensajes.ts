@@ -33,13 +33,15 @@ export function mensajeDeError(error: unknown): string {
 
 /**
  * El error que Supabase deja en la URL de vuelta de Google (`error`, `error_code`, `error_description`), o null.
- * `access_denied` es que la persona canceló en la pantalla de Google.
+ * `access_denied` sin `error_code` es que la persona canceló en la pantalla de Google; con `error_code` es un rechazo
+ * de Supabase (por ejemplo, `user_banned`).
  */
 export function errorDeOAuth(search: string): string | null {
   const params = new URLSearchParams(search)
   const error = params.get('error')
   const codigo = params.get('error_code')
   if (!error && !codigo && !params.has('error_description')) return null
-  if (error === 'access_denied') return 'Cancelaste el ingreso con Google.'
-  return (codigo && POR_CODIGO[codigo]) || GOOGLE_SIN_TERMINAR
+  if (codigo && POR_CODIGO[codigo]) return POR_CODIGO[codigo]
+  if (error === 'access_denied' && !codigo) return 'Cancelaste el ingreso con Google.'
+  return GOOGLE_SIN_TERMINAR
 }

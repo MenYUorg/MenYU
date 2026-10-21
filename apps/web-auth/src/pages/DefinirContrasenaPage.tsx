@@ -10,7 +10,7 @@ import { Encabezado } from '../components/Encabezado'
 import { Enlace } from '../components/Enlace'
 import { Marco } from '../components/Marco'
 import { Separador } from '../components/Separador'
-import { ingresarConGoogle } from '../flujo/ingresarConGoogle'
+import { useIngresoConGoogle } from '../flujo/useIngresoConGoogle'
 import { usePostLogin } from '../flujo/usePostLogin'
 import { ERROR_GENERICO, mensajeDeError } from '../lib/mensajes'
 import { supabase } from '../lib/supabase'
@@ -48,7 +48,7 @@ export function DefinirContrasenaPage({ modo }: { modo: ModoContrasena }) {
   const [repetida, setRepetida] = useState('')
   const [errores, setErrores] = useState<Errores>({})
   const [guardando, setGuardando] = useState(false)
-  const [yendoAGoogle, setYendoAGoogle] = useState(false)
+  const { yendoAGoogle, irAGoogle } = useIngresoConGoogle(search)
 
   // Que el token no quede en la barra ni en el historial: se guarda en el estado.
   useEffect(() => {
@@ -93,17 +93,10 @@ export function DefinirContrasenaPage({ modo }: { modo: ModoContrasena }) {
     }
   }
 
-  async function irAGoogle() {
+  async function ingresarConGoogle() {
     setErrores({})
-    setYendoAGoogle(true)
-    try {
-      const errorDeGoogle = await ingresarConGoogle(search)
-      if (!errorDeGoogle) return // el navegador ya se está yendo a Google
-      setErrores({ general: mensajeDeError(errorDeGoogle) })
-    } catch (e) {
-      setErrores({ general: mensajeDeError(e) })
-    }
-    setYendoAGoogle(false)
+    const errorDeGoogle = await irAGoogle()
+    if (errorDeGoogle) setErrores({ general: errorDeGoogle })
   }
 
   const titulo = modo === 'invitacion' ? 'Crear la contraseña' : 'Contraseña nueva'
@@ -112,6 +105,22 @@ export function DefinirContrasenaPage({ modo }: { modo: ModoContrasena }) {
     return (
       <Marco titulo={titulo}>
         <Cargando texto="Entrando…" />
+      </Marco>
+    )
+  }
+
+  // Sin token en la URL (por ejemplo, al volver atrás desde Google, porque se saca de la barra al abrir el link): el
+  // link del mail puede seguir sirviendo, no hace falta pedir otro.
+  if (!tokenHash && modo === 'invitacion') {
+    return (
+      <Marco titulo={titulo}>
+        <Encabezado titulo="Abrí el link del mail">
+          Para crear tu contraseña, abrí de nuevo el link del mail de invitación. Si ya entraste con Google o ya creaste
+          tu contraseña, ingresá desde el inicio.
+        </Encabezado>
+        <p className="text-sm">
+          <Enlace to="/">Ingresar</Enlace>
+        </p>
       </Marco>
     )
   }
@@ -155,7 +164,7 @@ export function DefinirContrasenaPage({ modo }: { modo: ModoContrasena }) {
       {modo === 'invitacion' && (
         <>
           <BotonGoogle
-            onClick={() => void irAGoogle()}
+            onClick={() => void ingresarConGoogle()}
             cargando={yendoAGoogle && 'Abriendo Google…'}
             disabled={guardando}
           />
