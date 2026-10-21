@@ -40,11 +40,12 @@ jobs:
 
       # Sin las URLs de los frontends el smoke no puede chequear nada: corta antes de desplegar.
       - name: Check production URL variables
-        run: node scripts/smoke/verificar-urls.mjs PROD_WEB_ADMIN_URL PROD_WEB_CLIENTE_URL PROD_WEB_STAFF_URL
+        run: node scripts/smoke/verificar-urls.mjs PROD_WEB_ADMIN_URL PROD_WEB_CLIENTE_URL PROD_WEB_STAFF_URL PROD_WEB_AUTH_URL
         env:
           PROD_WEB_ADMIN_URL: ${{ vars.PROD_WEB_ADMIN_URL }}
           PROD_WEB_CLIENTE_URL: ${{ vars.PROD_WEB_CLIENTE_URL }}
           PROD_WEB_STAFF_URL: ${{ vars.PROD_WEB_STAFF_URL }}
+          PROD_WEB_AUTH_URL: ${{ vars.PROD_WEB_AUTH_URL }}
 
       # Si el CI del commit está en cola o en curso, espera (cada 20 s, hasta 15 min).
       # Falla enseguida si terminó con otro resultado que success o si no hay run.
@@ -97,7 +98,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build
-        run: pnpm turbo build --filter=@menyu/api --filter=@menyu/web-admin --filter=@menyu/web-cliente --filter=@menyu/web-staff
+        run: pnpm turbo build --filter=@menyu/api --filter=@menyu/web-admin --filter=@menyu/web-cliente --filter=@menyu/web-staff --filter=@menyu/web-auth
 
       # ── Railway production ────────────────────────────────────
       # El SHA que muestra /health. RAILWAY_GIT_COMMIT_SHA solo llega en deploys disparados
@@ -161,6 +162,20 @@ jobs:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_STAFF }}
 
+      - name: Deploy web-auth to Vercel production
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: |
+            npx vercel@54.6.1 pull --yes --environment=production --token ${{ secrets.VERCEL_TOKEN }}
+            npx vercel@54.6.1 build --prod --token ${{ secrets.VERCEL_TOKEN }}
+            npx vercel@54.6.1 deploy --prebuilt --prod --token ${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_AUTH }}
+
   # ── Smoke post-deploy (solo lectura) ─────────────────────────
   smoke-production:
     name: Smoke de producción
@@ -181,11 +196,12 @@ jobs:
 
       # Segunda red: el mismo chequeo que en check-ci.
       - name: Check production URL variables
-        run: node scripts/smoke/verificar-urls.mjs PROD_WEB_ADMIN_URL PROD_WEB_CLIENTE_URL PROD_WEB_STAFF_URL
+        run: node scripts/smoke/verificar-urls.mjs PROD_WEB_ADMIN_URL PROD_WEB_CLIENTE_URL PROD_WEB_STAFF_URL PROD_WEB_AUTH_URL
         env:
           PROD_WEB_ADMIN_URL: ${{ vars.PROD_WEB_ADMIN_URL }}
           PROD_WEB_CLIENTE_URL: ${{ vars.PROD_WEB_CLIENTE_URL }}
           PROD_WEB_STAFF_URL: ${{ vars.PROD_WEB_STAFF_URL }}
+          PROD_WEB_AUTH_URL: ${{ vars.PROD_WEB_AUTH_URL }}
 
       # La URL del backend es la VITE_API_URL de production de web-cliente en Vercel: se lee solo esa
       # línea, el archivo no se imprime ni se sube y se borra al terminar el paso.
@@ -212,3 +228,4 @@ jobs:
           WEB_ADMIN_URL: ${{ vars.PROD_WEB_ADMIN_URL }}
           WEB_CLIENTE_URL: ${{ vars.PROD_WEB_CLIENTE_URL }}
           WEB_STAFF_URL: ${{ vars.PROD_WEB_STAFF_URL }}
+          WEB_AUTH_URL: ${{ vars.PROD_WEB_AUTH_URL }}

@@ -1,5 +1,5 @@
 // Smoke post-deploy de staging o producción (solo lectura).
-// Uso: SMOKE_API_URL=... WEB_ADMIN_URL=... WEB_CLIENTE_URL=... WEB_STAFF_URL=... node scripts/smoke/smoke.mjs
+// Uso: SMOKE_API_URL=... WEB_ADMIN_URL=... WEB_CLIENTE_URL=... WEB_STAFF_URL=... WEB_AUTH_URL=... node scripts/smoke/smoke.mjs
 import { correrSmoke, requerirEnv } from './lib.mjs'
 
 let apiUrl
@@ -16,6 +16,7 @@ const resultados = await correrSmoke({
     'web-admin': process.env.WEB_ADMIN_URL,
     'web-cliente': process.env.WEB_CLIENTE_URL,
     'web-staff': process.env.WEB_STAFF_URL,
+    'web-auth': process.env.WEB_AUTH_URL,
   },
 })
 
