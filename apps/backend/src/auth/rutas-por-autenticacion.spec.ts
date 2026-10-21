@@ -18,9 +18,9 @@ import { TipoGuard } from './guards/tipo.guard'
  * abajo), de la sesión de mesa (SessionAuthGuard) o del personal con el token de Supabase (SupabaseAuthGuard), y ninguna mezcla
  * dos sistemas: es la garantía de "no mezclar los dos sistemas en un mismo endpoint" (CLAUDE.md).
  *
- * Mientras dura la Fase 4, las rutas que todavía usan el JWT legacy están en PENDIENTES_4_3 y PENDIENTES_4_4, que tienen que
- * coincidir exactamente con las que lo usan: pasar una ruta a Supabase obliga a sacarla de acá, y no se puede sumar una ruta nueva
- * con el JWT legacy. Al cerrar la entrega 4.4 quedan vacías y se borran.
+ * Mientras dura la Fase 4, las rutas que todavía usan el JWT legacy están en PENDIENTES_4_4 (las de la 4.3 ya pasaron), que tiene
+ * que coincidir exactamente con las que lo usan: pasar una ruta a Supabase obliga a sacarla de acá, y no se puede sumar una ruta
+ * nueva con el JWT legacy. Al cerrar la entrega 4.4 quedan todas vacías y se borran.
  */
 
 /** Sin autenticación, a propósito. */
@@ -54,7 +54,7 @@ const PUBLICAS = [
 /** Del personal sin guard, con el JWT legacy verificado a mano en el service. Vacía desde la entrega 4.3. */
 const PENDIENTES_A_MANO: string[] = []
 
-/** Del personal con JwtAuthGuard, RolesGuard o TipoGuard. Pasan a Supabase en la entrega 4.3 (o se quitan, decisión 5). */
+/** Del personal con JwtAuthGuard, RolesGuard o TipoGuard fuera de /root. Vacía desde la entrega 4.3. */
 const PENDIENTES_4_3: string[] = []
 
 /** La consola de ROOT: pasa a `@RequiereRoot()` en la entrega 4.4. */

@@ -779,6 +779,8 @@ Lo que sigue después de `feat/discovery` (mergeada en `main` el 2026-10-15, PR 
 
 ## Apéndice A: permisos de ROOT en el código existente
 
+**Resuelto en el backend por la entrega 4.3 de la Fase 4 de auth (2026-10-21, [`auth/specs/auth.md`](auth/specs/auth.md)):** las rutas del personal pasaron al token de Supabase, sus permisos los decide `AccesoService`, que ignora `esRoot`, y ROOT recibe 403 en todas. Ya no queda ningún `if (user.rol === 'ROOT') return` fuera de `/root`, `assert-staff-access.ts` y `assert-owner-access.ts` se borraron, y `/admins` y `/admin-restaurante` se quitaron. Lo de ROOT es la consola (`/root/*`, entrega 4.4). El frontend (`isOwner`, `canEdit` y el selector de contexto de web-admin) se corrige en la entrega 4.5. La tabla de abajo queda como registro de cómo estaba.
+
 Relevado el 2026-10-06 y re-verificado parcialmente el 2026-10-08. **No se cambia nada en este plan**: es la lista para decidir qué se hace con la regla de 2.1. El seguimiento está en la sección 11.2 y en [`plan-consola-root.md`](plan-consola-root.md) (limpiar esta tabla es su etapa 4). **La regla se corrigió el 2026-10-15:** ROOT ahora también edita marcas (nombre e identificador) y restaurantes (nombre) y crea los OWNER, pero no los GERENTE; con eso, "Marca: editar" queda decidido (ROOT cambia nombre e identificador) y, en "Cuentas admin", ROOT solo toca cuentas OWNER (email y restablecer la contraseña) y no las de GERENTE. El módulo de pagos se reescribió después del relevamiento y hay que re-revisarlo (Mercado Pago lo informa el equipo por su cuenta).
 
 Hoy `common/assert-staff-access.ts` centraliza el chequeo para sesiones y pagos. El resto (items, categorías, ingredientes, clasificaciones, mozos, mesas, pedidos, restaurante y admin-restaurante) tiene su propia copia con `if (user.rol === 'ROOT') return`. Si se decide excluir a ROOT, conviene centralizar todo en un solo servicio de acceso.
@@ -808,7 +810,7 @@ Documentación que lo describe como acceso libre: `Documentacion/modulo-menu.md`
 
 ## Apéndice B: backlog diferido
 
-- Varios endpoints no validan pertenencia entre marcas (reportes, `GET /pedidos`, `GET /pedidos/auditoria`, edición de pedidos, alta de mesas, `GET /waiter-calls`): un OWNER o GERENTE de otra marca podría leer u operar otro restaurante.
+- ~~Varios endpoints no validan pertenencia entre marcas (reportes, `GET /pedidos`, `GET /pedidos/auditoria`, edición de pedidos, alta de mesas, `GET /waiter-calls`): un OWNER o GERENTE de otra marca podría leer u operar otro restaurante.~~ Resuelto en la entrega 4.3 de la Fase 4 de auth (2026-10-21): esas rutas, `GET /payments/sesiones`, `POST /payments/confirmar-efectivo` y atender un llamado exigen el rol en el restaurante del recurso.
 - `PedidosService.confirmar` resta el precio extra en `QUITAR` y los otros dos cálculos de cobro no. `POST /pedidos` no parece usarse desde web-cliente (usa `/orders`).
 - `Documentacion/Doc_DB.md` describe `item_sucursal`, que ya no existe.
 - Responsive de las pantallas existentes de admin y staff que este plan no toca.
