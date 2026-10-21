@@ -84,6 +84,29 @@ export class AccesoService {
   }
 
   /**
+   * Si tiene alguno de `roles` en algún lugar: una membresía OWNER de una marca activa o una de
+   * restaurante en uno disponible. Para las rutas que no son de un restaurante (los listados y el
+   * catálogo global de clasificaciones).
+   */
+  async tieneAlgunRol(usuarioId: string, roles: readonly Rol[]): Promise<boolean> {
+    const rolesDeRestaurante = roles.filter((rol) => rol !== 'OWNER')
+    const alcance: Prisma.MembresiaWhereInput[] = []
+    if (rolesDeRestaurante.length > 0) {
+      alcance.push({ rol: { in: rolesDeRestaurante }, restaurante: RESTAURANTE_DISPONIBLE })
+    }
+    if (roles.includes('OWNER')) alcance.push({ rol: 'OWNER', marca: { activo: true } })
+    if (alcance.length === 0) return false
+
+    const membresia = await this.prisma.membresia.findFirst({ where: { usuarioId, OR: alcance }, select: { id: true } })
+    return membresia !== null
+  }
+
+  /** 403 si no tiene ninguno de `roles` en ningún lugar (ver `tieneAlgunRol`). */
+  async exigirAlgunRol(usuarioId: string, roles: readonly Rol[]): Promise<void> {
+    if (!(await this.tieneAlgunRol(usuarioId, roles))) throw new ForbiddenException(SIN_PERMISO)
+  }
+
+  /**
    * El `Mozo` del usuario en el restaurante, solo si está activo. Es la identidad de quien atiende un
    * llamado o cobra: sale de acá, nunca del body. No decide permisos (para eso, `exigirRol`).
    */

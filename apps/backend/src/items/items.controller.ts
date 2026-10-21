@@ -14,24 +14,16 @@ import {
   Put,
   Query,
   UploadedFile,
-  UseGuards,
   UseInterceptors,
 } from '@nestjs/common'
 import { FileInterceptor } from '@nestjs/platform-express'
-import {
-  ApiBearerAuth,
-  ApiBody,
-  ApiConsumes,
-  ApiOperation,
-  ApiResponse,
-  ApiTags,
-} from '@nestjs/swagger'
+import { ApiBody, ApiConsumes, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger'
 import { memoryStorage } from 'multer'
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'
-import { RolesGuard } from '../common/guards/roles.guard'
-import { Roles } from '../common/decorators/roles.decorator'
-import { CurrentUser } from '../common/decorators/current-user.decorator'
-import { JwtPayload } from '../auth/auth.service'
+import { Personal } from '../auth/decorators/personal.decorator'
+import { RequiereRolEn } from '../auth/decorators/requiere-rol.decorator'
+import { UsuarioActual } from '../auth/decorators/usuario-actual.decorator'
+import { ADMINISTRACION } from '../auth/roles-del-personal'
+import { UsuarioAutenticado } from '../auth/supabase/usuario-autenticado'
 import { ItemsService } from './items.service'
 import { CreateItemDto } from './dto/create-item.dto'
 import { UpdateItemDto } from './dto/update-item.dto'
@@ -41,99 +33,85 @@ import { UpdateIngredienteItemDto } from './dto/update-ingrediente-item.dto'
 
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024 // 5 MB
 
+// OWNER y GERENTE del restaurante (borrar un ítem, solo OWNER). En las rutas de un ítem, el service pide el rol.
 @ApiTags('items')
-@ApiBearerAuth()
 @Controller('items')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('ROOT', 'OWNER', 'GERENTE')
 export class ItemsController {
   constructor(private readonly items: ItemsService) {}
 
   @Post()
+  @RequiereRolEn({ body: 'restauranteId' }, ...ADMINISTRACION)
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Crear ítem de menú' })
   @ApiResponse({ status: 201, description: 'Ítem creado' })
-  @ApiResponse({ status: 401, description: 'No autenticado' })
-  @ApiResponse({ status: 403, description: 'Sin permisos' })
-  create(@Body() dto: CreateItemDto, @CurrentUser() user: JwtPayload) {
-    return this.items.create(dto, user)
+  create(@Body() dto: CreateItemDto) {
+    return this.items.create(dto)
   }
 
   @Get()
+  @RequiereRolEn({ query: 'restauranteId' }, ...ADMINISTRACION)
   @ApiOperation({ summary: 'Listar ítems de un restaurante' })
   @ApiResponse({ status: 200, description: 'Lista de ítems' })
-  findAll(
-    @Query('restauranteId') restauranteId: string,
-    @Query('disponible') disponibleRaw: string | undefined,
-    @CurrentUser() user: JwtPayload,
-  ) {
-    const disponible =
-      disponibleRaw === 'true' ? true : disponibleRaw === 'false' ? false : undefined
-    return this.items.findAll(restauranteId, user, disponible)
+  findAll(@Query('restauranteId') restauranteId: string, @Query('disponible') disponibleRaw: string | undefined) {
+    const disponible = disponibleRaw === 'true' ? true : disponibleRaw === 'false' ? false : undefined
+    return this.items.findAll(restauranteId, disponible)
   }
 
   @Get(':id')
+  @Personal()
   @ApiOperation({ summary: 'Obtener un ítem por ID' })
   @ApiResponse({ status: 200, description: 'Ítem encontrado' })
   @ApiResponse({ status: 404, description: 'Ítem no encontrado' })
-  findOne(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
-    return this.items.findOne(id, user)
+  findOne(@Param('id') id: string, @UsuarioActual() usuario: UsuarioAutenticado) {
+    return this.items.findOne(id, usuario)
   }
 
   @Patch(':id')
+  @Personal()
   @ApiOperation({ summary: 'Actualizar un ítem' })
   @ApiResponse({ status: 200, description: 'Ítem actualizado' })
   @ApiResponse({ status: 404, description: 'Ítem no encontrado' })
-  update(
-    @Param('id') id: string,
-    @Body() dto: UpdateItemDto,
-    @CurrentUser() user: JwtPayload,
-  ) {
-    return this.items.update(id, dto, user)
+  update(@Param('id') id: string, @Body() dto: UpdateItemDto, @UsuarioActual() usuario: UsuarioAutenticado) {
+    return this.items.update(id, dto, usuario)
   }
 
   @Delete(':id')
-  @Roles('ROOT', 'OWNER')
+  @Personal()
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Eliminar un ítem' })
+  @ApiOperation({ summary: 'Eliminar un ítem (solo el OWNER)' })
   @ApiResponse({ status: 204, description: 'Ítem eliminado' })
   @ApiResponse({ status: 404, description: 'Ítem no encontrado' })
-  async remove(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
-    await this.items.remove(id, user)
+  async remove(@Param('id') id: string, @UsuarioActual() usuario: UsuarioAutenticado) {
+    await this.items.remove(id, usuario)
   }
 
-  // ── Descuento: OWNER de la marca y GERENTE asignado (ROOT no) ───────────
+  // ── Descuento ──────────────────────────────────────────────────────────
 
   @Put(':id/descuento')
-  @Roles('OWNER', 'GERENTE')
+  @Personal()
   @ApiOperation({
     summary: 'Poner un ítem en descuento, por precio o por porcentaje (solo uno de los dos)',
   })
   @ApiResponse({ status: 200, description: 'Ítem con el descuento aplicado' })
   @ApiResponse({ status: 400, description: 'Descuento inválido' })
-  @ApiResponse({ status: 403, description: 'Sin permisos (ROOT no puede)' })
   @ApiResponse({ status: 404, description: 'Ítem no encontrado' })
-  setDescuento(
-    @Param('id') id: string,
-    @Body() dto: SetDescuentoDto,
-    @CurrentUser() user: JwtPayload,
-  ) {
-    return this.items.setDescuento(id, dto, user)
+  setDescuento(@Param('id') id: string, @Body() dto: SetDescuentoDto, @UsuarioActual() usuario: UsuarioAutenticado) {
+    return this.items.setDescuento(id, dto, usuario)
   }
 
   @Delete(':id/descuento')
-  @Roles('OWNER', 'GERENTE')
+  @Personal()
   @ApiOperation({ summary: 'Quitar el descuento de un ítem' })
   @ApiResponse({ status: 200, description: 'Ítem sin descuento' })
-  @ApiResponse({ status: 403, description: 'Sin permisos (ROOT no puede)' })
   @ApiResponse({ status: 404, description: 'Ítem no encontrado' })
-  removeDescuento(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
-    return this.items.removeDescuento(id, user)
+  removeDescuento(@Param('id') id: string, @UsuarioActual() usuario: UsuarioAutenticado) {
+    return this.items.removeDescuento(id, usuario)
   }
 
   // ── Imagen ─────────────────────────────────────────────────────────────
 
   @Post(':id/imagen')
+  @Personal()
   @UseInterceptors(FileInterceptor('imagen', { storage: memoryStorage() }))
   @ApiOperation({ summary: 'Subir imagen de un ítem (jpeg, png, webp — máx 5 MB)' })
   @ApiConsumes('multipart/form-data')
@@ -156,22 +134,24 @@ export class ItemsController {
       }),
     )
     file: Express.Multer.File,
-    @CurrentUser() user: JwtPayload,
+    @UsuarioActual() usuario: UsuarioAutenticado,
   ) {
-    return this.items.uploadImagen(id, file, user)
+    return this.items.uploadImagen(id, file, usuario)
   }
 
   @Delete(':id/imagen')
+  @Personal()
   @ApiOperation({ summary: 'Eliminar imagen de un ítem' })
   @ApiResponse({ status: 200, description: 'Imagen eliminada' })
   @ApiResponse({ status: 404, description: 'Ítem no encontrado' })
-  removeImagen(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
-    return this.items.removeImagen(id, user)
+  removeImagen(@Param('id') id: string, @UsuarioActual() usuario: UsuarioAutenticado) {
+    return this.items.removeImagen(id, usuario)
   }
 
   // ── Ingredientes del ítem ──────────────────────────────────────────────
 
   @Post(':itemId/ingredientes')
+  @Personal()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Agregar ingrediente a un ítem' })
   @ApiResponse({ status: 201, description: 'Ingrediente agregado' })
@@ -179,12 +159,13 @@ export class ItemsController {
   addIngrediente(
     @Param('itemId') itemId: string,
     @Body() dto: AddIngredienteDto,
-    @CurrentUser() user: JwtPayload,
+    @UsuarioActual() usuario: UsuarioAutenticado,
   ) {
-    return this.items.addIngrediente(itemId, dto, user)
+    return this.items.addIngrediente(itemId, dto, usuario)
   }
 
   @Patch(':itemId/ingredientes/:id')
+  @Personal()
   @ApiOperation({ summary: 'Actualizar ingrediente de un ítem' })
   @ApiResponse({ status: 200, description: 'Ingrediente actualizado' })
   @ApiResponse({ status: 404, description: 'Relación ítem-ingrediente no encontrada' })
@@ -192,12 +173,13 @@ export class ItemsController {
     @Param('itemId') itemId: string,
     @Param('id') id: string,
     @Body() dto: UpdateIngredienteItemDto,
-    @CurrentUser() user: JwtPayload,
+    @UsuarioActual() usuario: UsuarioAutenticado,
   ) {
-    return this.items.updateIngrediente(itemId, id, dto, user)
+    return this.items.updateIngrediente(itemId, id, dto, usuario)
   }
 
   @Delete(':itemId/ingredientes/:id')
+  @Personal()
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Quitar ingrediente de un ítem' })
   @ApiResponse({ status: 204, description: 'Ingrediente quitado' })
@@ -205,8 +187,8 @@ export class ItemsController {
   async removeIngrediente(
     @Param('itemId') itemId: string,
     @Param('id') id: string,
-    @CurrentUser() user: JwtPayload,
+    @UsuarioActual() usuario: UsuarioAutenticado,
   ) {
-    await this.items.removeIngrediente(itemId, id, user)
+    await this.items.removeIngrediente(itemId, id, usuario)
   }
 }

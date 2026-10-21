@@ -1,24 +1,10 @@
-import {
-  Body,
-  Controller,
-  Delete,
-  Get,
-  HttpCode,
-  HttpStatus,
-  Param,
-  Patch,
-  Post,
-  Query,
-  UseGuards,
-} from '@nestjs/common'
-import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger'
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Query } from '@nestjs/common'
+import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger'
 import { IsNotEmpty, IsString, IsUUID } from 'class-validator'
 import { ApiProperty } from '@nestjs/swagger'
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'
-import { RolesGuard } from '../common/guards/roles.guard'
-import { Roles } from '../common/decorators/roles.decorator'
-import { CurrentUser } from '../common/decorators/current-user.decorator'
-import { JwtPayload } from '../auth/auth.service'
+import { Personal } from '../auth/decorators/personal.decorator'
+import { UsuarioActual } from '../auth/decorators/usuario-actual.decorator'
+import { UsuarioAutenticado } from '../auth/supabase/usuario-autenticado'
 import { ClasificacionesService } from './clasificaciones.service'
 
 class CreateClasificacionDto {
@@ -41,6 +27,8 @@ class AddClasificacionItemDto {
   clasificacionId!: string
 }
 
+// El listado es público. El catálogo lo editan el OWNER y el GERENTE de cualquier restaurante (es global); las
+// clasificaciones de un ítem, los de su restaurante. El rol lo pide el service.
 @ApiTags('clasificaciones')
 @Controller('clasificaciones')
 export class ClasificacionesController {
@@ -55,73 +43,59 @@ export class ClasificacionesController {
   }
 
   @Post()
+  @Personal()
   @HttpCode(HttpStatus.CREATED)
-  @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ROOT', 'OWNER', 'GERENTE')
   @ApiOperation({ summary: 'Crear clasificación de dieta' })
   @ApiResponse({ status: 201, description: 'Clasificación creada' })
   @ApiResponse({ status: 409, description: 'Ya existe esa clasificación' })
-  create(@Body() dto: CreateClasificacionDto, @CurrentUser() user: JwtPayload) {
-    return this.clasificaciones.create(dto.nombre, user)
+  create(@Body() dto: CreateClasificacionDto, @UsuarioActual() usuario: UsuarioAutenticado) {
+    return this.clasificaciones.create(dto.nombre, usuario)
   }
 
   @Patch(':id')
-  @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ROOT', 'OWNER', 'GERENTE')
+  @Personal()
   @ApiOperation({ summary: 'Actualizar nombre de clasificación' })
   @ApiResponse({ status: 200, description: 'Clasificación actualizada' })
   @ApiResponse({ status: 404, description: 'Clasificación no encontrada' })
-  update(
-    @Param('id') id: string,
-    @Body() dto: UpdateClasificacionDto,
-    @CurrentUser() user: JwtPayload,
-  ) {
-    return this.clasificaciones.update(id, dto.nombre, user)
+  update(@Param('id') id: string, @Body() dto: UpdateClasificacionDto, @UsuarioActual() usuario: UsuarioAutenticado) {
+    return this.clasificaciones.update(id, dto.nombre, usuario)
   }
 
   @Delete(':id')
+  @Personal()
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ROOT', 'OWNER', 'GERENTE')
   @ApiOperation({ summary: 'Eliminar clasificación (solo si no tiene ítems asignados)' })
   @ApiResponse({ status: 204, description: 'Clasificación eliminada' })
   @ApiResponse({ status: 409, description: 'La clasificación está en uso' })
-  async remove(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
-    await this.clasificaciones.remove(id, user)
+  async remove(@Param('id') id: string, @UsuarioActual() usuario: UsuarioAutenticado) {
+    await this.clasificaciones.remove(id, usuario)
   }
 
   // ── Asignación a ítems ─────────────────────────────────────────────────
 
   @Post('items/:itemId')
+  @Personal()
   @HttpCode(HttpStatus.CREATED)
-  @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ROOT', 'OWNER', 'GERENTE')
   @ApiOperation({ summary: 'Asignar clasificación a un ítem' })
   @ApiResponse({ status: 201, description: 'Clasificación asignada' })
   addToItem(
     @Param('itemId') itemId: string,
     @Body() dto: AddClasificacionItemDto,
-    @CurrentUser() user: JwtPayload,
+    @UsuarioActual() usuario: UsuarioAutenticado,
   ) {
-    return this.clasificaciones.addToItem(itemId, dto.clasificacionId, user)
+    return this.clasificaciones.addToItem(itemId, dto.clasificacionId, usuario)
   }
 
   @Delete('items/:itemId/:clasificacionId')
+  @Personal()
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ROOT', 'OWNER', 'GERENTE')
   @ApiOperation({ summary: 'Desasignar clasificación de un ítem' })
   @ApiResponse({ status: 204, description: 'Clasificación desasignada' })
   async removeFromItem(
     @Param('itemId') itemId: string,
     @Param('clasificacionId') clasificacionId: string,
-    @CurrentUser() user: JwtPayload,
+    @UsuarioActual() usuario: UsuarioAutenticado,
   ) {
-    await this.clasificaciones.removeFromItem(itemId, clasificacionId, user)
+    await this.clasificaciones.removeFromItem(itemId, clasificacionId, usuario)
   }
 }

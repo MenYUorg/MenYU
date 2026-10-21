@@ -1,8 +1,8 @@
-import { AppDeEndpoints, USUARIOS, crearAppDeEndpoints } from '../test/app-endpoints'
+import { AppDeEndpoints, CUENTAS, crearAppDeEndpoints, MUNDO, SIN_USUARIO } from '../test/app-endpoints'
 import { IngredientesController } from './ingredientes.controller'
 import { IngredientesService } from './ingredientes.service'
 
-const REST_ID = '6f1c2a40-1111-4a1b-9c3d-000000000001'
+const REST_ID = MUNDO.REST_1
 
 describe('endpoints de ingredientes', () => {
   let api: AppDeEndpoints
@@ -22,17 +22,17 @@ describe('endpoints de ingredientes', () => {
     const body = { nombre: 'Maní', restauranteId: REST_ID, esAlergeno: true }
 
     // Act
-    const res = await api.pedir('post', '/ingredientes', { usuario: USUARIOS.OWNER, body })
+    const res = await api.pedir('post', '/ingredientes', { cuenta: CUENTAS.OWNER_A, body })
 
     // Assert
     expect(res.status).toBe(201)
-    expect(ingredientes.create).toHaveBeenCalledWith(body, USUARIOS.OWNER)
+    expect(ingredientes.create).toHaveBeenCalledWith(body)
   })
 
   it('POST /ingredientes con esAlergeno que no es booleano responde 400', async () => {
     // Act
     const res = await api.pedir('post', '/ingredientes', {
-      usuario: USUARIOS.OWNER,
+      cuenta: CUENTAS.OWNER_A,
       body: { nombre: 'Maní', restauranteId: REST_ID, esAlergeno: 'sí' },
     })
 
@@ -41,7 +41,22 @@ describe('endpoints de ingredientes', () => {
     expect(ingredientes.create).not.toHaveBeenCalled()
   })
 
-  it('GET, PATCH y DELETE delegan con el id de la ruta; DELETE responde 204', async () => {
+  it.each([
+    ['ROOT', CUENTAS.ROOT],
+    ['el OWNER de otra marca', CUENTAS.OWNER_B],
+    ['el MOZO', CUENTAS.MOZO],
+  ])('POST y GET /ingredientes: %s recibe 403', async (_caso, cuenta) => {
+    // Act
+    const alta = await api.pedir('post', '/ingredientes', { cuenta, body: { nombre: 'Maní', restauranteId: REST_ID } })
+    const lista = await api.pedir('get', '/ingredientes', { cuenta, query: { restauranteId: REST_ID } })
+
+    // Assert
+    expect([alta.status, lista.status]).toEqual([403, 403])
+    expect(ingredientes.create).not.toHaveBeenCalled()
+    expect(ingredientes.findAll).not.toHaveBeenCalled()
+  })
+
+  it('GET, PATCH y DELETE delegan con el id de la ruta y la cuenta; DELETE responde 204', async () => {
     // Arrange
     ingredientes.findAll.mockResolvedValue([])
     ingredientes.findOne.mockResolvedValue({ id: 'ing-1' })
@@ -49,24 +64,28 @@ describe('endpoints de ingredientes', () => {
     ingredientes.remove.mockResolvedValue(undefined)
 
     // Act
-    await api.pedir('get', '/ingredientes', { usuario: USUARIOS.GERENTE, query: { restauranteId: REST_ID } })
-    await api.pedir('get', '/ingredientes/ing-1', { usuario: USUARIOS.GERENTE })
-    await api.pedir('patch', '/ingredientes/ing-1', { usuario: USUARIOS.GERENTE, body: { nombre: 'Maní tostado' } })
-    const baja = await api.pedir('delete', '/ingredientes/ing-1', { usuario: USUARIOS.GERENTE })
+    await api.pedir('get', '/ingredientes', { cuenta: CUENTAS.GERENTE, query: { restauranteId: REST_ID } })
+    await api.pedir('get', '/ingredientes/ing-1', { cuenta: CUENTAS.GERENTE })
+    await api.pedir('patch', '/ingredientes/ing-1', { cuenta: CUENTAS.GERENTE, body: { nombre: 'Maní tostado' } })
+    const baja = await api.pedir('delete', '/ingredientes/ing-1', { cuenta: CUENTAS.GERENTE })
 
     // Assert
-    expect(ingredientes.findAll).toHaveBeenCalledWith(REST_ID, USUARIOS.GERENTE)
-    expect(ingredientes.findOne).toHaveBeenCalledWith('ing-1', USUARIOS.GERENTE)
-    expect(ingredientes.update).toHaveBeenCalledWith('ing-1', { nombre: 'Maní tostado' }, USUARIOS.GERENTE)
+    expect(ingredientes.findAll).toHaveBeenCalledWith(REST_ID)
+    expect(ingredientes.findOne).toHaveBeenCalledWith('ing-1', CUENTAS.GERENTE)
+    expect(ingredientes.update).toHaveBeenCalledWith('ing-1', { nombre: 'Maní tostado' }, CUENTAS.GERENTE)
+    expect(ingredientes.remove).toHaveBeenCalledWith('ing-1', CUENTAS.GERENTE)
     expect(baja.status).toBe(204)
   })
 
-  it('un JWT de comensal no accede (403)', async () => {
+  it('las rutas de un ingrediente: sin token 401 y sin Usuario 403', async () => {
     // Act
-    const res = await api.pedir('get', '/ingredientes/ing-1', { usuario: USUARIOS.CLIENTE })
+    const anonimo = await api.pedir('get', '/ingredientes/ing-1')
+    const sinUsuario = await api.pedir('delete', '/ingredientes/ing-1', { cuenta: SIN_USUARIO })
 
     // Assert
-    expect(res.status).toBe(403)
+    expect(anonimo.status).toBe(401)
+    expect(sinUsuario.status).toBe(403)
     expect(ingredientes.findOne).not.toHaveBeenCalled()
+    expect(ingredientes.remove).not.toHaveBeenCalled()
   })
 })

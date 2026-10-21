@@ -5,16 +5,19 @@ import { ItemsService } from './items.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { StorageService } from '../storage/storage.service'
 import { MenyuGateway } from '../gateway/menyu.gateway'
-import { JwtPayload } from '../auth/auth.service'
+import { AccesoService } from '../auth/supabase/acceso.service'
+import { accesoDeTest, CUENTAS, MUNDO } from '../test/acceso-de-test'
 
-const OWNER: JwtPayload = { sub: 'owner-1', email: 'owner@test.com', tipo: 'admin', rol: 'OWNER' }
-const GERENTE: JwtPayload = { sub: 'gerente-1', email: 'gerente@test.com', tipo: 'admin', rol: 'GERENTE' }
-const ROOT: JwtPayload = { sub: 'root-1', email: 'root@menyu.com', tipo: 'admin', rol: 'ROOT' }
-const MOZO: JwtPayload = { sub: 'mozo-1', tipo: 'mozo', restauranteId: 'rest-1' }
+// El descuento lo ponen el OWNER de la marca y el GERENTE del restaurante (membresías de CUENTAS).
+const OWNER = CUENTAS.OWNER_A
+const GERENTE = CUENTAS.GERENTE
+const ROOT = CUENTAS.ROOT
+const MOZO = CUENTAS.MOZO
+const REST = MUNDO.REST_1
 
 const ITEM = {
   id: 'item-1',
-  restauranteId: 'rest-1',
+  restauranteId: REST,
   nombre: 'Milanesa napolitana',
   precioBase: new Prisma.Decimal('1500.00'),
   precioDescuento: null as number | null,
@@ -23,36 +26,28 @@ const ITEM = {
 
 const mockPrisma = {
   itemMenu: { findUnique: jest.fn(), findMany: jest.fn(), findFirst: jest.fn(), create: jest.fn(), update: jest.fn() },
-  admin: { findUnique: jest.fn() },
-  restaurante: { findUnique: jest.fn() },
-  adminRestaurante: { findUnique: jest.fn() },
 }
 const mockGateway = { emitMenuUpdated: jest.fn() }
 
-// Deja pasar al OWNER de la marca "marca-1" y al GERENTE asignado a "rest-1".
-function permitirAccesoNormal() {
-  mockPrisma.admin.findUnique.mockResolvedValue({ marcaId: 'marca-1' })
-  mockPrisma.restaurante.findUnique.mockResolvedValue({ marcaId: 'marca-1' })
-  mockPrisma.adminRestaurante.findUnique.mockResolvedValue({ adminId: 'gerente-1' })
-}
-
 describe('ItemsService — descuentos', () => {
   let service: ItemsService
+  let acceso: AccesoService
 
   beforeEach(async () => {
+    acceso = accesoDeTest()
     const module = await Test.createTestingModule({
       providers: [
         ItemsService,
         { provide: PrismaService, useValue: mockPrisma },
         { provide: StorageService, useValue: {} },
         { provide: MenyuGateway, useValue: mockGateway },
+        { provide: AccesoService, useValue: acceso },
       ],
     }).compile()
 
     service = module.get(ItemsService)
     jest.clearAllMocks()
 
-    permitirAccesoNormal()
     mockPrisma.itemMenu.findUnique.mockResolvedValue(ITEM)
     mockPrisma.itemMenu.update.mockImplementation(async ({ data }: { data: object }) => ({ ...ITEM, ...data }))
   })
@@ -88,22 +83,17 @@ describe('ItemsService — descuentos', () => {
       )
     })
 
-    it('GERENTE asignado al restaurante puede', async () => {
+    it('el GERENTE del restaurante puede', async () => {
       const result = await service.setDescuento('item-1', { precioDescuento: 1200 }, GERENTE)
 
       expect(result).toMatchObject({ precioVigente: 1200 })
-      expect(mockPrisma.adminRestaurante.findUnique).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { adminId_restauranteId: { adminId: 'gerente-1', restauranteId: 'rest-1' } },
-        }),
-      )
     })
 
     it('avisa a los clientes conectados con menu:updated del restaurante del ítem', async () => {
       await service.setDescuento('item-1', { precioDescuento: 1200 }, OWNER)
 
       expect(mockGateway.emitMenuUpdated).toHaveBeenCalledTimes(1)
-      expect(mockGateway.emitMenuUpdated).toHaveBeenCalledWith('rest-1')
+      expect(mockGateway.emitMenuUpdated).toHaveBeenCalledWith(REST)
     })
 
     it('reemplaza un descuento anterior', async () => {
@@ -141,18 +131,16 @@ describe('ItemsService — descuentos', () => {
       })
 
       it('OWNER de otra marca → 403', async () => {
-        mockPrisma.admin.findUnique.mockResolvedValue({ marcaId: 'marca-otra' })
-
-        await expect(service.setDescuento('item-1', { precioDescuento: 1200 }, OWNER)).rejects.toThrow(
-          ForbiddenException,
-        )
+        await expect(
+          service.setDescuento('item-1', { precioDescuento: 1200 }, CUENTAS.OWNER_B),
+        ).rejects.toThrow(ForbiddenException)
 
         expect(mockPrisma.itemMenu.update).not.toHaveBeenCalled()
         expect(mockGateway.emitMenuUpdated).not.toHaveBeenCalled()
       })
 
-      it('GERENTE de otro restaurante (no asignado) → 403', async () => {
-        mockPrisma.adminRestaurante.findUnique.mockResolvedValue(null)
+      it('GERENTE de otro restaurante → 403', async () => {
+        mockPrisma.itemMenu.findUnique.mockResolvedValue({ ...ITEM, restauranteId: MUNDO.REST_2 })
 
         await expect(service.setDescuento('item-1', { precioDescuento: 1200 }, GERENTE)).rejects.toThrow(
           ForbiddenException,
@@ -163,13 +151,14 @@ describe('ItemsService — descuentos', () => {
       })
 
       it('un ítem que no existe → 404, antes de revisar permisos', async () => {
+        const exigirRol = jest.spyOn(acceso, 'exigirRol')
         mockPrisma.itemMenu.findUnique.mockResolvedValue(null)
 
         await expect(service.setDescuento('no-existe', { precioDescuento: 1200 }, OWNER)).rejects.toThrow(
           NotFoundException,
         )
 
-        expect(mockPrisma.admin.findUnique).not.toHaveBeenCalled()
+        expect(exigirRol).not.toHaveBeenCalled()
       })
     })
 
@@ -253,10 +242,10 @@ describe('ItemsService — descuentos', () => {
         expect.objectContaining({ where: { id: 'item-1' }, data: { precioDescuento: null } }),
       )
       expect(result).toMatchObject({ precioDescuento: null, porcentajeDescuento: null, precioVigente: 1500 })
-      expect(mockGateway.emitMenuUpdated).toHaveBeenCalledWith('rest-1')
+      expect(mockGateway.emitMenuUpdated).toHaveBeenCalledWith(REST)
     })
 
-    it('GERENTE asignado puede quitarlo', async () => {
+    it('el GERENTE del restaurante puede quitarlo', async () => {
       mockPrisma.itemMenu.findUnique.mockResolvedValue({ ...ITEM, precioDescuento: 1200 })
 
       await expect(service.removeDescuento('item-1', GERENTE)).resolves.toMatchObject({ precioVigente: 1500 })
@@ -285,16 +274,14 @@ describe('ItemsService — descuentos', () => {
 
     it('OWNER de otra marca → 403', async () => {
       mockPrisma.itemMenu.findUnique.mockResolvedValue({ ...ITEM, precioDescuento: 1200 })
-      mockPrisma.admin.findUnique.mockResolvedValue({ marcaId: 'marca-otra' })
 
-      await expect(service.removeDescuento('item-1', OWNER)).rejects.toThrow(ForbiddenException)
+      await expect(service.removeDescuento('item-1', CUENTAS.OWNER_B)).rejects.toThrow(ForbiddenException)
 
       expect(mockPrisma.itemMenu.update).not.toHaveBeenCalled()
     })
 
     it('GERENTE de otro restaurante → 403', async () => {
-      mockPrisma.itemMenu.findUnique.mockResolvedValue({ ...ITEM, precioDescuento: 1200 })
-      mockPrisma.adminRestaurante.findUnique.mockResolvedValue(null)
+      mockPrisma.itemMenu.findUnique.mockResolvedValue({ ...ITEM, restauranteId: MUNDO.REST_2, precioDescuento: 1200 })
 
       await expect(service.removeDescuento('item-1', GERENTE)).rejects.toThrow(ForbiddenException)
 
@@ -373,7 +360,7 @@ describe('ItemsService — descuentos', () => {
         { ...ITEM, id: 'b', precioBase: new Prisma.Decimal('800'), precioDescuento: null },
       ])
 
-      const result = await service.findAll('rest-1', OWNER)
+      const result = await service.findAll(REST)
 
       expect(result.map((i) => [i.id, i.precioDescuento, i.porcentajeDescuento, i.precioVigente])).toEqual([
         ['a', 1500, 25, 1500],
@@ -387,17 +374,14 @@ describe('ItemsService — descuentos', () => {
 
       mockPrisma.itemMenu.findFirst.mockResolvedValue(null)
       mockPrisma.itemMenu.create.mockResolvedValue({ ...ITEM, precioDescuento: null })
-      const creado = await service.create(
-        { restauranteId: 'rest-1', nombre: 'Nuevo', precioBase: 1500 },
-        OWNER,
-      )
+      const creado = await service.create({ restauranteId: REST, nombre: 'Nuevo', precioBase: 1500 })
       expect(creado).toMatchObject({ precioDescuento: null, porcentajeDescuento: null, precioVigente: 1500 })
     })
 
     it('un descuento guardado que no es válido contra el precio base se ignora (se cobra el base)', async () => {
       mockPrisma.itemMenu.findMany.mockResolvedValue([{ ...ITEM, precioDescuento: 1500 }])
 
-      const [item] = await service.findAll('rest-1', OWNER)
+      const [item] = await service.findAll(REST)
 
       expect(item).toMatchObject({ precioDescuento: null, porcentajeDescuento: null, precioVigente: 1500 })
     })

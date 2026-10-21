@@ -138,6 +138,56 @@ describe('AccesoService', () => {
     })
   })
 
+  describe('tieneAlgunRol y exigirAlgunRol', () => {
+    const deRestaurante = (roles: string[]) => ({ rol: { in: roles }, restaurante: RESTAURANTE_DISPONIBLE })
+    const deMarca = { rol: 'OWNER', marca: { activo: true } }
+
+    it('con OWNER y GERENTE busca una membresía OWNER de una marca activa o de GERENTE en un restaurante disponible', async () => {
+      // Arrange
+      prisma.membresia.findFirst.mockResolvedValue({ id: 'm-1' })
+
+      // Act
+      const tiene = await acceso.tieneAlgunRol(USUARIO.id, ['OWNER', 'GERENTE'])
+
+      // Assert
+      expect(tiene).toBe(true)
+      expect(prisma.membresia.findFirst).toHaveBeenCalledWith({
+        where: { usuarioId: USUARIO.id, OR: [deRestaurante(['GERENTE']), deMarca] },
+        select: { id: true },
+      })
+    })
+
+    it.each([
+      ['solo OWNER: solo las marcas', ['OWNER'], [deMarca]],
+      ['sin OWNER: solo los restaurantes', ['MOZO', 'COCINA'], [deRestaurante(['MOZO', 'COCINA'])]],
+    ])('%s', async (_caso, roles, alcance) => {
+      // Arrange
+      prisma.membresia.findFirst.mockResolvedValue(null)
+
+      // Act
+      const tiene = await acceso.tieneAlgunRol(USUARIO.id, roles as never)
+
+      // Assert
+      expect(tiene).toBe(false)
+      expect(prisma.membresia.findFirst.mock.calls[0][0].where.OR).toEqual(alcance)
+    })
+
+    it('una lista de roles vacía no consulta y da false', async () => {
+      // Act + Assert
+      expect(await acceso.tieneAlgunRol(USUARIO.id, [])).toBe(false)
+      expect(prisma.membresia.findFirst).not.toHaveBeenCalled()
+    })
+
+    it('exigirAlgunRol: pasa con una membresía y da 403 sin ninguna', async () => {
+      // Arrange
+      prisma.membresia.findFirst.mockResolvedValueOnce({ id: 'm-1' }).mockResolvedValueOnce(null)
+
+      // Act + Assert
+      await expect(acceso.exigirAlgunRol(USUARIO.id, ['OWNER'])).resolves.toBeUndefined()
+      await expect(acceso.exigirAlgunRol(USUARIO.id, ['OWNER'])).rejects.toThrow(ForbiddenException)
+    })
+  })
+
   describe('mozoDe', () => {
     it('busca por la clave única (usuario, restaurante) y devuelve el mozo activo sin el campo activo', async () => {
       // Arrange

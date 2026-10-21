@@ -1,15 +1,10 @@
-import {
-  BadRequestException,
-  ConflictException,
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common'
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
 import { StorageService } from '../storage/storage.service'
 import { MenyuGateway } from '../gateway/menyu.gateway'
-import { JwtPayload } from '../auth/auth.service'
-import { assertOwnerOGerenteDeRestaurante } from '../common/assert-owner-access'
+import { ADMINISTRACION } from '../auth/roles-del-personal'
+import { AccesoService } from '../auth/supabase/acceso.service'
+import { UsuarioAutenticado } from '../auth/supabase/usuario-autenticado'
 import { CreateItemDto } from './dto/create-item.dto'
 import { UpdateItemDto } from './dto/update-item.dto'
 import { SetDescuentoDto } from './dto/set-descuento.dto'
@@ -42,19 +37,19 @@ export class ItemsService {
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
     private readonly gateway: MenyuGateway,
+    private readonly acceso: AccesoService,
   ) {}
 
-  async create(dto: CreateItemDto, user: JwtPayload) {
-    await this.assertRestauranteOwnership(dto.restauranteId, user)
+  /** El rol en el restaurante lo exige la ruta (`@RequiereRolEn`). */
+  async create(dto: CreateItemDto) {
     await this.assertNombreUnico(dto.restauranteId, dto.nombre)
 
     const created = await this.prisma.itemMenu.create({ data: dto, include: DETAIL_INCLUDE })
     return this.serializeItem(created)
   }
 
-  async findAll(restauranteId: string, user: JwtPayload, disponible?: boolean) {
-    await this.assertRestauranteOwnership(restauranteId, user)
-
+  /** El rol en el restaurante lo exige la ruta (`@RequiereRolEn`). */
+  async findAll(restauranteId: string, disponible?: boolean) {
     const items = await this.prisma.itemMenu.findMany({
       where: {
         restauranteId,
@@ -66,16 +61,16 @@ export class ItemsService {
     return items.map((item) => this.serializeItem(item))
   }
 
-  async findOne(id: string, user: JwtPayload) {
+  async findOne(id: string, usuario: UsuarioAutenticado) {
     const item = await this.getOrThrow(id)
-    await this.assertRestauranteOwnership(item.restauranteId, user)
+    await this.acceso.exigirRol(usuario.id, item.restauranteId, ADMINISTRACION)
     const found = await this.prisma.itemMenu.findUnique({ where: { id }, include: DETAIL_INCLUDE })
     return this.serializeItem(found)
   }
 
-  async update(id: string, dto: UpdateItemDto, user: JwtPayload) {
+  async update(id: string, dto: UpdateItemDto, usuario: UsuarioAutenticado) {
     const item = await this.getOrThrow(id)
-    await this.assertRestauranteOwnership(item.restauranteId, user)
+    await this.acceso.exigirRol(usuario.id, item.restauranteId, ADMINISTRACION)
 
     if (dto.nombre && dto.nombre !== item.nombre) {
       await this.assertNombreUnico(item.restauranteId, dto.nombre, id)
@@ -99,9 +94,9 @@ export class ItemsService {
     return this.serializeItem(updated)
   }
 
-  async uploadImagen(id: string, file: Express.Multer.File, user: JwtPayload) {
+  async uploadImagen(id: string, file: Express.Multer.File, usuario: UsuarioAutenticado) {
     const item = await this.getOrThrow(id)
-    await this.assertRestauranteOwnership(item.restauranteId, user)
+    await this.acceso.exigirRol(usuario.id, item.restauranteId, ADMINISTRACION)
 
     const path = `${item.restauranteId}/${id}`
     const url = await this.storage.uploadFile(IMAGEN_BUCKET, path, file.buffer, file.mimetype)
@@ -110,9 +105,9 @@ export class ItemsService {
     return this.serializeItem(updated)
   }
 
-  async removeImagen(id: string, user: JwtPayload) {
+  async removeImagen(id: string, usuario: UsuarioAutenticado) {
     const item = await this.getOrThrow(id)
-    await this.assertRestauranteOwnership(item.restauranteId, user)
+    await this.acceso.exigirRol(usuario.id, item.restauranteId, ADMINISTRACION)
 
     if (!item.imagenUrl) throw new NotFoundException('Este ítem no tiene imagen')
 
@@ -122,11 +117,11 @@ export class ItemsService {
     return this.serializeItem(updated)
   }
 
-  // ── Descuento: solo el OWNER de la marca y el GERENTE asignado (ROOT no) ──────────
+  // ── Descuento ──────────────────────────────────────────────────────────
 
-  async setDescuento(id: string, dto: SetDescuentoDto, user: JwtPayload) {
+  async setDescuento(id: string, dto: SetDescuentoDto, usuario: UsuarioAutenticado) {
     const item = await this.getOrThrow(id)
-    await assertOwnerOGerenteDeRestaurante(this.prisma, item.restauranteId, user)
+    await this.acceso.exigirRol(usuario.id, item.restauranteId, ADMINISTRACION)
 
     const { precioDescuento, porcentaje } = dto
     if (precioDescuento != null && porcentaje != null) {
@@ -154,9 +149,9 @@ export class ItemsService {
     return this.serializeItem(updated)
   }
 
-  async removeDescuento(id: string, user: JwtPayload) {
+  async removeDescuento(id: string, usuario: UsuarioAutenticado) {
     const item = await this.getOrThrow(id)
-    await assertOwnerOGerenteDeRestaurante(this.prisma, item.restauranteId, user)
+    await this.acceso.exigirRol(usuario.id, item.restauranteId, ADMINISTRACION)
 
     // Quitar un descuento que no existe no es un error: el ítem ya queda como se pidió.
     if (item.precioDescuento == null) {
@@ -173,9 +168,9 @@ export class ItemsService {
     return this.serializeItem(updated)
   }
 
-  async remove(id: string, user: JwtPayload) {
+  async remove(id: string, usuario: UsuarioAutenticado) {
     const item = await this.getOrThrow(id)
-    await this.assertRestauranteOwnership(item.restauranteId, user)
+    await this.acceso.exigirRol(usuario.id, item.restauranteId, ['OWNER'])
 
     const totalPedidos = await this.prisma.pedidoItem.count({ where: { itemId: id } })
     if (totalPedidos > 0) {
@@ -189,9 +184,9 @@ export class ItemsService {
 
   // ── Ingredientes del ítem ──────────────────────────────────────────────
 
-  async addIngrediente(itemId: string, dto: AddIngredienteDto, user: JwtPayload) {
+  async addIngrediente(itemId: string, dto: AddIngredienteDto, usuario: UsuarioAutenticado) {
     const item = await this.getOrThrow(itemId)
-    await this.assertRestauranteOwnership(item.restauranteId, user)
+    await this.acceso.exigirRol(usuario.id, item.restauranteId, ADMINISTRACION)
     await this.assertIngredientePertenece(dto.ingredienteId, item.restauranteId)
 
     const yaAsociado = await this.prisma.itemIngrediente.findFirst({
@@ -205,9 +200,9 @@ export class ItemsService {
     return this.serializeItem(updated)
   }
 
-  async updateIngrediente(itemId: string, id: string, dto: UpdateIngredienteItemDto, user: JwtPayload) {
+  async updateIngrediente(itemId: string, id: string, dto: UpdateIngredienteItemDto, usuario: UsuarioAutenticado) {
     const itemIngrediente = await this.getItemIngredienteOrThrow(id, itemId)
-    await this.assertRestauranteOwnership(itemIngrediente.item.restauranteId, user)
+    await this.acceso.exigirRol(usuario.id, itemIngrediente.item.restauranteId, ADMINISTRACION)
 
     await this.prisma.itemIngrediente.update({ where: { id }, data: dto })
 
@@ -215,9 +210,9 @@ export class ItemsService {
     return this.serializeItem(updated)
   }
 
-  async removeIngrediente(itemId: string, id: string, user: JwtPayload) {
+  async removeIngrediente(itemId: string, id: string, usuario: UsuarioAutenticado) {
     const itemIngrediente = await this.getItemIngredienteOrThrow(id, itemId)
-    await this.assertRestauranteOwnership(itemIngrediente.item.restauranteId, user)
+    await this.acceso.exigirRol(usuario.id, itemIngrediente.item.restauranteId, ADMINISTRACION)
 
     const tieneMods = await this.prisma.pedidoItemMod.count({ where: { itemIngredienteId: id } })
     if (tieneMods > 0) {
@@ -272,25 +267,5 @@ export class ItemsService {
     if (ing.restauranteId !== restauranteId) {
       throw new BadRequestException('El ingrediente no pertenece a este restaurante')
     }
-  }
-
-  private async assertRestauranteOwnership(restauranteId: string, user: JwtPayload) {
-    if (user.rol === 'ROOT') return
-    if (user.rol === 'OWNER') {
-      const admin = await this.prisma.admin.findUnique({ where: { id: user.sub } })
-      const restaurante = await this.prisma.restaurante.findUnique({ where: { id: restauranteId } })
-      if (!admin || !restaurante || admin.marcaId !== restaurante.marcaId) {
-        throw new ForbiddenException('No tenés acceso a este restaurante')
-      }
-      return
-    }
-    if (user.rol === 'GERENTE') {
-      const asignacion = await this.prisma.adminRestaurante.findUnique({
-        where: { adminId_restauranteId: { adminId: user.sub, restauranteId } },
-      })
-      if (!asignacion) throw new ForbiddenException('No tenés acceso a este restaurante')
-      return
-    }
-    throw new ForbiddenException('No tenés acceso a este restaurante')
   }
 }

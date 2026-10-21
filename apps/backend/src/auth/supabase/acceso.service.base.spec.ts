@@ -129,6 +129,31 @@ describeConBase('AccesoService contra la base: la baja efectiva', () => {
       expect(await acceso.restaurantesDe(persona.id, ['MOZO'])).toEqual([restB1])
     }))
 
+  it('tieneAlgunRol cuenta solo las membresías de marcas activas y de restaurantes disponibles', () =>
+    enUnMundo(async ({ tx, acceso, marcaA, marcaB, restA1, restA2DeBaja, restB1, usuario }) => {
+      const ownerDeBaja = await usuario([{ rol: 'OWNER', marcaId: marcaB }])
+      const gerenteDeBaja = await usuario([
+        { rol: 'GERENTE', restauranteId: restA2DeBaja },
+        { rol: 'GERENTE', restauranteId: restB1 },
+      ])
+      const ownerSinRestaurantes = await usuario([{ rol: 'OWNER', marcaId: marcaA }])
+      const mozo = await usuario([{ rol: 'MOZO', restauranteId: restA1 }])
+
+      expect(await acceso.tieneAlgunRol(ownerDeBaja.id, ['OWNER', 'GERENTE'])).toBe(false)
+      expect(await acceso.tieneAlgunRol(gerenteDeBaja.id, ['OWNER', 'GERENTE'])).toBe(false)
+      expect(await acceso.tieneAlgunRol(mozo.id, ['OWNER', 'GERENTE'])).toBe(false)
+      expect(await acceso.tieneAlgunRol(mozo.id, ['MOZO'])).toBe(true)
+
+      await tx.restaurante.updateMany({ where: { marcaId: marcaA }, data: { activo: false } })
+
+      expect(await acceso.tieneAlgunRol(ownerSinRestaurantes.id, ['OWNER'])).toBe(true)
+
+      await tx.marca.update({ where: { id: marcaB }, data: { activo: true } })
+
+      expect(await acceso.tieneAlgunRol(ownerDeBaja.id, ['OWNER'])).toBe(true)
+      expect(await acceso.tieneAlgunRol(gerenteDeBaja.id, ['GERENTE'])).toBe(true)
+    }))
+
   it('el perfil omite las membresías de marcas y restaurantes dados de baja y trae la marca de cada restaurante', () =>
     enUnMundo(async ({ acceso, marcaA, marcaB, restA1, restA2DeBaja, restB1, usuario }) => {
       const persona = await usuario([

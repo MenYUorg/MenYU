@@ -1,9 +1,12 @@
 import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common'
-import { GERENTE, OWNER, PrismaMock, comoPrisma, crearPrismaMock, ownerDeLaMarca, ownerDeOtraMarca } from '../test/prisma-mock'
+import { accesoDeTest, CUENTAS, MUNDO } from '../test/acceso-de-test'
+import { PrismaMock, comoPrisma, crearPrismaMock } from '../test/prisma-mock'
 import { ClasificacionesService } from './clasificaciones.service'
 
 const VEGANO = { id: 'clas-1', nombre: 'Vegano' }
-const ITEM = { id: 'item-1', restauranteId: 'rest-1' }
+const ITEM = { id: 'item-1', restauranteId: MUNDO.REST_1 }
+const OWNER = CUENTAS.OWNER_A
+const GERENTE = CUENTAS.GERENTE
 
 describe('ClasificacionesService', () => {
   let prisma: PrismaMock
@@ -11,7 +14,7 @@ describe('ClasificacionesService', () => {
 
   beforeEach(() => {
     prisma = crearPrismaMock()
-    service = new ClasificacionesService(comoPrisma(prisma))
+    service = new ClasificacionesService(comoPrisma(prisma), accesoDeTest())
   })
 
   describe('findAll', () => {
@@ -109,6 +112,35 @@ describe('ClasificacionesService', () => {
     })
   })
 
+  describe('el catálogo global: lo edita el OWNER o el GERENTE de cualquier restaurante', () => {
+    it.each([
+      ['ROOT (no es un bypass)', CUENTAS.ROOT],
+      ['el MOZO', CUENTAS.MOZO],
+      ['la COCINA', CUENTAS.COCINA],
+      ['un Usuario sin membresías', CUENTAS.SIN_MEMBRESIAS],
+    ])('%s recibe 403 al crear, editar o borrar, sin tocar el catálogo', async (_caso, cuenta) => {
+      // Arrange
+      prisma.clasificacionDieta.findUnique.mockResolvedValue(VEGANO)
+
+      // Act + Assert
+      await expect(service.create('Vegano', cuenta)).rejects.toThrow(ForbiddenException)
+      await expect(service.update('clas-1', 'Vegana', cuenta)).rejects.toThrow(ForbiddenException)
+      await expect(service.remove('clas-1', cuenta)).rejects.toThrow(ForbiddenException)
+      expect(prisma.clasificacionDieta.create).not.toHaveBeenCalled()
+      expect(prisma.clasificacionDieta.update).not.toHaveBeenCalled()
+      expect(prisma.clasificacionDieta.delete).not.toHaveBeenCalled()
+    })
+
+    it('el GERENTE de un restaurante crea una clasificación', async () => {
+      // Arrange
+      prisma.clasificacionDieta.findFirst.mockResolvedValue(null)
+      prisma.clasificacionDieta.create.mockResolvedValue(VEGANO)
+
+      // Act + Assert
+      await expect(service.create('Vegano', GERENTE)).resolves.toEqual(VEGANO)
+    })
+  })
+
   describe('remove', () => {
     it('si está asignada a ítems responde 409 con la cantidad y no la borra', async () => {
       // Arrange
@@ -143,7 +175,6 @@ describe('ClasificacionesService', () => {
       // Arrange
       const itemConClasificaciones = { ...ITEM, clasificaciones: [{ clasificacion: VEGANO }] }
       prisma.itemMenu.findUnique.mockResolvedValueOnce(ITEM).mockResolvedValueOnce(itemConClasificaciones)
-      ownerDeLaMarca(prisma)
       prisma.clasificacionDieta.findUnique.mockResolvedValue(VEGANO)
       prisma.itemClasificacion.findUnique.mockResolvedValue(null)
 
@@ -169,20 +200,18 @@ describe('ClasificacionesService', () => {
     it('addToItem sobre un ítem de otra marca responde 403 y no asigna', async () => {
       // Arrange
       prisma.itemMenu.findUnique.mockResolvedValue(ITEM)
-      ownerDeOtraMarca(prisma)
 
       // Act
-      const asignacion = service.addToItem('item-1', 'clas-1', OWNER)
+      const asignacion = service.addToItem('item-1', 'clas-1', CUENTAS.OWNER_B)
 
       // Assert
       await expect(asignacion).rejects.toThrow(ForbiddenException)
       expect(prisma.itemClasificacion.create).not.toHaveBeenCalled()
     })
 
-    it('addToItem: un GERENTE asignado al restaurante del ítem puede asignar', async () => {
+    it('addToItem: el GERENTE del restaurante del ítem puede asignar', async () => {
       // Arrange
       prisma.itemMenu.findUnique.mockResolvedValue(ITEM)
-      prisma.adminRestaurante.findUnique.mockResolvedValue({ adminId: GERENTE.sub, restauranteId: 'rest-1' })
       prisma.clasificacionDieta.findUnique.mockResolvedValue(VEGANO)
       prisma.itemClasificacion.findUnique.mockResolvedValue(null)
 
@@ -193,10 +222,9 @@ describe('ClasificacionesService', () => {
       expect(prisma.itemClasificacion.create).toHaveBeenCalledTimes(1)
     })
 
-    it('addToItem: un GERENTE sin asignación al restaurante del ítem recibe 403', async () => {
+    it('addToItem: el GERENTE de otro restaurante recibe 403', async () => {
       // Arrange
-      prisma.itemMenu.findUnique.mockResolvedValue(ITEM)
-      prisma.adminRestaurante.findUnique.mockResolvedValue(null)
+      prisma.itemMenu.findUnique.mockResolvedValue({ ...ITEM, restauranteId: MUNDO.REST_2 })
 
       // Act
       const asignacion = service.addToItem('item-1', 'clas-1', GERENTE)
@@ -206,21 +234,23 @@ describe('ClasificacionesService', () => {
       expect(prisma.itemClasificacion.create).not.toHaveBeenCalled()
     })
 
-    it('addToItem: un usuario que no es admin recibe 403', async () => {
+    it.each([
+      ['ROOT (no es un bypass)', CUENTAS.ROOT],
+      ['el MOZO', CUENTAS.MOZO],
+    ])('addToItem y removeFromItem: %s recibe 403', async (_caso, cuenta) => {
       // Arrange
       prisma.itemMenu.findUnique.mockResolvedValue(ITEM)
 
-      // Act
-      const asignacion = service.addToItem('item-1', 'clas-1', { sub: 'mozo-1', tipo: 'mozo' })
-
-      // Assert
-      await expect(asignacion).rejects.toThrow(ForbiddenException)
+      // Act + Assert
+      await expect(service.addToItem('item-1', 'clas-1', cuenta)).rejects.toThrow(ForbiddenException)
+      await expect(service.removeFromItem('item-1', 'clas-1', cuenta)).rejects.toThrow(ForbiddenException)
+      expect(prisma.itemClasificacion.create).not.toHaveBeenCalled()
+      expect(prisma.itemClasificacion.delete).not.toHaveBeenCalled()
     })
 
     it('addToItem con una clasificación ya asignada responde 409', async () => {
       // Arrange
       prisma.itemMenu.findUnique.mockResolvedValue(ITEM)
-      ownerDeLaMarca(prisma)
       prisma.clasificacionDieta.findUnique.mockResolvedValue(VEGANO)
       prisma.itemClasificacion.findUnique.mockResolvedValue({ itemId: 'item-1', clasificacionId: 'clas-1' })
 
@@ -235,7 +265,6 @@ describe('ClasificacionesService', () => {
     it('removeFromItem con una clasificación no asignada responde 404', async () => {
       // Arrange
       prisma.itemMenu.findUnique.mockResolvedValue(ITEM)
-      ownerDeLaMarca(prisma)
       prisma.itemClasificacion.findUnique.mockResolvedValue(null)
 
       // Act
@@ -249,7 +278,6 @@ describe('ClasificacionesService', () => {
     it('removeFromItem borra la asignación existente', async () => {
       // Arrange
       prisma.itemMenu.findUnique.mockResolvedValue(ITEM)
-      ownerDeLaMarca(prisma)
       prisma.itemClasificacion.findUnique.mockResolvedValue({ itemId: 'item-1', clasificacionId: 'clas-1' })
 
       // Act

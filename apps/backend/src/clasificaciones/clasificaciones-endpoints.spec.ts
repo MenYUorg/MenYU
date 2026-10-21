@@ -1,9 +1,10 @@
-import { AppDeEndpoints, USUARIOS, crearAppDeEndpoints } from '../test/app-endpoints'
+import { AppDeEndpoints, CUENTAS, crearAppDeEndpoints, SIN_USUARIO } from '../test/app-endpoints'
 import { ClasificacionesController } from './clasificaciones.controller'
 import { ClasificacionesService } from './clasificaciones.service'
 
 const CLAS_ID = '6f1c2a40-2222-4a1b-9c3d-000000000002'
 
+// El rol (en algún restaurante para el catálogo, en el del ítem para asignar) lo pide el service: ver su spec.
 describe('endpoints de clasificaciones', () => {
   let api: AppDeEndpoints
   const clasificaciones = {
@@ -25,7 +26,7 @@ describe('endpoints de clasificaciones', () => {
 
   beforeEach(() => jest.clearAllMocks())
 
-  it('GET /clasificaciones es público: responde sin JWT', async () => {
+  it('GET /clasificaciones es público: responde sin token', async () => {
     // Arrange
     clasificaciones.findAll.mockResolvedValue([{ id: CLAS_ID, nombre: 'Vegano' }])
 
@@ -38,25 +39,25 @@ describe('endpoints de clasificaciones', () => {
     expect(clasificaciones.findAll).toHaveBeenCalledWith('rest-1')
   })
 
-  it('POST /clasificaciones pasa solo el nombre al service (201)', async () => {
+  it('POST /clasificaciones pasa solo el nombre y la cuenta al service (201)', async () => {
     // Arrange
     clasificaciones.create.mockResolvedValue({ id: CLAS_ID })
 
     // Act
-    const res = await api.pedir('post', '/clasificaciones', { usuario: USUARIOS.OWNER, body: { nombre: 'Vegano' } })
+    const res = await api.pedir('post', '/clasificaciones', { cuenta: CUENTAS.OWNER_A, body: { nombre: 'Vegano' } })
 
     // Assert
     expect(res.status).toBe(201)
-    expect(clasificaciones.create).toHaveBeenCalledWith('Vegano', USUARIOS.OWNER)
+    expect(clasificaciones.create).toHaveBeenCalledWith('Vegano', CUENTAS.OWNER_A)
   })
 
   it.each([
-    ['POST sin JWT', 'post', '/clasificaciones', undefined, 401],
-    ['POST con nombre vacío', 'post', '/clasificaciones', USUARIOS.OWNER, 400],
-    ['PATCH de un mozo', 'patch', `/clasificaciones/${CLAS_ID}`, USUARIOS.MOZO, 403],
-  ] as const)('%s responde %i', async (_caso, metodo, ruta, usuario, estado) => {
+    ['POST sin token', 'post', '/clasificaciones', undefined, 401],
+    ['POST con nombre vacío', 'post', '/clasificaciones', CUENTAS.OWNER_A, 400],
+    ['PATCH de una cuenta de Supabase sin Usuario', 'patch', `/clasificaciones/${CLAS_ID}`, SIN_USUARIO, 403],
+  ] as const)('%s responde %i', async (_caso, metodo, ruta, cuenta, estado) => {
     // Act
-    const res = await api.pedir(metodo, ruta, { usuario, body: { nombre: '' } })
+    const res = await api.pedir(metodo, ruta, { cuenta, body: { nombre: '' } })
 
     // Assert
     expect(res.status).toBe(estado)
@@ -70,14 +71,14 @@ describe('endpoints de clasificaciones', () => {
     clasificaciones.remove.mockResolvedValue(undefined)
 
     // Act
-    const cambio = await api.pedir('patch', `/clasificaciones/${CLAS_ID}`, { usuario: USUARIOS.GERENTE, body: { nombre: 'Vegana' } })
-    const baja = await api.pedir('delete', `/clasificaciones/${CLAS_ID}`, { usuario: USUARIOS.GERENTE })
+    const cambio = await api.pedir('patch', `/clasificaciones/${CLAS_ID}`, { cuenta: CUENTAS.GERENTE, body: { nombre: 'Vegana' } })
+    const baja = await api.pedir('delete', `/clasificaciones/${CLAS_ID}`, { cuenta: CUENTAS.GERENTE })
 
     // Assert
     expect(cambio.status).toBe(200)
-    expect(clasificaciones.update).toHaveBeenCalledWith(CLAS_ID, 'Vegana', USUARIOS.GERENTE)
+    expect(clasificaciones.update).toHaveBeenCalledWith(CLAS_ID, 'Vegana', CUENTAS.GERENTE)
     expect(baja.status).toBe(204)
-    expect(clasificaciones.remove).toHaveBeenCalledWith(CLAS_ID, USUARIOS.GERENTE)
+    expect(clasificaciones.remove).toHaveBeenCalledWith(CLAS_ID, CUENTAS.GERENTE)
   })
 
   describe('asignación a ítems', () => {
@@ -86,16 +87,16 @@ describe('endpoints de clasificaciones', () => {
       clasificaciones.addToItem.mockResolvedValue({ id: 'item-1' })
 
       // Act
-      const res = await api.pedir('post', '/clasificaciones/items/item-1', { usuario: USUARIOS.OWNER, body: { clasificacionId: CLAS_ID } })
+      const res = await api.pedir('post', '/clasificaciones/items/item-1', { cuenta: CUENTAS.OWNER_A, body: { clasificacionId: CLAS_ID } })
 
       // Assert
       expect(res.status).toBe(201)
-      expect(clasificaciones.addToItem).toHaveBeenCalledWith('item-1', CLAS_ID, USUARIOS.OWNER)
+      expect(clasificaciones.addToItem).toHaveBeenCalledWith('item-1', CLAS_ID, CUENTAS.OWNER_A)
     })
 
     it('POST con un clasificacionId que no es UUID responde 400', async () => {
       // Act
-      const res = await api.pedir('post', '/clasificaciones/items/item-1', { usuario: USUARIOS.OWNER, body: { clasificacionId: 'vegano' } })
+      const res = await api.pedir('post', '/clasificaciones/items/item-1', { cuenta: CUENTAS.OWNER_A, body: { clasificacionId: 'vegano' } })
 
       // Assert
       expect(res.status).toBe(400)
@@ -107,11 +108,20 @@ describe('endpoints de clasificaciones', () => {
       clasificaciones.removeFromItem.mockResolvedValue(undefined)
 
       // Act
-      const res = await api.pedir('delete', `/clasificaciones/items/item-1/${CLAS_ID}`, { usuario: USUARIOS.OWNER })
+      const res = await api.pedir('delete', `/clasificaciones/items/item-1/${CLAS_ID}`, { cuenta: CUENTAS.OWNER_A })
 
       // Assert
       expect(res.status).toBe(204)
-      expect(clasificaciones.removeFromItem).toHaveBeenCalledWith('item-1', CLAS_ID, USUARIOS.OWNER)
+      expect(clasificaciones.removeFromItem).toHaveBeenCalledWith('item-1', CLAS_ID, CUENTAS.OWNER_A)
+    })
+
+    it('sin token, 401', async () => {
+      // Act
+      const res = await api.pedir('delete', `/clasificaciones/items/item-1/${CLAS_ID}`)
+
+      // Assert
+      expect(res.status).toBe(401)
+      expect(clasificaciones.removeFromItem).not.toHaveBeenCalled()
     })
   })
 })
