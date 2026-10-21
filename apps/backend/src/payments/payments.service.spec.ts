@@ -290,9 +290,13 @@ describe('PaymentsService', () => {
   describe('confirmarEfectivo', () => {
     let tx: ReturnType<typeof createTxMock>
 
+    // La aprobación es un updateMany condicionado al estado pendiente: con count 0, otro lo cobró antes.
+    const APROBACION = { id: 'pago-ef', estado: ESTADO_PAGO_PENDIENTE }
+
     beforeEach(() => {
       tx = createTxMock()
       mockPrisma.$transaction.mockImplementation((fn: any) => fn(tx))
+      tx.pago.updateMany.mockResolvedValue({ count: 1 })
       mockPrisma.pago.findUnique.mockResolvedValue({
         id: 'pago-ef',
         sesionId: 'sesion-1',
@@ -308,13 +312,13 @@ describe('PaymentsService', () => {
 
       const result = await service.confirmarEfectivo({ pagoId: 'pago-ef' }, CUENTAS.MOZO)
 
-      expect(tx.pago.updateMany).toHaveBeenCalledWith({
+      expect(tx.pago.updateMany).toHaveBeenNthCalledWith(1, expect.objectContaining({ where: APROBACION }))
+      expect(tx.pago.updateMany).toHaveBeenNthCalledWith(2, {
         where: { sesionId: 'sesion-1', estado: ESTADO_PAGO_PENDIENTE }, // sin filtro de método
         data: { estado: ESTADO_PAGO_CANCELADO },
       })
-      const orden = (fn: jest.Mock) => fn.mock.invocationCallOrder[0]
-      expect(orden(tx.pago.update)).toBeLessThan(orden(tx.pago.updateMany))
-      expect(orden(tx.pago.updateMany)).toBeLessThan(orden(tx.sesionMesa.update))
+      const orden = (fn: jest.Mock, vez = 0) => fn.mock.invocationCallOrder[vez]
+      expect(orden(tx.pago.updateMany, 1)).toBeLessThan(orden(tx.sesionMesa.update))
       expect(result).toEqual({ sesionId: 'sesion-1', estado: 'cerrada' })
     })
 
@@ -324,7 +328,7 @@ describe('PaymentsService', () => {
 
       const result = await service.confirmarEfectivo({ pagoId: 'pago-ef' }, CUENTAS.MOZO)
 
-      expect(tx.pago.updateMany).not.toHaveBeenCalled()
+      expect(tx.pago.updateMany).toHaveBeenCalledTimes(1) // solo la aprobación
       expect(tx.sesionMesa.update).not.toHaveBeenCalled()
       expect(result).toEqual({ sesionId: 'sesion-1', estado: 'activa' })
     })
@@ -351,14 +355,37 @@ describe('PaymentsService', () => {
           new ConflictException('Ese pago ya no está pendiente'),
         )
         expect(mockPrisma.$transaction).not.toHaveBeenCalled()
-        expect(tx.pago.update).not.toHaveBeenCalled()
+        expect(tx.pago.updateMany).not.toHaveBeenCalled()
+      })
+
+      it('si otro lo cobró entre la lectura y la escritura (o en el reintento de la transacción): 409 y la sesión no se toca', async () => {
+        tx.pago.updateMany.mockResolvedValue({ count: 0 })
+
+        await expect(service.confirmarEfectivo({ pagoId: 'pago-ef' }, CUENTAS.MOZO)).rejects.toThrow(
+          new ConflictException('Ese pago ya no está pendiente'),
+        )
+        expect(tx.pago.updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: APROBACION }))
+        expect(tx.sesionMesa.update).not.toHaveBeenCalled()
+        expect(tx.mesa.update).not.toHaveBeenCalled()
+      })
+
+      it('el permiso va antes que el estado: el de otra marca recibe 403 aunque el pago ya esté cobrado', async () => {
+        mockPrisma.pago.findUnique.mockResolvedValue({
+          id: 'pago-ef',
+          sesionId: 'sesion-1',
+          metodo: 'efectivo',
+          estado: 'aprobado',
+          sesion: { mesaId: 'mesa-1', mesa: { restauranteId: MUNDO.REST_1 } },
+        })
+
+        await expect(service.confirmarEfectivo({ pagoId: 'pago-ef' }, CUENTAS.OWNER_B)).rejects.toThrow(ForbiddenException)
       })
 
       it('un MOZO lo confirma con su propio Mozo aunque mande el de otro', async () => {
         await service.confirmarEfectivo({ pagoId: 'pago-ef', mozoId: 'mozo-ajeno' }, CUENTAS.MOZO)
 
-        expect(tx.pago.update).toHaveBeenCalledWith({
-          where: { id: 'pago-ef' },
+        expect(tx.pago.updateMany).toHaveBeenCalledWith({
+          where: APROBACION,
           data: { estado: 'aprobado', fechaCobro: expect.any(Date), mozoId: MOZOS.DEL_MOZO.id, usuarioId: CUENTAS.MOZO.id },
         })
       })
@@ -366,8 +393,8 @@ describe('PaymentsService', () => {
       it('el OWNER lo confirma a su nombre, sin mozo', async () => {
         await service.confirmarEfectivo({ pagoId: 'pago-ef' }, CUENTAS.OWNER_A)
 
-        expect(tx.pago.update).toHaveBeenCalledWith({
-          where: { id: 'pago-ef' },
+        expect(tx.pago.updateMany).toHaveBeenCalledWith({
+          where: APROBACION,
           data: expect.objectContaining({ mozoId: null, usuarioId: CUENTAS.OWNER_A.id }),
         })
       })

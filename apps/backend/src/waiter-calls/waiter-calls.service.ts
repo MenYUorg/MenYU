@@ -93,11 +93,15 @@ export class WaiterCallsService {
     const { restauranteId } = llamado.sesion.mesa
     await this.acceso.exigirRol(usuario.id, restauranteId, ['JEFE_SALON', 'MOZO'])
     const mozo = await this.acceso.exigirMozo(usuario.id, restauranteId)
-    if (llamado.estado !== 'pendiente') throw new BadRequestException('Este llamado ya fue atendido')
+    const yaAtendido = new BadRequestException('Este llamado ya fue atendido')
+    if (llamado.estado !== 'pendiente') throw yaAtendido
 
-    return this.prisma.llamadoMozo.update({
-      where: { id },
+    // Si dos mozos lo atienden a la vez, queda a nombre del primero: la escritura vuelve a mirar el estado.
+    const { count } = await this.prisma.llamadoMozo.updateMany({
+      where: { id, estado: 'pendiente' },
       data: { estado: 'atendido', mozoId: mozo.id },
     })
+    if (count === 0) throw yaAtendido
+    return { id, estado: 'atendido', mozoId: mozo.id }
   }
 }

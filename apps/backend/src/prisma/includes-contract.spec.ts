@@ -62,19 +62,33 @@ function sensiblesDe(modelo: string): string[] {
   return (modelos.get(modelo)?.fields ?? []).filter((f) => f.kind !== 'object' && SENSIBLE.test(f.name)).map((f) => f.name)
 }
 
-/**
- * Los campos sensibles que trae un select, en cualquier nivel: los que nombra y los de una relación seleccionada
- * entera (`mozos: true`, o con `where` pero sin `select`), que trae todas las columnas del modelo relacionado.
- */
-function camposSensibles(modelo: string, select: Record<string, unknown>, ruta = ''): string[] {
+/** Las relaciones de un modelo nombradas en un `select` o un `include`, con su modelo y lo que se pide de cada una. */
+function relaciones(modelo: string, args: Record<string, unknown>): Array<[string, string, unknown]> {
   const campos = new Map((modelos.get(modelo)?.fields ?? []).map((f) => [f.name, f]))
-  return Object.entries(select).flatMap(([campo, valor]) => {
-    if (SENSIBLE.test(campo)) return [`${ruta}${campo}`]
+  return Object.entries(args).flatMap(([campo, valor]) => {
     const definicion = campos.get(campo)
-    if (definicion?.kind !== 'object') return []
-    if (esArgs(valor) && esArgs(valor.select)) return camposSensibles(definicion.type, valor.select, `${ruta}${campo}.`)
-    return sensiblesDe(definicion.type).map((c) => `${ruta}${campo}.${c}`)
+    return definicion?.kind === 'object' ? [[campo, definicion.type, valor] as [string, string, unknown]] : []
   })
+}
+
+/**
+ * Lo sensible que trae una relación: con `select`, lo que ese select trae; si no (`true`, o con `where` o `include` pero
+ * sin `select`), todas las columnas del modelo relacionado, más lo que traigan las relaciones que incluye.
+ */
+function sensiblesDeRelacion(modelo: string, valor: unknown, ruta: string): string[] {
+  if (esArgs(valor) && esArgs(valor.select)) return camposSensibles(modelo, valor.select, ruta)
+  const propias = sensiblesDe(modelo).map((c) => `${ruta}${c}`)
+  const incluidas = esArgs(valor) && esArgs(valor.include)
+    ? relaciones(modelo, valor.include).flatMap(([campo, tipo, v]) => sensiblesDeRelacion(tipo, v, `${ruta}${campo}.`))
+    : []
+  return [...propias, ...incluidas]
+}
+
+/** Los campos sensibles que trae un select, en cualquier nivel: los que nombra y los de las relaciones que trae enteras. */
+function camposSensibles(modelo: string, select: Record<string, unknown>, ruta = ''): string[] {
+  const nombrados = Object.keys(select).filter((campo) => SENSIBLE.test(campo)).map((campo) => `${ruta}${campo}`)
+  const deRelaciones = relaciones(modelo, select).flatMap(([campo, tipo, valor]) => sensiblesDeRelacion(tipo, valor, `${ruta}${campo}.`))
+  return [...nombrados, ...deRelaciones]
 }
 
 describe('contrato include ↔ schema de Prisma', () => {
@@ -151,6 +165,18 @@ describe('contrato include ↔ schema de Prisma', () => {
         'marca.restaurantes.mpRefreshToken',
         'marca.restaurantes.mpUserId',
         'marca.restaurantes.mpTokenExpiresAt',
+      ])
+    })
+
+    it('y en las relaciones que incluye una relación sin select', () => {
+      const select = { id: true, marca: { include: { restaurantes: { include: { mozos: true } } } } }
+
+      expect(camposSensibles('Restaurante', select)).toEqual([
+        'marca.restaurantes.mpAccessToken',
+        'marca.restaurantes.mpRefreshToken',
+        'marca.restaurantes.mpUserId',
+        'marca.restaurantes.mpTokenExpiresAt',
+        'marca.restaurantes.mozos.passwordHash',
       ])
     })
   })

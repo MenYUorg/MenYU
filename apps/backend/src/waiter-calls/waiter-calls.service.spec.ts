@@ -180,17 +180,26 @@ describe('WaiterCallsService', () => {
     ])('%s lo marca como atendido a nombre de su propio Mozo', async (_caso, cuenta, mozoId) => {
       // Arrange
       prisma.llamadoMozo.findUnique.mockResolvedValue(llamadoEn(MUNDO.REST_1))
-      prisma.llamadoMozo.update.mockResolvedValue({ id: 'llamado-1', estado: 'atendido', mozoId })
+      prisma.llamadoMozo.updateMany.mockResolvedValue({ count: 1 })
 
       // Act
       const llamado = await service.atender('llamado-1', cuenta)
 
       // Assert
-      expect(llamado.estado).toBe('atendido')
-      expect(prisma.llamadoMozo.update).toHaveBeenCalledWith({
-        where: { id: 'llamado-1' },
+      expect(llamado).toEqual({ id: 'llamado-1', estado: 'atendido', mozoId })
+      expect(prisma.llamadoMozo.updateMany).toHaveBeenCalledWith({
+        where: { id: 'llamado-1', estado: 'pendiente' },
         data: { estado: 'atendido', mozoId },
       })
+    })
+
+    it('si otro mozo lo atendió entre la lectura y la escritura: 400, queda a nombre del primero', async () => {
+      // Arrange
+      prisma.llamadoMozo.findUnique.mockResolvedValue(llamadoEn(MUNDO.REST_1))
+      prisma.llamadoMozo.updateMany.mockResolvedValue({ count: 0 })
+
+      // Act + Assert
+      await expect(service.atender('llamado-1', CUENTAS.MOZO)).rejects.toThrow(new BadRequestException('Este llamado ya fue atendido'))
     })
 
     it.each([
@@ -204,7 +213,7 @@ describe('WaiterCallsService', () => {
 
       // Act + Assert
       await expect(service.atender('llamado-1', cuenta)).rejects.toThrow(ForbiddenException)
-      expect(prisma.llamadoMozo.update).not.toHaveBeenCalled()
+      expect(prisma.llamadoMozo.updateMany).not.toHaveBeenCalled()
     })
 
     it('un MOZO no atiende los llamados de otro restaurante (antes podía cualquiera): 403', async () => {
@@ -213,7 +222,7 @@ describe('WaiterCallsService', () => {
 
       // Act + Assert
       await expect(service.atender('llamado-1', CUENTAS.MOZO)).rejects.toThrow(ForbiddenException)
-      expect(prisma.llamadoMozo.update).not.toHaveBeenCalled()
+      expect(prisma.llamadoMozo.updateMany).not.toHaveBeenCalled()
     })
 
     it('un MOZO con su perfil de mozo dado de baja: 403', async () => {
@@ -225,7 +234,7 @@ describe('WaiterCallsService', () => {
       await expect(service.atender('llamado-1', CUENTAS.MOZO)).rejects.toThrow(
         new ForbiddenException('Tu perfil de mozo no está activo en este restaurante'),
       )
-      expect(prisma.llamadoMozo.update).not.toHaveBeenCalled()
+      expect(prisma.llamadoMozo.updateMany).not.toHaveBeenCalled()
     })
 
     it('un llamado que no existe responde 404', async () => {
@@ -248,7 +257,7 @@ describe('WaiterCallsService', () => {
 
       // Assert
       await expect(atencion).rejects.toThrow(new BadRequestException('Este llamado ya fue atendido'))
-      expect(prisma.llamadoMozo.update).not.toHaveBeenCalled()
+      expect(prisma.llamadoMozo.updateMany).not.toHaveBeenCalled()
     })
   })
 })

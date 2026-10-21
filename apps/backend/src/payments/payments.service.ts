@@ -241,13 +241,17 @@ export class PaymentsService {
       dto.mozoId,
     )
     // Un cobro ya confirmado (o cancelado) no se vuelve a confirmar: le cambiaría el autor y la fecha.
-    if (pago.estado !== ESTADO_PAGO_PENDIENTE) throw new ConflictException('Ese pago ya no está pendiente')
+    const yaNoPendiente = new ConflictException('Ese pago ya no está pendiente')
+    if (pago.estado !== ESTADO_PAGO_PENDIENTE) throw yaNoPendiente
 
     return runSerializableTransaction(this.prisma, async (tx) => {
-      await tx.pago.update({
-        where: { id: pagoId },
-        data: { estado: 'aprobado', fechaCobro, mozoId, usuarioId },
+      // El estado se vuelve a mirar al escribir: otro cobro, el webhook o el reintento de esta transacción pueden haberlo
+      // cambiado después de la lectura de arriba.
+      const { count } = await tx.pago.updateMany({
+        where: { id: pagoId, estado: ESTADO_PAGO_PENDIENTE },
+        data: { estado: ESTADO_PAGO_APROBADO, fechaCobro, mozoId, usuarioId },
       })
+      if (count === 0) throw yaNoPendiente
 
       const totalSesion = await this.divisionService.calcularTotalSesion(tx, pago.sesionId)
       const pagosAprobados = await tx.pago.findMany({
