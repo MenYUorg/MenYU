@@ -33,7 +33,7 @@ export const PERFIL_MOZO: PerfilUsuario = {
       id: 'm-1',
       rol: 'MOZO',
       marca: null,
-      restaurante: { id: 'rest-1', nombre: 'Restaurante', marcaId: 'marca-1' },
+      restaurante: { id: 'rest-1', nombre: 'Restaurante', marcaId: 'marca-1', marca: { id: 'marca-1', nombre: 'Marca' } },
     },
   ],
 }

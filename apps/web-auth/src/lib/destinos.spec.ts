@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { decidirDestino, urlsDeApps } from './destinos'
 
 const marca = { id: 'marca-1', nombre: 'Marca', restaurantes: [{ id: 'rest-1', nombre: 'Restaurante' }] }
-const restaurante = { id: 'rest-1', nombre: 'Restaurante', marcaId: 'marca-1' }
+const restaurante = { id: 'rest-1', nombre: 'Restaurante', marcaId: 'marca-1', marca: { id: 'marca-1', nombre: 'Marca' } }
 
 function membresia(rol: Rol): MembresiaPerfil {
   return rol === 'OWNER'

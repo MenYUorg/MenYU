@@ -36,7 +36,7 @@ export function sesion(userId = 'uid-1', token = 'token-1'): Session {
 }
 
 const marca = { id: 'marca-1', nombre: 'Marca', restaurantes: [{ id: 'rest-1', nombre: 'Restaurante' }] }
-const restaurante = { id: 'rest-1', nombre: 'Restaurante', marcaId: 'marca-1' }
+const restaurante = { id: 'rest-1', nombre: 'Restaurante', marcaId: 'marca-1', marca: { id: 'marca-1', nombre: 'Marca' } }
 
 export function membresia(rol: Rol): MembresiaPerfil {
   return rol === 'OWNER'

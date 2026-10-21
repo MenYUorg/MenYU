@@ -90,7 +90,7 @@ describe('SupabaseAuthGuard + MembresiaGuard', () => {
   /** La base: el `Usuario` de la cuenta de Supabase (o ninguno) y sus roles en el restaurante. */
   function enLaBase(usuario: typeof USUARIO | null, roles: Rol[]) {
     prisma.usuario.findUnique.mockResolvedValue(usuario)
-    prisma.restaurante.findUnique.mockResolvedValue({ marcaId: 'marca-1' })
+    prisma.restaurante.findFirst.mockResolvedValue({ marcaId: 'marca-1' })
     prisma.membresia.findMany.mockResolvedValue(roles.map((rol) => ({ rol })))
   }
 
