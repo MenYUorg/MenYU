@@ -89,6 +89,12 @@ Su entorno **Production** es staging. Mismos valores en los tres.
 
 ### Fase 3: `menyu-auth` y `menyu-auth-staging` (todavía no existen)
 
+**Antes del primer deploy (staging con el merge, producción con el tag):**
+
+1. **Data API de Supabase cerrada en ese proyecto.** web-auth lleva la publishable key en un bundle público. Si la Data API (PostgREST) está activa sin RLS, cualquiera puede leer con esa key `admin`, `mozo`, `cliente` (con los `password_hash`) y `restaurante` (con los tokens de Mercado Pago). En *Project Settings → Data API*, desactivarla, o habilitar RLS en todas las tablas de `public`. Verificar con `curl "$SUPABASE_URL/rest/v1/admin?select=id&limit=1" -H "apikey: <publishable key>"` (también `restaurante` y `usuario`): no puede devolver filas. Staging respondió 503 `PGRST002` el 2026-10-20 en todas las tablas, que es una falla de PostgREST y no la Data API apagada. Producción no se probó.
+2. Los proyectos de Vercel, sus dominios, el secret `VERCEL_PROJECT_ID_AUTH` y la variable `PROD_WEB_AUTH_URL` (sección 4). Sin el secret, `deploy-staging.yml` y `deploy-production.yml` cortan al empezar.
+3. Las plantillas de mail (abajo) y `CORS_ORIGINS` en Railway (sección 2).
+
 | Variable | Staging | Producción |
 |---|---|---|
 | `VITE_API_URL` | `https://api.staging.menyu-app.com/api` | `https://api.menyu-app.com/api` |
@@ -102,7 +108,7 @@ Dominios: `auth.staging.menyu-app.com` en `menyu-auth-staging` y `auth.menyu-app
 
 #### Plantillas de mail de Supabase (staging y producción)
 
-Los links de invitación y de "olvidé mi contraseña" llevan a web-auth con un `token_hash`, que la app canjea con `verifyOtp`. Así funcionan con el flujo PKCE (el que usa `@supabase/ssr` desde la Fase 4), desde cualquier navegador, y un escáner de mail que abra el link no lo consume. La invitación no manda `redirectTo`: el link sale de la Site URL (`auth.<ambiente>`). Las rutas `/invitacion` y `/restablecer-contrasena` están en `apps/web-auth/src/App.tsx`: si cambian, cambiar también las plantillas.
+Los links de invitación y de "olvidé mi contraseña" llevan a web-auth con un `token_hash`, que la app canjea con `verifyOtp` recién cuando la persona guarda la contraseña. Así funcionan con el flujo PKCE (el que usa `@supabase/ssr` desde la Fase 4), desde cualquier navegador, y un escáner de mail que abra el link no lo gasta. La invitación no manda `redirectTo`: el link sale de la Site URL (`auth.<ambiente>`). Las rutas `/invitacion` y `/restablecer-contrasena` están en `apps/web-auth/src/App.tsx`: si cambian, cambiar también las plantillas.
 
 En *Authentication → Emails → Templates* de cada proyecto:
 

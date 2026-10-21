@@ -4,6 +4,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { obtenerPerfil } from '../lib/api'
 import { irA } from '../lib/navegar'
+import { FUTURO_ROUTER } from '../test/router'
 import { crearSupabaseSimulado, PERFIL_MOZO, sesion } from '../test/supabaseSimulado'
 import { IngresarPage } from './IngresarPage'
 
@@ -14,7 +15,7 @@ vi.mock('../lib/navegar', () => ({ irA: vi.fn() }))
 
 function renderizar(url = '/') {
   render(
-    <MemoryRouter initialEntries={[url]}>
+    <MemoryRouter initialEntries={[url]} future={FUTURO_ROUTER}>
       <Routes>
         <Route path="/" element={<IngresarPage />} />
         <Route path="/sin-acceso" element={<p>pantalla sin acceso</p>} />

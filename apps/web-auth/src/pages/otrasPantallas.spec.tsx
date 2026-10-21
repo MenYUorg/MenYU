@@ -4,6 +4,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { opcionesDeIngreso } from '../lib/destinos'
 import { irA } from '../lib/navegar'
+import { FUTURO_ROUTER } from '../test/router'
 import { crearSupabaseSimulado, PERFIL_MOZO, sesion } from '../test/supabaseSimulado'
 import { ElegirPage } from './ElegirPage'
 import { OlvideContrasenaPage } from './OlvideContrasenaPage'
@@ -16,7 +17,7 @@ vi.mock('../lib/navegar', () => ({ irA: vi.fn() }))
 
 function renderizar(ruta: string, pantalla: ReactNode, estado?: unknown) {
   render(
-    <MemoryRouter initialEntries={[{ pathname: ruta, state: estado }]}>
+    <MemoryRouter initialEntries={[{ pathname: ruta, state: estado }]} future={FUTURO_ROUTER}>
       <Routes>
         <Route path={ruta} element={pantalla} />
         <Route path="/" element={<p>pantalla de ingreso</p>} />

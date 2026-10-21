@@ -4,8 +4,18 @@
 const DOMINIO_PROPIO = '.menyu-app.com' // también cubre *.staging.menyu-app.com
 const DOMINIO_LOCAL = '.menyu.local'
 
-/** Devuelve la URL normalizada si es de MenYU, o null. */
-export function redirectValido(valor: string | null | undefined): string | null {
+function esLocal(hostname: string): boolean {
+  return hostname.endsWith(DOMINIO_LOCAL) || hostname === 'localhost' || hostname === '127.0.0.1'
+}
+
+/**
+ * Devuelve la URL normalizada si es de MenYU, o null. `*.menyu.local` solo vale cuando web-auth también corre en local
+ * (`hostname` es el de web-auth): en staging y en producción no hay por qué mandar a una máquina de desarrollo.
+ */
+export function redirectValido(
+  valor: string | null | undefined,
+  hostname: string = window.location.hostname,
+): string | null {
   if (!valor) return null
 
   let url: URL
@@ -17,9 +27,9 @@ export function redirectValido(valor: string | null | undefined): string | null 
 
   if (url.username || url.password) return null
 
-  const propio = url.hostname.endsWith(DOMINIO_PROPIO)
-  const local = url.hostname.endsWith(DOMINIO_LOCAL)
-  if (propio && url.protocol === 'https:') return url.toString()
-  if (local && (url.protocol === 'https:' || url.protocol === 'http:')) return url.toString()
+  if (url.hostname.endsWith(DOMINIO_PROPIO) && url.protocol === 'https:') return url.toString()
+  if (url.hostname.endsWith(DOMINIO_LOCAL) && esLocal(hostname) && ['https:', 'http:'].includes(url.protocol)) {
+    return url.toString()
+  }
   return null
 }

@@ -29,6 +29,13 @@ jobs:
       web_auth_url: ${{ steps.vercel-auth.outputs.url }}
 
     steps:
+      # El deploy de web-auth es el último: sin su proyecto de Vercel fallaría con el backend y las otras apps ya
+      # desplegados. Corta antes.
+      - name: Check web-auth Vercel project
+        run: test -n "$VERCEL_PROJECT_ID_AUTH" || { echo "::error::Falta el secret VERCEL_PROJECT_ID_AUTH (Documentacion/WORKFLOW.md)"; exit 1; }
+        env:
+          VERCEL_PROJECT_ID_AUTH: ${{ secrets.VERCEL_PROJECT_ID_AUTH }}
+
       - name: Checkout
         uses: actions/checkout@v4
 

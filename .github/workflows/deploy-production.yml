@@ -47,6 +47,12 @@ jobs:
           PROD_WEB_STAFF_URL: ${{ vars.PROD_WEB_STAFF_URL }}
           PROD_WEB_AUTH_URL: ${{ vars.PROD_WEB_AUTH_URL }}
 
+      # Ídem con el proyecto de Vercel de web-auth, que se despliega último.
+      - name: Check web-auth Vercel project
+        run: test -n "$VERCEL_PROJECT_ID_AUTH" || { echo "::error::Falta el secret VERCEL_PROJECT_ID_AUTH (Documentacion/WORKFLOW.md)"; exit 1; }
+        env:
+          VERCEL_PROJECT_ID_AUTH: ${{ secrets.VERCEL_PROJECT_ID_AUTH }}
+
       # Si el CI del commit está en cola o en curso, espera (cada 20 s, hasta 15 min).
       # Falla enseguida si terminó con otro resultado que success o si no hay run.
       - name: Check CI result for this commit

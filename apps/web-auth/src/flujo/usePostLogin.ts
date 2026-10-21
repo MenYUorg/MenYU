@@ -21,35 +21,36 @@ const SESION_VENCIDA = 'Tu sesión venció. Ingresá de nuevo.'
 
 /**
  * Lo que pasa después de iniciar sesión (docs/auth/specs/auth.md, Fase 3): GET /auth/me y, según la respuesta, la
- * pantalla de sin acceso, el `redirect` si es válido, la app del rol o el selector. Sin sesión vuelve a `listo`.
+ * pantalla de sin acceso, el `redirect` si es válido, la app del rol o el selector. Sin sesión vuelve a `listo` y
+ * `continuar()` devuelve false.
  */
 export function usePostLogin(inicial: EstadoIngreso = { tipo: 'listo' }) {
   const [estado, setEstado] = useState<EstadoIngreso>(inicial)
   const navigate = useNavigate()
   const { search } = useLocation()
 
-  const continuar = useCallback(async () => {
+  const continuar = useCallback(async (): Promise<boolean> => {
     setEstado({ tipo: 'verificando' })
     try {
       const { data } = await supabase().auth.getSession()
       if (!data.session) {
         setEstado({ tipo: 'listo' })
-        return
+        return false
       }
 
       const resultado = await obtenerPerfil(data.session.access_token)
       if (resultado.tipo === 'sin-acceso') {
         navigate(conRedirect('/sin-acceso', search), { replace: true })
-        return
+        return true
       }
       if (resultado.tipo === 'sesion-invalida') {
         await supabase().auth.signOut({ scope: 'local' })
         setEstado({ tipo: 'sesion-vencida', mensaje: SESION_VENCIDA })
-        return
+        return true
       }
       if (resultado.tipo === 'error') {
         setEstado({ tipo: 'sin-verificar', mensaje: SIN_VERIFICAR })
-        return
+        return true
       }
 
       const redirect = redirectValido(new URLSearchParams(search).get('redirect'))
@@ -65,6 +66,7 @@ export function usePostLogin(inicial: EstadoIngreso = { tipo: 'listo' }) {
       console.error(error)
       setEstado({ tipo: 'sin-verificar', mensaje: ERROR_GENERICO })
     }
+    return true
   }, [navigate, search])
 
   const cerrarSesion = useCallback(async () => {

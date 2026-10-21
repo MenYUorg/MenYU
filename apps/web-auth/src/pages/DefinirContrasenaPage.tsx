@@ -1,3 +1,4 @@
+import { isAuthRetryableFetchError } from '@supabase/supabase-js'
 import { useEffect, useState, type FormEvent } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { Aviso } from '../components/Aviso'
@@ -8,7 +9,6 @@ import { Encabezado } from '../components/Encabezado'
 import { Enlace } from '../components/Enlace'
 import { Marco } from '../components/Marco'
 import { usePostLogin } from '../flujo/usePostLogin'
-import { verificarLink } from '../flujo/verificarLink'
 import { ERROR_GENERICO, mensajeDeError } from '../lib/mensajes'
 import { supabase } from '../lib/supabase'
 
@@ -21,70 +21,57 @@ const RUTA: Record<ModoContrasena, string> = {
 
 const LARGO_MINIMO = 8
 
-type Paso =
-  | { tipo: 'revisando-link' }
-  | { tipo: 'formulario'; email: string }
-  | { tipo: 'link-invalido'; mensaje: string }
+type Errores = { contrasena?: string; repetida?: string; general?: string }
 
 /**
  * `/invitacion` y `/restablecer-contrasena`, los links de los mails (plantillas "Invite user" y "Reset password" de
- * docs/auth/VariablesACambiar.md). Canjea el token_hash por una sesión, pide la contraseña y sigue como un login.
+ * docs/auth/VariablesACambiar.md). El token_hash se canjea con verifyOtp recién al guardar la contraseña: así un
+ * escáner de mail que abra el link no lo gasta, y el formulario solo sirve con un link (no con cualquier sesión).
  */
 export function DefinirContrasenaPage({ modo }: { modo: ModoContrasena }) {
   const navigate = useNavigate()
   const { search } = useLocation()
   const { estado, continuar } = usePostLogin()
   const [tokenHash] = useState(() => new URLSearchParams(search).get('token_hash'))
-  const [paso, setPaso] = useState<Paso>({ tipo: 'revisando-link' })
+  // El token se canjea una sola vez: si después falla updateUser (por ejemplo, una contraseña débil), se reintenta
+  // solo eso, con la sesión que dejó verifyOtp.
+  const [canjeado, setCanjeado] = useState(false)
+  const [linkInvalido, setLinkInvalido] = useState<string | null>(tokenHash ? null : 'Este link no es válido.')
   const [contrasena, setContrasena] = useState('')
   const [repetida, setRepetida] = useState('')
-  const [errores, setErrores] = useState<{ contrasena?: string; repetida?: string; general?: string }>({})
+  const [errores, setErrores] = useState<Errores>({})
   const [guardando, setGuardando] = useState(false)
 
+  // Que el token no quede en la barra ni en el historial: se guarda en el estado.
   useEffect(() => {
-    let vigente = true
-    async function preparar() {
-      try {
-        if (tokenHash) {
-          const { data, error } = await verificarLink(tokenHash, modo === 'invitacion' ? 'invite' : 'recovery')
-          if (!vigente) return
-          // El token ya no sirve: que no quede en la URL ni en el historial.
-          navigate(RUTA[modo], { replace: true })
-          if (error || !data.user) {
-            setPaso({ tipo: 'link-invalido', mensaje: error ? mensajeDeError(error) : ERROR_GENERICO })
-          } else {
-            setPaso({ tipo: 'formulario', email: data.user.email ?? '' })
-          }
-          return
-        }
-        // Sin token: alguien que recargó la página después de abrir el link.
-        const { data } = await supabase().auth.getSession()
-        if (!vigente) return
-        setPaso(
-          data.session
-            ? { tipo: 'formulario', email: data.session.user.email ?? '' }
-            : { tipo: 'link-invalido', mensaje: 'Este link no es válido.' },
-        )
-      } catch (e) {
-        if (vigente) setPaso({ tipo: 'link-invalido', mensaje: mensajeDeError(e) })
-      }
-    }
-    void preparar()
-    return () => {
-      vigente = false
-    }
+    if (tokenHash) navigate(RUTA[modo], { replace: true })
   }, [tokenHash, modo, navigate])
 
   async function guardar(evento: FormEvent) {
     evento.preventDefault()
-    const nuevos: typeof errores = {}
+    const nuevos: Errores = {}
     if (contrasena.length < LARGO_MINIMO) nuevos.contrasena = `Tiene que tener al menos ${LARGO_MINIMO} caracteres.`
     else if (repetida !== contrasena) nuevos.repetida = 'Las contraseñas no coinciden.'
     setErrores(nuevos)
-    if (nuevos.contrasena || nuevos.repetida) return
+    if (nuevos.contrasena || nuevos.repetida || !tokenHash) return
 
     setGuardando(true)
     try {
+      if (!canjeado) {
+        const { data, error } = await supabase().auth.verifyOtp({
+          token_hash: tokenHash,
+          type: modo === 'invitacion' ? 'invite' : 'recovery',
+        })
+        if (error && isAuthRetryableFetchError(error)) {
+          setErrores({ general: mensajeDeError(error) }) // sin red: el link sigue sirviendo
+          return
+        }
+        if (error || !data.session) {
+          setLinkInvalido(error ? mensajeDeError(error) : ERROR_GENERICO)
+          return
+        }
+        setCanjeado(true)
+      }
       const { error } = await supabase().auth.updateUser({ password: contrasena })
       if (error) {
         setErrores({ general: mensajeDeError(error) })
@@ -100,19 +87,19 @@ export function DefinirContrasenaPage({ modo }: { modo: ModoContrasena }) {
 
   const titulo = modo === 'invitacion' ? 'Crear la contraseña' : 'Contraseña nueva'
 
-  if (paso.tipo === 'revisando-link' || estado.tipo === 'verificando') {
+  if (estado.tipo === 'verificando') {
     return (
       <Marco titulo={titulo}>
-        <Cargando texto={paso.tipo === 'revisando-link' ? 'Revisando el link…' : 'Entrando…'} />
+        <Cargando texto="Entrando…" />
       </Marco>
     )
   }
 
-  if (paso.tipo === 'link-invalido') {
+  if (linkInvalido) {
     return (
       <Marco titulo={titulo}>
         <Encabezado titulo="Este link ya no sirve" />
-        <Aviso tipo="error">{paso.mensaje}</Aviso>
+        <Aviso tipo="error">{linkInvalido}</Aviso>
         <p className="mt-6 leading-relaxed text-menyu-gris">
           {modo === 'invitacion'
             ? 'Si ya creaste tu contraseña, ingresá con tu email. Si no, pedí un link nuevo desde “Olvidé mi contraseña” con el mismo email de la invitación.'
@@ -132,10 +119,10 @@ export function DefinirContrasenaPage({ modo }: { modo: ModoContrasena }) {
     <Marco titulo={titulo}>
       {modo === 'invitacion' ? (
         <Encabezado titulo="Creá tu contraseña">
-          Te invitaron a MenYU con {paso.email}. Vas a ingresar con ese email y esta contraseña.
+          Te invitaron a MenYU. Vas a ingresar con el email de la invitación y esta contraseña.
         </Encabezado>
       ) : (
-        <Encabezado titulo="Elegí una contraseña nueva">Para la cuenta {paso.email}.</Encabezado>
+        <Encabezado titulo="Elegí una contraseña nueva">La vas a usar desde ahora para ingresar a MenYU.</Encabezado>
       )}
 
       <form onSubmit={guardar} noValidate className="space-y-5">
