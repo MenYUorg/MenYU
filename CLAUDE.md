@@ -122,6 +122,7 @@ Spec, decisiones y fases: `docs/auth/specs/auth.md` (una fase por sesión; al ce
 - web-auth (`apps/web-auth`, `auth.<ambiente>`, puerto 5173): login con email y contraseña o con Google, olvidé mi contraseña, aceptar invitación, selector y "sin acceso".
   - "Continuar con Google" está en `/` y en `/invitacion`, y vuelve a `/google`, que muestra el error o sigue a `/`.
   - Una cuenta de Google sin invitación no da acceso: `/auth/me` responde 403.
+  - `/privacidad` es la política de privacidad pública que figura en Google Cloud. No usa la sesión: no le pongas post-login ni la cambies de ruta.
   - Después del login llama a `GET /auth/me` y manda al `redirect` (solo `https://*.menyu-app.com`, o `*.menyu.local` en local) o a la app del rol.
   - Los links del mail traen un `token_hash` que se canjea con `verifyOtp` (plantillas: `docs/auth/VariablesACambiar.md`).
   - La sesión queda en localStorage hasta la Fase 4. web-admin y web-staff todavía no la leen.
