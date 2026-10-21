@@ -89,8 +89,12 @@ export function PrivacidadPage() {
         </p>
         <Lista>
           <li>
-            <strong>Supabase:</strong> el inicio de sesión, la base de datos, los archivos (como los logos de los
-            restaurantes) y el envío de los mails de invitación y de contraseña.
+            <strong>Supabase:</strong> el inicio de sesión, la base de datos y los archivos (como los logos de los
+            restaurantes).
+          </li>
+          <li>
+            <strong>Resend:</strong> el envío de los mails de invitación y de contraseña, que llegan desde
+            no-reply@menyu-app.com.
           </li>
           <li>
             <strong>Railway:</strong> el servidor de MenYU.

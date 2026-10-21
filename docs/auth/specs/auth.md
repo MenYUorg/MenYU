@@ -83,7 +83,7 @@ En la misma sesión se decidieron también los puntos **Clientes**, **Convivenci
 - Supabase: registro público con email **habilitado** (lo usan los clientes) y con confirmación de email. El personal igual entra solo por invitación: el acceso lo da la `Membresia`.
 - Supabase: JWT Signing Keys asimétricas activas en ambos proyectos (si todavía usan el JWT secret legacy, migrar). Comprobar que `<SUPABASE_URL>/auth/v1/.well-known/jwks.json` devuelve al menos una clave.
 - Supabase: desactivar la Data API (PostgREST), que el backend no usa (usa Prisma y Storage), o habilitar RLS en todas las tablas de `public`. Obligatorio antes del primer deploy de la Fase 3, porque web-auth pone la publishable key en un bundle público: hoy ninguna tabla tiene RLS, `admin`, `mozo` y `cliente` guardan `password_hash` y `restaurante` guarda los tokens de Mercado Pago.
-- SMTP propio (ej. Resend) en ambos proyectos. El SMTP por defecto de Supabase tiene límite muy bajo y solo envía a miembros del equipo del proyecto.
+- SMTP propio en ambos proyectos: Resend (`smtp.resend.com`), con remitente `no-reply@menyu-app.com`. Figura entre los proveedores de `/privacidad` de web-auth: si cambia, actualizarla. El SMTP por defecto de Supabase tiene límite muy bajo y solo envía a miembros del equipo del proyecto.
 - Google Cloud: cliente OAuth con las URLs de callback de ambos proyectos Supabase. Activar el proveedor Google en Supabase.
 - Archivo hosts con los subdominios `*.menyu.local`.
 - **Terminado cuando:** una invitación de prueba llega al mail, el proveedor Google aparece activo en ambos proyectos, el JWKS devuelve claves en ambos y los dominios de staging responden.
