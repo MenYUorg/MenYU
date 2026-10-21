@@ -216,7 +216,7 @@ Entregas (ver Decisiones de la planificación de la Fase 4):
 | Entrega | Qué | Estado |
 |---|---|---|
 | 4.1 | `@menyu/auth-client` y web-auth sobre la cookie de dominio compartido | Hecha (2026-10-21): ver abajo |
-| 4.2 | Backend: `AccesoService` con la baja efectiva, `@RequiereRol` con origen explícito, `@Personal()`, `@RequiereRoot()`, la migración de autoría (`pedido_edicion.usuario_id`, `pago.usuario_id`) y el test que recorre el enrutador | |
+| 4.2 | Backend: `AccesoService` con la baja efectiva, `@RequiereRol` con origen explícito, `@Personal()`, `@RequiereRoot()`, la migración de autoría (`pedido_edicion.usuario_id`, `pago.usuario_id`) y el test que recorre el enrutador | Hecha (2026-10-21): ver abajo |
 | 4.3 | Backend: los 16 controllers del personal pasan al guard nuevo, sin ROOT; los cobros de #356; el Personal (listar y quitar acceso); se quitan las rutas legacy de la decisión 5 | |
 | 4.4 | Backend: la consola de ROOT (decisión 2) | |
 | 4.5 | web-admin: `RequireAuth`, contexto desde `/auth/me`, Personal, `useRootSession` | |
@@ -250,6 +250,29 @@ Entregas (ver Decisiones de la planificación de la Fase 4):
   - Como el estado venció, Supabase no sabe a qué `redirectTo` volver: manda a la Site URL (`auth.<ambiente>/`). `/` no muestra `errorDeOAuth` (solo `/google` lo hace), así que la persona ve el login sin explicación.
   - Mejora posible: que `/` también muestre el error de OAuth de la URL.
   - No depende de la cookie: con la cuenta ya verificada en Google, el reintento entró en 9 segundos.
+
+**4.2, cómo quedó (2026-10-21).** En el PR draft #416, que sigue abierto hasta la 4.7. Ningún controller cambió todavía: es la base que usan la 4.3 y la 4.4.
+- **`AccesoService`** (`auth/supabase/acceso.service.ts`):
+  - Baja efectiva: `rolesEnRestaurante`, `esOwnerDeMarca` y `perfil()` cuentan una membresía solo si el restaurante y su marca están activos (`RESTAURANTE_DISPONIBLE`). Al reactivarlos, vuelve a contar.
+  - `exigirRol(usuarioId, restauranteId, roles)` da 403 o devuelve todos los roles del usuario ahí (para distinguir al MOZO del GERENTE en los cobros).
+  - `exigirOwnerDeMarca(usuarioId, marcaId)` da 403 si no es OWNER de esa marca activa.
+  - `mozoDe(usuarioId, restauranteId)` busca por la clave única y devuelve `{ id, nombre, esJefeSalon }` solo si el `Mozo` está activo.
+  - `restaurantesDe(usuarioId, roles?)` devuelve los ids de los restaurantes disponibles, ordenados por nombre. Con OWNER incluye todos los de sus marcas.
+  - `PerfilUsuario.membresias[].restaurante` suma `marca: { id, nombre }`, también en `@menyu/types`.
+- **Decoradores** (`auth/decorators/`):
+  - `@RequiereRol(...roles)` es `@RequiereRolEn({ param: 'restauranteId' }, ...roles)`.
+  - `@RequiereRolEn({ param | query | body: '<nombre>' }, ...roles)`. Una ruta mal declarada (sin roles o sin el parámetro) da 403 y se loguea. Sin el id en la query o el body (o si no es un texto), da 400.
+  - `@Personal()` es solo `SupabaseAuthGuard`: el service resuelve el restaurante y llama a `exigirRol`.
+  - `@RequiereRoot()` es `SupabaseAuthGuard` más `RootGuard` (`usuario.esRoot`).
+- **Migración `20261021141707_fase4_autoria_usuario`:**
+  - `pedido_edicion.usuario_id` y `pago.usuario_id`, con FK a `usuario` y `ON DELETE SET NULL`.
+  - El disparador `usuario_proteger_ultimo_root`. A diferencia del de `admin`, también impide desactivar a la última cuenta ROOT activa (una cuenta inactiva no entra), y una cuenta ROOT inactiva no cuenta como otra.
+- **Tests:**
+  - `test/app-endpoints.ts`: la opción `cuenta` (header `x-test-usuario`) deja un `UsuarioAutenticado` en la request; `SIN_USUARIO` da 403. MembresiaGuard y RootGuard son los reales.
+  - `AccesoService` responde con las membresías de `CUENTAS` en `MUNDO`: ROOT sin membresías, OWNER de las marcas A y B, y GERENTE, JEFE_SALON, MOZO y COCINA del restaurante 1. Solo simula `rolesEnRestaurante` y `esOwnerDeMarca`; si un test llega a `mozoDe` o `restaurantesDe`, falla con un error que lo dice.
+  - La opción legacy `usuario` (`x-test-user`) sigue hasta la 4.4.
+  - `auth/rutas-por-autenticacion.spec.ts` recorre el enrutador. Las rutas con el JWT legacy tienen que coincidir exactamente con `PENDIENTES_4_3` y `PENDIENTES_4_4`: al pasar una a Supabase, hay que sacarla de la lista. `PATCH /waiter-calls/:id/atender` está aparte, porque verifica el JWT legacy a mano.
+  - Contra la base local, con `TEST_DATABASE_URL` (en el CI se saltan): `acceso.service.base.spec.ts` (la baja efectiva) y `usuario-migracion.base.spec.ts` (la autoría y el disparador).
 
 - Paquete compartido en el monorepo (`@menyu/auth-client`) con:
   - Cliente Supabase con cookie de dominio desde `VITE_AUTH_COOKIE_DOMAIN`.
@@ -328,8 +351,8 @@ Observaciones que dejaron las Fases 0 a 3b (2026-10-20 y 2026-10-21). Revisarlas
   - Que una cuenta confirmada se reutiliza al invitarla (`invitacionEnviada: false`) quedó probado en la Fase 3b, con una cuenta de Google. Sin probar: que una sin confirmar se borra y se reinvita.
 - **"Confirm email" activo en los dos proyectos de Supabase (Fase 0).** La invitación reutiliza una cuenta confirmada: si la confirmación estuviera apagada, un registro público quedaría confirmado al instante y se le daría acceso de personal a quien lo creó.
 - **Para la Fase 4:**
-  - `@RequiereRol` / `MembresiaGuard` solo sirven para rutas con `:restauranteId`. Las de marca (`/marcas/:id`) y las de un recurso (`/items/:id`) resuelven el restaurante en el service y le preguntan a `AccesoService`.
-  - `AccesoService.rolesEnRestaurante` no mira si el restaurante o la marca están activos (`perfil()` sí filtra los restaurantes inactivos de la marca).
+  - Resuelto en la 4.2: `@RequiereRolEn` toma el restaurante de un parámetro, de la query o del body. Las rutas de marca (`/marcas/:id`) y las de un recurso (`/items/:id`) usan `@Personal()` y llaman a `exigirOwnerDeMarca` o a `exigirRol` desde el service.
+  - Resuelto en la 4.2: `AccesoService` ya no cuenta las membresías de un restaurante o una marca dados de baja.
   - No hay forma de reenviar la invitación a un `Usuario` que todavía no la aceptó. Mientras tanto, web-auth le dice que pida un link desde "Olvidé mi contraseña" con el mismo email (falta comprobar con GoTrue que el recovery sirva para una cuenta invitada sin confirmar).
   - Hasta esta fase, web-admin y web-staff no leen la sesión de Supabase: el usuario llega a la URL correcta y ve el login legacy.
   - web-auth manda `?marcaId=` o `?restauranteId=` con lo que se eligió. Las apps lo leen como una preferencia, no como permiso: el acceso lo sigue decidiendo el backend.

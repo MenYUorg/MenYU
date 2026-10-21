@@ -113,13 +113,14 @@ packages/types/src/
 - El comensal no usa guards de admin — se autentica por sesión de mesa
 
 ### Autenticación con Supabase (migración en curso)
-Spec, decisiones y fases: `docs/auth/specs/auth.md` (una fase por sesión; al cerrar cada una, el subagente `revisor`). Hechas: Fase 1 (modelo de datos), Fase 2 (backend), Fase 3 (web-auth) y Fase 3b (Google y `/privacidad`), en staging y en producción desde v1.1.0, con la pantalla de consentimiento de Google publicada. En curso: Fase 4 (SSO en las apps), por entregas; la 4.1 (`@menyu/auth-client` y web-auth sobre la cookie de dominio compartido) está hecha.
+Spec, decisiones y fases: `docs/auth/specs/auth.md` (una fase por sesión; al cerrar cada una, el subagente `revisor`). Hechas: Fase 1 (modelo de datos), Fase 2 (backend), Fase 3 (web-auth) y Fase 3b (Google y `/privacidad`), en staging y en producción desde v1.1.0, con la pantalla de consentimiento de Google publicada. En curso: Fase 4 (SSO en las apps), por entregas, en el PR draft #416 desde la 4.2; están hechas la 4.1 (`@menyu/auth-client` y web-auth sobre la cookie de dominio compartido) y la 4.2 (base de permisos del backend).
 - Modelos nuevos: `Usuario` (`supabaseUserId`, `esRoot` para ROOT) y `Membresia` con el enum `Rol`: `OWNER` por marca; `GERENTE`, `JEFE_SALON`, `MOZO` y `COCINA` por restaurante (CHECK `membresia_ambito_check` en la migración). Además `Mozo.usuarioId` (los mozos invitados no tienen `passwordHash`) y `Cliente.supabaseUserId`. `usuario` y `membresia` tienen RLS sin políticas.
 - Backend (en `apps/backend/src/auth/`):
   - `SupabaseAuthGuard` verifica el access token de Supabase contra el JWKS de `SUPABASE_URL` y deja el `Usuario` en `request.usuario` (lo lee `@UsuarioActual()`).
-  - `@RequiereRol(...)` suma `MembresiaGuard` y exige el rol en el restaurante de `:restauranteId` (la membresía OWNER de la marca cubre sus sucursales).
-  - Los permisos los decide `AccesoService`, que ignora `esRoot`.
-  - Por ahora solo los usan `GET /auth/me` y `POST /auth/invitaciones`.
+  - `@RequiereRol(...)` suma `MembresiaGuard` y exige el rol en el restaurante de `:restauranteId` (la membresía OWNER de la marca cubre sus sucursales). `@RequiereRolEn({ param | query | body }, ...)` lo toma de otro lugar.
+  - `@Personal()` solo autentica: en las rutas de un recurso (`/items/:id`) el service llama a `AccesoService.exigirRol` o `exigirOwnerDeMarca`. `@RequiereRoot()` suma `RootGuard` (`esRoot`), solo para `/root/*`.
+  - Los permisos los decide `AccesoService`, que ignora `esRoot` y no cuenta las membresías de un restaurante o una marca dados de baja.
+  - Por ahora solo los usan `GET /auth/me` y `POST /auth/invitaciones`. `src/auth/rutas-por-autenticacion.spec.ts` lista las rutas que todavía usan el JWT legacy: al pasar una a Supabase, sacarla de ahí.
 - web-auth (`apps/web-auth`, `auth.<ambiente>`, puerto 5173): login con email y contraseña o con Google, olvidé mi contraseña, aceptar invitación, selector y "sin acceso".
   - "Continuar con Google" está en `/` y en `/invitacion`, y vuelve a `/google`, que muestra el error o sigue a `/`.
   - Una cuenta de Google sin invitación no da acceso: `/auth/me` responde 403.
