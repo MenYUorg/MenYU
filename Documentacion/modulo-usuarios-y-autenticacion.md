@@ -56,10 +56,14 @@ src/
     guards/
       jwt-auth.guard.ts
       tipo.guard.ts
-      rol.guard.ts
+      supabase-auth.guard.ts        ← Supabase Auth (Fase 2)
+      membresia.guard.ts            ← Supabase Auth (Fase 2)
     decorators/
       requires-tipo.decorator.ts
-      requires-rol.decorator.ts
+      requiere-rol.decorator.ts     ← Supabase Auth (Fase 2)
+      usuario-actual.decorator.ts   ← Supabase Auth (Fase 2)
+    supabase/                       ← verificador del token, AccesoService, Admin API
+    invitaciones/                   ← POST /auth/invitaciones
   common/
     guards/roles.guard.ts           ← usado por marca y restaurante
     decorators/
@@ -163,9 +167,12 @@ createCliente(data)
 | POST | `/api/auth/guest` | No | Entrar como invitado (crea un Cliente sin contraseña) |
 | POST | `/api/auth/refresh` | No | Renovar el access token usando el refresh token |
 | POST | `/api/auth/logout` | No* | Cerrar sesión (invalida el refresh token) |
-| GET | `/api/auth/me` | Sí | Devuelve el payload del JWT del usuario logueado |
+| GET | `/api/auth/me` | Sí (token de Supabase) | Devuelve el `Usuario` y sus membresías |
+| POST | `/api/auth/invitaciones` | Sí (token de Supabase) | Invita a alguien del personal por email |
 
 *Pendiente de proteger antes de producción.
+
+`/auth/me` y `/auth/invitaciones` ya usan Supabase Auth (Fase 2 de `docs/auth/specs/auth.md`): `SupabaseAuthGuard`, `@RequiereRol` y `MembresiaGuard`, en `src/auth/guards/` y `src/auth/supabase/`. El resto de esta sección describe el login legacy, que sigue activo hasta la Fase 5.
 
 **Endpoints de desarrollo:** no hay. Los `/api/auth/dev/*` (seed, admin, mozo y root) se eliminaron porque creaban usuarios, incluido un ROOT con contraseña conocida, sin autenticación. Para tener datos y usuarios en local se usa el seed (`pnpm --filter @menyu/api seed`).
 
@@ -191,14 +198,13 @@ createCliente(data)
 
 Hay dos sistemas de guards en el proyecto que coexisten y se usan en contextos distintos:
 
-### Sistema 1 — `auth/guards/` (tipo + rol)
+### Sistema 1 — `auth/guards/` (tipo)
 
-Creado en este sprint para proteger rutas según el tipo de usuario (`admin`, `mozo`, `cliente`) y su rol libre. Se usa donde hay lógica que diferencia entre tipos de usuario.
+Creado en este sprint para proteger rutas según el tipo de usuario (`admin`, `mozo`, `cliente`). Se usa donde hay lógica que diferencia entre tipos de usuario. (El `RolGuard` + `@RequiresRol` que lo acompañaba no lo usaba ningún endpoint y se borró en la Fase 2 de auth, para que no se confundiera con `@RequiereRol`.)
 
 ```typescript
-@UseGuards(JwtAuthGuard, TipoGuard, RolGuard)
-@RequiresTipo('admin')
-@RequiresRol('JEFE_SALON')
+@UseGuards(JwtAuthGuard, TipoGuard)
+@RequiresTipo('admin', 'mozo')
 @Post('asignar-mesa')
 ```
 
@@ -485,7 +491,7 @@ El panel admin también necesita listar/editar usuarios. Si todo estuviera en `A
 
 ### Dos sistemas de guards
 
-El sistema de `auth/guards/` (TipoGuard + RolGuard) protege rutas donde la lógica varía por tipo de usuario. El sistema de `common/guards/` (RolesGuard) es más compacto y lo usan los módulos de backoffice. Conviven sin conflicto.
+El sistema de `auth/guards/` (TipoGuard) protege rutas donde la lógica varía por tipo de usuario. El sistema de `common/guards/` (RolesGuard) es más compacto y lo usan los módulos de backoffice. Conviven sin conflicto.
 
 ### ROOT admin sin `restauranteId`
 

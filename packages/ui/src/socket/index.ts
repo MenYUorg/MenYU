@@ -1,0 +1,1 @@
+export { urlDelSocket } from './urlDelSocket'

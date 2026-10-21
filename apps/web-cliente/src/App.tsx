@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import { io } from 'socket.io-client'
+import { urlDelSocket } from '@menyu/ui/socket'
 import { ClienteMenuPage } from './pages/menu/ClienteMenuPage'
 import { ItemDetailPage } from './pages/menu/ItemDetailPage'
 import { CarritoPage } from './pages/carrito/CarritoPage'
@@ -25,8 +26,8 @@ import { useSessionStore } from './store/sessionStore'
 import { usePublicMenuStore } from './store/publicMenuStore'
 import { GraciasCard } from './components/GraciasCard'
 
-const WS_BASE = (import.meta.env.VITE_WS_URL as string) ??
-  ((import.meta.env.VITE_API_URL as string) ?? '').replace('/api', '')
+const WS_BASE =
+  urlDelSocket(import.meta.env.VITE_WS_URL as string | undefined, import.meta.env.VITE_API_URL as string | undefined) ?? ''
 
 function SessionGuard({ children }: { children: React.ReactNode }) {
   const restauranteId = useSessionStore((s) => s.restauranteId)

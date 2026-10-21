@@ -4,6 +4,7 @@ import { io, type Socket } from 'socket.io-client'
 import type { Mesa } from '@menyu/types'
 import { Bell, Clock, DollarSign, DoorOpen, LayoutGrid, ShoppingBag, Users } from 'lucide-react'
 import { useAuth } from '@menyu/auth'
+import { urlDelSocket } from '@menyu/ui/socket'
 import { useMozoStore } from '../../store/mozoStore'
 import { api, getToken } from '../../services/api'
 import type { SesionActivaRico, WaiterCallRico } from '../../services/api'
@@ -48,8 +49,7 @@ const C = {
 } as const
 
 const WS_URL: string =
-  (import.meta.env.VITE_WS_URL as string | undefined) ??
-  (import.meta.env.VITE_API_URL as string | undefined)?.replace('/api', '') ??
+  urlDelSocket(import.meta.env.VITE_WS_URL as string | undefined, import.meta.env.VITE_API_URL as string | undefined) ??
   ''
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

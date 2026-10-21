@@ -12,13 +12,13 @@ set -u
 # "menyu-admin-<hash>-..." nunca empieza como "menyu-admin-staging-...".
 #
 # Desde Git solo se construyen los proyectos de STAGING, que despliegan main:
-# menyu-cliente-staging, menyu-admin-staging y menyu-staff-staging. Los de producción
-# (menyu-cliente, menyu-admin y menyu-staff) se despliegan con el tag (deploy-production.yml),
+# menyu-cliente-staging, menyu-admin-staging, menyu-staff-staging y menyu-auth-staging. Los de producción
+# (menyu-cliente, menyu-admin, menyu-staff y menyu-auth) se despliegan con el tag (deploy-production.yml),
 # nunca desde Git: ni en producción, ni en preview, ni en ninguna rama. Los apps/web-*/vercel.json
 # se comparten entre el proyecto de producción y el de staging de cada app, así que la diferencia
 # la marca este archivo. Si VERCEL_URL no viene, tampoco se construye: ante la duda, no.
 case "${VERCEL_URL:-}" in
-  menyu-cliente-staging-* | menyu-admin-staging-* | menyu-staff-staging-*) ;;
+  menyu-cliente-staging-* | menyu-admin-staging-* | menyu-staff-staging-* | menyu-auth-staging-*) ;;
   *)
     echo "Los proyectos de producción se despliegan con el tag (deploy-production.yml): no se construyen desde Git."
     exit 0

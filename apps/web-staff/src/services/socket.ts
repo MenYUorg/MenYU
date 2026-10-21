@@ -1,8 +1,9 @@
 import { io, Socket } from 'socket.io-client'
 import { TOKEN_KEY } from '@menyu/auth'
 import type { Pedido } from '@menyu/types'
+import { urlDelSocket } from '@menyu/ui/socket'
 
-const WS_URL = import.meta.env.VITE_WS_URL ?? import.meta.env.VITE_API_URL?.replace('/api', '') ?? ''
+const WS_URL = urlDelSocket(import.meta.env.VITE_WS_URL, import.meta.env.VITE_API_URL) ?? ''
 
 let socket: Socket | null = null
 

@@ -69,7 +69,7 @@ El repositorio tiene 3 workflows en `.github/workflows/`:
 ### `ci.yml` — Integración continua
 **Trigger:** Pull Request hacia `main`
 
-Corre los siguientes checks en orden sobre las apps activas (`@menyu/api`, `@menyu/web-admin`, `@menyu/web-cliente`, `@menyu/web-staff`):
+Corre los siguientes checks en orden sobre las apps activas (`@menyu/api`, `@menyu/web-admin`, `@menyu/web-cliente`, `@menyu/web-staff`, `@menyu/web-auth`):
 
 | Paso | Comando | Qué verifica |
 |---|---|---|
@@ -119,19 +119,21 @@ Las variables de entorno de cada ambiente están configuradas en Railway y en Ve
 
 | Proyecto | Es | Cuándo se actualiza |
 |---|---|---|
-| `menyu-cliente`, `menyu-admin`, `menyu-staff` | Producción (`menyu-cliente.vercel.app`, `menyu-admin.vercel.app`, `menyu-staff.vercel.app`) | **Solo con el tag** `v*.*.*`, con la CLI (`deploy-production.yml`). **Nunca desde Git.** En cada merge a `main`, `deploy-staging.yml` además les hace un deploy *preview* con la CLI (no toca producción). |
-| `menyu-cliente-staging`, `menyu-admin-staging`, `menyu-staff-staging` | Staging, con dominio fijo (`<proyecto>.vercel.app`) | **Cada merge a `main`**, desde Git, si cambió la app o un paquete del que depende (`turbo-ignore`). |
+| `menyu-cliente`, `menyu-admin`, `menyu-staff`, `menyu-auth` | Producción (`mesa.menyu-app.com`, `admin.menyu-app.com`, `staff.menyu-app.com`, `auth.menyu-app.com`; siguen activos `menyu-cliente.vercel.app`, `menyu-admin.vercel.app`, `menyu-staff.vercel.app`) | **Solo con el tag** `v*.*.*`, con la CLI (`deploy-production.yml`). **Nunca desde Git.** En cada merge a `main`, `deploy-staging.yml` además les hace un deploy *preview* con la CLI (no toca producción). |
+| `menyu-cliente-staging`, `menyu-admin-staging`, `menyu-staff-staging`, `menyu-auth-staging` | Staging (`mesa.staging.menyu-app.com`, `admin.staging.menyu-app.com`, `staff.staging.menyu-app.com`, `auth.staging.menyu-app.com`; siguen activos los `<proyecto>.vercel.app` de las tres primeras) | **Cada merge a `main`**, desde Git, si cambió la app o un paquete del que depende (`turbo-ignore`). |
+
+Los dominios propios (`menyu-app.com`) se registran en Cloudflare sin proxy y se asignan en *Settings → Domains* de cada proyecto. Las variables de cada plataforma para la migración: `docs/auth/VariablesACambiar.md`. El smoke de `deploy-staging.yml` prueba los previews de los proyectos de producción, no los dominios `*.staging.menyu-app.com`.
 
 **Cómo se logra la diferencia.** Los `apps/web-*/vercel.json` son los mismos para el proyecto de producción y el de staging de cada app: dejan construir solo `main` (`git.deploymentEnabled`) y corren `scripts/vercel/ignorar-build.sh` como `ignoreCommand`. El script decide por el nombre del proyecto (el principio de `VERCEL_URL`): en cualquier proyecto que **no** sea de staging cancela todo build de Git; en los de staging construye si hubo cambios, y el primer deploy de `main` de un proyecto nuevo siempre construye. Los deploys de la CLI no pasan por ahí.
 
 **Crear un proyecto de staging nuevo (a mano en Vercel):**
 
-1. *Add New → Project*, importar `MenYUorg/MenYU` con el nombre exacto `menyu-<app>-staging`. De ese nombre sale el dominio `menyu-<app>-staging.vercel.app`, y el login entre apps (`resolveAppUrl` y `resolveLoginUrl`) depende de él.
+1. *Add New → Project*, importar `MenYUorg/MenYU` con el nombre exacto `menyu-<app>-staging`. De ese nombre sale el dominio `menyu-<app>-staging.vercel.app`, y el login entre apps (`resolveAppUrl` y `resolveLoginUrl`) depende de él. Sumar además el dominio propio `<app>.staging.menyu-app.com` en *Settings → Domains*.
 2. *Settings → General:* Root Directory `apps/web-<app>`, "Include source files outside of the Root Directory" activado, y el resto (framework, comandos, Node) igual que `menyu-cliente-staging`.
 3. *Settings → Git:* rama de producción `main`.
-4. *Settings → Environment Variables*, en el entorno Production: `VITE_API_URL=https://menyu-backend-staging.up.railway.app/api` (y `VITE_WS_URL` sin `/api`, si se quiere; si no está, la app lo deduce de la otra).
+4. *Settings → Environment Variables*, en el entorno Production: `VITE_API_URL=https://api.staging.menyu-app.com/api` y `VITE_WS_URL=https://api.staging.menyu-app.com` (si no está, la app la deduce de `VITE_API_URL`). web-auth no usa `VITE_WS_URL` y lleva las de Supabase: sección Fase 3 de `docs/auth/VariablesACambiar.md`.
 5. *Settings → Deployment Protection:* igual que `menyu-cliente-staging` (sin login de Vercel).
-6. En Railway (backend de staging), sumar `https://menyu-<app>-staging.vercel.app` a `CORS_ORIGINS`.
+6. En Railway (backend de staging), sumar `https://menyu-<app>-staging.vercel.app` y `https://<app>.staging.menyu-app.com` a `CORS_ORIGINS`.
 
 ---
 
@@ -187,9 +189,10 @@ Cada app corre en su propio puerto:
 | App | Puerto |
 |---|---|
 | Backend (NestJS) | `3000` |
-| web-admin | `5173` |
-| web-cliente | `5174` |
+| web-auth | `5173` |
+| web-admin | `5174` |
 | web-staff | `5175` |
+| web-cliente | `5176` |
 
 ---
 
@@ -208,6 +211,9 @@ Los secrets están configurados en **Settings → Secrets and variables → Acti
 | `VERCEL_PROJECT_ID_ADMIN` | ID del proyecto web-admin en Vercel |
 | `VERCEL_PROJECT_ID_CLIENTE` | ID del proyecto web-cliente en Vercel |
 | `VERCEL_PROJECT_ID_STAFF` | ID del proyecto web-staff en Vercel |
+| `VERCEL_PROJECT_ID_AUTH` | ID del proyecto web-auth en Vercel (`menyu-auth`) |
+
+Las URLs de producción que verifica el smoke son *variables* del repo (no secrets): `PROD_WEB_ADMIN_URL`, `PROD_WEB_CLIENTE_URL`, `PROD_WEB_STAFF_URL` y `PROD_WEB_AUTH_URL`.
 
 ---
 

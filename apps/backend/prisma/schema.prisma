@@ -131,7 +131,8 @@ model Mozo {
   restauranteId String   @map("restaurante_id")
   nombre        String
   email         String?
-  passwordHash  String   @map("password_hash")
+  // Null en los mozos invitados por Supabase: inician sesión ahí, no con el login propio.
+  passwordHash  String?  @map("password_hash")
   telefono      String?
   activo        Boolean  @default(true)
   esJefeSalon   Boolean  @default(false) @map("es_jefe_salon")
@@ -573,7 +574,7 @@ model RefreshToken {
 }
 
 // ─────────────────────────────────────────────
-// AUTENTICACIÓN (SUPABASE) Y PERMISOS — docs/specs/auth.md
+// AUTENTICACIÓN (SUPABASE) Y PERMISOS — docs/auth/specs/auth.md
 // ─────────────────────────────────────────────
 
 enum Rol {

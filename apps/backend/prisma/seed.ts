@@ -52,7 +52,7 @@ const CLIENTE2_ID      = 'dddddddd-0005-4005-a005-000000000005'
 const ADMIN_GERENTE_ID = 'dddddddd-0006-4006-a006-000000000006'
 const ADMIN_OWNER2_ID  = 'dddddddd-0007-4007-a007-000000000007'
 
-// Usuarios de Supabase Auth (docs/specs/auth.md). En local no hay Supabase Auth: el supabaseUserId
+// Usuarios de Supabase Auth (docs/auth/specs/auth.md). En local no hay Supabase Auth: el supabaseUserId
 // es un UUID fijo que no existe en ningún proyecto. Para iniciar sesión hay que reemplazarlo por el
 // id de un usuario real del Supabase de staging (el upsert no lo pisa).
 const USUARIO_OWNER_ID       = 'ffffffff-0001-4001-a001-000000000001'
