@@ -1,10 +1,10 @@
 import { Prisma } from '@prisma/client'
-import { MARCA_DETAIL_INCLUDE } from '../marca/marca.service'
-import { RESTAURANTE_DETAIL_INCLUDE } from '../restaurante/restaurante.service'
+import { MARCA_CON_RESTAURANTES_SELECT, MARCA_DETALLE_SELECT } from '../marca/marca.service'
+import { RESTAURANTE_CON_MARCA_SELECT, RESTAURANTE_DETALLE_SELECT } from '../restaurante/restaurante.service'
 
 // Contrato include ↔ schema. Prisma rechaza en runtime (HTTP 500) un `include` o `select` que
 // nombra una relación inexistente, y con Prisma mockeado los tests de los services no lo detectan.
-// Acá se validan los includes de detalle contra el schema real (`Prisma.dmmf`).
+// Acá se validan los selects de las respuestas del personal contra el schema real (`Prisma.dmmf`).
 
 type Args = { include?: Record<string, unknown>; select?: Record<string, unknown> }
 
@@ -47,6 +47,20 @@ function erroresDeInclude(modelo: string, include: Record<string, unknown>): str
   return erroresDeArgs(modelo, { include }, modelo)
 }
 
+/** Igual, para el que se pasa como `select:`. */
+function erroresDeSelect(modelo: string, select: Record<string, unknown>): string[] {
+  return erroresDeArgs(modelo, { select }, modelo)
+}
+
+/** Los campos sensibles que nombra un select, en cualquier nivel: los tokens de Mercado Pago y las contraseñas. */
+function camposSensibles(select: Record<string, unknown>, ruta = ''): string[] {
+  return Object.entries(select).flatMap(([campo, valor]) => {
+    const aca = /^mp[A-Z]|^passwordHash$/.test(campo) ? [`${ruta}${campo}`] : []
+    const adentro = esArgs(valor) && esArgs(valor.select) ? camposSensibles(valor.select, `${ruta}${campo}.`) : []
+    return [...aca, ...adentro]
+  })
+}
+
 describe('contrato include ↔ schema de Prisma', () => {
   describe('el validador', () => {
     it('detecta una relación inexistente (el caso de itemSucursal en Restaurante)', () => {
@@ -87,13 +101,26 @@ describe('contrato include ↔ schema de Prisma', () => {
     })
   })
 
-  describe('includes de detalle', () => {
-    it('MARCA_DETAIL_INCLUDE solo referencia relaciones y campos del schema', () => {
-      expect(erroresDeInclude('Marca', MARCA_DETAIL_INCLUDE)).toEqual([])
+  const SELECTS: Array<[string, string, Record<string, unknown>]> = [
+    ['MARCA_CON_RESTAURANTES_SELECT', 'Marca', MARCA_CON_RESTAURANTES_SELECT],
+    ['MARCA_DETALLE_SELECT', 'Marca', MARCA_DETALLE_SELECT],
+    ['RESTAURANTE_CON_MARCA_SELECT', 'Restaurante', RESTAURANTE_CON_MARCA_SELECT],
+    ['RESTAURANTE_DETALLE_SELECT', 'Restaurante', RESTAURANTE_DETALLE_SELECT],
+  ]
+
+  describe('selects de las respuestas del personal', () => {
+    it.each(SELECTS)('%s solo referencia relaciones y campos del schema', (_nombre, modelo, select) => {
+      expect(erroresDeSelect(modelo, select)).toEqual([])
     })
 
-    it('RESTAURANTE_DETAIL_INCLUDE solo referencia relaciones y campos del schema', () => {
-      expect(erroresDeInclude('Restaurante', RESTAURANTE_DETAIL_INCLUDE)).toEqual([])
+    it.each(SELECTS)('%s no nombra columnas de Mercado Pago ni contraseñas', (_nombre, _modelo, select) => {
+      expect(camposSensibles(select)).toEqual([])
+    })
+
+    it('el buscador de campos sensibles los encuentra en cualquier nivel', () => {
+      const select = { id: true, mpAccessToken: true, mozos: { select: { nombre: true, passwordHash: true } } }
+
+      expect(camposSensibles(select)).toEqual(['mpAccessToken', 'mozos.passwordHash'])
     })
   })
 })

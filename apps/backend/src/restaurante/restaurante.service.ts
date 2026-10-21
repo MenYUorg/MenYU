@@ -1,108 +1,75 @@
-import {
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common'
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
+import { Prisma } from '@prisma/client'
 import { PrismaService } from '../prisma/prisma.service'
 import { LogosService } from '../storage/logos.service'
-import { assertOwnerDeRestaurante } from '../common/assert-owner-access'
-import { JwtPayload } from '../auth/auth.service'
-import { CreateRestauranteDto } from './dto/create-restaurante.dto'
+import { ADMINISTRACION } from '../auth/roles-del-personal'
+import { AccesoService } from '../auth/supabase/acceso.service'
+import { UsuarioAutenticado } from '../auth/supabase/usuario-autenticado'
+import { MARCA_SELECT } from '../marca/marca.service'
 import { UpdateRestauranteDto } from './dto/update-restaurante.dto'
+import { RESTAURANTE_SELECT } from './restaurante.select'
 
-// Los ítems del menú no se incluyen acá: se piden con GET /items?restauranteId=
-export const RESTAURANTE_DETAIL_INCLUDE = {
-  marca: true,
-  mozos: { where: { activo: true } },
+/** Un restaurante con su marca, como lo listan web-admin y su contexto. */
+export const RESTAURANTE_CON_MARCA_SELECT = {
+  ...RESTAURANTE_SELECT,
+  marca: { select: MARCA_SELECT },
+} satisfies Prisma.RestauranteSelect
+
+// Los ítems del menú no se incluyen acá: se piden con GET /items?restauranteId=. Los mozos, sin la contraseña.
+export const RESTAURANTE_DETALLE_SELECT = {
+  ...RESTAURANTE_CON_MARCA_SELECT,
+  mozos: {
+    where: { activo: true },
+    orderBy: { nombre: 'asc' },
+    select: { id: true, nombre: true, email: true, telefono: true, esJefeSalon: true, usuarioId: true },
+  },
   comandas: true,
   categorias: true,
   menus: true,
   mesas: true,
   ingredientes: true,
-} as const
+} satisfies Prisma.RestauranteSelect
+
+const SOLO_EL_OWNER = 'Solo el owner de la marca puede cambiar la dirección y el nombre de la sección de recomendados'
 
 @Injectable()
 export class RestauranteService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly logos: LogosService,
+    private readonly acceso: AccesoService,
   ) {}
 
-  async create(dto: CreateRestauranteDto) {
-    return this.prisma.restaurante.create({ data: dto })
-  }
-
-  async findAll(user: JwtPayload) {
-    if (user.rol === 'ROOT') {
-      return this.prisma.restaurante.findMany({
-        where: { activo: true },
-        include: { marca: true },
-      })
-    }
-    if (user.rol === 'GERENTE') {
-      const restauranteIds = await this.getRestaurantesForGerente(user.sub)
-      return this.prisma.restaurante.findMany({
-        where: { id: { in: restauranteIds }, activo: true },
-        include: { marca: true },
-      })
-    }
-    const marcaId = await this.getMarcaIdForAdmin(user.sub)
+  /** Los restaurantes disponibles de los que el usuario es OWNER (por la marca) o GERENTE. 403 si no es ninguno. */
+  async findAll(usuario: UsuarioAutenticado) {
+    await this.acceso.exigirAlgunRol(usuario.id, ADMINISTRACION)
+    const ids = await this.acceso.restaurantesDe(usuario.id, ADMINISTRACION)
     return this.prisma.restaurante.findMany({
-      where: { marcaId, activo: true },
-      include: { marca: true },
+      where: { id: { in: ids } },
+      orderBy: { nombre: 'asc' },
+      select: RESTAURANTE_CON_MARCA_SELECT,
     })
   }
 
-  async findOne(id: string, user: JwtPayload) {
-    if (user.rol === 'OWNER') {
-      const marcaId = await this.getMarcaIdForAdmin(user.sub)
-      const restaurante = await this.prisma.restaurante.findUnique({ where: { id } })
-      if (!restaurante || restaurante.marcaId !== marcaId)
-        throw new ForbiddenException('No tenés acceso a este restaurante')
-    }
-    if (user.rol === 'GERENTE') {
-      await this.assertRestauranteOwnership(id, user)
-    }
-    const restaurante = await this.prisma.restaurante.findUnique({
-      where: { id },
-      include: RESTAURANTE_DETAIL_INCLUDE,
-    })
-    if (!restaurante || !restaurante.activo) throw new NotFoundException('Restaurante no encontrado')
+  /** El rol en el restaurante lo exige la ruta (`@RequiereRolEn`). */
+  async findOne(id: string) {
+    const restaurante = await this.prisma.restaurante.findUnique({ where: { id }, select: RESTAURANTE_DETALLE_SELECT })
+    if (!restaurante) throw new NotFoundException('Restaurante no encontrado')
     return restaurante
   }
 
-  async update(id: string, dto: UpdateRestauranteDto, user: JwtPayload) {
-    // La dirección solo la modifica el OWNER de la marca: ni GERENTE ni ROOT.
-    if (dto.direccion !== undefined) {
-      await assertOwnerDeRestaurante(this.prisma, id, user)
+  /** OWNER o GERENTE lo exige la ruta; la dirección y el nombre de la sección de recomendados, solo el OWNER. */
+  async update(id: string, dto: UpdateRestauranteDto, usuario: UsuarioAutenticado) {
+    if (dto.direccion !== undefined || dto.nombreSeccionRecomendados !== undefined) {
+      const roles = await this.acceso.rolesEnRestaurante(usuario.id, id)
+      if (!roles.includes('OWNER')) throw new ForbiddenException(SOLO_EL_OWNER)
     }
-    if (user.rol === 'OWNER') {
-      const marcaId = await this.getMarcaIdForAdmin(user.sub)
-      const restaurante = await this.prisma.restaurante.findUnique({ where: { id } })
-      if (!restaurante || restaurante.marcaId !== marcaId)
-        throw new ForbiddenException('No tenés acceso a este restaurante')
-    }
-    if (user.rol === 'GERENTE') {
-      await this.assertRestauranteOwnership(id, user)
-    }
-    if (dto.nombreSeccionRecomendados !== undefined && user.rol === 'GERENTE') {
-      throw new ForbiddenException('Solo el owner puede renombrar la sección de recomendados')
-    }
-    await this.assertExists(id)
-    return this.prisma.restaurante.update({ where: { id }, data: dto })
+    return this.prisma.restaurante.update({ where: { id }, data: dto, select: RESTAURANTE_SELECT })
   }
 
-  async remove(id: string) {
-    await this.assertExists(id)
-    return this.prisma.restaurante.update({ where: { id }, data: { activo: false } })
-  }
+  // ── Logo (solo el OWNER de la marca, lo exige la ruta) ─────────────────
 
-  // ── Logo (solo el OWNER de la marca) ──────────────────────────────────
-
-  async uploadLogo(id: string, file: Express.Multer.File, user: JwtPayload) {
-    const restaurante = await assertOwnerDeRestaurante(this.prisma, id, user)
-    if (!restaurante.activo) throw new NotFoundException('Restaurante no encontrado')
-
+  async uploadLogo(id: string, file: Express.Multer.File) {
     const logoUrl = await this.logos.subir('restaurantes', id, file)
     return this.prisma.restaurante.update({
       where: { id },
@@ -111,9 +78,9 @@ export class RestauranteService {
     })
   }
 
-  async removeLogo(id: string, user: JwtPayload) {
-    const restaurante = await assertOwnerDeRestaurante(this.prisma, id, user)
-    if (!restaurante.activo) throw new NotFoundException('Restaurante no encontrado')
+  async removeLogo(id: string) {
+    const restaurante = await this.prisma.restaurante.findUnique({ where: { id }, select: { logoUrl: true } })
+    if (!restaurante) throw new NotFoundException('Restaurante no encontrado')
     if (!restaurante.logoUrl) throw new NotFoundException('Este restaurante no tiene logo propio')
 
     await this.logos.eliminar('restaurantes', id)
@@ -122,41 +89,5 @@ export class RestauranteService {
       data: { logoUrl: null },
       select: { id: true, logoUrl: true },
     })
-  }
-
-  private async assertExists(id: string): Promise<void> {
-    const r = await this.prisma.restaurante.findUnique({ where: { id } })
-    if (!r || !r.activo) throw new NotFoundException('Restaurante no encontrado')
-  }
-
-  private async assertRestauranteOwnership(restauranteId: string, user: JwtPayload) {
-    if (user.rol === 'ROOT') return
-    if (user.rol === 'OWNER') {
-      const admin = await this.prisma.admin.findUnique({ where: { id: user.sub } })
-      const restaurante = await this.prisma.restaurante.findUnique({ where: { id: restauranteId } })
-      if (!admin || !restaurante || admin.marcaId !== restaurante.marcaId) {
-        throw new ForbiddenException('No tenés acceso a este restaurante')
-      }
-      return
-    }
-    if (user.rol === 'GERENTE') {
-      const asignacion = await this.prisma.adminRestaurante.findUnique({
-        where: { adminId_restauranteId: { adminId: user.sub, restauranteId } },
-      })
-      if (!asignacion) throw new ForbiddenException('No tenés acceso a este restaurante')
-      return
-    }
-    throw new ForbiddenException('No tenés acceso a este restaurante')
-  }
-
-  private async getMarcaIdForAdmin(adminId: string): Promise<string> {
-    const admin = await this.prisma.admin.findUnique({ where: { id: adminId } })
-    if (!admin || !admin.marcaId) throw new NotFoundException('Admin sin marca asignada')
-    return admin.marcaId
-  }
-
-  private async getRestaurantesForGerente(adminId: string): Promise<string[]> {
-    const asignaciones = await this.prisma.adminRestaurante.findMany({ where: { adminId } })
-    return asignaciones.map((a: { restauranteId: string }) => a.restauranteId)
   }
 }

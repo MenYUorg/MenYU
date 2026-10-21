@@ -56,20 +56,6 @@ const PENDIENTES_A_MANO = ['PATCH /waiter-calls/:id/atender']
 
 /** Del personal con JwtAuthGuard, RolesGuard o TipoGuard. Pasan a Supabase en la entrega 4.3 (o se quitan, decisión 5). */
 const PENDIENTES_4_3 = [
-  'POST /marcas',
-  'GET /marcas',
-  'GET /marcas/:id',
-  'PATCH /marcas/:id',
-  'DELETE /marcas/:id',
-  'POST /marcas/:id/logo',
-  'DELETE /marcas/:id/logo',
-  'POST /restaurantes',
-  'GET /restaurantes',
-  'GET /restaurantes/:id',
-  'PATCH /restaurantes/:id',
-  'DELETE /restaurantes/:id',
-  'POST /restaurantes/:id/logo',
-  'DELETE /restaurantes/:id/logo',
   'POST /sessions/open-staff',
   'POST /sessions/mesa/:mesaId/cerrar',
   'GET /sessions/mesa/:mesaId/activa',
@@ -183,7 +169,7 @@ describe('el enrutador: un solo sistema de autenticación por ruta', () => {
   const textos = rutas.map(texto)
 
   it('recorre los controllers de toda la aplicación (si no, los demás tests de acá no prueban nada)', () => {
-    expect(rutas.length).toBeGreaterThan(140)
+    expect(rutas.length).toBeGreaterThan(120)
     expect(textos).toEqual(expect.arrayContaining(['GET /auth/me', 'POST /sessions/close', 'GET /discovery', 'GET /root/historial']))
   })
 

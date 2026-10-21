@@ -1,4 +1,13 @@
-import { PartialType } from '@nestjs/mapped-types'
-import { CreateMarcaDto } from './create-marca.dto'
+import { IsNotEmpty, IsOptional, IsString } from 'class-validator'
 
-export class UpdateMarcaDto extends PartialType(CreateMarcaDto) {}
+export class UpdateMarcaDto {
+  @IsString()
+  @IsNotEmpty()
+  @IsOptional()
+  nombre?: string
+
+  @IsString()
+  @IsNotEmpty()
+  @IsOptional()
+  slug?: string
+}
