@@ -111,7 +111,9 @@ export function IngresarPage() {
           <Enlace to={conRedirect('/olvide-contrasena', search)}>Olvidé mi contraseña</Enlace>
         </p>
         <p className="leading-relaxed text-menyu-gris">
-          ¿Te invitaron a un restaurante? Abrí el link del mail de invitación para crear tu contraseña.
+          ¿Te invitaron a un restaurante?
+          <br />
+          Abrí el link del mail de invitación para crear tu contraseña.
         </p>
       </div>
     </Marco>

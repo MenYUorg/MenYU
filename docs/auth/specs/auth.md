@@ -107,7 +107,7 @@ Hecha con los nombres que propone esta sección: `SupabaseAuthGuard`, `@Requiere
 - **Tests (solo estos):** token válido, token vencido, token de otro proyecto, usuario sin membresía, rol incorrecto. Además, un test de tabla de la matriz de invitaciones (decisión 3 de la planificación de la Fase 2).
 - **Terminado cuando:** los tests pasan y un endpoint de prueba protegido responde bien a cada caso.
 
-### Fase 3 — App web-auth (email + contraseña) ✅ en código (2026-10-20), falta el deploy
+### Fase 3 — App web-auth (email + contraseña) ✅ (2026-10-20), producción con el próximo tag
 
 Hecha en `apps/web-auth`, en el puerto 5173 en local:
 
@@ -120,7 +120,7 @@ Hecha en `apps/web-auth`, en el puerto 5173 en local:
 - **Links del mail:** traen un `token_hash` (plantillas en `docs/auth/VariablesACambiar.md`) que se canjea con `verifyOtp` recién al guardar la contraseña. El backend no manda `redirectTo`.
 - **Tokens de marca:** en `@menyu/ui/tailwind-preset`.
 
-Verificada con Supabase simulado (playwright-cli, 31 casos) y contra el Supabase y la API de staging, con un usuario de cada rol (`docs/auth/usuarios-prueba-staging.md`). El deploy y los smokes dependen del merge y de los pasos manuales (ver "Para tener en cuenta").
+Verificada con Supabase simulado (playwright-cli, 31 casos) y contra el Supabase y la API de staging, con un usuario de cada rol (`docs/auth/usuarios-prueba-staging.md`). Desplegada en staging con el merge del PR #409. Producción sale con el próximo tag (ver "Para tener en cuenta").
 
 - Construir la UI con la skill `frontend-design`. Definir tokens de color y tipografía a partir del logo.
 - Pantalla de login (email + contraseña) con mensajes de error claros.
@@ -199,22 +199,18 @@ Verificada con Supabase simulado (playwright-cli, 31 casos) y contra el Supabase
 
 Observaciones que dejaron las Fases 0 a 3 (2026-10-20). Revisarlas al arrancar cada fase y borrar las que ya no apliquen.
 
-- **Fase 3: antes del merge y del tag.** Sin estos pasos, el deploy de web-auth falla (los dos workflows cortan al empezar si falta `VERCEL_PROJECT_ID_AUTH`) o la expone:
-  1. ~~Data API de Supabase cerrada en los dos proyectos~~: hecho el 2026-10-20 (lo confirmó el equipo; staging responde 503 `PGRST002` en todas las tablas, sin filas).
-  2. Las plantillas de mail con `token_hash` en los dos proyectos: el HTML está en `docs/auth/plantillas-mail/` (asuntos en `docs/auth/VariablesACambiar.md`, Fase 3).
-  3. Vercel: `menyu-auth` y `menyu-auth-staging`, con los dominios y su registro en Cloudflare. Al 2026-10-20 todavía no están creados. Como `apps/web-auth` todavía no está en `main`, el selector de carpetas de *Import* no la muestra: importarlos con Root Directory `apps/web-admin` (su `vercel.json` hace que `ignorar-build.sh` cancele el primer build) y después cambiarlo a `apps/web-auth` en *Settings → Build and Deployment*.
-  4. GitHub: el secret `VERCEL_PROJECT_ID_AUTH` y la variable `PROD_WEB_AUTH_URL`.
-  5. Railway: el CORS de staging antes del merge. El de producción, junto con el release, porque el cambio redespliega el servicio.
-- **Fase 3: lo que falta verificar.**
-  - Después del merge: el deploy y el smoke de staging, y un login en `auth.staging.menyu-app.com`.
-  - Después del tag: el smoke de producción.
-  - Con la cuenta del invitado, que una cuenta confirmada se reutiliza al invitarla en otro restaurante (`invitacionEnviada: false`).
-  - El caso de la cuenta sin confirmar que se borra y se reinvita sigue sin probarse.
-  - Lo que ya quedó probado en staging: `GET /auth/me` da 200 con los 7 usuarios con acceso (así que la RLS de `usuario` y `membresia` no bloquea al backend), 403 con la cuenta sin `Usuario` y 401 con un token alterado; el MOZO invitando da 403; en el navegador, cada usuario termina en su app y `sin-acceso`, en "Tu cuenta no tiene acceso".
-  - La invitación de punta a punta, con las plantillas con `token_hash` en staging, quedó probada el 2026-10-20 (OWNER → MOZO): 201 y el mail llegó (la invitación repetida da 409, probado con la anterior).
+- **Fase 3: falta producción.** Staging quedó completo con el merge del PR #409 (`6f13a7d`). Para el tag:
+  1. Sumar `https://auth.menyu-app.com` a `CORS_ORIGINS` de Railway de producción en el mismo release: el cambio redespliega el servicio y corre las migraciones.
+  2. Después del tag, el smoke de producción (ya incluye web-auth) y un login en `auth.menyu-app.com` con un usuario de Supabase Auth de producción (si todavía no hay ninguno, el primer ROOT se crea a mano, como en staging).
+- **Fase 3: lo que se probó en staging (2026-10-20).**
+  - El deploy del merge y el smoke de staging, con las cuatro apps y web-auth OK.
+  - En `auth.staging.menyu-app.com` desplegado, ROOT y OWNER terminan en `admin.staging…/admin`, MOZO en `staff.staging…/mozo` y COCINA en `staff.staging…/cocina`. "varias" ve el selector y `sin-acceso` va a "Tu cuenta no tiene acceso". `/auth/me` responde con el CORS de `auth.staging`.
+  - `GET /auth/me` da 200 con los 7 usuarios con acceso, así que la RLS de `usuario` y `membresia` no bloquea al backend. Da 403 con la cuenta sin `Usuario` y 401 con un token alterado. El MOZO invitando da 403.
+  - La invitación de punta a punta (OWNER → MOZO): 201, el mail llegó y la invitación repetida da 409.
     - El link abrió `/invitacion` sin gastar el token. "Guardar y entrar" lo canjeó y llevó a `staff/mozo`, y la contraseña nueva sirve para ingresar.
-    - Una invitación anterior con la plantilla por defecto llevó a `auth.<amb>/#access_token=…` (flujo implícito), que web-auth con PKCE no acepta: sin las plantillas nuevas, la invitación no funciona.
-  - La recuperación de punta a punta también, el 2026-10-20: se pidió desde "Olvidé mi contraseña" y el link (`token_hash` con prefijo `pkce_`) abrió `/restablecer-contrasena` sin gastar el token. Después de guardar, la contraseña nueva sirve y la anterior no.
+    - Una invitación anterior con la plantilla por defecto llevó a `auth.<amb>/#access_token=…` (flujo implícito), que web-auth con PKCE no acepta: sin las plantillas con `token_hash`, la invitación no funciona.
+  - La recuperación de punta a punta: se pidió desde "Olvidé mi contraseña" y el link (`token_hash` con prefijo `pkce_`) abrió `/restablecer-contrasena` sin gastar el token. Después de guardar, la contraseña nueva sirve y la anterior no.
+  - Sin probar: que una cuenta confirmada se reutiliza al invitarla en otro restaurante (`invitacionEnviada: false`) y que una sin confirmar se borra y se reinvita.
 - **"Confirm email" activo en los dos proyectos de Supabase (Fase 0).** La invitación reutiliza una cuenta confirmada: si la confirmación estuviera apagada, un registro público quedaría confirmado al instante y se le daría acceso de personal a quien lo creó.
 - **Para la Fase 4:**
   - `@RequiereRol` / `MembresiaGuard` solo sirven para rutas con `:restauranteId`. Las de marca (`/marcas/:id`) y las de un recurso (`/items/:id`) resuelven el restaurante en el service y le preguntan a `AccesoService`.
