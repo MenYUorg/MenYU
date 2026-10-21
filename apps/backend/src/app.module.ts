@@ -25,6 +25,7 @@ import { AdminsModule } from './admins/admins.module'
 import { ComensalesModule } from './comensales/comensales.module'
 import { DiscoveryModule } from './discovery/discovery.module'
 import { HealthModule } from './health/health.module'
+import { RootModule } from './root/root.module'
 
 @Module({
   imports: [
@@ -54,6 +55,7 @@ import { HealthModule } from './health/health.module'
     ComensalesModule,
     DiscoveryModule,
     HealthModule,
+    RootModule,
   ],
 })
 export class AppModule {}

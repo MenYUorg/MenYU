@@ -269,7 +269,190 @@ If the email already belongs to a `Usuario`, or to a confirmed Supabase account 
 
 ### No development endpoints
 
-There are no `/api/auth/dev/*` endpoints (they used to create users, even a ROOT, without authentication, and were removed). To get users and data in a local database run the seed (`pnpm --filter @menyu/api seed`); the credentials are in `Documentacion/datos-de-prueba-local.md`. The seed is never run in staging or production: there, accounts are created with the authenticated endpoints.
+There are no `/api/auth/dev/*` endpoints (they used to create users, even a ROOT, without authentication, and were removed). To get users and data in a local database run the seed (`pnpm --filter @menyu/api seed`); the credentials are in `Documentacion/datos-de-prueba-local.md`. The seed is never run in staging or production: there, accounts are created with the authenticated endpoints. The **first** ROOT account of an environment is created with the team script `apps/backend/scripts/cuentas-root.ts` (see [ROOT console](#root-console--apiroot)); the other ones, with `POST /api/root/roots`.
+
+---
+
+## ROOT console — `/api/root`
+
+Plan and decisions: `docs/plan-consola-root.md`. How to try it on your machine: `docs/probar-consola-root.md`. Stage 1a: owner accounts and ROOT accounts. Stage 1b: marcas, restaurantes and the history (`GET /api/root/historial`). The screens come in stage 2.
+
+- **Auth:** `Bearer` + role `ROOT`, at controller level. `OWNER`, `GERENTE`, mozo and cliente get **403**; no token, **401**. The routes that change something (`POST`, `PATCH`, `DELETE`) also check, inside the transaction, that the ROOT account of the token still exists and is still ROOT; if not (the token can outlive the account by up to 8 h) they answer **401** and change nothing.
+- **IDs in the path are not required to be UUIDs** (`m-001` works). An id with an impossible shape (`a.b`, spaces…) answers 404.
+- **Every change is recorded in the ROOT history, inside the same database transaction as the change**: if the record cannot be written, the change is not made. The record keeps who (a copy of the ROOT's email), what, on what and when, and **never a password or a hash**. The table is append-only: the database blocks `UPDATE`, `DELETE` and `TRUNCATE` on it, and there is no route that edits it.
+- **Passwords:** the system generates a temporary password (12 characters, no `0 O 1 l I`, from `crypto.randomInt`) and returns it **once**, in `passwordTemporal`. It is stored only as a bcrypt hash. The account is marked `debeCambiarPassword: true` (the person has to change it on first sign-in; the screen and `POST /api/auth/cambiar-password` arrive in stage 3). If you send `password` yourself it must have 12 to 72 bytes, not be a known password and not contain the part of the email before the `@`; in that case `passwordTemporal` is `null`.
+- **Emails** are trimmed and lowercased, and are rejected (409) if any admin, mozo or cliente already uses them (case-insensitive): the login looks in `admin` first and an admin with the same email would shadow them. The message does not say who uses it.
+- **There is no route to delete ROOT accounts** (not even for ROOT). A test walks the whole router and fails if one appears. Once the console exists, ROOT accounts can only be removed with the script, which never removes the last one; the database also refuses to delete (or demote) the last ROOT.
+
+### Endpoint summary
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/root/duenos?q=` | List OWNER accounts with their brand (`q`: email or brand name, up to 100 chars) |
+| `POST` | `/api/root/marcas/:id/duenos` | Create an OWNER in a brand |
+| `PATCH` | `/api/root/duenos/:id` | Change an owner's email |
+| `POST` | `/api/root/duenos/:id/restablecer-password` | Generate a new password for an owner |
+| `DELETE` | `/api/root/duenos/:id` | Delete an owner account |
+| `GET` | `/api/root/roots` | List ROOT accounts |
+| `POST` | `/api/root/roots` | Create a ROOT account |
+| `POST` | `/api/root/roots/:id/restablecer-password` | Generate a new password for **another** ROOT account |
+| `GET` | `/api/root/marcas?bajas=` | List brands with how many restaurants and owners they have (`bajas=true` also lists deactivated ones) |
+| `POST` | `/api/root/marcas` | Create a brand (`nombre`, `slug`) |
+| `GET` | `/api/root/marcas/:id` | A brand's detail: data, restaurants (address read-only) and owners |
+| `PATCH` | `/api/root/marcas/:id` | Change a brand's `nombre` and/or `slug` |
+| `POST` | `/api/root/marcas/:id/baja` · `/reactivar` | Deactivate / reactivate a brand (reversible, nothing is deleted) |
+| `POST` | `/api/root/marcas/:id/restaurantes` | Create a restaurant in a brand (`nombre`, `direccion`) |
+| `PATCH` | `/api/root/restaurantes/:id` | Change a restaurant's `nombre` (only that) |
+| `POST` | `/api/root/restaurantes/:id/baja` · `/reactivar` | Deactivate / reactivate a restaurant |
+| `GET` | `/api/root/historial` | The ROOT history, newest first, 50 at a time, with filters |
+
+Only accounts with the right role are touched: the owner routes answer 404 for any account that is not an `OWNER`, and the ROOT routes for any that is not `ROOT` (a `GERENTE` is never reachable from here).
+
+### Owner object
+
+```json
+{
+  "id": "9b1c…",
+  "email": "juan@laparrilla.com",
+  "debeCambiarPassword": true,
+  "marca": { "id": "m-001", "nombre": "La Parrilla", "activo": true }
+}
+```
+
+`marca` is `null` for an owner without a brand. No other field is ever returned (no hash, no `marcaId`, no role).
+
+### `POST /api/root/marcas/:id/duenos`
+
+```json
+{ "email": "Juan@LaParrilla.com" }
+```
+
+| Field | Type | Required |
+|---|---|---|
+| `email` | string, valid email, up to 254 chars | yes |
+| `password` | string, 12 to 72 bytes | no (generated when missing) |
+
+**201** — the owner object plus the password, **only in this response**:
+
+```json
+{
+  "id": "9b1c…",
+  "email": "juan@laparrilla.com",
+  "debeCambiarPassword": true,
+  "marca": { "id": "m-001", "nombre": "La Parrilla", "activo": true },
+  "passwordTemporal": "Kq7mTb4xWzNe"
+}
+```
+
+**Errors:** 400 invalid email or weak password · 404 the brand does not exist · 409 email in use, or the brand is deactivated (`activo = false`).
+History: `DUENO_CREAR`.
+
+### `PATCH /api/root/duenos/:id`
+
+```json
+{ "email": "administracion@laparrilla.com" }
+```
+
+Changes the email only (never the password). Same email as today → 200 and nothing is recorded. **Responses:** 200 the owner object · 400 · 404 · 409 email in use. History: `DUENO_CAMBIAR_EMAIL` with the email before and after.
+
+### `POST /api/root/duenos/:id/restablecer-password`
+
+No body. Generates a new password, marks the account `debeCambiarPassword: true` and revokes its refresh tokens (an access token already issued lasts until it expires, up to 8 h). **Responses:** 200 the owner object plus `passwordTemporal` (once) · 404. History: `DUENO_RESTABLECER` (the password shows as "no se registra").
+
+### `DELETE /api/root/duenos/:id`
+
+Deletes the account and revokes its refresh tokens. The brand and its restaurants are not touched. **Responses:** 204 · 404 · **409 if it is the only owner of an active brand** (create another owner first, or deactivate the brand). History: `DUENO_ELIMINAR`.
+
+### `GET /api/root/roots`
+
+```json
+[{ "id": "3f2a…", "email": "ana@ejemplo.com", "debeCambiarPassword": false, "esPropia": true }]
+```
+
+`esPropia` is `true` for the caller's own account. **Responses:** 200.
+
+### `POST /api/root/roots`
+
+Same body and behavior as creating an owner (no brand). **201** — `{ id, email, debeCambiarPassword: true, esPropia: false, passwordTemporal }`. **Errors:** 400 · 409 email in use. History: `ROOT_CREAR`.
+
+### `POST /api/root/roots/:id/restablecer-password`
+
+Generates a new password for **another** ROOT account, marks it temporary and revokes its refresh tokens. **Responses:** 200 `{ id, email, debeCambiarPassword: true, esPropia: false, passwordTemporal }` · **400 if `:id` is the caller's own account** (changing your own password is a different flow, stage 3) · 404 not a ROOT account. History: `ROOT_RESTABLECER`.
+
+### Brands and restaurants: what ROOT sees and edits
+
+ROOT sees only identity and state. **Never** logos, address edits, menu, prices, discounts, tables, orders, waiters, session mode or Mercado Pago data: every query has an explicit `select` and a test compares each response's keys against an exact list. ROOT edits a brand's `nombre` and `slug`, and a restaurant's `nombre`; the address is loaded by ROOT **once**, when creating the restaurant, and from then on only the OWNER changes it.
+
+- **A body with any other field is rejected with 400** (it is not silently ignored): for example `{ "nombre": "X", "direccion": "Y" }` on `PATCH /api/root/restaurantes/:id`. The message says which fields were sent and that the rest is the owner's decision. (The global pipe would drop unknown fields without a word and ROOT would think it saved them.) This applies to the four bodies of this section; the owner and ROOT-account routes above keep ignoring extra fields.
+- **A "delete" is a reversible deactivation** (`activo = false`): no brand or restaurant row is ever deleted, and there is no `DELETE` route for them. Deactivating **does not touch** the restaurants, accounts, menu or sessions of the brand. **Today it only hides the brand (and its restaurants) from Discovery**; closing table opening, the public menu and the login arrives in stage 3. Each restaurant keeps its own state: reactivating a brand brings everything back as it was.
+- `POST …/baja` and `…/reactivar` are idempotent: if it is already in that state the answer is 200 and nothing is recorded.
+- `slug` is a lowercase identifier (`la-parrilla-de-juan`: letters a–z, numbers and single hyphens, up to 80 chars). It is unique **even among deactivated brands**: to reuse it, change the old brand's `slug` (ROOT can edit a deactivated brand).
+
+### Brand objects
+
+```json
+// GET /api/root/marcas → [ … ]
+{ "id": "m-001", "nombre": "La Parrilla", "slug": "la-parrilla", "activo": true,
+  "restaurantes": { "activos": 2, "total": 3 }, "duenos": 1 }
+
+// GET /api/root/marcas/:id (also the answer of POST, PATCH, baja and reactivar)
+{ "id": "m-001", "nombre": "La Parrilla", "slug": "la-parrilla", "activo": true,
+  "restaurantes": [ { "id": "r-001", "nombre": "Centro", "direccion": "Av. Colón 1200", "activo": true } ],
+  "duenos": [ { "id": "9b1c…", "email": "juan@laparrilla.com", "debeCambiarPassword": true } ] }
+```
+
+`duenos` is only the OWNER accounts (never the GERENTE ones); `0` means "no owner yet".
+
+### `POST /api/root/marcas`
+
+`{ "nombre": "La Parrilla", "slug": "la-parrilla" }` (`nombre` up to 120 chars, trimmed; `slug` is lowercased). **201** the detail of the new, active brand. **Errors:** 400 invalid or extra field · 409 `slug` in use (also by a deactivated brand). History: `MARCA_CREAR`.
+
+### `PATCH /api/root/marcas/:id`
+
+`{ "nombre"?: string, "slug"?: string }`, at least one. Works on deactivated brands too. What arrives equal to what is stored is neither written nor recorded. **Errors:** 400 (nothing to change, invalid, or extra field such as `logoUrl` or `activo`) · 404 · 409 `slug` in use by another brand. History: `MARCA_EDITAR` with the before and after of each changed field.
+
+### `POST /api/root/marcas/:id/baja` and `/reactivar`
+
+No body. **200** the detail. **404** if the brand does not exist. History: `MARCA_BAJA` (`Activa → De baja`) and `MARCA_REACTIVAR`.
+
+### `POST /api/root/marcas/:id/restaurantes`
+
+`{ "nombre": "La Parrilla Centro", "direccion": "Av. Colón 1200, Córdoba" }` (`direccion` up to 200 chars, mandatory). **201** `{ id, nombre, direccion, activo: true }`. **Errors:** 400 · 404 the brand does not exist · 409 the brand is deactivated. History: `RESTAURANTE_CREAR`.
+
+### `PATCH /api/root/restaurantes/:id`
+
+`{ "nombre": string }`. **200** `{ id, nombre, direccion, activo }`. **400 for any other field** (`direccion`, `logoUrl`, `modoSesion`, `nombreSeccionRecomendados`, `activo`, `marcaId`, `mp_*`…) and for an empty body. **404** if it does not exist. History: `RESTAURANTE_EDITAR`.
+
+### `POST /api/root/restaurantes/:id/baja` and `/reactivar`
+
+No body, idempotent, **200** `{ id, nombre, direccion, activo }`, **404**. Reactivating a restaurant of a deactivated brand is allowed. History: `RESTAURANTE_BAJA` (`Activo → De baja`) and `RESTAURANTE_REACTIVAR`.
+
+### `GET /api/root/historial`
+
+Read-only: **there is no route that edits or deletes the history**, not even for ROOT (a test walks the whole router), and the database blocks it too. Only ROOT can read it (the rest get 403).
+
+| Query | Meaning |
+|---|---|
+| `actor` | Who did it: the email of a ROOT account (case-insensitive) or `script` for the actions of the ROOT-accounts script |
+| `entidad` | On what: `MARCA`, `RESTAURANTE`, `OWNER` or `ROOT` |
+| `desde`, `hasta` | `YYYY-MM-DD`, whole days in **Buenos Aires time** (UTC-3), both included. A date that does not exist, or `desde` after `hasta`, is a 400 |
+| `cursor` | The `siguiente` of the previous answer, to get the next 50 |
+
+Blank values (`?actor=&desde=`) mean "no filter".
+
+```json
+{
+  "items": [
+    { "id": 142, "cuando": "2026-10-20T14:20:11.512Z", "actorTipo": "ROOT", "actorNombre": "ana@ejemplo.com",
+      "accion": "RESTAURANTE_EDITAR", "entidadTipo": "RESTAURANTE", "entidadId": "r-001", "entidadNombre": "La Parrilla Alta Córdoba",
+      "marcaId": "m-001", "marcaNombre": "La Parrilla",
+      "cambios": [ { "campo": "Nombre", "antes": "La Parrilla Centro", "despues": "La Parrilla Alta Córdoba" } ] }
+  ],
+  "siguiente": 93
+}
+```
+
+Newest first (by `id`, which only grows, so a new action never shifts the pages). `siguiente` is `null` on the last page. `actorTipo` is `SCRIPT` for the script, and then `actorNombre` is the operating-system user of whoever ran it. `antes` / `despues` are `null` when there was nothing ("—" on screen). The `id` of the ROOT account that acted is not exposed. A password is never in a record: it shows as "no se registra".
 
 ---
 

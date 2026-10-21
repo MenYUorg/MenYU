@@ -154,3 +154,47 @@ su propio proyecto).
 - En Windows, `pnpm dev` (`nest start --watch`) puede abrir una shell
   interactiva en vez de arrancar cuando se lo ejecuta sin TTY (background,
   CI). `npx nest start` funciona en ese caso.
+
+## Consola de ROOT: cuentas, historial y pruebas con la base
+
+Plan: `docs/plan-consola-root.md`. La API está en `doc.md` (sección "ROOT console").
+
+### La migración de la etapa 1a
+
+`20261020150000_consola_root_historial` agrega `admin.debe_cambiar_password`, la tabla `historial_root` con sus disparadores
+y el disparador que impide quitar a la última cuenta ROOT. **Después de traer esta rama hay que aplicarla a la base local
+(`npx prisma migrate deploy`) y regenerar el cliente (`npx prisma generate`)**: el cliente nuevo pide la columna
+`debe_cambiar_password` en cada consulta a `admin`, así que con la base sin migrar el login da 500. En staging y producción la
+aplica sola el arranque del backend (`prisma migrate deploy && node dist/main`).
+
+### El historial no se puede borrar, tampoco en local
+
+La base bloquea `UPDATE`, `DELETE` y `TRUNCATE` sobre `historial_root` para cualquier sesión, **incluso con
+`session_replication_role = replica`** (los disparadores son `ENABLE ALWAYS`). Las pruebas manuales contra la base local dejan
+filas que no se pueden limpiar con un `DELETE`: para empezar de cero se usa una base descartable
+(`create database ...` / `drop database ... with (force)`) o `docker compose down -v`. No hay forma de saltearlo desde la app.
+
+La última cuenta ROOT tampoco se puede borrar ni degradar (ni por SQL). Las limpiezas de pruebas que borran cuentas de admin
+tienen que usar `set local session_replication_role = replica` dentro de una transacción; ese atajo **no** salta al historial.
+
+### Cuentas ROOT con el script
+
+```bash
+# desde apps/backend, con DATABASE_URL de ESA terminal (el script no lee el .env a propósito)
+pnpm exec ts-node --transpile-only scripts/cuentas-root.ts listar | crear <email> | restablecer <email> | eliminar <email>
+```
+
+La contraseña se pide sin eco. Lo que hace el script queda en el historial de ROOT (actor `SCRIPT`, con tu usuario del sistema
+como operador), dentro de la misma transacción que el cambio. Si la base todavía no tiene la tabla (producción, hasta el tag que
+lleve la consola), avisa y hace la acción igual sin registrarla. El encabezado de `scripts/cuentas-root.ts` explica todo.
+
+### Probar los disparadores contra un PostgreSQL de verdad
+
+Los tests de la consola usan mocks. Los disparadores de la base se prueban con `historial-root.base.spec.ts`, que se salta solo si
+no hay base (el CI no tiene una). Para correrlo, con una base local con las migraciones aplicadas:
+
+```bash
+TEST_DATABASE_URL=postgresql://menyu:menyu@localhost:5433/<base> pnpm --filter @menyu/api exec jest historial-root.base
+```
+
+Corre dentro de transacciones que se revierten (no deja filas) y se niega a conectarse a un servidor que no sea local.
