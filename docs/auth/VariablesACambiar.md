@@ -87,7 +87,7 @@ Su entorno **Production** es staging. Mismos valores en los tres.
 
 **Verificar:** en la pestaña Network del navegador, en `mesa.staging.menyu-app.com`, las llamadas van a `api.staging.menyu-app.com/api/...` y el websocket a `wss://api.staging.menyu-app.com/ws`.
 
-### Fase 3: `menyu-auth` y `menyu-auth-staging` (todavía no existen)
+### Fase 3: `menyu-auth` y `menyu-auth-staging` (en producción desde v1.1.0)
 
 **Antes del primer deploy (staging con el merge, producción con el tag):**
 
@@ -160,7 +160,7 @@ Google vuelve a `https://auth.<ambiente>/google?redirect=…` (`apps/web-auth/sr
 | Supabase → *Authentication → URL Configuration* | Site URL `https://auth.staging.menyu-app.com` (Fase 0). Redirect URLs: `http://auth.menyu.local:5173/**`, para desarrollo (termina en `/**` porque la URL lleva query; agregada el 2026-10-21) | Site URL `https://auth.menyu-app.com` (Fase 0) |
 | Supabase → *Authentication → Sign In / Providers → Google* | Activo (Fase 0), con el client ID y el secret del cliente OAuth | Ídem |
 | Google Cloud → *APIs y servicios → Credenciales* → el cliente OAuth | URI de redireccionamiento autorizado: `https://<ref de staging>.supabase.co/auth/v1/callback` (Fase 0) | `https://<ref de producción>.supabase.co/auth/v1/callback` (Fase 0) |
-| Google Cloud → *Pantalla de consentimiento de OAuth* | En *Testing* solo entran los usuarios de prueba cargados: sumar las cuentas del equipo | *In production*, recién cuando `https://auth.menyu-app.com/privacidad` responda (después del tag): Google visita las URLs al publicar. O antes, con la URL de staging (ver "Para tener en cuenta" en la spec). Con `openid`, `email` y `profile` no hace falta la verificación de Google |
+| Google Cloud → *Pantalla de consentimiento de OAuth* (una sola para los dos ambientes) | Publicada (*In production*) el 2026-10-21 | Ídem. Con `openid`, `email` y `profile` no hace falta la verificación de Google. Google visita la página principal y la política de privacidad: tienen que seguir respondiendo |
 | Google Cloud → *Branding* (uno solo para los dos ambientes) | — | Página principal `https://mesa.menyu-app.com`, política de privacidad `https://auth.menyu-app.com/privacidad` y dominios autorizados `menyu-app.com` y el `<ref>.supabase.co` de cada proyecto |
 
 La pantalla de Google muestra `<ref>.supabase.co` como destino. Cambiarlo requiere un dominio propio para Supabase (add-on pago): fuera de alcance.
