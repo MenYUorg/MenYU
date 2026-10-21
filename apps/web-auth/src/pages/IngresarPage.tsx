@@ -2,17 +2,23 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useLocation } from 'react-router-dom'
 import { Aviso } from '../components/Aviso'
 import { Boton } from '../components/Boton'
+import { BotonGoogle } from '../components/BotonGoogle'
 import { Campo } from '../components/Campo'
 import { Cargando } from '../components/Cargando'
 import { Encabezado } from '../components/Encabezado'
 import { Enlace } from '../components/Enlace'
 import { Marco } from '../components/Marco'
+import { Separador } from '../components/Separador'
 import { conRedirect } from '../flujo/rutas'
+import { useIngresoConGoogle } from '../flujo/useIngresoConGoogle'
 import { usePostLogin } from '../flujo/usePostLogin'
 import { mensajeDeError } from '../lib/mensajes'
 import { supabase } from '../lib/supabase'
 
-/** `/`: email y contraseña. Si ya hay una sesión, sigue directo (por ejemplo, cuando otra app manda acá con redirect). */
+/**
+ * `/`: Google o email y contraseña. Si ya hay una sesión, sigue directo (por ejemplo, cuando otra app manda acá con
+ * redirect, o al volver de Google).
+ */
 export function IngresarPage() {
   const { search } = useLocation()
   const { estado, continuar, cerrarSesion } = usePostLogin({ tipo: 'verificando' })
@@ -20,6 +26,7 @@ export function IngresarPage() {
   const [contrasena, setContrasena] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [enviando, setEnviando] = useState(false)
+  const { yendoAGoogle, irAGoogle } = useIngresoConGoogle(search)
 
   const revisada = useRef(false)
   useEffect(() => {
@@ -53,6 +60,12 @@ export function IngresarPage() {
     }
   }
 
+  async function ingresarConGoogle() {
+    setError(null)
+    const errorDeGoogle = await irAGoogle()
+    if (errorDeGoogle) setError(errorDeGoogle)
+  }
+
   if (estado.tipo === 'verificando') {
     return (
       <Marco titulo="Ingresar">
@@ -82,8 +95,20 @@ export function IngresarPage() {
     <Marco titulo="Ingresar">
       <Encabezado titulo="Ingresá a MenYU" />
 
+      {aviso && (
+        <div className="mb-5">
+          <Aviso tipo="error">{aviso}</Aviso>
+        </div>
+      )}
+      <BotonGoogle
+        onClick={() => void ingresarConGoogle()}
+        cargando={yendoAGoogle && 'Abriendo Google…'}
+        disabled={enviando}
+      />
+
+      <Separador texto="o con tu email" />
+
       <form onSubmit={ingresar} noValidate className="space-y-5">
-        {aviso && <Aviso tipo="error">{aviso}</Aviso>}
         <Campo
           id="email"
           etiqueta="Email"
@@ -101,7 +126,7 @@ export function IngresarPage() {
           value={contrasena}
           onChange={(e) => setContrasena(e.target.value)}
         />
-        <Boton type="submit" cargando={enviando && 'Ingresando…'}>
+        <Boton type="submit" cargando={enviando && 'Ingresando…'} disabled={yendoAGoogle}>
           Ingresar
         </Boton>
       </form>
@@ -113,7 +138,8 @@ export function IngresarPage() {
         <p className="leading-relaxed text-menyu-gris">
           ¿Te invitaron a un restaurante?
           <br />
-          Abrí el link del mail de invitación para crear tu contraseña.
+          Abrí el link del mail de invitación para crear tu contraseña, o entrá con Google si te invitaron con tu
+          email de Google.
         </p>
       </div>
     </Marco>

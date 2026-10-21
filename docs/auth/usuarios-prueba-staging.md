@@ -107,3 +107,35 @@ JOIN restaurante r ON r.marca_id = m.id AND r.nombre = 'Restaurante Pruebas Auth
 ```
 
 Hasta la Fase 4, web-admin y web-staff no leen la sesión de Supabase: al llegar muestran su login legacy. Lo que se verifica es la URL a la que manda web-auth.
+
+## Cuentas de Google (desde la Fase 3b)
+
+Para probar "Continuar con Google". Son cuentas de Gmail del equipo, cargadas como usuarios de prueba en la pantalla de consentimiento de Google Cloud mientras esté en *Testing*. Las dos son MOZO de "Restaurante Pruebas Auth": las invitó el OWNER de prueba con `POST /auth/invitaciones` el 2026-10-21.
+
+| Email | Cómo llegó | Entra con |
+|---|---|---|
+| `menyuprueba1@gmail.com` | Invitada antes de tener cuenta. Aceptó entrando con Google y después creó una contraseña desde "Olvidé mi contraseña" | Google, o email y contraseña (`STAGING_GOOGLE_1_PASSWORD`) |
+| `menyuprueba2@gmail.com` | Entró con Google sin invitación ("sin acceso") y después la invitaron: `invitacionEnviada: false` | Solo Google |
+
+En `docs/auth/.env.usuarios-staging` están `STAGING_GOOGLE_1_EMAIL`, `STAGING_GOOGLE_1_PASSWORD` (la contraseña de Supabase, no la de Google) y `STAGING_GOOGLE_2_EMAIL`. Las contraseñas de Google no se guardan en ningún lado.
+
+### Probar el login con Google en el navegador
+
+Google suele bloquear el inicio de sesión en un Chrome abierto por Playwright. Para automatizarlo:
+
+1. Abrir un Chrome aparte, con un perfil propio y el puerto de depuración (PowerShell). Desde Chrome 136 el puerto solo funciona con un `--user-data-dir` que no sea el de siempre:
+   ```powershell
+   & "C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222 --user-data-dir="$env:LOCALAPPDATA\menyu-pruebas-google" "--host-resolver-rules=MAP *.menyu.local 127.0.0.1"
+   ```
+   Con `Start-Process`, pasar los argumentos como un solo string: con un array se parte `--host-resolver-rules` en los espacios.
+2. Una persona inicia sesión en esa ventana con las cuentas de Google. El perfil las recuerda para la próxima vez.
+3. Conectarse con `playwright-cli -s=google attach --cdp=http://127.0.0.1:9222` y usar `run-code` con localizadores por rol.
+4. Si la ventana queda tapada por otras, Chrome la marca como oculta y congela la página: los clics esperan para siempre y los formularios no se mandan. Al empezar cada script:
+   ```js
+   const cdp = await page.context().newCDPSession(page)
+   await cdp.send('Page.setWebLifecycleState', { state: 'active' })
+   await cdp.send('Emulation.setFocusEmulationEnabled', { enabled: true })
+   ```
+5. Al terminar, cerrar ese Chrome: mientras está abierto, cualquier programa de la máquina lo puede controlar por el puerto 9222.
+
+La pantalla de permisos de Google ("Cancelar" / "Continuar") aparece solo la primera vez que cada cuenta entra; después Google pasa directo del selector de cuentas a MenYU.
