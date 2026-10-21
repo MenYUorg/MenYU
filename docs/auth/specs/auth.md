@@ -208,13 +208,13 @@ Observaciones que dejaron las Fases 0 a 3 (2026-10-20). Revisarlas al arrancar c
 - **Fase 3: lo que falta verificar.**
   - Después del merge: el deploy y el smoke de staging, y un login en `auth.staging.menyu-app.com`.
   - Después del tag: el smoke de producción.
-  - La recuperación de contraseña con el link del mail real. El mail se pidió desde web-auth el 2026-10-20.
   - Con la cuenta del invitado, que una cuenta confirmada se reutiliza al invitarla en otro restaurante (`invitacionEnviada: false`).
   - El caso de la cuenta sin confirmar que se borra y se reinvita sigue sin probarse.
   - Lo que ya quedó probado en staging: `GET /auth/me` da 200 con los 7 usuarios con acceso (así que la RLS de `usuario` y `membresia` no bloquea al backend), 403 con la cuenta sin `Usuario` y 401 con un token alterado; el MOZO invitando da 403; en el navegador, cada usuario termina en su app y `sin-acceso`, en "Tu cuenta no tiene acceso".
   - La invitación de punta a punta, con las plantillas con `token_hash` en staging, quedó probada el 2026-10-20 (OWNER → MOZO): 201 y el mail llegó (la invitación repetida da 409, probado con la anterior).
     - El link abrió `/invitacion` sin gastar el token. "Guardar y entrar" lo canjeó y llevó a `staff/mozo`, y la contraseña nueva sirve para ingresar.
     - Una invitación anterior con la plantilla por defecto llevó a `auth.<amb>/#access_token=…` (flujo implícito), que web-auth con PKCE no acepta: sin las plantillas nuevas, la invitación no funciona.
+  - La recuperación de punta a punta también, el 2026-10-20: se pidió desde "Olvidé mi contraseña" y el link (`token_hash` con prefijo `pkce_`) abrió `/restablecer-contrasena` sin gastar el token. Después de guardar, la contraseña nueva sirve y la anterior no.
 - **"Confirm email" activo en los dos proyectos de Supabase (Fase 0).** La invitación reutiliza una cuenta confirmada: si la confirmación estuviera apagada, un registro público quedaría confirmado al instante y se le daría acceso de personal a quien lo creó.
 - **Para la Fase 4:**
   - `@RequiereRol` / `MembresiaGuard` solo sirven para rutas con `:restauranteId`. Las de marca (`/marcas/:id`) y las de un recurso (`/items/:id`) resuelven el restaurante en el service y le preguntan a `AccesoService`.
