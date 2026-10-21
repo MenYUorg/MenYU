@@ -61,8 +61,8 @@ importers:
         specifier: ^6.0.0
         version: 6.19.3(prisma@6.19.3(magicast@0.3.5)(typescript@5.9.3))(typescript@5.9.3)
       '@supabase/supabase-js':
-        specifier: ^2.105.1
-        version: 2.105.1
+        specifier: 2.117.0
+        version: 2.117.0
       bcryptjs:
         specifier: ^3.0.3
         version: 3.0.3
@@ -200,6 +200,97 @@ importers:
       '@menyu/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@testing-library/dom':
+        specifier: 10.4.2
+        version: 10.4.2
+      '@testing-library/jest-dom':
+        specifier: 7.0.1
+        version: 7.0.1(@testing-library/dom@10.4.2)(vitest@3.2.7(@types/node@25.6.0)(jiti@2.6.1)(jsdom@26.1.0)(lightningcss@1.27.0)(terser@5.46.2))
+      '@testing-library/react':
+        specifier: 16.3.3
+        version: 16.3.3(@testing-library/dom@10.4.2)(@types/react-dom@19.2.3(@types/react@19.0.14))(@types/react@19.0.14)(react-dom@19.0.0(react@19.0.0))(react@19.0.0)
+      '@testing-library/user-event':
+        specifier: 14.6.7
+        version: 14.6.7(@testing-library/dom@10.4.2)
+      '@types/react':
+        specifier: ^19.0.0
+        version: 19.0.14
+      '@types/react-dom':
+        specifier: ^19.0.0
+        version: 19.2.3(@types/react@19.0.14)
+      '@vitejs/plugin-react':
+        specifier: ^4.3.0
+        version: 4.7.0(vite@6.4.2(@types/node@25.6.0)(jiti@2.6.1)(lightningcss@1.27.0)(terser@5.46.2))
+      '@vitest/coverage-v8':
+        specifier: 3.2.7
+        version: 3.2.7(vitest@3.2.7(@types/node@25.6.0)(jiti@2.6.1)(jsdom@26.1.0)(lightningcss@1.27.0)(terser@5.46.2))
+      autoprefixer:
+        specifier: ^10.4.0
+        version: 10.5.0(postcss@8.5.10)
+      eslint:
+        specifier: ^9.0.0
+        version: 9.39.4(jiti@2.6.1)
+      eslint-plugin-react-hooks:
+        specifier: ^5.0.0
+        version: 5.2.0(eslint@9.39.4(jiti@2.6.1))
+      eslint-plugin-react-refresh:
+        specifier: ^0.4.0
+        version: 0.4.26(eslint@9.39.4(jiti@2.6.1))
+      globals:
+        specifier: ^15.0.0
+        version: 15.15.0
+      jsdom:
+        specifier: ^26.0.0
+        version: 26.1.0
+      postcss:
+        specifier: ^8.4.0
+        version: 8.5.10
+      tailwindcss:
+        specifier: ^3.4.0
+        version: 3.4.19
+      typescript:
+        specifier: ~5.8.0
+        version: 5.8.3
+      typescript-eslint:
+        specifier: ^8.0.0
+        version: 8.59.4(eslint@9.39.4(jiti@2.6.1))(typescript@5.8.3)
+      vite:
+        specifier: ^6.0.0
+        version: 6.4.2(@types/node@25.6.0)(jiti@2.6.1)(lightningcss@1.27.0)(terser@5.46.2)
+      vitest:
+        specifier: 3.2.7
+        version: 3.2.7(@types/node@25.6.0)(jiti@2.6.1)(jsdom@26.1.0)(lightningcss@1.27.0)(terser@5.46.2)
+
+  apps/web-auth:
+    dependencies:
+      '@menyu/auth-client':
+        specifier: workspace:*
+        version: link:../../packages/auth-client
+      '@menyu/types':
+        specifier: workspace:*
+        version: link:../../packages/types
+      '@supabase/supabase-js':
+        specifier: 2.117.0
+        version: 2.117.0
+      react:
+        specifier: ^19.0.0
+        version: 19.0.0
+      react-dom:
+        specifier: ^19.0.0
+        version: 19.0.0(react@19.0.0)
+      react-router-dom:
+        specifier: ^6.28.0
+        version: 6.30.3(react-dom@19.0.0(react@19.0.0))(react@19.0.0)
+    devDependencies:
+      '@eslint/js':
+        specifier: ^9.0.0
+        version: 9.39.4
+      '@menyu/config':
+        specifier: workspace:*
+        version: link:../../packages/config
+      '@menyu/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       '@testing-library/dom':
         specifier: 10.4.2
         version: 10.4.2
@@ -485,6 +576,58 @@ importers:
       vite:
         specifier: ^6.0.0
         version: 6.4.2(@types/node@25.6.0)(jiti@2.6.1)(lightningcss@1.27.0)(terser@5.46.2)
+
+  packages/auth-client:
+    dependencies:
+      '@menyu/types':
+        specifier: workspace:*
+        version: link:../types
+      '@supabase/ssr':
+        specifier: 0.12.7
+        version: 0.12.7(@supabase/supabase-js@2.117.0)
+      '@supabase/supabase-js':
+        specifier: 2.117.0
+        version: 2.117.0
+    devDependencies:
+      '@testing-library/dom':
+        specifier: 10.4.2
+        version: 10.4.2
+      '@testing-library/jest-dom':
+        specifier: 7.0.1
+        version: 7.0.1(@testing-library/dom@10.4.2)(vitest@3.2.7(@types/node@25.6.0)(jiti@2.6.1)(jsdom@26.1.0)(lightningcss@1.27.0)(terser@5.46.2))
+      '@testing-library/react':
+        specifier: 16.3.3
+        version: 16.3.3(@testing-library/dom@10.4.2)(@types/react-dom@19.2.3(@types/react@19.0.14))(@types/react@19.0.14)(react-dom@19.0.0(react@19.0.0))(react@19.0.0)
+      '@testing-library/user-event':
+        specifier: 14.6.7
+        version: 14.6.7(@testing-library/dom@10.4.2)
+      '@types/react':
+        specifier: ^19.0.0
+        version: 19.0.14
+      '@types/react-dom':
+        specifier: ^19.0.0
+        version: 19.2.3(@types/react@19.0.14)
+      '@vitest/coverage-v8':
+        specifier: 3.2.7
+        version: 3.2.7(vitest@3.2.7(@types/node@25.6.0)(jiti@2.6.1)(jsdom@26.1.0)(lightningcss@1.27.0)(terser@5.46.2))
+      jsdom:
+        specifier: ^26.0.0
+        version: 26.1.0
+      react:
+        specifier: ^19.0.0
+        version: 19.0.0
+      react-dom:
+        specifier: ^19.0.0
+        version: 19.0.0(react@19.0.0)
+      typescript:
+        specifier: ~5.8.0
+        version: 5.8.3
+      vite:
+        specifier: ^6.0.0
+        version: 6.4.2(@types/node@25.6.0)(jiti@2.6.1)(lightningcss@1.27.0)(terser@5.46.2)
+      vitest:
+        specifier: 3.2.7
+        version: 3.2.7(@types/node@25.6.0)(jiti@2.6.1)(jsdom@26.1.0)(lightningcss@1.27.0)(terser@5.46.2)
 
   packages/config: {}
 
@@ -1659,32 +1802,42 @@ packages:
   '@standard-schema/spec@1.1.0':
     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
 
-  '@supabase/auth-js@2.105.1':
-    resolution: {integrity: sha512-zc4s8Xg4truwE1Q4Q8M8oUVDARMd05pKh73NyQsMbYU1HDdDN2iiKzena/yu+yJze3WrD4c092FdckPiK1rLQw==}
-    engines: {node: '>=20.0.0'}
+  '@supabase/auth-js@2.117.0':
+    resolution: {integrity: sha512-mmKfXHkZ+93fJ57yxMnJ+h+psiHIEBLzqZNgNu7yE7/kNxAKXkKxz/BZO/Ht0NJiMztFICvA+7xOLbIrK723qQ==}
+    engines: {node: '>=22.0.0'}
 
-  '@supabase/functions-js@2.105.1':
-    resolution: {integrity: sha512-dTk1e7oE51VGc1lS2S0J0NLo0Wp4JYChj74ArJKbIWgoWuFwO0wcJYjeyOV3AAEpKst8/LQWUZOUKO1tRXBrpA==}
-    engines: {node: '>=20.0.0'}
+  '@supabase/functions-js@2.117.0':
+    resolution: {integrity: sha512-RC3kdN0DZS8gyLsTDhWCc6xg5FKAyMNz/xt5KD7PSC+PB/7/NhFPo6YrMZu+3xsQMFdOWuVaBlHYdPwdmhqx/w==}
+    engines: {node: '>=22.0.0'}
 
-  '@supabase/phoenix@0.4.1':
-    resolution: {integrity: sha512-hWGJkDAfWUNY8k0C080u3sGNFd2ncl9erhKgP7hnGkgJWEfT5Pd/SXal4QmWXBECVlZrannMAc9sBaaRyWpiUA==}
+  '@supabase/phoenix@0.4.5':
+    resolution: {integrity: sha512-aAn9H9ovVyeApKy11OWOrrOGq8DV68yWeH4ud2lN9fzn4aO8Zb5GLL9m1pUg9nLqIcT+ZDfAcsZe0E/nqdv2lw==}
 
-  '@supabase/postgrest-js@2.105.1':
-    resolution: {integrity: sha512-6SbtsoWC55xfsm7gbfLqvF+yIwTQEbjt+jFGf4klDpwSnUy17Hv5x0Dq52oqwTQlw6Ta0h1D5gTP0/pApqNojA==}
-    engines: {node: '>=20.0.0'}
+  '@supabase/postgrest-js@2.117.0':
+    resolution: {integrity: sha512-KG2+dYIkTzOjR8f0Xza3uXzKB6bHQOIjMTJhHuNNSUK0C6zdtd4A8LBjxpPB9R5I95xuN1CCdlIEJTkZ5g8LBA==}
+    engines: {node: '>=22.0.0'}
 
-  '@supabase/realtime-js@2.105.1':
-    resolution: {integrity: sha512-3X3cUEl5cJ4lRQHr1hXHx0b98OaL97RRO2vrRZ98FD91JV/MquZHhrGJSv/+IkOnjF6E2e0RUOxE8P3Zi035ow==}
-    engines: {node: '>=20.0.0'}
+  '@supabase/realtime-js@2.117.0':
+    resolution: {integrity: sha512-E+hovHDWTpoOQHCMWdOwahvJmD7M/Vgj8cQTwLMPlEFvTO7wV8zBhrM9iUnKReurpGpl9u6MGbbjBeQJTEE1Kg==}
+    engines: {node: '>=22.0.0'}
 
-  '@supabase/storage-js@2.105.1':
-    resolution: {integrity: sha512-owfdCNH5ikXXDusjzsgU6LavEBqGUoueOnL/9XIucld70/WJ/rbqp89K//c9QPICDNuegsmpoeasydDAiucLKQ==}
-    engines: {node: '>=20.0.0'}
+  '@supabase/ssr@0.12.7':
+    resolution: {integrity: sha512-wiBtEie1KkRJi9RrZWY3R2imRhX1JY7qMyUCH2z9AUk15gQebNEplM+urbCKamdxaTJLXUU6LlpkJsaxhojCEg==}
+    peerDependencies:
+      '@supabase/supabase-js': ^2.114.0
 
-  '@supabase/supabase-js@2.105.1':
-    resolution: {integrity: sha512-4gn6HmsAkCCVU7p8JmgKGhHJ5Btod4ZzSp8qKZf4JHaTxbhaIK86/usHzeLxWv7EJJDhBmILDmJOSOf9iF4CLA==}
-    engines: {node: '>=20.0.0'}
+  '@supabase/storage-js@2.117.0':
+    resolution: {integrity: sha512-jFn8MTRKhUls5yzfYogPqItNH0jwzlLvdhAO2nBKRMzQuvI9BgNM2BabcGSxcDAcyEACGEjeIBXjxRfIb8OI5Q==}
+    engines: {node: '>=22.0.0'}
+
+  '@supabase/supabase-js@2.117.0':
+    resolution: {integrity: sha512-c9ASbrLEqFBTWIxF4aXuK4hVgdIH+kA6BsT6xjDkXuFYQkGBWL4OqirstgzhS30gr0Vlfbur6F8jlUfWkCy2dw==}
+    engines: {node: '>=22.0.0'}
+    peerDependencies:
+      '@opentelemetry/api': '>=1.0.0'
+    peerDependenciesMeta:
+      '@opentelemetry/api':
+        optional: true
 
   '@testing-library/dom@10.4.2':
     resolution: {integrity: sha512-yzr2S9HyAIdhz2/6qHgbs665Q7PKVcDF05vsOlHPxG1mo36gKVesdYVeDLnXgfjJ03CrKRk08knc6+E/9m8v2Q==}
@@ -2677,6 +2830,10 @@ packages:
     resolution: {integrity: sha512-yki5XnKuf750l50uGTllt6kKILY4nQ1eNIQatoXEByZ5dWgnKqbnqmTrBE5B4N7lrMJKQ2ytWMiTO2o0v6Ew/w==}
     engines: {node: '>= 0.6'}
 
+  cookie@1.1.1:
+    resolution: {integrity: sha512-ei8Aos7ja0weRpFzJnEA9UHJ/7XQmqglbRwnf2ATjcB9Wq874VKH9kfjjirM6UhU2/E5fFYadylyhFldcqSidQ==}
+    engines: {node: '>=18'}
+
   cookiejar@2.1.4:
     resolution: {integrity: sha512-LDx6oHrK+PhzLKJU9j5S7/Y3jM/mUHvD/DeI1WQmJn652iPC5Y4TBzC9l+5OMOXlyTTA+SmVUPm0HQUwpD5Jqw==}
 
@@ -2953,6 +3110,7 @@ packages:
   eslint@9.39.4:
     resolution: {integrity: sha512-XoMjdBOwe/esVgEvLmNsD3IRHkm7fbKIUGvrleloJXUZgDHig2IPWNniv+GwjyJXzuNqVjlr5+4yVUZjycJwfQ==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
+    deprecated: This version is no longer supported. Please see https://eslint.org/version-support for other options.
     hasBin: true
     peerDependencies:
       jiti: '*'
@@ -6363,45 +6521,42 @@ snapshots:
 
   '@standard-schema/spec@1.1.0': {}
 
-  '@supabase/auth-js@2.105.1':
+  '@supabase/auth-js@2.117.0':
     dependencies:
       tslib: 2.8.1
 
-  '@supabase/functions-js@2.105.1':
+  '@supabase/functions-js@2.117.0':
     dependencies:
       tslib: 2.8.1
 
-  '@supabase/phoenix@0.4.1': {}
+  '@supabase/phoenix@0.4.5': {}
 
-  '@supabase/postgrest-js@2.105.1':
+  '@supabase/postgrest-js@2.117.0':
     dependencies:
       tslib: 2.8.1
 
-  '@supabase/realtime-js@2.105.1':
+  '@supabase/realtime-js@2.117.0':
     dependencies:
-      '@supabase/phoenix': 0.4.1
-      '@types/ws': 8.18.1
+      '@supabase/phoenix': 0.4.5
       tslib: 2.8.1
-      ws: 8.20.0
-    transitivePeerDependencies:
-      - bufferutil
-      - utf-8-validate
 
-  '@supabase/storage-js@2.105.1':
+  '@supabase/ssr@0.12.7(@supabase/supabase-js@2.117.0)':
+    dependencies:
+      '@supabase/supabase-js': 2.117.0
+      cookie: 1.1.1
+
+  '@supabase/storage-js@2.117.0':
     dependencies:
       iceberg-js: 0.8.1
       tslib: 2.8.1
 
-  '@supabase/supabase-js@2.105.1':
+  '@supabase/supabase-js@2.117.0':
     dependencies:
-      '@supabase/auth-js': 2.105.1
-      '@supabase/functions-js': 2.105.1
-      '@supabase/postgrest-js': 2.105.1
-      '@supabase/realtime-js': 2.105.1
-      '@supabase/storage-js': 2.105.1
-    transitivePeerDependencies:
-      - bufferutil
-      - utf-8-validate
+      '@supabase/auth-js': 2.117.0
+      '@supabase/functions-js': 2.117.0
+      '@supabase/postgrest-js': 2.117.0
+      '@supabase/realtime-js': 2.117.0
+      '@supabase/storage-js': 2.117.0
 
   '@testing-library/dom@10.4.2':
     dependencies:
@@ -6783,7 +6938,7 @@ snapshots:
       '@typescript-eslint/visitor-keys': 8.59.4
       debug: 4.4.3
       minimatch: 10.2.5
-      semver: 7.7.4
+      semver: 7.8.5
       tinyglobby: 0.2.16
       ts-api-utils: 2.5.0(typescript@5.8.3)
       typescript: 5.8.3
@@ -7560,6 +7715,8 @@ snapshots:
   cookie-signature@1.2.2: {}
 
   cookie@0.7.2: {}
+
+  cookie@1.1.1: {}
 
   cookiejar@2.1.4: {}
 
@@ -8359,7 +8516,7 @@ snapshots:
       '@babel/parser': 7.29.2
       '@istanbuljs/schema': 0.1.6
       istanbul-lib-coverage: 3.2.2
-      semver: 7.7.4
+      semver: 7.8.5
     transitivePeerDependencies:
       - supports-color
 
@@ -8935,7 +9092,7 @@ snapshots:
 
   make-dir@4.0.0:
     dependencies:
-      semver: 7.7.4
+      semver: 7.8.5
 
   make-error@1.3.6: {}
 

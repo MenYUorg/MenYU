@@ -45,7 +45,7 @@ Estado al 2026-10-20: los 6 dominios de Vercel responden y apuntan a sus proyect
 
 | Variable | Staging | Producción | Notas |
 |---|---|---|---|
-| `CORS_ORIGINS` | `https://menyu-cliente-staging.vercel.app,https://menyu-admin-staging.vercel.app,https://menyu-staff-staging.vercel.app,https://mesa.staging.menyu-app.com,https://admin.staging.menyu-app.com,https://staff.staging.menyu-app.com` | `https://menyu-cliente.vercel.app,https://menyu-admin.vercel.app,https://menyu-staff.vercel.app,https://mesa.menyu-app.com,https://admin.menyu-app.com,https://staff.menyu-app.com` | Valor actual: ver en el panel. En staging ya acepta los dominios nuevos (comprobado el 2026-10-20): confirmar que estén los 6. Sin barra final. En la Fase 3 se suma `https://auth.…` |
+| `CORS_ORIGINS` | `https://menyu-cliente-staging.vercel.app,https://menyu-admin-staging.vercel.app,https://menyu-staff-staging.vercel.app,https://mesa.staging.menyu-app.com,https://admin.staging.menyu-app.com,https://staff.staging.menyu-app.com` | `https://menyu-cliente.vercel.app,https://menyu-admin.vercel.app,https://menyu-staff.vercel.app,https://mesa.menyu-app.com,https://admin.menyu-app.com,https://staff.menyu-app.com` | Valor actual: ver en el panel. En staging ya acepta los dominios nuevos (comprobado el 2026-10-20): confirmar que estén los 6. Sin barra final. En la Fase 3 se suma `https://auth.staging.menyu-app.com` (staging) y `https://auth.menyu-app.com` (producción): sin eso, web-auth no puede llamar a `/auth/me`. Cambiar una variable redespliega el servicio y corre las migraciones: en producción, hacerlo junto con el release que lleve web-auth |
 | `CORS_ORIGIN_PATTERNS` | sin cambios | sin cambios | Cubre los previews de Vercel (`men-yu-s-projects.vercel.app`) |
 | `BASE_URL` | `https://api.staging.menyu-app.com/api` | `https://api.menyu-app.com/api` | **Después** de registrar la redirect URL en Mercado Pago (sección 1) |
 | `FRONTEND_URL` | `https://mesa.staging.menyu-app.com` | `https://mesa.menyu-app.com` | Respaldo de las `back_urls` del pago cuando no llega un `Origin` válido |
@@ -87,7 +87,13 @@ Su entorno **Production** es staging. Mismos valores en los tres.
 
 **Verificar:** en la pestaña Network del navegador, en `mesa.staging.menyu-app.com`, las llamadas van a `api.staging.menyu-app.com/api/...` y el websocket a `wss://api.staging.menyu-app.com/ws`.
 
-### Fase 3: `menyu-auth` y `menyu-auth-staging` (todavía no existen)
+### Fase 3: `menyu-auth` y `menyu-auth-staging` (en producción desde v1.1.0)
+
+**Antes del primer deploy (staging con el merge, producción con el tag):**
+
+1. **Data API de Supabase cerrada en ese proyecto** (hecho en los dos el 2026-10-20). web-auth lleva la publishable key en un bundle público. Si la Data API (PostgREST) está activa sin RLS, cualquiera puede leer con esa key `admin`, `mozo`, `cliente` (con los `password_hash`) y `restaurante` (con los tokens de Mercado Pago). En *Project Settings → Data API*, desactivarla, o habilitar RLS en todas las tablas de `public`. Verificar con `curl "$SUPABASE_URL/rest/v1/admin?select=id&limit=1" -H "apikey: <publishable key>"` (también `restaurante` y `usuario`): no puede devolver filas. Con la Data API cerrada, staging responde 503 `PGRST002` en todas las tablas, sin filas.
+2. Los proyectos de Vercel, sus dominios, el secret `VERCEL_PROJECT_ID_AUTH` y la variable `PROD_WEB_AUTH_URL` (sección 4). Sin el secret, `deploy-staging.yml` y `deploy-production.yml` cortan al empezar.
+3. Las plantillas de mail (abajo) y `CORS_ORIGINS` en Railway (sección 2).
 
 | Variable | Staging | Producción |
 |---|---|---|
@@ -97,6 +103,21 @@ Su entorno **Production** es staging. Mismos valores en los tres.
 | `VITE_AUTH_COOKIE_DOMAIN` | `.staging.menyu-app.com` | `.menyu-app.com` |
 
 Dominios: `auth.staging.menyu-app.com` en `menyu-auth-staging` y `auth.menyu-app.com` en `menyu-auth`, con su registro en Cloudflare.
+
+`VITE_AUTH_COOKIE_DOMAIN` lo lee web-auth desde la entrega 4.1 de la Fase 4. Sin la variable, la sesión queda solo para `auth.<ambiente>` y las otras apps no la ven: comprobarla en `menyu-auth` y `menyu-auth-staging` antes del deploy. El entorno Preview de `menyu-auth` (el deploy que prueba el smoke de staging) puede quedar sin las de Supabase: el smoke solo pide la página.
+
+#### Plantillas de mail de Supabase (staging y producción)
+
+Los links de invitación y de "olvidé mi contraseña" llevan a web-auth con un `token_hash`, que la app canjea con `verifyOtp` recién cuando la persona guarda la contraseña. Así funcionan con el flujo PKCE (el que usa `@supabase/ssr` desde la Fase 4), desde cualquier navegador, y un escáner de mail que abra el link no lo gasta. La invitación no manda `redirectTo`: el link sale de la Site URL (`auth.<ambiente>`). Las rutas `/invitacion` y `/restablecer-contrasena` están en `apps/web-auth/src/App.tsx`: si cambian, cambiar también las plantillas.
+
+En *Authentication → Emails → Templates* de cada proyecto, pegar como cuerpo (*Message body*) el HTML de `docs/auth/plantillas-mail/`:
+
+| Plantilla | Asunto | Cuerpo |
+|---|---|---|
+| **Invite user** | `Te invitaron a MenYU` | `docs/auth/plantillas-mail/invite-user.html` |
+| **Reset password** | `Creá una contraseña nueva para MenYU` | `docs/auth/plantillas-mail/reset-password.html` |
+
+**Verificar:** invitar a un mail propio (`POST /auth/invitaciones`) y que el link del mail abra `https://auth.<ambiente>/invitacion?token_hash=...` y pida la contraseña.
 
 ### Fase 4: web-admin, web-staff y web-cliente
 
@@ -121,8 +142,27 @@ El entorno Preview de los proyectos de producción corre en `*.vercel.app`, dond
 
 Los secrets de Railway y Vercel que ya existen no cambian: los dominios no cambian ni los servicios ni los proyectos.
 
-## 5. Desarrollo local (`*.menyu.local`, recién para la Fase 4)
+## 5. Desarrollo local (`*.menyu.local`)
 
 - Archivo hosts: `127.0.0.1 auth.menyu.local admin.menyu.local staff.menyu.local mesa.menyu.local api.menyu.local`.
 - `.env` del backend: sumar a `CORS_ORIGIN_PATTERNS` (separado por coma de los que ya tenga) el patrón `^http://(auth|admin|staff|mesa)\.menyu\.local(:[0-9]+)?$`.
-- Los `vite.config.ts` ya aceptan `*.menyu.local`. Cada app sigue en su puerto: `http://admin.menyu.local:5174`, `http://staff.menyu.local:5175`, `http://mesa.menyu.local:5176`.
+- Los `vite.config.ts` ya aceptan `*.menyu.local`. Cada app sigue en su puerto: `http://auth.menyu.local:5173`, `http://admin.menyu.local:5174`, `http://staff.menyu.local:5175`, `http://mesa.menyu.local:5176`.
+- web-auth: copiar `apps/web-auth/.env.example` a `apps/web-auth/.env.local` (git lo ignora) con la URL y la publishable key del Supabase de staging. El servidor de Vite reenvía `/api` a `BACKEND_URL` (por defecto `http://localhost:3000`). Para iniciar sesión con los usuarios de staging, `/auth/me` tiene que encontrarlos en la base de staging: `BACKEND_URL=https://api.staging.menyu-app.com pnpm --filter @menyu/web-auth dev`. Como la llamada sale del servidor de Vite, no hace falta tocar el CORS de staging.
+- Sin archivo hosts, Chrome resuelve los `*.menyu.local` si se abre con `--host-resolver-rules="MAP *.menyu.local 127.0.0.1"` (así se abre en las pruebas con playwright-cli). Con este mapeo Vite tiene que escuchar en IPv4: `--host 127.0.0.1`.
+- Login con Google en local: web-auth en el puerto 5173 (la Redirect URL de staging es la de ese puerto, sección 6). Por `http://` el navegador no da WebCrypto, así que el PKCE usa `plain` en vez de `S256`; en staging y producción, con `https`, es `S256`.
+
+## 6. Login con Google (Fase 3b)
+
+Google vuelve a `https://auth.<ambiente>/google?redirect=…` (`apps/web-auth/src/flujo/useIngresoConGoogle.ts`). Supabase acepta sin más cualquier URL con el mismo esquema, host y puerto que la Site URL (`IsRedirectURLValid` de GoTrue). Como la Site URL ya es `https://auth.<ambiente>` (Fase 0), staging y producción no necesitan una entrada en las Redirect URLs. Desarrollo sí, porque es otro host: si falta, Supabase vuelve a la Site URL de staging y no a la máquina local.
+
+| Dónde | Staging | Producción |
+|---|---|---|
+| Supabase → *Authentication → URL Configuration* | Site URL `https://auth.staging.menyu-app.com` (Fase 0). Redirect URLs: `http://auth.menyu.local:5173/**`, para desarrollo (termina en `/**` porque la URL lleva query; agregada el 2026-10-21) | Site URL `https://auth.menyu-app.com` (Fase 0) |
+| Supabase → *Authentication → Sign In / Providers → Google* | Activo (Fase 0), con el client ID y el secret del cliente OAuth | Ídem |
+| Google Cloud → *APIs y servicios → Credenciales* → el cliente OAuth | URI de redireccionamiento autorizado: `https://<ref de staging>.supabase.co/auth/v1/callback` (Fase 0) | `https://<ref de producción>.supabase.co/auth/v1/callback` (Fase 0) |
+| Google Cloud → *Pantalla de consentimiento de OAuth* (una sola para los dos ambientes) | Publicada (*In production*) el 2026-10-21 | Ídem. Con `openid`, `email` y `profile` no hace falta la verificación de Google. Google visita la página principal y la política de privacidad: tienen que seguir respondiendo |
+| Google Cloud → *Branding* (uno solo para los dos ambientes) | — | Página principal `https://mesa.menyu-app.com`, política de privacidad `https://auth.menyu-app.com/privacidad` y dominios autorizados `menyu-app.com` y el `<ref>.supabase.co` de cada proyecto |
+
+La pantalla de Google muestra `<ref>.supabase.co` como destino. Cambiarlo requiere un dominio propio para Supabase (add-on pago): fuera de alcance.
+
+**Verificar:** en `auth.<ambiente>/?redirect=https://admin.<ambiente>/admin`, "Continuar con Google" con una cuenta invitada: tiene que pasar por `/google` y terminar en `admin.<ambiente>/admin`. En local, si después de Google se termina en `auth.staging…` y no en `auth.menyu.local:5173/google`, falta la Redirect URL de desarrollo.

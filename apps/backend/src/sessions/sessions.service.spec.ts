@@ -85,13 +85,14 @@ function createTxMock() {
   }
 }
 
+// El restaurante y su marca vienen activos: la baja de uno de los dos se prueba aparte, en "restaurante dado de baja".
 const MESA_ABIERTA = {
   id: 'mesa-1',
   restauranteId: 'rest-1',
-  restaurante: { modoSesion: 'abierto' },
+  restaurante: { modoSesion: 'abierto', activo: true, marca: { activo: true } },
 }
 
-const MESA_SEGURA = { ...MESA_ABIERTA, restaurante: { modoSesion: 'seguro' } }
+const MESA_SEGURA = { ...MESA_ABIERTA, restaurante: { ...MESA_ABIERTA.restaurante, modoSesion: 'seguro' } }
 
 const SESION_ACTIVA = {
   id: 'sesion-1',
@@ -314,6 +315,91 @@ describe('SessionsService', () => {
         await expect(service.open({ restauranteId: 'otro-rest', pin: '1234' })).rejects.toThrow('Mesa no encontrada')
 
         expect(mockUsers.createCliente).not.toHaveBeenCalled()
+      })
+    })
+
+    describe('restaurante dado de baja (docs/plan-consola-root.md, sección 6)', () => {
+      const conRestaurante = (cambios: { activo?: boolean; marcaActiva?: boolean }) => ({
+        ...MESA_ABIERTA,
+        restaurante: {
+          ...MESA_ABIERTA.restaurante,
+          activo: cambios.activo ?? true,
+          marca: { activo: cambios.marcaActiva ?? true },
+        },
+      })
+
+      it.each([
+        ['el restaurante', { activo: false }],
+        ['su marca', { marcaActiva: false }],
+        ['los dos', { activo: false, marcaActiva: false }],
+      ])('mesa libre y dado de baja %s → 403 "Este restaurante no está disponible", sin crear nada', async (_quien, cambios) => {
+        mockPrisma.mesa.findFirst.mockResolvedValue(conRestaurante(cambios))
+        mockPrisma.sesionMesa.findFirst.mockResolvedValue(null)
+
+        await expect(service.open({ tableCode: 'qr-abc' })).rejects.toThrow(
+          new ForbiddenException('Este restaurante no está disponible'),
+        )
+
+        expect(mockUsers.createCliente).not.toHaveBeenCalled()
+        expect(mockPrisma.sesionMesa.create).not.toHaveBeenCalled()
+        expect(mockPrisma.$transaction).not.toHaveBeenCalled()
+        expect(mockPrisma.mesa.update).not.toHaveBeenCalled()
+      })
+
+      it('lo mismo por PIN, y no cuenta como un PIN equivocado (el PIN estaba bien)', async () => {
+        mockPrisma.mesa.findFirst.mockResolvedValue(conRestaurante({ activo: false }))
+        mockPrisma.sesionMesa.findFirst.mockResolvedValue(null)
+
+        for (let i = 0; i < 20; i++) {
+          await expect(service.open({ restauranteId: 'rest-1', pin: '1234' })).rejects.toThrow('Este restaurante no está disponible')
+        }
+      })
+
+      it('con una sesión ya abierta se deja terminar: quien se suma o vuelve a escanear su QR entra igual', async () => {
+        mockPrisma.mesa.findFirst.mockResolvedValue(conRestaurante({ marcaActiva: false }))
+        mockPrisma.sesionMesa.findFirst.mockResolvedValue(SESION_ACTIVA)
+        mockPrisma.sesionMesaCliente.findUnique.mockResolvedValue(null)
+        mockPrisma.sesionMesaCliente.count.mockResolvedValue(1)
+        mockPrisma.sesionMesaCliente.create.mockResolvedValue({})
+
+        const result = await service.open({ tableCode: 'qr-abc' })
+
+        expect(result.sesionId).toBe('sesion-1')
+        expect(mockPrisma.sesionMesa.create).not.toHaveBeenCalled()
+      })
+
+      it('quien ya participaba de la sesión vuelve a entrar sin sumarse de nuevo', async () => {
+        mockPrisma.mesa.findFirst.mockResolvedValue(conRestaurante({ activo: false }))
+        mockPrisma.sesionMesa.findFirst.mockResolvedValue(SESION_ACTIVA)
+        mockPrisma.sesionMesaCliente.findUnique.mockResolvedValue({ sesionId: 'sesion-1', clienteId: INVITADO.id })
+        mockPrisma.sesionMesaCliente.count.mockResolvedValue(1)
+
+        const result = await service.open({ tableCode: 'qr-abc' })
+
+        expect(result.sesionId).toBe('sesion-1')
+        expect(mockPrisma.sesionMesaCliente.create).not.toHaveBeenCalled()
+      })
+
+      it('reactivado (restaurante y marca activos) abre la mesa como siempre', async () => {
+        mockPrisma.mesa.findFirst.mockResolvedValue(conRestaurante({}))
+        mockPrisma.sesionMesa.findFirst.mockResolvedValue(null)
+        mockPrisma.$transaction.mockResolvedValue([{ id: 'nueva-sesion', codigoSesion: '007' }, { id: 'mesa-1' }])
+
+        const result = await service.open({ tableCode: 'qr-abc' })
+
+        expect(result.sesionId).toBe('nueva-sesion')
+      })
+
+      it('la mesa se pide junto con la disponibilidad del restaurante y de su marca', async () => {
+        mockPrisma.mesa.findFirst.mockResolvedValue(null)
+
+        await expect(service.open({ tableCode: 'qr-abc' })).rejects.toThrow(NotFoundException)
+
+        expect(mockPrisma.mesa.findFirst).toHaveBeenCalledWith(
+          expect.objectContaining({
+            include: { restaurante: { select: { modoSesion: true, activo: true, marca: { select: { activo: true } } } } },
+          }),
+        )
       })
     })
 

@@ -1,6 +1,7 @@
 import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common'
 import * as bcrypt from 'bcryptjs'
 import { GERENTE, OWNER, PrismaMock, comoPrisma, crearPrismaMock } from '../test/prisma-mock'
+import { ROOT_USER as ROOT } from '../test/root-mock'
 import { AdminsService } from './admins.service'
 
 const DTO_ALTA = { email: 'gerente@menyu.test', nombre: 'Gerente Palermo', password: 'clave-segura' }
@@ -190,6 +191,34 @@ describe('AdminsService', () => {
 
       // Assert
       await expect(baja).rejects.toThrow(NotFoundException)
+    })
+
+    // Decisión 15 de docs/plan-consola-root.md: las cuentas ROOT no se borran desde la app ni la API (solo el script de cuentas
+    // ROOT, que nunca borra la última). Esta ruta vieja las dejaba borrar, sin pasar por el historial de ROOT.
+    it('nadie borra una cuenta ROOT por esta ruta: ni otra ROOT ni la propia (403)', async () => {
+      // Arrange
+      const otraRoot = { id: 'root-2', email: 'bruno@menyu.test', rol: 'ROOT', marcaId: null, passwordHash: 'hash' }
+      prisma.admin.findUnique.mockResolvedValue(otraRoot)
+
+      // Act
+      const bajaDeOtra = service.remove('root-2', ROOT)
+      const bajaPropia = service.remove('root-2', { ...ROOT, sub: 'root-2' })
+
+      // Assert
+      await expect(bajaDeOtra).rejects.toThrow(new ForbiddenException('Las cuentas ROOT no se pueden eliminar desde la app'))
+      await expect(bajaPropia).rejects.toThrow(ForbiddenException)
+      expect(prisma.admin.delete).not.toHaveBeenCalled()
+    })
+
+    it('ROOT sigue pudiendo borrar las cuentas que no son ROOT (hasta que la etapa 4 le saque este permiso)', async () => {
+      // Arrange
+      prisma.admin.findUnique.mockResolvedValue(GERENTE_DE_LA_MARCA)
+
+      // Act
+      await service.remove('admin-g1', ROOT)
+
+      // Assert
+      expect(prisma.admin.delete).toHaveBeenCalledWith({ where: { id: 'admin-g1' } })
     })
   })
 })

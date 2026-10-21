@@ -196,6 +196,50 @@ describe('CheckInRedirectPage', () => {
     })
   })
 
+  describe('cuando el restaurante está dado de baja (el servidor responde 403)', () => {
+    beforeEach(() => {
+      abrir.mockRejectedValue(new ApiError('Este restaurante no está disponible', 403))
+    })
+
+    it('lo dice, no culpa al QR y no ofrece ni el PIN ni reintentar (con el PIN daría lo mismo)', async () => {
+      renderCheckIn()
+
+      expect(await screen.findByRole('heading', { name: 'Este restaurante no está disponible' })).toBeInTheDocument()
+      expect(screen.getByRole('alert')).toHaveTextContent('Por ahora no se pueden abrir mesas en este restaurante')
+      expect(screen.queryByText('No pudimos abrir tu mesa')).not.toBeInTheDocument()
+      expect(screen.queryByText(/El QR no corresponde/)).not.toBeInTheDocument()
+      expect(screen.queryByRole('link', { name: 'Ingresar con el PIN de mi mesa' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('link', { name: 'Elegir mi restaurante' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Reintentar' })).not.toBeInTheDocument()
+      expect(screen.queryByText('Abriendo tu mesa…')).not.toBeInTheDocument()
+    })
+
+    it('la salida es un solo "Ir al inicio", el botón naranja (el principal), que no deja el link en el historial', async () => {
+      renderCheckIn()
+
+      const salida = await screen.findByRole('link', { name: 'Ir al inicio' })
+
+      expect(screen.getAllByRole('link', { name: 'Ir al inicio' })).toHaveLength(1)
+      expect(salida).toHaveStyle({ backgroundColor: 'rgb(232, 86, 58)' })
+      fireEvent.click(salida)
+      expect(screen.getByText('inicio (REPLACE)')).toBeInTheDocument()
+    })
+
+    it('es lo mismo sin restaurante en el link (no hace falta saber de quién era la mesa)', async () => {
+      renderCheckIn('/check-in?tableCode=qr-1')
+
+      expect(await screen.findByRole('heading', { name: 'Este restaurante no está disponible' })).toBeInTheDocument()
+    })
+
+    it('un 500 no se confunde con una baja: sigue ofreciendo reintentar', async () => {
+      abrir.mockRejectedValue(new ApiError('Error 500', 500))
+      renderCheckIn()
+
+      expect(await screen.findByRole('heading', { name: 'No pudimos conectarnos' })).toBeInTheDocument()
+      expect(screen.queryByText('Este restaurante no está disponible')).not.toBeInTheDocument()
+    })
+  })
+
   describe('cuando no hubo respuesta del servidor', () => {
     it.each([
       ['sin conexión', new TypeError('Failed to fetch')],

@@ -4,13 +4,18 @@ import { AbriendoMesaScreen, CheckInFalloScreen } from '../../components/CheckIn
 import { useEntrarAMesa } from '../../hooks/useEntrarAMesa'
 import { useSessionStore } from '../../store/sessionStore'
 
-type Estado = 'abriendo' | 'qr' | 'red'
+type Estado = 'abriendo' | 'qr' | 'red' | 'cerrado'
 
 /**
  * Sin respuesta del servidor, o respuesta de que está caído o saturado: volver a intentar puede andar. Con cualquier
  * otra respuesta (la mesa no existe, el pedido es inválido) el QR no sirve y reintentar da lo mismo.
  */
 const sePuedeReintentar = (status: number | null) => status === null || status === 429 || status >= 500
+
+/** 403: el restaurante (o su marca) está dado de baja y no abre mesas nuevas. El QR está bien: no se manda a probar con el PIN. */
+const estaDadoDeBaja = (status: number | null) => status === 403
+
+const estadoDelFallo = (status: number | null): Estado => (estaDadoDeBaja(status) ? 'cerrado' : sePuedeReintentar(status) ? 'red' : 'qr')
 
 /**
  * Es la dirección que codifican los QR impresos de las mesas (`/check-in?restaurantId=…&tableCode=…`). Abre la mesa y
@@ -29,7 +34,7 @@ export default function CheckInRedirectPage() {
   const volverAlInicio = () => navigate('/', { replace: true })
   const { entrar, pantalla } = useEntrarAMesa({
     reemplazar: true,
-    alFallar: ({ status }) => setEstado(sePuedeReintentar(status) ? 'red' : 'qr'),
+    alFallar: ({ status }) => setEstado(estadoDelFallo(status)),
     alVolver: volverAlInicio,
   })
 

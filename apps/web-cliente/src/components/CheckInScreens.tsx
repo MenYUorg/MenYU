@@ -63,8 +63,11 @@ export function AbriendoMesaScreen() {
   )
 }
 
-/** Por qué no se pudo abrir: `qr` es que esa mesa no existe (reintentar no sirve); `red` es que no hubo respuesta del servidor. */
-export type MotivoFalloCheckIn = 'qr' | 'red'
+/**
+ * Por qué no se pudo abrir: `qr` es que esa mesa no existe (reintentar no sirve); `red` es que no hubo respuesta del servidor;
+ * `cerrado` es que el restaurante (o su marca) está dado de baja: con el QR y con el PIN da lo mismo, así que no se ofrece el PIN.
+ */
+export type MotivoFalloCheckIn = 'qr' | 'red' | 'cerrado'
 
 interface CheckInFalloScreenProps {
   motivo: MotivoFalloCheckIn
@@ -81,6 +84,10 @@ const TEXTOS: Record<MotivoFalloCheckIn, { titulo: string; texto: string }> = {
   red: {
     titulo: 'No pudimos conectarnos',
     texto: 'Revisá tu conexión a internet y volvé a intentar. Si el problema sigue, podés entrar con el PIN de tu mesa.',
+  },
+  cerrado: {
+    titulo: 'Este restaurante no está disponible',
+    texto: 'Por ahora no se pueden abrir mesas en este restaurante. Probá más tarde o elegí otro desde el inicio.',
   },
 }
 
@@ -116,15 +123,18 @@ export function CheckInFalloScreen({ motivo, restauranteId, onReintentar }: Chec
           <p style={{ margin: '8px 0 0', fontFamily: 'Inter, sans-serif', fontSize: 14, lineHeight: 1.5, color: C.textSub }}>{texto}</p>
         </div>
         {motivo === 'red' && <Boton variante="principal" onClick={onReintentar}>Reintentar</Boton>}
-        {salidaPin}
-        <Link
-          to="/"
-          replace
-          className="hover:!text-[#2D3561]"
-          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 44, padding: '0 12px', marginTop: -8, fontFamily: 'Inter, sans-serif', fontWeight: 500, fontSize: 13, color: C.textSub }}
-        >
-          Ir al inicio
-        </Link>
+        {/* Restaurante dado de baja: el PIN no sirve de nada, la salida es el inicio (con el botón principal). */}
+        {motivo === 'cerrado' ? <Boton variante="principal" to="/">Ir al inicio</Boton> : salidaPin}
+        {motivo !== 'cerrado' && (
+          <Link
+            to="/"
+            replace
+            className="hover:!text-[#2D3561]"
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 44, padding: '0 12px', marginTop: -8, fontFamily: 'Inter, sans-serif', fontWeight: 500, fontSize: 13, color: C.textSub }}
+          >
+            Ir al inicio
+          </Link>
+        )}
       </div>
     </Shell>
   )

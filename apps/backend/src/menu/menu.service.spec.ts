@@ -24,7 +24,7 @@ const RESTAURANTE = {
   nombreSeccionRecomendados: 'Recomendaciones del chef',
   direccion: 'Av. Siempreviva 742',
   logoUrl: null,
-  marca: { logoUrl: null },
+  marca: { logoUrl: null, activo: true },
 }
 
 const ING_REMOVIBLE = {
@@ -138,7 +138,7 @@ describe('MenuService', () => {
 
     describe('logo y dirección del restaurante (para el header y el menú lateral)', () => {
       it('con logo propio devuelve ese, aunque la marca tenga otro', async () => {
-        mockPrisma.restaurante.findUnique.mockResolvedValue({ ...RESTAURANTE, logoUrl: 'https://x/propio.png', marca: { logoUrl: 'https://x/marca.png' } })
+        mockPrisma.restaurante.findUnique.mockResolvedValue({ ...RESTAURANTE, logoUrl: 'https://x/propio.png', marca: { logoUrl: 'https://x/marca.png', activo: true } })
 
         const result = await service.getMenuPublico('rest-1', {})
 
@@ -146,7 +146,7 @@ describe('MenuService', () => {
       })
 
       it('sin logo propio devuelve el de su marca', async () => {
-        mockPrisma.restaurante.findUnique.mockResolvedValue({ ...RESTAURANTE, logoUrl: null, marca: { logoUrl: 'https://x/marca.png' } })
+        mockPrisma.restaurante.findUnique.mockResolvedValue({ ...RESTAURANTE, logoUrl: null, marca: { logoUrl: 'https://x/marca.png', activo: true } })
 
         const result = await service.getMenuPublico('rest-1', {})
 
@@ -154,15 +154,15 @@ describe('MenuService', () => {
       })
 
       it('sin logo propio ni de marca devuelve null (la app muestra el de MenYU)', async () => {
-        mockPrisma.restaurante.findUnique.mockResolvedValue({ ...RESTAURANTE, logoUrl: null, marca: { logoUrl: null } })
+        mockPrisma.restaurante.findUnique.mockResolvedValue({ ...RESTAURANTE, logoUrl: null, marca: { logoUrl: null, activo: true } })
 
         const result = await service.getMenuPublico('rest-1', {})
 
         expect(result.restaurante.logoUrl).toBeNull()
       })
 
-      it('una marca sin datos no rompe: devuelve null', async () => {
-        mockPrisma.restaurante.findUnique.mockResolvedValue({ ...RESTAURANTE, marca: undefined })
+      it('una marca sin logo cargado no rompe: devuelve null', async () => {
+        mockPrisma.restaurante.findUnique.mockResolvedValue({ ...RESTAURANTE, marca: { activo: true } })
 
         const result = await service.getMenuPublico('rest-1', {})
 
@@ -189,7 +189,7 @@ describe('MenuService', () => {
             nombreSeccionRecomendados: true,
             direccion: true,
             logoUrl: true,
-            marca: { select: { logoUrl: true } },
+            marca: { select: { logoUrl: true, activo: true } },
           },
         })
       })
@@ -335,6 +335,20 @@ describe('MenuService', () => {
 
       await expect(service.getMenuPublico('rest-inactivo', {}))
         .rejects.toThrow(NotFoundException)
+    })
+
+    it('marca dada de baja (con el restaurante activo) → lanza NotFoundException y no busca el menú', async () => {
+      mockPrisma.restaurante.findUnique.mockResolvedValue({ ...RESTAURANTE, activo: true, marca: { logoUrl: null, activo: false } })
+
+      await expect(service.getMenuPublico('rest-1', {})).rejects.toThrow('Restaurante no encontrado')
+
+      expect(mockPrisma.categoriaMenu.findMany).not.toHaveBeenCalled()
+    })
+
+    it('marca y restaurante activos → devuelve el menú (reactivar vuelve todo como estaba)', async () => {
+      mockPrisma.restaurante.findUnique.mockResolvedValue({ ...RESTAURANTE, activo: true, marca: { logoUrl: null, activo: true } })
+
+      await expect(service.getMenuPublico('rest-1', {})).resolves.toMatchObject({ restaurante: { id: 'rest-1' } })
     })
 
     // 8. Ingredientes con esAgregable, esRemovible, precioExtra

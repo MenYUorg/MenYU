@@ -79,6 +79,10 @@ export class AdminsService {
     const target = await this.prisma.admin.findUnique({ where: { id } })
     if (!target) throw new NotFoundException('Admin no encontrado')
 
+    // Las cuentas ROOT no se borran desde la app ni la API (decisión 15 de docs/plan-consola-root.md): la única vía es el script
+    // de cuentas ROOT, que nunca borra a la última. Esta ruta vieja no pasa por el historial de ROOT.
+    if (target.rol === 'ROOT') throw new ForbiddenException('Las cuentas ROOT no se pueden eliminar desde la app')
+
     if (user.rol === 'OWNER') {
       const ownerMarcaId = await this.resolveMarcaId(user)
       if (target.marcaId !== ownerMarcaId) throw new ForbiddenException('No tenés acceso a este admin')
