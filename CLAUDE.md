@@ -40,6 +40,7 @@ MenYu/
 ├── packages/
 │   ├── types/            → @menyu/types    (tipos TS compartidos)
 │   ├── ui/               → @menyu/ui       (componentes React compartidos y tokens de marca: @menyu/ui/tailwind-preset)
+│   ├── auth-client/      → @menyu/auth-client (sesión de Supabase en cookie de dominio compartido, RequireAuth, logout)
 │   └── config/           → @menyu/config   (ESLint + TS configs base)
 ├── turbo.json
 ├── package.json
@@ -112,7 +113,7 @@ packages/types/src/
 - El comensal no usa guards de admin — se autentica por sesión de mesa
 
 ### Autenticación con Supabase (migración en curso)
-Spec, decisiones y fases: `docs/auth/specs/auth.md` (una fase por sesión; al cerrar cada una, el subagente `revisor`). Hechas: Fase 1 (modelo de datos), Fase 2 (backend), Fase 3 (web-auth) y Fase 3b (Google y `/privacidad`), en staging y en producción desde v1.1.0, con la pantalla de consentimiento de Google publicada. Sigue: Fase 4 (SSO en las apps).
+Spec, decisiones y fases: `docs/auth/specs/auth.md` (una fase por sesión; al cerrar cada una, el subagente `revisor`). Hechas: Fase 1 (modelo de datos), Fase 2 (backend), Fase 3 (web-auth) y Fase 3b (Google y `/privacidad`), en staging y en producción desde v1.1.0, con la pantalla de consentimiento de Google publicada. En curso: Fase 4 (SSO en las apps), por entregas; la 4.1 (`@menyu/auth-client` y web-auth sobre la cookie de dominio compartido) está hecha.
 - Modelos nuevos: `Usuario` (`supabaseUserId`, `esRoot` para ROOT) y `Membresia` con el enum `Rol`: `OWNER` por marca; `GERENTE`, `JEFE_SALON`, `MOZO` y `COCINA` por restaurante (CHECK `membresia_ambito_check` en la migración). Además `Mozo.usuarioId` (los mozos invitados no tienen `passwordHash`) y `Cliente.supabaseUserId`. `usuario` y `membresia` tienen RLS sin políticas.
 - Backend (en `apps/backend/src/auth/`):
   - `SupabaseAuthGuard` verifica el access token de Supabase contra el JWKS de `SUPABASE_URL` y deja el `Usuario` en `request.usuario` (lo lee `@UsuarioActual()`).
@@ -125,7 +126,7 @@ Spec, decisiones y fases: `docs/auth/specs/auth.md` (una fase por sesión; al ce
   - `/privacidad` es la política de privacidad pública que figura en Google Cloud. No usa la sesión: no le pongas post-login ni la cambies de ruta.
   - Después del login llama a `GET /auth/me` y manda al `redirect` (solo `https://*.menyu-app.com`, o `*.menyu.local` en local) o a la app del rol.
   - Los links del mail traen un `token_hash` que se canjea con `verifyOtp` (plantillas: `docs/auth/VariablesACambiar.md`).
-  - La sesión queda en localStorage hasta la Fase 4. web-admin y web-staff todavía no la leen.
+  - La sesión vive en la cookie de dominio compartido de `@menyu/auth-client` (`VITE_AUTH_COOKIE_DOMAIN`). web-admin y web-staff todavía no la leen (entregas 4.5 y 4.6).
   - Probar en local contra staging: `docs/auth/VariablesACambiar.md`, Desarrollo local.
 - Todo lo demás sigue con la autenticación actual hasta la Fase 4, cuando backend y frontends cambian de token a la vez: JWT propio con `JWT_SECRET`, `@Roles`, `RolesGuard` y `@CurrentUser`, `Admin`/`AdminRestaurante`/`Mozo` y el login en `/auth` de web-cliente. No mezclar los dos sistemas en un mismo endpoint.
 - En el seed, el `Usuario` OWNER de Marca Seed (`owner@menyu.com`) tiene un `supabaseUserId` ficticio que no existe en ningún proyecto de Supabase. Para iniciar sesión con él (desde la Fase 2) hay que reemplazarlo por el id de un usuario real del Supabase de staging; el seed no lo pisa.
@@ -167,6 +168,8 @@ Vive en packages/:
 - `packages/auth`  → LoginForm, useAuth, authService
                      compartido entre web-admin y web-staff
                      NO usar en web-cliente
+- `packages/auth-client` → cliente de Supabase con la cookie de dominio compartido, `useSession`,
+                     `RequireAuth`, `logout` y qué app le toca a cada perfil (Fase 4 de auth)
 - `packages/ui`    → componentes visuales idénticos entre apps
                      Button, Input, Modal, Avatar, hooks compartidos
 - `packages/types` → tipos TypeScript (sin cambios)
