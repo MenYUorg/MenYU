@@ -237,7 +237,19 @@ Entregas (ver Decisiones de la planificación de la Fase 4):
   - Un `redirect` a admin de un MOZO termina en staff, y uno a `staff/mozo/mesas` termina ahí.
   - Cerrar sesión borra la cookie, y staff deja de verla.
   - La cuenta sin `Usuario` va a `/sin-acceso`.
-- **Falta probar con la cookie:** Google (el verifier del PKCE ahora vive en la cookie), la invitación y la recuperación por mail.
+- **Google, invitación y recuperación con la cookie** (2026-10-21). Se usó el Chrome aparte con el perfil `menyu-pruebas-google` y playwright-cli por CDP; los links de los mails se abrieron en `auth.menyu.local:5173`:
+  - **Google** (`menyuprueba2@gmail.com`, con `?redirect=…/mozo/mesas`): `auth/` → selector de Google → `/google` → `staff/mozo/mesas`, en 9 segundos.
+    - El verifier del PKCE queda en cookies de `.menyu.local` (`sb-<ref>-auth-token-code-verifier` y las de `-flow…`).
+    - La sesión de Google pesa más y `@supabase/ssr` la parte en `auth-token.0` y `.1`. Staff la ve.
+  - **Invitación** (cuenta descartable `menyuprueba2+fase41@gmail.com`, MOZO, invitada por el OWNER de prueba): el link del mail (`/invitacion`, `type=invite`) define la contraseña y termina en `staff/mozo` con la sesión en la cookie.
+  - **Recuperación** con la misma cuenta:
+    - El mail llegó en 12 segundos, y el link (`/restablecer-contrasena`, `type=recovery`) termina en `staff/mozo`.
+    - Después, la contraseña nueva entra y la anterior da "El email o la contraseña no son correctos".
+- **Hallazgo: el estado de OAuth de Supabase vence a los 5 minutos.**
+  - Qué pasó: con `menyuprueba1`, Google pidió "actividad inusual", un QR y la contraseña. Al volver, Supabase respondió `error=invalid_request`, `error_code=bad_oauth_state` ("OAuth state has expired").
+  - Como el estado venció, Supabase no sabe a qué `redirectTo` volver: manda a la Site URL (`auth.<ambiente>/`). `/` no muestra `errorDeOAuth` (solo `/google` lo hace), así que la persona ve el login sin explicación.
+  - Mejora posible: que `/` también muestre el error de OAuth de la URL.
+  - No depende de la cookie: con la cuenta ya verificada en Google, el reintento entró en 9 segundos.
 
 - Paquete compartido en el monorepo (`@menyu/auth-client`) con:
   - Cliente Supabase con cookie de dominio desde `VITE_AUTH_COOKIE_DOMAIN`.

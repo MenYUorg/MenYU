@@ -75,6 +75,8 @@ Para probar web-auth: cada uno tiene que terminar en su app (`docs/auth/specs/au
 | `varias.pruebas-auth@menyu-app.com` | OWNER de la marca y MOZO del restaurante | el selector de web-auth |
 | `sin-acceso.pruebas-auth@menyu-app.com` | ninguno (sección anterior) | "Tu cuenta no tiene acceso" |
 
+`menyuprueba2+fase41@gmail.com` es una cuenta descartable de la entrega 4.1 de la Fase 4 (2026-10-21). Es MOZO de "Restaurante Pruebas Auth": la invitó el OWNER de prueba y se usó para probar la invitación y la recuperación con la cookie. Los mails llegan a la bandeja de `menyuprueba2@gmail.com` (alias `+`). Su contraseña de Supabase está en `STAGING_AUTH_FASE41_PASSWORD`.
+
 Para la invitación de punta a punta no se crea nada a mano: se invita a un mail con bandeja real (`STAGING_AUTH_INVITADO_EMAIL`, por ejemplo un alias `+invitado` de Gmail) con `POST /auth/invitaciones` y el token del OWNER, y el link del mail lleva a `auth.staging.menyu-app.com/invitacion`.
 
 SQL Editor de staging, después de crear las cuentas (cada `<UID>` es el *User UID* de la suya):
