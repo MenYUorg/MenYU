@@ -1,3 +1,4 @@
+import { Suspense, lazy } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { ProtectedRoute, useAuth } from '@menyu/auth'
 import { LoginPage } from './pages/login/LoginPage'
@@ -16,6 +17,17 @@ import { AuditoriaPage } from './pages/admin/auditoria/AuditoriaPage'
 import { MarcaPage } from './pages/admin/marca/MarcaPage'
 import { RoleGuard } from './components/RoleGuard'
 
+// La consola de ROOT se descarga recién cuando entra un ROOT: OWNER y GERENTE no bajan ni su código ni su CSS.
+const RootRoutes = lazy(() => import('./pages/root/RootRoutes'))
+
+function CargandoConsola() {
+  return (
+    <div role="status" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6b7280', fontFamily: 'Inter, sans-serif' }}>
+      Cargando…
+    </div>
+  )
+}
+
 function MesasRouter() {
   const { user } = useAuth()
   if (user?.rol === 'GERENTE') return <GerenceMesasPage />
@@ -24,6 +36,9 @@ function MesasRouter() {
 
 function AdminRedirect() {
   const { user } = useAuth()
+  if (user?.rol === 'ROOT') {
+    return <Navigate to="/root" replace />
+  }
   if (user?.rol === 'GERENTE') {
     return <Navigate to="/admin/tables" replace />
   }
@@ -36,6 +51,17 @@ export function App() {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route element={<ProtectedRoute roles={['OWNER', 'ROOT', 'GERENTE']} />}>
+          {/* Consola de ROOT: tiene su propio shell, por eso va afuera de AdminLayout. Solo entra ROOT; el resto vuelve a /admin. */}
+          <Route
+            path="/root/*"
+            element={
+              <RoleGuard roles={['ROOT']}>
+                <Suspense fallback={<CargandoConsola />}>
+                  <RootRoutes />
+                </Suspense>
+              </RoleGuard>
+            }
+          />
           <Route element={<AdminLayout />}>
             <Route path="/admin" element={<AdminRedirect />} />
 
