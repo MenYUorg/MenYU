@@ -16,6 +16,9 @@ const VALID_PAYLOAD = {
 
 const SESION_ACTIVA = { id: 'sesion-1', estado: 'activa' }
 
+// Lo que firma POST /auth/guest: tipo cliente, pero sin sesión de mesa. La cuenta de cliente (/auth/login) es igual.
+const TOKEN_DE_INVITADO = { sub: 'cli-invitado', tipo: 'cliente', nombre: 'Invitado' }
+
 const ITEM_SIMPLE = {
   id: 'item-1',
   precioBase: 1500,
@@ -90,6 +93,15 @@ describe('OrdersService', () => {
       await expect(service.create('Bearer valid.token', { items: [] })).rejects.toThrow(
         UnauthorizedException,
       )
+    })
+
+    it('un token de invitado (sin sesión de mesa) no crea pedidos: 401 sin tocar la base', async () => {
+      mockJwt.verify.mockReturnValue(TOKEN_DE_INVITADO)
+
+      await expect(service.create('Bearer invitado', { items: [] })).rejects.toThrow(
+        new UnauthorizedException('Este recurso requiere una sesión de mesa'),
+      )
+      expect(mockPrisma.sesionMesa.findUnique).not.toHaveBeenCalled()
     })
   })
 
@@ -399,6 +411,16 @@ describe('OrdersService', () => {
     it('JWT con tipo distinto de "cliente" → UnauthorizedException', async () => {
       mockJwt.verify.mockReturnValue({ ...VALID_PAYLOAD, tipo: 'admin' })
       await expect(service.findBySesion('Bearer valid.token')).rejects.toThrow(UnauthorizedException)
+    })
+
+    // El hueco del hotfix: con sesionId undefined, Prisma ignora el filtro y devolvía los pedidos de toda la base.
+    it('un token de invitado (sin sesión de mesa) no lista nada: 401 sin consultar los pedidos', async () => {
+      mockJwt.verify.mockReturnValue(TOKEN_DE_INVITADO)
+
+      await expect(service.findBySesion('Bearer invitado')).rejects.toThrow(
+        new UnauthorizedException('Este recurso requiere una sesión de mesa'),
+      )
+      expect(mockPrisma.pedido.findMany).not.toHaveBeenCalled()
     })
 
     it('JWT válido → llama findMany filtrando por sesionId del payload', async () => {
