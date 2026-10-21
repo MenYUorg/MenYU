@@ -65,7 +65,7 @@ export function OlvideContrasenaPage() {
 
   return (
     <Marco titulo="Recuperar la contraseña">
-      <Encabezado titulo="Recuperá tu contraseña">Te mandamos un link por mail para crear una nueva.</Encabezado>
+      <Encabezado titulo="Recuperá tu contraseña">Te mandaremos un link por mail para crear una nueva.</Encabezado>
       <form onSubmit={enviar} noValidate className="space-y-5">
         {error && <Aviso tipo="error">{error}</Aviso>}
         <Campo
