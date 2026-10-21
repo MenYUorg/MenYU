@@ -37,6 +37,13 @@ En la misma sesión se decidieron también los puntos **Clientes**, **Convivenci
 2. **Una cuenta de Supabase sin confirmar no se reutiliza al invitar:** se borra y se manda la invitación normal. Como el registro público está abierto, cualquiera puede crear una cuenta con el email de un empleado; si se usara esa cuenta, quien la creó conocería su contraseña y, cuando el dueño del email la confirmara, entraría con acceso de personal.
 3. **Tests:** además de los 5 del guard, un test de tabla de la matriz de quién invita a quién, que es la parte con más riesgo de escalada de privilegios.
 
+## Decisiones de la planificación de la Fase 3b (2026-10-21)
+
+1. **El backend no cambia.** `SupabaseAuthGuard` resuelve el `Usuario` por el `sub` del token. Cuando un invitado entra con Google usando el mismo email, Supabase vincula la identidad de Google a esa cuenta y el `sub` no cambia. Una cuenta de Google sin invitación es una cuenta nueva sin `Usuario`: `/auth/me` da 403 y web-auth la manda a `/sin-acceso`.
+2. **Vuelta a `/google`.** El `redirect` viaja en el `redirectTo` de `signInWithOAuth` y se vuelve a validar al llegar. El canje del `?code=` lo hace el cliente de Supabase al inicializarse; `/google` lee de `auth.initialize()` si falló, y lee de la URL el error de OAuth (al cancelar en Google, Supabase puede devolver solo `error=access_denied`, que supabase-js no detecta). Si salió bien, sigue a `/`, que hace el post-login de siempre.
+3. **`prompt=select_account`.** Cerrar sesión en MenYU no cierra la de Google: sin el selector de cuentas, quien entró con la cuenta equivocada vuelve a entrar con la misma.
+4. **El botón va arriba del formulario en `/` y también en `/invitacion`**, no en `/restablecer-contrasena`. En `/invitacion` no gasta el `token_hash` (se canjea recién al guardar la contraseña): si el email de Google no es el de la invitación, el link del mail sigue sirviendo.
+
 ## Dominios
 
 
@@ -140,14 +147,40 @@ Verificada con Supabase simulado (playwright-cli, 31 casos) y contra el Supabase
   - Supabase: Data API desactivada (o RLS en todas las tablas) antes del primer deploy, y las plantillas de mail "Invite user" y "Reset password" con `token_hash` (`docs/auth/VariablesACambiar.md`, Fase 3).
 - **Terminado cuando:** un usuario de cada rol inicia sesión y termina en la app correcta, y el flujo de invitación funciona de punta a punta. web-auth se despliega sola en staging con cada merge a `main` y en producción con el tag, y el smoke de producción la verifica.
 
-### Fase 3b — Login con Google
+### Fase 3b — Login con Google ✅ (2026-10-21), staging con el merge y producción con el próximo tag
 
-- Botón "Continuar con Google" en web-auth (`signInWithOAuth`), con callback a `auth.menyu-app.com`.
+Hecha en `apps/web-auth` (el backend no cambia):
+
+- **Pantallas:** "Continuar con Google" (`src/components/BotonGoogle.tsx`) arriba del formulario en `/` y en `/invitacion`. La salida a Google es `src/flujo/useIngresoConGoogle.ts`, y `/google` (`src/pages/VolverDeGooglePage.tsx`) recibe la vuelta.
+- **Errores:** `/google` muestra el error de OAuth de la URL (`errorDeOAuth`, en `src/lib/mensajes.ts`) o el del canje. Si salió bien, sigue a `/`, que hace el post-login de la Fase 3.
+- **Volver atrás:**
+  - `/invitacion` sin token (por ejemplo, al volver atrás desde Google) pide abrir de nuevo el link del mail.
+  - Si la página vuelve desde la bfcache, los botones se vuelven a habilitar.
+
+**Verificada** en local (`auth.menyu.local:5173`) contra el Supabase y la API de staging, con las dos cuentas de Google de `docs/auth/usuarios-prueba-staging.md`. Se usó playwright-cli conectado a un Chrome aparte en el que una persona inició sesión en Google. Los seis casos de abajo dieron lo esperado:
+1. **Cancelar:** `/google` con "Cancelaste…", y el `redirect` se conserva.
+2. **Sin invitación:** `/auth/me` 403 y "sin acceso". Después de cerrar sesión aparece el selector de cuentas de Google.
+3. **Invitado que no aceptó:**
+   - Desde el link del mail, con la otra cuenta, termina en "sin acceso".
+   - Con la cuenta invitada, entra como MOZO, mismo `sub` que el `Usuario` de la invitación.
+   - Después, el link dice que venció.
+4. **Contraseña después de Google:** con la cuenta que entró con Google y después creó una contraseña desde "Olvidé mi contraseña", entra con email y contraseña y con Google, siempre con el mismo id.
+5. **Cuenta de Google a la que invitan después:** `invitacionEnviada: false`, no llega mail y entra con Google.
+6. **`redirect`:** con `?redirect=…/mozo/mesas`, termina ahí.
+
+El "atrás" desde Google, en un Chrome de escritorio real, restaura la página desde la bfcache con los botones habilitados. Pendientes en "Para tener en cuenta".
+
+- Botón "Continuar con Google" en web-auth (`signInWithOAuth`), con callback a `auth.menyu-app.com/google` (ver Decisiones de la planificación de la Fase 3b).
 - Mismo post-login que la Fase 3 (`/auth/me`, redirect, selector de restaurante, pantalla de sin acceso).
+- Configuración externa (`docs/auth/VariablesACambiar.md`, sección 6): la vuelta a `/google` no necesita Redirect URL en staging ni en producción (es el host de la Site URL), sí en desarrollo (`http://auth.menyu.local:5173/**`). La pantalla de consentimiento de Google Cloud, en *In production* antes del tag (en *Testing* solo entran los usuarios de prueba cargados).
 - **Casos a verificar (a mano, no automatizados):**
   - Usuario invitado con `x@gmail.com` entra con Google usando ese mail → Supabase vincula la identidad al mismo usuario, se conserva el `supabaseUserId` y accede normal.
-  - Cuenta de Google sin invitación → pantalla de sin acceso.
-- **Terminado cuando:** ambos casos se comportan como se describe. Email + contraseña sigue funcionando como respaldo.
+  - Cuenta de Google sin invitación → pantalla de sin acceso. Al cerrar sesión y volver a Google, aparece el selector de cuentas.
+  - Invitado que todavía no aceptó la invitación entra con Google (desde `/` o desde el link del mail) → accede, y después el link del mail dice que venció. Desde el link, con una cuenta de Google de otro email → sin acceso, y el link sigue sirviendo.
+  - Cuenta de Google sin invitación a la que después invitan → `POST /auth/invitaciones` responde `invitacionEnviada: false` y la persona entra con Google.
+  - Con `?redirect=` de otra app de MenYU, al volver de Google termina ahí.
+  - Cancelar en Google → `/google` con el mensaje, y se puede reintentar.
+- **Terminado cuando:** los casos se comportan como se describe. Email + contraseña sigue funcionando como respaldo.
 
 ### Fase 4 — SSO en las apps
 
@@ -194,10 +227,18 @@ Verificada con Supabase simulado (playwright-cli, 31 casos) y contra el Supabase
 - Autenticarse en Supabase (con Google o con una cuenta de cliente) NO otorga acceso. Como el registro público está abierto, ninguna ruta del personal puede conformarse con "tiene sesión de Supabase": el acceso lo da la `Membresia` en nuestra DB.
 - Desde la Fase 3 la publishable key de Supabase está en un bundle público (web-auth; desde la Fase 4, en todos): ninguna tabla puede quedar expuesta por la Data API (ver Fase 0). `usuario` y `membresia` tienen RLS desde la Fase 1. La service role key (o secret key) saltea RLS: nunca sale del backend.
 - Las pruebas del revisor en el navegador se hacen solo contra staging o local, nunca contra producción, y con usuarios de prueba.
+- Desde la Fase 3b, Supabase vincula una cuenta de Google a la cuenta con el mismo email confiando en el `email_verified` de Google, aunque la cuenta invitada todavía no esté confirmada. Con un email que no es de Gmail ni de Workspace, eso solo prueba que la persona controlaba ese email cuando creó la cuenta de Google: un ex empleado con una cuenta de Google creada con el mail del trabajo podría entrar a una invitación nueva a ese mail. Riesgo aceptado para el MVP; documentarlo en la tesis.
 
 ## Para tener en cuenta
 
-Observaciones que dejaron las Fases 0 a 3 (2026-10-20). Revisarlas al arrancar cada fase y borrar las que ya no apliquen.
+Observaciones que dejaron las Fases 0 a 3b (2026-10-20 y 2026-10-21). Revisarlas al arrancar cada fase y borrar las que ya no apliquen.
+
+- **Fase 3b: falta staging desplegado y producción.**
+  1. Después del merge: un login con Google en `auth.staging.menyu-app.com` desplegado con una de las cuentas de prueba (ahí el PKCE es `S256`; en local, por `http://`, es `plain`).
+  2. Antes del tag: la pantalla de consentimiento de Google Cloud en *In production* y el proveedor Google activo en el Supabase de producción (`docs/auth/VariablesACambiar.md`, sección 6).
+  3. Sin probar: "atrás" desde Google en celulares (Safari iOS y Chrome Android).
+- **Fase 3b: Supabase no agrega una identidad `email` cuando una cuenta que solo tiene Google crea una contraseña.** `identities` sigue mostrando solo `google`, pero la contraseña sirve (comprobado el 2026-10-21). Para saber si una cuenta tiene contraseña no sirve mirar `identities`.
+- **Fase 3b: Redirect URL de desarrollo.** Hasta el 2026-10-21 el Supabase de staging no tenía `http://auth.menyu.local:5173/**`, y la vuelta de Google desde local caía en la Site URL (`auth.staging…`). Ya está agregada.
 
 - **Fase 3: falta producción.** Staging quedó completo con el merge del PR #409 (`6f13a7d`). Para el tag:
   1. Sumar `https://auth.menyu-app.com` a `CORS_ORIGINS` de Railway de producción en el mismo release: el cambio redespliega el servicio y corre las migraciones.
@@ -210,7 +251,7 @@ Observaciones que dejaron las Fases 0 a 3 (2026-10-20). Revisarlas al arrancar c
     - El link abrió `/invitacion` sin gastar el token. "Guardar y entrar" lo canjeó y llevó a `staff/mozo`, y la contraseña nueva sirve para ingresar.
     - Una invitación anterior con la plantilla por defecto llevó a `auth.<amb>/#access_token=…` (flujo implícito), que web-auth con PKCE no acepta: sin las plantillas con `token_hash`, la invitación no funciona.
   - La recuperación de punta a punta: se pidió desde "Olvidé mi contraseña" y el link (`token_hash` con prefijo `pkce_`) abrió `/restablecer-contrasena` sin gastar el token. Después de guardar, la contraseña nueva sirve y la anterior no.
-  - Sin probar: que una cuenta confirmada se reutiliza al invitarla en otro restaurante (`invitacionEnviada: false`) y que una sin confirmar se borra y se reinvita.
+  - Que una cuenta confirmada se reutiliza al invitarla (`invitacionEnviada: false`) quedó probado en la Fase 3b, con una cuenta de Google. Sin probar: que una sin confirmar se borra y se reinvita.
 - **"Confirm email" activo en los dos proyectos de Supabase (Fase 0).** La invitación reutiliza una cuenta confirmada: si la confirmación estuviera apagada, un registro público quedaría confirmado al instante y se le daría acceso de personal a quien lo creó.
 - **Para la Fase 4:**
   - `@RequiereRol` / `MembresiaGuard` solo sirven para rutas con `:restauranteId`. Las de marca (`/marcas/:id`) y las de un recurso (`/items/:id`) resuelven el restaurante en el service y le preguntan a `AccesoService`.

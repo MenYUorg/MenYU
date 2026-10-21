@@ -112,14 +112,16 @@ packages/types/src/
 - El comensal no usa guards de admin — se autentica por sesión de mesa
 
 ### Autenticación con Supabase (migración en curso)
-Spec, decisiones y fases: `docs/auth/specs/auth.md` (una fase por sesión; al cerrar cada una, el subagente `revisor`). Hechas: Fase 1 (modelo de datos), Fase 2 (backend) y Fase 3 (web-auth; desplegada en staging, producción con el próximo tag). Sigue: Fase 3b (Google).
+Spec, decisiones y fases: `docs/auth/specs/auth.md` (una fase por sesión; al cerrar cada una, el subagente `revisor`). Hechas: Fase 1 (modelo de datos), Fase 2 (backend), Fase 3 (web-auth; desplegada en staging, producción con el próximo tag) y Fase 3b (Google; staging con el merge, producción con el próximo tag). Sigue: Fase 4 (SSO en las apps).
 - Modelos nuevos: `Usuario` (`supabaseUserId`, `esRoot` para ROOT) y `Membresia` con el enum `Rol`: `OWNER` por marca; `GERENTE`, `JEFE_SALON`, `MOZO` y `COCINA` por restaurante (CHECK `membresia_ambito_check` en la migración). Además `Mozo.usuarioId` (los mozos invitados no tienen `passwordHash`) y `Cliente.supabaseUserId`. `usuario` y `membresia` tienen RLS sin políticas.
 - Backend (en `apps/backend/src/auth/`):
   - `SupabaseAuthGuard` verifica el access token de Supabase contra el JWKS de `SUPABASE_URL` y deja el `Usuario` en `request.usuario` (lo lee `@UsuarioActual()`).
   - `@RequiereRol(...)` suma `MembresiaGuard` y exige el rol en el restaurante de `:restauranteId` (la membresía OWNER de la marca cubre sus sucursales).
   - Los permisos los decide `AccesoService`, que ignora `esRoot`.
   - Por ahora solo los usan `GET /auth/me` y `POST /auth/invitaciones`.
-- web-auth (`apps/web-auth`, `auth.<ambiente>`, puerto 5173): login con email y contraseña, olvidé mi contraseña, aceptar invitación, selector y "sin acceso".
+- web-auth (`apps/web-auth`, `auth.<ambiente>`, puerto 5173): login con email y contraseña o con Google, olvidé mi contraseña, aceptar invitación, selector y "sin acceso".
+  - "Continuar con Google" está en `/` y en `/invitacion`, y vuelve a `/google`, que muestra el error o sigue a `/`.
+  - Una cuenta de Google sin invitación no da acceso: `/auth/me` responde 403.
   - Después del login llama a `GET /auth/me` y manda al `redirect` (solo `https://*.menyu-app.com`, o `*.menyu.local` en local) o a la app del rol.
   - Los links del mail traen un `token_hash` que se canjea con `verifyOtp` (plantillas: `docs/auth/VariablesACambiar.md`).
   - La sesión queda en localStorage hasta la Fase 4. web-admin y web-staff todavía no la leen.
