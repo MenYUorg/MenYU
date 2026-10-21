@@ -37,6 +37,13 @@ En la misma sesión se decidieron también los puntos **Clientes**, **Convivenci
 2. **Una cuenta de Supabase sin confirmar no se reutiliza al invitar:** se borra y se manda la invitación normal. Como el registro público está abierto, cualquiera puede crear una cuenta con el email de un empleado; si se usara esa cuenta, quien la creó conocería su contraseña y, cuando el dueño del email la confirmara, entraría con acceso de personal.
 3. **Tests:** además de los 5 del guard, un test de tabla de la matriz de quién invita a quién, que es la parte con más riesgo de escalada de privilegios.
 
+## Decisiones de la planificación de la Fase 3b (2026-10-21)
+
+1. **El backend no cambia.** `SupabaseAuthGuard` resuelve el `Usuario` por el `sub` del token. Cuando un invitado entra con Google usando el mismo email, Supabase vincula la identidad de Google a esa cuenta y el `sub` no cambia. Una cuenta de Google sin invitación es una cuenta nueva sin `Usuario`: `/auth/me` da 403 y web-auth la manda a `/sin-acceso`.
+2. **Vuelta a `/google`.** El `redirect` viaja en el `redirectTo` de `signInWithOAuth` y se vuelve a validar al llegar. El canje del `?code=` lo hace el cliente de Supabase al inicializarse; `/google` lee de `auth.initialize()` si falló, y lee de la URL el error de OAuth (al cancelar en Google, Supabase puede devolver solo `error=access_denied`, que supabase-js no detecta). Si salió bien, sigue a `/`, que hace el post-login de siempre.
+3. **`prompt=select_account`.** Cerrar sesión en MenYU no cierra la de Google: sin el selector de cuentas, quien entró con la cuenta equivocada vuelve a entrar con la misma.
+4. **El botón va arriba del formulario en `/` y también en `/invitacion`**, no en `/restablecer-contrasena`. En `/invitacion` no gasta el `token_hash` (se canjea recién al guardar la contraseña): si el email de Google no es el de la invitación, el link del mail sigue sirviendo.
+
 ## Dominios
 
 
@@ -142,12 +149,17 @@ Verificada con Supabase simulado (playwright-cli, 31 casos) y contra el Supabase
 
 ### Fase 3b — Login con Google
 
-- Botón "Continuar con Google" en web-auth (`signInWithOAuth`), con callback a `auth.menyu-app.com`.
+- Botón "Continuar con Google" en web-auth (`signInWithOAuth`), con callback a `auth.menyu-app.com/google` (ver Decisiones de la planificación de la Fase 3b).
 - Mismo post-login que la Fase 3 (`/auth/me`, redirect, selector de restaurante, pantalla de sin acceso).
+- Configuración externa: `https://auth.<ambiente>/google` en las Redirect URLs de cada proyecto de Supabase, y la pantalla de consentimiento de Google Cloud en *In production* antes del tag (en *Testing* solo entran los usuarios de prueba cargados).
 - **Casos a verificar (a mano, no automatizados):**
   - Usuario invitado con `x@gmail.com` entra con Google usando ese mail → Supabase vincula la identidad al mismo usuario, se conserva el `supabaseUserId` y accede normal.
-  - Cuenta de Google sin invitación → pantalla de sin acceso.
-- **Terminado cuando:** ambos casos se comportan como se describe. Email + contraseña sigue funcionando como respaldo.
+  - Cuenta de Google sin invitación → pantalla de sin acceso. Al cerrar sesión y volver a Google, aparece el selector de cuentas.
+  - Invitado que todavía no aceptó la invitación entra con Google (desde `/` o desde el link del mail) → accede, y después el link del mail dice que venció. Desde el link, con una cuenta de Google de otro email → sin acceso, y el link sigue sirviendo.
+  - Cuenta de Google sin invitación a la que después invitan → `POST /auth/invitaciones` responde `invitacionEnviada: false` y la persona entra con Google.
+  - Con `?redirect=` de otra app de MenYU, al volver de Google termina ahí.
+  - Cancelar en Google → `/google` con el mensaje, y se puede reintentar.
+- **Terminado cuando:** los casos se comportan como se describe. Email + contraseña sigue funcionando como respaldo.
 
 ### Fase 4 — SSO en las apps
 
