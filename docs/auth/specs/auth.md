@@ -172,7 +172,7 @@ El "atrás" desde Google, en un Chrome de escritorio real, restaura la página d
 
 - Botón "Continuar con Google" en web-auth (`signInWithOAuth`), con callback a `auth.menyu-app.com/google` (ver Decisiones de la planificación de la Fase 3b).
 - Mismo post-login que la Fase 3 (`/auth/me`, redirect, selector de restaurante, pantalla de sin acceso).
-- Configuración externa (`docs/auth/VariablesACambiar.md`, sección 6): la vuelta a `/google` no necesita Redirect URL en staging ni en producción (es el host de la Site URL), sí en desarrollo (`http://auth.menyu.local:5173/**`). La pantalla de consentimiento de Google Cloud, en *In production* antes del tag (en *Testing* solo entran los usuarios de prueba cargados).
+- Configuración externa (`docs/auth/VariablesACambiar.md`, sección 6): la vuelta a `/google` no necesita Redirect URL en staging ni en producción (es el host de la Site URL), sí en desarrollo (`http://auth.menyu.local:5173/**`). La pantalla de consentimiento de Google Cloud pasa a *In production* cuando responda la política de privacidad (ver "Para tener en cuenta"); mientras esté en *Testing*, solo entran los usuarios de prueba cargados.
 - Política de privacidad pública en `/privacidad` de web-auth (`src/pages/PrivacidadPage.tsx`). Es una ruta estática: no usa la sesión ni llama a `/auth/me`, y el rewrite de `vercel.json` la sirve aunque se cargue directo. Google exige una página principal y una política de privacidad, las dos en un dominio autorizado (`menyu-app.com`), para pasar la pantalla de consentimiento a *In production*, y visita las URLs al publicar.
 - **Casos a verificar (a mano, no automatizados):**
   - Usuario invitado con `x@gmail.com` entra con Google usando ese mail → Supabase vincula la identidad al mismo usuario, se conserva el `supabaseUserId` y accede normal.
@@ -240,8 +240,11 @@ Observaciones que dejaron las Fases 0 a 3b (2026-10-20 y 2026-10-21). Revisarlas
   3. Pasar la pantalla de consentimiento de Google Cloud a *In production* recién cuando `https://auth.menyu-app.com/privacidad` responda, es decir, después del tag. Google visita las URLs al publicar, y hasta el tag `auth.menyu-app.com` no tiene ningún deploy (`DEPLOYMENT_NOT_FOUND`). En *Branding*:
      - Política de privacidad: `https://auth.menyu-app.com/privacidad` (en staging, `https://auth.staging.menyu-app.com/privacidad`, desde el merge).
      - Página principal: `https://mesa.menyu-app.com` (Discovery). La raíz `menyu-app.com` no tiene sitio.
-     - Dominio autorizado: `menyu-app.com`.
+     - Dominios autorizados: `menyu-app.com` y el `<ref>.supabase.co` de cada proyecto de Supabase (lo pide la guía de Google de Supabase).
      - Si Google pide verificar la marca, la página principal tiene que tener un link a la política de privacidad, y Discovery todavía no lo tiene.
+     - Sin publicar, después del tag el login con Google de producción deja entrar solo a los usuarios de prueba. *Branding* es uno solo para los dos ambientes, así que se puede publicar antes con la URL de staging (existe desde el merge) y cambiarla por la de producción después del tag. Falta confirmar que Google lo acepte, y staging se redespliega con cada merge.
+     - La página la arma JavaScript: el HTML que sirve Vercel tiene el `#root` vacío. Si Google dice que no la encuentra, servirla también como HTML estático.
+     - `/privacidad` describe lo que hace el código hoy: qué guarda cada tabla y qué proveedores reciben datos. Si eso cambia (por ejemplo, la Fase 5 retira los `password_hash`), actualizarla junto con la fecha de vigencia.
   4. Sin probar: "atrás" desde Google en celulares (Safari iOS y Chrome Android).
 - **Fase 3b: Supabase no agrega una identidad `email` cuando una cuenta que solo tiene Google crea una contraseña.** `identities` sigue mostrando solo `google`, pero la contraseña sirve (comprobado el 2026-10-21). Para saber si una cuenta tiene contraseña no sirve mirar `identities`.
 - **Fase 3b: Redirect URL de desarrollo.** Hasta el 2026-10-21 el Supabase de staging no tenía `http://auth.menyu.local:5173/**`, y la vuelta de Google desde local caía en la Site URL (`auth.staging…`). Ya está agregada.

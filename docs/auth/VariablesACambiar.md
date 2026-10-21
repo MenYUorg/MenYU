@@ -161,7 +161,7 @@ Google vuelve a `https://auth.<ambiente>/google?redirect=…` (`apps/web-auth/sr
 | Supabase → *Authentication → Sign In / Providers → Google* | Activo (Fase 0), con el client ID y el secret del cliente OAuth | Ídem |
 | Google Cloud → *APIs y servicios → Credenciales* → el cliente OAuth | URI de redireccionamiento autorizado: `https://<ref de staging>.supabase.co/auth/v1/callback` (Fase 0) | `https://<ref de producción>.supabase.co/auth/v1/callback` (Fase 0) |
 | Google Cloud → *Pantalla de consentimiento de OAuth* | En *Testing* solo entran los usuarios de prueba cargados: sumar las cuentas del equipo | *In production*, recién cuando `https://auth.menyu-app.com/privacidad` responda (después del tag): Google visita las URLs al publicar. Con `openid`, `email` y `profile` no hace falta la verificación de Google |
-| Google Cloud → *Branding* (uno solo para los dos ambientes) | — | Página principal `https://mesa.menyu-app.com`, política de privacidad `https://auth.menyu-app.com/privacidad` y dominio autorizado `menyu-app.com` |
+| Google Cloud → *Branding* (uno solo para los dos ambientes) | — | Página principal `https://mesa.menyu-app.com`, política de privacidad `https://auth.menyu-app.com/privacidad` y dominios autorizados `menyu-app.com` y el `<ref>.supabase.co` de cada proyecto |
 
 La pantalla de Google muestra `<ref>.supabase.co` como destino. Cambiarlo requiere un dominio propio para Supabase (add-on pago): fuera de alcance.
 

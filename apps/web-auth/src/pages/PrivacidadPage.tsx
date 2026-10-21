@@ -3,7 +3,8 @@ import { Encabezado } from '../components/Encabezado'
 import { Enlace } from '../components/Enlace'
 import { Marco } from '../components/Marco'
 
-// Si cambia el contenido, actualizar la fecha y avisar en docs/auth/specs/auth.md (Fase 3b).
+// Si cambia el contenido, actualizar la fecha y avisar en docs/auth/specs/auth.md (Fase 3b). El texto describe lo que
+// hace el código hoy (qué guarda cada tabla, qué proveedores reciben datos): si eso cambia, revisarlo.
 const VIGENCIA = '21 de octubre de 2026'
 const CONTACTO = 'dantelojeda05@gmail.com'
 
@@ -41,29 +42,35 @@ export function PrivacidadPage() {
       <p className="leading-relaxed">
         MenYU es una plataforma para restaurantes: los clientes ven el menú, piden y pagan desde la mesa, y el personal
         gestiona los pedidos y las mesas. Es un proyecto académico en desarrollo, parte de una tesis de Ingeniería en
-        Sistemas de la UCC. Acá explicamos qué datos recibimos, para qué los usamos y cómo pedir que los borremos.
+        Sistemas de la Universidad Católica de Córdoba (UCC). Acá explicamos qué datos recibimos, para qué los usamos y
+        cómo pedir que los borremos.
       </p>
 
       <Seccion titulo="Qué datos recibimos">
         <Lista>
           <li>
-            <strong>Si iniciás sesión con Google:</strong> tu email, tu nombre y tu foto de perfil (los permisos{' '}
-            <code>openid</code>, <code>email</code> y <code>profile</code>). No pedimos otros permisos ni accedemos a
-            tu Gmail, Drive, contactos ni calendario.
+            <strong>Si iniciás sesión con Google:</strong> tu email, tu nombre, tu foto de perfil y un identificador de
+            tu cuenta de Google (los permisos <code>openid</code>, <code>email</code> y <code>profile</code>). No
+            pedimos otros permisos ni accedemos a tu Gmail, Drive, contactos ni calendario.
           </li>
           <li>
-            <strong>Si te registrás con email y contraseña:</strong> tu email y tu contraseña. La contraseña nunca se
-            guarda en texto: en las cuentas nuevas la gestiona Supabase Auth, y en las creadas con el sistema anterior
-            de MenYU guardamos solo un hash, del que no se puede recuperar la contraseña, hasta que ese sistema se
-            retire. En ese registro también podés cargar tu nombre y, si querés, tu teléfono.
+            <strong>Si te registrás con email y contraseña:</strong> tu email y tu contraseña, que nunca se guarda en
+            texto. Las cuentas de comensal de la app de la mesa y las del personal creadas desde el panel guardan en la
+            base de MenYU solo un hash de la contraseña, del que no se puede recuperar. Las del personal invitado por
+            mail las gestiona Supabase Auth. En el registro de comensal también pedimos tu nombre y, si querés, tu
+            teléfono.
           </li>
           <li>
-            <strong>Si trabajás en un restaurante que usa MenYU:</strong> tu rol y el restaurante en el que trabajás.
+            <strong>Si trabajás en un restaurante que usa MenYU:</strong> tu nombre, tu email y, si lo cargan, tu
+            teléfono; tu rol y el restaurante en el que trabajás; y la actividad de tu trabajo: las mesas que tenés
+            asignadas, los llamados que atendés, los cobros que registrás y las ediciones de pedidos, con su
+            justificación.
           </li>
           <li>
-            <strong>Datos de uso del servicio:</strong> las sesiones de mesa, los pedidos y los pagos. Más adelante,
-            también los puntos de fidelización. Los pagos se hacen con Mercado Pago: nosotros guardamos el monto y el
-            estado, no los datos de tu tarjeta.
+            <strong>Datos de uso del servicio:</strong> las sesiones de mesa (con el nombre con el que te anotás en la
+            mesa, aunque no tengas cuenta), los pedidos con sus modificaciones y notas, los llamados al mozo y los
+            pagos. Más adelante, también los puntos de fidelización. Los pagos se hacen con Mercado Pago: nosotros
+            guardamos el monto, el método y el estado, no los datos de tu tarjeta.
           </li>
         </Lista>
       </Seccion>
@@ -82,8 +89,8 @@ export function PrivacidadPage() {
         </p>
         <Lista>
           <li>
-            <strong>Supabase:</strong> el inicio de sesión, la base de datos y los archivos (como los logos de los
-            restaurantes).
+            <strong>Supabase:</strong> el inicio de sesión, la base de datos, los archivos (como los logos de los
+            restaurantes) y el envío de los mails de invitación y de contraseña.
           </li>
           <li>
             <strong>Railway:</strong> el servidor de MenYU.
@@ -95,15 +102,21 @@ export function PrivacidadPage() {
             <strong>Mercado Pago:</strong> los pagos que hacés desde la mesa.
           </li>
           <li>
-            <strong>Google:</strong> solo si elegís iniciar sesión con Google.
+            <strong>Google:</strong> las tipografías de las páginas (Google Fonts recibe tu dirección IP al cargarlas) y
+            el inicio de sesión con Google, si lo elegís.
           </li>
         </Lista>
       </Seccion>
 
       <Seccion titulo="Cuánto tiempo los guardamos y cómo borrarlos">
         <p>
-          Los guardamos mientras tu cuenta esté activa. Para pedir que borremos tu cuenta y tus datos, escribinos a{' '}
-          {mail} desde el email de la cuenta.
+          Guardamos los datos de tu cuenta mientras esté activa. Para pedir la baja, escribinos a {mail} (si tenés
+          cuenta, desde su email). Borramos tu cuenta y tus datos personales; los pedidos y los pagos quedan como
+          registro del restaurante, sin tus datos.
+        </p>
+        <p>
+          La excepción es el historial de cambios de las cuentas de dueños de restaurantes y de administradores de MenYU,
+          que no se puede modificar: si tuviste una de esas cuentas, tu email queda ahí.
         </p>
         <p>
           Si iniciaste sesión con Google, también podés quitarle el acceso a MenYU desde{' '}

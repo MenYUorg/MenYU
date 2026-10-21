@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { App } from '../App'
 import { obtenerPerfil } from '../lib/api'
@@ -33,12 +33,17 @@ describe('/privacidad', () => {
     expect(obtenerPerfil).not.toHaveBeenCalled()
   })
 
-  it('con una sesión abierta tampoco redirige', async () => {
+  it('con una sesión abierta tampoco la lee ni redirige', async () => {
     cliente.actual!.auth.getSession.mockResolvedValue({ data: { session: sesion() } })
     abrir('/privacidad')
+    // Que termine cualquier efecto asincrónico que pudiera redirigir antes de mirar.
+    await act(async () => {
+      await new Promise((resolver) => setTimeout(resolver, 0))
+    })
 
-    expect(await screen.findByRole('heading', { level: 1, name: 'Política de privacidad' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 1, name: 'Política de privacidad' })).toBeInTheDocument()
     expect(window.location.pathname).toBe('/privacidad')
+    expect(cliente.actual!.auth.getSession).not.toHaveBeenCalled()
     expect(obtenerPerfil).not.toHaveBeenCalled()
     expect(irA).not.toHaveBeenCalled()
   })
