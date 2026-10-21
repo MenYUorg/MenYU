@@ -210,12 +210,15 @@ Observaciones que dejaron las Fases 0 a 3 (2026-10-20). Revisarlas al arrancar c
 - **Fase 3: lo que falta verificar.**
   - Después del merge: el deploy y el smoke de staging, y un login en `auth.staging.menyu-app.com`.
   - Después del tag: el smoke de producción.
-  - La invitación de punta a punta con mail real. Se mandó el 2026-10-20 (OWNER → MOZO): dio 201 y la repetida, 409. Faltan el link del mail y la contraseña.
+  - La invitación de punta a punta con mail real, del lado de web-auth.
+    - Se mandó el 2026-10-20 (OWNER → MOZO): 201, la repetida 409, y el mail llegó.
+    - Al aceptarla, `GET /auth/me` del invitado dio 200 con su membresía MOZO.
+    - Pero staging todavía tenía la plantilla por defecto: el link llevó a `auth.staging.menyu-app.com/#access_token=…` (flujo implícito), que web-auth con PKCE no acepta.
+    - Falta repetirla con la plantilla con `token_hash` y otro email, porque el invitado ya tiene `Usuario`.
   - La recuperación de contraseña con mail real.
-  - `GET /auth/me` con una cuenta sin `Usuario` → 403: la cuenta `sin-acceso` de staging no pudo iniciar sesión (`invalid_credentials`). Revisar la cuenta o su contraseña.
   - Con la cuenta del invitado, que una cuenta confirmada se reutiliza al invitarla en otro restaurante (`invitacionEnviada: false`).
   - El caso de la cuenta sin confirmar que se borra y se reinvita sigue sin probarse.
-  - Lo que ya quedó probado en staging: `GET /auth/me` da 200 con los 7 usuarios con acceso (así que la RLS de `usuario` y `membresia` no bloquea al backend), un token alterado da 401 y el MOZO invitando da 403.
+  - Lo que ya quedó probado en staging: `GET /auth/me` da 200 con los 7 usuarios con acceso (así que la RLS de `usuario` y `membresia` no bloquea al backend), 403 con la cuenta sin `Usuario` y 401 con un token alterado; el MOZO invitando da 403; en el navegador, cada usuario termina en su app y `sin-acceso`, en "Tu cuenta no tiene acceso".
 - **"Confirm email" activo en los dos proyectos de Supabase (Fase 0).** La invitación reutiliza una cuenta confirmada: si la confirmación estuviera apagada, un registro público quedaría confirmado al instante y se le daría acceso de personal a quien lo creó.
 - **Para la Fase 4:**
   - `@RequiereRol` / `MembresiaGuard` solo sirven para rutas con `:restauranteId`. Las de marca (`/marcas/:id`) y las de un recurso (`/items/:id`) resuelven el restaurante en el service y le preguntan a `AccesoService`.
