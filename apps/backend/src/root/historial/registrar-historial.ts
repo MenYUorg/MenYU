@@ -1,0 +1,124 @@
+import type { Prisma } from '@prisma/client'
+
+/**
+ * Registro de las acciones de ROOT (docs/plan-consola-root.md, 7.2).
+ *
+ * Este archivo NO depende de Nest: lo usan el servicio de la consola (HistorialRootService) y el script de cuentas ROOT
+ * (apps/backend/scripts/cuentas-root.ts), así los dos escriben exactamente lo mismo y con las mismas reglas.
+ *
+ * Reglas que se cuidan acá:
+ * - El registro se escribe con el cliente de la TRANSACCIÓN del cambio (`tx`), nunca con el cliente suelto: si registrar falla,
+ *   el cambio se revierte; no puede haber un cambio sin registro ni un registro de un cambio que no ocurrió.
+ * - Nunca se guarda una contraseña ni un hash.
+ * - La tabla es de solo agregar (disparadores en la base): este archivo solo hace `create`.
+ */
+
+/** Sobre qué tipo de cosa fue la acción. Es la columna `entidad_tipo` (con un CHECK en la base). */
+export type EntidadRoot = 'MARCA' | 'RESTAURANTE' | 'OWNER' | 'ROOT'
+
+/** Cada acción y sobre qué tipo de entidad es. `ROOT_ELIMINAR` solo la hace el script (no hay ruta para borrar cuentas ROOT). */
+export const ENTIDAD_DE_ACCION = {
+  MARCA_CREAR: 'MARCA',
+  MARCA_EDITAR: 'MARCA',
+  MARCA_BAJA: 'MARCA',
+  MARCA_REACTIVAR: 'MARCA',
+  RESTAURANTE_CREAR: 'RESTAURANTE',
+  RESTAURANTE_EDITAR: 'RESTAURANTE',
+  RESTAURANTE_BAJA: 'RESTAURANTE',
+  RESTAURANTE_REACTIVAR: 'RESTAURANTE',
+  DUENO_CREAR: 'OWNER',
+  DUENO_CAMBIAR_EMAIL: 'OWNER',
+  DUENO_RESTABLECER: 'OWNER',
+  DUENO_ELIMINAR: 'OWNER',
+  ROOT_CREAR: 'ROOT',
+  ROOT_RESTABLECER: 'ROOT',
+  ROOT_ELIMINAR: 'ROOT',
+} as const satisfies Record<string, EntidadRoot>
+
+export type AccionRoot = keyof typeof ENTIDAD_DE_ACCION
+
+/** Quién lo hizo: una cuenta ROOT desde la consola, o una persona del equipo con el script (se guarda su usuario del sistema). */
+export type ActorHistorial = { tipo: 'ROOT'; id: string; nombre: string } | { tipo: 'SCRIPT'; nombre: string }
+
+/** Un renglón del detalle. `null` es "no había nada" (se muestra "—"). */
+export interface CambioHistorial {
+  campo: string
+  antes: string | null
+  despues: string | null
+}
+
+export interface EntradaHistorial {
+  actor: ActorHistorial
+  accion: AccionRoot
+  entidad: { tipo: EntidadRoot; id: string; nombre: string }
+  /** La marca de contexto de un restaurante o un dueño. */
+  marca?: { id: string; nombre: string } | null
+  cambios: CambioHistorial[]
+}
+
+/** Lo único que necesita para escribir: el cliente de la transacción (o cualquiera que tenga `historialRoot.create`). */
+export type ClienteConHistorial = Pick<Prisma.TransactionClient, 'historialRoot'>
+
+/**
+ * Cómo figura una contraseña en el detalle. NUNCA el valor: una contraseña restablecida es "no se registra".
+ * El código arma el detalle con estas constantes; no hay un camino para meter una contraseña real.
+ */
+export const CAMBIO_PASSWORD = {
+  generada: { campo: 'Contraseña', antes: null, despues: 'generada (no se registra)' },
+  elegida: { campo: 'Contraseña', antes: null, despues: 'elegida por quien la creó (no se registra)' },
+  restablecida: {
+    campo: 'Contraseña',
+    antes: '(no se registra)',
+    despues: 'restablecida: la persona tiene que cambiarla al entrar',
+  },
+} as const satisfies Record<string, CambioHistorial>
+
+// Un hash de bcrypt ($2a$10$… de 60 caracteres), esté solo o dentro de un texto. Red de seguridad: ningún detalle lo lleva.
+const HASH_BCRYPT = /\$2[abxy]?\$\d{2}\$[./A-Za-z0-9]{40,}/
+
+const LARGO_MAXIMO_TEXTO = 500
+
+export class RegistroInvalido extends Error {}
+
+/** Falla (error de programación, no del usuario) si la entrada no cumple las reglas del historial. */
+export function validarEntrada(entrada: EntradaHistorial): void {
+  const { actor, accion, entidad, marca, cambios } = entrada
+  if (!Object.prototype.hasOwnProperty.call(ENTIDAD_DE_ACCION, accion)) throw new RegistroInvalido(`Acción desconocida: ${String(accion)}`)
+  if (ENTIDAD_DE_ACCION[accion] !== entidad.tipo) {
+    throw new RegistroInvalido(`La acción ${accion} es sobre ${ENTIDAD_DE_ACCION[accion]}, no sobre ${entidad.tipo}`)
+  }
+  if (!actor.nombre.trim()) throw new RegistroInvalido('Falta el nombre de quien hizo la acción')
+  if (actor.tipo === 'ROOT' && !actor.id) throw new RegistroInvalido('Falta el id de la cuenta ROOT')
+  if (!entidad.id || !entidad.nombre.trim()) throw new RegistroInvalido('Falta el id o el nombre de la entidad')
+  if (!cambios.length) throw new RegistroInvalido('Una acción registrada tiene que decir qué cambió')
+
+  const textos = [actor.nombre, entidad.nombre, marca?.nombre ?? '', ...cambios.flatMap((c) => [c.campo, c.antes ?? '', c.despues ?? ''])]
+  for (const texto of textos) {
+    if (HASH_BCRYPT.test(texto)) throw new RegistroInvalido('El historial no guarda hashes de contraseñas')
+    if (texto.length > LARGO_MAXIMO_TEXTO) throw new RegistroInvalido(`Un texto del historial supera los ${LARGO_MAXIMO_TEXTO} caracteres`)
+  }
+}
+
+/**
+ * Escribe una acción en el historial. Llamarla con el cliente de la transacción del cambio, como último paso antes de
+ * confirmar: si lanza, la transacción entera se revierte.
+ */
+export async function registrarEnHistorial(tx: ClienteConHistorial, entrada: EntradaHistorial): Promise<void> {
+  validarEntrada(entrada)
+  const { actor, accion, entidad, marca, cambios } = entrada
+  await tx.historialRoot.create({
+    data: {
+      actorTipo: actor.tipo,
+      actorId: actor.tipo === 'ROOT' ? actor.id : null,
+      actorNombre: actor.nombre,
+      accion,
+      entidadTipo: entidad.tipo,
+      entidadId: entidad.id,
+      entidadNombre: entidad.nombre,
+      marcaId: marca?.id ?? null,
+      marcaNombre: marca?.nombre ?? null,
+      detalle: cambios.map(({ campo, antes, despues }) => ({ campo, antes, despues })),
+    },
+    select: { id: true },
+  })
+}

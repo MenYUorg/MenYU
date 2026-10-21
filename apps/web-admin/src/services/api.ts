@@ -10,6 +10,16 @@ import type {
   TokenPair,
   UpdateItemDescuentoRequest,
   SesionHistorial,
+  RootMarcaResumen,
+  RootMarcaDetalle,
+  RootRestaurante,
+  RootCrearMarcaRequest,
+  RootEditarMarcaRequest,
+  RootCrearRestauranteRequest,
+  RootEditarRestauranteRequest,
+  RootHistorialFiltros,
+  RootHistorialPagina,
+  RootCuentaResumen,
 } from '@menyu/types'
 
 export class ApiError extends Error {
@@ -453,5 +463,48 @@ export const api = {
       req<ItemMenu>('POST', `/clasificaciones/items/${itemId}`, { clasificacionId }),
     removeFromItem: (itemId: string, clasificacionId: string) =>
       req<void>('DELETE', `/clasificaciones/items/${itemId}/${clasificacionId}`),
+  },
+
+  /**
+   * Consola de ROOT (`/api/root/*`, solo para ROOT). Ver docs/plan-consola-root.md. Las marcas y los restaurantes no se borran:
+   * "dar de baja" es reversible. Dueños y cuentas ROOT todavía no están acá: esperan a la migración de autenticación.
+   */
+  root: {
+    marcas: {
+      /** Por defecto solo las activas; con `bajas` también las dadas de baja. */
+      listar: (opciones: { bajas?: boolean } = {}) =>
+        req<RootMarcaResumen[]>('GET', `/root/marcas${opciones.bajas ? '?bajas=true' : ''}`),
+      detalle: (id: string) => req<RootMarcaDetalle>('GET', `/root/marcas/${encodeURIComponent(id)}`),
+      crear: (data: RootCrearMarcaRequest) => req<RootMarcaDetalle>('POST', '/root/marcas', data),
+      editar: (id: string, data: RootEditarMarcaRequest) =>
+        req<RootMarcaDetalle>('PATCH', `/root/marcas/${encodeURIComponent(id)}`, data),
+      baja: (id: string) => req<RootMarcaDetalle>('POST', `/root/marcas/${encodeURIComponent(id)}/baja`),
+      reactivar: (id: string) => req<RootMarcaDetalle>('POST', `/root/marcas/${encodeURIComponent(id)}/reactivar`),
+      crearRestaurante: (marcaId: string, data: RootCrearRestauranteRequest) =>
+        req<RootRestaurante>('POST', `/root/marcas/${encodeURIComponent(marcaId)}/restaurantes`, data),
+    },
+    restaurantes: {
+      editar: (id: string, data: RootEditarRestauranteRequest) =>
+        req<RootRestaurante>('PATCH', `/root/restaurantes/${encodeURIComponent(id)}`, data),
+      baja: (id: string) => req<RootRestaurante>('POST', `/root/restaurantes/${encodeURIComponent(id)}/baja`),
+      reactivar: (id: string) => req<RootRestaurante>('POST', `/root/restaurantes/${encodeURIComponent(id)}/reactivar`),
+    },
+    historial: {
+      /** De a 50, de lo más nuevo a lo más viejo. Los filtros vacíos no se mandan. */
+      listar: (filtros: RootHistorialFiltros = {}) => {
+        const consulta = new URLSearchParams()
+        if (filtros.actor) consulta.set('actor', filtros.actor)
+        if (filtros.entidad) consulta.set('entidad', filtros.entidad)
+        if (filtros.desde) consulta.set('desde', filtros.desde)
+        if (filtros.hasta) consulta.set('hasta', filtros.hasta)
+        if (filtros.cursor) consulta.set('cursor', String(filtros.cursor))
+        const texto = consulta.toString()
+        return req<RootHistorialPagina>('GET', `/root/historial${texto ? `?${texto}` : ''}`)
+      },
+    },
+    /** Solo para armar el filtro "Quién" del historial. */
+    cuentas: {
+      listar: () => req<RootCuentaResumen[]>('GET', '/root/roots'),
+    },
   },
 }
