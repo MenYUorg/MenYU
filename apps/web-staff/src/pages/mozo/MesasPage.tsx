@@ -317,12 +317,14 @@ export function MesasPage() {
         }
         return next
       })
-      if (sesionDetalle?.sesionId === sesionId) setSesionDetalle(null)
+      // Actualización funcional: el handler no depende del detalle abierto, así el socket no se
+      // reabre cada vez que cambia y un evento que llega justo después de abrirlo no se pierde.
+      setSesionDetalle((actual) => (actual?.sesionId === sesionId ? null : actual))
     }
     socket.on('sesion:cerrada', onSesionCerrada)
     socket.on('session:closed', onSesionCerrada)
     return () => { socket.disconnect() }
-  }, [restauranteId, cargarLlamados, sesionDetalle?.sesionId])
+  }, [restauranteId, cargarLlamados])
 
   const mesasConLlamado = useMemo(
     () => new Set(llamados.map((l) => l.sesion.mesa.numero)),
