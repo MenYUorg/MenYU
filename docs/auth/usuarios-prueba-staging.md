@@ -110,7 +110,7 @@ Hasta la Fase 4, web-admin y web-staff no leen la sesión de Supabase: al llegar
 
 ## Cuentas de Google (desde la Fase 3b)
 
-Para probar "Continuar con Google". Son cuentas de Gmail del equipo, cargadas como usuarios de prueba en la pantalla de consentimiento de Google Cloud mientras esté en *Testing*. Las dos son MOZO de "Restaurante Pruebas Auth": las invitó el OWNER de prueba con `POST /auth/invitaciones` el 2026-10-21.
+Para probar "Continuar con Google". Son cuentas de Gmail del equipo. Desde que la pantalla de consentimiento de Google Cloud está publicada (2026-10-21), entra cualquier cuenta de Google, sin cargarla como usuario de prueba. Las dos son MOZO de "Restaurante Pruebas Auth": las invitó el OWNER de prueba con `POST /auth/invitaciones` el 2026-10-21.
 
 | Email | Cómo llegó | Entra con |
 |---|---|---|

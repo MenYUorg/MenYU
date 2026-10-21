@@ -112,7 +112,7 @@ packages/types/src/
 - El comensal no usa guards de admin — se autentica por sesión de mesa
 
 ### Autenticación con Supabase (migración en curso)
-Spec, decisiones y fases: `docs/auth/specs/auth.md` (una fase por sesión; al cerrar cada una, el subagente `revisor`). Hechas: Fase 1 (modelo de datos), Fase 2 (backend), Fase 3 (web-auth; desplegada en staging, producción con el próximo tag) y Fase 3b (Google; staging con el merge, producción con el próximo tag). Sigue: Fase 4 (SSO en las apps).
+Spec, decisiones y fases: `docs/auth/specs/auth.md` (una fase por sesión; al cerrar cada una, el subagente `revisor`). Hechas: Fase 1 (modelo de datos), Fase 2 (backend), Fase 3 (web-auth) y Fase 3b (Google y `/privacidad`), en staging y en producción desde v1.1.0, con la pantalla de consentimiento de Google publicada. Sigue: Fase 4 (SSO en las apps).
 - Modelos nuevos: `Usuario` (`supabaseUserId`, `esRoot` para ROOT) y `Membresia` con el enum `Rol`: `OWNER` por marca; `GERENTE`, `JEFE_SALON`, `MOZO` y `COCINA` por restaurante (CHECK `membresia_ambito_check` en la migración). Además `Mozo.usuarioId` (los mozos invitados no tienen `passwordHash`) y `Cliente.supabaseUserId`. `usuario` y `membresia` tienen RLS sin políticas.
 - Backend (en `apps/backend/src/auth/`):
   - `SupabaseAuthGuard` verifica el access token de Supabase contra el JWKS de `SUPABASE_URL` y deja el `Usuario` en `request.usuario` (lo lee `@UsuarioActual()`).
