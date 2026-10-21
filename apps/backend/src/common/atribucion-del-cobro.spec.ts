@@ -35,20 +35,25 @@ describe('atribucionDelCobro', () => {
   })
 
   it('el OWNER de la marca le atribuye el cobro a un mozo del restaurante: se guardan los dos', async () => {
-    prisma.mozo.findUnique.mockResolvedValue({ restauranteId: REST })
+    prisma.mozo.findUnique.mockResolvedValue({ restauranteId: REST, activo: true })
 
     await expect(atribuir(CUENTAS.OWNER_A, 'mozo-7')).resolves.toEqual({ usuarioId: CUENTAS.OWNER_A.id, mozoId: 'mozo-7' })
-    expect(prisma.mozo.findUnique).toHaveBeenCalledWith({ where: { id: 'mozo-7' }, select: { restauranteId: true } })
+    expect(prisma.mozo.findUnique).toHaveBeenCalledWith({ where: { id: 'mozo-7' }, select: { restauranteId: true, activo: true } })
   })
 
-  it('con un mozo que no existe: 400', async () => {
-    prisma.mozo.findUnique.mockResolvedValue(null)
+  it.each([
+    ['no existe', null],
+    ['está dado de baja (le quitaron el acceso)', { restauranteId: REST, activo: false }],
+  ])('con un mozo que %s: 400', async (_caso, fila) => {
+    prisma.mozo.findUnique.mockResolvedValue(fila)
 
-    await expect(atribuir(CUENTAS.GERENTE, 'no-existe')).rejects.toThrow(new BadRequestException('El mozo indicado no existe'))
+    await expect(atribuir(CUENTAS.GERENTE, 'mozo-x')).rejects.toThrow(
+      new BadRequestException('El mozo indicado no existe o está dado de baja'),
+    )
   })
 
   it('con un mozo de otro restaurante: 403', async () => {
-    prisma.mozo.findUnique.mockResolvedValue({ restauranteId: MUNDO.REST_2 })
+    prisma.mozo.findUnique.mockResolvedValue({ restauranteId: MUNDO.REST_2, activo: true })
 
     await expect(atribuir(CUENTAS.GERENTE, 'mozo-de-otro')).rejects.toThrow(
       new ForbiddenException('El mozo indicado no pertenece a este restaurante'),

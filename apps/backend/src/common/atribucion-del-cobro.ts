@@ -15,8 +15,8 @@ export interface AtribucionDelCobro {
  * A nombre de quién queda un cobro (issue #356). Exige OWNER, GERENTE, JEFE_SALON o MOZO del restaurante (403 si no).
  * - Un JEFE_SALON o un MOZO cobra con su propio `Mozo`, que sale de su cuenta (403 si no está activo). El `mozoId` del
  *   body se ignora: nadie cobra a nombre de otro mozo.
- * - Un OWNER o un GERENTE cobra a su nombre y puede atribuirle el cobro a un mozo de ese restaurante (400 si el mozo no
- *   existe, 403 si es de otro restaurante).
+ * - Un OWNER o un GERENTE cobra a su nombre y puede atribuirle el cobro a un mozo activo de ese restaurante (400 si el
+ *   mozo no existe o está dado de baja, 403 si es de otro restaurante).
  */
 export async function atribucionDelCobro(
   prisma: PrismaService,
@@ -34,8 +34,8 @@ export async function atribucionDelCobro(
   }
   if (!mozoIdDelBody) return { usuarioId: usuario.id, mozoId: null }
 
-  const mozo = await prisma.mozo.findUnique({ where: { id: mozoIdDelBody }, select: { restauranteId: true } })
-  if (!mozo) throw new BadRequestException('El mozo indicado no existe')
+  const mozo = await prisma.mozo.findUnique({ where: { id: mozoIdDelBody }, select: { restauranteId: true, activo: true } })
+  if (!mozo?.activo) throw new BadRequestException('El mozo indicado no existe o está dado de baja')
   if (mozo.restauranteId !== restauranteId) {
     throw new ForbiddenException('El mozo indicado no pertenece a este restaurante')
   }

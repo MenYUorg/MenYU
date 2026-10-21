@@ -6,6 +6,10 @@ import { ItemsService } from './items.service'
 // en las de un ítem, el service (items.imagen-ingredientes.spec y items.service.spec).
 
 const REST = MUNDO.REST_1
+const PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+  'base64',
+)
 const ITEM_NUEVO = { restauranteId: REST, nombre: 'Milanesa', precioBase: 1500 }
 const RESULTADO = { id: 'item-1', precioDescuento: 1200, porcentajeDescuento: 20, precioVigente: 1200 }
 
@@ -135,6 +139,14 @@ describe('endpoints de ítems', () => {
       const res = await api.pedir('post', '/items/item-1/imagen', { cuenta: CUENTAS.OWNER_A })
 
       expect(res.status).toBe(400)
+    })
+
+    it('POST /items/:id/imagen de más de 5 MB: 413, la corta multer antes de llegar al service', async () => {
+      const res = await api
+        .pedir('post', '/items/item-1/imagen', { cuenta: CUENTAS.COCINA })
+        .attach('imagen', Buffer.concat([PNG, Buffer.alloc(5 * 1024 * 1024)]), { filename: 'plato.png', contentType: 'image/png' })
+
+      expect(res.status).toBe(413)
     })
   })
 

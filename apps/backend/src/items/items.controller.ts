@@ -112,7 +112,8 @@ export class ItemsController {
 
   @Post(':id/imagen')
   @Personal()
-  @UseInterceptors(FileInterceptor('imagen', { storage: memoryStorage() }))
+  // El límite corta la subida en multer (413): la ruta solo autentica y el rol se pide en el service, con el archivo ya leído.
+  @UseInterceptors(FileInterceptor('imagen', { storage: memoryStorage(), limits: { fileSize: MAX_IMAGE_SIZE } }))
   @ApiOperation({ summary: 'Subir imagen de un ítem (jpeg, png, webp — máx 5 MB)' })
   @ApiConsumes('multipart/form-data')
   @ApiBody({

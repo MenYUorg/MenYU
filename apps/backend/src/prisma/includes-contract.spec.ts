@@ -1,6 +1,8 @@
 import { Prisma } from '@prisma/client'
-import { MARCA_CON_RESTAURANTES_SELECT, MARCA_DETALLE_SELECT } from '../marca/marca.service'
+import { MARCA_CON_RESTAURANTES_SELECT, MARCA_DETALLE_SELECT, MARCA_SELECT } from '../marca/marca.service'
+import { MOZO_SELECT } from '../mozos/mozos.service'
 import { RESTAURANTE_CON_MARCA_SELECT, RESTAURANTE_DETALLE_SELECT } from '../restaurante/restaurante.service'
+import { RESTAURANTE_SELECT } from '../restaurante/restaurante.select'
 
 // Contrato include ↔ schema. Prisma rechaza en runtime (HTTP 500) un `include` o `select` que
 // nombra una relación inexistente, y con Prisma mockeado los tests de los services no lo detectan.
@@ -52,12 +54,26 @@ function erroresDeSelect(modelo: string, select: Record<string, unknown>): strin
   return erroresDeArgs(modelo, { select }, modelo)
 }
 
-/** Los campos sensibles que nombra un select, en cualquier nivel: los tokens de Mercado Pago y las contraseñas. */
-function camposSensibles(select: Record<string, unknown>, ruta = ''): string[] {
+/** Los tokens de Mercado Pago (`mp*`) y las contraseñas. */
+const SENSIBLE = /^mp[A-Z]|^passwordHash$/
+
+/** Las columnas sensibles de un modelo: las que trae una relación seleccionada entera. */
+function sensiblesDe(modelo: string): string[] {
+  return (modelos.get(modelo)?.fields ?? []).filter((f) => f.kind !== 'object' && SENSIBLE.test(f.name)).map((f) => f.name)
+}
+
+/**
+ * Los campos sensibles que trae un select, en cualquier nivel: los que nombra y los de una relación seleccionada
+ * entera (`mozos: true`, o con `where` pero sin `select`), que trae todas las columnas del modelo relacionado.
+ */
+function camposSensibles(modelo: string, select: Record<string, unknown>, ruta = ''): string[] {
+  const campos = new Map((modelos.get(modelo)?.fields ?? []).map((f) => [f.name, f]))
   return Object.entries(select).flatMap(([campo, valor]) => {
-    const aca = /^mp[A-Z]|^passwordHash$/.test(campo) ? [`${ruta}${campo}`] : []
-    const adentro = esArgs(valor) && esArgs(valor.select) ? camposSensibles(valor.select, `${ruta}${campo}.`) : []
-    return [...aca, ...adentro]
+    if (SENSIBLE.test(campo)) return [`${ruta}${campo}`]
+    const definicion = campos.get(campo)
+    if (definicion?.kind !== 'object') return []
+    if (esArgs(valor) && esArgs(valor.select)) return camposSensibles(definicion.type, valor.select, `${ruta}${campo}.`)
+    return sensiblesDe(definicion.type).map((c) => `${ruta}${campo}.${c}`)
   })
 }
 
@@ -102,10 +118,13 @@ describe('contrato include ↔ schema de Prisma', () => {
   })
 
   const SELECTS: Array<[string, string, Record<string, unknown>]> = [
+    ['MARCA_SELECT', 'Marca', MARCA_SELECT],
     ['MARCA_CON_RESTAURANTES_SELECT', 'Marca', MARCA_CON_RESTAURANTES_SELECT],
     ['MARCA_DETALLE_SELECT', 'Marca', MARCA_DETALLE_SELECT],
+    ['RESTAURANTE_SELECT', 'Restaurante', RESTAURANTE_SELECT],
     ['RESTAURANTE_CON_MARCA_SELECT', 'Restaurante', RESTAURANTE_CON_MARCA_SELECT],
     ['RESTAURANTE_DETALLE_SELECT', 'Restaurante', RESTAURANTE_DETALLE_SELECT],
+    ['MOZO_SELECT', 'Mozo', MOZO_SELECT],
   ]
 
   describe('selects de las respuestas del personal', () => {
@@ -113,14 +132,26 @@ describe('contrato include ↔ schema de Prisma', () => {
       expect(erroresDeSelect(modelo, select)).toEqual([])
     })
 
-    it.each(SELECTS)('%s no nombra columnas de Mercado Pago ni contraseñas', (_nombre, _modelo, select) => {
-      expect(camposSensibles(select)).toEqual([])
+    it.each(SELECTS)('%s no trae columnas de Mercado Pago ni contraseñas', (_nombre, modelo, select) => {
+      expect(camposSensibles(modelo, select)).toEqual([])
     })
 
-    it('el buscador de campos sensibles los encuentra en cualquier nivel', () => {
+    it('el buscador de campos sensibles los encuentra nombrados en cualquier nivel', () => {
       const select = { id: true, mpAccessToken: true, mozos: { select: { nombre: true, passwordHash: true } } }
 
-      expect(camposSensibles(select)).toEqual(['mpAccessToken', 'mozos.passwordHash'])
+      expect(camposSensibles('Restaurante', select)).toEqual(['mpAccessToken', 'mozos.passwordHash'])
+    })
+
+    it('y en una relación seleccionada entera (con true o con un where sin select)', () => {
+      const select = { id: true, mozos: true, marca: { select: { restaurantes: { where: { activo: true } } } } }
+
+      expect(camposSensibles('Restaurante', select)).toEqual([
+        'mozos.passwordHash',
+        'marca.restaurantes.mpAccessToken',
+        'marca.restaurantes.mpRefreshToken',
+        'marca.restaurantes.mpUserId',
+        'marca.restaurantes.mpTokenExpiresAt',
+      ])
     })
   })
 })

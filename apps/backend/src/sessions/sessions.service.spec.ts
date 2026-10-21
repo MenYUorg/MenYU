@@ -853,7 +853,7 @@ describe('SessionsService', () => {
 
       it('un GERENTE cobra a su nombre y le atribuye el cobro a un mozo del restaurante', async () => {
         cobroQueCierra()
-        mockPrisma.mozo.findUnique.mockResolvedValue({ restauranteId: MUNDO.REST_1 })
+        mockPrisma.mozo.findUnique.mockResolvedValue({ restauranteId: MUNDO.REST_1, activo: true })
 
         await service.registrarCobro('sesion-1', { ...DTO_BASE, mozoId: 'mozo-7' }, CUENTAS.GERENTE)
 

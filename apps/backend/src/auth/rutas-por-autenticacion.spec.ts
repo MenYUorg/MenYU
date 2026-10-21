@@ -51,6 +51,69 @@ const PUBLICAS = [
   'GET /health',
 ]
 
+/**
+ * Con el token de Supabase pero sin MembresiaGuard ni RootGuard (`@Personal()`): el rol lo pide el service, con el
+ * restaurante o la marca del recurso. Para sumar una, revisar que el service llame a AccesoService antes de leer o escribir.
+ */
+const CON_PERMISO_EN_EL_SERVICE = [
+  // El perfil de la propia cuenta y la invitación (el permiso, con puedeInvitar).
+  'GET /auth/me',
+  'POST /auth/invitaciones',
+  // Marcas: OWNER de la marca. GET /marcas y GET /restaurantes, por las membresías.
+  'GET /marcas',
+  'GET /marcas/:id',
+  'PATCH /marcas/:id',
+  'POST /marcas/:id/logo',
+  'DELETE /marcas/:id/logo',
+  'GET /restaurantes',
+  // La carta, con el restaurante del ítem, la categoría o el ingrediente. El catálogo de clasificaciones, en algún restaurante.
+  'GET /items/:id',
+  'PATCH /items/:id',
+  'DELETE /items/:id',
+  'PUT /items/:id/descuento',
+  'DELETE /items/:id/descuento',
+  'POST /items/:id/imagen',
+  'DELETE /items/:id/imagen',
+  'POST /items/:itemId/ingredientes',
+  'PATCH /items/:itemId/ingredientes/:id',
+  'DELETE /items/:itemId/ingredientes/:id',
+  'GET /categorias/:id',
+  'PATCH /categorias/:id',
+  'DELETE /categorias/:id',
+  'GET /ingredientes/:id',
+  'PATCH /ingredientes/:id',
+  'DELETE /ingredientes/:id',
+  'POST /clasificaciones',
+  'PATCH /clasificaciones/:id',
+  'DELETE /clasificaciones/:id',
+  'POST /clasificaciones/items/:itemId',
+  'DELETE /clasificaciones/items/:itemId/:clasificacionId',
+  // Mesas y mozos, con el restaurante de la mesa o del mozo.
+  'GET /mesas/:id',
+  'PATCH /mesas/:id',
+  'DELETE /mesas/:id',
+  'POST /mesas/:id/regenerar-qr',
+  'PATCH /mesas/:id/pin',
+  'GET /mozos/:id',
+  'PATCH /mozos/:id',
+  'DELETE /mozos/:id',
+  'POST /mozos/:mozoId/mesas',
+  'DELETE /mozos/:mozoId/mesas/:mesaId',
+  'GET /mozos/:mozoId/mesas',
+  'GET /mozos/:mozoId/llamados-hoy',
+  // El salón, con el restaurante de la mesa, la sesión, el pedido, el pago o el llamado.
+  'POST /sessions/open-staff',
+  'POST /sessions/mesa/:mesaId/cerrar',
+  'GET /sessions/mesa/:mesaId/activa',
+  'PATCH /sessions/:id/cobro',
+  'POST /payments/confirmar-efectivo',
+  'POST /pedidos/staff',
+  'PATCH /pedidos/:id/editar',
+  'GET /pedidos/:id/ediciones',
+  'PATCH /pedidos/:id/estado',
+  'PATCH /waiter-calls/:id/atender',
+]
+
 /** Del personal sin guard, con el JWT legacy verificado a mano en el service. Vacía desde la entrega 4.3. */
 const PENDIENTES_A_MANO: string[] = []
 
@@ -173,6 +236,14 @@ describe('el enrutador: un solo sistema de autenticación por ruta', () => {
     const mezcladas = rutas.filter((r) => sistemasDe(r).length > 1)
 
     expect(mezcladas.map((r) => `${texto(r)}: ${sistemasDe(r).join(' + ')}`)).toEqual([])
+  })
+
+  it('las rutas del personal que solo autentican (@Personal) son exactamente las de la lista: el rol lo pide su service', () => {
+    const soloAutentican = rutas.filter(
+      (r) => tiene(r, SupabaseAuthGuard) && !tiene(r, MembresiaGuard) && !tiene(r, RootGuard),
+    )
+
+    expect(ordenadas(soloAutentican.map(texto))).toEqual(ordenadas(CON_PERMISO_EN_EL_SERVICE))
   })
 
   it('MembresiaGuard y RootGuard siempre corren después de SupabaseAuthGuard', () => {
