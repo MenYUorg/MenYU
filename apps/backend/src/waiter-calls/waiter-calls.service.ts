@@ -5,17 +5,10 @@ import {
   UnauthorizedException,
 } from '@nestjs/common'
 import { JwtService } from '@nestjs/jwt'
+import { exigirSuSesion, verificarSesionDeMesa } from '../auth/guards/session-auth.guard'
 import { PrismaService } from '../prisma/prisma.service'
 import { MenyuGateway } from '../gateway/menyu.gateway'
 import { CreateWaiterCallDto } from './dto/create-waiter-call.dto'
-
-interface SessionJwt {
-  sub: string
-  tipo: string
-  sesionId: string
-  mesaId: string
-  restauranteId: string
-}
 
 @Injectable()
 export class WaiterCallsService {
@@ -56,20 +49,8 @@ export class WaiterCallsService {
   }
 
   async llamar(dto: CreateWaiterCallDto, authHeader: string | undefined) {
-    if (!authHeader?.startsWith('Bearer ')) {
-      throw new UnauthorizedException('Session JWT requerido')
-    }
-
-    let payload: SessionJwt
-    try {
-      payload = this.jwt.verify<SessionJwt>(authHeader.slice(7))
-    } catch {
-      throw new UnauthorizedException('Session JWT inválido o expirado')
-    }
-
-    if (payload.tipo !== 'cliente') {
-      throw new UnauthorizedException('Solo clientes pueden llamar al mozo')
-    }
+    const payload = verificarSesionDeMesa(this.jwt, authHeader, 'Solo clientes pueden llamar al mozo')
+    exigirSuSesion(payload, dto.sesionId)
 
     const { restauranteId } = payload
 

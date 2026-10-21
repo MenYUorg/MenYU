@@ -6,6 +6,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common'
 import { JwtService } from '@nestjs/jwt'
+import { exigirSuSesion, verificarSesionDeMesa } from '../auth/guards/session-auth.guard'
 import { PrismaService } from '../prisma/prisma.service'
 import { MenyuGateway } from '../gateway/menyu.gateway'
 import { Request } from 'express'
@@ -14,14 +15,6 @@ import { CreatePedidoDto } from './dto/create-pedido.dto'
 import { UpdateEstadoPedidoDto } from './dto/update-estado-pedido.dto'
 import { EditPedidoDto } from './dto/edit-pedido.dto'
 import { precioVigente } from '../items/descuento.util'
-
-interface SessionJwt {
-  sub: string
-  tipo: string
-  sesionId: string
-  mesaId: string
-  restauranteId: string
-}
 
 @Injectable()
 export class PedidosService {
@@ -32,19 +25,10 @@ export class PedidosService {
   ) {}
 
   async confirmar(authHeader: string | undefined, dto: CreatePedidoDto) {
-    if (!authHeader?.startsWith('Bearer ')) {
-      throw new UnauthorizedException('Session JWT requerido')
-    }
-
-    let payload: SessionJwt
-    try {
-      payload = this.jwt.verify<SessionJwt>(authHeader.slice(7))
-    } catch {
-      throw new UnauthorizedException('Session JWT inválido o expirado')
-    }
-
-    if (payload.tipo !== 'cliente') {
-      throw new UnauthorizedException('Solo clientes pueden crear pedidos')
+    const payload = verificarSesionDeMesa(this.jwt, authHeader, 'Solo clientes pueden crear pedidos')
+    exigirSuSesion(payload, dto.sesionId)
+    if (dto.mesaId !== payload.mesaId) {
+      throw new ForbiddenException('Esa mesa no es la de tu sesión')
     }
 
     const { restauranteId, sub: clienteId } = payload

@@ -132,9 +132,11 @@ describe('RequireAuth', () => {
     await screen.findByText('Hola a@menyu.com')
 
     auth.sesion = sesion('uid-2')
-    window.dispatchEvent(new Event('focus'))
-
-    await waitFor(() => expect(recargar).toHaveBeenCalledTimes(1))
+    // El listener de foco se registra en un efecto que puede correr después de que aparece el texto: se reintenta el foco.
+    await waitFor(() => {
+      window.dispatchEvent(new Event('focus'))
+      expect(recargar).toHaveBeenCalledTimes(1)
+    })
   })
 
   it('si se desmonta antes de que responda el backend, no actualiza nada', async () => {

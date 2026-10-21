@@ -1,4 +1,4 @@
-import { BadRequestException, NotFoundException, UnauthorizedException } from '@nestjs/common'
+import { BadRequestException, ForbiddenException, NotFoundException, UnauthorizedException } from '@nestjs/common'
 import { JwtService } from '@nestjs/jwt'
 import { MenyuGateway } from '../gateway/menyu.gateway'
 import { PrismaMock, comoPrisma, crearPrismaMock } from '../test/prisma-mock'
@@ -121,6 +121,25 @@ describe('WaiterCallsService', () => {
 
       // Assert
       await expect(llamado).rejects.toThrow(new UnauthorizedException('Solo clientes pueden llamar al mozo'))
+    })
+
+    it('un token de invitado (tipo cliente, sin sesión de mesa) responde 401', async () => {
+      // Act
+      const llamado = service.llamar({ sesionId: 'sesion-1' }, bearer({ sub: 'cliente-invitado', tipo: 'cliente', nombre: 'Invitado' }))
+
+      // Assert
+      await expect(llamado).rejects.toThrow(new UnauthorizedException('Este recurso requiere una sesión de mesa'))
+      expect(prisma.llamadoMozo.create).not.toHaveBeenCalled()
+    })
+
+    it('con el token de una mesa no se puede llamar al mozo desde otra sesión: 403 y no avisa a nadie', async () => {
+      // Act
+      const llamado = service.llamar({ sesionId: 'sesion-de-otra-mesa' }, bearer(SESION_CLIENTE))
+
+      // Assert
+      await expect(llamado).rejects.toThrow(new ForbiddenException('Esa sesión de mesa no es la tuya'))
+      expect(prisma.sesionMesa.findUnique).not.toHaveBeenCalled()
+      expect(gateway.emitMozoCalled).not.toHaveBeenCalled()
     })
 
     it('una sesión que no existe responde 404 y no avisa a nadie', async () => {

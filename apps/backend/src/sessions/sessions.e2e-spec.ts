@@ -133,7 +133,7 @@ describe('POST /api/sessions/open (e2e)', () => {
     // Segundo cliente se une por PIN
     const res = await request(app.getHttpServer())
       .post('/api/sessions/open')
-      .send({ restaurantId: restaurante.id, pin: mesa.pin })
+      .send({ restauranteId: restaurante.id, pin: mesa.pin })
 
     expect(res.status).toBe(200)
     expect(res.body.sesionId).toBe(firstRes.body.sesionId)

@@ -48,6 +48,24 @@ describe('endpoints de comensales de una sesión', () => {
       // Assert
       expect(res.status).toBe(401)
     })
+
+    it('un token de invitado (tipo cliente, sin sesión de mesa) responde 401', async () => {
+      // Act
+      const res = await api.pedir('get', BASE, { sesion: USUARIOS.CLIENTE })
+
+      // Assert
+      expect(res.status).toBe(401)
+      expect(comensales.listarComensales).not.toHaveBeenCalled()
+    })
+
+    it('con el token de otra mesa responde 403: un comensal solo ve su propia sesión', async () => {
+      // Act
+      const res = await api.pedir('get', BASE, { sesion: { ...SESION_CLIENTE, sesionId: 'sesion-de-otra-mesa' } })
+
+      // Assert
+      expect(res.status).toBe(403)
+      expect(comensales.listarComensales).not.toHaveBeenCalled()
+    })
   })
 
   describe('alta y reclamo de comensales', () => {
