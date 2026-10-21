@@ -202,21 +202,19 @@ Observaciones que dejaron las Fases 0 a 3 (2026-10-20). Revisarlas al arrancar c
 - **Fase 3: antes del merge y del tag.** Sin estos pasos, el deploy de web-auth falla (los dos workflows cortan al empezar si falta `VERCEL_PROJECT_ID_AUTH`) o la expone:
   1. ~~Data API de Supabase cerrada en los dos proyectos~~: hecho el 2026-10-20 (lo confirmó el equipo; staging responde 503 `PGRST002` en todas las tablas, sin filas).
   2. Las plantillas de mail con `token_hash` en los dos proyectos: el HTML está en `docs/auth/plantillas-mail/` (asuntos en `docs/auth/VariablesACambiar.md`, Fase 3).
-  3. Vercel: `menyu-auth` y `menyu-auth-staging`, con los dominios y su registro en Cloudflare. Al 2026-10-20 todavía no están creados.
+  3. Vercel: `menyu-auth` y `menyu-auth-staging`, con los dominios y su registro en Cloudflare. Al 2026-10-20 todavía no están creados. Como `apps/web-auth` todavía no está en `main`, el selector de carpetas de *Import* no la muestra: importarlos con Root Directory `apps/web-admin` (su `vercel.json` hace que `ignorar-build.sh` cancele el primer build) y después cambiarlo a `apps/web-auth` en *Settings → Build and Deployment*.
   4. GitHub: el secret `VERCEL_PROJECT_ID_AUTH` y la variable `PROD_WEB_AUTH_URL`.
   5. Railway: el CORS de staging antes del merge. El de producción, junto con el release, porque el cambio redespliega el servicio.
 - **Fase 3: lo que falta verificar.**
   - Después del merge: el deploy y el smoke de staging, y un login en `auth.staging.menyu-app.com`.
   - Después del tag: el smoke de producción.
-  - La invitación de punta a punta con mail real, del lado de web-auth.
-    - Se mandó el 2026-10-20 (OWNER → MOZO): 201, la repetida 409, y el mail llegó.
-    - Al aceptarla, `GET /auth/me` del invitado dio 200 con su membresía MOZO.
-    - Pero staging todavía tenía la plantilla por defecto: el link llevó a `auth.staging.menyu-app.com/#access_token=…` (flujo implícito), que web-auth con PKCE no acepta.
-    - Falta repetirla con la plantilla con `token_hash` y otro email: el anterior tiene `Usuario`. Si de ese invitado se borró solo la cuenta de Supabase, en la base de staging quedan su `Usuario`, su membresía y su `Mozo`.
-  - La recuperación de contraseña con mail real.
+  - La recuperación de contraseña con el link del mail real. El mail se pidió desde web-auth el 2026-10-20.
   - Con la cuenta del invitado, que una cuenta confirmada se reutiliza al invitarla en otro restaurante (`invitacionEnviada: false`).
   - El caso de la cuenta sin confirmar que se borra y se reinvita sigue sin probarse.
   - Lo que ya quedó probado en staging: `GET /auth/me` da 200 con los 7 usuarios con acceso (así que la RLS de `usuario` y `membresia` no bloquea al backend), 403 con la cuenta sin `Usuario` y 401 con un token alterado; el MOZO invitando da 403; en el navegador, cada usuario termina en su app y `sin-acceso`, en "Tu cuenta no tiene acceso".
+  - La invitación de punta a punta, con las plantillas con `token_hash` en staging, quedó probada el 2026-10-20 (OWNER → MOZO): 201 y el mail llegó (la invitación repetida da 409, probado con la anterior).
+    - El link abrió `/invitacion` sin gastar el token. "Guardar y entrar" lo canjeó y llevó a `staff/mozo`, y la contraseña nueva sirve para ingresar.
+    - Una invitación anterior con la plantilla por defecto llevó a `auth.<amb>/#access_token=…` (flujo implícito), que web-auth con PKCE no acepta: sin las plantillas nuevas, la invitación no funciona.
 - **"Confirm email" activo en los dos proyectos de Supabase (Fase 0).** La invitación reutiliza una cuenta confirmada: si la confirmación estuviera apagada, un registro público quedaría confirmado al instante y se le daría acceso de personal a quien lo creó.
 - **Para la Fase 4:**
   - `@RequiereRol` / `MembresiaGuard` solo sirven para rutas con `:restauranteId`. Las de marca (`/marcas/:id`) y las de un recurso (`/items/:id`) resuelven el restaurante en el service y le preguntan a `AccesoService`.
