@@ -114,7 +114,7 @@ Hecha con los nombres que propone esta sección: `SupabaseAuthGuard`, `@Requiere
 - **Tests (solo estos):** token válido, token vencido, token de otro proyecto, usuario sin membresía, rol incorrecto. Además, un test de tabla de la matriz de invitaciones (decisión 3 de la planificación de la Fase 2).
 - **Terminado cuando:** los tests pasan y un endpoint de prueba protegido responde bien a cada caso.
 
-### Fase 3 — App web-auth (email + contraseña) ✅ (2026-10-20), producción con el próximo tag
+### Fase 3 — App web-auth (email + contraseña) ✅ (2026-10-20), en producción desde v1.1.0 (2026-10-21)
 
 Hecha en `apps/web-auth`, en el puerto 5173 en local:
 
@@ -127,7 +127,7 @@ Hecha en `apps/web-auth`, en el puerto 5173 en local:
 - **Links del mail:** traen un `token_hash` (plantillas en `docs/auth/VariablesACambiar.md`) que se canjea con `verifyOtp` recién al guardar la contraseña. El backend no manda `redirectTo`.
 - **Tokens de marca:** en `@menyu/ui/tailwind-preset`.
 
-Verificada con Supabase simulado (playwright-cli, 31 casos) y contra el Supabase y la API de staging, con un usuario de cada rol (`docs/auth/usuarios-prueba-staging.md`). Desplegada en staging con el merge del PR #409. Producción sale con el próximo tag (ver "Para tener en cuenta").
+Verificada con Supabase simulado (playwright-cli, 31 casos) y contra el Supabase y la API de staging, con un usuario de cada rol (`docs/auth/usuarios-prueba-staging.md`). Desplegada en staging con el merge del PR #409 y en producción con el tag v1.1.0 (2026-10-21).
 
 - Construir la UI con la skill `frontend-design`. Definir tokens de color y tipografía a partir del logo.
 - Pantalla de login (email + contraseña) con mensajes de error claros.
@@ -147,7 +147,7 @@ Verificada con Supabase simulado (playwright-cli, 31 casos) y contra el Supabase
   - Supabase: Data API desactivada (o RLS en todas las tablas) antes del primer deploy, y las plantillas de mail "Invite user" y "Reset password" con `token_hash` (`docs/auth/VariablesACambiar.md`, Fase 3).
 - **Terminado cuando:** un usuario de cada rol inicia sesión y termina en la app correcta, y el flujo de invitación funciona de punta a punta. web-auth se despliega sola en staging con cada merge a `main` y en producción con el tag, y el smoke de producción la verifica.
 
-### Fase 3b — Login con Google ✅ (2026-10-21), staging con el merge y producción con el próximo tag
+### Fase 3b — Login con Google ✅ (2026-10-21), en producción desde v1.1.0 (2026-10-21)
 
 Hecha en `apps/web-auth` (el backend no cambia):
 
@@ -168,11 +168,18 @@ Hecha en `apps/web-auth` (el backend no cambia):
 5. **Cuenta de Google a la que invitan después:** `invitacionEnviada: false`, no llega mail y entra con Google.
 6. **`redirect`:** con `?redirect=…/mozo/mesas`, termina ahí.
 
-El "atrás" desde Google, en un Chrome de escritorio real, restaura la página desde la bfcache con los botones habilitados. Pendientes en "Para tener en cuenta".
+El "atrás" desde Google, en un Chrome de escritorio real, restaura la página desde la bfcache con los botones habilitados.
+
+**Despliegue:**
+- **Staging:** con el merge del PR #411. El login con Google en `auth.staging.menyu-app.com` desplegado funciona de punta a punta: PKCE `S256`, `/auth/me` 200 y el `redirect` a staff.
+- **Producción:** con el tag v1.1.0, junto con la política de privacidad (PR #412).
+- **Google Cloud:** la pantalla de consentimiento está publicada (*In production*) desde el 2026-10-21.
+
+Los pendientes están en "Para tener en cuenta".
 
 - Botón "Continuar con Google" en web-auth (`signInWithOAuth`), con callback a `auth.menyu-app.com/google` (ver Decisiones de la planificación de la Fase 3b).
 - Mismo post-login que la Fase 3 (`/auth/me`, redirect, selector de restaurante, pantalla de sin acceso).
-- Configuración externa (`docs/auth/VariablesACambiar.md`, sección 6): la vuelta a `/google` no necesita Redirect URL en staging ni en producción (es el host de la Site URL), sí en desarrollo (`http://auth.menyu.local:5173/**`). La pantalla de consentimiento de Google Cloud pasa a *In production* cuando responda la política de privacidad (ver "Para tener en cuenta"); mientras esté en *Testing*, solo entran los usuarios de prueba cargados.
+- Configuración externa (`docs/auth/VariablesACambiar.md`, sección 6): la vuelta a `/google` no necesita Redirect URL en staging ni en producción (es el host de la Site URL), sí en desarrollo (`http://auth.menyu.local:5173/**`). La pantalla de consentimiento de Google Cloud está publicada (*In production*) desde el 2026-10-21. Mientras estuvo en *Testing* solo entraban los usuarios de prueba cargados.
 - Política de privacidad pública en `/privacidad` de web-auth (`src/pages/PrivacidadPage.tsx`). Es una ruta estática: no usa la sesión ni llama a `/auth/me`, y el rewrite de `vercel.json` la sirve aunque se cargue directo. Google exige una página principal y una política de privacidad, las dos en un dominio autorizado (`menyu-app.com`), para pasar la pantalla de consentimiento a *In production*, y visita las URLs al publicar.
 - **Casos a verificar (a mano, no automatizados):**
   - Usuario invitado con `x@gmail.com` entra con Google usando ese mail → Supabase vincula la identidad al mismo usuario, se conserva el `supabaseUserId` y accede normal.
@@ -234,24 +241,23 @@ El "atrás" desde Google, en un Chrome de escritorio real, restaura la página d
 
 Observaciones que dejaron las Fases 0 a 3b (2026-10-20 y 2026-10-21). Revisarlas al arrancar cada fase y borrar las que ya no apliquen.
 
-- **Fase 3b: falta staging desplegado y producción.**
-  1. Después del merge: un login con Google en `auth.staging.menyu-app.com` desplegado con una de las cuentas de prueba (ahí el PKCE es `S256`; en local, por `http://`, es `plain`).
-  2. Antes del tag: el proveedor Google activo en el Supabase de producción (`docs/auth/VariablesACambiar.md`, sección 6).
-  3. Pasar la pantalla de consentimiento de Google Cloud a *In production* recién cuando `https://auth.menyu-app.com/privacidad` responda, es decir, después del tag. Google visita las URLs al publicar, y hasta el tag `auth.menyu-app.com` no tiene ningún deploy (`DEPLOYMENT_NOT_FOUND`). En *Branding*:
-     - Política de privacidad: `https://auth.menyu-app.com/privacidad` (en staging, `https://auth.staging.menyu-app.com/privacidad`, desde el merge).
-     - Página principal: `https://mesa.menyu-app.com` (Discovery). La raíz `menyu-app.com` no tiene sitio.
-     - Dominios autorizados: `menyu-app.com` y el `<ref>.supabase.co` de cada proyecto de Supabase (lo pide la guía de Google de Supabase).
-     - Si Google pide verificar la marca, la página principal tiene que tener un link a la política de privacidad, y Discovery todavía no lo tiene.
-     - Sin publicar, después del tag el login con Google de producción deja entrar solo a los usuarios de prueba. *Branding* es uno solo para los dos ambientes, así que se puede publicar antes con la URL de staging (existe desde el merge) y cambiarla por la de producción después del tag. Falta confirmar que Google lo acepte, y staging se redespliega con cada merge.
-     - La página la arma JavaScript: el HTML que sirve Vercel tiene el `#root` vacío. Si Google dice que no la encuentra, servirla también como HTML estático.
-     - `/privacidad` describe lo que hace el código hoy: qué guarda cada tabla y qué proveedores reciben datos. Si eso cambia (por ejemplo, la Fase 5 retira los `password_hash`), actualizarla junto con la fecha de vigencia.
-  4. Sin probar: "atrás" desde Google en celulares (Safari iOS y Chrome Android).
+- **Fases 3 y 3b en producción (v1.1.0, 2026-10-21).** Comprobado después del deploy:
+  - El smoke de producción, con web-auth incluida, pasó.
+  - `https://auth.menyu-app.com` y `/privacidad` responden. El bundle usa el Supabase de producción y `api.menyu-app.com`.
+  - La API acepta el origen `https://auth.menyu-app.com` (`CORS_ORIGINS`).
+  - Falta un ingreso real en `auth.menyu-app.com`, con email y contraseña y con Google. Hace falta un `Usuario` en la base de producción: el primer ROOT se crea a mano, como en staging (`docs/auth/usuarios-prueba-staging.md`).
+- **Fase 3b: pantalla de consentimiento de Google publicada (2026-10-21).** *Branding* es uno solo para los dos ambientes:
+  - Página principal: `https://mesa.menyu-app.com` (Discovery). La raíz `menyu-app.com` no tiene sitio.
+  - Política de privacidad: `https://auth.menyu-app.com/privacidad`. Google visita estas URLs: no cambiar la ruta ni dejarla caer.
+  - Dominios autorizados: `menyu-app.com` y el `<ref>.supabase.co` de cada proyecto de Supabase.
+  - Si Google pide verificar la marca, la página principal tiene que tener un link a la política de privacidad, y Discovery todavía no lo tiene.
+  - La página la arma JavaScript: el HTML que sirve Vercel tiene el `#root` vacío. Si Google dice que no la encuentra, servirla también como HTML estático.
+  - `/privacidad` describe lo que hace el código hoy: qué guarda cada tabla y qué proveedores reciben datos. Si eso cambia (por ejemplo, la Fase 5 retira los `password_hash`), actualizarla junto con la fecha de vigencia.
+- **Fase 3b: sin probar el "atrás" desde Google en celulares** (Safari iOS y Chrome Android).
 - **Fase 3b: Supabase no agrega una identidad `email` cuando una cuenta que solo tiene Google crea una contraseña.** `identities` sigue mostrando solo `google`, pero la contraseña sirve (comprobado el 2026-10-21). Para saber si una cuenta tiene contraseña no sirve mirar `identities`.
-- **Fase 3b: Redirect URL de desarrollo.** Hasta el 2026-10-21 el Supabase de staging no tenía `http://auth.menyu.local:5173/**`, y la vuelta de Google desde local caía en la Site URL (`auth.staging…`). Ya está agregada.
-
-- **Fase 3: falta producción.** Staging quedó completo con el merge del PR #409 (`6f13a7d`). Para el tag:
-  1. Sumar `https://auth.menyu-app.com` a `CORS_ORIGINS` de Railway de producción en el mismo release: el cambio redespliega el servicio y corre las migraciones.
-  2. Después del tag, el smoke de producción (ya incluye web-auth) y un login en `auth.menyu-app.com` con un usuario de Supabase Auth de producción (si todavía no hay ninguno, el primer ROOT se crea a mano, como en staging).
+- **Test inestable en web-staff (2026-10-21).**
+  - `MesasPage (mozo) › detalle › si la sesión abierta en el detalle se cierra por socket, se limpia` (`apps/web-staff/src/pages/mozo/MesasPage.spec.tsx`) falló en el CI de `main` (`b4d2dcb`) sin cambios en web-staff. Pasó al reintentar y en local pasa siempre.
+  - `deploy-production.yml` exige el CI del commit en verde, así que puede frenar un release (para v1.1.0 hubo que relanzar el job). Conviene arreglarlo.
 - **Fase 3: lo que se probó en staging (2026-10-20).**
   - El deploy del merge y el smoke de staging, con las cuatro apps y web-auth OK.
   - En `auth.staging.menyu-app.com` desplegado, ROOT y OWNER terminan en `admin.staging…/admin`, MOZO en `staff.staging…/mozo` y COCINA en `staff.staging…/cocina`. "varias" ve el selector y `sin-acceso` va a "Tu cuenta no tiene acceso". `/auth/me` responde con el CORS de `auth.staging`.
