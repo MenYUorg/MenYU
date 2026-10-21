@@ -212,7 +212,7 @@ Observaciones que dejaron las Fases 0 a 3 (2026-10-20). Revisarlas al arrancar c
     - Se mandó el 2026-10-20 (OWNER → MOZO): 201, la repetida 409, y el mail llegó.
     - Al aceptarla, `GET /auth/me` del invitado dio 200 con su membresía MOZO.
     - Pero staging todavía tenía la plantilla por defecto: el link llevó a `auth.staging.menyu-app.com/#access_token=…` (flujo implícito), que web-auth con PKCE no acepta.
-    - Falta repetirla con la plantilla con `token_hash` y otro email: el anterior tiene `Usuario`. Su cuenta de Supabase se borró, pero el `Usuario`, su membresía y su `Mozo` siguen en la base de staging.
+    - Falta repetirla con la plantilla con `token_hash` y otro email: el anterior tiene `Usuario`. Si de ese invitado se borró solo la cuenta de Supabase, en la base de staging quedan su `Usuario`, su membresía y su `Mozo`.
   - La recuperación de contraseña con mail real.
   - Con la cuenta del invitado, que una cuenta confirmada se reutiliza al invitarla en otro restaurante (`invitacionEnviada: false`).
   - El caso de la cuenta sin confirmar que se borra y se reinvita sigue sin probarse.
