@@ -147,7 +147,28 @@ Verificada con Supabase simulado (playwright-cli, 31 casos) y contra el Supabase
   - Supabase: Data API desactivada (o RLS en todas las tablas) antes del primer deploy, y las plantillas de mail "Invite user" y "Reset password" con `token_hash` (`docs/auth/VariablesACambiar.md`, Fase 3).
 - **Terminado cuando:** un usuario de cada rol inicia sesión y termina en la app correcta, y el flujo de invitación funciona de punta a punta. web-auth se despliega sola en staging con cada merge a `main` y en producción con el tag, y el smoke de producción la verifica.
 
-### Fase 3b — Login con Google
+### Fase 3b — Login con Google ✅ (2026-10-21), staging con el merge y producción con el próximo tag
+
+Hecha en `apps/web-auth` (el backend no cambia):
+
+- **Pantallas:** "Continuar con Google" (`src/components/BotonGoogle.tsx`) arriba del formulario en `/` y en `/invitacion`. La salida a Google es `src/flujo/useIngresoConGoogle.ts`, y `/google` (`src/pages/VolverDeGooglePage.tsx`) recibe la vuelta.
+- **Errores:** `/google` muestra el error de OAuth de la URL (`errorDeOAuth`, en `src/lib/mensajes.ts`) o el del canje. Si salió bien, sigue a `/`, que hace el post-login de la Fase 3.
+- **Volver atrás:**
+  - `/invitacion` sin token (por ejemplo, al volver atrás desde Google) pide abrir de nuevo el link del mail.
+  - Si la página vuelve desde la bfcache, los botones se vuelven a habilitar.
+
+**Verificada** en local (`auth.menyu.local:5173`) contra el Supabase y la API de staging, con las dos cuentas de Google de `docs/auth/usuarios-prueba-staging.md`. Se usó playwright-cli conectado a un Chrome aparte en el que una persona inició sesión en Google. Los seis casos de abajo dieron lo esperado:
+1. **Cancelar:** `/google` con "Cancelaste…", y el `redirect` se conserva.
+2. **Sin invitación:** `/auth/me` 403 y "sin acceso". Después de cerrar sesión aparece el selector de cuentas de Google.
+3. **Invitado que no aceptó:**
+   - Desde el link del mail, con la otra cuenta, termina en "sin acceso".
+   - Con la cuenta invitada, entra como MOZO, mismo `sub` que el `Usuario` de la invitación.
+   - Después, el link dice que venció.
+4. **Contraseña después de Google:** con la cuenta que entró con Google y después creó una contraseña desde "Olvidé mi contraseña", entra con email y contraseña y con Google, siempre con el mismo id.
+5. **Cuenta de Google a la que invitan después:** `invitacionEnviada: false`, no llega mail y entra con Google.
+6. **`redirect`:** con `?redirect=…/mozo/mesas`, termina ahí.
+
+El "atrás" desde Google, en un Chrome de escritorio real, restaura la página desde la bfcache con los botones habilitados. Pendientes en "Para tener en cuenta".
 
 - Botón "Continuar con Google" en web-auth (`signInWithOAuth`), con callback a `auth.menyu-app.com/google` (ver Decisiones de la planificación de la Fase 3b).
 - Mismo post-login que la Fase 3 (`/auth/me`, redirect, selector de restaurante, pantalla de sin acceso).
@@ -210,7 +231,14 @@ Verificada con Supabase simulado (playwright-cli, 31 casos) y contra el Supabase
 
 ## Para tener en cuenta
 
-Observaciones que dejaron las Fases 0 a 3 (2026-10-20). Revisarlas al arrancar cada fase y borrar las que ya no apliquen.
+Observaciones que dejaron las Fases 0 a 3b (2026-10-20 y 2026-10-21). Revisarlas al arrancar cada fase y borrar las que ya no apliquen.
+
+- **Fase 3b: falta staging desplegado y producción.**
+  1. Después del merge: un login con Google en `auth.staging.menyu-app.com` desplegado con una de las cuentas de prueba (ahí el PKCE es `S256`; en local, por `http://`, es `plain`).
+  2. Antes del tag: la pantalla de consentimiento de Google Cloud en *In production* y el proveedor Google activo en el Supabase de producción (`docs/auth/VariablesACambiar.md`, sección 6).
+  3. Sin probar: "atrás" desde Google en celulares (Safari iOS y Chrome Android).
+- **Fase 3b: Supabase no agrega una identidad `email` cuando una cuenta que solo tiene Google crea una contraseña.** `identities` sigue mostrando solo `google`, pero la contraseña sirve (comprobado el 2026-10-21). Para saber si una cuenta tiene contraseña no sirve mirar `identities`.
+- **Fase 3b: Redirect URL de desarrollo.** Hasta el 2026-10-21 el Supabase de staging no tenía `http://auth.menyu.local:5173/**`, y la vuelta de Google desde local caía en la Site URL (`auth.staging…`). Ya está agregada.
 
 - **Fase 3: falta producción.** Staging quedó completo con el merge del PR #409 (`6f13a7d`). Para el tag:
   1. Sumar `https://auth.menyu-app.com` a `CORS_ORIGINS` de Railway de producción en el mismo release: el cambio redespliega el servicio y corre las migraciones.
@@ -223,7 +251,7 @@ Observaciones que dejaron las Fases 0 a 3 (2026-10-20). Revisarlas al arrancar c
     - El link abrió `/invitacion` sin gastar el token. "Guardar y entrar" lo canjeó y llevó a `staff/mozo`, y la contraseña nueva sirve para ingresar.
     - Una invitación anterior con la plantilla por defecto llevó a `auth.<amb>/#access_token=…` (flujo implícito), que web-auth con PKCE no acepta: sin las plantillas con `token_hash`, la invitación no funciona.
   - La recuperación de punta a punta: se pidió desde "Olvidé mi contraseña" y el link (`token_hash` con prefijo `pkce_`) abrió `/restablecer-contrasena` sin gastar el token. Después de guardar, la contraseña nueva sirve y la anterior no.
-  - Sin probar: que una cuenta confirmada se reutiliza al invitarla en otro restaurante (`invitacionEnviada: false`) y que una sin confirmar se borra y se reinvita.
+  - Que una cuenta confirmada se reutiliza al invitarla (`invitacionEnviada: false`) quedó probado en la Fase 3b, con una cuenta de Google. Sin probar: que una sin confirmar se borra y se reinvita.
 - **"Confirm email" activo en los dos proyectos de Supabase (Fase 0).** La invitación reutiliza una cuenta confirmada: si la confirmación estuviera apagada, un registro público quedaría confirmado al instante y se le daría acceso de personal a quien lo creó.
 - **Para la Fase 4:**
   - `@RequiereRol` / `MembresiaGuard` solo sirven para rutas con `:restauranteId`. Las de marca (`/marcas/:id`) y las de un recurso (`/items/:id`) resuelven el restaurante en el service y le preguntan a `AccesoService`.
