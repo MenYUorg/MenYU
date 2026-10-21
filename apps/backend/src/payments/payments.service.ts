@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   Logger,
   NotFoundException,
@@ -239,6 +240,8 @@ export class PaymentsService {
       pago.sesion.mesa.restauranteId,
       dto.mozoId,
     )
+    // Un cobro ya confirmado (o cancelado) no se vuelve a confirmar: le cambiaría el autor y la fecha.
+    if (pago.estado !== ESTADO_PAGO_PENDIENTE) throw new ConflictException('Ese pago ya no está pendiente')
 
     return runSerializableTransaction(this.prisma, async (tx) => {
       await tx.pago.update({

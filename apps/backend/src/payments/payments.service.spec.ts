@@ -1,5 +1,5 @@
 import { Test } from '@nestjs/testing'
-import { BadRequestException, ForbiddenException, Logger, NotFoundException } from '@nestjs/common'
+import { BadRequestException, ConflictException, ForbiddenException, Logger, NotFoundException } from '@nestjs/common'
 import { PaymentsService } from './payments.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { MenyuGateway } from '../gateway/menyu.gateway'
@@ -333,6 +333,25 @@ describe('PaymentsService', () => {
       beforeEach(() => {
         mockDivision.calcularTotalSesion.mockResolvedValue(2000)
         tx.pago.findMany.mockResolvedValue([{ monto: 1000 }])
+      })
+
+      it.each([
+        ['ya aprobado (otro mozo lo cobró)', 'aprobado'],
+        ['cancelado', 'cancelado'],
+      ])('un pago %s no se vuelve a confirmar: 409 y no se le cambia el autor', async (_caso, estado) => {
+        mockPrisma.pago.findUnique.mockResolvedValue({
+          id: 'pago-ef',
+          sesionId: 'sesion-1',
+          metodo: 'efectivo',
+          estado,
+          sesion: { mesaId: 'mesa-1', mesa: { restauranteId: MUNDO.REST_1 } },
+        })
+
+        await expect(service.confirmarEfectivo({ pagoId: 'pago-ef' }, CUENTAS.MOZO)).rejects.toThrow(
+          new ConflictException('Ese pago ya no está pendiente'),
+        )
+        expect(mockPrisma.$transaction).not.toHaveBeenCalled()
+        expect(tx.pago.update).not.toHaveBeenCalled()
       })
 
       it('un MOZO lo confirma con su propio Mozo aunque mande el de otro', async () => {

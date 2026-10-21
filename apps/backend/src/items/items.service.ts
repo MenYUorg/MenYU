@@ -42,6 +42,7 @@ export class ItemsService {
 
   /** El rol en el restaurante lo exige la ruta (`@RequiereRolEn`). */
   async create(dto: CreateItemDto) {
+    await this.assertRelacionesDelRestaurante(dto.restauranteId, dto)
     await this.assertNombreUnico(dto.restauranteId, dto.nombre)
 
     const created = await this.prisma.itemMenu.create({ data: dto, include: DETAIL_INCLUDE })
@@ -71,6 +72,7 @@ export class ItemsService {
   async update(id: string, dto: UpdateItemDto, usuario: UsuarioAutenticado) {
     const item = await this.getOrThrow(id)
     await this.acceso.exigirRol(usuario.id, item.restauranteId, ADMINISTRACION)
+    await this.assertRelacionesDelRestaurante(item.restauranteId, dto)
 
     if (dto.nombre && dto.nombre !== item.nombre) {
       await this.assertNombreUnico(item.restauranteId, dto.nombre, id)
@@ -259,6 +261,24 @@ export class ItemsService {
     })
     if (!ii || ii.itemId !== itemId) throw new NotFoundException('Asociación ingrediente-ítem no encontrada')
     return ii
+  }
+
+  /**
+   * La categoría y la comanda tienen que ser del restaurante del ítem: el permiso es sobre ese restaurante, y la carta
+   * pública de otro mostraría el ítem si quedara en una de sus categorías (los ids de las categorías son públicos).
+   */
+  private async assertRelacionesDelRestaurante(
+    restauranteId: string,
+    dto: { categoriaId?: string | null; comandaId?: string | null },
+  ) {
+    if (dto.categoriaId) {
+      const categoria = await this.prisma.categoriaMenu.findUnique({ where: { id: dto.categoriaId }, select: { restauranteId: true } })
+      if (categoria?.restauranteId !== restauranteId) throw new BadRequestException('La categoría no es de este restaurante')
+    }
+    if (dto.comandaId) {
+      const comanda = await this.prisma.comanda.findUnique({ where: { id: dto.comandaId }, select: { restauranteId: true } })
+      if (comanda?.restauranteId !== restauranteId) throw new BadRequestException('La comanda no es de este restaurante')
+    }
   }
 
   private async assertIngredientePertenece(ingredienteId: string, restauranteId: string) {

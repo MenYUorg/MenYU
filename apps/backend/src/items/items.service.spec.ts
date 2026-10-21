@@ -26,6 +26,8 @@ const ITEM = {
 
 const mockPrisma = {
   itemMenu: { findUnique: jest.fn(), findMany: jest.fn(), findFirst: jest.fn(), create: jest.fn(), update: jest.fn() },
+  categoriaMenu: { findUnique: jest.fn() },
+  comanda: { findUnique: jest.fn() },
 }
 const mockGateway = { emitMenuUpdated: jest.fn() }
 
@@ -348,6 +350,56 @@ describe('ItemsService — descuentos', () => {
         precioDescuento: null,
         precioVigente: 1,
       })
+    })
+  })
+
+  // ── La categoría y la comanda, del restaurante del ítem ────────────────────
+  // El permiso es sobre el restaurante del ítem: un ítem en la categoría de otro restaurante aparecería en su carta
+  // pública (los ids de las categorías se ven en GET /menu/:restauranteId).
+
+  describe('la categoría y la comanda tienen que ser del restaurante del ítem', () => {
+    const NUEVO = { restauranteId: REST, nombre: 'Nuevo', precioBase: 1500 }
+
+    beforeEach(() => {
+      mockPrisma.itemMenu.findFirst.mockResolvedValue(null)
+      mockPrisma.itemMenu.create.mockResolvedValue({ ...ITEM, precioDescuento: null })
+    })
+
+    it.each([
+      ['la categoría', { categoriaId: 'cat-ajena' }, () => mockPrisma.categoriaMenu.findUnique.mockResolvedValue({ restauranteId: MUNDO.REST_B }), 'La categoría no es de este restaurante'],
+      ['la comanda', { comandaId: 'com-ajena' }, () => mockPrisma.comanda.findUnique.mockResolvedValue({ restauranteId: MUNDO.REST_B }), 'La comanda no es de este restaurante'],
+      ['una categoría que no existe', { categoriaId: 'no-existe' }, () => mockPrisma.categoriaMenu.findUnique.mockResolvedValue(null), 'La categoría no es de este restaurante'],
+    ])('crear con %s de otro restaurante: 400 y no se crea', async (_caso, extra, preparar, mensaje) => {
+      preparar()
+
+      await expect(service.create({ ...NUEVO, ...extra })).rejects.toThrow(new BadRequestException(mensaje))
+      expect(mockPrisma.itemMenu.create).not.toHaveBeenCalled()
+    })
+
+    it('editar para pasarlo a la categoría de otro restaurante: 400 y no se toca', async () => {
+      mockPrisma.categoriaMenu.findUnique.mockResolvedValue({ restauranteId: MUNDO.REST_B })
+
+      await expect(service.update('item-1', { categoriaId: 'cat-ajena' }, OWNER)).rejects.toThrow(
+        new BadRequestException('La categoría no es de este restaurante'),
+      )
+      expect(mockPrisma.itemMenu.update).not.toHaveBeenCalled()
+    })
+
+    it('con la categoría y la comanda del restaurante se crea', async () => {
+      mockPrisma.categoriaMenu.findUnique.mockResolvedValue({ restauranteId: REST })
+      mockPrisma.comanda.findUnique.mockResolvedValue({ restauranteId: REST })
+
+      await service.create({ ...NUEVO, categoriaId: 'cat-1', comandaId: 'com-1' })
+
+      expect(mockPrisma.categoriaMenu.findUnique).toHaveBeenCalledWith({ where: { id: 'cat-1' }, select: { restauranteId: true } })
+      expect(mockPrisma.itemMenu.create).toHaveBeenCalled()
+    })
+
+    it('sacarlo de su categoría (null) no consulta nada', async () => {
+      await service.update('item-1', { categoriaId: null }, OWNER)
+
+      expect(mockPrisma.categoriaMenu.findUnique).not.toHaveBeenCalled()
+      expect(mockPrisma.itemMenu.update).toHaveBeenCalled()
     })
   })
 
