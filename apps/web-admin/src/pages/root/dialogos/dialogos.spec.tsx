@@ -276,8 +276,10 @@ describe('DialogoBajaMarca', () => {
     abrir()
 
     const dialogo = screen.getByRole('dialog')
-    expect(dialogo).toHaveTextContent('2 restaurantes dejan de aparecer en Discovery')
-    expect(dialogo).toHaveTextContent('Por ahora no se corta nada más')
+    expect(dialogo).toHaveTextContent('2 restaurantes dejan de estar disponibles')
+    expect(dialogo).toHaveTextContent('no abren mesas nuevas')
+    expect(dialogo).toHaveTextContent('Las mesas que ya están abiertas se pueden terminar')
+    expect(dialogo).toHaveTextContent('siguen pudiendo iniciar sesión')
     expect(dialogo).toHaveTextContent('No se borra ningún dato')
     expect(dialogo).toHaveTextContent('Es reversible')
   })
@@ -291,7 +293,7 @@ describe('DialogoBajaMarca', () => {
       />,
     )
 
-    expect(screen.getByRole('dialog')).toHaveTextContent('1 restaurante deja de aparecer en Discovery')
+    expect(screen.getByRole('dialog')).toHaveTextContent('1 restaurante deja de estar disponible')
   })
 
   it('si falla, lo dice sin cerrar', async () => {
@@ -312,7 +314,7 @@ describe('DialogoReactivarMarca', () => {
     marcas.reactivar.mockResolvedValue(reactivada)
     const alHacer = vi.fn()
     render(<DialogoReactivarMarca marca={marcaDetalle({ activo: false })} onHecho={alHacer} onCerrar={vi.fn()} />)
-    expect(screen.getByRole('dialog')).toHaveTextContent('vuelven a aparecer en Discovery')
+    expect(screen.getByRole('dialog')).toHaveTextContent('vuelven a Discovery, a mostrar su carta y a abrir mesas')
 
     await userEvent.click(screen.getByRole('button', { name: 'Reactivar' }))
 
@@ -426,8 +428,9 @@ describe('DialogoBajaRestaurante y DialogoReactivarRestaurante', () => {
     restaurantes.baja.mockResolvedValue(restaurante({ activo: false }))
     const alHacer = vi.fn()
     render(<DialogoBajaRestaurante restaurante={restaurante()} onHecho={alHacer} onCerrar={vi.fn()} />)
-    expect(screen.getByRole('dialog')).toHaveTextContent('Deja de aparecer en Discovery')
-    expect(screen.getByRole('dialog')).toHaveTextContent('Por ahora no se corta nada más')
+    expect(screen.getByRole('dialog')).toHaveTextContent('Deja de estar disponible')
+    expect(screen.getByRole('dialog')).toHaveTextContent('no abren mesas nuevas')
+    expect(screen.getByRole('dialog')).toHaveTextContent('siguen pudiendo iniciar sesión')
 
     await userEvent.click(screen.getByRole('button', { name: 'Dar de baja' }))
 
@@ -439,7 +442,7 @@ describe('DialogoBajaRestaurante y DialogoReactivarRestaurante', () => {
     restaurantes.reactivar.mockResolvedValue(restaurante())
     const alHacer = vi.fn()
     render(<DialogoReactivarRestaurante restaurante={restaurante({ activo: false })} onHecho={alHacer} onCerrar={vi.fn()} />)
-    expect(screen.getByRole('dialog')).toHaveTextContent('Vuelve a aparecer en Discovery')
+    expect(screen.getByRole('dialog')).toHaveTextContent('Vuelve a Discovery, a mostrar su carta y a abrir mesas')
 
     await userEvent.click(screen.getByRole('button', { name: 'Reactivar' }))
 

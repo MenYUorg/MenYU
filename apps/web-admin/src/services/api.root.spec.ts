@@ -17,9 +17,18 @@ beforeEach(() => {
 
 afterEach(() => vi.unstubAllGlobals())
 
+// Si hay un `.env.local` con `VITE_API_URL` (como en la compu de desarrollo), api.ts lo antepone a cada ruta: se saca para que
+// el test mire solo la ruta y dé lo mismo con el entorno que sea.
+const BASE = import.meta.env.VITE_API_URL ?? ''
+
 const ultimaLlamada = () => {
   const [url, opciones] = fetchFalso.mock.calls[fetchFalso.mock.calls.length - 1] as [string, RequestInit]
-  return { url, metodo: opciones.method, cuerpo: opciones.body, encabezados: opciones.headers as Record<string, string> }
+  return {
+    url: BASE && url.startsWith(BASE) ? url.slice(BASE.length) : url,
+    metodo: opciones.method,
+    cuerpo: opciones.body,
+    encabezados: opciones.headers as Record<string, string>,
+  }
 }
 
 describe('api.root', () => {

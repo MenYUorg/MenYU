@@ -1,5 +1,5 @@
 import {
-  BAJA_CORTA_EL_ACCESO,
+  BAJA_CORTA_EL_LOGIN,
   OPCIONES_DE_TIPO,
   avisoDeMarcaDeBaja,
   efectosDeBajaDeMarca,
@@ -48,28 +48,35 @@ describe('etiquetaDeTipo y opciones del filtro', () => {
 })
 
 describe('textos de la baja', () => {
-  it('hoy la baja no corta el acceso (cuando eso cambie, se activa el interruptor y este test avisa)', () => {
-    expect(BAJA_CORTA_EL_ACCESO).toBe(false)
+  it('hoy la baja no corta el inicio de sesión (cuando eso cambie, se activa el interruptor y este test avisa)', () => {
+    expect(BAJA_CORTA_EL_LOGIN).toBe(false)
   })
 
-  it('con el interruptor apagado no promete lo que todavía no pasa', () => {
+  it('con el interruptor apagado dice que lo público se corta y que el login todavía no', () => {
     const marca = textoDe(efectosDeBajaDeMarca(2, false))
     expect(marca).toContain('Discovery')
-    expect(marca).toContain('Por ahora no se corta nada más')
+    expect(marca).toContain('no se ve su carta')
+    expect(marca).toContain('no abren mesas nuevas')
+    expect(marca).toContain('Las mesas que ya están abiertas se pueden terminar')
+    expect(marca).toContain('siguen pudiendo iniciar sesión')
     expect(marca).not.toMatch(/no pueden iniciar sesión/)
-    expect(textoDe(efectosDeBajaDeRestaurante(false))).toContain('Por ahora no se corta nada más')
-    expect(textoDe(avisoDeMarcaDeBaja(false))).toContain('Por ahora el resto sigue funcionando')
-    expect(efectosDeReactivarMarca(false).join(' ')).toContain('No cambia nada más')
-    expect(efectosDeReactivarRestaurante(false)).toContain('No cambia nada más')
+    expect(marca).not.toContain('Por ahora no se corta nada más')
+    const restaurante = textoDe(efectosDeBajaDeRestaurante(false))
+    expect(restaurante).toContain('no abren mesas nuevas')
+    expect(restaurante).toContain('siguen pudiendo iniciar sesión')
+    expect(textoDe(avisoDeMarcaDeBaja(false))).toContain('Su gente todavía puede iniciar sesión')
+    expect(efectosDeReactivarMarca(false).join(' ')).toContain('vuelven a Discovery, a mostrar su carta y a abrir mesas')
+    expect(efectosDeReactivarMarca(false).join(' ')).toContain('no se había cortado')
+    expect(efectosDeReactivarRestaurante(false)).toContain('no se había cortado')
   })
 
-  it('con el interruptor encendido muestra los textos del diseño aprobado', () => {
+  it('con el interruptor encendido también promete el corte del login, como el diseño aprobado', () => {
     const marca = textoDe(efectosDeBajaDeMarca(2, true))
     expect(marca).toContain('no se ve su carta')
     expect(marca).toContain('no pueden iniciar sesión')
-    expect(marca).not.toContain('Por ahora')
+    expect(marca).not.toContain('siguen pudiendo')
     expect(textoDe(efectosDeBajaDeRestaurante(true))).toContain('no pueden iniciar sesión')
-    expect(textoDe(avisoDeMarcaDeBaja(true))).toContain('su dueño no puede iniciar sesión')
+    expect(textoDe(avisoDeMarcaDeBaja(true))).toContain('Su dueño no puede iniciar sesión')
     expect(efectosDeReactivarMarca(true).join(' ')).toContain('pueden iniciar sesión de nuevo')
     expect(efectosDeReactivarRestaurante(true)).toContain('pueden iniciar sesión de nuevo')
   })
@@ -80,9 +87,18 @@ describe('textos de la baja', () => {
     expect(efectosDeBajaDeMarca(0, corta)[0][0]).toMatch(/^0 restaurantes dejan/)
   })
 
-  it.each([false, true])('siempre aclara que no se borra ningún dato (interruptor %s)', (corta) => {
+  it.each([false, true])('siempre aclara que no se borra ningún dato y que las mesas abiertas se terminan (interruptor %s)', (corta) => {
     expect(textoDe(efectosDeBajaDeMarca(2, corta))).toContain('No se borra ningún dato')
+    expect(textoDe(efectosDeBajaDeMarca(2, corta))).toContain('Las mesas que ya están abiertas se pueden terminar')
     expect(textoDe(efectosDeBajaDeRestaurante(corta))).toContain('No se borra ningún dato')
+    expect(textoDe(efectosDeBajaDeRestaurante(corta))).toContain('Las mesas que ya están abiertas se pueden terminar')
     expect(textoDe(avisoDeMarcaDeBaja(corta))).toContain('No se borró ningún dato')
+  })
+
+  it.each([false, true])('cada viñeta tiene un encabezado distinto (se usa como clave de la lista) (interruptor %s)', (corta) => {
+    for (const pares of [efectosDeBajaDeMarca(2, corta), efectosDeBajaDeRestaurante(corta)]) {
+      const encabezados = pares.map(([fuerte]) => fuerte)
+      expect(new Set(encabezados).size).toBe(encabezados.length)
+    }
   })
 })
