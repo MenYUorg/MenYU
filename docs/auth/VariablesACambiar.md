@@ -91,7 +91,7 @@ Su entorno **Production** es staging. Mismos valores en los tres.
 
 **Antes del primer deploy (staging con el merge, producción con el tag):**
 
-1. **Data API de Supabase cerrada en ese proyecto.** web-auth lleva la publishable key en un bundle público. Si la Data API (PostgREST) está activa sin RLS, cualquiera puede leer con esa key `admin`, `mozo`, `cliente` (con los `password_hash`) y `restaurante` (con los tokens de Mercado Pago). En *Project Settings → Data API*, desactivarla, o habilitar RLS en todas las tablas de `public`. Verificar con `curl "$SUPABASE_URL/rest/v1/admin?select=id&limit=1" -H "apikey: <publishable key>"` (también `restaurante` y `usuario`): no puede devolver filas. Staging respondió 503 `PGRST002` el 2026-10-20 en todas las tablas, que es una falla de PostgREST y no la Data API apagada. Producción no se probó.
+1. **Data API de Supabase cerrada en ese proyecto** (hecho en los dos el 2026-10-20). web-auth lleva la publishable key en un bundle público. Si la Data API (PostgREST) está activa sin RLS, cualquiera puede leer con esa key `admin`, `mozo`, `cliente` (con los `password_hash`) y `restaurante` (con los tokens de Mercado Pago). En *Project Settings → Data API*, desactivarla, o habilitar RLS en todas las tablas de `public`. Verificar con `curl "$SUPABASE_URL/rest/v1/admin?select=id&limit=1" -H "apikey: <publishable key>"` (también `restaurante` y `usuario`): no puede devolver filas. Con la Data API cerrada, staging responde 503 `PGRST002` en todas las tablas, sin filas.
 2. Los proyectos de Vercel, sus dominios, el secret `VERCEL_PROJECT_ID_AUTH` y la variable `PROD_WEB_AUTH_URL` (sección 4). Sin el secret, `deploy-staging.yml` y `deploy-production.yml` cortan al empezar.
 3. Las plantillas de mail (abajo) y `CORS_ORIGINS` en Railway (sección 2).
 
@@ -110,22 +110,12 @@ Dominios: `auth.staging.menyu-app.com` en `menyu-auth-staging` y `auth.menyu-app
 
 Los links de invitación y de "olvidé mi contraseña" llevan a web-auth con un `token_hash`, que la app canjea con `verifyOtp` recién cuando la persona guarda la contraseña. Así funcionan con el flujo PKCE (el que usa `@supabase/ssr` desde la Fase 4), desde cualquier navegador, y un escáner de mail que abra el link no lo gasta. La invitación no manda `redirectTo`: el link sale de la Site URL (`auth.<ambiente>`). Las rutas `/invitacion` y `/restablecer-contrasena` están en `apps/web-auth/src/App.tsx`: si cambian, cambiar también las plantillas.
 
-En *Authentication → Emails → Templates* de cada proyecto:
+En *Authentication → Emails → Templates* de cada proyecto, pegar como cuerpo (*Message body*) el HTML de `docs/auth/plantillas-mail/`:
 
-- **Invite user.** Asunto: `Te invitaron a MenYU`. Cuerpo:
-  ```html
-  <h2>Te invitaron a MenYU</h2>
-  <p>Para crear tu contraseña y entrar, abrí este link:</p>
-  <p><a href="{{ .SiteURL }}/invitacion?token_hash={{ .TokenHash }}&type=invite">Aceptar la invitación</a></p>
-  <p>Si no esperabas esta invitación, ignorá este mail.</p>
-  ```
-- **Reset password.** Asunto: `Creá una contraseña nueva para MenYU`. Cuerpo:
-  ```html
-  <h2>Contraseña nueva</h2>
-  <p>Para crear una contraseña nueva, abrí este link. Vence en una hora y sirve una sola vez.</p>
-  <p><a href="{{ .SiteURL }}/restablecer-contrasena?token_hash={{ .TokenHash }}&type=recovery">Crear una contraseña nueva</a></p>
-  <p>Si no la pediste, ignorá este mail: tu contraseña no cambia.</p>
-  ```
+| Plantilla | Asunto | Cuerpo |
+|---|---|---|
+| **Invite user** | `Te invitaron a MenYU` | `docs/auth/plantillas-mail/invite-user.html` |
+| **Reset password** | `Creá una contraseña nueva para MenYU` | `docs/auth/plantillas-mail/reset-password.html` |
 
 **Verificar:** invitar a un mail propio (`POST /auth/invitaciones`) y que el link del mail abra `https://auth.<ambiente>/invitacion?token_hash=...` y pida la contraseña.
 

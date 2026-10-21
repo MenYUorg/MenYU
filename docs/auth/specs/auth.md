@@ -200,11 +200,9 @@ Verificada con Supabase simulado (playwright-cli, 31 casos) y contra el Supabase
 Observaciones que dejaron las Fases 0 a 3 (2026-10-20). Revisarlas al arrancar cada fase y borrar las que ya no apliquen.
 
 - **Fase 3: antes del merge y del tag.** Sin estos pasos, el deploy de web-auth falla (los dos workflows cortan al empezar si falta `VERCEL_PROJECT_ID_AUTH`) o la expone:
-  1. **Data API de Supabase cerrada en los dos proyectos** (Fase 0): desactivada o con RLS en todas las tablas de `public`. Verificar con `curl` (`docs/auth/VariablesACambiar.md`, Fase 3).
-     - Staging respondió 503 `PGRST002` el 2026-10-20 en todas las tablas: no devuelve filas, pero por una falla de PostgREST, no porque esté apagada.
-     - Producción no se probó.
-  2. Las plantillas de mail con `token_hash` en los dos proyectos.
-  3. Vercel: `menyu-auth` y `menyu-auth-staging`, con los dominios y su registro en Cloudflare.
+  1. ~~Data API de Supabase cerrada en los dos proyectos~~: hecho el 2026-10-20 (lo confirmó el equipo; staging responde 503 `PGRST002` en todas las tablas, sin filas).
+  2. Las plantillas de mail con `token_hash` en los dos proyectos: el HTML está en `docs/auth/plantillas-mail/` (asuntos en `docs/auth/VariablesACambiar.md`, Fase 3).
+  3. Vercel: `menyu-auth` y `menyu-auth-staging`, con los dominios y su registro en Cloudflare. Al 2026-10-20 todavía no están creados.
   4. GitHub: el secret `VERCEL_PROJECT_ID_AUTH` y la variable `PROD_WEB_AUTH_URL`.
   5. Railway: el CORS de staging antes del merge. El de producción, junto con el release, porque el cambio redespliega el servicio.
 - **Fase 3: lo que falta verificar.**
@@ -214,7 +212,7 @@ Observaciones que dejaron las Fases 0 a 3 (2026-10-20). Revisarlas al arrancar c
     - Se mandó el 2026-10-20 (OWNER → MOZO): 201, la repetida 409, y el mail llegó.
     - Al aceptarla, `GET /auth/me` del invitado dio 200 con su membresía MOZO.
     - Pero staging todavía tenía la plantilla por defecto: el link llevó a `auth.staging.menyu-app.com/#access_token=…` (flujo implícito), que web-auth con PKCE no acepta.
-    - Falta repetirla con la plantilla con `token_hash` y otro email, porque el invitado ya tiene `Usuario`.
+    - Falta repetirla con la plantilla con `token_hash` y otro email: el anterior tiene `Usuario`. Su cuenta de Supabase se borró, pero el `Usuario`, su membresía y su `Mozo` siguen en la base de staging.
   - La recuperación de contraseña con mail real.
   - Con la cuenta del invitado, que una cuenta confirmada se reutiliza al invitarla en otro restaurante (`invitacionEnviada: false`).
   - El caso de la cuenta sin confirmar que se borra y se reinvita sigue sin probarse.
