@@ -90,6 +90,21 @@ describe('PedidosService: validaciones, estado y ediciones', () => {
       expect(prisma.$transaction).not.toHaveBeenCalled()
     })
 
+    it('un token de invitado (tipo cliente, sin sesión de mesa) responde 401', async () => {
+      jwt.verify.mockReturnValue({ sub: 'cli-invitado', tipo: 'cliente', nombre: 'Invitado' })
+
+      await expect(service.confirmar('Bearer x', DTO())).rejects.toThrow(new UnauthorizedException('Este recurso requiere una sesión de mesa'))
+      expect(prisma.$transaction).not.toHaveBeenCalled()
+    })
+
+    it.each([
+      ['la sesión', { ...DTO(), sesionId: 'ses-de-otra-mesa' }, new ForbiddenException('Esa sesión de mesa no es la tuya')],
+      ['la mesa', { ...DTO(), mesaId: 'otra-mesa' }, new ForbiddenException('Esa mesa no es la de tu sesión')],
+    ])('si %s del pedido no es la del token responde 403 sin crear nada', async (_, dto, error) => {
+      await expect(service.confirmar('Bearer x', dto)).rejects.toThrow(error)
+      expect(prisma.$transaction).not.toHaveBeenCalled()
+    })
+
     it.each([
       ['no existe', null, new NotFoundException('Sesión no encontrada')],
       ['no está activa', { id: 'ses-1', estado: 'cerrada' }, new BadRequestException('La sesión no está activa')],

@@ -70,6 +70,29 @@ describe('endpoints de pagos', () => {
       expect(res.status).toBe(401)
       expect(payments.solicitarEfectivo).not.toHaveBeenCalled()
     })
+
+    it.each(['/payments/solicitar-efectivo', '/payments/avisar-mozo-cuenta', '/payments/mercadopago/crear-preferencia'])(
+      'POST %s con la sesión de otra mesa en el body responde 403',
+      async (ruta) => {
+        // Act
+        const res = await api.pedir('post', ruta, { sesion: SESION_CLIENTE, body: { sesionId: 'sesion-de-otra-mesa' } })
+
+        // Assert
+        expect(res.status).toBe(403)
+        expect(payments.solicitarEfectivo).not.toHaveBeenCalled()
+        expect(payments.avisarMozoPedidoDeCuenta).not.toHaveBeenCalled()
+        expect(payments.crearPreferenciaMercadoPago).not.toHaveBeenCalled()
+      },
+    )
+
+    it('un token de invitado (tipo cliente, sin sesión de mesa) responde 401', async () => {
+      // Act
+      const res = await api.pedir('post', '/payments/solicitar-efectivo', { sesion: USUARIOS.CLIENTE, body: DE_LA_SESION })
+
+      // Assert
+      expect(res.status).toBe(401)
+      expect(payments.solicitarEfectivo).not.toHaveBeenCalled()
+    })
   })
 
   describe('staff (admin o mozo)', () => {
