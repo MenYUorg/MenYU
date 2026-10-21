@@ -4,6 +4,7 @@ import { UsersModule } from './users/users.module'
 import { AuthModule } from './auth/auth.module'
 import { SupabaseAuthModule } from './auth/supabase/supabase-auth.module'
 import { InvitacionesModule } from './auth/invitaciones/invitaciones.module'
+import { PersonalModule } from './personal/personal.module'
 import { MarcaModule } from './marca/marca.module'
 import { RestauranteModule } from './restaurante/restaurante.module'
 import { MesasModule } from './mesas/mesas.module'
@@ -32,6 +33,7 @@ import { RootModule } from './root/root.module'
     AuthModule,
     SupabaseAuthModule,
     InvitacionesModule,
+    PersonalModule,
     MarcaModule,
     RestauranteModule,
     MesasModule,

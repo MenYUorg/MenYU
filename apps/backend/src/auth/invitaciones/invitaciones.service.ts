@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common'
 import { Prisma, Rol } from '@prisma/client'
 import { AuthError, User } from '@supabase/supabase-js'
+import { restauranteDisponible, SELECT_DISPONIBILIDAD } from '../../common/restaurante-disponible'
 import { PrismaService } from '../../prisma/prisma.service'
 import { AccesoService } from '../supabase/acceso.service'
 import { SupabaseAdminService } from '../supabase/supabase-admin.service'
@@ -76,7 +77,11 @@ export class InvitacionesService {
     return { usuarioId: usuario.id, membresiaId: membresia.id, invitacionEnviada }
   }
 
-  /** 403 si no puede invitar a ese rol ahí; 404 si puede (ROOT) pero la marca o el restaurante no existe. */
+  /**
+   * 403 si no puede invitar a ese rol ahí; si puede (ROOT), 404 si la marca o el restaurante no existe y 409 si está
+   * dado de baja (él o su marca): no se suma gente a algo dado de baja. Para el resto, AccesoService ya no cuenta las
+   * membresías de algo dado de baja, así que reciben 403.
+   */
   private async exigirPermiso(ambito: Ambito, rol: Rol, invitador: UsuarioAutenticado): Promise<void> {
     let rolesEnAmbito: Rol[]
     if (ambito.marcaId !== undefined) {
@@ -90,14 +95,16 @@ export class InvitacionesService {
     }
 
     if (ambito.marcaId !== undefined) {
-      const marca = await this.prisma.marca.findUnique({ where: { id: ambito.marcaId }, select: { id: true } })
+      const marca = await this.prisma.marca.findUnique({ where: { id: ambito.marcaId }, select: { activo: true } })
       if (!marca) throw new NotFoundException('Marca no encontrada')
+      if (!marca.activo) throw new ConflictException('La marca está dada de baja')
     } else {
       const restaurante = await this.prisma.restaurante.findUnique({
         where: { id: ambito.restauranteId },
-        select: { id: true },
+        select: SELECT_DISPONIBILIDAD,
       })
       if (!restaurante) throw new NotFoundException('Restaurante no encontrado')
+      if (!restauranteDisponible(restaurante)) throw new ConflictException('El restaurante o su marca están dados de baja')
     }
   }
 
