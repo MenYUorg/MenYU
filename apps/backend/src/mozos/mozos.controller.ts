@@ -1,95 +1,70 @@
-import {
-  Body,
-  Controller,
-  Delete,
-  Get,
-  HttpCode,
-  HttpStatus,
-  Param,
-  Patch,
-  Post,
-  Query,
-  UseGuards,
-} from '@nestjs/common'
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger'
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'
-import { RolesGuard } from '../common/guards/roles.guard'
-import { Roles } from '../common/decorators/roles.decorator'
-import { CurrentUser } from '../common/decorators/current-user.decorator'
-import { JwtPayload } from '../auth/auth.service'
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Query } from '@nestjs/common'
+import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger'
+import { Personal } from '../auth/decorators/personal.decorator'
+import { RequiereRolEn } from '../auth/decorators/requiere-rol.decorator'
+import { UsuarioActual } from '../auth/decorators/usuario-actual.decorator'
+import { ADMINISTRACION } from '../auth/roles-del-personal'
+import { UsuarioAutenticado } from '../auth/supabase/usuario-autenticado'
 import { MozosService } from './mozos.service'
-import { CreateMozoDto } from './dto/create-mozo.dto'
 import { UpdateMozoDto } from './dto/update-mozo.dto'
+import { AsignarMesaDto } from './dto/asignar-mesa.dto'
 
+// OWNER y GERENTE del restaurante (editar y dar de baja, solo OWNER). En las rutas de un mozo, el service pide el
+// rol. Los mozos se suman invitándolos (POST /auth/invitaciones).
 @ApiTags('mozos')
-@ApiBearerAuth()
 @Controller('mozos')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('ROOT', 'OWNER', 'GERENTE')
 export class MozosController {
   constructor(private readonly mozos: MozosService) {}
 
-  @Post()
-  @Roles('ROOT', 'OWNER')
-  @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Crear mozo' })
-  @ApiResponse({ status: 201, description: 'Mozo creado' })
-  create(@Body() dto: CreateMozoDto, @CurrentUser() user: JwtPayload) {
-    return this.mozos.create(dto, user)
-  }
-
   @Get()
+  @RequiereRolEn({ query: 'restauranteId' }, ...ADMINISTRACION)
   @ApiOperation({ summary: 'Listar mozos de un restaurante' })
   @ApiResponse({ status: 200, description: 'Lista de mozos' })
-  findAll(@Query('restauranteId') restauranteId: string, @CurrentUser() user: JwtPayload) {
-    return this.mozos.findAll(restauranteId, user)
+  findAll(@Query('restauranteId') restauranteId: string) {
+    return this.mozos.findAll(restauranteId)
   }
 
   @Get(':id')
+  @Personal()
   @ApiOperation({ summary: 'Obtener mozo por ID' })
   @ApiResponse({ status: 200 })
   @ApiResponse({ status: 404 })
-  findOne(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
-    return this.mozos.findOne(id, user)
+  findOne(@Param('id') id: string, @UsuarioActual() usuario: UsuarioAutenticado) {
+    return this.mozos.findOne(id, usuario)
   }
 
   @Patch(':id')
-  @Roles('ROOT', 'OWNER')
-  @ApiOperation({ summary: 'Actualizar mozo' })
+  @Personal()
+  @ApiOperation({ summary: 'Actualizar nombre y teléfono del mozo (solo el OWNER)' })
   @ApiResponse({ status: 200 })
   @ApiResponse({ status: 404 })
-  update(
-    @Param('id') id: string,
-    @Body() dto: UpdateMozoDto,
-    @CurrentUser() user: JwtPayload,
-  ) {
-    return this.mozos.update(id, dto, user)
+  update(@Param('id') id: string, @Body() dto: UpdateMozoDto, @UsuarioActual() usuario: UsuarioAutenticado) {
+    return this.mozos.update(id, dto, usuario)
   }
 
   @Delete(':id')
-  @Roles('ROOT', 'OWNER')
+  @Personal()
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Desactivar mozo (soft delete)' })
+  @ApiOperation({ summary: 'Dar de baja a un mozo sin cuenta (solo el OWNER); a uno con cuenta, desde Personal' })
   @ApiResponse({ status: 204 })
-  async remove(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
-    await this.mozos.remove(id, user)
+  @ApiResponse({ status: 409, description: 'El mozo tiene cuenta' })
+  async remove(@Param('id') id: string, @UsuarioActual() usuario: UsuarioAutenticado) {
+    await this.mozos.remove(id, usuario)
   }
 
   @Post(':mozoId/mesas')
+  @Personal()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Asignar mesa permanente al mozo' })
   @ApiResponse({ status: 201 })
   @ApiResponse({ status: 404, description: 'Mozo o mesa no encontrado' })
   @ApiResponse({ status: 409, description: 'Mesa ya asignada al mozo' })
-  assignMesa(
-    @Param('mozoId') mozoId: string,
-    @Body() body: { mesaId: string },
-    @CurrentUser() user: JwtPayload,
-  ) {
-    return this.mozos.assignMesa(mozoId, body.mesaId, user)
+  assignMesa(@Param('mozoId') mozoId: string, @Body() dto: AsignarMesaDto, @UsuarioActual() usuario: UsuarioAutenticado) {
+    return this.mozos.assignMesa(mozoId, dto.mesaId, usuario)
   }
 
   @Delete(':mozoId/mesas/:mesaId')
+  @Personal()
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Eliminar asignación permanente de mesa al mozo' })
   @ApiResponse({ status: 204 })
@@ -97,22 +72,24 @@ export class MozosController {
   async unassignMesa(
     @Param('mozoId') mozoId: string,
     @Param('mesaId') mesaId: string,
-    @CurrentUser() user: JwtPayload,
+    @UsuarioActual() usuario: UsuarioAutenticado,
   ) {
-    await this.mozos.unassignMesa(mozoId, mesaId, user)
+    await this.mozos.unassignMesa(mozoId, mesaId, usuario)
   }
 
   @Get(':mozoId/mesas')
+  @Personal()
   @ApiOperation({ summary: 'Listar mesas permanentes asignadas al mozo' })
   @ApiResponse({ status: 200 })
-  getMesas(@Param('mozoId') mozoId: string, @CurrentUser() user: JwtPayload) {
-    return this.mozos.getMesas(mozoId, user)
+  getMesas(@Param('mozoId') mozoId: string, @UsuarioActual() usuario: UsuarioAutenticado) {
+    return this.mozos.getMesas(mozoId, usuario)
   }
 
   @Get(':mozoId/llamados-hoy')
+  @Personal()
   @ApiOperation({ summary: 'Contador de llamados atendidos hoy por el mozo' })
   @ApiResponse({ status: 200 })
-  llamadosHoy(@Param('mozoId') mozoId: string, @CurrentUser() user: JwtPayload) {
-    return this.mozos.llamadosHoy(mozoId, user)
+  llamadosHoy(@Param('mozoId') mozoId: string, @UsuarioActual() usuario: UsuarioAutenticado) {
+    return this.mozos.llamadosHoy(mozoId, usuario)
   }
 }

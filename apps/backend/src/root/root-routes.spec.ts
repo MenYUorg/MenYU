@@ -18,7 +18,7 @@ describe('el enrutador de la aplicación', () => {
 
   it('recorre los controllers de toda la aplicación (si no, los demás tests de acá no prueban nada)', () => {
     expect(rutas.length).toBeGreaterThan(80)
-    expect(rutas.map(texto)).toEqual(expect.arrayContaining(['POST /auth/login', 'GET /discovery', 'GET /admins', 'DELETE /admins/:id']))
+    expect(rutas.map(texto)).toEqual(expect.arrayContaining(['POST /auth/login', 'GET /discovery', 'GET /marcas', 'DELETE /mozos/:id']))
   })
 
   it('las rutas de /root son exactamente las de la etapa 1a (si se agrega o se saca una, hay que actualizar esta lista y el plan)', () => {

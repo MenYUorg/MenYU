@@ -15,13 +15,11 @@ import { MenuModule } from './menu/menu.module'
 import { GatewayModule } from './gateway/gateway.module'
 import { MozosModule } from './mozos/mozos.module'
 import { ClasificacionesModule } from './clasificaciones/clasificaciones.module'
-import { AdminRestauranteModule } from './admin-restaurante/admin-restaurante.module'
 import { OrdersModule } from './orders/orders.module'
 import { PaymentsModule } from './payments/payments.module'
 import { PedidosModule } from './pedidos/pedidos.module'
 import { WaiterCallsModule } from './waiter-calls/waiter-calls.module'
 import { ReportesModule } from './reportes/reportes.module'
-import { AdminsModule } from './admins/admins.module'
 import { ComensalesModule } from './comensales/comensales.module'
 import { DiscoveryModule } from './discovery/discovery.module'
 import { HealthModule } from './health/health.module'
@@ -45,13 +43,11 @@ import { RootModule } from './root/root.module'
     GatewayModule,
     MozosModule,
     ClasificacionesModule,
-    AdminRestauranteModule,
     OrdersModule,
     PaymentsModule,
     PedidosModule,
     WaiterCallsModule,
     ReportesModule,
-    AdminsModule,
     ComensalesModule,
     DiscoveryModule,
     HealthModule,
