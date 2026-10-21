@@ -1,6 +1,7 @@
 import { ApiPropertyOptional } from '@nestjs/swagger'
 import { Transform } from 'class-transformer'
 import { IsIn, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min } from 'class-validator'
+import { SinCaracterNulo } from '../../comun/sin-caracter-nulo'
 
 export const ENTIDADES_FILTRABLES = ['MARCA', 'RESTAURANTE', 'OWNER', 'ROOT'] as const
 export const POR_PAGINA = 50
@@ -22,7 +23,7 @@ export class ListarHistorialDto {
   @IsString()
   @MaxLength(254)
   // PostgreSQL no acepta el carácter nulo en un texto: la consulta fallaría con un 500.
-  @Matches(/^[^\x00]*$/, { message: 'actor tiene caracteres no válidos' })
+  @SinCaracterNulo({ message: 'actor tiene caracteres no válidos' })
   actor?: string
 
   @ApiPropertyOptional({ enum: ENTIDADES_FILTRABLES, description: 'Sobre qué: marcas, restaurantes, dueños (OWNER) o cuentas ROOT.' })

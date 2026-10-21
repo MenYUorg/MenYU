@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 import { Transform } from 'class-transformer'
 import { IsBoolean, IsNotEmpty, IsOptional, IsString, Matches, MaxLength, ValidateIf } from 'class-validator'
+import { SinCaracterNulo } from '../../comun/sin-caracter-nulo'
 
 export const MAX_NOMBRE = 120
 export const MAX_SLUG = 80
@@ -12,8 +13,7 @@ export const FORMA_SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 const recortar = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value)
 const recortarEnMinusculas = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim().toLowerCase() : value)
 
-// PostgreSQL no acepta el carácter nulo en un texto: la consulta fallaría con un 500.
-const SIN_CARACTER_NULO = /^[^\x00]*$/
+// PostgreSQL no acepta el carácter nulo en un texto (la consulta fallaría con un 500): `@SinCaracterNulo` lo rechaza.
 const MENSAJE_CARACTERES = 'tiene caracteres no válidos'
 
 /** Alta de una marca: nombre e identificador. El logo no (lo carga el dueño). */
@@ -23,7 +23,7 @@ export class CrearMarcaRootDto {
   @IsString()
   @IsNotEmpty()
   @MaxLength(MAX_NOMBRE)
-  @Matches(SIN_CARACTER_NULO, { message: `nombre ${MENSAJE_CARACTERES}` })
+  @SinCaracterNulo({ message: `nombre ${MENSAJE_CARACTERES}` })
   nombre!: string
 
   @ApiProperty({
@@ -47,7 +47,7 @@ export class EditarMarcaRootDto {
   @IsString()
   @IsNotEmpty()
   @MaxLength(MAX_NOMBRE)
-  @Matches(SIN_CARACTER_NULO, { message: `nombre ${MENSAJE_CARACTERES}` })
+  @SinCaracterNulo({ message: `nombre ${MENSAJE_CARACTERES}` })
   nombre?: string
 
   @ApiPropertyOptional({ example: 'la-parrilla', maxLength: MAX_SLUG })
@@ -75,7 +75,7 @@ export class CrearRestauranteRootDto {
   @IsString()
   @IsNotEmpty()
   @MaxLength(MAX_NOMBRE)
-  @Matches(SIN_CARACTER_NULO, { message: `nombre ${MENSAJE_CARACTERES}` })
+  @SinCaracterNulo({ message: `nombre ${MENSAJE_CARACTERES}` })
   nombre!: string
 
   @ApiProperty({ example: 'Av. Colón 1200, Córdoba', maxLength: MAX_DIRECCION })
@@ -83,7 +83,7 @@ export class CrearRestauranteRootDto {
   @IsString()
   @IsNotEmpty()
   @MaxLength(MAX_DIRECCION)
-  @Matches(SIN_CARACTER_NULO, { message: `direccion ${MENSAJE_CARACTERES}` })
+  @SinCaracterNulo({ message: `direccion ${MENSAJE_CARACTERES}` })
   direccion!: string
 }
 
@@ -95,6 +95,6 @@ export class EditarRestauranteRootDto {
   @IsString()
   @IsNotEmpty()
   @MaxLength(MAX_NOMBRE)
-  @Matches(SIN_CARACTER_NULO, { message: `nombre ${MENSAJE_CARACTERES}` })
+  @SinCaracterNulo({ message: `nombre ${MENSAJE_CARACTERES}` })
   nombre?: string
 }
