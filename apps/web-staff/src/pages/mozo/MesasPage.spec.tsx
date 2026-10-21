@@ -287,6 +287,14 @@ describe('MesasPage (mozo)', () => {
       expect(screen.getByText('Sin información de sesión.')).toBeInTheDocument()
     })
 
+    it('abrir el detalle no reabre el socket', async () => {
+      await abrirMesa()
+      await screen.findByText('Pedidos de la sesión')
+
+      expect(io).toHaveBeenCalledTimes(1)
+      expect(socket.disconnect).not.toHaveBeenCalled()
+    })
+
     it('con ?mesaId abre esa mesa directamente', async () => {
       await abrirConMesas([LIBRE, OCUPADA], '/mozo/mesas?mesaId=m2')
 
