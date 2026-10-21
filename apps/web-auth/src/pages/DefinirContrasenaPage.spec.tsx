@@ -1,16 +1,19 @@
+import { obtenerPerfil } from '@menyu/auth-client'
 import { AuthApiError, AuthRetryableFetchError } from '@supabase/supabase-js'
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { obtenerPerfil } from '../lib/api'
 import { irA } from '../lib/navegar'
 import { FUTURO_ROUTER } from '../test/router'
 import { crearSupabaseSimulado, PERFIL_MOZO, sesion } from '../test/supabaseSimulado'
 import { DefinirContrasenaPage } from './DefinirContrasenaPage'
 
 const cliente = vi.hoisted(() => ({ actual: null as ReturnType<typeof crearSupabaseSimulado> | null }))
-vi.mock('../lib/supabase', () => ({ supabase: () => cliente.actual }))
-vi.mock('../lib/api', () => ({ obtenerPerfil: vi.fn() }))
+vi.mock('@menyu/auth-client', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@menyu/auth-client')>()),
+  clienteAuth: () => cliente.actual,
+  obtenerPerfil: vi.fn(),
+}))
 vi.mock('../lib/navegar', () => ({ irA: vi.fn() }))
 
 function renderizar(url: string) {

@@ -11,8 +11,11 @@ import { OlvideContrasenaPage } from './OlvideContrasenaPage'
 import { SinAccesoPage } from './SinAccesoPage'
 
 const cliente = vi.hoisted(() => ({ actual: null as ReturnType<typeof crearSupabaseSimulado> | null }))
-vi.mock('../lib/supabase', () => ({ supabase: () => cliente.actual }))
-vi.mock('../lib/api', () => ({ obtenerPerfil: vi.fn() }))
+vi.mock('@menyu/auth-client', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@menyu/auth-client')>()),
+  clienteAuth: () => cliente.actual,
+  obtenerPerfil: vi.fn(),
+}))
 vi.mock('../lib/navegar', () => ({ irA: vi.fn() }))
 
 function renderizar(ruta: string, pantalla: ReactNode, estado?: unknown) {

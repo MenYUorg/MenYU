@@ -104,7 +104,7 @@ Su entorno **Production** es staging. Mismos valores en los tres.
 
 Dominios: `auth.staging.menyu-app.com` en `menyu-auth-staging` y `auth.menyu-app.com` en `menyu-auth`, con su registro en Cloudflare.
 
-`VITE_AUTH_COOKIE_DOMAIN` todavía no se lee: la cookie compartida llega en la Fase 4. El entorno Preview de `menyu-auth` (el deploy que prueba el smoke de staging) puede quedar sin las de Supabase: el smoke solo pide la página.
+`VITE_AUTH_COOKIE_DOMAIN` lo lee web-auth desde la entrega 4.1 de la Fase 4. Sin la variable, la sesión queda solo para `auth.<ambiente>` y las otras apps no la ven: comprobarla en `menyu-auth` y `menyu-auth-staging` antes del deploy. El entorno Preview de `menyu-auth` (el deploy que prueba el smoke de staging) puede quedar sin las de Supabase: el smoke solo pide la página.
 
 #### Plantillas de mail de Supabase (staging y producción)
 

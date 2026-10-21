@@ -1,11 +1,10 @@
+import { clienteAuth, obtenerPerfil } from '@menyu/auth-client'
 import { useCallback, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { obtenerPerfil } from '../lib/api'
 import { decidirDestino, urlsDeApps } from '../lib/destinos'
 import { ERROR_GENERICO } from '../lib/mensajes'
 import { irA } from '../lib/navegar'
 import { redirectValido } from '../lib/redirect'
-import { supabase } from '../lib/supabase'
 import { conRedirect } from './rutas'
 
 export type EstadoIngreso =
@@ -32,7 +31,7 @@ export function usePostLogin(inicial: EstadoIngreso = { tipo: 'listo' }) {
   const continuar = useCallback(async (): Promise<boolean> => {
     setEstado({ tipo: 'verificando' })
     try {
-      const { data } = await supabase().auth.getSession()
+      const { data } = await clienteAuth().auth.getSession()
       if (!data.session) {
         setEstado({ tipo: 'listo' })
         return false
@@ -44,7 +43,7 @@ export function usePostLogin(inicial: EstadoIngreso = { tipo: 'listo' }) {
         return true
       }
       if (resultado.tipo === 'sesion-invalida') {
-        await supabase().auth.signOut({ scope: 'local' })
+        await clienteAuth().auth.signOut({ scope: 'local' })
         setEstado({ tipo: 'sesion-vencida', mensaje: SESION_VENCIDA })
         return true
       }
@@ -70,7 +69,7 @@ export function usePostLogin(inicial: EstadoIngreso = { tipo: 'listo' }) {
   }, [navigate, search])
 
   const cerrarSesion = useCallback(async () => {
-    await supabase().auth.signOut({ scope: 'local' })
+    await clienteAuth().auth.signOut({ scope: 'local' })
     setEstado({ tipo: 'listo' })
     navigate(conRedirect('/', search), { replace: true })
   }, [navigate, search])

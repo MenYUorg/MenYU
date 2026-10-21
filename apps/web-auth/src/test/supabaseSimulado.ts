@@ -1,7 +1,7 @@
 import type { PerfilUsuario } from '@menyu/types'
 import { vi } from 'vitest'
 
-/** Lo que los tests de pantallas usan del cliente de Supabase (src/lib/supabase.ts). */
+/** Lo que los tests de pantallas usan del cliente de Supabase (`clienteAuth()` de @menyu/auth-client). */
 export function crearSupabaseSimulado() {
   return {
     auth: {

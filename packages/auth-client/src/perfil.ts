@@ -1,6 +1,5 @@
 import type { MeResponse, PerfilUsuario } from '@menyu/types'
-
-const BASE = import.meta.env.VITE_API_URL ?? '/api'
+import { urlDeLaApi } from './config'
 
 export type ResultadoPerfil =
   | { tipo: 'ok'; perfil: PerfilUsuario }
@@ -12,7 +11,7 @@ export type ResultadoPerfil =
 export async function obtenerPerfil(token: string): Promise<ResultadoPerfil> {
   let res: Response
   try {
-    res = await fetch(`${BASE}/auth/me`, { headers: { Authorization: `Bearer ${token}` } })
+    res = await fetch(`${urlDeLaApi()}/auth/me`, { headers: { Authorization: `Bearer ${token}` } })
   } catch {
     return { tipo: 'error' }
   }

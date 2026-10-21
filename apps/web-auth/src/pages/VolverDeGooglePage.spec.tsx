@@ -7,7 +7,11 @@ import { crearSupabaseSimulado, sesion } from '../test/supabaseSimulado'
 import { VolverDeGooglePage } from './VolverDeGooglePage'
 
 const cliente = vi.hoisted(() => ({ actual: null as ReturnType<typeof crearSupabaseSimulado> | null }))
-vi.mock('../lib/supabase', () => ({ supabase: () => cliente.actual }))
+vi.mock('@menyu/auth-client', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@menyu/auth-client')>()),
+  clienteAuth: () => cliente.actual,
+  obtenerPerfil: vi.fn(),
+}))
 
 function PantallaDeIngreso() {
   const { search } = useLocation()

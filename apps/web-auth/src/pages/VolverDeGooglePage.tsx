@@ -1,3 +1,4 @@
+import { clienteAuth } from '@menyu/auth-client'
 import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { Aviso } from '../components/Aviso'
@@ -7,7 +8,6 @@ import { Enlace } from '../components/Enlace'
 import { Marco } from '../components/Marco'
 import { conRedirect } from '../flujo/rutas'
 import { errorDeOAuth, GOOGLE_SIN_TERMINAR, mensajeDeError } from '../lib/mensajes'
-import { supabase } from '../lib/supabase'
 
 /**
  * `/google`: la vuelta del ingreso con Google (src/flujo/useIngresoConGoogle.ts). El cliente de Supabase canjea el
@@ -31,13 +31,13 @@ export function VolverDeGooglePage() {
         setError(enLaUrl)
         return
       }
-      const { error: errorDelCanje } = await supabase().auth.initialize()
+      const { error: errorDelCanje } = await clienteAuth().auth.initialize()
       if (errorDelCanje) {
         setError(mensajeDeError(errorDelCanje))
         return
       }
       // Sin el verificador PKCE (se empezó en otro navegador) supabase-js ni intenta el canje: no hay error ni sesión.
-      const { data } = await supabase().auth.getSession()
+      const { data } = await clienteAuth().auth.getSession()
       if (!data.session) {
         setError(GOOGLE_SIN_TERMINAR)
         return

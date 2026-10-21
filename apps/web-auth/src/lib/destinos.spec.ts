@@ -60,6 +60,26 @@ describe('decidirDestino', () => {
     })
   })
 
+  it('un redirect a una app que no le toca se ignora: un MOZO va a web-staff, no vuelve a web-admin', () => {
+    expect(decidirDestino(perfil([membresia('MOZO')]), 'https://admin.menyu-app.com/admin/menu', urls)).toEqual({
+      tipo: 'ir',
+      url: 'https://staff.menyu-app.com/mozo?restauranteId=rest-1',
+    })
+  })
+
+  it('un GERENTE puede volver a web-staff por el redirect', () => {
+    const redirect = 'https://staff.menyu-app.com/mozo/mesas'
+    expect(decidirDestino(perfil([membresia('GERENTE')]), redirect, urls)).toEqual({ tipo: 'ir', url: redirect })
+  })
+
+  it('con un redirect que no le toca y varios lugares, muestra el selector', () => {
+    const destino = decidirDestino(perfil([membresia('MOZO')], true), 'https://staff.menyu-app.com/mozo', urls)
+    expect(destino).toEqual({ tipo: 'ir', url: 'https://staff.menyu-app.com/mozo' })
+    expect(decidirDestino(perfil([membresia('COCINA'), membresia('MOZO')]), 'https://admin.menyu-app.com/', urls).tipo).toBe(
+      'elegir',
+    )
+  })
+
   it('sin membresías ni ROOT no tiene acceso, aunque haya redirect', () => {
     expect(decidirDestino(perfil([]), 'https://admin.menyu-app.com/', urls)).toEqual({ tipo: 'sin-acceso' })
   })

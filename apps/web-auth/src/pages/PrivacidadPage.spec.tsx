@@ -1,13 +1,16 @@
+import { obtenerPerfil } from '@menyu/auth-client'
 import { act, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { App } from '../App'
-import { obtenerPerfil } from '../lib/api'
 import { irA } from '../lib/navegar'
 import { crearSupabaseSimulado, sesion } from '../test/supabaseSimulado'
 
 const cliente = vi.hoisted(() => ({ actual: null as ReturnType<typeof crearSupabaseSimulado> | null }))
-vi.mock('../lib/supabase', () => ({ supabase: () => cliente.actual }))
-vi.mock('../lib/api', () => ({ obtenerPerfil: vi.fn() }))
+vi.mock('@menyu/auth-client', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@menyu/auth-client')>()),
+  clienteAuth: () => cliente.actual,
+  obtenerPerfil: vi.fn(),
+}))
 vi.mock('../lib/navegar', () => ({ irA: vi.fn() }))
 
 // La App entera, para comprobar también la ruta: Google y su bot la visitan sin sesión, y no tiene que redirigir a nadie.

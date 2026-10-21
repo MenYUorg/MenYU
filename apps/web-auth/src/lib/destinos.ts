@@ -1,8 +1,7 @@
+import { puedeIrA, type App } from '@menyu/auth-client'
 import type { MembresiaPerfil, PerfilUsuario, Rol } from '@menyu/types'
 
 // A qué app va cada usuario después de iniciar sesión (docs/auth/specs/auth.md, Roles y Fase 3).
-
-export type App = 'admin' | 'staff'
 
 export interface UrlsDeApps {
   admin: string
@@ -93,13 +92,14 @@ export type Destino =
   | { tipo: 'elegir'; opciones: OpcionIngreso[] }
 
 /**
- * Sin lugares a los que entrar → sin acceso, aunque haya un redirect. Con un redirect válido → ahí (la app de destino
- * decide qué ve). Si no, el único lugar que tiene o el selector.
+ * Sin lugares a los que entrar → sin acceso, aunque haya un redirect. Con un redirect válido a una app que le toca → ahí
+ * (la app de destino decide qué ve). Un redirect a una app que no le toca (un MOZO a web-admin) se ignora: RequireAuth
+ * lo devolvería y no terminaría nunca. Si no, el único lugar que tiene o el selector.
  */
 export function decidirDestino(perfil: PerfilUsuario, redirect: string | null, urls: UrlsDeApps): Destino {
   const opciones = opcionesDeIngreso(perfil)
   if (opciones.length === 0) return { tipo: 'sin-acceso' }
-  if (redirect) return { tipo: 'ir', url: redirect }
+  if (redirect && puedeIrA(perfil, redirect)) return { tipo: 'ir', url: redirect }
   if (opciones.length === 1) return { tipo: 'ir', url: urlDeOpcion(opciones[0], urls) }
   return { tipo: 'elegir', opciones }
 }

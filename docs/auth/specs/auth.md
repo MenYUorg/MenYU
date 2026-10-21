@@ -44,6 +44,25 @@ En la misma sesión se decidieron también los puntos **Clientes**, **Convivenci
 3. **`prompt=select_account`.** Cerrar sesión en MenYU no cierra la de Google: sin el selector de cuentas, quien entró con la cuenta equivocada vuelve a entrar con la misma.
 4. **El botón va arriba del formulario en `/` y también en `/invitacion`**, no en `/restablecer-contrasena`. En `/invitacion` no gasta el `token_hash` (se canjea recién al guardar la contraseña): si el email de Google no es el de la invitación, el link del mail sigue sirviendo.
 
+## Decisiones de la planificación de la Fase 4 (2026-10-21)
+
+1. **Personal mínimo en web-admin.** La Fase 4 suma invitar, listar y quitar acceso, que reemplazan el alta de mozos y gerentes con contraseña: con el token nuevo, esas cuentas no entran a nada. Usa `POST /auth/invitaciones`.
+2. **El backend de la consola de ROOT va en la Fase 4.** Si no, la consola se rompe el día del cambio: sus 19 rutas usan el JWT legacy y `actorDe` lee `admin`. Incluye:
+   - `@RequiereRoot()` y el actor desde `Usuario`;
+   - dueños y cuentas ROOT sobre `Usuario` y `Membresia`;
+   - ROOT invita solo a OWNER y a ROOT;
+   - el historial de las invitaciones y la baja efectiva en `AccesoService`.
+
+   Las pantallas de E2b quedan para la consola (`docs/plan-consola-root.md`, sección 13).
+3. **JEFE_SALON = MOZO por ahora.** Solo usa web-staff. Que entre a web-admin para mesas y carta (tabla de Roles) queda pendiente.
+4. **La rama `fix/356-mozo-id-desde-jwt` se absorbe y se cierra sin mergear.** Su regla de quién cobra (sale del token, nunca del body) se rehace sobre `Usuario` y `Mozo.usuarioId`, con `Pago.usuarioId` en lugar de `Pago.adminId`.
+5. **Las rutas legacy de alta de personal y de ROOT se quitan ya en la Fase 4.** Son `/admins`, `/admin-restaurante`, `POST /mozos` y `POST` y `DELETE` de `/marcas` y `/restaurantes`. Las tablas `Admin` y `AdminRestaurante` quedan hasta la Fase 5.
+6. **web-cliente:** `useSession` pasa a la Fase 4b, que es la primera que lo usa. En la Fase 4, web-cliente solo deja de pasarle tokens al personal y lo manda a web-auth.
+7. **Entregas.**
+   - La 4.1 (`@menyu/auth-client` y web-auth sobre la cookie) se mergea sola: las otras apps todavía no leen la sesión.
+   - De la 4.2 a la 4.7 van en un solo PR, porque backend y frontends cambian de token a la vez. Se abre como draft desde la 4.2 para ver el quality gate de SonarCloud en cada push.
+   - Cada commit trae sus tests. La meta es 80 % de cobertura de líneas en el código nuevo.
+
 ## Dominios
 
 
@@ -65,10 +84,10 @@ En la misma sesión se decidieron también los puntos **Clientes**, **Convivenci
 
 | Rol                     | Ámbito      | Apps a las que accede                                                                                                      |
 | ----------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------- |
-| ROOT (`Usuario.esRoot`) | MenYU       | web-admin: crea y da de baja marcas, restaurantes y usuarios OWNER y GERENTE. No accede a los datos privados de las marcas |
+| ROOT (`Usuario.esRoot`) | MenYU       | web-admin (`/root`): crea y da de baja marcas y restaurantes, e invita a OWNER y a otras cuentas ROOT. Los GERENTE los invita el OWNER. No accede a los datos privados de las marcas |
 | OWNER                   | marca       | web-admin (toda su marca) y web-staff                                                                                      |
 | GERENTE                 | restaurante | web-admin (sus restaurantes) y web-staff                                                                                   |
-| JEFE\_SALON             | restaurante | web-admin (secciones de mesas y carta), web-staff (vista mozo)                                                             |
+| JEFE\_SALON             | restaurante | web-staff (vista mozo). Las secciones de mesas y carta de web-admin quedan pendientes (decisión 3 de la Fase 4)            |
 | MOZO                    | restaurante | web-staff (vista mozo)                                                                                                     |
 | COCINA                  | restaurante | web-staff (vista cocina)                                                                                                   |
 | Cliente (sin membresía) | —           | web-cliente, con sesión opcional                                                                                           |
@@ -192,6 +211,46 @@ Los pendientes están en "Para tener en cuenta".
 
 ### Fase 4 — SSO en las apps
 
+Entregas (ver Decisiones de la planificación de la Fase 4):
+
+| Entrega | Qué | Estado |
+|---|---|---|
+| 4.1 | `@menyu/auth-client` y web-auth sobre la cookie de dominio compartido | Hecha (2026-10-21): ver abajo |
+| 4.2 | Backend: `AccesoService` con la baja efectiva, `@RequiereRol` con origen explícito, `@Personal()`, `@RequiereRoot()`, la migración de autoría (`pedido_edicion.usuario_id`, `pago.usuario_id`) y el test que recorre el enrutador | |
+| 4.3 | Backend: los 16 controllers del personal pasan al guard nuevo, sin ROOT; los cobros de #356; el Personal (listar y quitar acceso); se quitan las rutas legacy de la decisión 5 | |
+| 4.4 | Backend: la consola de ROOT (decisión 2) | |
+| 4.5 | web-admin: `RequireAuth`, contexto desde `/auth/me`, Personal, `useRootSession` | |
+| 4.6 | web-staff: `RequireAuth`, selector por membresías, `mozoId` desde el backend | |
+| 4.7 | web-cliente, variables, documentación, verificación en `*.menyu.local` y staging, revisor | |
+
+**4.1, cómo quedó (2026-10-21).**
+- **El paquete:** `packages/auth-client` (`@menyu/auth-client`). Es solo código fuente, como `@menyu/ui`, con 100 % de cobertura. Exporta:
+  - `clienteAuth()`: `createBrowserClient` de `@supabase/ssr` 0.12.7 con `cookieOptions` (dominio de `VITE_AUTH_COOKIE_DOMAIN`, `Lax`, `secure` solo con https).
+  - `useSession`, `RequireAuth` (con `usePerfil`), `logout`, `irAlLogin`, `tokenDeAcceso`, `renovarSesion`, `obtenerPerfil` y `useRevalidarSesion`.
+  - `appsDelPerfil`, `tieneAcceso` y `puedeIrA`: la única regla de qué app le toca a quién (admin: ROOT, OWNER o GERENTE; staff: cualquier membresía).
+- **web-auth:** usa `clienteAuth()` y se borraron `src/lib/supabase.ts` y `src/lib/api.ts`. `decidirDestino` ignora un `redirect` a una app que no le toca (un MOZO con `redirect=admin…` va a staff), así que no hay loop con `RequireAuth`. Las sesiones que había en localStorage se pierden con el deploy: hay que volver a ingresar.
+- **Versiones:** `@supabase/supabase-js` 2.117.0 en el backend, en web-auth y en el paquete.
+- **CI y Sonar:** el paquete se sumó a typecheck, test y coverage en `ci.yml`, y a `sonar-project.properties`.
+- **Verificada** en `auth.menyu.local:5173` contra el Supabase y la API de staging (playwright-cli, con admin y staff simulados en sus subdominios):
+  - El MOZO entra y termina en `staff/mozo`.
+  - La cookie `sb-<ref>-auth-token` queda con dominio `.menyu.local`, `path=/`, `Lax`, sin `secure` (http) y sin `httpOnly`. La ven `admin.menyu.local` y `staff.menyu.local`, y localStorage no guarda la sesión.
+  - Un `redirect` a admin de un MOZO termina en staff, y uno a `staff/mozo/mesas` termina ahí.
+  - Cerrar sesión borra la cookie, y staff deja de verla.
+  - La cuenta sin `Usuario` va a `/sin-acceso`.
+- **Google, invitación y recuperación con la cookie** (2026-10-21). Se usó el Chrome aparte con el perfil `menyu-pruebas-google` y playwright-cli por CDP; los links de los mails se abrieron en `auth.menyu.local:5173`:
+  - **Google** (`menyuprueba2@gmail.com`, con `?redirect=…/mozo/mesas`): `auth/` → selector de Google → `/google` → `staff/mozo/mesas`, en 9 segundos.
+    - El verifier del PKCE queda en cookies de `.menyu.local` (`sb-<ref>-auth-token-code-verifier` y las de `-flow…`).
+    - La sesión de Google pesa más y `@supabase/ssr` la parte en `auth-token.0` y `.1`. Staff la ve.
+  - **Invitación** (cuenta descartable `menyuprueba2+fase41@gmail.com`, MOZO, invitada por el OWNER de prueba): el link del mail (`/invitacion`, `type=invite`) define la contraseña y termina en `staff/mozo` con la sesión en la cookie.
+  - **Recuperación** con la misma cuenta:
+    - El mail llegó en 12 segundos, y el link (`/restablecer-contrasena`, `type=recovery`) termina en `staff/mozo`.
+    - Después, la contraseña nueva entra y la anterior da "El email o la contraseña no son correctos".
+- **Hallazgo: el estado de OAuth de Supabase vence a los 5 minutos.**
+  - Qué pasó: con `menyuprueba1`, Google pidió "actividad inusual", un QR y la contraseña. Al volver, Supabase respondió `error=invalid_request`, `error_code=bad_oauth_state` ("OAuth state has expired").
+  - Como el estado venció, Supabase no sabe a qué `redirectTo` volver: manda a la Site URL (`auth.<ambiente>/`). `/` no muestra `errorDeOAuth` (solo `/google` lo hace), así que la persona ve el login sin explicación.
+  - Mejora posible: que `/` también muestre el error de OAuth de la URL.
+  - No depende de la cookie: con la cuenta ya verificada en Google, el reintento entró en 9 segundos.
+
 - Paquete compartido en el monorepo (`@menyu/auth-client`) con:
   - Cliente Supabase con cookie de dominio desde `VITE_AUTH_COOKIE_DOMAIN`.
   - Hook `useSession`.
@@ -199,7 +258,7 @@ Los pendientes están en "Para tener en cuenta".
   - `logout()` que hace `signOut()` y redirige a web-auth.
   - Revalidación de sesión al recuperar foco/visibilidad de la pestaña y cada pocos minutos. Necesario porque `onAuthStateChange` no se entera de cambios hechos desde otro subdominio.
 - Variables de entorno de los frontends: `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `VITE_AUTH_COOKIE_DOMAIN` y `VITE_AUTH_URL`.
-- `@supabase/ssr` 0.12.x pide `@supabase/supabase-js` ^2.114: alinear la versión del backend (hoy 2.105.1).
+- `@supabase/ssr` 0.12.x pide `@supabase/supabase-js` ^2.114: alinear la versión del backend. Hecho en la 4.1 (2.117.0).
 - Integrarlo en web-admin y web-staff (con `RequireAuth`) y en web-cliente (solo `useSession`, sin `RequireAuth`: la sesión es opcional).
 - CI: sumar `@menyu/auth-client` a los filtros de test y cobertura de `ci.yml`, a la subida de cobertura y a `sonar-project.properties`, como `@menyu/ui`. Los deploys no cambian: las apps que lo importan se reconstruyen solas cuando cambia (`turbo-ignore` y `dependsOn: ["^build"]`).
 - **Terminado cuando:** login en auth → abrir admin y staff en otras pestañas sin volver a loguear; logout en una → las otras vuelven a web-auth al recuperar foco. Probado en `*.menyu.local` y en staging.
@@ -274,9 +333,8 @@ Observaciones que dejaron las Fases 0 a 3b (2026-10-20 y 2026-10-21). Revisarlas
   - No hay forma de reenviar la invitación a un `Usuario` que todavía no la aceptó. Mientras tanto, web-auth le dice que pida un link desde "Olvidé mi contraseña" con el mismo email (falta comprobar con GoTrue que el recovery sirva para una cuenta invitada sin confirmar).
   - Hasta esta fase, web-admin y web-staff no leen la sesión de Supabase: el usuario llega a la URL correcta y ve el login legacy.
   - web-auth manda `?marcaId=` o `?restauranteId=` con lo que se eligió. Las apps lo leen como una preferencia, no como permiso: el acceso lo sigue decidiendo el backend.
-  - El `redirect` le gana al rol: un MOZO con `redirect=admin…` va a web-admin. Si `RequireAuth` devuelve a web-auth por rol incorrecto conservando el `redirect`, se arma un loop. En ese caso tiene que mandar a la app del rol o mostrar "sin acceso".
+  - Resuelto en la 4.1: el `redirect` ya no le gana al rol. web-auth lo sigue solo si `puedeIrA` (de `@menyu/auth-client`), y `RequireAuth` manda a quien no tiene acceso a web-auth sin `redirect`.
   - Con una sesión abierta, `/` de web-auth redirige enseguida, y quien tiene un solo lugar no tiene cómo cerrar sesión ahí. Lo resuelve el `logout()` de `@menyu/auth-client`. Si hace falta antes, sumar "Ingresar con otra cuenta".
-  - web-auth pasa de localStorage a la cookie de dominio compartido: reemplazar `apps/web-auth/src/lib/supabase.ts` por el cliente de `@menyu/auth-client`.
 - **Producción, incidente del 2026-10-20:** un cambio manual de `CORS_ORIGINS` en Railway de producción redesplegó el servicio construyendo el último commit de `main` (31 migraciones) en lugar del tag v1.0.5 (18). `prisma migrate deploy` aplicó las migraciones pendientes hasta que `20260906183320_division_pagos_campos` falló (P3009): su índice único `comensal(sesion_id, nombre_normalizado)` chocó con los comensales "Invitado" que el backfill de `20260722175451_split_pagos_comensales` crea uno por pago, como ya había pasado en QA. La base de producción ya no servía para el código de v1.0.5 (`pago.pedido_id` y `restaurante.qr_base_url` se borraron), así que se recuperó hacia adelante: se borraron esos comensales, se marcó la migración como revertida y se desplegó `main` con el tag v1.0.6 (`39522af`, con las 32 migraciones aplicadas y el smoke de producción en verde).
   - En Railway, un cambio de variables redespliega el servicio y corre las migraciones. El servicio de producción quedó desconectado de GitHub (*Settings → Source*) para que salga solo de `deploy-production.yml`: no reconectarlo.
 - **Dominios propios: falta Mercado Pago y `BASE_URL` (2026-10-20).** Staging y producción ya usan `*.menyu-app.com` (v1.0.7, con las variables de `docs/auth/VariablesACambiar.md`), salvo `BASE_URL`, que en los dos ambientes sigue con la URL vieja de Railway: nadie del equipo tiene acceso al panel de la app de Mercado Pago. `BASE_URL` arma el `redirect_uri` del OAuth con el que cada restaurante conecta su cuenta de MP y la `notification_url` de cada pago. MP rechaza un `redirect_uri` que no esté registrado, así que cambiar `BASE_URL` antes de registrarlo rompe la conexión de MP. Mientras tanto todo funciona por la URL vieja, que no hay que dar de baja: las preferencias ya creadas notifican ahí. Cuando haya acceso al panel:

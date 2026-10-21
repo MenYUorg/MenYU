@@ -1,3 +1,4 @@
+import { clienteAuth } from '@menyu/auth-client'
 import { isAuthRetryableFetchError } from '@supabase/supabase-js'
 import { useEffect, useState, type FormEvent } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
@@ -13,7 +14,6 @@ import { Separador } from '../components/Separador'
 import { useIngresoConGoogle } from '../flujo/useIngresoConGoogle'
 import { usePostLogin } from '../flujo/usePostLogin'
 import { ERROR_GENERICO, mensajeDeError } from '../lib/mensajes'
-import { supabase } from '../lib/supabase'
 
 export type ModoContrasena = 'invitacion' | 'recuperacion'
 
@@ -66,7 +66,7 @@ export function DefinirContrasenaPage({ modo }: { modo: ModoContrasena }) {
     setGuardando(true)
     try {
       if (!canjeado) {
-        const { data, error } = await supabase().auth.verifyOtp({
+        const { data, error } = await clienteAuth().auth.verifyOtp({
           token_hash: tokenHash,
           type: modo === 'invitacion' ? 'invite' : 'recovery',
         })
@@ -80,7 +80,7 @@ export function DefinirContrasenaPage({ modo }: { modo: ModoContrasena }) {
         }
         setCanjeado(true)
       }
-      const { error } = await supabase().auth.updateUser({ password: contrasena })
+      const { error } = await clienteAuth().auth.updateUser({ password: contrasena })
       if (error) {
         setErrores({ general: mensajeDeError(error) })
         return
