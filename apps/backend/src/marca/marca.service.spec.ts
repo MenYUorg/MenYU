@@ -25,6 +25,9 @@ const mockPrisma = {
   admin: {
     findUnique: jest.fn(),
   },
+  restaurante: {
+    findMany: jest.fn(),
+  },
 }
 
 const mockLogos = {
@@ -295,6 +298,29 @@ describe('MarcaService', () => {
         .rejects.toThrow(ForbiddenException)
 
       expect(mockLogos.eliminar).not.toHaveBeenCalled()
+    })
+  })
+
+  // ── findRestaurantesByMarca (público) ─────────────────────────────────
+
+  describe('findRestaurantesByMarca', () => {
+    it('pide solo los restaurantes activos de una marca activa (la baja de la marca los oculta aunque cada uno siga activo)', async () => {
+      mockPrisma.restaurante.findMany.mockResolvedValue([{ id: 'rest-1', nombre: 'Sucursal Norte', direccion: null }])
+
+      const result = await service.findRestaurantesByMarca('marca-1')
+
+      expect(mockPrisma.restaurante.findMany).toHaveBeenCalledWith({
+        where: { marcaId: 'marca-1', activo: true, marca: { activo: true } },
+        select: { id: true, nombre: true, direccion: true },
+        orderBy: { nombre: 'asc' },
+      })
+      expect(result).toEqual([{ id: 'rest-1', nombre: 'Sucursal Norte', direccion: null }])
+    })
+
+    it('una marca dada de baja no devuelve nada (lista vacía, igual que una marca que no existe)', async () => {
+      mockPrisma.restaurante.findMany.mockResolvedValue([])
+
+      await expect(service.findRestaurantesByMarca('marca-de-baja')).resolves.toEqual([])
     })
   })
 

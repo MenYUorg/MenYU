@@ -7,6 +7,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service'
 import { LogosService } from '../storage/logos.service'
 import { assertOwnerDeMarca } from '../common/assert-owner-access'
+import { RESTAURANTE_DISPONIBLE } from '../common/restaurante-disponible'
 import { JwtPayload } from '../auth/auth.service'
 import { CreateMarcaDto } from './dto/create-marca.dto'
 import { UpdateMarcaDto } from './dto/update-marca.dto'
@@ -30,9 +31,10 @@ export class MarcaService {
     private readonly logos: LogosService,
   ) {}
 
+  /** Público. Una marca dada de baja no muestra sus restaurantes (aunque cada uno siga activo): vuelve todo al reactivarla. */
   async findRestaurantesByMarca(marcaId: string) {
     return this.prisma.restaurante.findMany({
-      where: { marcaId, activo: true },
+      where: { marcaId, ...RESTAURANTE_DISPONIBLE },
       select: { id: true, nombre: true, direccion: true },
       orderBy: { nombre: 'asc' },
     })

@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
 import { derivarDescuento } from '../items/descuento.util'
+import { restauranteDisponible } from '../common/restaurante-disponible'
 
 export interface MenuFiltros {
   categoriaId?: string
@@ -48,10 +49,11 @@ export class MenuService {
         nombreSeccionRecomendados: true,
         direccion: true,
         logoUrl: true,
-        marca: { select: { logoUrl: true } },
+        marca: { select: { logoUrl: true, activo: true } },
       },
     })
-    if (!restaurante || !restaurante.activo) throw new NotFoundException('Restaurante no encontrado')
+    // Dado de baja el restaurante o su marca, la carta deja de verse (igual que en Discovery).
+    if (!restaurante || !restauranteDisponible(restaurante)) throw new NotFoundException('Restaurante no encontrado')
 
     const buscarWhere = filtros.buscar
       ? { nombre: { contains: filtros.buscar, mode: 'insensitive' as const } }
