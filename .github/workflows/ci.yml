@@ -36,19 +36,19 @@ jobs:
           DIRECT_URL: "postgresql://x:x@x:5432/x"
 
       - name: Typecheck
-        run: pnpm turbo typecheck --filter=@menyu/api --filter=@menyu/web-admin --filter=@menyu/web-cliente --filter=@menyu/web-staff --filter=@menyu/web-auth
+        run: pnpm turbo typecheck --filter=@menyu/api --filter=@menyu/web-admin --filter=@menyu/web-cliente --filter=@menyu/web-staff --filter=@menyu/web-auth --filter=@menyu/auth-client
 
       - name: Lint
         run: pnpm turbo lint --filter=@menyu/api --filter=@menyu/web-admin --filter=@menyu/web-cliente --filter=@menyu/web-staff --filter=@menyu/web-auth
 
       - name: Test
-        run: pnpm turbo test --filter=@menyu/api --filter=@menyu/web-admin --filter=@menyu/web-cliente --filter=@menyu/web-staff --filter=@menyu/web-auth --filter=@menyu/ui
+        run: pnpm turbo test --filter=@menyu/api --filter=@menyu/web-admin --filter=@menyu/web-cliente --filter=@menyu/web-staff --filter=@menyu/web-auth --filter=@menyu/ui --filter=@menyu/auth-client
 
       - name: Test — smoke scripts
         run: node --test scripts/smoke/lib.test.mjs
 
       - name: Coverage
-        run: pnpm turbo test:coverage --filter=@menyu/api --filter=@menyu/web-admin --filter=@menyu/web-cliente --filter=@menyu/web-staff --filter=@menyu/web-auth --filter=@menyu/ui
+        run: pnpm turbo test:coverage --filter=@menyu/api --filter=@menyu/web-admin --filter=@menyu/web-cliente --filter=@menyu/web-staff --filter=@menyu/web-auth --filter=@menyu/ui --filter=@menyu/auth-client
 
       - name: Upload coverage — backend
         uses: actions/upload-artifact@v4
@@ -101,6 +101,15 @@ jobs:
         with:
           name: coverage-ui
           path: packages/ui/coverage/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload coverage — auth-client
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-auth-client
+          path: packages/auth-client/coverage/
           if-no-files-found: ignore
           retention-days: 14
 

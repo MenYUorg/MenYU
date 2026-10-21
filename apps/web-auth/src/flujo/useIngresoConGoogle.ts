@@ -1,6 +1,6 @@
+import { clienteAuth } from '@menyu/auth-client'
 import { useCallback, useEffect, useState } from 'react'
 import { mensajeDeError } from '../lib/mensajes'
-import { supabase } from '../lib/supabase'
 import { conRedirect } from './rutas'
 
 /**
@@ -29,7 +29,7 @@ export function useIngresoConGoogle(search: string) {
     try {
       // supabase-js 2.105 no devuelve error acá: falla con una excepción (por ejemplo, si no puede guardar el
       // verificador PKCE). El `error` se mira igual por si cambia.
-      const { error } = await supabase().auth.signInWithOAuth({
+      const { error } = await clienteAuth().auth.signInWithOAuth({
         provider: 'google',
         options: {
           redirectTo: `${window.location.origin}${conRedirect('/google', search)}`,

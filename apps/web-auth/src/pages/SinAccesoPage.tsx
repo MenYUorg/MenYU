@@ -1,9 +1,9 @@
+import { clienteAuth } from '@menyu/auth-client'
 import { useEffect, useState } from 'react'
 import { Boton } from '../components/Boton'
 import { Encabezado } from '../components/Encabezado'
 import { Marco } from '../components/Marco'
 import { usePostLogin } from '../flujo/usePostLogin'
-import { supabase } from '../lib/supabase'
 
 /**
  * `/sin-acceso`: la cuenta existe en Supabase pero no tiene `Usuario` en nuestra base (403 en /auth/me) o no tiene
@@ -16,7 +16,7 @@ export function SinAccesoPage() {
 
   useEffect(() => {
     let vigente = true
-    supabase()
+    clienteAuth()
       .auth.getSession()
       .then(({ data }) => {
         if (vigente) setEmail(data.session?.user.email ?? null)

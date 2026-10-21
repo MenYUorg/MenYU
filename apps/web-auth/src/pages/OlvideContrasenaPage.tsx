@@ -1,3 +1,4 @@
+import { clienteAuth } from '@menyu/auth-client'
 import { useState, type FormEvent } from 'react'
 import { useLocation } from 'react-router-dom'
 import { Aviso } from '../components/Aviso'
@@ -8,7 +9,6 @@ import { Enlace } from '../components/Enlace'
 import { Marco } from '../components/Marco'
 import { conRedirect } from '../flujo/rutas'
 import { mensajeDeError } from '../lib/mensajes'
-import { supabase } from '../lib/supabase'
 
 /**
  * `/olvide-contrasena`: manda el mail de recuperación. El link (plantilla "Reset password") lleva a
@@ -31,7 +31,7 @@ export function OlvideContrasenaPage() {
     }
     setEnviando(true)
     try {
-      const { error: errorDeEnvio } = await supabase().auth.resetPasswordForEmail(destinatario)
+      const { error: errorDeEnvio } = await clienteAuth().auth.resetPasswordForEmail(destinatario)
       if (errorDeEnvio) {
         setError(mensajeDeError(errorDeEnvio))
         return

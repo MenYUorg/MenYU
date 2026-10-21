@@ -1,3 +1,4 @@
+import { clienteAuth } from '@menyu/auth-client'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useLocation } from 'react-router-dom'
 import { Aviso } from '../components/Aviso'
@@ -13,7 +14,6 @@ import { conRedirect } from '../flujo/rutas'
 import { useIngresoConGoogle } from '../flujo/useIngresoConGoogle'
 import { usePostLogin } from '../flujo/usePostLogin'
 import { mensajeDeError } from '../lib/mensajes'
-import { supabase } from '../lib/supabase'
 
 /**
  * `/`: Google o email y contraseña. Si ya hay una sesión, sigue directo (por ejemplo, cuando otra app manda acá con
@@ -44,7 +44,7 @@ export function IngresarPage() {
     }
     setEnviando(true)
     try {
-      const { error: errorDeLogin } = await supabase().auth.signInWithPassword({
+      const { error: errorDeLogin } = await clienteAuth().auth.signInWithPassword({
         email: email.trim(),
         password: contrasena,
       })

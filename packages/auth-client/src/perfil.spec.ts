@@ -1,8 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { obtenerPerfil } from './api'
+import { obtenerPerfil } from './perfil'
 
 describe('obtenerPerfil', () => {
-  afterEach(() => vi.unstubAllGlobals())
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
+  })
 
   it.each([
     [401, 'sesion-invalida'],
@@ -13,13 +16,16 @@ describe('obtenerPerfil', () => {
     expect(await obtenerPerfil('token')).toEqual({ tipo })
   })
 
-  it('con 200 devuelve el perfil y manda el token como Bearer', async () => {
+  it('con 200 devuelve el perfil y manda el token como Bearer a la API configurada', async () => {
+    vi.stubEnv('VITE_API_URL', 'https://api.menyu-app.com/api')
     const perfil = { id: 'u-1', email: 'a@b.com', nombre: 'A', esRoot: true, membresias: [] }
     const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify(perfil), { status: 200 }))
     vi.stubGlobal('fetch', fetch)
 
     expect(await obtenerPerfil('token-1')).toEqual({ tipo: 'ok', perfil })
-    expect(fetch).toHaveBeenCalledWith('/api/auth/me', { headers: { Authorization: 'Bearer token-1' } })
+    expect(fetch).toHaveBeenCalledWith('https://api.menyu-app.com/api/auth/me', {
+      headers: { Authorization: 'Bearer token-1' },
+    })
   })
 
   it('sin red es un error', async () => {
