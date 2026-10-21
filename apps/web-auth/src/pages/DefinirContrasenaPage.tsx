@@ -3,11 +3,14 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { Aviso } from '../components/Aviso'
 import { Boton } from '../components/Boton'
+import { BotonGoogle } from '../components/BotonGoogle'
 import { Campo } from '../components/Campo'
 import { Cargando } from '../components/Cargando'
 import { Encabezado } from '../components/Encabezado'
 import { Enlace } from '../components/Enlace'
 import { Marco } from '../components/Marco'
+import { Separador } from '../components/Separador'
+import { ingresarConGoogle } from '../flujo/ingresarConGoogle'
 import { usePostLogin } from '../flujo/usePostLogin'
 import { ERROR_GENERICO, mensajeDeError } from '../lib/mensajes'
 import { supabase } from '../lib/supabase'
@@ -27,6 +30,10 @@ type Errores = { contrasena?: string; repetida?: string; general?: string }
  * `/invitacion` y `/restablecer-contrasena`, los links de los mails (plantillas "Invite user" y "Reset password" de
  * docs/auth/VariablesACambiar.md). El token_hash se canjea con verifyOtp recién al guardar la contraseña: así un
  * escáner de mail que abra el link no lo gasta, y el formulario solo sirve con un link (no con cualquier sesión).
+ *
+ * La invitación también ofrece entrar con Google, que no gasta el token: si el email de Google es el de la invitación,
+ * Supabase le suma esa identidad a la cuenta invitada y la confirma; si es otro, la persona termina en /sin-acceso y el
+ * link sigue sirviendo.
  */
 export function DefinirContrasenaPage({ modo }: { modo: ModoContrasena }) {
   const navigate = useNavigate()
@@ -41,6 +48,7 @@ export function DefinirContrasenaPage({ modo }: { modo: ModoContrasena }) {
   const [repetida, setRepetida] = useState('')
   const [errores, setErrores] = useState<Errores>({})
   const [guardando, setGuardando] = useState(false)
+  const [yendoAGoogle, setYendoAGoogle] = useState(false)
 
   // Que el token no quede en la barra ni en el historial: se guarda en el estado.
   useEffect(() => {
@@ -85,6 +93,19 @@ export function DefinirContrasenaPage({ modo }: { modo: ModoContrasena }) {
     }
   }
 
+  async function irAGoogle() {
+    setErrores({})
+    setYendoAGoogle(true)
+    try {
+      const errorDeGoogle = await ingresarConGoogle(search)
+      if (!errorDeGoogle) return // el navegador ya se está yendo a Google
+      setErrores({ general: mensajeDeError(errorDeGoogle) })
+    } catch (e) {
+      setErrores({ general: mensajeDeError(e) })
+    }
+    setYendoAGoogle(false)
+  }
+
   const titulo = modo === 'invitacion' ? 'Crear la contraseña' : 'Contraseña nueva'
 
   if (estado.tipo === 'verificando') {
@@ -102,7 +123,7 @@ export function DefinirContrasenaPage({ modo }: { modo: ModoContrasena }) {
         <Aviso tipo="error">{linkInvalido}</Aviso>
         <p className="mt-6 leading-relaxed text-menyu-gris">
           {modo === 'invitacion'
-            ? 'Si ya creaste tu contraseña, ingresá con tu email. Si no, pedí un link nuevo desde “Olvidé mi contraseña” con el mismo email de la invitación.'
+            ? 'Si ya creaste tu contraseña o entraste con Google, ingresá desde el inicio. Si no, pedí un link nuevo desde “Olvidé mi contraseña” con el mismo email de la invitación.'
             : 'Pedí un link nuevo: vence a la hora y sirve una sola vez.'}
         </p>
         <div className="mt-6 flex flex-wrap gap-x-6 gap-y-3 text-sm">
@@ -119,14 +140,30 @@ export function DefinirContrasenaPage({ modo }: { modo: ModoContrasena }) {
     <Marco titulo={titulo}>
       {modo === 'invitacion' ? (
         <Encabezado titulo="Creá tu contraseña">
-          Te invitaron a MenYU. Vas a ingresar con el email de la invitación y esta contraseña.
+          Te invitaron a MenYU. Si la invitación llegó a tu email de Google, podés entrar con Google. Si no, creá una
+          contraseña para ingresar con el email de la invitación.
         </Encabezado>
       ) : (
         <Encabezado titulo="Elegí una contraseña nueva">La vas a usar desde ahora para ingresar a MenYU.</Encabezado>
       )}
 
+      {general && (
+        <div className="mb-5">
+          <Aviso tipo="error">{general}</Aviso>
+        </div>
+      )}
+      {modo === 'invitacion' && (
+        <>
+          <BotonGoogle
+            onClick={() => void irAGoogle()}
+            cargando={yendoAGoogle && 'Abriendo Google…'}
+            disabled={guardando}
+          />
+          <Separador texto="o creá una contraseña" />
+        </>
+      )}
+
       <form onSubmit={guardar} noValidate className="space-y-5">
-        {general && <Aviso tipo="error">{general}</Aviso>}
         <Campo
           id="contrasena"
           etiqueta="Contraseña"
@@ -146,7 +183,7 @@ export function DefinirContrasenaPage({ modo }: { modo: ModoContrasena }) {
           value={repetida}
           onChange={(e) => setRepetida(e.target.value)}
         />
-        <Boton type="submit" cargando={guardando && 'Guardando…'}>
+        <Boton type="submit" cargando={guardando && 'Guardando…'} disabled={yendoAGoogle}>
           Guardar y entrar
         </Boton>
       </form>

@@ -32,7 +32,12 @@ export function SinAccesoPage() {
       <Encabezado titulo="Tu cuenta no tiene acceso">
         Pedile una invitación al administrador de tu restaurante. Cuando te invite, te llega un mail para entrar.
       </Encabezado>
-      {email && <p className="-mt-4 mb-8 text-sm text-menyu-gris">Entraste como {email}.</p>}
+      <div className="-mt-4 mb-8 space-y-2 text-sm text-menyu-gris">
+        {email && <p>Entraste como {email}.</p>}
+        {/* Con Google es lo más probable: Google da la dirección tal como está registrada (juan.perez@gmail.com no es
+            juanperez@gmail.com), y si no es la de la invitación, es otra cuenta. */}
+        <p>Si te invitaron con otro email, cerrá sesión y entrá con ese.</p>
+      </div>
       <Boton
         variante="secundario"
         cargando={cerrando && 'Cerrando sesión…'}

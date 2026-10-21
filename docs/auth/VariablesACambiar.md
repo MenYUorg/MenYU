@@ -149,3 +149,19 @@ Los secrets de Railway y Vercel que ya existen no cambian: los dominios no cambi
 - Los `vite.config.ts` ya aceptan `*.menyu.local`. Cada app sigue en su puerto: `http://auth.menyu.local:5173`, `http://admin.menyu.local:5174`, `http://staff.menyu.local:5175`, `http://mesa.menyu.local:5176`.
 - web-auth: copiar `apps/web-auth/.env.example` a `apps/web-auth/.env.local` (git lo ignora) con la URL y la publishable key del Supabase de staging. El servidor de Vite reenvía `/api` a `BACKEND_URL` (por defecto `http://localhost:3000`). Para iniciar sesión con los usuarios de staging, `/auth/me` tiene que encontrarlos en la base de staging: `BACKEND_URL=https://api.staging.menyu-app.com pnpm --filter @menyu/web-auth dev`. Como la llamada sale del servidor de Vite, no hace falta tocar el CORS de staging.
 - Sin archivo hosts, Chrome resuelve los `*.menyu.local` si se abre con `--host-resolver-rules="MAP *.menyu.local 127.0.0.1"` (así se abre en las pruebas con playwright-cli). Con este mapeo Vite tiene que escuchar en IPv4: `--host 127.0.0.1`.
+- Login con Google en local: web-auth en el puerto 5173 (la Redirect URL de staging es la de ese puerto, sección 6). Por `http://` el navegador no da WebCrypto, así que el PKCE usa `plain` en vez de `S256`; en staging y producción, con `https`, es `S256`.
+
+## 6. Login con Google (Fase 3b)
+
+Google vuelve a `https://auth.<ambiente>/google?redirect=…` (`apps/web-auth/src/flujo/ingresarConGoogle.ts`). Si esa URL no está en las Redirect URLs de Supabase, Supabase vuelve a la Site URL (`auth.<ambiente>/`): la sesión se abre igual, pero se pierde el `redirect` y no se muestra el error si la vuelta falla. Como la URL lleva query, la entrada termina en `/**`.
+
+| Dónde | Staging | Producción |
+|---|---|---|
+| Supabase → *Authentication → URL Configuration → Redirect URLs* | `https://auth.staging.menyu-app.com/**` y, para desarrollo, `http://auth.menyu.local:5173/**` | `https://auth.menyu-app.com/**` |
+| Supabase → *Authentication → Sign In / Providers → Google* | Activo (Fase 0), con el client ID y el secret del cliente OAuth | Ídem |
+| Google Cloud → *APIs y servicios → Credenciales* → el cliente OAuth | URI de redireccionamiento autorizado: `https://<ref de staging>.supabase.co/auth/v1/callback` (Fase 0) | `https://<ref de producción>.supabase.co/auth/v1/callback` (Fase 0) |
+| Google Cloud → *Pantalla de consentimiento de OAuth* | En *Testing* solo entran los usuarios de prueba cargados: sumar las cuentas del equipo | *In production* antes del tag. Con `openid`, `email` y `profile` no hace falta la verificación de Google |
+
+La pantalla de Google muestra `<ref>.supabase.co` como destino. Cambiarlo requiere un dominio propio para Supabase (add-on pago): fuera de alcance.
+
+**Verificar:** en `auth.<ambiente>/?redirect=https://admin.<ambiente>/admin`, "Continuar con Google" con una cuenta invitada: tiene que pasar por `/google` y terminar en `admin.<ambiente>/admin`. Si termina en la app del rol sin pasar por `/google`, falta la Redirect URL.

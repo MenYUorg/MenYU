@@ -48,6 +48,7 @@ describe('SinAccesoPage', () => {
     renderizar('/sin-acceso', <SinAccesoPage />)
 
     expect(await screen.findByText('Entraste como cliente@gmail.com.')).toBeInTheDocument()
+    expect(screen.getByText('Si te invitaron con otro email, cerrá sesión y entrá con ese.')).toBeInTheDocument()
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Cerrar sesión' }))
     })

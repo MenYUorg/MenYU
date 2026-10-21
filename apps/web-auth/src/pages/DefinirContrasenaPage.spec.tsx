@@ -18,6 +18,7 @@ function renderizar(url: string) {
     <MemoryRouter initialEntries={[url]} future={FUTURO_ROUTER}>
       <Routes>
         <Route path="/invitacion" element={<DefinirContrasenaPage modo="invitacion" />} />
+        <Route path="/restablecer-contrasena" element={<DefinirContrasenaPage modo="recuperacion" />} />
       </Routes>
     </MemoryRouter>,
   )
@@ -79,5 +80,29 @@ describe('DefinirContrasenaPage (invitación)', () => {
 
     expect(screen.getByRole('alert')).toHaveTextContent('No pudimos conectarnos')
     expect(screen.getByRole('button', { name: 'Guardar y entrar' })).toBeEnabled()
+  })
+
+  it('con Google sale a Supabase sin gastar el link', async () => {
+    renderizar('/invitacion?token_hash=hash-3&type=invite')
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Continuar con Google' }))
+    })
+
+    expect(cliente.actual!.auth.signInWithOAuth).toHaveBeenCalledWith({
+      provider: 'google',
+      options: { redirectTo: `${window.location.origin}/google`, queryParams: { prompt: 'select_account' } },
+    })
+    expect(cliente.actual!.auth.verifyOtp).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Guardar y entrar' })).toBeDisabled()
+  })
+})
+
+describe('DefinirContrasenaPage (recuperación)', () => {
+  it('no ofrece Google', () => {
+    cliente.actual = crearSupabaseSimulado()
+    renderizar('/restablecer-contrasena?token_hash=hash-4&type=recovery')
+
+    expect(screen.getByText('Elegí una contraseña nueva')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Continuar con Google' })).not.toBeInTheDocument()
   })
 })

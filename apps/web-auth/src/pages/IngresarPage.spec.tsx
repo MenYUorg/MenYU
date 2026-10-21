@@ -24,6 +24,13 @@ function renderizar(url = '/') {
   )
 }
 
+async function continuarConGoogle() {
+  const boton = await screen.findByRole('button', { name: 'Continuar con Google' })
+  await act(async () => {
+    fireEvent.click(boton)
+  })
+}
+
 async function ingresar(email: string, contrasena: string) {
   fireEvent.change(await screen.findByLabelText('Email'), { target: { value: email } })
   fireEvent.change(screen.getByLabelText('Contraseña'), { target: { value: contrasena } })
@@ -77,5 +84,33 @@ describe('IngresarPage', () => {
 
     expect(await screen.findByText('pantalla sin acceso')).toBeInTheDocument()
     expect(irA).not.toHaveBeenCalled()
+  })
+
+  it('con Google sale a Supabase y vuelve a /google con el redirect', async () => {
+    renderizar('/?redirect=https%3A%2F%2Fadmin.menyu-app.com%2Fadmin')
+    await continuarConGoogle()
+
+    expect(cliente.actual!.auth.signInWithOAuth).toHaveBeenCalledWith({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/google?redirect=https%3A%2F%2Fadmin.menyu-app.com%2Fadmin`,
+        queryParams: { prompt: 'select_account' },
+      },
+    })
+    expect(screen.getByRole('button', { name: 'Abriendo Google…' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Ingresar' })).toBeDisabled()
+  })
+
+  it('si no puede salir a Google muestra el error y deja reintentar', async () => {
+    cliente.actual!.auth.signInWithOAuth.mockResolvedValue({
+      data: { provider: 'google', url: null },
+      error: new AuthApiError('Too many requests', 429, 'over_request_rate_limit'),
+    })
+
+    renderizar()
+    await continuarConGoogle()
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Hiciste demasiados intentos.')
+    expect(screen.getByRole('button', { name: 'Continuar con Google' })).toBeEnabled()
   })
 })

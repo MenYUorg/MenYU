@@ -11,6 +11,10 @@ export function crearSupabaseSimulado() {
       verifyOtp: vi.fn(),
       updateUser: vi.fn(),
       resetPasswordForEmail: vi.fn(),
+      signInWithOAuth: vi
+        .fn()
+        .mockResolvedValue({ data: { provider: 'google', url: 'https://supabase/authorize' }, error: null }),
+      initialize: vi.fn().mockResolvedValue({ error: null }),
     },
   }
 }

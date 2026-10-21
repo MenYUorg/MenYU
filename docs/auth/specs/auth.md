@@ -151,7 +151,7 @@ Verificada con Supabase simulado (playwright-cli, 31 casos) y contra el Supabase
 
 - Botón "Continuar con Google" en web-auth (`signInWithOAuth`), con callback a `auth.menyu-app.com/google` (ver Decisiones de la planificación de la Fase 3b).
 - Mismo post-login que la Fase 3 (`/auth/me`, redirect, selector de restaurante, pantalla de sin acceso).
-- Configuración externa: `https://auth.<ambiente>/google` en las Redirect URLs de cada proyecto de Supabase, y la pantalla de consentimiento de Google Cloud en *In production* antes del tag (en *Testing* solo entran los usuarios de prueba cargados).
+- Configuración externa (`docs/auth/VariablesACambiar.md`, sección 6): `https://auth.<ambiente>/**` en las Redirect URLs de cada proyecto de Supabase, y la pantalla de consentimiento de Google Cloud en *In production* antes del tag (en *Testing* solo entran los usuarios de prueba cargados).
 - **Casos a verificar (a mano, no automatizados):**
   - Usuario invitado con `x@gmail.com` entra con Google usando ese mail → Supabase vincula la identidad al mismo usuario, se conserva el `supabaseUserId` y accede normal.
   - Cuenta de Google sin invitación → pantalla de sin acceso. Al cerrar sesión y volver a Google, aparece el selector de cuentas.
