@@ -283,8 +283,8 @@ Detalle, decisiones (D1 a D31) y checklists: `docs/plan-discovery-descuentos.md`
 | `GET /discovery` | público | Hasta 50 restaurantes activos de marcas activas (por nombre; `logoUrl` = el del restaurante, si no el de su marca, si no `null`) y hasta 30 platos en oferta (por porcentaje de descuento mayor) |
 | `GET /discovery/buscar?q=` | público | `q` de 2 a 60 caracteres. Ignora mayúsculas y acentos (extensión de PostgreSQL `unaccent`). Devuelve `{ ofertas, restaurantes, restaurantesConPlatos }` |
 | `GET /discovery/restaurantes/:id` | público | Un restaurante y sus ofertas. 404 si no existe, no está activo o su marca no lo está |
-| `GET /menu/:restauranteId` | público | Suma `restaurante.direccion`, `restaurante.logoUrl` (resuelto igual que en Discovery) y `descuentos[]` |
-| `POST /sessions/open` | público | Con `tableCode` y `restauranteId` valida que la mesa sea de ese restaurante (409 si no); también acepta `restauranteId` + `pin` |
+| `GET /menu/:restauranteId` | público | Suma `restaurante.direccion`, `restaurante.logoUrl` (resuelto igual que en Discovery) y `descuentos[]`. 404 si el restaurante o su marca están dados de baja |
+| `POST /sessions/open` | público | Con `tableCode` y `restauranteId` valida que la mesa sea de ese restaurante (409 si no); también acepta `restauranteId` + `pin`. 403 "Este restaurante no está disponible" si el restaurante o su marca están dados de baja y la mesa no tiene una sesión abierta (una sesión ya abierta se deja terminar) |
 | `POST` y `DELETE /marcas/:id/logo` y `/restaurantes/:id/logo` | OWNER de la marca | Sube o quita el logo (PNG, JPEG o WebP de hasta 2 MB, en Supabase Storage) |
 | `PATCH /restaurantes/:id` con `direccion` | OWNER de la marca | GERENTE y ROOT reciben 403 si envían `direccion` |
 | `PUT` y `DELETE /items/:id/descuento` | OWNER o GERENTE asignado | `precioDescuento` (precio entero) o `porcentaje` (1 a 99), uno solo. ROOT recibe 403 |
