@@ -1,6 +1,6 @@
 # Plan: consola de ROOT
 
-**Estado:** mockups y supuestos 1 a 9 aprobados el 2026-10-15; novedades del mismo día (cuentas ROOT, historial de acciones) en el plan y los mockups; decisiones 12, 15, 18, 19 y 20 y las de implementación de E1a confirmadas el 2026-10-20. **El script de cuentas ROOT (E0) y las etapas 1a y 1b (backend completo: historial, cuentas ROOT, dueños, marcas y restaurantes) están hechos** (2026-10-20, rama `feat/pantalla-root`); la pantalla todavía no tiene código. Cómo probarlo en local: [`probar-consola-root.md`](probar-consola-root.md) · **Actualizado:** 2026-10-20 · **Base:** `main` (merge 67cb463)
+**Estado:** mockups y supuestos 1 a 9 aprobados el 2026-10-15; novedades del mismo día (cuentas ROOT, historial de acciones) en el plan y los mockups; decisiones 12, 15, 18, 19 y 20 y las de implementación de E1a confirmadas el 2026-10-20. **El script de cuentas ROOT (E0) y las etapas 1a y 1b (backend completo: historial, cuentas ROOT, dueños, marcas y restaurantes) están hechos** (2026-10-20, rama `feat/pantalla-root`); la pantalla todavía no tiene código. Cómo probarlo en local: [`probar-consola-root.md`](probar-consola-root.md) **Ajustado el 2026-10-20 por la spec de autenticación con Supabase** ([`auth/specs/auth.md`](auth/specs/auth.md), Fases 1 y 2 ya en `main`): lo que toca contraseñas y cuentas se rehace sobre invitaciones por mail (sección 13) · **Actualizado:** 2026-10-20 · **Base:** `main` (v1.0.7)
 **Mockups:** [`docs/mockups/consola-root/`](mockups/consola-root/README.md) (abrir `index.html`; 66 pantallas y estados)
 **Viene de:** la sección 11.2 y el Apéndice A de [`plan-discovery-descuentos.md`](plan-discovery-descuentos.md). Este plan **reemplaza** a 11.2 y cambia la regla de ROOT (sección 2.1 y D16 de ese plan, y `CLAUDE.md`).
 
@@ -20,6 +20,7 @@ Este documento es la referencia de la consola de ROOT: qué hace ROOT, cómo est
 10. [Tests y verificación](#10-tests-y-verificación)
 11. [Riesgos y notas](#11-riesgos-y-notas)
 12. [Fuera de alcance](#12-fuera-de-alcance)
+13. [Autenticación con Supabase (`feat/auth`): qué cambia para la consola](#13-autenticación-con-supabase-featauth-qué-cambia-para-la-consola)
 
 ---
 
@@ -48,7 +49,7 @@ En la interfaz a los OWNER se los llama **dueños**; en el código y la API sigu
 
 ## 3. Cómo está hoy el código
 
-Relevado el 2026-10-15 leyendo `main`. Son hechos, no suposiciones.
+Relevado el 2026-10-15 leyendo `main`. Son hechos, no suposiciones. **Describe el login propio (`Admin`, contraseñas, JWT propio), que la migración a Supabase Auth va a retirar: ver la sección 13.**
 
 | Tema | Hoy |
 |---|---|
@@ -78,20 +79,20 @@ Relevado el 2026-10-15 leyendo `main`. Son hechos, no suposiciones.
 | 4 | **Dirección al crear un restaurante:** la carga ROOT una sola vez, porque hoy es obligatoria al crear (D2), y después solo la cambia el OWNER. | Aprobado |
 | 5 | **"Borrar" una marca o un restaurante es una baja lógica y reversible** (`activo = false`, con "Reactivar"). No se borra ninguna fila (secciones 3 y 6). Las cuentas OWNER **sí se eliminan** de verdad: son solo credenciales. | Aprobado |
 | 6 | **La baja tiene efecto real** (sección 6). Se evalúa "marca activa **y** restaurante activo", así que reactivar la marca devuelve todo como estaba sin tocar cada restaurante. | Aprobado |
-| 7 | **Cuentas de dueño:** email + contraseña, sin nombre (se saca `nombre` del DTO). Puede haber varios dueños por marca. **No se puede eliminar al último dueño de una marca activa** (409). | Aprobado |
-| 8 | **Contraseñas:** el sistema genera la contraseña y la muestra **una sola vez**; la persona la tiene que cambiar en su primer ingreso (columna y pantalla nuevas). "Restablecer" genera otra y vuelve a marcarla como temporal. | Aprobado |
+| 7 | **Cuentas de dueño:** email + contraseña, sin nombre (se saca `nombre` del DTO). Puede haber varios dueños por marca. **No se puede eliminar al último dueño de una marca activa** (409). *Con Supabase (sección 13):* un dueño es una `Membresia` OWNER de un `Usuario`, sin contraseña propia; la regla del último dueño se mantiene. | Aprobado |
+| 8 | **Contraseñas:** el sistema genera la contraseña y la muestra **una sola vez**; la persona la tiene que cambiar en su primer ingreso (columna y pantalla nuevas). "Restablecer" genera otra y vuelve a marcarla como temporal. | Aprobado el 2026-10-15; **supersedida el 2026-10-20** por la spec de autenticación: ROOT no genera ni conoce contraseñas, invita por mail (sección 13) |
 | 9 | **BurgerLab:** se da de baja desde la consola. Con eso, todos los ids que no son UUID quedan fuera de Discovery y de la operación, y **ya no hace falta** relajar los `@IsUUID()` (11.3 del plan de Discovery). | Aprobado |
 | 10 | Los GERENTE no aparecen en la consola. `POST /admins` deja de aceptar a ROOT y los GERENTE los sigue creando el OWNER. | Derivado de la regla |
 | 11 | Sacarle a ROOT los permisos viejos (Apéndice A del plan de Discovery) va **al final**, en la etapa 4. Hasta entonces ROOT puede seguir abriendo las pantallas viejas de web-admin por URL. | Aprobado |
-| 12 | Las sesiones de mesa **ya abiertas** en el momento de la baja se dejan terminar (cobrar y cerrar); lo que se corta es abrir sesiones nuevas y entrar. Es un detalle de la 6. | A confirmar |
-| 13 | **Un ROOT puede crear otras cuentas ROOT** desde la consola. Vamos a tener una por integrante del equipo (tres). | Acordado |
-| 14 | **La primera cuenta ROOT de cada entorno se crea con un script** que corre el equipo, con la contraseña elegida al correrlo (sin eco): no queda escrita en el repo ni en la línea de comandos. Hecho: `apps/backend/scripts/cuentas-root.ts` (sección 7.1). | Acordado y hecho |
-| 15 | **Las cuentas ROOT no se pueden borrar:** un ROOT no se borra a sí mismo y no se puede borrar al último. *Mi lectura (a confirmar):* ninguna cuenta ROOT se borra desde la consola ni desde la API; la única vía es el script, que nunca borra al último, y la base de datos también lo impide. Si querías que un ROOT pueda borrar a otro (menos a sí mismo y al último), es un cambio chico en E1a y E2. | Acordado; la lectura, a confirmar |
+| 12 | Las sesiones de mesa **ya abiertas** en el momento de la baja se dejan terminar (cobrar y cerrar); lo que se corta es abrir sesiones nuevas y entrar. Es un detalle de la 6. | Confirmada (2026-10-20) |
+| 13 | **Un ROOT puede crear otras cuentas ROOT** desde la consola. Vamos a tener una por integrante del equipo (tres). *Con Supabase:* se invita por mail (sección 13). | Acordado |
+| 14 | **La primera cuenta ROOT de cada entorno se crea con un script** que corre el equipo, con la contraseña elegida al correrlo (sin eco): no queda escrita en el repo ni en la línea de comandos. Hecho: `apps/backend/scripts/cuentas-root.ts` (sección 7.1). *Con Supabase:* el primer ROOT de cada ambiente se crea a mano (Auth y un `INSERT`, como dice `docs/auth/usuarios-prueba-staging.md`) y el script pasa a "promover" un `Usuario` (sección 13). | Acordado y hecho (el script, hasta la migración) |
+| 15 | **Las cuentas ROOT no se pueden borrar:** un ROOT no se borra a sí mismo y no se puede borrar al último. *Mi lectura (a confirmar):* ninguna cuenta ROOT se borra desde la consola ni desde la API; la única vía es el script, que nunca borra al último, y la base de datos también lo impide. Si querías que un ROOT pueda borrar a otro (menos a sí mismo y al último), es un cambio chico en E1a y E2. | Acordado; la lectura, confirmada (2026-10-20) |
 | 16 | **`root@menyu.com` se borra en staging y en producción** cuando las cuentas personales funcionen bien. Es la etapa 5 (sección 9). | Acordado |
 | 17 | **Historial de acciones de ROOT:** todo lo que hace un ROOT queda registrado (quién, qué acción, sobre qué —marca, restaurante, OWNER u otro ROOT— y cuándo), incluidos crear un ROOT y restablecer contraseñas. **No se puede editar ni borrar**, ni desde la app ni desde la API ni, si se puede, desde la base de datos. Todos los ROOT lo ven desde una pantalla de la consola. | Acordado |
-| 18 | **Qué se registra y cómo:** todo **cambio** que haga un ROOT (mirar listas no). El registro se escribe en **la misma transacción** que el cambio: si no se puede registrar, el cambio no se hace. Guarda una copia del email de quien lo hizo (sigue valiendo si esa cuenta se retira), qué cambió (antes y después) y **nunca una contraseña**. *Opcional:* registrar también los inicios de sesión de ROOT (+0,25 día). | A confirmar |
-| 19 | **Un ROOT puede restablecer la contraseña de otro ROOT** (queda registrado; la otra persona la cambia al entrar). Hace falta si alguien la olvida. | A confirmar |
-| 20 | **Mínimo de 12 caracteres** al elegir la contraseña en el primer ingreso, para dueños y ROOT (hoy los dueños tienen 8 como mínimo al crear la cuenta). | A confirmar |
+| 18 | **Qué se registra y cómo:** todo **cambio** que haga un ROOT (mirar listas no). El registro se escribe en **la misma transacción** que el cambio: si no se puede registrar, el cambio no se hace. Guarda una copia del email de quien lo hizo (sigue valiendo si esa cuenta se retira), qué cambió (antes y después) y **nunca una contraseña**. *Opcional:* registrar también los inicios de sesión de ROOT (+0,25 día). | Confirmada (2026-10-20); el opcional quedó afuera |
+| 19 | **Un ROOT puede restablecer la contraseña de otro ROOT** (queda registrado; la otra persona la cambia al entrar). Hace falta si alguien la olvida. | Confirmada el 2026-10-20; **con Supabase** pasa a ser "mandarle el mail para cambiar la contraseña" (sección 13) |
+| 20 | **Mínimo de 12 caracteres** al elegir la contraseña en el primer ingreso, para dueños y ROOT (hoy los dueños tienen 8 como mínimo al crear la cuenta). | Confirmada el 2026-10-20; **con Supabase** es la política de contraseñas del proyecto (Authentication → Password), no código nuestro |
 
 ## 5. Qué edita ROOT, campo por campo
 
@@ -171,6 +172,8 @@ Solo actúa sobre cuentas con rol `OWNER` (las rutas de dueños) o `ROOT` (las d
 **Rutas viejas** (etapa 4): `POST` y `DELETE /marcas` y `/restaurantes` (solo ROOT) pasan a vivir en `/root/*` y se sacan; ROOT sale de `PATCH /marcas/:id`, `PATCH /restaurantes/:id`, `POST`, `PATCH` y `DELETE /admins` y del resto del Apéndice A; `GET /marcas` y `GET /restaurantes` dejan de devolver las columnas `mp_*`.
 
 ### 7.1 Cuentas ROOT: el script y el retiro de `root@menyu.com`
+
+> **Con la migración a Supabase (sección 13)** este script y el retiro de `root@menyu.com` son del login actual: `Admin` se retira en la Fase 5 de la spec de autenticación. El script pasa a "promover" un `Usuario` a ROOT, y mientras exista el login actual sigue siendo la forma de crear las cuentas personales.
 
 **El script** (hecho): `apps/backend/scripts/cuentas-root.ts`. Lo corre una persona del equipo, una vez por entorno. Comandos: `listar` (solo lectura), `crear <email>`, `restablecer <email>` y `eliminar <email>`. Se corre desde `apps/backend`:
 
@@ -256,18 +259,35 @@ Cómo quedó, en concreto (probado contra un PostgreSQL de verdad, `historial-ro
 
 Mockups en `docs/mockups/consola-root/` (abrir `index.html`; 66 pantallas y estados, en celular, tablet y escritorio).
 
-- **Rutas:** `/root` (Marcas), `/root/marcas/:id` (detalle de una marca), `/root/duenos`, `/root/roots` (cuentas ROOT) y `/root/historial`, más la pantalla de primer ingreso. Cada ruta con `RoleGuard roles={['ROOT']}`; el login manda a ROOT a `/root`.
+- **Rutas:** `/root` (redirige a Marcas), `/root/marcas`, `/root/marcas/:id` (detalle de una marca), `/root/duenos`, `/root/roots` (cuentas ROOT) y `/root/historial`, más la pantalla de primer ingreso. Cada ruta con `RoleGuard roles={['ROOT']}`; el login manda a ROOT a `/root`. *(En E2a: un solo `RoleGuard` sobre `/root/*`, y `AdminRedirect` manda a ROOT a `/root`.)*
 - **Shell:** el mismo menú lateral y barra superior de web-admin, con dos grupos: **Administración** (Marcas, Dueños) y **Sistema** (Cuentas ROOT, Historial). En vez del selector de marca y restaurante (ROOT no opera ninguno) dice "Administración". Para no copiar las ~700 líneas de `AdminLayout`, se extrae un `Shell` que reciben `AdminLayout` y `RootLayout`; los tests de `AdminLayout` cubren esa extracción.
 - **Marcas:** lista con búsqueda, interruptor "Mostrar dadas de baja" y "Nueva marca". Cada fila muestra restaurantes, dueños y estado, y avisa "Sin dueño".
-- **Detalle de una marca (donde ROOT trabaja):** datos con Editar y Dar de baja; dueños con su menú (restablecer contraseña, cambiar email, eliminar); restaurantes con su dirección de solo lectura y su menú (editar nombre, dar de baja o reactivar). Cierra con el recordatorio de lo que ROOT no ve.
-- **Dueños:** lista global con búsqueda por email o marca. **Opcional:** se puede dejar para después sin perder nada.
-- **Cuentas ROOT:** una por integrante, con "Vos" y "Contraseña temporal", "Nueva cuenta ROOT" y el menú para restablecer la contraseña de otra o cambiar la propia. **No hay "Eliminar"**, y un aviso lo explica.
+- **Detalle de una marca (donde ROOT trabaja):** datos con Editar y Dar de baja; dueños con su menú (restablecer contraseña, cambiar email, eliminar); restaurantes con su dirección de solo lectura y su menú (editar nombre, dar de baja o reactivar). Cierra con el recordatorio de lo que ROOT no ve. **En E2a** los dueños se muestran de solo lectura (su email); sus acciones (restablecer, cambiar email, eliminar) se hacen sobre invitaciones cuando termine `feat/auth` (sección 13).
+- **Dueños:** lista global con búsqueda por email o marca. **Opcional:** se puede dejar para después sin perder nada. **Espera a `feat/auth`** (sección 13).
+- **Cuentas ROOT:** una por integrante, con "Vos" y "Contraseña temporal", "Nueva cuenta ROOT" y el menú para restablecer la contraseña de otra o cambiar la propia. **No hay "Eliminar"**, y un aviso lo explica. **Espera a `feat/auth`:** con Supabase se invita por mail y se manda el mail de recuperación; ya no hay contraseña temporal (sección 13).
 - **Historial:** agrupado por día; cada fila dice qué hizo quién y sobre qué, y se despliega para ver antes y después. Filtros, "Cargar más", estados vacío, sin resultados, error y cargando. Dice que no se puede editar ni borrar.
-- **Primer ingreso (E3):** pantalla sola, sin menú lateral, "Elegí tu contraseña", para quien entra con una contraseña temporal. 12 caracteres como mínimo y distinta de la temporal.
-- **Diálogos:** ventana al centro en escritorio y hoja desde abajo en celular. Dar de baja una marca pide escribir su nombre. La contraseña generada se muestra una sola vez, con botón para copiar. **Todos los que cambian algo avisan "Esta acción queda registrada en el historial".**
+- **Primer ingreso (E3):** pantalla sola, sin menú lateral, "Elegí tu contraseña", para quien entra con una contraseña temporal. 12 caracteres como mínimo y distinta de la temporal. **Ya no se hace:** las invitaciones y la recuperación las atiende web-auth (sección 13).
+- **Diálogos:** ventana al centro en escritorio y hoja desde abajo en celular. Dar de baja una marca pide escribir su nombre. La contraseña generada se muestra una sola vez, con botón para copiar *(con Supabase no hay contraseña generada: se reemplaza por "Invitación enviada a …")*. **Todos los que cambian algo avisan "Esta acción queda registrada en el historial".**
 - **Estados:** cargando (esqueletos), vacío, error con "Reintentar", sin conexión y nombres larguísimos.
 - **Responsive:** botones y áreas táctiles de 44 px o más, campos de 16 px, sin scroll horizontal, `100dvh`. Es la regla de la sección 2.3 del plan de Discovery.
-- **Tipos:** `@menyu/types` suma los tipos de la consola (`RootMarca`, `RootRestaurante`, `RootDueno`, `RootCuenta`, `RootAccion` y sus pedidos y respuestas). La API del cliente va en `api.root.*` de `apps/web-admin/src/services/api.ts`.
+- **Tipos:** `@menyu/types` suma los tipos de la consola (en `root.types.ts`: `RootMarcaResumen`, `RootMarcaDetalle`, `RootRestaurante`, `RootHistorialItem`, `RootCuentaResumen` y sus pedidos y respuestas; los de dueños llegan con E2b). La API del cliente va en `api.root.*` de `apps/web-admin/src/services/api.ts`.
+
+### 8.1 E2a: cómo quedó (hecha el 2026-10-21)
+
+**Dónde está:** `apps/web-admin/src/components/shell/Shell.tsx` (extraído de `AdminLayout`, que ahora lo usa; su spec no cambió) y `apps/web-admin/src/pages/root/` (`RootRoutes`, `RootLayout`, `marcas/`, `historial/`, `dialogos/`, `ui/`, `copy.ts`, `useCarga.ts`, `useRootSession.ts`, `root.css`). Rutas: `/root` → `/root/marcas`, `/root/marcas/:id`, `/root/historial`.
+
+**Decisiones de implementación (a revisar):**
+
+1. **Código aparte.** `/root/*` se carga con `React.lazy` y solo entra un ROOT: el chunk de la consola pesa 37 kB (más 14 kB de CSS) y no está en el bundle principal (verificado con `vite build`). El CSS de la consola está acotado a la clase `.rc` para no pisar Tailwind ni el resto de web-admin; los diálogos se dibujan en `document.body` dentro de un `.rc` propio.
+2. **Los textos de la baja dicen la verdad.** Hoy dar de baja solo saca a la marca o al restaurante de Discovery, así que los diálogos lo dicen ("por ahora no se corta nada más"). `BAJA_CORTA_EL_ACCESO` (en `copy.ts`) está en `false`; cuando la baja efectiva (E3 o la Fase 4 de `feat/auth`) corte mesas, carta y login, se pasa a `true` y salen los textos del diseño aprobado (un test cuida que existan los dos juegos).
+3. **Dueños de solo lectura**, con un aviso de que crear, cambiar o eliminar llega con la migración de autenticación. Nada usa `debeCambiarPassword`. La sesión y el rol salen de un solo hook (`useRootSession`).
+4. **Historial:** los días y las horas son de Buenos Aires (UTC-3, sin importar la zona de la computadora); el filtro "Quién" sale de `GET /root/roots` (si falla, queda "Todos" y "Script"); un código de acción que la pantalla no conoce se muestra tal cual; "Hasta" anterior a "Desde" se avisa en pantalla sin llamar a la API; el cartel "Llegaste al principio del historial" aparece solo si se cargó más de una página.
+5. **Diálogos:** tocar el fondo no los cierra (no se pierde lo escrito); Escape no cierra mientras guarda; el 409 de un identificador repetido va debajo del campo y no como error general; si no cambió nada, "Guardar" cierra sin llamar a la API ni dejar registro; la baja de una marca pide escribir su nombre (sin importar mayúsculas, sí los acentos).
+6. **`AdminRedirect` manda a ROOT a `/root`.** Las rutas `/admin/*` todavía aceptan a ROOT: eso se corrige en E4 (Fase 4 de `feat/auth`).
+
+**Verificación:** typecheck de los 9 paquetes y `eslint --max-warnings 0`; 677 tests de web-admin (unos 190 nuevos: textos, fechas, carga con respuestas tardías, piezas y diálogos, páginas, rutas y armado de las URLs de `api.root`); 26 mutaciones de la lógica clave, todas detectadas (las que sobrevivieron al principio mostraron tests débiles y se reforzaron); y 99 comprobaciones en un navegador real (Edge) contra un backend y una base descartables: acceso por rol, alta, edición, baja y reactivación de marcas y restaurantes con lo que queda en la base y en Discovery, historial con más de 50 acciones y filtros, celular, tablet y escritorio sin scroll horizontal y con objetivos de 44 px o más, y el historial que ni la API ni la base dejan cambiar. **Hallazgo:** un código de acción llamado `constructor` mostraba una función en vez de texto (la tabla de textos heredaba de `Object`); corregido y con test.
+
+**Pendiente (E2b, espera a `feat/auth`):** acciones de dueños, pantalla de Dueños, pantalla de Cuentas ROOT y los diálogos de contraseña.
 
 ## 9. Etapas, estimación y orden
 
@@ -278,18 +298,18 @@ Orden de magnitud, una persona en días de trabajo enfocado (no son las horas de
 | **E0** Script de cuentas ROOT | `cuentas-root.ts` (sección 7.1). **Hecho.** | 0,5 día (hecho) |
 | **E1a** Backend: historial, cuentas ROOT y dueños | La migración (historial, disparadores, `debe_cambiar_password`), el servicio de historial, `POST /root/marcas/:id/duenos` y el resto de dueños, las rutas de cuentas ROOT, y que el script también registre. **Es lo que destraba el QA sin puente:** con el token de ROOT, desde el Swagger de staging, se crea un OWNER. **Hecha** (2026-10-20): detalle en 7.2. | 2,5 a 3,5 días (hecha) |
 | **E1b** Backend: marcas, restaurantes y lectura del historial | El resto de `/root/*` (marcas, restaurantes, baja y reactivar, todavía sin efecto fuera de Discovery) y `GET /root/historial` con filtros y cursor. **Hecha** (2026-10-20): decisiones de implementación en 7.2. | 1,5 a 2 días (hecha) |
-| **E2** Consola (web-admin) | `Shell` compartido, rutas `/root/*` con `React.lazy`, las pantallas (marcas, detalle, dueños, **cuentas ROOT**, **historial**), los diálogos y estados, tipos y `api.root`, tests, verificación con Playwright contra el backend real. | 4,5 a 6 días |
-| **E3** Baja efectiva y contraseñas | Sección 6 (menú público, apertura de mesas, login, pruebas de que reactivar devuelve todo), `POST /auth/cambiar-password`, la pantalla de primer ingreso con cambio obligatorio (y que el backend lo exija), revocación de refresh tokens. | 2 a 2,5 días |
-| **E4** Sacarle a ROOT lo viejo | El Apéndice A del plan de Discovery: ~35 `@Roles(…ROOT…)` en 11 controllers, ~15 `rol === 'ROOT'`, un servicio de acceso central, `isOwner` y `canEdit` en ~6 pantallas, `SelectorPage` de web-staff, los specs invertidos y un "ROOT → 403" por cada ruta cerrada. | 3 a 4 días |
-| **E5** Retirar `root@menyu.com` | Sección 7.1: crear las cuentas personales, probarlas, eliminar la compartida con el script y verificar, en staging y en producción. | 0,25 a 0,5 día |
+| **E2** Consola (web-admin) | `Shell` compartido, rutas `/root/*` con `React.lazy`, las pantallas (marcas, detalle, dueños, **cuentas ROOT**, **historial**), los diálogos y estados, tipos y `api.root`, tests, verificación con Playwright contra el backend real. **Se parte en dos (13.4):** E2a (shell, marcas, restaurantes, bajas e historial) se hace ya; E2b (dueños y cuentas ROOT) espera a `feat/auth`. **E2a hecha** (2026-10-21): cómo quedó, en 8.1. | 4,5 a 6 días (E2a: 3,5 a 4,5; E2b: 1 a 1,5) |
+| **E3** Baja efectiva y contraseñas | Sección 6 (menú público, apertura de mesas, login, pruebas de que reactivar devuelve todo), `POST /auth/cambiar-password`, la pantalla de primer ingreso con cambio obligatorio (y que el backend lo exija), revocación de refresh tokens. **Con Supabase desaparece la mitad de contraseñas** (cambiar contraseña, primer ingreso, refresh tokens propios): queda la baja efectiva, que va en `AccesoService` (13.3). | 2 a 2,5 días (ahora 0,5 a 1) |
+| **E4** Sacarle a ROOT lo viejo | El Apéndice A del plan de Discovery: ~35 `@Roles(…ROOT…)` en 11 controllers, ~15 `rol === 'ROOT'`, un servicio de acceso central, `isOwner` y `canEdit` en ~6 pantallas, `SelectorPage` de web-staff, los specs invertidos y un "ROOT → 403" por cada ruta cerrada. **Se hace dentro de la Fase 4 de `feat/auth`**, que migra esos mismos controllers a `@RequiereRol`; acá se dan los criterios de aceptación (13.3). | 3 a 4 días (a cargo de la Fase 4) |
+| **E5** Retirar `root@menyu.com` | Sección 7.1: crear las cuentas personales, probarlas, eliminar la compartida con el script y verificar, en staging y en producción. **Con Supabase** la cuenta compartida desaparece con la tabla `Admin` (Fase 5); si se adelanta, se hace con el script actual. | 0,25 a 0,5 día |
 | **Subtotal E1 a E3** (consola usable y segura) | | **10,5 a 14 días** |
 | **Total con E4 y E5** | | **14 a 18,5 días** |
 
 **Lo que agregó lo nuevo del 2026-10-15** (cuentas ROOT, historial y primer ingreso mockeado): **3,5 a 4,5 días** sobre la estimación aprobada (7 a 9,5 hasta E3): el historial, 2,5 a 3 (migración con disparadores, servicio dentro de la transacción, tests de que no se puede alterar, lectura con filtros, pantalla y estados), y las cuentas ROOT, 1 a 1,5 (rutas, disparador del último ROOT, pantalla y diálogos). La estimación original de 11.2 era 6 a 8 días y no incluía editar, reactivar, la baja efectiva ni las contraseñas.
 
-**Se puede recortar:** sin las decisiones 6 y 8, E3 desaparece. Sin la pantalla de Dueños (opcional), E2 baja 0,5 día. Sin el historial no: es un pedido del equipo.
+**Se puede recortar:** sin las decisiones 6 y 8, E3 desaparece (con Supabase, la parte de contraseñas desaparece igual: sección 13). Sin la pantalla de Dueños (opcional), E2 baja 0,5 día. Sin el historial no: es un pedido del equipo.
 
-**Orden:** E0 (hecho) → E1a → E1b → E2 → E3 → E4 → E5. El historial va en E1a porque **cada acción de ROOT tiene que quedar registrada desde la primera**. La consola (E2) puede salir a staging sin E3 y sin E4.
+**Orden:** E0 (hecho) → E1a → E1b → E2a → *(espera a `feat/auth`)* → E2b, dueños y cuentas ROOT sobre invitaciones y baja efectiva → E4 dentro de la Fase 4 → E5. El historial va en E1a porque **cada acción de ROOT tiene que quedar registrada desde la primera**. La consola (E2) puede salir a staging sin E3 y sin E4.
 
 **El puente para el QA, hasta que exista E1a:** un script fuera del repo (`puente-qa-staging.mjs`, en la carpeta del usuario) **no se conecta a ninguna base**: imprime el SQL, que se revisa y se pega en el editor SQL de Supabase de staging. Crea un OWNER de la marca que se elija (con la contraseña pedida sin eco y solo su hash en el SQL), da de baja una marca (BurgerLab, `m-001`) o la reactiva, y trae consultas de solo lectura (cuentas, marcas con su cantidad de dueños e ids que no son UUID). Es temporal: se descarta cuando exista la consola.
 
@@ -309,19 +329,15 @@ Orden de magnitud, una persona en días de trabajo enfocado (no son las horas de
 
 ## 11. Riesgos y notas
 
-- **ROOT puede, por diseño, crear un dueño o restablecer la contraseña de uno y entrar como él.** La regla "ROOT no ve datos privados" se cumple por permisos e interfaz, no es una barrera técnica. Lo que la protege es que (a) la contraseña es temporal y cambia en el primer ingreso (decisión 8), (b) restablecerla cierra las sesiones, así que la persona lo nota, y (c) **ahora todo queda en el historial, que ningún ROOT puede borrar**: una entrada indebida deja rastro de quién restableció qué y cuándo. Es la protección que antes faltaba.
+- **ROOT puede, por diseño, crear un dueño o restablecer la contraseña de uno y entrar como él.** La regla "ROOT no ve datos privados" se cumple por permisos e interfaz, no es una barrera técnica. Lo que la protege es que (a) la contraseña es temporal y cambia en el primer ingreso (decisión 8), (b) restablecerla cierra las sesiones, así que la persona lo nota, y (c) **ahora todo queda en el historial, que ningún ROOT puede borrar**: una entrada indebida deja rastro de quién restableció qué y cuándo. Es la protección que antes faltaba. **Con Supabase (sección 13)** ROOT no conoce ninguna contraseña: invita por mail o manda el de recuperación. Sigue pudiendo cambiar el email de un dueño y mandarle la recuperación, así que la protección sigue siendo el historial.
 - **El historial no es invulnerable.** Quien tenga el rol dueño de la base puede quitar el disparador (sección 7.2). Se acepta para este plan; la cadena de hashes es la mejora si hiciera falta.
-- **Tres ROOT con los mismos poderes:** cualquiera puede restablecer la contraseña de otro ROOT (decisión 19). Queda registrado con su nombre, pero no hay un segundo control. Para un equipo de tres es razonable.
+- **Tres ROOT con los mismos poderes:** cualquiera puede restablecer la contraseña de otro ROOT (decisión 19). Queda registrado con su nombre, pero no hay un segundo control. Para un equipo de tres es razonable. *(Con Supabase: cualquiera puede mandar el mail de recuperación de otro ROOT.)*
 - **La cuenta ROOT de producción.** En 11.1 del plan de Discovery se decidió no cambiar cuentas ni contraseñas de producción. `root@menyu.com` puede existir en staging y producción con `root1234` (la documentación dice que se creó con el endpoint de desarrollo). Con la consola, quien entre con ella crea dueños y entra a cualquier marca. **El retiro (E5) lo resuelve**, y el script permite hacerlo antes de que exista la consola; si no, conviene cambiarla antes del tag que lleve la consola. La decisión es del equipo; queda anotada.
 - **Las acciones del script quedan en el historial solo en las bases que ya tienen la migración de E1a.** La cuenta ROOT que se creó en staging antes de E1a no dejó rastro. En producción, hasta el tag que lleve la migración, el script avisa y no registra.
 - **Cambio de comportamiento público (E3):** una marca o restaurante dado de baja deja de abrir mesas y de mostrar su carta. Hoy "borrar" no hacía eso: si alguien depende de eso, se entera acá.
-- **Sesiones ya iniciadas:** los tokens de acceso (8 h) de gente de una marca dada de baja, o de una cuenta cuya contraseña se restableció, siguen valiendo hasta que vencen; lo que se revoca al instante son los refresh tokens. Revocar todo al instante exigiría consultar la base en cada pedido; no se propone.
-<<<<<<< Updated upstream
-- **Migración (E1a, ya escrita y probada):** una sola, con la tabla del historial, los disparadores y la columna de contraseña temporal. Va en el mismo tag que las 13 migraciones pendientes (ahora 14) y **entra en el ensayo con una copia de producción**. El disparador del último ROOT hace que `delete from admin` falle mientras quede un ROOT: las limpiezas de tests usan `session_replication_role = replica`. El historial, en cambio, **no se puede limpiar ni con ese atajo**.
-=======
-- **Migración (E1a):** una sola, con la tabla del historial, los disparadores y la columna de contraseña temporal. Va en el mismo tag que las 13 migraciones pendientes y **entra en el ensayo con una copia de producción**. El disparador del último ROOT hace que `delete from admin` falle mientras quede un ROOT: las limpiezas de tests usan `session_replication_role = replica`.
-- **La consola necesita un web-admin de staging con URL fija.** Hoy no la hay: ver 11.4 del plan de Discovery (la redirección del login lo rompe y manda los tokens por la URL). Se resuelve creando `menyu-admin-staging` y `menyu-staff-staging` en Vercel; lo de fondo es que cada app tenga su propio login.
->>>>>>> Stashed changes
+- **Sesiones ya iniciadas:** los tokens de acceso (8 h) de gente de una marca dada de baja, o de una cuenta cuya contraseña se restableció, siguen valiendo hasta que vencen; lo que se revoca al instante son los refresh tokens. Revocar todo al instante exigiría consultar la base en cada pedido; no se propone. *Con Supabase (sección 13)* el access token dura 1 hora y cada pedido consulta las membresías en la base, así que la baja y la quita de una membresía valen de inmediato para la API.
+- **Migración (E1a, ya escrita y probada):** `20261020150000_consola_root_historial`, una sola, con la tabla del historial, los disparadores y la columna de contraseña temporal. En `main` ya están desplegadas v1.0.6 y v1.0.7 (producción con las 32 migraciones anteriores, incluida la de autenticación); la de la consola es la única pendiente y sale con el primer tag que lleve esta rama, **ensayada antes con una copia de producción**. El disparador del último ROOT hace que `delete from admin` falle mientras quede un ROOT: las limpiezas de tests usan `session_replication_role = replica`. El historial, en cambio, **no se puede limpiar ni con ese atajo**. Cuando se retire `Admin` (Fase 5 de la spec de autenticación), ese disparador se rehace sobre `usuario.es_root`; `historial_root` no se toca.
+- **La consola necesita un web-admin de staging con URL fija.** Existe `menyu-admin-staging` (creado el 2026-10-19; ver 11.4 del plan de Discovery). Con la spec de autenticación, los dominios propios (`admin.staging.menyu-app.com`) son los que van a compartir sesión; los de `vercel.app` siguen con el login actual hasta la Fase 4.
 - **Cuenta sin dueño:** hoy puede haber marcas sin OWNER (BurgerLab). La consola las marca con "Sin dueño".
 - **Hasta E4** ROOT sigue entrando a las pantallas viejas de web-admin escribiendo la URL. La consola no cierra eso: lo cierra E4.
 - **Compatibilidad:** los scripts de prueba que usan a `root@menyu.com` (`Documentacion/datos-de-prueba-local.md`) siguen sirviendo en local; en staging y producción esa cuenta se retira (E5).
@@ -336,3 +352,59 @@ Orden de magnitud, una persona en días de trabajo enfocado (no son las horas de
 - Borrado físico de marcas y restaurantes.
 - Borrar cuentas ROOT desde la app (decisión 15).
 - Que un dueño cambie su propio email o administre más de una marca.
+
+## 13. Autenticación con Supabase (`feat/auth`): qué cambia para la consola
+
+*Agregado el 2026-10-20, después de leer [`docs/auth/specs/auth.md`](auth/specs/auth.md) con las Fases 1 y 2 ya en `main` (producción en v1.0.7).* Hasta acá este plan suponía el login propio (`Admin`, contraseñas, JWT propio). La spec lo reemplaza por Supabase Auth: el personal entra por **invitación por mail**, ROOT es el indicador `Usuario.esRoot` (no una membresía) y los permisos salen de `Usuario` y `Membresia`, que decide `AccesoService`. Los endpoints existentes pasan al guard nuevo **en la Fase 4**, en la misma entrega que los frontends; hasta entonces rige el login actual, y lo hecho en las etapas 1a y 1b sirve tal cual para el QA de staging.
+
+### 13.1 Qué cambia, pieza por pieza
+
+| Pieza | Efecto | Qué se hace |
+|---|---|---|
+| Marcas, restaurantes, baja y reactivar (backend de 1b y sus pantallas) | **Casi nada.** No dependen de cómo se loguea la persona. | Al llegar la Fase 4 se cambian el guard (`@RequiereRoot()`, ver 13.3) y de dónde sale el actor: ~0,5 día. |
+| Historial (tabla, `GET /root/historial` y su pantalla) | **Sigue igual.** La tabla no tiene claves foráneas y guarda copias, justamente para sobrevivir a esto. | `actor_id` pasa a ser el id del `Usuario` (es una columna de texto). Habrá códigos de acción nuevos (invitar, mandar la recuperación): la pantalla tolera códigos que no conoce, y las filas viejas siguen valiendo. |
+| Dueños (rutas de 1a, pantalla "Dueños" y menú de dueños en el detalle de una marca) | **Se rehacen.** | Un dueño es una `Membresia` OWNER de un `Usuario`. Crear = invitar por mail (`POST /auth/invitaciones`); cambiar el email = en Supabase y en `usuario`; eliminar = quitar la membresía; "restablecer" = mandar el mail de recuperación. Sin contraseña temporal. |
+| Cuentas ROOT (rutas de 1a, pantalla y script) | **Se rehacen.** | `esRoot`. El primer ROOT de cada ambiente se crea a mano (Supabase → Authentication y un `INSERT`, como dice `docs/auth/usuarios-prueba-staging.md`). Los demás: la invitación de un ROOT a otro, que hay que construir. La última cuenta ROOT se protege con un disparador sobre `usuario.es_root`, que reemplaza al de `admin`. El script pasa a "promover" un `Usuario`. |
+| E3 | **Desaparece la mitad.** | Sin cambiar contraseña, sin primer ingreso, sin refresh tokens propios y sin `debeCambiarPassword`. Queda la baja efectiva (13.3). |
+| E4 | **Se funde con la Fase 4 de la spec**, que pasa los 43 `@Roles` legacy de 13 controllers a `@RequiereRol`. | No se hace aparte: se le pasan los criterios del Apéndice A del plan de Discovery (ROOT fuera de las rutas de datos y un "ROOT → 403" por ruta). |
+| E5 | **Pierde sentido a mediano plazo.** | `root@menyu.com` desaparece con la tabla `Admin` (Fase 5). Si el riesgo de producción apura, se adelanta con el script actual. |
+| 11.4 (tokens en la URL) | **Supersedido.** | Las Fases 4 y 5 reemplazan el pase por la URL con una cookie de sesión de dominio compartido y borran `?token=&refresh=`: el "arreglo de fondo" de 11.4 no se hace. La exposición sigue hasta la Fase 5. |
+
+### 13.2 Decisiones reemplazadas y decisiones nuevas
+
+**Reemplazadas.** Las decisiones **8** (contraseña generada y cambio en el primer ingreso), **19** (restablecer la contraseña de otro ROOT) y **20** (mínimo de 12 caracteres) quedan supersedidas: ROOT no genera, ve ni fija contraseñas. Invita por mail o manda el mail de recuperación, y la política de contraseñas es del proyecto de Supabase.
+
+**Nuevas** (a confirmar):
+
+- **21. ROOT invita a OWNER y a otras cuentas ROOT; el GERENTE lo invita el OWNER.** Es la regla del 2026-10-15. La spec y `puedeInvitar` dicen "ROOT → OWNER y GERENTE": hay que corregirlos (pedido 1).
+- **22. El historial registra lo que cambia en nuestra base.** La llamada a Supabase es externa y queda fuera de la transacción: se hace primero (es idempotente: una cuenta ya confirmada se reutiliza) y después una sola transacción guarda el `Usuario`, la `Membresia` y el registro. Si esa transacción falla, el mail ya salió, pero nunca queda un permiso sin registro.
+- **23. Una persona puede ser dueña de más de una marca.** El modelo lo permite (una `Membresia` por marca) y `POST /auth/invitaciones` ya suma la membresía a un email existente. La consola lo admite: invitar a un email que ya es dueño de otra marca no es un error (con `Admin` sí lo era: 409).
+
+### 13.3 Lo que se le pide a `feat/auth`
+
+Con el código de la Fase 2 a la vista (`apps/backend/src/auth/`):
+
+1. **Corregir la regla de ROOT.** `ROLES_DE_ROOT` de `puede-invitar.ts` y su test de tabla, la descripción del endpoint y la tabla de roles de la spec dicen "ROOT → OWNER y GERENTE". Tiene que ser solo OWNER (más ROOT, punto 2).
+2. **Cómo se crean las demás cuentas ROOT.** `Rol` no tiene `ROOT` e `invitar` nunca pone `esRoot`: el primer ROOT a mano está bien, pero la consola tiene que poder invitar a otros. Proponemos que lo construya la consola reutilizando `cuentaDeSupabase()` (exportarlo del servicio), más el disparador de la última cuenta ROOT sobre `usuario.es_root` y un script que promueva un `Usuario`.
+3. **La baja efectiva en `AccesoService`.** `rolesEnRestaurante`, `esOwnerDeMarca` y `perfil()` ignoran `activo` (ya figura en "Para la Fase 4"). Una membresía solo cuenta si la marca y el restaurante están activos, y `invitar` rechaza (409) sumar gente a una marca o restaurante dado de baja. Con eso la baja de la consola corta el acceso en cada pedido, sin tocar cuentas.
+4. **Que lo que hace ROOT quede en el historial.** `InvitacionesService.invitar` es una acción de ROOT cuando `invitador.esRoot`, y hoy no deja rastro. Dentro de la transacción de `guardar()` hay que llamar a `HistorialRootService.registrar` (la consola aporta `actorDe` para un `Usuario`). Y si en la Fase 0 se opta por activar RLS en vez de apagar la Data API, la lista tiene que incluir `historial_root` y `admin`.
+5. **Las rutas `/root/*` pasan con la Fase 4.** Son 5 controllers y 19 rutas con `JwtAuthGuard` y `@Roles('ROOT')`, todavía no en `main`. `@RequiereRol` solo sirve con `:restauranteId`: hace falta un `@RequiereRoot()` (`SupabaseAuthGuard` más `usuario.esRoot`). La migración de esas rutas la hace la consola, no `feat/auth`; también falta poder reenviar una invitación a quien no la aceptó (ya anotado en la spec).
+
+### 13.4 E2, partida en dos
+
+- **E2a: no depende de la autenticación, se hace ya.** El `Shell` compartido y las rutas `/root/*` con `React.lazy`, la lista de marcas, el detalle de una marca (datos y restaurantes; los dueños de solo lectura), los diálogos de marca y de restaurante (crear, editar, dar de baja y reactivar; la baja de una marca pide escribir su nombre), el historial con sus filtros, los estados, los tipos en `@menyu/types` y `api.root`, con tests y verificación contra el backend real.
+- **E2b: espera a `feat/auth`.** Las acciones de dueños (crear, cambiar el email, restablecer, eliminar), la pantalla de Dueños, la de Cuentas ROOT y todo diálogo de contraseña. La pantalla de primer ingreso **no se hace**: la atiende web-auth.
+- **Cuidados de E2a para no rehacer nada:** la sesión y el rol salen de un solo hook (`useRootSession`), que cambia de fuente en la Fase 4; la pantalla del historial tolera códigos de acción que no conoce; el detalle de una marca no usa `debeCambiarPassword`; ningún componente compartido habla de contraseñas.
+
+### 13.5 Estimación después de leer la spec (orden de magnitud)
+
+| Qué | Días | Cuándo |
+|---|---|---|
+| E2a (pantallas que no dependen de auth) | 3,5 a 4,5 | Ya |
+| E2b (dueños y cuentas ROOT sobre invitaciones, front) | 1 a 1,5 | Después de la Fase 4 |
+| Dueños y cuentas ROOT sobre invitaciones (backend), `@RequiereRoot()` en `/root/*`, actor desde `Usuario`, disparador y script | 2 a 2,5 | Después de la Fase 4 |
+| Baja efectiva (en `AccesoService`) | 0,5 a 1 | La Fase 2 o la 4 de `feat/auth` |
+| E4 | — | La Fase 4 de `feat/auth` |
+| E3 (contraseñas) | 0 | Descartada |
+
+Mientras tanto, lo hecho en 1a y 1b se usa tal cual en staging con el login actual.

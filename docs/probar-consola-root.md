@@ -1,6 +1,6 @@
 # Cómo probar la consola de ROOT en tu compu
 
-Guía para probar cada etapa de la consola de ROOT ([`plan-consola-root.md`](plan-consola-root.md)) sin tocar staging ni producción. Se actualiza en cada etapa: hoy cubre el backend (etapas 1a y 1b); cuando exista la pantalla (etapa 2) suma cómo verla.
+Guía para probar cada etapa de la consola de ROOT ([`plan-consola-root.md`](plan-consola-root.md)) sin tocar staging ni producción. Se actualiza en cada etapa: hoy cubre el backend (etapas 1a y 1b) y la pantalla de marcas, restaurantes e historial (etapa 2a).
 
 ## 0. Una vez, al traer la rama
 
@@ -107,7 +107,30 @@ Un recorrido de punta a punta (copiando los `id` que va devolviendo cada paso):
 
 Con el token de un dueño (`owner@menyu.com` / `owner1234`), de un gerente (`gerente@menyu.com` / `gerente1234`) o de un mozo, **todas** las rutas de `/api/root/*` dan 403, y sin token, 401.
 
-## 5. Probar los tests
+## 5. Etapa 2a: la pantalla (marcas, restaurantes, bajas e historial)
+
+La consola vive en web-admin, en `/root/*`. Usa el mismo backend de la etapa anterior: levantalo contra la base de prueba (sección 1) y, en otra terminal, la pantalla:
+
+```bash
+pnpm install                              # una vez: la rama trae dependencias nuevas
+pnpm --filter @menyu/types build          # una vez: los tipos de la consola se consumen compilados
+pnpm --filter @menyu/web-admin dev        # http://localhost:5174
+```
+
+Abrí <http://localhost:5174>: web-admin no tiene login propio y te manda al de la app de clientes (<http://localhost:5176/auth>, que tiene que estar levantada y apuntando al mismo backend). Entrá con `root@menyu.com` / `root1234` y volvés a web-admin, donde aterrizás en **Marcas** (`/root/marcas`). Un dueño o un gerente que escriba `/root` a mano vuelve a su pantalla de siempre; y un ROOT que escriba `/admin` termina en `/root`.
+
+Un recorrido para ver todo (con el backend en la base de prueba, porque deja filas en el historial):
+
+1. **Marcas.** La lista con las marcas del seed, cuántos restaurantes y dueños tiene cada una y si están activas. Buscá `cafe` (sin acento ni mayúsculas) y probá el interruptor **Mostrar dadas de baja**.
+2. **Nueva marca.** Escribí un nombre: el identificador se arma solo. Probá dejarlo vacío, ponerle espacios o repetir el de una marca existente: el error aparece debajo del campo, sin cerrar el diálogo. Al crearla te lleva a su detalle.
+3. **Detalle de la marca.** Datos, dueños (solo se ven: crear o cambiar dueños llega con la migración de autenticación) y restaurantes. **Agregar restaurante** pide nombre y dirección (esa es la única vez que ROOT la carga). Desde el menú ⋮ de cada restaurante: **Editar nombre** y **Dar de baja** / **Reactivar**. No existe ningún botón de eliminar.
+4. **Dar de baja una marca.** Pide escribir su nombre. Fijate que el texto dice que **hoy la baja solo la saca de Discovery**; abrí la app del comensal (<http://localhost:5176>) y comprobalo. Después **Reactivar la marca**.
+5. **Historial** (menú lateral → *Historial*). Lo que hiciste aparece agrupado por día (hora de Buenos Aires): tocá la flecha de una fila para ver el antes y el después. Probá los filtros **Quién**, **Sobre qué**, **Desde** y **Hasta** (poné un **Hasta** anterior al **Desde**: lo avisa y no pide nada). Para ver **Cargar más** hacen falta más de 50 acciones: cambiá el nombre de una marca unas 60 veces con Swagger.
+6. **Celular.** En el navegador, abrí las herramientas de desarrollo y probá el ancho 390: el menú pasa a ser un cajón con el botón de las tres rayas y los diálogos suben desde abajo.
+
+Tests de esta etapa: `pnpm --filter @menyu/web-admin test` (toda la suite de web-admin) y `pnpm --filter @menyu/web-admin lint`.
+
+## 6. Probar los tests
 
 ```bash
 pnpm --filter @menyu/api test                      # toda la suite del backend (no necesita base)
@@ -121,7 +144,7 @@ $env:TEST_DATABASE_URL = 'postgresql://menyu:menyu@localhost:5433/menyu'
 pnpm --filter @menyu/api exec jest historial-root.base
 ```
 
-## 6. Probar el script de cuentas ROOT
+## 7. Probar el script de cuentas ROOT
 
 Contra la base de prueba (nunca contra staging o producción desde acá):
 
@@ -136,5 +159,5 @@ Pide la contraseña sin eco y el nombre de la base para confirmar. Lo que hace q
 
 ## Etapas que faltan
 
-- **Etapa 2:** la pantalla (web-admin, rutas `/root/*`). Esta guía va a sumar cómo abrirla y recorrerla.
+- **Etapa 2b** (espera a la migración de autenticación): las pantallas de dueños y cuentas ROOT, y el alta por invitación.
 - **Etapa 3:** la baja corta de verdad (mesas, menú, login) y el cambio de contraseña obligatorio en el primer ingreso.

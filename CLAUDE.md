@@ -283,7 +283,7 @@ Un descuento se guarda como `precio_descuento` (entero, con un CHECK en la base:
 - `/check-in?restaurantId=…&tableCode=…` es lo que codifica el QR impreso de cada mesa: abre la sesión y sigue al menú; si falla, ofrece el PIN.
 - `/auth` acepta `?volver=` (solo rutas internas de la app).
 
-**web-admin**: `/admin/marca` ("Marca y sucursales", solo OWNER) con el logo de la marca, el de cada sucursal y su dirección. El botón "Descuento" de la lista del menú lo ven OWNER y GERENTE.
+**web-admin**: `/admin/marca` ("Marca y sucursales", solo OWNER) con el logo de la marca, el de cada sucursal y su dirección. El botón "Descuento" de la lista del menú lo ven OWNER y GERENTE. La consola de ROOT vive en `/root/*` (marcas, restaurantes con baja y reactivar, e historial; solo ROOT, con carga aparte vía `React.lazy`); lo que falta (dueños y cuentas ROOT) espera a `feat/auth`: ver `docs/plan-consola-root.md` y, para probarla en local, `docs/probar-consola-root.md`.
 
 **Fuera de alcance:** combos, fidelización, vigencia o programación de descuentos.
 
