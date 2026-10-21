@@ -1,12 +1,14 @@
 import { Test } from '@nestjs/testing'
 import { BadRequestException } from '@nestjs/common'
 import { JwtService } from '@nestjs/jwt'
-import { Request } from 'express'
 import { Prisma } from '@prisma/client'
 import { PedidosService } from './pedidos.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { MenyuGateway } from '../gateway/menyu.gateway'
-import { JwtPayload } from '../auth/auth.service'
+import { AccesoService } from '../auth/supabase/acceso.service'
+import { accesoDeTest, CUENTAS, MUNDO } from '../test/acceso-de-test'
+
+const REST = MUNDO.REST_1
 
 const mockPrisma = {
   pedido: { findUnique: jest.fn(), findMany: jest.fn() },
@@ -35,6 +37,7 @@ describe('PedidosService', () => {
         { provide: PrismaService, useValue: mockPrisma },
         { provide: JwtService, useValue: mockJwt },
         { provide: MenyuGateway, useValue: mockGateway },
+        { provide: AccesoService, useValue: accesoDeTest() },
       ],
     }).compile()
 
@@ -43,7 +46,7 @@ describe('PedidosService', () => {
   })
 
   describe('editarPedido', () => {
-    const REQ = { user: { sub: 'admin-1', tipo: 'admin', rol: 'GERENTE' } } as unknown as Request
+    const GERENTE = CUENTAS.GERENTE
     const DTO = {
       justificacion: 'El cliente se arrepintió',
       ediciones: [{ pedidoItemId: 'item-1', cantidadNueva: 1 }],
@@ -51,7 +54,7 @@ describe('PedidosService', () => {
     const pedidoBase = (pagos: { id: string }[]) => ({
       id: 'ped-1',
       estado: 'pendiente',
-      mesa: { restauranteId: 'rest-1' },
+      mesa: { restauranteId: REST },
       sesion: { pagos },
       items: [
         { id: 'item-1', cantidad: 3, cantidadEditada: null, precioUnitario: 100, item: { nombre: 'Milanesa' } },
@@ -67,7 +70,7 @@ describe('PedidosService', () => {
     it('sesión con un pago aprobado → 400 con el texto acordado y no toca el pedido', async () => {
       mockPrisma.pedido.findUnique.mockResolvedValueOnce(pedidoBase([{ id: 'pago-1' }]))
 
-      const promesa = service.editarPedido('ped-1', DTO, REQ)
+      const promesa = service.editarPedido('ped-1', DTO, GERENTE)
 
       await expect(promesa).rejects.toThrow(BadRequestException)
       await expect(promesa).rejects.toThrow(
@@ -85,7 +88,7 @@ describe('PedidosService', () => {
         .mockResolvedValueOnce(pedidoBase([]))
         .mockResolvedValueOnce(resultado)
 
-      const r = await service.editarPedido('ped-1', DTO, REQ)
+      const r = await service.editarPedido('ped-1', DTO, GERENTE)
 
       expect(tx.pedidoItem.update).toHaveBeenCalledWith({
         where: { id: 'item-1' },
@@ -95,19 +98,19 @@ describe('PedidosService', () => {
       expect(tx.pedidoEdicion.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
           pedidoId: 'ped-1',
-          adminId: 'admin-1',
+          usuarioId: GERENTE.id,
           mozoId: null,
           justificacion: 'El cliente se arrepintió',
         }),
       })
-      expect(mockGateway.emitOrderEdited).toHaveBeenCalledWith('rest-1', r)
+      expect(mockGateway.emitOrderEdited).toHaveBeenCalledWith(REST, r)
       expect(r).toMatchObject({ id: 'ped-1' })
     })
 
     it('la consulta pide los pagos aprobados de la sesión y ya no navega asignaciones → comensal → pagos', async () => {
       mockPrisma.pedido.findUnique.mockResolvedValueOnce(pedidoBase([{ id: 'pago-1' }]))
 
-      await service.editarPedido('ped-1', DTO, REQ).catch(() => undefined)
+      await service.editarPedido('ped-1', DTO, GERENTE).catch(() => undefined)
 
       const arg = mockPrisma.pedido.findUnique.mock.calls[0][0]
       expect(arg.include.sesion).toEqual({
@@ -259,14 +262,14 @@ describe('PedidosService', () => {
       })
     })
 
-    describe('crearStaff (mozo o gerente)', () => {
-      const MOZO: JwtPayload = { sub: 'mozo-1', tipo: 'mozo', restauranteId: 'rest-1' }
+    describe('crearStaff (el salón)', () => {
+      const MOZO = CUENTAS.MOZO
       let tx: ReturnType<typeof createTxPedidoMock>
 
       beforeEach(() => {
         tx = createTxPedidoMock()
-        mockPrisma.sesionMesa.findUnique.mockResolvedValue({ id: 'ses-1', estado: 'activa' })
-        mockPrisma.mesa.findUnique.mockResolvedValue({ id: 'mesa-1', restauranteId: 'rest-1' })
+        mockPrisma.sesionMesa.findUnique.mockResolvedValue({ id: 'ses-1', mesaId: 'mesa-1', estado: 'activa' })
+        mockPrisma.mesa.findUnique.mockResolvedValue({ id: 'mesa-1', restauranteId: REST })
         mockPrisma.$transaction.mockImplementation((fn: any) => fn(tx))
       })
 

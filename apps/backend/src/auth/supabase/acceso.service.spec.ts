@@ -216,6 +216,29 @@ describe('AccesoService', () => {
     })
   })
 
+  describe('exigirMozo', () => {
+    it('devuelve el Mozo activo del usuario en el restaurante', async () => {
+      // Arrange
+      prisma.mozo.findUnique.mockResolvedValue({ id: 'mozo-1', nombre: 'Juan', esJefeSalon: true, activo: true })
+
+      // Act + Assert
+      expect(await acceso.exigirMozo(USUARIO.id, 'rest-1')).toEqual({ id: 'mozo-1', nombre: 'Juan', esJefeSalon: true })
+    })
+
+    it.each([
+      ['inactivo', { id: 'mozo-1', nombre: 'Juan', esJefeSalon: false, activo: false }],
+      ['que no existe', null],
+    ])('con un Mozo %s: 403', async (_caso, fila) => {
+      // Arrange
+      prisma.mozo.findUnique.mockResolvedValue(fila)
+
+      // Act + Assert
+      await expect(acceso.exigirMozo(USUARIO.id, 'rest-1')).rejects.toThrow(
+        new ForbiddenException('Tu perfil de mozo no está activo en este restaurante'),
+      )
+    })
+  })
+
   describe('restaurantesDe', () => {
     const porMembresia = (roles: string[]) => ({ membresias: { some: { usuarioId: USUARIO.id, rol: { in: roles } } } })
     const porMarca = { marca: { membresias: { some: { usuarioId: USUARIO.id, rol: 'OWNER' } } } }

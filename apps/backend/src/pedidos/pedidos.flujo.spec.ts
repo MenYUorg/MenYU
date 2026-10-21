@@ -1,24 +1,22 @@
 import { BadRequestException, ForbiddenException, NotFoundException, UnauthorizedException } from '@nestjs/common'
 import { JwtService } from '@nestjs/jwt'
 import { Prisma } from '@prisma/client'
-import { Request } from 'express'
-import { JwtPayload } from '../auth/auth.service'
+import { AccesoService } from '../auth/supabase/acceso.service'
 import { MenyuGateway } from '../gateway/menyu.gateway'
 import { PrismaService } from '../prisma/prisma.service'
+import { accesoDeTest, CUENTAS, MOZOS, MUNDO } from '../test/acceso-de-test'
 import { PedidosService } from './pedidos.service'
 
-// Validaciones de los pedidos (del comensal y del staff), el avance de estado, la edición y su historial.
-// Los precios con descuento están en pedidos.service.spec.
+// Validaciones de los pedidos (del comensal y del personal), el avance de estado, la edición y su historial, con
+// las membresías de CUENTAS. Los precios con descuento están en pedidos.service.spec.
 const prisma = {
   pedido: { findUnique: jest.fn(), findMany: jest.fn(), update: jest.fn() },
   pedidoEdicion: { findMany: jest.fn() },
   sesionMesa: { findUnique: jest.fn() },
   mesa: { findUnique: jest.fn(), findMany: jest.fn() },
-  admin: { findUnique: jest.fn() },
-  restaurante: { findUnique: jest.fn() },
-  adminRestaurante: { findUnique: jest.fn() },
   $transaction: jest.fn(),
 }
+const REST = MUNDO.REST_1
 const jwt = { verify: jest.fn() }
 const gateway = { emitOrderNew: jest.fn(), emitOrderUpdated: jest.fn(), emitOrderEdited: jest.fn() }
 
@@ -36,7 +34,6 @@ const DTO = (mods?: { itemIngredienteId: string; accion: 'AGREGAR' | 'QUITAR'; c
   mesaId: 'mesa-1',
   items: [{ itemId: 'item-1', cantidad: 1, ...(mods ? { mods } : {}) }],
 })
-const conUsuario = (user: object) => ({ user }) as unknown as Request
 
 function crearTx() {
   return {
@@ -51,13 +48,20 @@ function crearTx() {
 
 describe('PedidosService: validaciones, estado y ediciones', () => {
   let service: PedidosService
+  let acceso: AccesoService
   let tx: ReturnType<typeof crearTx>
 
   beforeEach(() => {
     jest.clearAllMocks()
     tx = crearTx()
     prisma.$transaction.mockImplementation((fn: (cliente: typeof tx) => unknown) => fn(tx))
-    service = new PedidosService(prisma as unknown as PrismaService, jwt as unknown as JwtService, gateway as unknown as MenyuGateway)
+    acceso = accesoDeTest()
+    service = new PedidosService(
+      prisma as unknown as PrismaService,
+      jwt as unknown as JwtService,
+      gateway as unknown as MenyuGateway,
+      acceso,
+    )
   })
 
   afterEach(() => {
@@ -158,19 +162,18 @@ describe('PedidosService: validaciones, estado y ediciones', () => {
     })
   })
 
-  describe('crearStaff', () => {
-    const MOZO = { sub: 'mozo-1', tipo: 'mozo', restauranteId: 'rest-1' } as JwtPayload
-    const OWNER = { sub: 'owner-1', tipo: 'admin', rol: 'OWNER' } as JwtPayload
-    const GERENTE = { sub: 'ger-1', tipo: 'admin', rol: 'GERENTE' } as JwtPayload
+  describe('crearStaff (el salón del restaurante de la mesa)', () => {
+    const MOZO = CUENTAS.MOZO
 
     beforeEach(() => {
-      prisma.sesionMesa.findUnique.mockResolvedValue({ id: 'ses-1', estado: 'activa' })
-      prisma.mesa.findUnique.mockResolvedValue({ id: 'mesa-1', restauranteId: 'rest-1' })
+      prisma.sesionMesa.findUnique.mockResolvedValue({ id: 'ses-1', mesaId: 'mesa-1', estado: 'activa' })
+      prisma.mesa.findUnique.mockResolvedValue({ id: 'mesa-1', restauranteId: REST })
     })
 
     it.each([
       ['la sesión no existe', () => prisma.sesionMesa.findUnique.mockResolvedValue(null), new NotFoundException('Sesión no encontrada')],
-      ['la sesión no está activa', () => prisma.sesionMesa.findUnique.mockResolvedValue({ id: 'ses-1', estado: 'cerrada' }), new BadRequestException('La sesión no está activa')],
+      ['la sesión no está activa', () => prisma.sesionMesa.findUnique.mockResolvedValue({ id: 'ses-1', mesaId: 'mesa-1', estado: 'cerrada' }), new BadRequestException('La sesión no está activa')],
+      ['la sesión es de otra mesa', () => prisma.sesionMesa.findUnique.mockResolvedValue({ id: 'ses-1', mesaId: 'mesa-de-otro-restaurante', estado: 'activa' }), new BadRequestException('La sesión no es de esa mesa')],
       ['la mesa no existe', () => prisma.mesa.findUnique.mockResolvedValue(null), new NotFoundException('Mesa no encontrada')],
     ])('si %s no crea el pedido', async (_, preparar, error) => {
       preparar()
@@ -179,37 +182,30 @@ describe('PedidosService: validaciones, estado y ediciones', () => {
       expect(prisma.$transaction).not.toHaveBeenCalled()
     })
 
-    it('un mozo de otro restaurante recibe 403', async () => {
-      await expect(service.crearStaff(DTO(), { ...MOZO, restauranteId: 'rest-2' })).rejects.toThrow(
-        new ForbiddenException('No tenés acceso a este restaurante'),
-      )
+    it.each([
+      ['el OWNER de la marca', CUENTAS.OWNER_A],
+      ['el GERENTE', CUENTAS.GERENTE],
+      ['el JEFE_SALON', CUENTAS.JEFE_SALON],
+      ['el MOZO', CUENTAS.MOZO],
+    ])('%s del restaurante de la mesa crea el pedido', async (_caso, cuenta) => {
+      await expect(service.crearStaff(DTO(), cuenta)).resolves.toEqual({ id: 'ped-1' })
+    })
+
+    it.each([
+      ['ROOT (no es un bypass)', CUENTAS.ROOT],
+      ['el OWNER de otra marca', CUENTAS.OWNER_B],
+      ['la COCINA', CUENTAS.COCINA],
+    ])('%s recibe 403 antes de mirar la sesión', async (_caso, cuenta) => {
+      await expect(service.crearStaff(DTO(), cuenta)).rejects.toThrow(ForbiddenException)
+      expect(prisma.sesionMesa.findUnique).not.toHaveBeenCalled()
       expect(prisma.$transaction).not.toHaveBeenCalled()
     })
 
-    it('el OWNER de la marca del restaurante puede; el de otra marca recibe 403', async () => {
-      prisma.admin.findUnique.mockResolvedValue({ id: 'owner-1', marcaId: 'marca-1' })
-      prisma.restaurante.findUnique.mockResolvedValue({ id: 'rest-1', marcaId: 'marca-1' })
-      await expect(service.crearStaff(DTO(), OWNER)).resolves.toEqual({ id: 'ped-1' })
+    it('el MOZO de otro restaurante recibe 403', async () => {
+      prisma.mesa.findUnique.mockResolvedValue({ id: 'mesa-1', restauranteId: MUNDO.REST_2 })
 
-      prisma.restaurante.findUnique.mockResolvedValue({ id: 'rest-1', marcaId: 'marca-2' })
-      await expect(service.crearStaff(DTO(), OWNER)).rejects.toThrow(ForbiddenException)
-    })
-
-    it('un GERENTE asignado al restaurante puede; uno sin asignación recibe 403', async () => {
-      prisma.adminRestaurante.findUnique.mockResolvedValue({ adminId: 'ger-1', restauranteId: 'rest-1' })
-      await expect(service.crearStaff(DTO(), GERENTE)).resolves.toEqual({ id: 'ped-1' })
-      expect(prisma.adminRestaurante.findUnique).toHaveBeenCalledWith({
-        where: { adminId_restauranteId: { adminId: 'ger-1', restauranteId: 'rest-1' } },
-      })
-
-      prisma.adminRestaurante.findUnique.mockResolvedValue(null)
-      await expect(service.crearStaff(DTO(), GERENTE)).rejects.toThrow(ForbiddenException)
-    })
-
-    it('un usuario que no es mozo ni admin con rol recibe 403', async () => {
-      await expect(service.crearStaff(DTO(), { sub: 'x', tipo: 'cliente' } as unknown as JwtPayload)).rejects.toThrow(
-        ForbiddenException,
-      )
+      await expect(service.crearStaff(DTO(), MOZO)).rejects.toThrow(ForbiddenException)
+      expect(prisma.$transaction).not.toHaveBeenCalled()
     })
 
     it.each([
@@ -231,20 +227,24 @@ describe('PedidosService: validaciones, estado y ediciones', () => {
     })
   })
 
-  describe('actualizarEstado', () => {
-    const MOZO = conUsuario({ sub: 'mozo-1', tipo: 'mozo', restauranteId: 'rest-1' })
-
-    it('un comensal no puede (401)', async () => {
-      await expect(service.actualizarEstado('ped-1', { estado: 'listo' }, conUsuario({ tipo: 'cliente' }))).rejects.toThrow(
-        new UnauthorizedException('Solo staff puede actualizar el estado de un pedido'),
-      )
-      expect(prisma.pedido.findUnique).not.toHaveBeenCalled()
-    })
+  describe('actualizarEstado (todo el personal del restaurante del pedido, también la cocina)', () => {
+    const COCINA = CUENTAS.COCINA
 
     it('si el pedido no existe responde 404', async () => {
       prisma.pedido.findUnique.mockResolvedValue(null)
 
-      await expect(service.actualizarEstado('ped-x', { estado: 'listo' }, MOZO)).rejects.toThrow(new NotFoundException('Pedido no encontrado'))
+      await expect(service.actualizarEstado('ped-x', { estado: 'listo' }, COCINA)).rejects.toThrow(new NotFoundException('Pedido no encontrado'))
+    })
+
+    it.each([
+      ['ROOT (no es un bypass)', CUENTAS.ROOT],
+      ['el OWNER de otra marca', CUENTAS.OWNER_B],
+      ['un Usuario sin membresías', CUENTAS.SIN_MEMBRESIAS],
+    ])('%s recibe 403 y no se guarda nada', async (_caso, cuenta) => {
+      prisma.pedido.findUnique.mockResolvedValue({ id: 'ped-1', estado: 'pendiente', mesa: { restauranteId: REST } })
+
+      await expect(service.actualizarEstado('ped-1', { estado: 'en_preparacion' }, cuenta)).rejects.toThrow(ForbiddenException)
+      expect(prisma.pedido.update).not.toHaveBeenCalled()
     })
 
     it.each([
@@ -253,16 +253,16 @@ describe('PedidosService: validaciones, estado y ediciones', () => {
       ['listo', 'entregado'],
     ])('de %s pasa a %s, lo guarda y lo avisa al restaurante', async (desde, hacia) => {
       // Arrange
-      prisma.pedido.findUnique.mockResolvedValue({ id: 'ped-1', estado: desde, mesa: { restauranteId: 'rest-1' } })
+      prisma.pedido.findUnique.mockResolvedValue({ id: 'ped-1', estado: desde, mesa: { restauranteId: REST } })
       prisma.pedido.update.mockResolvedValue({ id: 'ped-1', estado: hacia })
 
       // Act
-      const actualizado = await service.actualizarEstado('ped-1', { estado: hacia }, MOZO)
+      const actualizado = await service.actualizarEstado('ped-1', { estado: hacia }, COCINA)
 
       // Assert
       expect(actualizado).toEqual({ id: 'ped-1', estado: hacia })
       expect(prisma.pedido.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'ped-1' }, data: { estado: hacia } }))
-      expect(gateway.emitOrderUpdated).toHaveBeenCalledWith('rest-1', { id: 'ped-1', estado: hacia })
+      expect(gateway.emitOrderUpdated).toHaveBeenCalledWith(REST, { id: 'ped-1', estado: hacia })
     })
 
     it.each([
@@ -270,9 +270,9 @@ describe('PedidosService: validaciones, estado y ediciones', () => {
       ['listo', 'en_preparacion'],
       ['entregado', 'entregado'],
     ])('de %s a %s es una transición inválida (400) y no guarda', async (desde, hacia) => {
-      prisma.pedido.findUnique.mockResolvedValue({ id: 'ped-1', estado: desde, mesa: { restauranteId: 'rest-1' } })
+      prisma.pedido.findUnique.mockResolvedValue({ id: 'ped-1', estado: desde, mesa: { restauranteId: REST } })
 
-      await expect(service.actualizarEstado('ped-1', { estado: hacia }, MOZO)).rejects.toThrow(
+      await expect(service.actualizarEstado('ped-1', { estado: hacia }, COCINA)).rejects.toThrow(
         new BadRequestException(`Transición inválida: ${desde} → ${hacia}`),
       )
       expect(prisma.pedido.update).not.toHaveBeenCalled()
@@ -280,12 +280,12 @@ describe('PedidosService: validaciones, estado y ediciones', () => {
     })
   })
 
-  describe('editarPedido', () => {
-    const MOZO = conUsuario({ sub: 'mozo-1', tipo: 'mozo', restauranteId: 'rest-1' })
+  describe('editarPedido (GERENTE, JEFE_SALON o MOZO del restaurante del pedido)', () => {
+    const MOZO = CUENTAS.MOZO
     const pedido = (extra: object = {}) => ({
       id: 'ped-1',
       estado: 'pendiente',
-      mesa: { restauranteId: 'rest-1' },
+      mesa: { restauranteId: REST },
       sesion: { pagos: [] },
       items: [
         { id: 'pi-1', cantidad: 2, cantidadEditada: null, precioUnitario: 1000, item: { nombre: 'Milanesa' } },
@@ -298,15 +298,28 @@ describe('PedidosService: validaciones, estado y ediciones', () => {
       ediciones,
     })
 
-    it('un comensal no puede (401)', async () => {
-      await expect(service.editarPedido('ped-1', edicion([]), conUsuario({ tipo: 'cliente' }))).rejects.toThrow(UnauthorizedException)
-    })
+    it.each([
+      ['el OWNER (como antes, no edita)', CUENTAS.OWNER_A],
+      ['ROOT (no es un bypass)', CUENTAS.ROOT],
+      ['la COCINA', CUENTAS.COCINA],
+      ['el OWNER de otra marca', CUENTAS.OWNER_B],
+    ])('%s recibe 403 y no se edita nada', async (_caso, cuenta) => {
+      prisma.pedido.findUnique.mockResolvedValue(pedido())
 
-    it('un admin OWNER no puede: se requiere GERENTE (403)', async () => {
-      await expect(service.editarPedido('ped-1', edicion([]), conUsuario({ sub: 'o', tipo: 'admin', rol: 'OWNER' }))).rejects.toThrow(
+      await expect(service.editarPedido('ped-1', edicion([{ pedidoItemId: 'pi-1', cantidadNueva: 1 }]), cuenta)).rejects.toThrow(
         ForbiddenException,
       )
-      expect(prisma.pedido.findUnique).not.toHaveBeenCalled()
+      expect(prisma.$transaction).not.toHaveBeenCalled()
+    })
+
+    it('un MOZO sin su perfil de mozo activo en el restaurante recibe 403', async () => {
+      prisma.pedido.findUnique.mockResolvedValue(pedido())
+      jest.spyOn(acceso, 'mozoDe').mockResolvedValue(null)
+
+      await expect(service.editarPedido('ped-1', edicion([{ pedidoItemId: 'pi-1', cantidadNueva: 1 }]), MOZO)).rejects.toThrow(
+        new ForbiddenException('Tu perfil de mozo no está activo en este restaurante'),
+      )
+      expect(prisma.$transaction).not.toHaveBeenCalled()
     })
 
     it.each([
@@ -323,7 +336,7 @@ describe('PedidosService: validaciones, estado y ediciones', () => {
       expect(prisma.$transaction).not.toHaveBeenCalled()
     })
 
-    it('baja la cantidad, registra la edición del mozo con la cantidad anterior y avisa el pedido actualizado', async () => {
+    it('baja la cantidad, registra la edición del mozo (su Mozo sale de la cuenta) y avisa el pedido actualizado', async () => {
       // Arrange
       const actualizado = {
         id: 'ped-1',
@@ -333,9 +346,11 @@ describe('PedidosService: validaciones, estado y ediciones', () => {
             justificacion: 'El cliente cambió de idea',
             creadoEn: new Date('2026-10-18T20:00:00Z'),
             adminId: null,
-            mozoId: 'mozo-1',
+            mozoId: MOZOS.DEL_MOZO.id,
+            usuarioId: MOZO.id,
             admin: null,
             mozo: { nombre: 'Ana' },
+            usuario: { nombre: 'Ana López' },
             itemsEliminados: [{ id: 'ie-1', pedidoItemId: 'pi-1', itemNombre: 'Milanesa', cantidadAntes: 2, cantidadDespues: 1, precioUnitario: '1000.00' }],
           },
         ],
@@ -351,8 +366,8 @@ describe('PedidosService: validaciones, estado y ediciones', () => {
       expect(tx.pedidoEdicion.create).toHaveBeenCalledWith({
         data: {
           pedidoId: 'ped-1',
-          adminId: null,
-          mozoId: 'mozo-1',
+          usuarioId: MOZO.id,
+          mozoId: MOZOS.DEL_MOZO.id,
           justificacion: 'El cliente cambió de idea',
           itemsEliminados: {
             create: [{ pedidoItemId: 'pi-1', itemNombre: 'Milanesa', cantidadAntes: 2, cantidadDespues: 1, precioUnitario: 1000 }],
@@ -368,22 +383,30 @@ describe('PedidosService: validaciones, estado y ediciones', () => {
           itemsEliminados: [{ id: 'ie-1', itemNombre: 'Milanesa', cantidadAntes: 2, cantidadDespues: 1, precioUnitario: 1000 }],
         },
       ])
-      expect(gateway.emitOrderEdited).toHaveBeenCalledWith('rest-1', resultado)
+      expect(gateway.emitOrderEdited).toHaveBeenCalledWith(REST, resultado)
     })
 
-    it('si todos los ítems quedan en 0, el pedido queda anulado (la edición del gerente lleva su id)', async () => {
+    it('el JEFE_SALON edita con su propio Mozo', async () => {
       prisma.pedido.findUnique.mockResolvedValueOnce(pedido()).mockResolvedValueOnce({ id: 'ped-1', ediciones: [] })
-      // El gerente está asignado al restaurante del pedido.
-      prisma.adminRestaurante.findUnique.mockResolvedValue({ adminId: 'ger-1', restauranteId: 'rest-1' })
+
+      await service.editarPedido('ped-1', edicion([{ pedidoItemId: 'pi-1', cantidadNueva: 1 }]), CUENTAS.JEFE_SALON)
+
+      expect(tx.pedidoEdicion.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ usuarioId: CUENTAS.JEFE_SALON.id, mozoId: MOZOS.DEL_JEFE_SALON.id }),
+      })
+    })
+
+    it('si todos los ítems quedan en 0, el pedido queda anulado (la edición del gerente lleva su cuenta, sin Mozo)', async () => {
+      prisma.pedido.findUnique.mockResolvedValueOnce(pedido()).mockResolvedValueOnce({ id: 'ped-1', ediciones: [] })
 
       await service.editarPedido(
         'ped-1',
         edicion([{ pedidoItemId: 'pi-1', cantidadNueva: 0 }, { pedidoItemId: 'pi-2', cantidadNueva: 0 }]),
-        conUsuario({ sub: 'ger-1', tipo: 'admin', rol: 'GERENTE' }),
+        CUENTAS.GERENTE,
       )
 
       expect(tx.pedido.update).toHaveBeenCalledWith({ where: { id: 'ped-1' }, data: { estado: 'anulado' } })
-      expect(tx.pedidoEdicion.create).toHaveBeenCalledWith({ data: expect.objectContaining({ adminId: 'ger-1', mozoId: null }) })
+      expect(tx.pedidoEdicion.create).toHaveBeenCalledWith({ data: expect.objectContaining({ usuarioId: CUENTAS.GERENTE.id, mozoId: null }) })
     })
 
     it('si un ítem queda en 0 pero otro sigue, el pedido no se anula', async () => {
@@ -423,7 +446,7 @@ describe('PedidosService: validaciones, estado y ediciones', () => {
       // Arrange
       prisma.mesa.findMany.mockResolvedValue([{ id: 'mesa-1' }])
       prisma.pedido.findMany.mockResolvedValue([{ id: 'ped-1' }])
-      const base = { justificacion: 'x', creadoEn: new Date('2026-10-10T12:00:00Z'), adminId: 'ger-1', mozoId: null, admin: { email: 'g@test' }, mozo: null }
+      const base = { justificacion: 'x', creadoEn: new Date('2026-10-10T12:00:00Z'), adminId: 'ger-1', mozoId: null, usuarioId: null, admin: { email: 'g@test' }, mozo: null, usuario: null }
       prisma.pedidoEdicion.findMany.mockResolvedValue([
         {
           ...base,
@@ -475,13 +498,18 @@ describe('PedidosService: validaciones, estado y ediciones', () => {
     })
   })
 
-  describe('getEdiciones', () => {
-    const ADMIN = conUsuario({ sub: 'ger-1', tipo: 'admin', rol: 'GERENTE' })
+  describe('getEdiciones (OWNER o GERENTE del restaurante del pedido)', () => {
+    const ADMIN = CUENTAS.GERENTE
 
-    it('solo un admin puede verlas (403 para un mozo)', async () => {
-      await expect(service.getEdiciones('ped-1', conUsuario({ tipo: 'mozo' }))).rejects.toThrow(
-        new ForbiddenException('Solo administradores pueden ver el historial de ediciones'),
-      )
+    it.each([
+      ['el MOZO', CUENTAS.MOZO],
+      ['ROOT', CUENTAS.ROOT],
+      ['el OWNER de otra marca', CUENTAS.OWNER_B],
+    ])('%s recibe 403', async (_caso, cuenta) => {
+      prisma.pedido.findUnique.mockResolvedValue({ mesa: { restauranteId: REST } })
+
+      await expect(service.getEdiciones('ped-1', cuenta)).rejects.toThrow(ForbiddenException)
+      expect(prisma.pedidoEdicion.findMany).not.toHaveBeenCalled()
     })
 
     it('si el pedido no existe responde 404', async () => {
@@ -491,12 +519,12 @@ describe('PedidosService: validaciones, estado y ediciones', () => {
     })
 
     it('devuelve las ediciones del pedido; sin admin ni mozo, el editor es "Desconocido"', async () => {
-      prisma.pedido.findUnique.mockResolvedValue({ id: 'ped-1' })
+      prisma.pedido.findUnique.mockResolvedValue({ mesa: { restauranteId: REST } })
       prisma.pedidoEdicion.findMany.mockResolvedValue([
-        { id: 'ed-1', justificacion: 'x', creadoEn: new Date('2026-10-18T20:00:00Z'), adminId: null, mozoId: null, admin: null, mozo: null, itemsEliminados: [] },
+        { id: 'ed-1', justificacion: 'x', creadoEn: new Date('2026-10-18T20:00:00Z'), adminId: null, mozoId: null, usuarioId: null, admin: null, mozo: null, usuario: null, itemsEliminados: [] },
       ])
 
-      const ediciones = await service.getEdiciones('ped-1', ADMIN)
+      const ediciones = await service.getEdiciones('ped-1', CUENTAS.OWNER_A)
 
       expect(prisma.pedidoEdicion.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { pedidoId: 'ped-1' }, orderBy: { creadoEn: 'desc' } }))
       expect(ediciones).toEqual([

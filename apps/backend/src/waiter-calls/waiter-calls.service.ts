@@ -1,11 +1,8 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-  UnauthorizedException,
-} from '@nestjs/common'
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
 import { JwtService } from '@nestjs/jwt'
 import { exigirSuSesion, verificarSesionDeMesa } from '../auth/guards/session-auth.guard'
+import { AccesoService } from '../auth/supabase/acceso.service'
+import { UsuarioAutenticado } from '../auth/supabase/usuario-autenticado'
 import { PrismaService } from '../prisma/prisma.service'
 import { MenyuGateway } from '../gateway/menyu.gateway'
 import { CreateWaiterCallDto } from './dto/create-waiter-call.dto'
@@ -16,8 +13,10 @@ export class WaiterCallsService {
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
     private readonly gateway: MenyuGateway,
+    private readonly acceso: AccesoService,
   ) {}
 
+  /** El rol en el restaurante lo exige la ruta (`@RequiereRolEn`). */
   async findByRestaurante(restauranteId: string) {
     // Paso 1: mesas del restaurante
     const mesas = await this.prisma.mesa.findMany({
@@ -80,29 +79,25 @@ export class WaiterCallsService {
     return { ok: true }
   }
 
-  async atender(id: string, authHeader: string | undefined) {
-    if (!authHeader?.startsWith('Bearer ')) {
-      throw new UnauthorizedException('JWT de mozo requerido')
-    }
-
-    let payload: { sub: string; tipo: string }
-    try {
-      payload = this.jwt.verify<{ sub: string; tipo: string }>(authHeader.slice(7))
-    } catch {
-      throw new UnauthorizedException('JWT inválido o expirado')
-    }
-
-    if (payload.tipo !== 'mozo') {
-      throw new UnauthorizedException('Solo mozos pueden atender llamados')
-    }
-
-    const llamado = await this.prisma.llamadoMozo.findUnique({ where: { id } })
+  /**
+   * Lo atiende un JEFE_SALON o un MOZO del restaurante del llamado, con su `Mozo` activo: el llamado queda a su nombre
+   * (`mozoId` sale de su cuenta, nunca del body).
+   */
+  async atender(id: string, usuario: UsuarioAutenticado) {
+    const llamado = await this.prisma.llamadoMozo.findUnique({
+      where: { id },
+      select: { estado: true, sesion: { select: { mesa: { select: { restauranteId: true } } } } },
+    })
     if (!llamado) throw new NotFoundException('Llamado no encontrado')
+
+    const { restauranteId } = llamado.sesion.mesa
+    await this.acceso.exigirRol(usuario.id, restauranteId, ['JEFE_SALON', 'MOZO'])
+    const mozo = await this.acceso.exigirMozo(usuario.id, restauranteId)
     if (llamado.estado !== 'pendiente') throw new BadRequestException('Este llamado ya fue atendido')
 
     return this.prisma.llamadoMozo.update({
       where: { id },
-      data: { estado: 'atendido', mozoId: payload.sub },
+      data: { estado: 'atendido', mozoId: mozo.id },
     })
   }
 }

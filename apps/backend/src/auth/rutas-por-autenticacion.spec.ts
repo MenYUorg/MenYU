@@ -51,8 +51,8 @@ const PUBLICAS = [
   'GET /health',
 ]
 
-/** Del personal sin guard: el service verifica a mano el JWT legacy (`waiter-calls.service.ts`). Entrega 4.3. */
-const PENDIENTES_A_MANO = ['PATCH /waiter-calls/:id/atender']
+/** Del personal sin guard, con el JWT legacy verificado a mano en el service. Vacía desde la entrega 4.3. */
+const PENDIENTES_A_MANO: string[] = []
 
 /** Del personal con JwtAuthGuard, RolesGuard o TipoGuard. Pasan a Supabase en la entrega 4.3 (o se quitan, decisión 5). */
 const PENDIENTES_4_3 = [
@@ -66,17 +66,6 @@ const PENDIENTES_4_3 = [
   'GET /payments/sesiones',
   'POST /payments/confirmar-efectivo',
   'GET /payments/mercadopago/oauth/conectar',
-  'GET /pedidos',
-  'GET /pedidos/auditoria',
-  'POST /pedidos/staff',
-  'PATCH /pedidos/:id/editar',
-  'GET /pedidos/:id/ediciones',
-  'PATCH /pedidos/:id/estado',
-  'GET /waiter-calls',
-  'GET /reportes/ventas-hoy',
-  'GET /reportes/ventas-por-hora',
-  'GET /reportes/top-items',
-  'GET /reportes/ventas-por-dia',
 ]
 
 /** La consola de ROOT: pasa a `@RequiereRoot()` en la entrega 4.4. */

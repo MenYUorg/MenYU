@@ -121,6 +121,16 @@ export class AccesoService {
   }
 
   /**
+   * Como `mozoDe`, pero 403 si no tiene un `Mozo` activo ahí. Para lo que un JEFE_SALON o un MOZO hace con su perfil de
+   * mozo (atender un llamado, editar un pedido, cobrar). No reemplaza a `exigirRol`.
+   */
+  async exigirMozo(usuarioId: string, restauranteId: string): Promise<MozoDelUsuario> {
+    const mozo = await this.mozoDe(usuarioId, restauranteId)
+    if (!mozo) throw new ForbiddenException('Tu perfil de mozo no está activo en este restaurante')
+    return mozo
+  }
+
+  /**
    * Ids de los restaurantes disponibles en los que el usuario tiene alguno de `roles` (por defecto,
    * cualquiera), ordenados por nombre. Con OWNER, todos los de las marcas de las que es dueño.
    */

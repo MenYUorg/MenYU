@@ -1,11 +1,11 @@
-import { AppDeEndpoints, USUARIOS, crearAppDeEndpoints } from '../test/app-endpoints'
+import { AppDeEndpoints, CUENTAS, crearAppDeEndpoints, MUNDO } from '../test/app-endpoints'
 import { ReportesController } from './reportes.controller'
 import { ReportesService } from './reportes.service'
 
 describe('endpoints de reportes', () => {
   let api: AppDeEndpoints
   const reportes = { ventasHoy: jest.fn(), ventasPorHora: jest.fn(), topItems: jest.fn(), ventasPorDia: jest.fn() }
-  const RANGO = { restauranteId: 'rest-1', desde: '2026-10-01', hasta: '2026-10-17' }
+  const RANGO = { restauranteId: MUNDO.REST_1, desde: '2026-10-01', hasta: '2026-10-17' }
 
   beforeAll(async () => {
     api = await crearAppDeEndpoints(ReportesController, [{ provide: ReportesService, useValue: reportes }])
@@ -24,11 +24,11 @@ describe('endpoints de reportes', () => {
     reportes[metodo].mockResolvedValue([])
 
     // Act
-    const res = await api.pedir('get', `/reportes/${ruta}`, { usuario: USUARIOS.OWNER, query: RANGO })
+    const res = await api.pedir('get', `/reportes/${ruta}`, { cuenta: CUENTAS.OWNER_A, query: RANGO })
 
     // Assert
     expect(res.status).toBe(200)
-    expect(reportes[metodo]).toHaveBeenCalledWith('rest-1', '2026-10-01', '2026-10-17')
+    expect(reportes[metodo]).toHaveBeenCalledWith(MUNDO.REST_1, '2026-10-01', '2026-10-17')
   })
 
   it('GET /reportes/top-items sin limit usa 5', async () => {
@@ -36,10 +36,10 @@ describe('endpoints de reportes', () => {
     reportes.topItems.mockResolvedValue([])
 
     // Act
-    await api.pedir('get', '/reportes/top-items', { usuario: USUARIOS.OWNER, query: { restauranteId: 'rest-1' } })
+    await api.pedir('get', '/reportes/top-items', { cuenta: CUENTAS.OWNER_A, query: { restauranteId: MUNDO.REST_1 } })
 
     // Assert
-    expect(reportes.topItems).toHaveBeenCalledWith('rest-1', 5, undefined, undefined)
+    expect(reportes.topItems).toHaveBeenCalledWith(MUNDO.REST_1, 5, undefined, undefined)
   })
 
   it('GET /reportes/top-items convierte limit a número', async () => {
@@ -47,10 +47,10 @@ describe('endpoints de reportes', () => {
     reportes.topItems.mockResolvedValue([])
 
     // Act
-    await api.pedir('get', '/reportes/top-items', { usuario: USUARIOS.OWNER, query: { ...RANGO, limit: '10' } })
+    await api.pedir('get', '/reportes/top-items', { cuenta: CUENTAS.OWNER_A, query: { ...RANGO, limit: '10' } })
 
     // Assert
-    expect(reportes.topItems).toHaveBeenCalledWith('rest-1', 10, '2026-10-01', '2026-10-17')
+    expect(reportes.topItems).toHaveBeenCalledWith(MUNDO.REST_1, 10, '2026-10-01', '2026-10-17')
   })
 
   it('GET /reportes/top-items con un limit que no es número usa el valor por defecto (5)', async () => {
@@ -58,19 +58,32 @@ describe('endpoints de reportes', () => {
     reportes.topItems.mockResolvedValue([])
 
     // Act
-    const res = await api.pedir('get', '/reportes/top-items', { usuario: USUARIOS.OWNER, query: { restauranteId: 'rest-1', limit: 'diez' } })
+    const res = await api.pedir('get', '/reportes/top-items', { cuenta: CUENTAS.OWNER_A, query: { restauranteId: MUNDO.REST_1, limit: 'diez' } })
 
     // Assert
     expect(res.status).toBe(200)
-    expect(reportes.topItems).toHaveBeenCalledWith('rest-1', 5, undefined, undefined)
+    expect(reportes.topItems).toHaveBeenCalledWith(MUNDO.REST_1, 5, undefined, undefined)
   })
 
-  it('un GERENTE no ve reportes (403)', async () => {
+  it.each([
+    ['el GERENTE', CUENTAS.GERENTE],
+    ['el OWNER de otra marca (antes no se chequeaba la pertenencia)', CUENTAS.OWNER_B],
+    ['ROOT (no es un bypass)', CUENTAS.ROOT],
+  ])('%s no ve reportes (403)', async (_caso, cuenta) => {
     // Act
-    const res = await api.pedir('get', '/reportes/ventas-hoy', { usuario: USUARIOS.GERENTE, query: RANGO })
+    const res = await api.pedir('get', '/reportes/ventas-hoy', { cuenta, query: RANGO })
 
     // Assert
     expect(res.status).toBe(403)
     expect(reportes.ventasHoy).not.toHaveBeenCalled()
+  })
+
+  it('sin restauranteId: 400', async () => {
+    // Act
+    const res = await api.pedir('get', '/reportes/ventas-por-dia', { cuenta: CUENTAS.OWNER_A })
+
+    // Assert
+    expect(res.status).toBe(400)
+    expect(reportes.ventasPorDia).not.toHaveBeenCalled()
   })
 })

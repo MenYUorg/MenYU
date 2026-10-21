@@ -1,8 +1,9 @@
-import { AppDeEndpoints, USUARIOS, crearAppDeEndpoints } from '../test/app-endpoints'
+import { AppDeEndpoints, CUENTAS, crearAppDeEndpoints, MUNDO, SIN_USUARIO } from '../test/app-endpoints'
 import { PedidosController } from './pedidos.controller'
 import { PedidosService } from './pedidos.service'
 
 const UUID = (n: number) => `6f1c2a40-0000-4a1b-9c3d-${String(n).padStart(12, '0')}`
+const REST = MUNDO.REST_1
 const PEDIDO = {
   sesionId: UUID(1),
   mesaId: UUID(2),
@@ -56,37 +57,60 @@ describe('endpoints de pedidos', () => {
     })
   })
 
-  describe('endpoints de staff', () => {
-    it('GET /pedidos pasa restaurante y estado de la query', async () => {
+  describe('GET /pedidos (todo el personal del restaurante de la query)', () => {
+    it.each([
+      ['la COCINA', CUENTAS.COCINA],
+      ['el MOZO', CUENTAS.MOZO],
+      ['el OWNER de la marca', CUENTAS.OWNER_A],
+    ])('%s lista los pedidos del restaurante y el estado', async (_caso, cuenta) => {
       // Arrange
       pedidos.listarPorEstado.mockResolvedValue([])
 
       // Act
-      const res = await api.pedir('get', '/pedidos', { usuario: USUARIOS.MOZO, query: { restauranteId: 'rest-1', estado: 'pendiente' } })
+      const res = await api.pedir('get', '/pedidos', { cuenta, query: { restauranteId: REST, estado: 'pendiente' } })
 
       // Assert
       expect(res.status).toBe(200)
-      expect(pedidos.listarPorEstado.mock.calls[0].slice(0, 2)).toEqual(['rest-1', 'pendiente'])
+      expect(pedidos.listarPorEstado).toHaveBeenCalledWith(REST, 'pendiente')
     })
 
-    it('sin JWT de staff responde 401', async () => {
+    it.each([
+      ['ROOT', CUENTAS.ROOT, REST],
+      ['el OWNER de otra marca (antes no se chequeaba la pertenencia)', CUENTAS.OWNER_B, REST],
+      ['la COCINA en otro restaurante', CUENTAS.COCINA, MUNDO.REST_2],
+    ])('%s recibe 403', async (_caso, cuenta, restauranteId) => {
       // Act
-      const res = await api.pedir('get', '/pedidos', { query: { restauranteId: 'rest-1', estado: 'pendiente' } })
+      const res = await api.pedir('get', '/pedidos', { cuenta, query: { restauranteId, estado: 'pendiente' } })
 
       // Assert
-      expect(res.status).toBe(401)
+      expect(res.status).toBe(403)
+      expect(pedidos.listarPorEstado).not.toHaveBeenCalled()
     })
 
-    it('POST /pedidos/staff crea el pedido con el usuario del token (201)', async () => {
+    it('sin token responde 401, y con el token de la sesión de mesa también (no es del personal)', async () => {
+      // Act
+      const anonimo = await api.pedir('get', '/pedidos', { query: { restauranteId: REST, estado: 'pendiente' } })
+      const comensal = await api
+        .pedir('get', '/pedidos', { query: { restauranteId: REST, estado: 'pendiente' } })
+        .set('Authorization', 'Bearer token-de-sesion')
+
+      // Assert
+      expect(anonimo.status).toBe(401)
+      expect(comensal.status).toBe(401)
+    })
+  })
+
+  describe('las rutas de un pedido: autentican y le pasan la cuenta al service', () => {
+    it('POST /pedidos/staff crea el pedido con la cuenta (201)', async () => {
       // Arrange
       pedidos.crearStaff.mockResolvedValue({ id: 'pedido-2' })
 
       // Act
-      const res = await api.pedir('post', '/pedidos/staff', { usuario: USUARIOS.MOZO, body: PEDIDO })
+      const res = await api.pedir('post', '/pedidos/staff', { cuenta: CUENTAS.MOZO, body: PEDIDO })
 
       // Assert
       expect(res.status).toBe(201)
-      expect(pedidos.crearStaff).toHaveBeenCalledWith(PEDIDO, USUARIOS.MOZO)
+      expect(pedidos.crearStaff).toHaveBeenCalledWith(PEDIDO, CUENTAS.MOZO)
     })
 
     it('PATCH /pedidos/:id/estado acepta un estado válido', async () => {
@@ -94,17 +118,16 @@ describe('endpoints de pedidos', () => {
       pedidos.actualizarEstado.mockResolvedValue({ id: 'pedido-1', estado: 'listo' })
 
       // Act
-      const res = await api.pedir('patch', '/pedidos/pedido-1/estado', { usuario: USUARIOS.MOZO, body: { estado: 'listo' } })
+      const res = await api.pedir('patch', '/pedidos/pedido-1/estado', { cuenta: CUENTAS.COCINA, body: { estado: 'listo' } })
 
       // Assert
       expect(res.status).toBe(200)
-      expect(pedidos.actualizarEstado.mock.calls[0][0]).toBe('pedido-1')
-      expect(pedidos.actualizarEstado.mock.calls[0][1]).toEqual({ estado: 'listo' })
+      expect(pedidos.actualizarEstado).toHaveBeenCalledWith('pedido-1', { estado: 'listo' }, CUENTAS.COCINA)
     })
 
     it('PATCH /pedidos/:id/estado con un estado fuera de la lista responde 400', async () => {
       // Act
-      const res = await api.pedir('patch', '/pedidos/pedido-1/estado', { usuario: USUARIOS.MOZO, body: { estado: 'cancelado' } })
+      const res = await api.pedir('patch', '/pedidos/pedido-1/estado', { cuenta: CUENTAS.MOZO, body: { estado: 'cancelado' } })
 
       // Assert
       expect(res.status).toBe(400)
@@ -114,11 +137,11 @@ describe('endpoints de pedidos', () => {
     it('PATCH /pedidos/:id/editar exige justificación y al menos una edición', async () => {
       // Act
       const sinEdiciones = await api.pedir('patch', '/pedidos/pedido-1/editar', {
-        usuario: USUARIOS.OWNER,
+        cuenta: CUENTAS.GERENTE,
         body: { justificacion: 'el cliente cambió', ediciones: [] },
       })
       const sinJustificacion = await api.pedir('patch', '/pedidos/pedido-1/editar', {
-        usuario: USUARIOS.OWNER,
+        cuenta: CUENTAS.GERENTE,
         body: { justificacion: '', ediciones: [{ pedidoItemId: UUID(5), cantidadNueva: 1 }] },
       })
 
@@ -128,55 +151,72 @@ describe('endpoints de pedidos', () => {
       expect(pedidos.editarPedido).not.toHaveBeenCalled()
     })
 
-    it('PATCH /pedidos/:id/editar con un body válido delega con el id', async () => {
+    it('PATCH /pedidos/:id/editar con un body válido delega con el id y la cuenta', async () => {
       // Arrange
       pedidos.editarPedido.mockResolvedValue({ id: 'pedido-1' })
       const body = { justificacion: 'el cliente cambió', ediciones: [{ pedidoItemId: UUID(5), cantidadNueva: 0 }] }
 
       // Act
-      const res = await api.pedir('patch', '/pedidos/pedido-1/editar', { usuario: USUARIOS.OWNER, body })
+      const res = await api.pedir('patch', '/pedidos/pedido-1/editar', { cuenta: CUENTAS.MOZO, body })
 
       // Assert
       expect(res.status).toBe(200)
-      expect(pedidos.editarPedido.mock.calls[0][0]).toBe('pedido-1')
-      expect(pedidos.editarPedido.mock.calls[0][1]).toEqual(body)
+      expect(pedidos.editarPedido).toHaveBeenCalledWith('pedido-1', body, CUENTAS.MOZO)
     })
 
-    it('GET /pedidos/:id/ediciones delega con el id', async () => {
+    it('GET /pedidos/:id/ediciones delega con el id y la cuenta', async () => {
       // Arrange
       pedidos.getEdiciones.mockResolvedValue([])
 
       // Act
-      const res = await api.pedir('get', '/pedidos/pedido-1/ediciones', { usuario: USUARIOS.OWNER })
+      const res = await api.pedir('get', '/pedidos/pedido-1/ediciones', { cuenta: CUENTAS.OWNER_A })
 
       // Assert
       expect(res.status).toBe(200)
-      expect(pedidos.getEdiciones.mock.calls[0][0]).toBe('pedido-1')
+      expect(pedidos.getEdiciones).toHaveBeenCalledWith('pedido-1', CUENTAS.OWNER_A)
+    })
+
+    it.each([
+      ['POST /pedidos/staff', 'post', '/pedidos/staff', PEDIDO],
+      ['PATCH /pedidos/:id/estado', 'patch', '/pedidos/pedido-1/estado', { estado: 'listo' }],
+      ['GET /pedidos/:id/ediciones', 'get', '/pedidos/pedido-1/ediciones', undefined],
+    ] as const)('%s: sin token 401 y sin Usuario 403', async (_ruta, metodo, url, body) => {
+      // Act
+      const anonimo = await api.pedir(metodo, url, { body })
+      const sinUsuario = await api.pedir(metodo, url, { cuenta: SIN_USUARIO, body })
+
+      // Assert
+      expect([anonimo.status, sinUsuario.status]).toEqual([401, 403])
     })
   })
 
-  describe('GET /pedidos/auditoria (solo OWNER)', () => {
+  describe('GET /pedidos/auditoria (solo el OWNER)', () => {
     it('el OWNER consulta la auditoría con el rango', async () => {
       // Arrange
       pedidos.auditoriaEdiciones.mockResolvedValue([])
 
       // Act
       const res = await api.pedir('get', '/pedidos/auditoria', {
-        usuario: USUARIOS.OWNER,
-        query: { restauranteId: 'rest-1', desde: '2026-10-01', hasta: '2026-10-17' },
+        cuenta: CUENTAS.OWNER_A,
+        query: { restauranteId: REST, desde: '2026-10-01', hasta: '2026-10-17' },
       })
 
       // Assert
       expect(res.status).toBe(200)
-      expect(pedidos.auditoriaEdiciones.mock.calls[0].slice(0, 3)).toEqual(['rest-1', '2026-10-01', '2026-10-17'])
+      expect(pedidos.auditoriaEdiciones).toHaveBeenCalledWith(REST, '2026-10-01', '2026-10-17')
     })
 
-    it('un GERENTE no ve la auditoría (403)', async () => {
+    it.each([
+      ['el GERENTE', CUENTAS.GERENTE],
+      ['el OWNER de otra marca (antes no se chequeaba la pertenencia)', CUENTAS.OWNER_B],
+      ['ROOT', CUENTAS.ROOT],
+    ])('%s no ve la auditoría (403)', async (_caso, cuenta) => {
       // Act
-      const res = await api.pedir('get', '/pedidos/auditoria', { usuario: USUARIOS.GERENTE, query: { restauranteId: 'rest-1' } })
+      const res = await api.pedir('get', '/pedidos/auditoria', { cuenta, query: { restauranteId: REST } })
 
       // Assert
       expect(res.status).toBe(403)
+      expect(pedidos.auditoriaEdiciones).not.toHaveBeenCalled()
     })
   })
 })
