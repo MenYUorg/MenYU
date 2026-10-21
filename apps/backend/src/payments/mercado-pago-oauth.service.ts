@@ -2,8 +2,7 @@ import { Injectable, BadRequestException } from '@nestjs/common'
 import { JwtService } from '@nestjs/jwt'
 import { PrismaService } from '../prisma/prisma.service'
 import { CryptoService } from '../common/crypto.service'
-import { assertStaffAccess } from '../common/assert-staff-access'
-import { JwtPayload } from '../auth/auth.service'
+import { UsuarioAutenticado } from '../auth/supabase/usuario-autenticado'
 
 // El state de OAuth es un JWT propio: con otra clave que la de login (no sirve como token de sesión ni al revés),
 // un audience fijo y 10 minutos de vida, lo que dura ir a Mercado Pago, autorizar y volver.
@@ -12,7 +11,8 @@ const STATE_VIDA = '10m'
 
 interface StateOAuth {
   restauranteId: string
-  adminId: string
+  /** Quién inició la conexión (la cuenta de Supabase). */
+  usuarioId: string
 }
 
 @Injectable()
@@ -23,10 +23,9 @@ export class MercadoPagoOAuthService {
     private readonly jwt: JwtService,
   ) {}
 
-  async buildAuthUrl(restauranteId: string, user: JwtPayload): Promise<string> {
-    await assertStaffAccess(this.prisma, restauranteId, user)
-
-    const state: StateOAuth = { restauranteId, adminId: user.sub }
+  /** OWNER o GERENTE del restaurante lo exige la ruta (`@RequiereRolEn`). */
+  async buildAuthUrl(restauranteId: string, usuario: UsuarioAutenticado): Promise<string> {
+    const state: StateOAuth = { restauranteId, usuarioId: usuario.id }
     const params = new URLSearchParams({
       client_id: process.env.MP_CLIENT_ID!,
       response_type: 'code',

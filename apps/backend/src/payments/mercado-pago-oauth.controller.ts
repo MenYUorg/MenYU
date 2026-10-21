@@ -1,11 +1,10 @@
-import { Controller, Get, Query, Res, UseGuards } from '@nestjs/common'
+import { Controller, Get, Query, Res } from '@nestjs/common'
 import { Response } from 'express'
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger'
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'
-import { RolesGuard } from '../common/guards/roles.guard'
-import { Roles } from '../common/decorators/roles.decorator'
-import { CurrentUser } from '../common/decorators/current-user.decorator'
-import { JwtPayload } from '../auth/auth.service'
+import { ApiTags } from '@nestjs/swagger'
+import { RequiereRolEn } from '../auth/decorators/requiere-rol.decorator'
+import { UsuarioActual } from '../auth/decorators/usuario-actual.decorator'
+import { ADMINISTRACION } from '../auth/roles-del-personal'
+import { UsuarioAutenticado } from '../auth/supabase/usuario-autenticado'
 import { MercadoPagoOAuthService } from './mercado-pago-oauth.service'
 
 @ApiTags('payments')
@@ -13,13 +12,11 @@ import { MercadoPagoOAuthService } from './mercado-pago-oauth.service'
 export class MercadoPagoOAuthController {
   constructor(private readonly oauth: MercadoPagoOAuthService) {}
 
-  // Devuelve la URL (no redirige): el panel la pide con su JWT y después navega.
+  // Devuelve la URL (no redirige): el panel la pide con su token y después navega. OWNER o GERENTE del restaurante.
   @Get('conectar')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('OWNER', 'GERENTE')
-  @ApiBearerAuth()
-  async conectar(@Query('restauranteId') restauranteId: string, @CurrentUser() user: JwtPayload) {
-    return { url: await this.oauth.buildAuthUrl(restauranteId, user) }
+  @RequiereRolEn({ query: 'restauranteId' }, ...ADMINISTRACION)
+  async conectar(@Query('restauranteId') restauranteId: string, @UsuarioActual() usuario: UsuarioAutenticado) {
+    return { url: await this.oauth.buildAuthUrl(restauranteId, usuario) }
   }
 
   // Mercado Pago vuelve acá con el navegador, sin JWT: el restaurante sale del state firmado.

@@ -13,6 +13,10 @@ import { DivisionService } from '../comensales/division.service'
 import { PaymentStatus } from './providers/payment-provider.interface'
 import { isAllowedOrigin } from '../common/is-allowed-origin'
 import { runSerializableTransaction } from '../common/run-serializable-transaction'
+import { atribucionDelCobro } from '../common/atribucion-del-cobro'
+import { AccesoService } from '../auth/supabase/acceso.service'
+import { UsuarioAutenticado } from '../auth/supabase/usuario-autenticado'
+import { ConfirmarEfectivoDto } from './dto/confirmar-efectivo.dto'
 import {
   ESTADO_PAGO_PENDIENTE,
   ESTADO_PAGO_APROBADO,
@@ -46,8 +50,10 @@ export class PaymentsService {
     private readonly mpProvider: MercadoPagoProvider,
     private readonly mpOAuth: MercadoPagoOAuthService,
     private readonly divisionService: DivisionService,
+    private readonly acceso: AccesoService,
   ) {}
 
+  /** El rol en el restaurante lo exige la ruta (`@RequiereRolEn`). */
   async getSesiones(restauranteId: string): Promise<SesionResumen[]> {
     const sesiones = await this.prisma.sesionMesa.findMany({
       where: { mesa: { restauranteId } },
@@ -214,21 +220,30 @@ export class PaymentsService {
     return { sesionId, estado: 'mozo_llamado' }
   }
 
-  async confirmarEfectivo(pagoId: string, mozoId?: string) {
+  /** Lo confirma el salón del restaurante del pago, y queda a nombre de quien cobra (`atribucionDelCobro`). */
+  async confirmarEfectivo(dto: ConfirmarEfectivoDto, usuario: UsuarioAutenticado) {
+    const { pagoId } = dto
     const fechaCobro = new Date()
 
     const pago = await this.prisma.pago.findUnique({
       where: { id: pagoId },
-      include: { sesion: { select: { mesaId: true } } },
+      include: { sesion: { select: { mesaId: true, mesa: { select: { restauranteId: true } } } } },
     })
     if (!pago || pago.metodo !== 'efectivo') {
       throw new NotFoundException('Pago en efectivo no encontrado')
     }
+    const { usuarioId, mozoId } = await atribucionDelCobro(
+      this.prisma,
+      this.acceso,
+      usuario,
+      pago.sesion.mesa.restauranteId,
+      dto.mozoId,
+    )
 
     return runSerializableTransaction(this.prisma, async (tx) => {
       await tx.pago.update({
         where: { id: pagoId },
-        data: { estado: 'aprobado', fechaCobro, ...(mozoId ? { mozoId } : {}) },
+        data: { estado: 'aprobado', fechaCobro, mozoId, usuarioId },
       })
 
       const totalSesion = await this.divisionService.calcularTotalSesion(tx, pago.sesionId)

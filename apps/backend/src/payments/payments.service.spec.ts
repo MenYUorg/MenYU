@@ -1,9 +1,11 @@
 import { Test } from '@nestjs/testing'
-import { BadRequestException, Logger, NotFoundException } from '@nestjs/common'
+import { BadRequestException, ForbiddenException, Logger, NotFoundException } from '@nestjs/common'
 import { PaymentsService } from './payments.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { MenyuGateway } from '../gateway/menyu.gateway'
 import { MercadoPagoProvider } from './providers/mercado-pago.provider'
+import { AccesoService } from '../auth/supabase/acceso.service'
+import { accesoDeTest, CUENTAS, MOZOS, MUNDO } from '../test/acceso-de-test'
 import { MercadoPagoOAuthService } from './mercado-pago-oauth.service'
 import { DivisionService } from '../comensales/division.service'
 import {
@@ -66,6 +68,7 @@ describe('PaymentsService', () => {
         { provide: MercadoPagoProvider, useValue: mockMpProvider },
         { provide: MercadoPagoOAuthService, useValue: mockMpOAuth },
         { provide: DivisionService, useValue: mockDivision },
+        { provide: AccesoService, useValue: accesoDeTest() },
       ],
     }).compile()
 
@@ -295,7 +298,7 @@ describe('PaymentsService', () => {
         sesionId: 'sesion-1',
         metodo: 'efectivo',
         estado: 'pendiente',
-        sesion: { mesaId: 'mesa-1' },
+        sesion: { mesaId: 'mesa-1', mesa: { restauranteId: MUNDO.REST_1 } },
       })
     })
 
@@ -303,7 +306,7 @@ describe('PaymentsService', () => {
       mockDivision.calcularTotalSesion.mockResolvedValue(1000)
       tx.pago.findMany.mockResolvedValue([{ monto: 1000 }])
 
-      const result = await service.confirmarEfectivo('pago-ef', 'mozo-1')
+      const result = await service.confirmarEfectivo({ pagoId: 'pago-ef' }, CUENTAS.MOZO)
 
       expect(tx.pago.updateMany).toHaveBeenCalledWith({
         where: { sesionId: 'sesion-1', estado: ESTADO_PAGO_PENDIENTE }, // sin filtro de método
@@ -319,11 +322,55 @@ describe('PaymentsService', () => {
       mockDivision.calcularTotalSesion.mockResolvedValue(2000)
       tx.pago.findMany.mockResolvedValue([{ monto: 1000 }])
 
-      const result = await service.confirmarEfectivo('pago-ef', 'mozo-1')
+      const result = await service.confirmarEfectivo({ pagoId: 'pago-ef' }, CUENTAS.MOZO)
 
       expect(tx.pago.updateMany).not.toHaveBeenCalled()
       expect(tx.sesionMesa.update).not.toHaveBeenCalled()
       expect(result).toEqual({ sesionId: 'sesion-1', estado: 'activa' })
+    })
+
+    describe('a nombre de quién queda (#356)', () => {
+      beforeEach(() => {
+        mockDivision.calcularTotalSesion.mockResolvedValue(2000)
+        tx.pago.findMany.mockResolvedValue([{ monto: 1000 }])
+      })
+
+      it('un MOZO lo confirma con su propio Mozo aunque mande el de otro', async () => {
+        await service.confirmarEfectivo({ pagoId: 'pago-ef', mozoId: 'mozo-ajeno' }, CUENTAS.MOZO)
+
+        expect(tx.pago.update).toHaveBeenCalledWith({
+          where: { id: 'pago-ef' },
+          data: { estado: 'aprobado', fechaCobro: expect.any(Date), mozoId: MOZOS.DEL_MOZO.id, usuarioId: CUENTAS.MOZO.id },
+        })
+      })
+
+      it('el OWNER lo confirma a su nombre, sin mozo', async () => {
+        await service.confirmarEfectivo({ pagoId: 'pago-ef' }, CUENTAS.OWNER_A)
+
+        expect(tx.pago.update).toHaveBeenCalledWith({
+          where: { id: 'pago-ef' },
+          data: expect.objectContaining({ mozoId: null, usuarioId: CUENTAS.OWNER_A.id }),
+        })
+      })
+
+      it.each([
+        ['ROOT (no es un bypass)', CUENTAS.ROOT],
+        ['el OWNER de otra marca (antes no se chequeaba la pertenencia)', CUENTAS.OWNER_B],
+        ['la COCINA', CUENTAS.COCINA],
+      ])('%s no lo confirma (403) y no se abre la transacción', async (_caso, cuenta) => {
+        await expect(service.confirmarEfectivo({ pagoId: 'pago-ef' }, cuenta)).rejects.toThrow(ForbiddenException)
+
+        expect(mockPrisma.$transaction).not.toHaveBeenCalled()
+      })
+
+      it.each([
+        ['no existe', null],
+        ['no es en efectivo', { id: 'pago-mp', metodo: 'mercadopago', sesion: { mesaId: 'mesa-1', mesa: { restauranteId: MUNDO.REST_1 } } }],
+      ])('un pago que %s: 404', async (_caso, fila) => {
+        mockPrisma.pago.findUnique.mockResolvedValue(fila)
+
+        await expect(service.confirmarEfectivo({ pagoId: 'pago-x' }, CUENTAS.MOZO)).rejects.toThrow(NotFoundException)
+      })
     })
   })
 

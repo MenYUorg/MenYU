@@ -55,18 +55,7 @@ const PUBLICAS = [
 const PENDIENTES_A_MANO: string[] = []
 
 /** Del personal con JwtAuthGuard, RolesGuard o TipoGuard. Pasan a Supabase en la entrega 4.3 (o se quitan, decisión 5). */
-const PENDIENTES_4_3 = [
-  'POST /sessions/open-staff',
-  'POST /sessions/mesa/:mesaId/cerrar',
-  'GET /sessions/mesa/:mesaId/activa',
-  'GET /sessions/activas',
-  'GET /sessions/pagadas',
-  'GET /sessions/historial',
-  'PATCH /sessions/:id/cobro',
-  'GET /payments/sesiones',
-  'POST /payments/confirmar-efectivo',
-  'GET /payments/mercadopago/oauth/conectar',
-]
+const PENDIENTES_4_3: string[] = []
 
 /** La consola de ROOT: pasa a `@RequiereRoot()` en la entrega 4.4. */
 const PENDIENTES_4_4 = [

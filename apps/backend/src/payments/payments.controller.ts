@@ -2,10 +2,13 @@ import { Body, Controller, Get, Headers, HttpCode, HttpStatus, Param, Post, Quer
 import { Response } from 'express'
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger'
 import { SessionAuthGuard } from '../auth/guards/session-auth.guard'
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'
-import { TipoGuard } from '../auth/guards/tipo.guard'
-import { RequiresTipo } from '../auth/decorators/requires-tipo.decorator'
+import { Personal } from '../auth/decorators/personal.decorator'
+import { RequiereRolEn } from '../auth/decorators/requiere-rol.decorator'
+import { UsuarioActual } from '../auth/decorators/usuario-actual.decorator'
+import { SALON } from '../auth/roles-del-personal'
+import { UsuarioAutenticado } from '../auth/supabase/usuario-autenticado'
 import { PaymentsService } from './payments.service'
+import { ConfirmarEfectivoDto } from './dto/confirmar-efectivo.dto'
 
 @ApiTags('payments')
 @Controller('payments')
@@ -30,8 +33,7 @@ export class PaymentsController {
   }
 
   @Get('sesiones')
-  @UseGuards(JwtAuthGuard, TipoGuard)
-  @RequiresTipo('admin', 'mozo')
+  @RequiereRolEn({ query: 'restauranteId' }, ...SALON)
   @ApiOperation({ summary: 'Listar sesiones de mesa de un restaurante (para caja)' })
   @ApiResponse({ status: 200, description: 'Lista de sesiones con estado de pago' })
   getSesiones(@Query('restauranteId') restauranteId: string) {
@@ -39,13 +41,12 @@ export class PaymentsController {
   }
 
   @Post('confirmar-efectivo')
+  @Personal()
   @HttpCode(HttpStatus.OK)
-  @UseGuards(JwtAuthGuard, TipoGuard)
-  @RequiresTipo('admin', 'mozo')
-  @ApiOperation({ summary: 'Confirmar pago en efectivo y cerrar sesión' })
+  @ApiOperation({ summary: 'Confirmar pago en efectivo y cerrar sesión (el salón del restaurante del pago)' })
   @ApiResponse({ status: 200, description: 'Sesión cerrada' })
-  confirmarEfectivo(@Body() body: { pagoId: string; mozoId?: string }) {
-    return this.payments.confirmarEfectivo(body.pagoId, body.mozoId)
+  confirmarEfectivo(@Body() dto: ConfirmarEfectivoDto, @UsuarioActual() usuario: UsuarioAutenticado) {
+    return this.payments.confirmarEfectivo(dto, usuario)
   }
 
   @Post('mercadopago/crear-preferencia')

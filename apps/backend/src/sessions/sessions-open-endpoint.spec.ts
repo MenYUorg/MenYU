@@ -1,10 +1,9 @@
 import * as request from 'supertest'
 import { ConflictException, INestApplication, NotFoundException, ValidationPipe } from '@nestjs/common'
 import { Test } from '@nestjs/testing'
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'
+import { MembresiaGuard } from '../auth/guards/membresia.guard'
 import { SessionAuthGuard } from '../auth/guards/session-auth.guard'
-import { TipoGuard } from '../auth/guards/tipo.guard'
-import { RolesGuard } from '../common/guards/roles.guard'
+import { SupabaseAuthGuard } from '../auth/guards/supabase-auth.guard'
 import { SessionsController } from './sessions.controller'
 import { SessionsService } from './sessions.service'
 
@@ -23,9 +22,8 @@ describe('POST /sessions/open', () => {
       providers: [{ provide: SessionsService, useValue: mockSessions }],
     })
       // Los guards de los demás endpoints del controller no se usan acá.
-      .overrideGuard(JwtAuthGuard).useValue(permitir)
-      .overrideGuard(RolesGuard).useValue(permitir)
-      .overrideGuard(TipoGuard).useValue(permitir)
+      .overrideGuard(SupabaseAuthGuard).useValue(permitir)
+      .overrideGuard(MembresiaGuard).useValue(permitir)
       .overrideGuard(SessionAuthGuard).useValue(permitir)
       .compile()
 

@@ -1,5 +1,6 @@
 import { Logger, NotFoundException } from '@nestjs/common'
 import { DivisionService } from '../comensales/division.service'
+import { AccesoService } from '../auth/supabase/acceso.service'
 import { MenyuGateway } from '../gateway/menyu.gateway'
 import { PrismaService } from '../prisma/prisma.service'
 import { MercadoPagoOAuthService } from './mercado-pago-oauth.service'
@@ -40,6 +41,7 @@ describe('PaymentsService: caja, cuenta, back_urls y webhooks sin cambios', () =
       mpProvider as unknown as MercadoPagoProvider,
       mpOAuth as unknown as MercadoPagoOAuthService,
       division as unknown as DivisionService,
+      {} as AccesoService,
     )
   })
 
