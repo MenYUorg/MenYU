@@ -274,6 +274,45 @@ Entregas (ver Decisiones de la planificación de la Fase 4):
   - `auth/rutas-por-autenticacion.spec.ts` recorre el enrutador. Las rutas con el JWT legacy tienen que coincidir exactamente con `PENDIENTES_4_3` y `PENDIENTES_4_4`: al pasar una a Supabase, hay que sacarla de la lista. `PATCH /waiter-calls/:id/atender` está aparte, porque verifica el JWT legacy a mano.
   - Contra la base local, con `TEST_DATABASE_URL` (en el CI se saltan): `acceso.service.base.spec.ts` (la baja efectiva) y `usuario-migracion.base.spec.ts` (la autoría y el disparador).
 
+**4.3, la matriz de roles por ruta (planificada el 2026-10-21).** ROOT no figura en ninguna: recibe 403 en todas (no tiene membresías). Con el restaurante en la ruta, la query o el body, la ruta usa `@RequiereRol` o `@RequiereRolEn`; en las de un recurso (`/items/:id`), `@Personal()` y el service llama a `exigirRol` o `exigirOwnerDeMarca`.
+
+| Ruta | Roles |
+|---|---|
+| `GET /marcas` | OWNER: sus marcas, desde `Membresia` |
+| `GET` y `PATCH /marcas/:id`, logo de la marca | OWNER de la marca |
+| `GET /restaurantes` | OWNER o GERENTE: los restaurantes de sus membresías |
+| `GET` y `PATCH /restaurantes/:id` | OWNER, GERENTE. `direccion` y `nombreSeccionRecomendados`: solo OWNER |
+| Logo del restaurante | OWNER |
+| `POST /mesas`, `GET`/`PATCH /mesas/:id`, `regenerar-qr`, `pin` | OWNER, GERENTE |
+| `GET /mesas` | OWNER, GERENTE, JEFE_SALON, MOZO |
+| `DELETE /mesas/:id` | OWNER |
+| Ítems, categorías, ingredientes (con la imagen, los ingredientes de un ítem, el descuento y las clasificaciones de un ítem) | OWNER, GERENTE. `DELETE /items/:id` y `DELETE /categorias/:id`: OWNER |
+| `POST`, `PATCH` y `DELETE /clasificaciones` (catálogo global) | OWNER o GERENTE de algún restaurante. Deuda: es un catálogo global |
+| `GET /mozos`, `GET /mozos/:id`, mesas asignadas, llamados de hoy | OWNER, GERENTE |
+| `PATCH /mozos/:id` (solo nombre y teléfono) | OWNER |
+| `DELETE /mozos/:id` (solo un mozo sin cuenta: 409 si tiene `usuarioId`) | OWNER |
+| `GET /sessions/activas`, `pagadas` e `historial`, `POST /sessions/open-staff`, `mesa/:mesaId/cerrar` y `mesa/:mesaId/activa`, `PATCH /sessions/:id/cobro` | OWNER, GERENTE, JEFE_SALON, MOZO |
+| `GET /payments/sesiones`, `POST /payments/confirmar-efectivo` | OWNER, GERENTE, JEFE_SALON, MOZO |
+| `GET /payments/mercadopago/oauth/conectar` | OWNER, GERENTE. El `state` lleva el `usuarioId` |
+| `GET /pedidos`, `PATCH /pedidos/:id/estado` | OWNER, GERENTE, JEFE_SALON, MOZO, COCINA |
+| `POST /pedidos/staff` | OWNER, GERENTE, JEFE_SALON, MOZO |
+| `PATCH /pedidos/:id/editar` | GERENTE, JEFE_SALON, MOZO (el OWNER no edita, como hoy) |
+| `GET /pedidos/:id/ediciones` | OWNER, GERENTE |
+| `GET /pedidos/auditoria`, `GET /reportes/*` | OWNER |
+| `GET /waiter-calls` | OWNER, GERENTE, JEFE_SALON, MOZO |
+| `PATCH /waiter-calls/:id/atender` | JEFE_SALON o MOZO del restaurante del llamado, con su `Mozo` activo |
+| `GET /restaurantes/:restauranteId/personal` (nueva) | OWNER, GERENTE |
+| `DELETE /restaurantes/:restauranteId/personal/:membresiaId` (nueva) | OWNER (quita GERENTE, JEFE_SALON, MOZO y COCINA), GERENTE (quita JEFE_SALON, MOZO y COCINA). Nadie se quita a sí mismo |
+
+Se quitan `POST /marcas`, `DELETE /marcas/:id`, `POST /restaurantes`, `DELETE /restaurantes/:id` (viven en `/root`), `POST /mozos`, `/admins` y `/admin-restaurante` (decisión 5).
+
+Decisiones de la planificación de la 4.3:
+1. **Solo backend.** `CobroModal` de web-staff se simplifica en la 4.6.
+2. **`DELETE /mozos/:id` queda solo para los mozos sin cuenta** (sin `usuarioId`), que no tienen membresía para quitarles el acceso. Se borra en la Fase 5.
+3. **Ninguna respuesta devuelve las columnas `mp_*` ni `passwordHash`**, tampoco los detalles (`GET /marcas/:id`, `GET /restaurantes/:id`) ni las respuestas de `PATCH` y de mozos.
+4. **`PATCH /mozos/:id` queda con nombre y teléfono.** `email` y la contraseña los quita la decisión 5, `esJefeSalon` lo define la membresía y `activo`, quitar el acceso.
+5. **Cobros (#356):** `Pago.usuarioId` guarda siempre quién cobró. Un MOZO o JEFE_SALON cobra con su propio `Mozo` (se ignora el `mozoId` del body); un OWNER o GERENTE puede atribuirle el cobro a un mozo de ese restaurante.
+
 - Paquete compartido en el monorepo (`@menyu/auth-client`) con:
   - Cliente Supabase con cookie de dominio desde `VITE_AUTH_COOKIE_DOMAIN`.
   - Hook `useSession`.
