@@ -173,6 +173,7 @@ El "atrás" desde Google, en un Chrome de escritorio real, restaura la página d
 - Botón "Continuar con Google" en web-auth (`signInWithOAuth`), con callback a `auth.menyu-app.com/google` (ver Decisiones de la planificación de la Fase 3b).
 - Mismo post-login que la Fase 3 (`/auth/me`, redirect, selector de restaurante, pantalla de sin acceso).
 - Configuración externa (`docs/auth/VariablesACambiar.md`, sección 6): la vuelta a `/google` no necesita Redirect URL en staging ni en producción (es el host de la Site URL), sí en desarrollo (`http://auth.menyu.local:5173/**`). La pantalla de consentimiento de Google Cloud, en *In production* antes del tag (en *Testing* solo entran los usuarios de prueba cargados).
+- Política de privacidad pública en `/privacidad` de web-auth (`src/pages/PrivacidadPage.tsx`). Es una ruta estática: no usa la sesión ni llama a `/auth/me`, y el rewrite de `vercel.json` la sirve aunque se cargue directo. Google exige una página principal y una política de privacidad, las dos en un dominio autorizado (`menyu-app.com`), para pasar la pantalla de consentimiento a *In production*, y visita las URLs al publicar.
 - **Casos a verificar (a mano, no automatizados):**
   - Usuario invitado con `x@gmail.com` entra con Google usando ese mail → Supabase vincula la identidad al mismo usuario, se conserva el `supabaseUserId` y accede normal.
   - Cuenta de Google sin invitación → pantalla de sin acceso. Al cerrar sesión y volver a Google, aparece el selector de cuentas.
@@ -235,8 +236,13 @@ Observaciones que dejaron las Fases 0 a 3b (2026-10-20 y 2026-10-21). Revisarlas
 
 - **Fase 3b: falta staging desplegado y producción.**
   1. Después del merge: un login con Google en `auth.staging.menyu-app.com` desplegado con una de las cuentas de prueba (ahí el PKCE es `S256`; en local, por `http://`, es `plain`).
-  2. Antes del tag: la pantalla de consentimiento de Google Cloud en *In production* y el proveedor Google activo en el Supabase de producción (`docs/auth/VariablesACambiar.md`, sección 6).
-  3. Sin probar: "atrás" desde Google en celulares (Safari iOS y Chrome Android).
+  2. Antes del tag: el proveedor Google activo en el Supabase de producción (`docs/auth/VariablesACambiar.md`, sección 6).
+  3. Pasar la pantalla de consentimiento de Google Cloud a *In production* recién cuando `https://auth.menyu-app.com/privacidad` responda, es decir, después del tag. Google visita las URLs al publicar, y hasta el tag `auth.menyu-app.com` no tiene ningún deploy (`DEPLOYMENT_NOT_FOUND`). En *Branding*:
+     - Política de privacidad: `https://auth.menyu-app.com/privacidad` (en staging, `https://auth.staging.menyu-app.com/privacidad`, desde el merge).
+     - Página principal: `https://mesa.menyu-app.com` (Discovery). La raíz `menyu-app.com` no tiene sitio.
+     - Dominio autorizado: `menyu-app.com`.
+     - Si Google pide verificar la marca, la página principal tiene que tener un link a la política de privacidad, y Discovery todavía no lo tiene.
+  4. Sin probar: "atrás" desde Google en celulares (Safari iOS y Chrome Android).
 - **Fase 3b: Supabase no agrega una identidad `email` cuando una cuenta que solo tiene Google crea una contraseña.** `identities` sigue mostrando solo `google`, pero la contraseña sirve (comprobado el 2026-10-21). Para saber si una cuenta tiene contraseña no sirve mirar `identities`.
 - **Fase 3b: Redirect URL de desarrollo.** Hasta el 2026-10-21 el Supabase de staging no tenía `http://auth.menyu.local:5173/**`, y la vuelta de Google desde local caía en la Site URL (`auth.staging…`). Ya está agregada.
 
