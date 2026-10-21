@@ -1,10 +1,12 @@
 import 'reflect-metadata'
 import { RequestMethod, Type } from '@nestjs/common'
-import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants'
+import { GUARDS_METADATA, METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants'
 
 /** Una ruta de la API tal como la declaran los controllers (sin el prefijo global `api`). */
 export interface RutaDeLaApp {
   controller: Type
+  /** La función del controller que atiende la ruta: tiene los metadatos de los decoradores de la ruta. */
+  manejador: object
   metodo: string
   /** Con barra al principio y sin barra al final: `/root/roots/:id/restablecer-password`. */
   ruta: string
@@ -47,7 +49,7 @@ export function rutasDe(controller: Type): RutaDeLaApp[] {
     const camino: string | string[] = Reflect.getMetadata(PATH_METADATA, manejador) ?? ''
     for (const prefijo of prefijos) {
       for (const parte of Array.isArray(camino) ? camino : [camino]) {
-        rutas.push({ controller, metodo: NOMBRES_DE_METODO[metodo] ?? String(metodo), ruta: unir(prefijo, parte) })
+        rutas.push({ controller, manejador, metodo: NOMBRES_DE_METODO[metodo] ?? String(metodo), ruta: unir(prefijo, parte) })
       }
     }
   }
@@ -57,4 +59,14 @@ export function rutasDe(controller: Type): RutaDeLaApp[] {
 /** Todas las rutas de la aplicación, recorriendo AppModule. */
 export function rutasDeLaApp(modulo: unknown): RutaDeLaApp[] {
   return controllersDe(modulo).flatMap(rutasDe)
+}
+
+/** Los guards de una ruta en el orden en que corren: primero los del controller, después los de la ruta. */
+export function guardsDe(ruta: RutaDeLaApp): unknown[] {
+  return [...(Reflect.getMetadata(GUARDS_METADATA, ruta.controller) ?? []), ...(Reflect.getMetadata(GUARDS_METADATA, ruta.manejador) ?? [])]
+}
+
+/** Un metadato de la ruta, o el del controller si la ruta no lo declara (como `Reflector.getAllAndOverride`). */
+export function metadatoDe<T>(ruta: RutaDeLaApp, clave: string): T | undefined {
+  return Reflect.getMetadata(clave, ruta.manejador) ?? Reflect.getMetadata(clave, ruta.controller)
 }

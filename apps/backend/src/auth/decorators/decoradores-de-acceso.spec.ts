@@ -1,4 +1,4 @@
-import { Body, Controller, ExecutionContext, ForbiddenException, Get, Logger, Post, SetMetadata } from '@nestjs/common'
+import { Body, Controller, ExecutionContext, ForbiddenException, Get, Logger, Param, Post, SetMetadata } from '@nestjs/common'
 import { Reflector } from '@nestjs/core'
 import { AppDeEndpoints, CUENTAS, crearAppDeEndpoints, MUNDO, SIN_USUARIO } from '../../test/app-endpoints'
 import { MembresiaGuard, ORIGEN_RESTAURANTE_KEY, ROLES_MEMBRESIA_KEY } from '../guards/membresia.guard'
@@ -73,19 +73,41 @@ class ConRolEnElControllerController {
   }
 }
 
+/** El patrón de las rutas de un recurso: @Personal() y el service (acá, el controller) le pide el rol a AccesoService. */
+@Controller('prueba-recurso')
+class DeUnRecursoController {
+  constructor(private readonly acceso: AccesoService) {}
+
+  @Get('marcas/:marcaId')
+  @Personal()
+  async deLaMarca(@Param('marcaId') marcaId: string, @UsuarioActual() usuario: UsuarioAutenticado) {
+    await this.acceso.exigirOwnerDeMarca(usuario.id, marcaId)
+    return { ok: true }
+  }
+
+  @Get('restaurantes/:id')
+  @Personal()
+  async delRestaurante(@Param('id') restauranteId: string, @UsuarioActual() usuario: UsuarioAutenticado) {
+    return { roles: await this.acceso.exigirRol(usuario.id, restauranteId, ['OWNER', 'GERENTE']) }
+  }
+}
+
 describe('@RequiereRol, @RequiereRolEn, @Personal y @RequiereRoot', () => {
   let api: AppDeEndpoints
   let apiDeClase: AppDeEndpoints
+  let apiDeRecurso: AppDeEndpoints
 
   beforeAll(async () => {
     jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined)
     api = await crearAppDeEndpoints(PruebaController, [])
     apiDeClase = await crearAppDeEndpoints(ConRolEnElControllerController, [])
+    apiDeRecurso = await crearAppDeEndpoints(DeUnRecursoController, [])
   })
 
   afterAll(async () => {
     await api.cerrar()
     await apiDeClase.cerrar()
+    await apiDeRecurso.cerrar()
     jest.restoreAllMocks()
   })
 
@@ -232,6 +254,29 @@ describe('@RequiereRol, @RequiereRolEn, @Personal y @RequiereRoot', () => {
 
       expect(res.status).toBe(200)
       expect(res.body).toEqual({ usuarioId: cuenta.id })
+    })
+
+    it.each([
+      ['el OWNER de la marca', CUENTAS.OWNER_A, 200],
+      ['el OWNER de otra marca', CUENTAS.OWNER_B, 403],
+      ['el GERENTE de un restaurante de la marca', CUENTAS.GERENTE, 403],
+      ['ROOT', CUENTAS.ROOT, 403],
+    ])('con exigirOwnerDeMarca en el service: %s, %i', async (_caso, cuenta, estado) => {
+      const res = await apiDeRecurso.pedir('get', `/prueba-recurso/marcas/${MUNDO.MARCA_A}`, { cuenta })
+
+      expect(res.status).toBe(estado)
+    })
+
+    it.each([
+      ['el OWNER de la marca', CUENTAS.OWNER_A, 200, ['OWNER']],
+      ['el GERENTE', CUENTAS.GERENTE, 200, ['GERENTE']],
+      ['el MOZO', CUENTAS.MOZO, 403, undefined],
+      ['ROOT', CUENTAS.ROOT, 403, undefined],
+    ])('con exigirRol en el service: %s, %i', async (_caso, cuenta, estado, roles) => {
+      const res = await apiDeRecurso.pedir('get', `/prueba-recurso/restaurantes/${MUNDO.REST_1}`, { cuenta })
+
+      expect(res.status).toBe(estado)
+      expect(res.body.roles).toEqual(roles)
     })
   })
 
