@@ -1,7 +1,7 @@
 import { ApiPropertyOptional } from '@nestjs/swagger'
 import { Transform } from 'class-transformer'
 import { IsOptional, IsString, MaxLength } from 'class-validator'
-import { SinCaracterNulo } from '../../comun/sin-caracter-nulo'
+import { SinCaracterNulo } from '../../../common/sin-caracter-nulo'
 
 export class ListarDuenosDto {
   @ApiPropertyOptional({ example: 'fiore', description: 'Busca por email del dueño o nombre de la marca (sin distinguir mayúsculas).' })
