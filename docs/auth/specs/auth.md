@@ -39,13 +39,15 @@ En la misma sesión se decidieron también los puntos **Clientes**, **Convivenci
 
 ## Dominios
 
-| App | Producción | Staging | Local |
-|---|---|---|---|
-| web-auth | auth.menyu-app.com | auth.staging.menyu-app.com | auth.menyu.local |
-| web-admin | admin.menyu-app.com | admin.staging.menyu-app.com | admin.menyu.local |
+
+| App                       | Producción          | Staging                     | Local             |
+| ------------------------- | ------------------- | --------------------------- | ----------------- |
+| web-auth                  | auth.menyu-app.com  | auth.staging.menyu-app.com  | auth.menyu.local  |
+| web-admin                 | admin.menyu-app.com | admin.staging.menyu-app.com | admin.menyu.local |
 | web-staff (mozo + cocina) | staff.menyu-app.com | staff.staging.menyu-app.com | staff.menyu.local |
-| web-cliente | mesa.menyu-app.com | mesa.staging.menyu-app.com | mesa.menyu.local |
-| API NestJS | api.menyu-app.com | api.staging.menyu-app.com | api.menyu.local |
+| web-cliente               | mesa.menyu-app.com  | mesa.staging.menyu-app.com  | mesa.menyu.local  |
+| API NestJS                | api.menyu-app.com   | api.staging.menyu-app.com   | api.menyu.local   |
+
 
 > La cookie con dominio compartido NO funciona en `localhost`. En desarrollo se usan los subdominios `*.menyu.local` mapeados a 127.0.0.1 en el archivo hosts.
 >
@@ -53,30 +55,34 @@ En la misma sesión se decidieron también los puntos **Clientes**, **Convivenci
 
 ## Roles
 
-| Rol | Ámbito | Apps a las que accede |
-|---|---|---|
-| ROOT (`Usuario.esRoot`) | MenYU | web-admin: crea y da de baja marcas, restaurantes y usuarios OWNER y GERENTE. No accede a los datos privados de las marcas |
-| OWNER | marca | web-admin (toda su marca) y web-staff |
-| GERENTE | restaurante | web-admin (sus restaurantes) y web-staff |
-| JEFE_SALON | restaurante | web-admin (secciones de mesas y carta), web-staff (vista mozo) |
-| MOZO | restaurante | web-staff (vista mozo) |
-| COCINA | restaurante | web-staff (vista cocina) |
-| Cliente (sin membresía) | — | web-cliente, con sesión opcional |
+
+| Rol                     | Ámbito      | Apps a las que accede                                                                                                      |
+| ----------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------- |
+| ROOT (`Usuario.esRoot`) | MenYU       | web-admin: crea y da de baja marcas, restaurantes y usuarios OWNER y GERENTE. No accede a los datos privados de las marcas |
+| OWNER                   | marca       | web-admin (toda su marca) y web-staff                                                                                      |
+| GERENTE                 | restaurante | web-admin (sus restaurantes) y web-staff                                                                                   |
+| JEFE\_SALON             | restaurante | web-admin (secciones de mesas y carta), web-staff (vista mozo)                                                             |
+| MOZO                    | restaurante | web-staff (vista mozo)                                                                                                     |
+| COCINA                  | restaurante | web-staff (vista cocina)                                                                                                   |
+| Cliente (sin membresía) | —           | web-cliente, con sesión opcional                                                                                           |
+
 
 ## Fases
 
-### Fase 0 — Configuración externa (manual, la hace el equipo)
+### Fase 0 — Configuración externa (manual, la hace el equipo) ✅ (2026-10-20)
+
 - Dominio `menyu-app.com`: DNS y dominios custom de producción y staging (ver Dominios): web-auth, web-admin, web-staff y web-cliente en Vercel; la API en Railway. Las variables de cada plataforma (CORS, `BASE_URL`, `FRONTEND_*`, `QR_BASE_URL`, `VITE_API_URL`, `VITE_WS_URL`) y la redirect URL de Mercado Pago: `docs/auth/VariablesACambiar.md`. El CORS es configuración (`CORS_ORIGINS`), no código.
 - Supabase (staging y producción): Site URL = `https://auth.menyu-app.com` (en staging, `https://auth.staging.menyu-app.com`); Redirect URLs para invitación, reset de contraseña, confirmación de email y callback de Google (incluir `http://auth.menyu.local:<puerto>` en staging).
 - Supabase: registro público con email **habilitado** (lo usan los clientes) y con confirmación de email. El personal igual entra solo por invitación: el acceso lo da la `Membresia`.
 - Supabase: JWT Signing Keys asimétricas activas en ambos proyectos (si todavía usan el JWT secret legacy, migrar). Comprobar que `<SUPABASE_URL>/auth/v1/.well-known/jwks.json` devuelve al menos una clave.
-- Supabase: desactivar la Data API (PostgREST), que el backend no usa (usa Prisma y Storage), o habilitar RLS en todas las tablas de `public`. Obligatorio antes de la Fase 4, que pone la publishable key en los bundles: hoy ninguna tabla tiene RLS, `admin`, `mozo` y `cliente` guardan `password_hash` y `restaurante` guarda los tokens de Mercado Pago.
+- Supabase: desactivar la Data API (PostgREST), que el backend no usa (usa Prisma y Storage), o habilitar RLS en todas las tablas de `public`. Obligatorio antes del primer deploy de la Fase 3, porque web-auth pone la publishable key en un bundle público: hoy ninguna tabla tiene RLS, `admin`, `mozo` y `cliente` guardan `password_hash` y `restaurante` guarda los tokens de Mercado Pago.
 - SMTP propio (ej. Resend) en ambos proyectos. El SMTP por defecto de Supabase tiene límite muy bajo y solo envía a miembros del equipo del proyecto.
 - Google Cloud: cliente OAuth con las URLs de callback de ambos proyectos Supabase. Activar el proveedor Google en Supabase.
 - Archivo hosts con los subdominios `*.menyu.local`.
 - **Terminado cuando:** una invitación de prueba llega al mail, el proveedor Google aparece activo en ambos proyectos, el JWKS devuelve claves en ambos y los dominios de staging responden.
 
 ### Fase 1 — Modelo de datos ✅ (2026-10-19)
+
 - Enum `Rol`: `OWNER`, `GERENTE`, `JEFE_SALON`, `MOZO`, `COCINA`.
 - Modelo `Usuario` con `supabaseUserId` (único), email (único), nombre, activo y `esRoot`.
 - Modelo `Membresia` (usuario, rol, marca o restaurante): `OWNER` con marca y sin restaurante; el resto con restaurante y sin marca (CHECK en la migración). Unicidad (usuario, restaurante) y (usuario, marca).
@@ -86,7 +92,9 @@ En la misma sesión se decidieron también los puntos **Clientes**, **Convivenci
 - **Terminado cuando:** la migración corre limpia, el seed crea un OWNER asociado a la marca del restaurante de prueba, y el typecheck y los tests del backend siguen pasando.
 
 ### Fase 2 — Backend (NestJS) ✅ (2026-10-20)
+
 Hecha con los nombres que propone esta sección: `SupabaseAuthGuard`, `@RequiereRol`, `MembresiaGuard` y `@UsuarioActual()`. Viven en `apps/backend/src/auth/guards/`, `decorators/` y `supabase/`, y las invitaciones en `invitaciones/`. Los permisos los decide `AccesoService`, y el guard deja el usuario en `request.usuario`. La verificación con tokens reales queda para staging (ver "Para tener en cuenta").
+
 - `SupabaseAuthGuard`: valida el JWT de Supabase con `jose` contra el JWKS del proyecto (`<SUPABASE_URL>/auth/v1/.well-known/jwks.json`, issuer `<SUPABASE_URL>/auth/v1`, audience `authenticated`) y resuelve el `Usuario` por `supabaseUserId`. Usuario inexistente → 403. Usuario inactivo → 403. Token inválido o vencido → 401.
 - Decorador de roles + guard que valida el rol en el restaurante del recurso pedido (una membresía de `OWNER` cubre todos los restaurantes de su marca). `@Roles`, `RolesGuard` y `@CurrentUser` ya existen (legacy, en uso hasta la Fase 5): los nuevos usan otros nombres, por ejemplo `@RequiereRol(...)`, `MembresiaGuard` y `@UsuarioActual()`.
 - Endpoint `GET /auth/me`: devuelve usuario + membresías. Reemplaza al `GET /auth/me` legacy, que ningún frontend usa.
@@ -99,7 +107,21 @@ Hecha con los nombres que propone esta sección: `SupabaseAuthGuard`, `@Requiere
 - **Tests (solo estos):** token válido, token vencido, token de otro proyecto, usuario sin membresía, rol incorrecto. Además, un test de tabla de la matriz de invitaciones (decisión 3 de la planificación de la Fase 2).
 - **Terminado cuando:** los tests pasan y un endpoint de prueba protegido responde bien a cada caso.
 
-### Fase 3 — App web-auth (email + contraseña)
+### Fase 3 — App web-auth (email + contraseña) ✅ en código (2026-10-20), falta el deploy
+
+Hecha en `apps/web-auth`, en el puerto 5173 en local:
+
+- **Pantallas:** `/` (ingresar), `/olvide-contrasena`, `/invitacion` y `/restablecer-contrasena` (links del mail), `/elegir` (selector) y `/sin-acceso`.
+- **Destino:** el post-login (`src/flujo/usePostLogin.ts`) llama a `GET /auth/me` y va al `redirect` si es válido (`src/lib/redirect.ts`) o a la app del rol (`src/lib/destinos.ts`).
+  - ROOT, OWNER y GERENTE → `admin.<amb>/admin`.
+  - JEFE_SALON y MOZO → `staff.<amb>/mozo`.
+  - COCINA → `staff.<amb>/cocina`.
+  - Con varios lugares, el selector; la elección viaja como `?marcaId=` o `?restauranteId=`.
+- **Links del mail:** traen un `token_hash` (plantillas en `docs/auth/VariablesACambiar.md`) que se canjea con `verifyOtp` recién al guardar la contraseña. El backend no manda `redirectTo`.
+- **Tokens de marca:** en `@menyu/ui/tailwind-preset`.
+
+Verificada con Supabase simulado (playwright-cli, 31 casos) y contra el Supabase y la API de staging, con un usuario de cada rol (`docs/auth/usuarios-prueba-staging.md`). El deploy y los smokes dependen del merge y de los pasos manuales (ver "Para tener en cuenta").
+
 - Construir la UI con la skill `frontend-design`. Definir tokens de color y tipografía a partir del logo.
 - Pantalla de login (email + contraseña) con mensajes de error claros.
 - Tras login: llamar `GET /auth/me`; si hay `redirect` válido (solo `*.menyu-app.com` / `*.staging.menyu-app.com` / `*.menyu.local`), ir ahí; si no, redirigir según rol.
@@ -115,9 +137,11 @@ Hecha con los nombres que propone esta sección: `SupabaseAuthGuard`, `@Requiere
   - Smoke: variable de repo `PROD_WEB_AUTH_URL` (`https://auth.menyu-app.com`), sumada a `scripts/smoke/verificar-urls.mjs` en los dos pasos que la validan y al smoke (`scripts/smoke/smoke.mjs` y `lib.mjs` aceptan hoy 3 frontends).
   - CI: sumar `@menyu/web-auth` a los filtros de test y cobertura de `ci.yml`, a la subida de cobertura y a `sonar-project.properties` (`sonar.sources`, `sonar.tests` y `lcov`).
   - CORS: sumar `https://auth.staging.menyu-app.com` y `https://auth.menyu-app.com` a `CORS_ORIGINS` de cada ambiente.
+  - Supabase: Data API desactivada (o RLS en todas las tablas) antes del primer deploy, y las plantillas de mail "Invite user" y "Reset password" con `token_hash` (`docs/auth/VariablesACambiar.md`, Fase 3).
 - **Terminado cuando:** un usuario de cada rol inicia sesión y termina en la app correcta, y el flujo de invitación funciona de punta a punta. web-auth se despliega sola en staging con cada merge a `main` y en producción con el tag, y el smoke de producción la verifica.
 
 ### Fase 3b — Login con Google
+
 - Botón "Continuar con Google" en web-auth (`signInWithOAuth`), con callback a `auth.menyu-app.com`.
 - Mismo post-login que la Fase 3 (`/auth/me`, redirect, selector de restaurante, pantalla de sin acceso).
 - **Casos a verificar (a mano, no automatizados):**
@@ -126,6 +150,7 @@ Hecha con los nombres que propone esta sección: `SupabaseAuthGuard`, `@Requiere
 - **Terminado cuando:** ambos casos se comportan como se describe. Email + contraseña sigue funcionando como respaldo.
 
 ### Fase 4 — SSO en las apps
+
 - Paquete compartido en el monorepo (`@menyu/auth-client`) con:
   - Cliente Supabase con cookie de dominio desde `VITE_AUTH_COOKIE_DOMAIN`.
   - Hook `useSession`.
@@ -139,12 +164,14 @@ Hecha con los nombres que propone esta sección: `SupabaseAuthGuard`, `@Requiere
 - **Terminado cuando:** login en auth → abrir admin y staff en otras pestañas sin volver a loguear; logout en una → las otras vuelven a web-auth al recuperar foco. Probado en `*.menyu.local` y en staging.
 
 ### Fase 4b — Cuenta de cliente
+
 - Registro (email + contraseña, con confirmación de email) e inicio de sesión de clientes en web-auth, también con Google. Vuelven a web-cliente con `redirect`.
 - Backend: resolver o crear el `Cliente` por `supabaseUserId` a partir del token de Supabase. Sin `Usuario` ni `Membresia`: una cuenta de cliente no da acceso al personal.
 - `POST /sessions/open` asocia la mesa a ese `Cliente` cuando recibe un token de Supabase.
 - **Terminado cuando:** un cliente se registra en web-auth, vuelve logueado a web-cliente, abre una mesa por QR y la sesión queda a su nombre; sin cuenta, el QR y el PIN funcionan igual que antes.
 
 ### Fase 5 — Limpieza
+
 - Quitar de web-cliente la pantalla `/auth` (login del personal y login/registro de clientes, que ahora viven en web-auth).
 - Quitar el pasaje de tokens por URL (`?token=&refresh=` y el script de `index.html` de web-admin y web-staff), `resolveLoginUrl`, `resolveAppUrl` y `packages/auth`.
 - Quitar los endpoints legacy `/auth/login`, `/auth/register`, `/auth/guest`, `/auth/refresh` y `/auth/logout`, la tabla `RefreshToken`, `Admin` y `AdminRestaurante` (después de pasar `PedidoEdicion.adminId` a `Usuario`) y los `passwordHash` de `Mozo` y `Cliente`.
@@ -152,6 +179,7 @@ Hecha con los nombres que propone esta sección: `SupabaseAuthGuard`, `@Requiere
 - Documentar en la tesis las decisiones de esta spec.
 
 ## Fuera de alcance
+
 - Otros proveedores además de Google (Apple, Microsoft, etc.).
 - Fidelización de clientes (v2). La cuenta opcional de cliente sí está en alcance (Fase 4b).
 - 2FA.
@@ -159,29 +187,44 @@ Hecha con los nombres que propone esta sección: `SupabaseAuthGuard`, `@Requiere
 - Autenticación del gateway de Socket.io: hoy no tiene (`cors: '*'`, y cada conexión se une a la sala del `restauranteId` que manda). Problema conocido, fuera de esta spec.
 
 ## Notas de seguridad
+
 - Validar el parámetro `redirect` contra una allowlist (`*.menyu-app.com`, `*.staging.menyu-app.com`, `*.menyu.local`) para evitar open redirects.
 - La cookie compartida es seteada por el browser (no httpOnly); aceptable para el MVP, documentarlo en la tesis como decisión consciente.
 - Nunca confiar en el rol que venga del frontend: siempre resolverlo desde la DB en el guard.
 - Autenticarse en Supabase (con Google o con una cuenta de cliente) NO otorga acceso. Como el registro público está abierto, ninguna ruta del personal puede conformarse con "tiene sesión de Supabase": el acceso lo da la `Membresia` en nuestra DB.
-- Desde la Fase 4 la publishable key de Supabase está en los bundles: ninguna tabla puede quedar expuesta por la Data API (ver Fase 0). `usuario` y `membresia` tienen RLS desde la Fase 1. La service role key (o secret key) saltea RLS: nunca sale del backend.
+- Desde la Fase 3 la publishable key de Supabase está en un bundle público (web-auth; desde la Fase 4, en todos): ninguna tabla puede quedar expuesta por la Data API (ver Fase 0). `usuario` y `membresia` tienen RLS desde la Fase 1. La service role key (o secret key) saltea RLS: nunca sale del backend.
 - Las pruebas del revisor en el navegador se hacen solo contra staging o local, nunca contra producción, y con usuarios de prueba.
 
 ## Para tener en cuenta
-Observaciones que dejaron las Fases 0 a 2 (2026-10-20). Revisarlas al arrancar cada fase y borrar las que ya no apliquen.
 
-- **Fase 2: verificación en staging, pendiente hasta el merge.** Sin credenciales de Supabase en local, los tokens reales y las invitaciones de punta a punta no se probaron. Después del deploy de staging, con los usuarios y el procedimiento de `docs/auth/usuarios-prueba-staging.md` (el primer ROOT se crea a mano):
-  - `GET /auth/me`: ROOT → 200; token alterado o vencido → 401; cuenta sin `Usuario` → 403.
-  - `POST /auth/invitaciones`: el MOZO invitando a un GERENTE → 403; ROOT → OWNER de "Marca Pruebas Auth" → 201 y llega el mail (depende del SMTP de la Fase 0); repetirla → 409.
-  - La búsqueda de cuentas existentes usa `auth.admin.generateLink({ type: 'recovery' })`: confirmar que una cuenta inexistente da 404 `user_not_found`, que una confirmada se reutiliza (`invitacionEnviada: false`) y que una sin confirmar se borra y se reinvita.
+Observaciones que dejaron las Fases 0 a 3 (2026-10-20). Revisarlas al arrancar cada fase y borrar las que ya no apliquen.
+
+- **Fase 3: antes del merge y del tag.** Sin estos pasos, el deploy de web-auth falla (los dos workflows cortan al empezar si falta `VERCEL_PROJECT_ID_AUTH`) o la expone:
+  1. ~~Data API de Supabase cerrada en los dos proyectos~~: hecho el 2026-10-20 (lo confirmó el equipo; staging responde 503 `PGRST002` en todas las tablas, sin filas).
+  2. Las plantillas de mail con `token_hash` en los dos proyectos: el HTML está en `docs/auth/plantillas-mail/` (asuntos en `docs/auth/VariablesACambiar.md`, Fase 3).
+  3. Vercel: `menyu-auth` y `menyu-auth-staging`, con los dominios y su registro en Cloudflare. Al 2026-10-20 todavía no están creados. Como `apps/web-auth` todavía no está en `main`, el selector de carpetas de *Import* no la muestra: importarlos con Root Directory `apps/web-admin` (su `vercel.json` hace que `ignorar-build.sh` cancele el primer build) y después cambiarlo a `apps/web-auth` en *Settings → Build and Deployment*.
+  4. GitHub: el secret `VERCEL_PROJECT_ID_AUTH` y la variable `PROD_WEB_AUTH_URL`.
+  5. Railway: el CORS de staging antes del merge. El de producción, junto con el release, porque el cambio redespliega el servicio.
+- **Fase 3: lo que falta verificar.**
+  - Después del merge: el deploy y el smoke de staging, y un login en `auth.staging.menyu-app.com`.
+  - Después del tag: el smoke de producción.
+  - Con la cuenta del invitado, que una cuenta confirmada se reutiliza al invitarla en otro restaurante (`invitacionEnviada: false`).
+  - El caso de la cuenta sin confirmar que se borra y se reinvita sigue sin probarse.
+  - Lo que ya quedó probado en staging: `GET /auth/me` da 200 con los 7 usuarios con acceso (así que la RLS de `usuario` y `membresia` no bloquea al backend), 403 con la cuenta sin `Usuario` y 401 con un token alterado; el MOZO invitando da 403; en el navegador, cada usuario termina en su app y `sin-acceso`, en "Tu cuenta no tiene acceso".
+  - La invitación de punta a punta, con las plantillas con `token_hash` en staging, quedó probada el 2026-10-20 (OWNER → MOZO): 201 y el mail llegó (la invitación repetida da 409, probado con la anterior).
+    - El link abrió `/invitacion` sin gastar el token. "Guardar y entrar" lo canjeó y llevó a `staff/mozo`, y la contraseña nueva sirve para ingresar.
+    - Una invitación anterior con la plantilla por defecto llevó a `auth.<amb>/#access_token=…` (flujo implícito), que web-auth con PKCE no acepta: sin las plantillas nuevas, la invitación no funciona.
+  - La recuperación de punta a punta también, el 2026-10-20: se pidió desde "Olvidé mi contraseña" y el link (`token_hash` con prefijo `pkce_`) abrió `/restablecer-contrasena` sin gastar el token. Después de guardar, la contraseña nueva sirve y la anterior no.
 - **"Confirm email" activo en los dos proyectos de Supabase (Fase 0).** La invitación reutiliza una cuenta confirmada: si la confirmación estuviera apagada, un registro público quedaría confirmado al instante y se le daría acceso de personal a quien lo creó.
-- **Para la Fase 3:** la invitación no manda `redirectTo`, así que el link del mail lleva a la Site URL (`auth.<ambiente>`). web-auth tiene que atender ahí el link de invitación (definir contraseña) o sumar el `redirectTo` en `InvitacionesService`.
 - **Para la Fase 4:**
   - `@RequiereRol` / `MembresiaGuard` solo sirven para rutas con `:restauranteId`. Las de marca (`/marcas/:id`) y las de un recurso (`/items/:id`) resuelven el restaurante en el service y le preguntan a `AccesoService`.
   - `AccesoService.rolesEnRestaurante` no mira si el restaurante o la marca están activos (`perfil()` sí filtra los restaurantes inactivos de la marca).
-  - No hay forma de reenviar la invitación a un `Usuario` que todavía no la aceptó.
-- **Migración de la Fase 1 en staging:** se aplicó en el deploy del merge de la Fase 1 (`/health` mostró `39522af`, y el contenedor solo arranca si `prisma migrate deploy` no falla). Falta confirmar (se ve con la verificación de la Fase 2 en staging):
-  - que el backend se conecta con el rol dueño de las tablas: si `GET /auth/me` devuelve 200, la RLS de `usuario` y `membresia` no lo bloquea;
-  - con la publishable key, que `anon` y `authenticated` no pueden leer `usuario` ni `membresia` por la Data API (`curl "$SUPABASE_URL/rest/v1/usuario" -H "apikey: <publishable key>"` no devuelve filas).
+  - No hay forma de reenviar la invitación a un `Usuario` que todavía no la aceptó. Mientras tanto, web-auth le dice que pida un link desde "Olvidé mi contraseña" con el mismo email (falta comprobar con GoTrue que el recovery sirva para una cuenta invitada sin confirmar).
+  - Hasta esta fase, web-admin y web-staff no leen la sesión de Supabase: el usuario llega a la URL correcta y ve el login legacy.
+  - web-auth manda `?marcaId=` o `?restauranteId=` con lo que se eligió. Las apps lo leen como una preferencia, no como permiso: el acceso lo sigue decidiendo el backend.
+  - El `redirect` le gana al rol: un MOZO con `redirect=admin…` va a web-admin. Si `RequireAuth` devuelve a web-auth por rol incorrecto conservando el `redirect`, se arma un loop. En ese caso tiene que mandar a la app del rol o mostrar "sin acceso".
+  - Con una sesión abierta, `/` de web-auth redirige enseguida, y quien tiene un solo lugar no tiene cómo cerrar sesión ahí. Lo resuelve el `logout()` de `@menyu/auth-client`. Si hace falta antes, sumar "Ingresar con otra cuenta".
+  - web-auth pasa de localStorage a la cookie de dominio compartido: reemplazar `apps/web-auth/src/lib/supabase.ts` por el cliente de `@menyu/auth-client`.
 - **Producción, incidente del 2026-10-20:** un cambio manual de `CORS_ORIGINS` en Railway de producción redesplegó el servicio construyendo el último commit de `main` (31 migraciones) en lugar del tag v1.0.5 (18). `prisma migrate deploy` aplicó las migraciones pendientes hasta que `20260906183320_division_pagos_campos` falló (P3009): su índice único `comensal(sesion_id, nombre_normalizado)` chocó con los comensales "Invitado" que el backfill de `20260722175451_split_pagos_comensales` crea uno por pago, como ya había pasado en QA. La base de producción ya no servía para el código de v1.0.5 (`pago.pedido_id` y `restaurante.qr_base_url` se borraron), así que se recuperó hacia adelante: se borraron esos comensales, se marcó la migración como revertida y se desplegó `main` con el tag v1.0.6 (`39522af`, con las 32 migraciones aplicadas y el smoke de producción en verde).
   - En Railway, un cambio de variables redespliega el servicio y corre las migraciones. El servicio de producción quedó desconectado de GitHub (*Settings → Source*) para que salga solo de `deploy-production.yml`: no reconectarlo.
 - **Dominios propios: falta Mercado Pago y `BASE_URL` (2026-10-20).** Staging y producción ya usan `*.menyu-app.com` (v1.0.7, con las variables de `docs/auth/VariablesACambiar.md`), salvo `BASE_URL`, que en los dos ambientes sigue con la URL vieja de Railway: nadie del equipo tiene acceso al panel de la app de Mercado Pago. `BASE_URL` arma el `redirect_uri` del OAuth con el que cada restaurante conecta su cuenta de MP y la `notification_url` de cada pago. MP rechaza un `redirect_uri` que no esté registrado, así que cambiar `BASE_URL` antes de registrarlo rompe la conexión de MP. Mientras tanto todo funciona por la URL vieja, que no hay que dar de baja: las preferencias ya creadas notifican ahí. Cuando haya acceso al panel:

@@ -7,7 +7,8 @@
     ".": "./src/index.ts",
     "./historial": "./src/historial/index.ts",
     "./editar-pedido": "./src/editar-pedido/index.ts",
-    "./socket": "./src/socket/index.ts"
+    "./socket": "./src/socket/index.ts",
+    "./tailwind-preset": "./tailwind-preset.cjs"
   },
   "scripts": {
     "typecheck": "echo 'typecheck not configured'",

@@ -16,7 +16,8 @@ Equipo: De Marcos, Ojeda, Strumia Carrara (ODS390-2026). Stack sin experiencia p
 | Panel web admin | React + Vite + TailwindCSS · apps/web-admin |
 | Panel web staff | React + Vite + TailwindCSS · apps/web-staff (cocina + mozo web) |
 | App web cliente | React + Vite + TailwindCSS · apps/web-cliente |
-| Infra frontend | Vercel (3 proyectos separados) |
+| Login central | React + Vite + TailwindCSS · apps/web-auth (Supabase Auth) |
+| Infra frontend | Vercel (un proyecto por app, más uno de staging por app) |
 | Estado global | Zustand |
 | Monorepo | Turborepo + pnpm workspaces |
 | Tipos compartidos | `@menyu/types` |
@@ -34,10 +35,11 @@ MenYu/
 │   ├── backend/          → @menyu/api          (NestJS + Prisma)
 │   ├── web-cliente/      → @menyu/web-cliente  (React + Vite · menú del comensal)
 │   ├── web-staff/        → @menyu/web-staff    (React + Vite · cocina + mozo web)
-│   └── web-admin/        → @menyu/web-admin    (React + Vite · panel administrador)
+│   ├── web-admin/        → @menyu/web-admin    (React + Vite · panel administrador)
+│   └── web-auth/         → @menyu/web-auth     (React + Vite · login central con Supabase)
 ├── packages/
 │   ├── types/            → @menyu/types    (tipos TS compartidos)
-│   ├── ui/               → @menyu/ui       (componentes React compartidos)
+│   ├── ui/               → @menyu/ui       (componentes React compartidos y tokens de marca: @menyu/ui/tailwind-preset)
 │   └── config/           → @menyu/config   (ESLint + TS configs base)
 ├── turbo.json
 ├── package.json
@@ -109,13 +111,18 @@ packages/types/src/
 - El comensal no usa guards de admin — se autentica por sesión de mesa
 
 ### Autenticación con Supabase (migración en curso)
-Spec, decisiones y fases: `docs/auth/specs/auth.md` (una fase por sesión; al cerrar cada una, el subagente `revisor`). Hechas: Fase 1 (modelo de datos) y Fase 2 (backend; la verificación con tokens reales queda para staging). Sigue: Fase 3 (web-auth).
+Spec, decisiones y fases: `docs/auth/specs/auth.md` (una fase por sesión; al cerrar cada una, el subagente `revisor`). Hechas: Fase 1 (modelo de datos), Fase 2 (backend) y Fase 3 (web-auth, en código; el deploy espera los pasos manuales de "Para tener en cuenta"). Sigue: Fase 3b (Google).
 - Modelos nuevos: `Usuario` (`supabaseUserId`, `esRoot` para ROOT) y `Membresia` con el enum `Rol`: `OWNER` por marca; `GERENTE`, `JEFE_SALON`, `MOZO` y `COCINA` por restaurante (CHECK `membresia_ambito_check` en la migración). Además `Mozo.usuarioId` (los mozos invitados no tienen `passwordHash`) y `Cliente.supabaseUserId`. `usuario` y `membresia` tienen RLS sin políticas.
 - Backend (en `apps/backend/src/auth/`):
   - `SupabaseAuthGuard` verifica el access token de Supabase contra el JWKS de `SUPABASE_URL` y deja el `Usuario` en `request.usuario` (lo lee `@UsuarioActual()`).
   - `@RequiereRol(...)` suma `MembresiaGuard` y exige el rol en el restaurante de `:restauranteId` (la membresía OWNER de la marca cubre sus sucursales).
   - Los permisos los decide `AccesoService`, que ignora `esRoot`.
   - Por ahora solo los usan `GET /auth/me` y `POST /auth/invitaciones`.
+- web-auth (`apps/web-auth`, `auth.<ambiente>`, puerto 5173): login con email y contraseña, olvidé mi contraseña, aceptar invitación, selector y "sin acceso".
+  - Después del login llama a `GET /auth/me` y manda al `redirect` (solo `https://*.menyu-app.com`, o `*.menyu.local` en local) o a la app del rol.
+  - Los links del mail traen un `token_hash` que se canjea con `verifyOtp` (plantillas: `docs/auth/VariablesACambiar.md`).
+  - La sesión queda en localStorage hasta la Fase 4. web-admin y web-staff todavía no la leen.
+  - Probar en local contra staging: `docs/auth/VariablesACambiar.md`, Desarrollo local.
 - Todo lo demás sigue con la autenticación actual hasta la Fase 4, cuando backend y frontends cambian de token a la vez: JWT propio con `JWT_SECRET`, `@Roles`, `RolesGuard` y `@CurrentUser`, `Admin`/`AdminRestaurante`/`Mozo` y el login en `/auth` de web-cliente. No mezclar los dos sistemas en un mismo endpoint.
 - En el seed, el `Usuario` OWNER de Marca Seed (`owner@menyu.com`) tiene un `supabaseUserId` ficticio que no existe en ningún proyecto de Supabase. Para iniciar sesión con él (desde la Fase 2) hay que reemplazarlo por el id de un usuario real del Supabase de staging; el seed no lo pisa.
 
@@ -123,11 +130,12 @@ Spec, decisiones y fases: `docs/auth/specs/auth.md` (una fase por sesión; al ce
 
 ## Arquitectura de frontends web
 
-### Tres apps web independientes (Vercel)
+### Cuatro apps web independientes (Vercel)
 ```
 apps/web-cliente/   → mesa.menyu-app.com     (comensal)
 apps/web-staff/     → staff.menyu-app.com    (cocina + mozo web)
 apps/web-admin/     → admin.menyu-app.com    (dueño/administrador)
+apps/web-auth/      → auth.menyu-app.com     (login central, Supabase Auth)
 ```
 La API (Railway) está en `api.menyu-app.com`. Staging: `<app>.staging.menyu-app.com`. Local: `<app>.menyu.local` (ver la sección Dominios de `docs/auth/specs/auth.md`). Durante la migración siguen activos los dominios viejos (`menyu-*.vercel.app`, `menyu-backend-*.up.railway.app`): no darlos de baja (QR impresos, webhooks de Mercado Pago). Las variables por plataforma: `docs/auth/VariablesACambiar.md`.
 

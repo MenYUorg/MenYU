@@ -59,3 +59,51 @@ curl -s -X POST "$SUPABASE_URL/auth/v1/token?grant_type=password" \
 ```
 
 El `access_token` de la respuesta vence en una hora (el default de Supabase). Usarlo como `Authorization: Bearer <access_token>`.
+
+## Un usuario por rol (desde la Fase 3)
+
+Para probar web-auth: cada uno tiene que terminar en su app (`docs/auth/specs/auth.md`, Fase 3). Se crean como el primer ROOT, con *Add user* y **Auto Confirm User**, sin invitación. Las contraseñas van en `docs/auth/.env.usuarios-staging` (variables `STAGING_AUTH_<ROL>_EMAIL` y `STAGING_AUTH_<ROL>_PASSWORD`), junto con `STAGING_SUPABASE_URL` y `STAGING_SUPABASE_PUBLISHABLE_KEY`.
+
+| Email | `Usuario` en la base | Después de iniciar sesión |
+|---|---|---|
+| `root.pruebas-auth@menyu-app.com` | `es_root = true` (sección anterior) | `admin.<amb>/admin` |
+| `owner-supabase.pruebas-auth@menyu-app.com` | OWNER de "Marca Pruebas Auth" | `admin.<amb>/admin?marcaId=…` |
+| `gerente-supabase.pruebas-auth@menyu-app.com` | GERENTE de "Restaurante Pruebas Auth" | `admin.<amb>/admin?restauranteId=…` |
+| `jefe-salon.pruebas-auth@menyu-app.com` | JEFE_SALON de "Restaurante Pruebas Auth" | `staff.<amb>/mozo?restauranteId=…` |
+| `mozo-supabase.pruebas-auth@menyu-app.com` | MOZO de "Restaurante Pruebas Auth" (sección anterior) | `staff.<amb>/mozo?restauranteId=…` |
+| `cocina.pruebas-auth@menyu-app.com` | COCINA de "Restaurante Pruebas Auth" | `staff.<amb>/cocina?restauranteId=…` |
+| `varias.pruebas-auth@menyu-app.com` | OWNER de la marca y MOZO del restaurante | el selector de web-auth |
+| `sin-acceso.pruebas-auth@menyu-app.com` | ninguno (sección anterior) | "Tu cuenta no tiene acceso" |
+
+Para la invitación de punta a punta no se crea nada a mano: se invita a un mail con bandeja real (`STAGING_AUTH_INVITADO_EMAIL`, por ejemplo un alias `+invitado` de Gmail) con `POST /auth/invitaciones` y el token del OWNER, y el link del mail lleva a `auth.staging.menyu-app.com/invitacion`.
+
+SQL Editor de staging, después de crear las cuentas (cada `<UID>` es el *User UID* de la suya):
+
+```sql
+INSERT INTO usuario (id, supabase_user_id, email, nombre, es_root) VALUES
+  (gen_random_uuid(), '<UID>', 'owner-supabase.pruebas-auth@menyu-app.com',   'Owner Pruebas Auth',      false),
+  (gen_random_uuid(), '<UID>', 'gerente-supabase.pruebas-auth@menyu-app.com', 'Gerente Pruebas Auth',    false),
+  (gen_random_uuid(), '<UID>', 'jefe-salon.pruebas-auth@menyu-app.com',       'Jefe Salón Pruebas Auth', false),
+  (gen_random_uuid(), '<UID>', 'cocina.pruebas-auth@menyu-app.com',           'Cocina Pruebas Auth',     false),
+  (gen_random_uuid(), '<UID>', 'varias.pruebas-auth@menyu-app.com',           'Varias Pruebas Auth',     false);
+
+INSERT INTO membresia (id, usuario_id, rol, marca_id)
+SELECT gen_random_uuid(), u.id, 'OWNER', m.id
+FROM usuario u CROSS JOIN marca m
+WHERE m.slug = 'pruebas-auth'
+  AND u.email IN ('owner-supabase.pruebas-auth@menyu-app.com', 'varias.pruebas-auth@menyu-app.com');
+
+INSERT INTO membresia (id, usuario_id, rol, restaurante_id)
+SELECT gen_random_uuid(), u.id, v.rol::rol, r.id
+FROM (VALUES
+  ('gerente-supabase.pruebas-auth@menyu-app.com', 'GERENTE'),
+  ('jefe-salon.pruebas-auth@menyu-app.com',       'JEFE_SALON'),
+  ('cocina.pruebas-auth@menyu-app.com',           'COCINA'),
+  ('varias.pruebas-auth@menyu-app.com',           'MOZO')
+) AS v(email, rol)
+JOIN usuario u ON u.email = v.email
+JOIN marca m ON m.slug = 'pruebas-auth'
+JOIN restaurante r ON r.marca_id = m.id AND r.nombre = 'Restaurante Pruebas Auth';
+```
+
+Hasta la Fase 4, web-admin y web-staff no leen la sesión de Supabase: al llegar muestran su login legacy. Lo que se verifica es la URL a la que manda web-auth.
