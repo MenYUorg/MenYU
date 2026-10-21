@@ -14,6 +14,7 @@ import { BotonCarrito } from './BotonCarrito'
 import { ChipsSecciones } from './ChipsSecciones'
 import { MenuDrawer } from './MenuDrawer'
 import { MenuHeader } from './MenuHeader'
+import { MesaSinCarta } from './MesaSinCarta'
 import type { ModoMenu } from './modo'
 import { CM } from './paleta'
 import { SeccionesMenu } from './SeccionesMenu'
@@ -219,6 +220,10 @@ export function MenuView({ modo, restauranteId }: MenuViewProps) {
       </div>
     )
   }
+
+  // El menú de una mesa ya abierta responde 404: el restaurante (o su marca) se dio de baja con la mesa en marcha. La mesa se
+  // deja terminar, así que se explica qué pasó y se ofrece pedir la cuenta, en vez de un error sin salida.
+  if (modo === 'mesa' && !loading && error && errorStatus === 404) return <MesaSinCarta />
 
   // Mientras llega (o todavía no se pidió el de este restaurante).
   if (loading || (!menu && !error)) return (

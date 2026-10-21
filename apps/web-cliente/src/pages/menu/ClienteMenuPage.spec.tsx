@@ -158,7 +158,7 @@ describe('ClienteMenuPage', () => {
         usePublicMenuStore.setState({ fetchMenu: pedirOriginal })
       })
 
-      it.each([[null], [404], [500]])('con el código %s avisa "No se pudo cargar el menú" y deja reintentar (nunca dice "no existe")', (status) => {
+      it.each([[null], [500]])('con el código %s avisa "No se pudo cargar el menú" y deja reintentar (nunca dice "no existe")', (status) => {
         conError(status)
         render(
           <MemoryRouter initialEntries={['/menu']}>
@@ -170,6 +170,50 @@ describe('ClienteMenuPage', () => {
         expect(screen.queryByText('No encontramos este restaurante')).not.toBeInTheDocument()
         // "Volver al restaurante" es de la carta: la mesa ya tiene su restaurante.
         expect(screen.queryByText('Volver al restaurante')).not.toBeInTheDocument()
+      })
+
+      describe('con el código 404: el restaurante (o su marca) se dio de baja con la mesa abierta', () => {
+        const renderizar = () =>
+          render(
+            <MemoryRouter initialEntries={['/menu']}>
+              <Routes>
+                <Route path="/menu" element={<ClienteMenuPage />} />
+                <Route path="/pagar" element={<p>Pantalla de pagar</p>} />
+                <Route path="/pedidos" element={<p>Pantalla de pedidos</p>} />
+              </Routes>
+            </MemoryRouter>,
+          )
+
+        it('en vez del error genérico explica que ya no está disponible y ofrece pedir la cuenta', () => {
+          conError(404)
+          renderizar()
+
+          expect(screen.getByRole('heading', { name: 'Este restaurante ya no está disponible' })).toBeInTheDocument()
+          expect(screen.getByText(/tu mesa sigue abierta/)).toBeInTheDocument()
+          expect(screen.queryByText('No se pudo cargar el menú')).not.toBeInTheDocument()
+          // Reintentar no sirve de nada: el menú va a seguir sin estar.
+          expect(screen.queryByRole('button', { name: 'Reintentar' })).not.toBeInTheDocument()
+          // "No encontramos este restaurante" y "Volver al restaurante" son de la carta.
+          expect(screen.queryByText('No encontramos este restaurante')).not.toBeInTheDocument()
+          expect(screen.queryByText('Volver al restaurante')).not.toBeInTheDocument()
+        })
+
+        it('desde ahí se llega a pagar, a los pedidos y al mozo', () => {
+          conError(404)
+          renderizar()
+          expect(screen.getByRole('button', { name: 'Llamar al mozo' })).toBeInTheDocument()
+
+          fireEvent.click(screen.getByRole('button', { name: 'Pagar la cuenta' }))
+
+          expect(screen.getByText('Pantalla de pagar')).toBeInTheDocument()
+        })
+
+        it('mientras vuelve a pedir el menú no muestra el aviso (solo cuando el 404 es el resultado)', () => {
+          usePublicMenuStore.setState({ menu: null, loading: true, error: null, errorStatus: null, fetchMenu: vi.fn() })
+          renderizar()
+
+          expect(screen.queryByText('Este restaurante ya no está disponible')).not.toBeInTheDocument()
+        })
       })
 
       it('"Reintentar" vuelve a pedir el menú del restaurante de la mesa', () => {

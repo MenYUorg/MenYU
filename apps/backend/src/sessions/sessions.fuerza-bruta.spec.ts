@@ -32,10 +32,11 @@ const PIN_CORRECTO = { restauranteId: 'rest-1', pin: '1234' }
 const MINUTO = 60_000
 
 /** Mesas de la base: la 1 se encuentra por PIN; la A y la B por QR, en modo seguro y con sesión activa. */
+const DISPONIBLE = { activo: true, marca: { activo: true } }
 const MESAS: Record<string, object> = {
-  'pin:1234': { id: 'mesa-1', numero: '1', restauranteId: 'rest-1', restaurante: { modoSesion: 'abierto' } },
-  'qr:qr-A': { id: 'mesa-A', numero: 'A', restauranteId: 'rest-1', restaurante: { modoSesion: 'seguro' } },
-  'qr:qr-B': { id: 'mesa-B', numero: 'B', restauranteId: 'rest-1', restaurante: { modoSesion: 'seguro' } },
+  'pin:1234': { id: 'mesa-1', numero: '1', restauranteId: 'rest-1', restaurante: { modoSesion: 'abierto', ...DISPONIBLE } },
+  'qr:qr-A': { id: 'mesa-A', numero: 'A', restauranteId: 'rest-1', restaurante: { modoSesion: 'seguro', ...DISPONIBLE } },
+  'qr:qr-B': { id: 'mesa-B', numero: 'B', restauranteId: 'rest-1', restaurante: { modoSesion: 'seguro', ...DISPONIBLE } },
 }
 const CODIGO_DE_LA_MESA: Record<string, string> = { 'mesa-A': '111', 'mesa-B': '222' }
 

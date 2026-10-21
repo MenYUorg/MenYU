@@ -1,7 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 import { Transform } from 'class-transformer'
 import { IsBoolean, IsNotEmpty, IsOptional, IsString, Matches, MaxLength, ValidateIf } from 'class-validator'
-import { SinCaracterNulo } from '../../comun/sin-caracter-nulo'
+import { SinCaracterNulo } from '../../../common/sin-caracter-nulo'
 
 export const MAX_NOMBRE = 120
 export const MAX_SLUG = 80

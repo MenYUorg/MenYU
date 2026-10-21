@@ -19,6 +19,7 @@ import { DivisionService } from '../comensales/division.service'
 import { runSerializableTransaction } from '../common/run-serializable-transaction'
 import { assertStaffAccess } from '../common/assert-staff-access'
 import { LimiteIntentos } from '../common/limite-intentos'
+import { restauranteDisponible, SELECT_DISPONIBILIDAD } from '../common/restaurante-disponible'
 import {
   ESTADO_PAGO_APROBADO,
   ESTADO_PAGO_PENDIENTE,
@@ -163,11 +164,19 @@ export class SessionsService {
 
     // Primero la mesa: si no existe (o es de otro restaurante) no se crea un cliente "Invitado" de más.
     const mesa = await this.resolveMesaContandoFallosDePin(dto)
-    const clienteId = await this.resolveClienteId(authHeader)
 
     const sesionActiva = await this.prisma.sesionMesa.findFirst({
       where: { mesaId: mesa.id, estado: 'activa' },
     })
+
+    // Con el restaurante (o su marca) dado de baja no se abren mesas nuevas. Una sesión que ya está abierta se deja terminar
+    // (docs/plan-consola-root.md, sección 6): quien vuelve a escanear el QR de su mesa, o se suma a ella, entra igual, porque
+    // si no no podría pedir la cuenta ni pagar. Va antes de crear al cliente "Invitado": un rechazo no deja filas.
+    if (!sesionActiva && !restauranteDisponible(mesa.restaurante)) {
+      throw new ForbiddenException('Este restaurante no está disponible')
+    }
+
+    const clienteId = await this.resolveClienteId(authHeader)
 
     let sesionId: string
     let codigoSesion: string
@@ -780,7 +789,7 @@ export class SessionsService {
 
     const mesa = await this.prisma.mesa.findFirst({
       where,
-      include: { restaurante: { select: { modoSesion: true } } },
+      include: { restaurante: { select: { modoSesion: true, ...SELECT_DISPONIBILIDAD } } },
     })
 
     if (!mesa) throw new NotFoundException('Mesa no encontrada')

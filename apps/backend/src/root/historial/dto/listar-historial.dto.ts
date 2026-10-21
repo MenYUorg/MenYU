@@ -1,7 +1,7 @@
 import { ApiPropertyOptional } from '@nestjs/swagger'
 import { Transform } from 'class-transformer'
 import { IsIn, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min } from 'class-validator'
-import { SinCaracterNulo } from '../../comun/sin-caracter-nulo'
+import { SinCaracterNulo } from '../../../common/sin-caracter-nulo'
 
 export const ENTIDADES_FILTRABLES = ['MARCA', 'RESTAURANTE', 'OWNER', 'ROOT'] as const
 export const POR_PAGINA = 50
