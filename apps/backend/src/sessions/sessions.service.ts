@@ -171,11 +171,35 @@ export class SessionsService {
 
     // Con el restaurante (o su marca) dado de baja no se abren mesas nuevas. Una sesión que ya está abierta se deja terminar
     // (docs/plan-consola-root.md, sección 6): quien vuelve a escanear el QR de su mesa, o se suma a ella, entra igual, porque
-    // si no no podría pedir la cuenta ni pagar. Va antes de crear al cliente "Invitado": un rechazo no deja filas.
+    // si no no podría pedir la cuenta ni pagar.
     if (!sesionActiva && !restauranteDisponible(mesa.restaurante)) {
       throw new ForbiddenException('Este restaurante no está disponible')
     }
 
+    // Unirse a una sesión abierta en modo seguro pide el código (salvo el primer cliente de una sesión que abrió el staff).
+    let esAnfitrionDeStaff = false
+    if (sesionActiva) {
+      // Si la sesión fue abierta por staff (clienteId = null),
+      // el primer cliente real se convierte en anfitrión sin PIN.
+      const esSesionStaff = sesionActiva.clienteId === null
+      const yaHayParticipantes = await this.prisma.sesionMesaCliente.count({
+        where: { sesionId: sesionActiva.id },
+      }) > 0
+      esAnfitrionDeStaff = esSesionStaff && !yaHayParticipantes
+
+      if (!esAnfitrionDeStaff && mesa.restaurante.modoSesion === 'seguro') {
+        if (!dto.codigoSesion) {
+          throw new ForbiddenException('Esta mesa requiere código de sesión para unirse')
+        }
+        this.intentosCodigoSesion.verificar(mesa.id)
+        if (dto.codigoSesion !== sesionActiva.codigoSesion) {
+          this.intentosCodigoSesion.registrarFallo(mesa.id)
+          throw new ForbiddenException('Código de sesión incorrecto')
+        }
+      }
+    }
+
+    // Todas las validaciones que rechazan van antes: un rechazo no crea al cliente "Invitado".
     const clienteId = await this.resolveClienteId(authHeader)
 
     let sesionId: string
@@ -203,27 +227,7 @@ export class SessionsService {
     } else {
       sesionId     = sesionActiva.id
       codigoSesion = sesionActiva.codigoSesion
-
-      // Si la sesión fue abierta por staff (clienteId = null),
-      // el primer cliente real se convierte en anfitrión sin PIN.
-      const esSesionStaff = sesionActiva.clienteId === null
-      const yaHayParticipantes = await this.prisma.sesionMesaCliente.count({
-        where: { sesionId: sesionActiva.id },
-      }) > 0
-
-      const esAnfitrionDeStaff = esSesionStaff && !yaHayParticipantes
-      esAnfitrion = esAnfitrionDeStaff
-
-      if (!esAnfitrionDeStaff && mesa.restaurante.modoSesion === 'seguro') {
-        if (!dto.codigoSesion) {
-          throw new ForbiddenException('Esta mesa requiere código de sesión para unirse')
-        }
-        this.intentosCodigoSesion.verificar(mesa.id)
-        if (dto.codigoSesion !== codigoSesion) {
-          this.intentosCodigoSesion.registrarFallo(mesa.id)
-          throw new ForbiddenException('Código de sesión incorrecto')
-        }
-      }
+      esAnfitrion  = esAnfitrionDeStaff
 
       const yaParticipa = await this.prisma.sesionMesaCliente.findUnique({
         where: { sesionId_clienteId: { sesionId, clienteId } },
