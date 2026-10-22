@@ -3,9 +3,9 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { io, type Socket } from 'socket.io-client'
 import type { Mesa } from '@menyu/types'
 import { Bell, Clock, DollarSign, DoorOpen, LayoutGrid, ShoppingBag, Users } from 'lucide-react'
-import { useAuth } from '@menyu/auth'
+import { usePerfil } from '@menyu/auth-client'
 import { urlDelSocket } from '@menyu/ui/socket'
-import { useMozoStore } from '../../store/mozoStore'
+import { useNombreDelRol, useRestauranteId } from '../../store/contextoStore'
 import { api } from '../../services/api'
 import type { SesionActivaRico, WaiterCallRico } from '../../services/api'
 import { PageHeader } from '../../components/PageHeader'
@@ -215,9 +215,10 @@ function PedidoSesionCard({ pedido }: { pedido: SesionActivaRico['pedidos'][0] }
 export function MesasPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const { user } = useAuth()
-  const { restauranteId } = useMozoStore()
-  const nombreMozo = user?.nombre ?? user?.email ?? 'Mozo'
+  const perfil = usePerfil()
+  const restauranteId = useRestauranteId()
+  const nombreMozo = perfil.nombre || perfil.email
+  const rolMostrado = useNombreDelRol()
 
   // TODO: agregar mesasAsignadas al payload del JWT del mozo cuando el backend lo soporte
   const mesasAsignadas: string[] = []
@@ -377,8 +378,8 @@ export function MesasPage() {
           icon={<LayoutGrid size={18} />}
           onBack={() => { setMesaSeleccionada(null); setSesionDetalle(null) }}
           userName={nombreMozo}
-          userRole="Mozo"
-          userInitials={getInitials(user?.nombre ?? user?.email)}
+          userRole={rolMostrado}
+          userInitials={getInitials(nombreMozo)}
         />
 
         {/* Content */}
@@ -481,8 +482,8 @@ export function MesasPage() {
         icon={<LayoutGrid size={18} />}
         onBack={() => navigate('/mozo')}
         userName={nombreMozo}
-        userRole="Mozo"
-        userInitials={getInitials(user?.nombre ?? user?.email)}
+        userRole={rolMostrado}
+        userInitials={getInitials(nombreMozo)}
       />
 
       <main style={{ padding: 20 }}>

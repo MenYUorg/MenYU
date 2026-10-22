@@ -13,7 +13,6 @@
     "test:coverage": "vitest run --coverage --passWithNoTests"
   },
   "dependencies": {
-    "@menyu/auth": "workspace:*",
     "@menyu/auth-client": "workspace:*",
     "@menyu/types": "workspace:*",
     "@menyu/ui": "workspace:*",

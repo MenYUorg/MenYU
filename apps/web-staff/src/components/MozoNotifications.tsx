@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { Bell, CheckCircle2, ChefHat, Receipt, X } from 'lucide-react'
-import { useMozoStore } from '../store/mozoStore'
+import { useRestauranteId } from '../store/contextoStore'
 import { useNotifStore } from '../store/notificationStore'
 import type { Notif, NotifTipo } from '../store/notificationStore'
 import * as socketService from '../services/socket'
@@ -114,7 +114,7 @@ function NotifCard({ notif }: { notif: Notif }) {
 
 // ── MozoNotifications ─────────────────────────────────────────────────────────
 export function MozoNotifications() {
-  const { restauranteId } = useMozoStore()
+  const restauranteId       = useRestauranteId()
   const add               = useNotifStore((s) => s.add)
   const notifications     = useNotifStore((s) => s.notifications)
   const joinedRef         = useRef(false)

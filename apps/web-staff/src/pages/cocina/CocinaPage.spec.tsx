@@ -3,16 +3,13 @@ import type { Pedido } from '@menyu/types'
 import { api, type PedidoRico } from '../../services/api'
 import * as impresora from '../../services/impresora'
 import * as socketService from '../../services/socket'
+import { perfilDeCocina, reiniciarSesionDePrueba } from '../../test/authClient'
+import { montarContexto, reiniciarContexto } from '../../test/contexto'
 import { CocinaPage } from './CocinaPage'
 
-let usuario: { restauranteId?: string } | null = { restauranteId: 'rest-1' }
-let restauranteStore: string | null = 'rest-store'
 let conectada = false
 
-vi.mock('@menyu/auth', () => ({ useAuth: () => ({ user: usuario }) }))
-vi.mock('../../store/mozoStore', () => ({
-  useMozoStore: (selector: (s: { restauranteId: string | null }) => unknown) => selector({ restauranteId: restauranteStore }),
-}))
+vi.mock('@menyu/auth-client', async () => (await import('../../test/authClient')).moduloSimulado())
 vi.mock('../../services/api', () => ({ api: { pedidos: { getByRestaurante: vi.fn(), cambiarEstado: vi.fn() } } }))
 vi.mock('../../services/impresora', () => ({
   conectarImpresora: vi.fn(),
@@ -24,6 +21,7 @@ const oyentes: { nuevo?: (p: Pedido) => void; actualizado?: (p: Pedido) => void;
 const desuscribir = { nuevo: vi.fn(), actualizado: vi.fn(), editado: vi.fn() }
 vi.mock('../../services/socket', () => ({
   joinRestauranteComoCocina: vi.fn(),
+  cerrarSesion: vi.fn(),
   onPedidoNuevo: vi.fn((fn) => { oyentes.nuevo = fn; return desuscribir.nuevo }),
   onPedidoActualizado: vi.fn((fn) => { oyentes.actualizado = fn; return desuscribir.actualizado }),
   onPedidoEditado: vi.fn((fn) => { oyentes.editado = fn; return desuscribir.editado }),
@@ -94,8 +92,9 @@ const recibir = (canal: keyof typeof oyentes, p: PedidoRico) => act(() => { oyen
 
 beforeEach(() => {
   vi.clearAllMocks()
-  usuario = { restauranteId: 'rest-1' }
-  restauranteStore = 'rest-store'
+  reiniciarSesionDePrueba()
+  reiniciarContexto()
+  montarContexto(perfilDeCocina('rest-1'))
   conectada = false
   tonos.length = 0
   vi.stubGlobal('AudioContext', AudioFalso)
@@ -107,9 +106,16 @@ afterEach(() => {
 })
 
 describe('CocinaPage', () => {
-  it('sin restaurante no consulta ni se une a la cocina', () => {
-    usuario = null
-    restauranteStore = null
+  it('"Salir" desconecta el socket y cierra la sesión', async () => {
+    await abrir()
+
+    fireEvent.click(screen.getByRole('button', { name: /Salir/ }))
+
+    expect(socketService.cerrarSesion).toHaveBeenCalledTimes(1)
+  })
+
+  it('sin restaurante elegido no consulta ni se une a la cocina', () => {
+    reiniciarContexto()
 
     render(<CocinaPage />)
 
@@ -117,11 +123,10 @@ describe('CocinaPage', () => {
     expect(socketService.joinRestauranteComoCocina).not.toHaveBeenCalled()
   })
 
-  it('sin usuario usa el restaurante guardado', async () => {
-    usuario = null
+  it('consulta el restaurante del contexto, que sale de la membresía', async () => {
     await abrir()
 
-    expect(pedidosApi.getByRestaurante).toHaveBeenCalledWith('rest-store', { estado: 'en_preparacion' })
+    expect(pedidosApi.getByRestaurante).toHaveBeenCalledWith('rest-1', { estado: 'en_preparacion' })
   })
 
   describe('tablero', () => {

@@ -3,14 +3,17 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { io } from 'socket.io-client'
 import { api, type PedidoRico } from '../../services/api'
 import * as impresora from '../../services/impresora'
+import { membresiaDeRestaurante, perfilDeOwner, perfilDePrueba, reiniciarSesionDePrueba } from '../../test/authClient'
+import { montarContexto, reiniciarContexto } from '../../test/contexto'
 import { PedidosPage } from './PedidosPage'
 
-let restauranteActual: string | null = 'rest-1'
+const perfilCon = (rol: 'MOZO' | 'JEFE_SALON' | 'GERENTE') =>
+  perfilDePrueba({ nombre: 'Ana Pérez', membresias: [membresiaDeRestaurante(rol, 'rest-1')] })
+
 let conectada = false
 
-vi.mock('@menyu/auth', () => ({ useAuth: () => ({ user: { nombre: 'Ana Pérez' } }) }))
+vi.mock('@menyu/auth-client', async () => (await import('../../test/authClient')).moduloSimulado())
 vi.mock('@menyu/ui', () => ({ LogoMenYuOscuro: () => <span>MenYU</span> }))
-vi.mock('../../store/mozoStore', () => ({ useMozoStore: () => ({ restauranteId: restauranteActual }) }))
 vi.mock('../../services/api', () => ({
   api: { pedidos: { getByRestaurante: vi.fn(), cambiarEstado: vi.fn(), editarItem: vi.fn() } },
 }))
@@ -89,15 +92,40 @@ const recibir = (evento: string, dato?: unknown) => act(() => { socket.handlers.
 const modalEdicion = () => screen.getByText(/^Editar pedido #/).closest('div[style*="position: fixed"]') as HTMLElement
 
 beforeEach(() => {
-  restauranteActual = 'rest-1'
+  reiniciarSesionDePrueba()
+  reiniciarContexto()
+  montarContexto(perfilCon('MOZO'))
   conectada = false
   vi.clearAllMocks()
   socket.handlers.clear()
 })
 
 describe('PedidosPage (mozo)', () => {
+  it.each([
+    ['MOZO', true],
+    ['JEFE_SALON', true],
+    ['GERENTE', true],
+  ] as const)('%s ve "Editar pedido": %s', async (rol, loVe) => {
+    reiniciarContexto()
+    montarContexto(perfilCon(rol))
+
+    await abrirCon()
+
+    const boton = within(tarjeta('1')).queryByRole('button', { name: 'Editar pedido' })
+    expect(boton === null).toBe(!loVe)
+  })
+
+  it('el OWNER no ve "Editar pedido": el backend no lo deja editar', async () => {
+    reiniciarContexto()
+    montarContexto(perfilDeOwner('rest-1'))
+
+    await abrirCon()
+
+    expect(within(tarjeta('1')).queryByRole('button', { name: 'Editar pedido' })).not.toBeInTheDocument()
+  })
+
   it('sin restaurante no consulta ni se conecta; el encabezado vuelve al panel', () => {
-    restauranteActual = null
+    reiniciarContexto()
 
     abrir()
 

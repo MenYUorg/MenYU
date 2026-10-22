@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useAuth } from '@menyu/auth'
-import { AlertTriangle, ChefHat, ChevronRight, Clock, RefreshCw } from 'lucide-react'
+import { AlertTriangle, ChefHat, ChevronRight, Clock, LogOut, RefreshCw } from 'lucide-react'
 import { api } from '../../services/api'
 import type { PedidoRico } from '../../services/api'
-import { useMozoStore } from '../../store/mozoStore'
+import { useRestauranteId } from '../../store/contextoStore'
 import * as socketService from '../../services/socket'
+import { cerrarSesion } from '../../services/socket'
 import type { Pedido } from '@menyu/types'
 import { imprimirPedido, conectarImpresora, impresoraConectada } from '../../services/impresora'
 
@@ -214,9 +214,7 @@ function PedidoCard({
 
 // ── CocinaPage ────────────────────────────────────────────────────────────────
 export function CocinaPage() {
-  const { user } = useAuth()
-  const restauranteIdStore = useMozoStore((s) => s.restauranteId)
-  const restauranteId = user?.restauranteId ?? restauranteIdStore
+  const restauranteId = useRestauranteId()
 
   const [pedidos,    setPedidos]    = useState<PedidoRico[]>([])
   const [anulados,   setAnulados]   = useState<Map<string, PedidoRico>>(new Map())
@@ -379,6 +377,13 @@ export function CocinaPage() {
           >
             <RefreshCw size={12} style={refreshing ? { animation: 'spin 0.8s linear infinite' } : undefined} />
             {refreshing ? 'Actualizando…' : 'Actualizar'}
+          </button>
+          <button
+            onClick={() => void cerrarSesion()}
+            style={{ background: 'none', border: '1px solid rgba(255,255,255,0.25)', borderRadius: 6, padding: '5px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'rgba(255,255,255,0.85)', fontFamily: 'Inter, sans-serif' }}
+          >
+            <LogOut size={12} />
+            Salir
           </button>
         </div>
       </header>

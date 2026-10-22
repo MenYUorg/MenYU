@@ -1,15 +1,21 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAuth } from '@menyu/auth'
+import { usePerfil } from '@menyu/auth-client'
 import { LogoMenYuOscuro } from '@menyu/ui'
 import {
   ArrowRight, Bell, ChefHat, CheckCircle, ClipboardList, CreditCard,
   History, LayoutGrid, LogOut,
 } from 'lucide-react'
-import { useMozoStore } from '../../store/mozoStore'
+import {
+  puedeAtenderLlamados,
+  useRestauranteActual,
+  useRestauranteId,
+  useRolesActuales,
+} from '../../store/contextoStore'
 import { api } from '../../services/api'
 import type { WaiterCallRico, PedidoRico } from '../../services/api'
 import * as socketService from '../../services/socket'
+import { cerrarSesion } from '../../services/socket'
 import type { Pedido } from '@menyu/types'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -34,9 +40,12 @@ function motivoLabel(motivo: string | null): string {
 function LlamadoCard({
   llamado,
   onAtendido,
+  puedeAtender,
 }: {
   llamado: WaiterCallRico
   onAtendido: () => void
+  /** Atender necesita el `Mozo` de la cuenta: a un OWNER o GERENTE el backend le responde 403 (matriz de la 4.3). */
+  puedeAtender: boolean
 }) {
   const [loading, setLoading] = useState(false)
 
@@ -73,6 +82,7 @@ function LlamadoCard({
           {motivoLabel(llamado.motivo)} · {tiempoDesde(llamado.createdAt)}
         </p>
       </div>
+      {puedeAtender && (
       <button
         onClick={() => void handleAtender()}
         disabled={loading}
@@ -95,6 +105,7 @@ function LlamadoCard({
         <CheckCircle size={14} />
         {loading ? 'Guardando…' : 'Atendido'}
       </button>
+      )}
     </div>
   )
 }
@@ -318,11 +329,12 @@ function NavCard({ icon, chipBg, iconColor, title, titleBadge, description, to, 
 
 // ── MozoPanel ─────────────────────────────────────────────────────────────────
 export function MozoPanel() {
-  const { user, logout } = useAuth()
-  const { restauranteId: restauranteIdStore, restauranteNombre: storeRestauranteNombre, marcaNombre: storeMarcaNombre } = useMozoStore()
-  const restauranteId     = user?.restauranteId ?? restauranteIdStore
-  const restauranteNombre = storeRestauranteNombre
-  const marcaNombre       = storeMarcaNombre
+  const perfil            = usePerfil()
+  const restauranteId     = useRestauranteId()
+  const restaurante       = useRestauranteActual()
+  const restauranteNombre = restaurante?.nombre ?? null
+  const marcaNombre       = restaurante?.marcaNombre ?? null
+  const puedeAtender      = puedeAtenderLlamados(useRolesActuales())
 
   const [llamados,      setLlamados]      = useState<WaiterCallRico[]>([])
   const [pedidosListos, setPedidosListos] = useState<PedidoRico[]>([])
@@ -389,8 +401,8 @@ export function MozoPanel() {
     }
   }, [restauranteId])
 
-  const nombreMozo  = user?.nombre ?? user?.email ?? 'Mozo'
-  const initials    = getInitials(user?.nombre, user?.email)
+  const nombreMozo  = perfil.nombre || perfil.email
+  const initials    = getInitials(nombreMozo)
   const hasAlerts   = llamados.length > 0 || pedidosListos.length > 0
 
   return (
@@ -438,7 +450,7 @@ export function MozoPanel() {
               {initials}
             </div>
           </div>
-          <LogoutBtn onClick={logout} />
+          <LogoutBtn onClick={() => void cerrarSesion()} />
         </div>
       </header>
 
@@ -577,6 +589,7 @@ export function MozoPanel() {
                       key={l.id}
                       llamado={l}
                       onAtendido={() => setLlamados((prev) => prev.filter((x) => x.id !== l.id))}
+                      puedeAtender={puedeAtender}
                     />
                   ))}
                 </div>

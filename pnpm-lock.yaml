@@ -454,9 +454,6 @@ importers:
 
   apps/web-staff:
     dependencies:
-      '@menyu/auth':
-        specifier: workspace:*
-        version: link:../../packages/auth
       '@menyu/auth-client':
         specifier: workspace:*
         version: link:../../packages/auth-client

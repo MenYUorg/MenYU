@@ -75,6 +75,21 @@ export const puedeAtenderLlamados = (roles: Rol[]) => alguno(roles, ['MOZO', 'JE
 /** Editar un pedido es de GERENTE, JEFE_SALON y MOZO: el OWNER no edita, como antes de la migración. */
 export const puedeEditarPedidos = (roles: Rol[]) => alguno(roles, ['GERENTE', 'JEFE_SALON', 'MOZO'])
 
+const NOMBRE_DEL_ROL: Record<Rol, string> = {
+  OWNER: 'Dueño',
+  GERENTE: 'Gerente',
+  JEFE_SALON: 'Jefe de salón',
+  MOZO: 'Mozo',
+  COCINA: 'Cocina',
+}
+const ROLES_POR_AUTORIDAD: Rol[] = ['OWNER', 'GERENTE', 'JEFE_SALON', 'MOZO', 'COCINA']
+
+/** Cómo se presenta la persona en el encabezado. Con varios roles en el restaurante gana el de más autoridad. */
+export function nombreDelRol(roles: Rol[]): string | undefined {
+  const rol = ROLES_POR_AUTORIDAD.find((r) => roles.includes(r))
+  return rol ? NOMBRE_DEL_ROL[rol] : undefined
+}
+
 /**
  * Con qué restaurante entra. La preferencia de la URL manda, después el último elegido y, si trabaja en uno solo, ese.
  * Con varios y sin preferencia queda en null y la persona elige en el selector.
@@ -133,4 +148,8 @@ export function useRolesActuales(): Rol[] {
   const perfil = usePerfil()
   const restauranteId = useContextoStore((s) => s.restauranteId)
   return rolesEnElRestaurante(perfil, restauranteId)
+}
+
+export function useNombreDelRol(): string | undefined {
+  return nombreDelRol(useRolesActuales())
 }

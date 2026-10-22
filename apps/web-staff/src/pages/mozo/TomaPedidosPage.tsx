@@ -2,8 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import type { Mesa } from '@menyu/types'
 import { ClipboardList, Minus, Plus, ShoppingBag, X } from 'lucide-react'
-import { useAuth } from '@menyu/auth'
-import { useMozoStore } from '../../store/mozoStore'
+import { usePerfil } from '@menyu/auth-client'
+import { useNombreDelRol, useRestauranteId } from '../../store/contextoStore'
 import { api } from '../../services/api'
 import type { MenuItem, MenuCategoria, SesionActivaRico } from '../../services/api'
 import { PageHeader } from '../../components/PageHeader'
@@ -374,11 +374,12 @@ function CartItemCard({ ci, onEditar, onQuitar }: { ci: CarritoItem; onEditar: (
 // ── Main page ──────────────────────────────────────────────────────────────────
 export function TomaPedidosPage() {
   const navigate = useNavigate()
-  const { user } = useAuth()
+  const perfil = usePerfil()
   const [searchParams] = useSearchParams()
   const mesaIdFromUrl = searchParams.get('mesaId')
-  const { restauranteId } = useMozoStore()
-  const nombreMozo = user?.nombre ?? user?.email ?? 'Mozo'
+  const restauranteId = useRestauranteId()
+  const nombreMozo = perfil.nombre || perfil.email
+  const rolMostrado = useNombreDelRol()
 
   const [mesas,        setMesas]        = useState<Mesa[]>([])
   const [sesiones,     setSesiones]     = useState<Map<string, SesionActivaRico>>(new Map())
@@ -555,8 +556,8 @@ export function TomaPedidosPage() {
           icon={<ClipboardList size={18} />}
           onBack={() => setVista('menu')}
           userName={nombreMozo}
-          userRole="Mozo"
-          userInitials={getInitials(user?.nombre ?? user?.email)}
+          userRole={rolMostrado}
+          userInitials={getInitials(nombreMozo)}
         />
 
         <main style={{ flex: 1, overflowY: 'auto', padding: 20, maxWidth: 640, margin: '0 auto', width: '100%' }}>
@@ -618,8 +619,8 @@ export function TomaPedidosPage() {
           icon={<ClipboardList size={18} />}
           onBack={() => { setVista('mesas'); setCarrito([]) }}
           userName={nombreMozo}
-          userRole="Mozo"
-          userInitials={getInitials(user?.nombre ?? user?.email)}
+          userRole={rolMostrado}
+          userInitials={getInitials(nombreMozo)}
         />
 
         <main style={{ flex: 1, overflowY: 'auto', padding: '16px 20px 100px' }}>
@@ -755,8 +756,8 @@ export function TomaPedidosPage() {
         icon={<ClipboardList size={18} />}
         onBack={() => navigate('/mozo')}
         userName={nombreMozo}
-        userRole="Mozo"
-        userInitials={getInitials(user?.nombre ?? user?.email)}
+        userRole={rolMostrado}
+        userInitials={getInitials(nombreMozo)}
       />
 
       <main style={{ padding: 20 }}>

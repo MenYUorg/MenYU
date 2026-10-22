@@ -306,7 +306,12 @@ export const api = {
       return authFetch<SesionPagadaItem[]>(`/sessions/pagadas?${params.toString()}`)
     },
 
-    registrarCobro: (sesionId: string, body: { metodoPago: string; mozoId?: string; cobradoPorNombre?: string; referenciaExterna?: string; confirmarCancelacionPagosPendientes?: boolean }) =>
+    /**
+     * Quién cobró lo deduce el backend de la cuenta (`common/atribucion-del-cobro.ts`): desde la entrega 4.3 el
+     * `mozoId` del body se ignora para un MOZO o JEFE_SALON, y `cobradoPorNombre` le ganaría al nombre del mozo en las
+     * sesiones pagadas. Por eso no se mandan desde staff.
+     */
+    registrarCobro: (sesionId: string, body: { metodoPago: string; referenciaExterna?: string; confirmarCancelacionPagosPendientes?: boolean }) =>
       authFetch<{ ok: boolean }>(`/sessions/${sesionId}/cobro`, {
         method: 'PATCH',
         body: JSON.stringify(body),

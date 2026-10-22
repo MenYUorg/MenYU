@@ -2,12 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { io, type Socket } from 'socket.io-client'
 import { AlertTriangle, ChevronRight, ClipboardList, Clock, RefreshCw } from 'lucide-react'
-import { useAuth } from '@menyu/auth'
+import { usePerfil } from '@menyu/auth-client'
 import { APARIENCIA_PEDIDOS, EditarPedidoModal, type AparienciaEditarPedido, type ItemEditable } from '@menyu/ui/editar-pedido'
 import { urlDelSocket } from '@menyu/ui/socket'
 import { api } from '../../services/api'
 import type { PedidoRico } from '../../services/api'
-import { useMozoStore } from '../../store/mozoStore'
+import { puedeEditarPedidos, useNombreDelRol, useRestauranteId, useRolesActuales } from '../../store/contextoStore'
 import { PageHeader } from '../../components/PageHeader'
 import { conectarImpresora, impresoraConectada, imprimirPedido, testPrint } from '../../services/impresora'
 
@@ -86,10 +86,11 @@ function shortId(id: string): string {
 
 // ── PedidoCard ────────────────────────────────────────────────────────────────
 function PedidoCard({
-  pedido, onAvanzar, onEntregar, onEditar, loading,
+  pedido, onAvanzar, onEntregar, onEditar, loading, puedeEditar,
 }: {
   pedido: PedidoRico; onAvanzar: (id: string, estado: EstadoPedido) => void
   onEntregar: (id: string) => void; onEditar: (p: PedidoRico) => void; loading: boolean
+  puedeEditar: boolean
 }) {
   const estado    = pedido.estado as EstadoPedido
   const siguiente = ESTADO_NEXT[estado]
@@ -102,7 +103,8 @@ function PedidoCard({
   const badgeBg     = isAnulado ? '#fef2f2' : hasEdits ? '#FDE5DF' : colores.bg
   const badgeColor  = isAnulado ? '#dc2626' : hasEdits ? '#E8563A' : colores.text
   const badgeBorder = isAnulado ? '#fecaca' : hasEdits ? '#fca5a5' : colores.border
-  const canEdit     = estado === 'pendiente' || estado === 'en_preparacion'
+  // Editar un pedido es de GERENTE, JEFE_SALON y MOZO: al OWNER el backend le responde 403 (matriz de la 4.3).
+  const canEdit     = puedeEditar && (estado === 'pendiente' || estado === 'en_preparacion')
 
   return (
     <div style={{ width: '100%', boxSizing: 'border-box', background: C.white, border: `1px solid ${urgente && estado === 'pendiente' ? '#fca5a5' : C.border}`, borderRadius: 10, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -195,9 +197,11 @@ function PedidoCard({
 // ── Main page ─────────────────────────────────────────────────────────────────
 export function PedidosPage() {
   const navigate = useNavigate()
-  const { user } = useAuth()
-  const { restauranteId } = useMozoStore()
-  const nombreMozo = user?.nombre ?? user?.email ?? 'Mozo'
+  const perfil = usePerfil()
+  const restauranteId = useRestauranteId()
+  const nombreMozo = perfil.nombre || perfil.email
+  const rolMostrado = useNombreDelRol()
+  const puedeEditar = puedeEditarPedidos(useRolesActuales())
   const [pedidos,       setPedidos]       = useState<PedidoRico[]>([])
   const [loadingIds,    setLoadingIds]    = useState<Set<string>>(new Set())
   const [error,         setError]         = useState<string | null>(null)
@@ -307,8 +311,8 @@ export function PedidosPage() {
         onBack={() => navigate('/mozo')}
         onRefresh={() => void fetchAll()}
         userName={nombreMozo}
-        userRole="Mozo"
-        userInitials={getInitials(user?.nombre ?? user?.email)}
+        userRole={rolMostrado}
+        userInitials={getInitials(nombreMozo)}
         extraActions={
           conectada ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
@@ -360,6 +364,7 @@ export function PedidosPage() {
                       key={p.id} pedido={p}
                       onAvanzar={handleAvanzar} onEntregar={handleEntregar}
                       onEditar={setEditingPedido} loading={loadingIds.has(p.id)}
+                      puedeEditar={puedeEditar}
                     />
                   ))
                 )}
