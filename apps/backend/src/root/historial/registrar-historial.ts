@@ -17,8 +17,12 @@ import type { Prisma } from '@prisma/client'
 export type EntidadRoot = 'MARCA' | 'RESTAURANTE' | 'OWNER' | 'ROOT'
 
 /**
- * Cada acción y sobre qué tipo de entidad es. `ROOT_ELIMINAR` y `ROOT_PROMOVER` solo las hace el script (no hay ruta para
- * borrar cuentas ROOT ni para hacer ROOT a una cuenta que ya existe).
+ * Las acciones que se pueden registrar hoy y sobre qué tipo de entidad es cada una. `ROOT_PROMOVER` solo la hace el script (no
+ * hay ruta para hacer ROOT a una cuenta que ya existe).
+ *
+ * Las filas anteriores a la entrega 4.4 de auth tienen además las acciones de las cuentas con contraseña (`DUENO_CREAR`,
+ * `DUENO_CAMBIAR_EMAIL`, `DUENO_RESTABLECER`, `DUENO_ELIMINAR`, `ROOT_CREAR`, `ROOT_RESTABLECER` y `ROOT_ELIMINAR`): siguen en la
+ * tabla y se leen igual, pero ya no se escriben.
  */
 export const ENTIDAD_DE_ACCION = {
   MARCA_CREAR: 'MARCA',
@@ -29,15 +33,8 @@ export const ENTIDAD_DE_ACCION = {
   RESTAURANTE_EDITAR: 'RESTAURANTE',
   RESTAURANTE_BAJA: 'RESTAURANTE',
   RESTAURANTE_REACTIVAR: 'RESTAURANTE',
-  DUENO_CREAR: 'OWNER',
-  DUENO_CAMBIAR_EMAIL: 'OWNER',
-  DUENO_RESTABLECER: 'OWNER',
-  DUENO_ELIMINAR: 'OWNER',
   DUENO_INVITAR: 'OWNER',
   DUENO_QUITAR: 'OWNER',
-  ROOT_CREAR: 'ROOT',
-  ROOT_RESTABLECER: 'ROOT',
-  ROOT_ELIMINAR: 'ROOT',
   ROOT_INVITAR: 'ROOT',
   ROOT_PROMOVER: 'ROOT',
 } as const satisfies Record<string, EntidadRoot>
@@ -66,26 +63,13 @@ export interface EntradaHistorial {
 /** Lo único que necesita para escribir: el cliente de la transacción (o cualquiera que tenga `historialRoot.create`). */
 export type ClienteConHistorial = Pick<Prisma.TransactionClient, 'historialRoot'>
 
-/**
- * Cómo figura una contraseña en el detalle. NUNCA el valor: una contraseña restablecida es "no se registra".
- * El código arma el detalle con estas constantes; no hay un camino para meter una contraseña real.
- */
-export const CAMBIO_PASSWORD = {
-  generada: { campo: 'Contraseña', antes: null, despues: 'generada (no se registra)' },
-  elegida: { campo: 'Contraseña', antes: null, despues: 'elegida por quien la creó (no se registra)' },
-  restablecida: {
-    campo: 'Contraseña',
-    antes: '(no se registra)',
-    despues: 'restablecida: la persona tiene que cambiarla al entrar',
-  },
-} as const satisfies Record<string, CambioHistorial>
-
 /** Si la invitación mandó un mail o sumó a alguien que ya tenía cuenta (en Supabase o como `Usuario`). */
 export function cambioDeInvitacion(invitacionEnviada: boolean): CambioHistorial {
   return { campo: 'Invitación', antes: null, despues: invitacionEnviada ? 'mail enviado' : 'ya tenía cuenta: no se le mandó mail' }
 }
 
-// Un hash de bcrypt ($2a$10$… de 60 caracteres), esté solo o dentro de un texto. Red de seguridad: ningún detalle lo lleva.
+// Un hash de bcrypt ($2a$10$… de 60 caracteres), esté solo o dentro de un texto. Red de seguridad: ningún detalle lo lleva
+// (mientras existan las tablas con `password_hash`, hasta la Fase 5 de auth).
 const HASH_BCRYPT = /\$2[abxy]?\$\d{2}\$[./A-Za-z0-9]{40,}/
 
 const LARGO_MAXIMO_TEXTO = 500

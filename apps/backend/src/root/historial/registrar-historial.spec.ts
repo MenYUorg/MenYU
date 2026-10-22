@@ -3,7 +3,6 @@ import { join } from 'path'
 import * as bcrypt from 'bcryptjs'
 import {
   AccionRoot,
-  CAMBIO_PASSWORD,
   ENTIDAD_DE_ACCION,
   EntradaHistorial,
   RegistroInvalido,
@@ -13,10 +12,10 @@ import {
 
 const ENTRADA: EntradaHistorial = {
   actor: { tipo: 'ROOT', id: 'root-1', nombre: 'ana@ejemplo.com' },
-  accion: 'DUENO_CREAR',
+  accion: 'DUENO_INVITAR',
   entidad: { tipo: 'OWNER', id: 'owner-9', nombre: 'juan@laparrilla.com' },
   marca: { id: 'marca-1', nombre: 'La Parrilla' },
-  cambios: [{ campo: 'Email', antes: null, despues: 'juan@laparrilla.com' }, CAMBIO_PASSWORD.generada],
+  cambios: [{ campo: 'Dueño de', antes: null, despues: 'La Parrilla' }, cambioDeInvitacion(true)],
 }
 
 function clienteFalso() {
@@ -37,15 +36,15 @@ describe('registrarEnHistorial', () => {
       actorTipo: 'ROOT',
       actorId: 'root-1',
       actorNombre: 'ana@ejemplo.com',
-      accion: 'DUENO_CREAR',
+      accion: 'DUENO_INVITAR',
       entidadTipo: 'OWNER',
       entidadId: 'owner-9',
       entidadNombre: 'juan@laparrilla.com',
       marcaId: 'marca-1',
       marcaNombre: 'La Parrilla',
       detalle: [
-        { campo: 'Email', antes: null, despues: 'juan@laparrilla.com' },
-        { campo: 'Contraseña', antes: null, despues: 'generada (no se registra)' },
+        { campo: 'Dueño de', antes: null, despues: 'La Parrilla' },
+        { campo: 'Invitación', antes: null, despues: 'mail enviado' },
       ],
     })
   })
@@ -57,9 +56,9 @@ describe('registrarEnHistorial', () => {
     // Act
     await registrarEnHistorial(tx as never, {
       actor: { tipo: 'SCRIPT', nombre: 'marga' },
-      accion: 'ROOT_CREAR',
+      accion: 'ROOT_PROMOVER',
       entidad: { tipo: 'ROOT', id: 'root-2', nombre: 'bruno@ejemplo.com' },
-      cambios: [{ campo: 'Email', antes: null, despues: 'bruno@ejemplo.com' }],
+      cambios: [{ campo: 'ROOT', antes: 'No', despues: 'Sí' }],
     })
 
     // Assert
@@ -146,31 +145,32 @@ describe('las acciones', () => {
     expect(tx.historialRoot.create.mock.calls[0][0].data).toMatchObject({ accion, entidadTipo: tipo })
   })
 
-  it('son las del plan (docs/plan-consola-root.md, 7.2)', () => {
+  it('son las del plan (docs/plan-consola-root.md, 7.2) con las invitaciones de la entrega 4.4 de auth', () => {
     expect(Object.keys(ENTIDAD_DE_ACCION).sort()).toEqual(
       [
         'MARCA_CREAR', 'MARCA_EDITAR', 'MARCA_BAJA', 'MARCA_REACTIVAR',
         'RESTAURANTE_CREAR', 'RESTAURANTE_EDITAR', 'RESTAURANTE_BAJA', 'RESTAURANTE_REACTIVAR',
-        'DUENO_CREAR', 'DUENO_CAMBIAR_EMAIL', 'DUENO_RESTABLECER', 'DUENO_ELIMINAR',
-        'ROOT_CREAR', 'ROOT_RESTABLECER', 'ROOT_ELIMINAR',
-        // Con Supabase (entrega 4.4 de auth): invitar y quitar dueños, invitar cuentas ROOT y, desde el script, promover una.
         'DUENO_INVITAR', 'DUENO_QUITAR', 'ROOT_INVITAR', 'ROOT_PROMOVER',
       ].sort(),
     )
   })
+
+  // Las cuentas con contraseña se fueron con Supabase: sus filas viejas siguen en la tabla, pero ya no se pueden escribir.
+  it.each(['DUENO_CREAR', 'DUENO_CAMBIAR_EMAIL', 'DUENO_RESTABLECER', 'DUENO_ELIMINAR', 'ROOT_CREAR', 'ROOT_RESTABLECER', 'ROOT_ELIMINAR'])(
+    '%s ya no se registra',
+    async (accion) => {
+      const tx = clienteFalso()
+
+      await expect(registrarEnHistorial(tx as never, { ...ENTRADA, accion: accion as AccionRoot })).rejects.toThrow(/Acción desconocida/)
+      expect(tx.historialRoot.create).not.toHaveBeenCalled()
+    },
+  )
 
   it.each([
     [true, 'mail enviado'],
     [false, 'ya tenía cuenta: no se le mandó mail'],
   ])('la invitación con invitacionEnviada=%s dice «%s»', (enviada, texto) => {
     expect(cambioDeInvitacion(enviada)).toEqual({ campo: 'Invitación', antes: null, despues: texto })
-  })
-
-  it('las constantes que describen una contraseña no llevan nunca un valor real', () => {
-    for (const cambio of Object.values(CAMBIO_PASSWORD)) {
-      expect(`${cambio.antes ?? ''}${cambio.despues ?? ''}`).toMatch(/no se registra|restablecida|^$/)
-      expect(JSON.stringify(cambio)).not.toMatch(/\$2[abxy]?\$/)
-    }
   })
 })
 

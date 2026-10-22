@@ -181,12 +181,14 @@ tienen que usar `set local session_replication_role = replica` dentro de una tra
 
 ```bash
 # desde apps/backend, con DATABASE_URL de ESA terminal (el script no lee el .env a propósito)
-pnpm exec ts-node --transpile-only scripts/cuentas-root.ts listar | crear <email> | restablecer <email> | eliminar <email>
+pnpm exec ts-node --transpile-only scripts/cuentas-root.ts listar | promover <email>
 ```
 
-La contraseña se pide sin eco. Lo que hace el script queda en el historial de ROOT (actor `SCRIPT`, con tu usuario del sistema
-como operador), dentro de la misma transacción que el cambio. Si la base todavía no tiene la tabla (producción, hasta el tag que
-lleve la consola), avisa y hace la acción igual sin registrarla. El encabezado de `scripts/cuentas-root.ts` explica todo.
+Desde la entrega 4.4 de auth una cuenta ROOT es un `Usuario` de Supabase con `esRoot`. A una persona nueva se la invita desde la
+consola (Cuentas ROOT); `promover` hace ROOT a alguien que ya tiene cuenta en MenYU, que la consola no hace a propósito. El
+primer ROOT de un ambiente se crea a mano (`docs/auth/usuarios-prueba-staging.md`). Lo que hace el script queda en el historial
+de ROOT (actor `SCRIPT`, con tu usuario del sistema como operador), dentro de la misma transacción que el cambio. Si la base
+todavía no tiene la tabla, avisa y hace la acción igual sin registrarla. El encabezado de `scripts/cuentas-root.ts` explica todo.
 
 ### Probar los disparadores contra un PostgreSQL de verdad
 

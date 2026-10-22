@@ -1,5 +1,4 @@
 import { PrismaService } from '../prisma/prisma.service'
-import { JwtPayload } from '../auth/auth.service'
 
 /**
  * Mock de PrismaService para tests unitarios de services.
@@ -45,23 +44,4 @@ export function crearPrismaMock(): PrismaMock {
 /** El mock con el tipo que esperan los constructores de los services. */
 export function comoPrisma(mock: PrismaMock): PrismaService {
   return mock as unknown as PrismaService
-}
-
-// Usuarios del JWT de admin que se repiten en los tests de permisos.
-export const OWNER: JwtPayload = { sub: 'admin-owner', tipo: 'admin', rol: 'OWNER' }
-export const GERENTE: JwtPayload = { sub: 'admin-gerente', tipo: 'admin', rol: 'GERENTE' }
-
-/**
- * Configura el mock para que `OWNER` sea dueño de la marca del restaurante `restauranteId`
- * (admin.marcaId === restaurante.marcaId), que es el chequeo de pertenencia de los services.
- */
-export function ownerDeLaMarca(prisma: PrismaMock, restauranteId = 'rest-1') {
-  prisma.admin.findUnique.mockResolvedValue({ id: OWNER.sub, marcaId: 'marca-1' })
-  prisma.restaurante.findUnique.mockResolvedValue({ id: restauranteId, marcaId: 'marca-1', activo: true })
-}
-
-/** Configura el mock para que `OWNER` sea de otra marca que la del restaurante. */
-export function ownerDeOtraMarca(prisma: PrismaMock, restauranteId = 'rest-1') {
-  prisma.admin.findUnique.mockResolvedValue({ id: OWNER.sub, marcaId: 'otra-marca' })
-  prisma.restaurante.findUnique.mockResolvedValue({ id: restauranteId, marcaId: 'marca-1', activo: true })
 }

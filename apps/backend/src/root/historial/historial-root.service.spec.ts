@@ -65,9 +65,9 @@ describe('HistorialRootService', () => {
   describe('registrar', () => {
     const entrada: EntradaHistorial = {
       actor: { tipo: 'ROOT', id: 'root-1', nombre: 'ana@ejemplo.com' },
-      accion: 'ROOT_CREAR',
+      accion: 'ROOT_INVITAR',
       entidad: { tipo: 'ROOT', id: 'root-2', nombre: 'bruno@ejemplo.com' },
-      cambios: [{ campo: 'Email', antes: null, despues: 'bruno@ejemplo.com' }],
+      cambios: [{ campo: 'Cuenta ROOT', antes: null, despues: 'bruno@ejemplo.com' }],
     }
 
     it('escribe con el cliente de la transacción que recibe', async () => {
@@ -79,7 +79,7 @@ describe('HistorialRootService', () => {
 
       // Assert
       expect(tx.historialRoot.create).toHaveBeenCalledTimes(1)
-      expect(tx.historialRoot.create.mock.calls[0][0].data).toMatchObject({ accion: 'ROOT_CREAR', entidadId: 'root-2' })
+      expect(tx.historialRoot.create.mock.calls[0][0].data).toMatchObject({ accion: 'ROOT_INVITAR', entidadId: 'root-2' })
       expect(prisma.historialRoot.create).not.toHaveBeenCalled()
     })
 

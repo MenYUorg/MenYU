@@ -35,7 +35,6 @@ export function armarTransaccionRoot(): { prisma: PrismaMock; tx: PrismaMock } {
   prisma.$transaction.mockImplementation((fn: (cliente: PrismaMock) => Promise<unknown>) => fn(tx))
   tx.usuario.findUnique.mockResolvedValue({ id: ROOT_USER.id, email: EMAIL_DEL_ROOT, esRoot: true, activo: true })
   tx.historialRoot.create.mockResolvedValue({ id: 1 })
-  tx.refreshToken.updateMany.mockResolvedValue({ count: 0 })
   return { prisma, tx }
 }
 
@@ -44,10 +43,7 @@ export function filasDelHistorial(tx: PrismaMock): Array<Record<string, any>> {
   return tx.historialRoot.create.mock.calls.map(([args]) => args.data)
 }
 
-/**
- * Todo lo que se le pidió a la base (consultas y escrituras), serializado. Para afirmar que una contraseña o un hash no
- * aparecen en ninguna parte del historial.
- */
+/** Una respuesta o un registro, serializado: para afirmar que un dato que no tiene que salir no aparece en ninguna parte. */
 export function serializar(valor: unknown): string {
   return JSON.stringify(valor)
 }
