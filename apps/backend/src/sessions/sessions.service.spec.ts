@@ -12,7 +12,8 @@ import { PrismaService } from '../prisma/prisma.service'
 import { UsersService } from '../users/users.service'
 import { MenyuGateway } from '../gateway/menyu.gateway'
 import { DivisionService } from '../comensales/division.service'
-import { JwtPayload } from '../auth/auth.service'
+import { AccesoService } from '../auth/supabase/acceso.service'
+import { accesoDeTest, CUENTAS, MOZOS, MUNDO } from '../test/acceso-de-test'
 import {
   ESTADO_PAGO_APROBADO,
   ESTADO_PAGO_PENDIENTE,
@@ -39,13 +40,7 @@ const mockPrisma = {
   pedidoItem: {
     findMany: jest.fn(),
   },
-  admin: {
-    findUnique: jest.fn(),
-  },
-  restaurante: {
-    findUnique: jest.fn(),
-  },
-  adminRestaurante: {
+  mozo: {
     findUnique: jest.fn(),
   },
   $transaction: jest.fn(),
@@ -117,6 +112,7 @@ describe('SessionsService', () => {
         { provide: JwtService,   useValue: mockJwt     },
         { provide: MenyuGateway, useValue: mockGateway },
         { provide: DivisionService, useValue: mockDivision },
+        { provide: AccesoService, useValue: accesoDeTest() },
       ],
     }).compile()
 
@@ -595,10 +591,10 @@ describe('SessionsService', () => {
       id: 'sesion-1',
       cerradaEn: null,
       mesaId: 'mesa-1',
-      mesa: { id: 'mesa-1', numero: '5', restauranteId: 'rest-1' },
+      mesa: { id: 'mesa-1', numero: '5', restauranteId: MUNDO.REST_1 },
     }
 
-    const USER_MOZO: JwtPayload = { sub: 'mozo-1', tipo: 'mozo', restauranteId: 'rest-1' }
+    const USER_MOZO = CUENTAS.MOZO
 
     const DTO_BASE = { metodoPago: 'efectivo' as const }
 
@@ -910,32 +906,91 @@ describe('SessionsService', () => {
       expect(JSON.stringify(consultas)).not.toContain('comensalId')
     })
 
-    it('sesión inexistente → NotFoundException, sin abrir la transacción', async () => {
-      // Arrange
-      mockPrisma.sesionMesa.findUnique.mockResolvedValue(null)
+    describe('a nombre de quién queda el cobro (#356)', () => {
+      const cobroQueCierra = () => {
+        mockDivision.calcularTotalSesion.mockResolvedValue(1000)
+        tx.pago.findMany
+          .mockResolvedValueOnce([]) // aprobados previos
+          .mockResolvedValueOnce([]) // sin MP pendientes
+          .mockResolvedValueOnce([{ id: 'pago-nuevo', monto: 1000 }])
+        tx.pago.create.mockResolvedValue({ id: 'pago-nuevo' })
+      }
 
-      // Act
-      const cobro = service.registrarCobro('sesion-x', DTO_BASE, USER_MOZO)
+      it('un MOZO cobra con su propio Mozo aunque mande el de otro, y su cuenta queda en usuarioId', async () => {
+        cobroQueCierra()
 
-      // Assert
-      await expect(cobro).rejects.toThrow(NotFoundException)
-      await expect(cobro).rejects.toThrow('Sesión no encontrada')
-      expect(mockPrisma.$transaction).not.toHaveBeenCalled()
+        await service.registrarCobro('sesion-1', { ...DTO_BASE, mozoId: 'mozo-ajeno' }, CUENTAS.MOZO)
+
+        expect(tx.pago.create).toHaveBeenCalledWith({
+          data: expect.objectContaining({ mozoId: MOZOS.DEL_MOZO.id, usuarioId: CUENTAS.MOZO.id }),
+        })
+        expect(mockPrisma.mozo.findUnique).not.toHaveBeenCalled()
+      })
+
+      it('un GERENTE cobra a su nombre y le atribuye el cobro a un mozo del restaurante', async () => {
+        cobroQueCierra()
+        mockPrisma.mozo.findUnique.mockResolvedValue({ restauranteId: MUNDO.REST_1, activo: true })
+
+        await service.registrarCobro('sesion-1', { ...DTO_BASE, mozoId: 'mozo-7' }, CUENTAS.GERENTE)
+
+        expect(tx.pago.create).toHaveBeenCalledWith({
+          data: expect.objectContaining({ mozoId: 'mozo-7', usuarioId: CUENTAS.GERENTE.id }),
+        })
+      })
+
+      it('el efectivo que pidió un comensal se reutiliza con la misma atribución', async () => {
+        mockDivision.calcularTotalSesion.mockResolvedValue(1000)
+        tx.pago.findMany
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([{ id: 'pago-ef', monto: 1000 }])
+        tx.pago.findFirst.mockResolvedValue({ id: 'pago-ef', metodo: 'efectivo', estado: ESTADO_PAGO_PENDIENTE })
+
+        await service.registrarCobro('sesion-1', DTO_BASE, CUENTAS.JEFE_SALON)
+
+        expect(tx.pago.update).toHaveBeenCalledWith({
+          where: { id: 'pago-ef' },
+          data: expect.objectContaining({ mozoId: MOZOS.DEL_JEFE_SALON.id, usuarioId: CUENTAS.JEFE_SALON.id }),
+        })
+      })
+
+      it.each([
+        ['ROOT (no es un bypass)', CUENTAS.ROOT],
+        ['la COCINA', CUENTAS.COCINA],
+        ['el OWNER de otra marca', CUENTAS.OWNER_B],
+      ])('%s no cobra (403) y no se abre la transacción', async (_caso, cuenta) => {
+        await expect(service.registrarCobro('sesion-1', DTO_BASE, cuenta)).rejects.toThrow(ForbiddenException)
+
+        expect(mockPrisma.$transaction).not.toHaveBeenCalled()
+      })
+
+      it('un mozo inválido indicado por el GERENTE falla antes de abrir la transacción', async () => {
+        mockPrisma.mozo.findUnique.mockResolvedValue(null)
+
+        await expect(service.registrarCobro('sesion-1', { ...DTO_BASE, mozoId: 'no-existe' }, CUENTAS.GERENTE)).rejects.toThrow(
+          BadRequestException,
+        )
+        expect(mockPrisma.$transaction).not.toHaveBeenCalled()
+      })
+
+      it('una sesión ya cerrada: 400, y el permiso se pide antes', async () => {
+        mockPrisma.sesionMesa.findUnique.mockResolvedValue({ ...SESION_PARA_COBRO, cerradaEn: new Date() })
+
+        await expect(service.registrarCobro('sesion-1', DTO_BASE, CUENTAS.ROOT)).rejects.toThrow(ForbiddenException)
+        await expect(service.registrarCobro('sesion-1', DTO_BASE, CUENTAS.MOZO)).rejects.toThrow(
+          new BadRequestException('La sesión ya fue cerrada'),
+        )
+      })
+
+      it('una sesión que no existe: 404', async () => {
+        mockPrisma.sesionMesa.findUnique.mockResolvedValue(null)
+
+        await expect(service.registrarCobro('no-existe', DTO_BASE, CUENTAS.MOZO)).rejects.toThrow(NotFoundException)
+      })
     })
 
-    it('sesión ya cerrada → BadRequestException, sin abrir la transacción', async () => {
-      // Arrange
-      mockPrisma.sesionMesa.findUnique.mockResolvedValue({ ...SESION_PARA_COBRO, cerradaEn: hace(5) })
-
-      // Act
-      const cobro = service.registrarCobro('sesion-1', DTO_BASE, USER_MOZO)
-
-      // Assert
-      await expect(cobro).rejects.toThrow(BadRequestException)
-      await expect(cobro).rejects.toThrow('La sesión ya fue cerrada')
-      expect(mockPrisma.$transaction).not.toHaveBeenCalled()
-    })
-
+    // De SCRUM-27 (main). Los dos casos que lo acompañaban —sesión inexistente y sesión ya cerrada— ya están arriba,
+    // con las cuentas de `acceso-de-test` en lugar del `USER_MOZO` del JWT legacy, que la Fase 4 retiró.
     it('los pagos rechazados no se tocan: no cuentan como cobrados, no se cancelan ni se reutilizan', async () => {
       // Arrange: la tabla de pagos de la sesión tiene un MP rechazado, un efectivo rechazado y un MP pendiente viejo.
       // findMany y findFirst filtran esa tabla con el `where` que recibe, como lo haría la base.
@@ -956,7 +1011,7 @@ describe('SessionsService', () => {
       })
 
       // Act
-      const result = await service.registrarCobro('sesion-1', DTO_BASE, USER_MOZO)
+      const result = await service.registrarCobro('sesion-1', DTO_BASE, CUENTAS.MOZO)
 
       // Assert
       expect(tx.pago.updateMany).toHaveBeenCalledWith({

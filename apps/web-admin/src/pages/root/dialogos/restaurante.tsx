@@ -2,10 +2,10 @@ import { useState, type FormEvent } from 'react'
 import { Lock, Store } from 'lucide-react'
 import type { RootMarcaDetalle, RootRestaurante } from '@menyu/types'
 import { api } from '../../../services/api'
-import { Aviso } from '../ui/piezas'
 import { Campo, CampoFijo } from '../ui/Campo'
 import { Dialogo } from '../ui/Dialogo'
 import { efectosDeBajaDeRestaurante, efectosDeReactivarRestaurante } from '../copy'
+import { AvisoDeError } from './AvisoDeError'
 import { useEnvio } from './envio'
 import { errorDeNombre } from './validaciones'
 
@@ -15,17 +15,6 @@ function errorDeDireccion(direccion: string): string {
   if (!direccion.trim()) return 'Escribí la dirección.'
   if (direccion.trim().length > MAX_DIRECCION) return `Tiene que tener hasta ${MAX_DIRECCION} caracteres.`
   return ''
-}
-
-function AvisoDeError({ texto }: { texto: string }) {
-  if (!texto) return null
-  return (
-    <div style={{ marginBottom: 14 }}>
-      <Aviso tipo="err">
-        <b>No pudimos completar la acción.</b> {texto}
-      </Aviso>
-    </div>
-  )
 }
 
 interface DialogoRestauranteProps {

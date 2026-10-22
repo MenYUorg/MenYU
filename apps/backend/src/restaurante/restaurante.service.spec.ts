@@ -1,28 +1,26 @@
 import { Test } from '@nestjs/testing'
 import { ForbiddenException, NotFoundException } from '@nestjs/common'
-import { RestauranteService, RESTAURANTE_DETAIL_INCLUDE } from './restaurante.service'
+import {
+  RestauranteService,
+  RESTAURANTE_CON_MARCA_SELECT,
+  RESTAURANTE_DETALLE_SELECT,
+} from './restaurante.service'
+import { RESTAURANTE_SELECT } from './restaurante.select'
 import { PrismaService } from '../prisma/prisma.service'
 import { LogosService } from '../storage/logos.service'
-import { JwtPayload } from '../auth/auth.service'
+import { AccesoService } from '../auth/supabase/acceso.service'
+import { accesoDeTest, CUENTAS, MUNDO } from '../test/acceso-de-test'
 
-const OWNER: JwtPayload = { sub: 'admin-1', email: 'owner@test.com', tipo: 'admin', rol: 'OWNER' }
-const GERENTE: JwtPayload = { sub: 'gerente-1', email: 'gerente@test.com', tipo: 'admin', rol: 'GERENTE' }
-const ROOT: JwtPayload = { sub: 'root-1', email: 'root@menyu.com', tipo: 'admin', rol: 'ROOT' }
-
-const RESTAURANTE = { id: 'rest-1', marcaId: 'marca-1', nombre: 'Sucursal Norte', activo: true, logoUrl: null }
+const REST = MUNDO.REST_1
+const RESTAURANTE = { id: REST, marcaId: MUNDO.MARCA_A, nombre: 'Sucursal Norte', activo: true, logoUrl: null }
 const LOGO_URL = 'https://proyecto.supabase.co/storage/v1/object/public/logos/restaurantes/rest-1?v=1700000000000'
 const ARCHIVO = { buffer: Buffer.from('logo'), mimetype: 'image/png' } as Express.Multer.File
 
 const mockPrisma = {
   restaurante: {
+    findMany: jest.fn(),
     findUnique: jest.fn(),
     update: jest.fn(),
-  },
-  admin: {
-    findUnique: jest.fn(),
-  },
-  adminRestaurante: {
-    findUnique: jest.fn(),
   },
 }
 
@@ -40,6 +38,7 @@ describe('RestauranteService', () => {
         RestauranteService,
         { provide: PrismaService, useValue: mockPrisma },
         { provide: LogosService, useValue: mockLogos },
+        { provide: AccesoService, useValue: accesoDeTest() },
       ],
     }).compile()
 
@@ -47,222 +46,156 @@ describe('RestauranteService', () => {
     jest.clearAllMocks()
   })
 
+  describe('las respuestas no tienen las columnas de Mercado Pago', () => {
+    it.each([
+      ['RESTAURANTE_SELECT', RESTAURANTE_SELECT],
+      ['RESTAURANTE_CON_MARCA_SELECT', RESTAURANTE_CON_MARCA_SELECT],
+      ['RESTAURANTE_DETALLE_SELECT', RESTAURANTE_DETALLE_SELECT],
+    ])('%s', (_nombre, select) => {
+      expect(Object.keys(select).filter((campo) => campo.startsWith('mp'))).toEqual([])
+    })
+
+    it('los mozos del detalle no traen la contraseña', () => {
+      expect(RESTAURANTE_DETALLE_SELECT.mozos.select).not.toHaveProperty('passwordHash')
+    })
+  })
+
+  // ── findAll ───────────────────────────────────────────────────────────
+
+  describe('findAll (los restaurantes de sus membresías)', () => {
+    it.each([
+      ['el OWNER: todos los de su marca', CUENTAS.OWNER_A, [REST, MUNDO.REST_2]],
+      ['el GERENTE: el suyo', CUENTAS.GERENTE, [REST]],
+    ])('%s', async (_caso, cuenta, ids) => {
+      mockPrisma.restaurante.findMany.mockResolvedValue([RESTAURANTE])
+
+      const result = await service.findAll(cuenta)
+
+      expect(mockPrisma.restaurante.findMany).toHaveBeenCalledWith({
+        where: { id: { in: ids } },
+        orderBy: { nombre: 'asc' },
+        select: RESTAURANTE_CON_MARCA_SELECT,
+      })
+      expect(result).toEqual([RESTAURANTE])
+    })
+
+    it.each([
+      ['ROOT (no es un bypass)', CUENTAS.ROOT],
+      ['el MOZO', CUENTAS.MOZO],
+      ['un Usuario sin membresías', CUENTAS.SIN_MEMBRESIAS],
+    ])('%s recibe 403', async (_caso, cuenta) => {
+      await expect(service.findAll(cuenta)).rejects.toThrow(ForbiddenException)
+
+      expect(mockPrisma.restaurante.findMany).not.toHaveBeenCalled()
+    })
+  })
+
   // ── findOne ───────────────────────────────────────────────────────────
 
-  describe('findOne', () => {
-    it('OWNER de la marca recibe el restaurante pidiendo el include de detalle', async () => {
-      mockPrisma.admin.findUnique.mockResolvedValue({ id: 'admin-1', marcaId: 'marca-1' })
+  describe('findOne (el rol lo exige la ruta)', () => {
+    it('pide el restaurante con el select de detalle', async () => {
       mockPrisma.restaurante.findUnique.mockResolvedValue(RESTAURANTE)
 
-      const result = await service.findOne('rest-1', OWNER)
+      const result = await service.findOne(REST)
 
       expect(mockPrisma.restaurante.findUnique).toHaveBeenCalledWith({
-        where: { id: 'rest-1' },
-        include: RESTAURANTE_DETAIL_INCLUDE,
+        where: { id: REST },
+        select: RESTAURANTE_DETALLE_SELECT,
       })
       expect(result).toEqual(RESTAURANTE)
     })
 
-    it('OWNER lanza 403 si el restaurante es de otra marca', async () => {
-      mockPrisma.admin.findUnique.mockResolvedValue({ id: 'admin-1', marcaId: 'marca-otra' })
-      mockPrisma.restaurante.findUnique.mockResolvedValue(RESTAURANTE)
+    it('lanza 404 si no lo encuentra', async () => {
+      mockPrisma.restaurante.findUnique.mockResolvedValue(null)
 
-      await expect(service.findOne('rest-1', OWNER))
-        .rejects.toThrow(ForbiddenException)
-
-      expect(mockPrisma.restaurante.findUnique).not.toHaveBeenCalledWith(
-        expect.objectContaining({ include: expect.anything() }),
-      )
-    })
-
-    it('GERENTE asignado recibe el restaurante pidiendo el include de detalle', async () => {
-      mockPrisma.adminRestaurante.findUnique.mockResolvedValue({ id: 'asignacion-1' })
-      mockPrisma.restaurante.findUnique.mockResolvedValue(RESTAURANTE)
-
-      const result = await service.findOne('rest-1', GERENTE)
-
-      expect(mockPrisma.adminRestaurante.findUnique).toHaveBeenCalledWith({
-        where: { adminId_restauranteId: { adminId: 'gerente-1', restauranteId: 'rest-1' } },
-      })
-      expect(mockPrisma.restaurante.findUnique).toHaveBeenCalledWith({
-        where: { id: 'rest-1' },
-        include: RESTAURANTE_DETAIL_INCLUDE,
-      })
-      expect(result).toEqual(RESTAURANTE)
-    })
-
-    it('GERENTE lanza 403 si no está asignado al restaurante', async () => {
-      mockPrisma.adminRestaurante.findUnique.mockResolvedValue(null)
-
-      await expect(service.findOne('rest-1', GERENTE))
-        .rejects.toThrow(ForbiddenException)
-
-      expect(mockPrisma.restaurante.findUnique).not.toHaveBeenCalled()
-    })
-
-    it('lanza 404 si el restaurante está inactivo', async () => {
-      mockPrisma.adminRestaurante.findUnique.mockResolvedValue({ id: 'asignacion-1' })
-      mockPrisma.restaurante.findUnique.mockResolvedValue({ ...RESTAURANTE, activo: false })
-
-      await expect(service.findOne('rest-1', GERENTE))
-        .rejects.toThrow(NotFoundException)
+      await expect(service.findOne(REST)).rejects.toThrow(NotFoundException)
     })
   })
 
   // ── update ────────────────────────────────────────────────────────────
 
-  describe('update — dirección (solo el OWNER de la marca)', () => {
-    it('el OWNER de la marca guarda la dirección', async () => {
-      mockPrisma.admin.findUnique.mockResolvedValue({ id: 'admin-1', marcaId: 'marca-1' })
-      mockPrisma.restaurante.findUnique.mockResolvedValue(RESTAURANTE)
-      mockPrisma.restaurante.update.mockResolvedValue({ ...RESTAURANTE, direccion: 'Colón 123' })
+  describe('update (OWNER o GERENTE lo exige la ruta)', () => {
+    beforeEach(() => {
+      mockPrisma.restaurante.update.mockImplementation(({ data }: { data: object }) => Promise.resolve({ ...RESTAURANTE, ...data }))
+    })
 
-      await service.update('rest-1', { direccion: 'Colón 123' }, OWNER)
+    it.each([
+      ['la dirección', { direccion: 'Colón 123' }],
+      ['el nombre de la sección de recomendados', { nombreSeccionRecomendados: 'DESTACADOS' }],
+    ])('el OWNER de la marca cambia %s', async (_campo, dto) => {
+      await service.update(REST, dto, CUENTAS.OWNER_A)
 
       expect(mockPrisma.restaurante.update).toHaveBeenCalledWith({
-        where: { id: 'rest-1' },
-        data: { direccion: 'Colón 123' },
+        where: { id: REST },
+        data: dto,
+        select: RESTAURANTE_SELECT,
       })
     })
 
-    it('un OWNER de otra marca recibe 403', async () => {
-      mockPrisma.admin.findUnique.mockResolvedValue({ id: 'admin-2', marcaId: 'marca-otra' })
-      mockPrisma.restaurante.findUnique.mockResolvedValue(RESTAURANTE)
-
-      await expect(service.update('rest-1', { direccion: 'Colón 123' }, OWNER))
-        .rejects.toThrow(ForbiddenException)
-
-      expect(mockPrisma.restaurante.update).not.toHaveBeenCalled()
-    })
-
-    it('un GERENTE asignado recibe 403 si intenta cambiar la dirección', async () => {
-      mockPrisma.adminRestaurante.findUnique.mockResolvedValue({ id: 'asignacion-1' })
-      mockPrisma.restaurante.findUnique.mockResolvedValue(RESTAURANTE)
-
-      await expect(service.update('rest-1', { direccion: 'Colón 123' }, GERENTE))
-        .rejects.toThrow(ForbiddenException)
+    it.each([
+      ['la dirección', { direccion: 'Colón 123' }],
+      ['el nombre de la sección de recomendados', { nombreSeccionRecomendados: 'DESTACADOS' }],
+    ])('el GERENTE recibe 403 si intenta cambiar %s', async (_campo, dto) => {
+      await expect(service.update(REST, dto, CUENTAS.GERENTE)).rejects.toThrow(
+        new ForbiddenException('Solo el owner de la marca puede cambiar la dirección y el nombre de la sección de recomendados'),
+      )
 
       expect(mockPrisma.restaurante.update).not.toHaveBeenCalled()
     })
 
-    it('ROOT recibe 403 si intenta cambiar la dirección', async () => {
-      await expect(service.update('rest-1', { direccion: 'Colón 123' }, ROOT))
-        .rejects.toThrow(ForbiddenException)
-
-      expect(mockPrisma.restaurante.update).not.toHaveBeenCalled()
-    })
-
-    it('un GERENTE asignado sigue pudiendo cambiar el modo de sesión', async () => {
-      mockPrisma.adminRestaurante.findUnique.mockResolvedValue({ id: 'asignacion-1' })
-      mockPrisma.restaurante.findUnique.mockResolvedValue(RESTAURANTE)
-      mockPrisma.restaurante.update.mockResolvedValue({ ...RESTAURANTE, modoSesion: 'seguro' })
-
-      await service.update('rest-1', { modoSesion: 'seguro' }, GERENTE)
+    it('el GERENTE sigue pudiendo cambiar el modo de sesión y el nombre', async () => {
+      await service.update(REST, { modoSesion: 'seguro', nombre: 'Centro' }, CUENTAS.GERENTE)
 
       expect(mockPrisma.restaurante.update).toHaveBeenCalledWith({
-        where: { id: 'rest-1' },
-        data: { modoSesion: 'seguro' },
+        where: { id: REST },
+        data: { modoSesion: 'seguro', nombre: 'Centro' },
+        select: RESTAURANTE_SELECT,
       })
     })
   })
 
-  // ── uploadLogo ────────────────────────────────────────────────────────
+  // ── logo (solo el OWNER, lo exige la ruta) ────────────────────────────
 
   describe('uploadLogo', () => {
-    it('el OWNER de la marca sube el logo y se guarda la URL', async () => {
-      mockPrisma.admin.findUnique.mockResolvedValue({ id: 'admin-1', marcaId: 'marca-1' })
-      mockPrisma.restaurante.findUnique.mockResolvedValue(RESTAURANTE)
+    it('sube el logo y se guarda la URL', async () => {
       mockLogos.subir.mockResolvedValue(LOGO_URL)
-      mockPrisma.restaurante.update.mockResolvedValue({ id: 'rest-1', logoUrl: LOGO_URL })
+      mockPrisma.restaurante.update.mockResolvedValue({ id: REST, logoUrl: LOGO_URL })
 
-      const result = await service.uploadLogo('rest-1', ARCHIVO, OWNER)
+      const result = await service.uploadLogo(REST, ARCHIVO)
 
-      expect(mockLogos.subir).toHaveBeenCalledWith('restaurantes', 'rest-1', ARCHIVO)
+      expect(mockLogos.subir).toHaveBeenCalledWith('restaurantes', REST, ARCHIVO)
       expect(mockPrisma.restaurante.update).toHaveBeenCalledWith({
-        where: { id: 'rest-1' },
+        where: { id: REST },
         data: { logoUrl: LOGO_URL },
         select: { id: true, logoUrl: true },
       })
-      expect(result).toEqual({ id: 'rest-1', logoUrl: LOGO_URL })
-    })
-
-    it('un OWNER de otra marca recibe 403 y no se sube nada', async () => {
-      mockPrisma.admin.findUnique.mockResolvedValue({ id: 'admin-2', marcaId: 'marca-otra' })
-      mockPrisma.restaurante.findUnique.mockResolvedValue(RESTAURANTE)
-
-      await expect(service.uploadLogo('rest-1', ARCHIVO, OWNER))
-        .rejects.toThrow(ForbiddenException)
-
-      expect(mockLogos.subir).not.toHaveBeenCalled()
-    })
-
-    it.each([
-      ['ROOT', ROOT],
-      ['GERENTE', GERENTE],
-    ])('%s recibe 403 y no se sube nada', async (_nombre, user) => {
-      await expect(service.uploadLogo('rest-1', ARCHIVO, user))
-        .rejects.toThrow(ForbiddenException)
-
-      expect(mockLogos.subir).not.toHaveBeenCalled()
-      expect(mockPrisma.restaurante.update).not.toHaveBeenCalled()
-    })
-
-    it('lanza 404 si el restaurante está inactivo', async () => {
-      mockPrisma.admin.findUnique.mockResolvedValue({ id: 'admin-1', marcaId: 'marca-1' })
-      mockPrisma.restaurante.findUnique.mockResolvedValue({ ...RESTAURANTE, activo: false })
-
-      await expect(service.uploadLogo('rest-1', ARCHIVO, OWNER))
-        .rejects.toThrow(NotFoundException)
-
-      expect(mockLogos.subir).not.toHaveBeenCalled()
+      expect(result).toEqual({ id: REST, logoUrl: LOGO_URL })
     })
   })
 
-  // ── removeLogo ────────────────────────────────────────────────────────
-
   describe('removeLogo', () => {
-    it('el OWNER borra el archivo y deja el logo en null', async () => {
-      mockPrisma.admin.findUnique.mockResolvedValue({ id: 'admin-1', marcaId: 'marca-1' })
-      mockPrisma.restaurante.findUnique.mockResolvedValue({ ...RESTAURANTE, logoUrl: LOGO_URL })
-      mockPrisma.restaurante.update.mockResolvedValue({ id: 'rest-1', logoUrl: null })
+    it('borra el archivo y deja el logo en null', async () => {
+      mockPrisma.restaurante.findUnique.mockResolvedValue({ logoUrl: LOGO_URL })
+      mockPrisma.restaurante.update.mockResolvedValue({ id: REST, logoUrl: null })
 
-      const result = await service.removeLogo('rest-1', OWNER)
+      const result = await service.removeLogo(REST)
 
-      expect(mockLogos.eliminar).toHaveBeenCalledWith('restaurantes', 'rest-1')
+      expect(mockLogos.eliminar).toHaveBeenCalledWith('restaurantes', REST)
       expect(mockPrisma.restaurante.update).toHaveBeenCalledWith({
-        where: { id: 'rest-1' },
+        where: { id: REST },
         data: { logoUrl: null },
         select: { id: true, logoUrl: true },
       })
-      expect(result).toEqual({ id: 'rest-1', logoUrl: null })
-    })
-
-    it('lanza 404 si el restaurante no tiene logo propio', async () => {
-      mockPrisma.admin.findUnique.mockResolvedValue({ id: 'admin-1', marcaId: 'marca-1' })
-      mockPrisma.restaurante.findUnique.mockResolvedValue({ ...RESTAURANTE, logoUrl: null })
-
-      await expect(service.removeLogo('rest-1', OWNER))
-        .rejects.toThrow(NotFoundException)
-
-      expect(mockLogos.eliminar).not.toHaveBeenCalled()
-    })
-
-    it('un OWNER de otra marca recibe 403 y no se borra nada', async () => {
-      mockPrisma.admin.findUnique.mockResolvedValue({ id: 'admin-2', marcaId: 'marca-otra' })
-      mockPrisma.restaurante.findUnique.mockResolvedValue({ ...RESTAURANTE, logoUrl: LOGO_URL })
-
-      await expect(service.removeLogo('rest-1', OWNER))
-        .rejects.toThrow(ForbiddenException)
-
-      expect(mockLogos.eliminar).not.toHaveBeenCalled()
+      expect(result).toEqual({ id: REST, logoUrl: null })
     })
 
     it.each([
-      ['ROOT', ROOT],
-      ['GERENTE', GERENTE],
-    ])('%s recibe 403 y no se borra nada', async (_nombre, user) => {
-      await expect(service.removeLogo('rest-1', user))
-        .rejects.toThrow(ForbiddenException)
+      ['no tiene logo propio', { logoUrl: null }, 'Este restaurante no tiene logo propio'],
+      ['no existe', null, 'Restaurante no encontrado'],
+    ])('lanza 404 si el restaurante %s', async (_caso, fila, mensaje) => {
+      mockPrisma.restaurante.findUnique.mockResolvedValue(fila)
+
+      await expect(service.removeLogo(REST)).rejects.toThrow(new NotFoundException(mensaje))
 
       expect(mockLogos.eliminar).not.toHaveBeenCalled()
     })

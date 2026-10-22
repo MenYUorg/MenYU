@@ -1,10 +1,8 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, UseGuards } from '@nestjs/common'
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger'
-import { JwtPayload } from '../../auth/auth.service'
-import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard'
-import { CurrentUser } from '../../common/decorators/current-user.decorator'
-import { Roles } from '../../common/decorators/roles.decorator'
-import { RolesGuard } from '../../common/guards/roles.guard'
+import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger'
+import { RequiereRoot } from '../../auth/decorators/requiere-root.decorator'
+import { UsuarioActual } from '../../auth/decorators/usuario-actual.decorator'
+import { UsuarioAutenticado } from '../../auth/supabase/usuario-autenticado'
 import { CamposPermitidos, CamposPermitidosGuard } from '../comun/campos-permitidos.guard'
 import { IdPipe } from '../comun/cuentas'
 import { RootRestaurantesService } from '../restaurantes/root-restaurantes.service'
@@ -19,10 +17,11 @@ const MOTIVO_RESTAURANTE = 'El resto de los datos del restaurante (logo, modo de
  * Cada cambio queda en el historial dentro de la misma transacción.
  */
 @ApiTags('root')
-@ApiBearerAuth()
 @Controller('root/marcas')
-@UseGuards(JwtAuthGuard, RolesGuard, CamposPermitidosGuard)
-@Roles('ROOT')
+@UseGuards(CamposPermitidosGuard)
+// Debajo de CamposPermitidosGuard: los decoradores de clase se aplican de abajo hacia arriba y los permisos tienen que correr
+// antes que la validación de los campos (un OWNER con un campo de más recibe 403, no 400).
+@RequiereRoot()
 export class RootMarcasController {
   constructor(
     private readonly marcas: RootMarcasService,
@@ -43,8 +42,8 @@ export class RootMarcasController {
   @ApiResponse({ status: 201, description: 'La marca, con el detalle' })
   @ApiResponse({ status: 400, description: 'Datos inválidos o un campo que ROOT no puede enviar' })
   @ApiResponse({ status: 409, description: 'El identificador (slug) ya lo usa otra marca, también de baja' })
-  crear(@Body() dto: CrearMarcaRootDto, @CurrentUser() user: JwtPayload) {
-    return this.marcas.crear(dto, user)
+  crear(@Body() dto: CrearMarcaRootDto, @UsuarioActual() usuario: UsuarioAutenticado) {
+    return this.marcas.crear(dto, usuario)
   }
 
   @Get(':id')
@@ -62,8 +61,8 @@ export class RootMarcasController {
   @ApiResponse({ status: 400, description: 'Sin nada para cambiar, datos inválidos o un campo que ROOT no puede enviar' })
   @ApiResponse({ status: 404, description: 'La marca no existe' })
   @ApiResponse({ status: 409, description: 'El identificador ya lo usa otra marca' })
-  editar(@Param('id', new IdPipe('Marca no encontrada')) id: string, @Body() dto: EditarMarcaRootDto, @CurrentUser() user: JwtPayload) {
-    return this.marcas.editar(id, dto, user)
+  editar(@Param('id', new IdPipe('Marca no encontrada')) id: string, @Body() dto: EditarMarcaRootDto, @UsuarioActual() usuario: UsuarioAutenticado) {
+    return this.marcas.editar(id, dto, usuario)
   }
 
   @Post(':id/baja')
@@ -74,8 +73,8 @@ export class RootMarcasController {
   })
   @ApiResponse({ status: 200 })
   @ApiResponse({ status: 404, description: 'La marca no existe' })
-  baja(@Param('id', new IdPipe('Marca no encontrada')) id: string, @CurrentUser() user: JwtPayload) {
-    return this.marcas.cambiarEstado(id, false, user)
+  baja(@Param('id', new IdPipe('Marca no encontrada')) id: string, @UsuarioActual() usuario: UsuarioAutenticado) {
+    return this.marcas.cambiarEstado(id, false, usuario)
   }
 
   @Post(':id/reactivar')
@@ -83,8 +82,8 @@ export class RootMarcasController {
   @ApiOperation({ summary: 'Reactiva una marca dada de baja', description: 'Vuelve todo como estaba. Idempotente.' })
   @ApiResponse({ status: 200 })
   @ApiResponse({ status: 404, description: 'La marca no existe' })
-  reactivar(@Param('id', new IdPipe('Marca no encontrada')) id: string, @CurrentUser() user: JwtPayload) {
-    return this.marcas.cambiarEstado(id, true, user)
+  reactivar(@Param('id', new IdPipe('Marca no encontrada')) id: string, @UsuarioActual() usuario: UsuarioAutenticado) {
+    return this.marcas.cambiarEstado(id, true, usuario)
   }
 
   @Post(':id/restaurantes')
@@ -101,8 +100,8 @@ export class RootMarcasController {
   crearRestaurante(
     @Param('id', new IdPipe('Marca no encontrada')) id: string,
     @Body() dto: CrearRestauranteRootDto,
-    @CurrentUser() user: JwtPayload,
+    @UsuarioActual() usuario: UsuarioAutenticado,
   ) {
-    return this.restaurantes.crear(id, dto, user)
+    return this.restaurantes.crear(id, dto, usuario)
   }
 }

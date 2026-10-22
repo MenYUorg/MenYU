@@ -1,6 +1,7 @@
 import { HttpException } from '@nestjs/common'
 import { JwtService } from '@nestjs/jwt'
 import { Test } from '@nestjs/testing'
+import { AccesoService } from '../auth/supabase/acceso.service'
 import { DivisionService } from '../comensales/division.service'
 import { MenyuGateway } from '../gateway/menyu.gateway'
 import { PrismaService } from '../prisma/prisma.service'
@@ -76,6 +77,7 @@ describe('SessionsService.open: límite de intentos fallidos', () => {
         { provide: JwtService, useValue: { sign: jest.fn().mockReturnValue('jwt'), verify: jest.fn() } },
         { provide: MenyuGateway, useValue: {} },
         { provide: DivisionService, useValue: {} },
+        { provide: AccesoService, useValue: {} },
       ],
     }).compile()
     service = module.get(SessionsService)

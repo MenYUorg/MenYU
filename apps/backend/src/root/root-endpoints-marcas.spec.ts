@@ -1,4 +1,5 @@
-import { AppDeEndpoints, USUARIOS, crearAppDeEndpoints } from '../test/app-endpoints'
+import { AppDeEndpoints, CUENTAS, crearAppDeEndpoints } from '../test/app-endpoints'
+import { NO_ROOT } from '../test/root-mock'
 import { HistorialRootService } from './historial/historial-root.service'
 import { RootHistorialController } from './historial/root-historial.controller'
 import { RootMarcasController } from './marcas/root-marcas.controller'
@@ -8,12 +9,6 @@ import { RootRestaurantesService } from './restaurantes/root-restaurantes.servic
 
 type Metodo = 'get' | 'post' | 'patch' | 'put' | 'delete'
 
-const OTROS_ROLES = [
-  ['OWNER', USUARIOS.OWNER],
-  ['GERENTE', USUARIOS.GERENTE],
-  ['mozo', USUARIOS.MOZO],
-  ['cliente', USUARIOS.CLIENTE],
-] as const
 
 describe('endpoints de marcas de ROOT', () => {
   let api: AppDeEndpoints
@@ -51,14 +46,14 @@ describe('endpoints de marcas de ROOT', () => {
 
   describe.each(RUTAS)('%s', (_nombre, metodo, ruta, exito, servicio, body) => {
     it(`ROOT: ${exito}`, async () => {
-      const res = await api.pedir(metodo, ruta, { usuario: USUARIOS.ROOT, body })
+      const res = await api.pedir(metodo, ruta, { cuenta: CUENTAS.ROOT, body })
 
       expect(res.status).toBe(exito)
       expect(servicio).toHaveBeenCalledTimes(1)
     })
 
-    it.each(OTROS_ROLES)('%s: 403 y el servicio no se llama', async (_rol, usuario) => {
-      const res = await api.pedir(metodo, ruta, { usuario, body })
+    it.each(NO_ROOT)('%s: 403 y el servicio no se llama', async (_rol, cuenta) => {
+      const res = await api.pedir(metodo, ruta, { cuenta, body })
 
       expect(res.status).toBe(403)
       expect(servicio).not.toHaveBeenCalled()
@@ -73,7 +68,7 @@ describe('endpoints de marcas de ROOT', () => {
   })
 
   it('los permisos van antes que la validación: un OWNER o sin token con un campo de más recibe 403 o 401, no 400', async () => {
-    const owner = await api.pedir('patch', '/root/marcas/m-001', { usuario: USUARIOS.OWNER, body: { logoUrl: 'x' } })
+    const owner = await api.pedir('patch', '/root/marcas/m-001', { cuenta: CUENTAS.OWNER_A, body: { logoUrl: 'x' } })
     const anonimo = await api.pedir('patch', '/root/marcas/m-001', { body: { logoUrl: 'x' } })
 
     expect([owner.status, anonimo.status]).toEqual([403, 401])
@@ -81,44 +76,44 @@ describe('endpoints de marcas de ROOT', () => {
 
   describe('lo que le llega al servicio', () => {
     it('GET: bajas=true y bajas=false llegan como booleanos; sin el parámetro, nada', async () => {
-      await api.pedir('get', '/root/marcas', { usuario: USUARIOS.ROOT, query: { bajas: 'true' } })
-      await api.pedir('get', '/root/marcas', { usuario: USUARIOS.ROOT, query: { bajas: 'false' } })
-      await api.pedir('get', '/root/marcas', { usuario: USUARIOS.ROOT })
+      await api.pedir('get', '/root/marcas', { cuenta: CUENTAS.ROOT, query: { bajas: 'true' } })
+      await api.pedir('get', '/root/marcas', { cuenta: CUENTAS.ROOT, query: { bajas: 'false' } })
+      await api.pedir('get', '/root/marcas', { cuenta: CUENTAS.ROOT })
 
       expect(marcas.listar.mock.calls.map(([dto]) => dto.bajas)).toEqual([true, false, undefined])
     })
 
     it('GET con bajas=quizas responde 400', async () => {
-      const res = await api.pedir('get', '/root/marcas', { usuario: USUARIOS.ROOT, query: { bajas: 'quizas' } })
+      const res = await api.pedir('get', '/root/marcas', { cuenta: CUENTAS.ROOT, query: { bajas: 'quizas' } })
 
       expect(res.status).toBe(400)
       expect(marcas.listar).not.toHaveBeenCalled()
     })
 
     it('POST: nombre recortado e identificador en minúsculas', async () => {
-      await api.pedir('post', '/root/marcas', { usuario: USUARIOS.ROOT, body: { nombre: '  La Parrilla de Juan ', slug: ' La-Parrilla-DE-Juan ' } })
+      await api.pedir('post', '/root/marcas', { cuenta: CUENTAS.ROOT, body: { nombre: '  La Parrilla de Juan ', slug: ' La-Parrilla-DE-Juan ' } })
 
-      expect(marcas.crear).toHaveBeenCalledWith({ nombre: 'La Parrilla de Juan', slug: 'la-parrilla-de-juan' }, USUARIOS.ROOT)
+      expect(marcas.crear).toHaveBeenCalledWith({ nombre: 'La Parrilla de Juan', slug: 'la-parrilla-de-juan' }, CUENTAS.ROOT)
     })
 
     it('el id de la marca llega tal cual, aunque no sea UUID, junto con el usuario', async () => {
-      await api.pedir('get', '/root/marcas/m-001', { usuario: USUARIOS.ROOT })
-      await api.pedir('post', '/root/marcas/m-001/baja', { usuario: USUARIOS.ROOT })
-      await api.pedir('post', '/root/marcas/m-001/reactivar', { usuario: USUARIOS.ROOT })
+      await api.pedir('get', '/root/marcas/m-001', { cuenta: CUENTAS.ROOT })
+      await api.pedir('post', '/root/marcas/m-001/baja', { cuenta: CUENTAS.ROOT })
+      await api.pedir('post', '/root/marcas/m-001/reactivar', { cuenta: CUENTAS.ROOT })
 
       expect(marcas.detalle).toHaveBeenCalledWith('m-001')
       expect(marcas.cambiarEstado.mock.calls).toEqual([
-        ['m-001', false, USUARIOS.ROOT],
-        ['m-001', true, USUARIOS.ROOT],
+        ['m-001', false, CUENTAS.ROOT],
+        ['m-001', true, CUENTAS.ROOT],
       ])
     })
 
     it('PATCH y alta de restaurante llevan el id, el cuerpo ya limpio y el usuario', async () => {
-      await api.pedir('patch', '/root/marcas/m-001', { usuario: USUARIOS.ROOT, body: { slug: 'Otro-Slug' } })
-      await api.pedir('post', '/root/marcas/m-001/restaurantes', { usuario: USUARIOS.ROOT, body: { nombre: ' Centro ', direccion: '  Av. Colón 1200  ' } })
+      await api.pedir('patch', '/root/marcas/m-001', { cuenta: CUENTAS.ROOT, body: { slug: 'Otro-Slug' } })
+      await api.pedir('post', '/root/marcas/m-001/restaurantes', { cuenta: CUENTAS.ROOT, body: { nombre: ' Centro ', direccion: '  Av. Colón 1200  ' } })
 
-      expect(marcas.editar).toHaveBeenCalledWith('m-001', { slug: 'otro-slug' }, USUARIOS.ROOT)
-      expect(restaurantes.crear).toHaveBeenCalledWith('m-001', { nombre: 'Centro', direccion: 'Av. Colón 1200' }, USUARIOS.ROOT)
+      expect(marcas.editar).toHaveBeenCalledWith('m-001', { slug: 'otro-slug' }, CUENTAS.ROOT)
+      expect(restaurantes.crear).toHaveBeenCalledWith('m-001', { nombre: 'Centro', direccion: 'Av. Colón 1200' }, CUENTAS.ROOT)
     })
   })
 
@@ -137,14 +132,14 @@ describe('endpoints de marcas de ROOT', () => {
       ['con un identificador de 81 caracteres', { nombre: 'La Parrilla', slug: 'a'.repeat(81) }],
       ['con el nombre que no es texto', { nombre: 123, slug: 'la-parrilla' }],
     ])('POST /root/marcas %s responde 400', async (_caso, body) => {
-      const res = await api.pedir('post', '/root/marcas', { usuario: USUARIOS.ROOT, body })
+      const res = await api.pedir('post', '/root/marcas', { cuenta: CUENTAS.ROOT, body })
 
       expect(res.status).toBe(400)
       expect(marcas.crear).not.toHaveBeenCalled()
     })
 
     it('un identificador de 80 caracteres y un nombre de 120 están bien', async () => {
-      const res = await api.pedir('post', '/root/marcas', { usuario: USUARIOS.ROOT, body: { nombre: 'a'.repeat(120), slug: 'a'.repeat(80) } })
+      const res = await api.pedir('post', '/root/marcas', { cuenta: CUENTAS.ROOT, body: { nombre: 'a'.repeat(120), slug: 'a'.repeat(80) } })
 
       expect(res.status).toBe(201)
     })
@@ -154,7 +149,7 @@ describe('endpoints de marcas de ROOT', () => {
       ['el estado', { nombre: 'La Parrilla', slug: 'la-parrilla', activo: false }],
       ['un id', { nombre: 'La Parrilla', slug: 'la-parrilla', id: 'otro' }],
     ])('POST /root/marcas con %s de más responde 400 (no se ignora en silencio)', async (_caso, body) => {
-      const res = await api.pedir('post', '/root/marcas', { usuario: USUARIOS.ROOT, body })
+      const res = await api.pedir('post', '/root/marcas', { cuenta: CUENTAS.ROOT, body })
 
       expect(res.status).toBe(400)
       expect(res.body.message).toMatch(/ROOT no puede enviar/)
@@ -162,8 +157,8 @@ describe('endpoints de marcas de ROOT', () => {
     })
 
     it('PATCH /root/marcas/:id con el logo o el estado responde 400 y dice que el logo lo carga el dueño', async () => {
-      const logo = await api.pedir('patch', '/root/marcas/m-001', { usuario: USUARIOS.ROOT, body: { nombre: 'X', logoUrl: 'https://x/logo.png' } })
-      const estado = await api.pedir('patch', '/root/marcas/m-001', { usuario: USUARIOS.ROOT, body: { activo: false } })
+      const logo = await api.pedir('patch', '/root/marcas/m-001', { cuenta: CUENTAS.ROOT, body: { nombre: 'X', logoUrl: 'https://x/logo.png' } })
+      const estado = await api.pedir('patch', '/root/marcas/m-001', { cuenta: CUENTAS.ROOT, body: { activo: false } })
 
       expect(logo.status).toBe(400)
       expect(logo.body.message).toMatch(/logoUrl/)
@@ -173,17 +168,17 @@ describe('endpoints de marcas de ROOT', () => {
     })
 
     it('PATCH con un nombre en blanco, o null, responde 400', async () => {
-      const blanco = await api.pedir('patch', '/root/marcas/m-001', { usuario: USUARIOS.ROOT, body: { nombre: '  ' } })
-      const nulo = await api.pedir('patch', '/root/marcas/m-001', { usuario: USUARIOS.ROOT, body: { nombre: null } })
+      const blanco = await api.pedir('patch', '/root/marcas/m-001', { cuenta: CUENTAS.ROOT, body: { nombre: '  ' } })
+      const nulo = await api.pedir('patch', '/root/marcas/m-001', { cuenta: CUENTAS.ROOT, body: { nombre: null } })
 
       expect([blanco.status, nulo.status]).toEqual([400, 400])
       expect(marcas.editar).not.toHaveBeenCalled()
     })
 
     it('PATCH con un cuerpo vacío llega al servicio, que responde 400 (no hay nada para cambiar)', async () => {
-      await api.pedir('patch', '/root/marcas/m-001', { usuario: USUARIOS.ROOT, body: {} })
+      await api.pedir('patch', '/root/marcas/m-001', { cuenta: CUENTAS.ROOT, body: {} })
 
-      expect(marcas.editar).toHaveBeenCalledWith('m-001', {}, USUARIOS.ROOT)
+      expect(marcas.editar).toHaveBeenCalledWith('m-001', {}, CUENTAS.ROOT)
     })
 
     it.each([
@@ -193,7 +188,7 @@ describe('endpoints de marcas de ROOT', () => {
       ['con el carácter nulo en la dirección', { nombre: 'Centro', direccion: 'Av.\u0000Colón' }],
       ['sin nombre', { direccion: 'Av. Colón 1200' }],
     ])('POST /root/marcas/:id/restaurantes %s responde 400', async (_caso, body) => {
-      const res = await api.pedir('post', '/root/marcas/m-001/restaurantes', { usuario: USUARIOS.ROOT, body })
+      const res = await api.pedir('post', '/root/marcas/m-001/restaurantes', { cuenta: CUENTAS.ROOT, body })
 
       expect(res.status).toBe(400)
       expect(restaurantes.crear).not.toHaveBeenCalled()
@@ -201,7 +196,7 @@ describe('endpoints de marcas de ROOT', () => {
 
     it('POST /root/marcas/:id/restaurantes con el modo de sesión o el logo de más responde 400', async () => {
       const res = await api.pedir('post', '/root/marcas/m-001/restaurantes', {
-        usuario: USUARIOS.ROOT,
+        cuenta: CUENTAS.ROOT,
         body: { nombre: 'Centro', direccion: 'Av. Colón 1200', modoSesion: 'seguro', logoUrl: 'x' },
       })
 
@@ -218,7 +213,7 @@ describe('endpoints de marcas de ROOT', () => {
       ['POST', '/root/marcas/a.b/reactivar'],
       ['POST', '/root/marcas/a.b/restaurantes'],
     ] as const)('%s %s: un id con forma de no-id responde 404 sin llegar al servicio', async (metodo, ruta) => {
-      const res = await api.pedir(metodo.toLowerCase() as Metodo, ruta, { usuario: USUARIOS.ROOT, body: { nombre: 'X', direccion: 'Y' } })
+      const res = await api.pedir(metodo.toLowerCase() as Metodo, ruta, { cuenta: CUENTAS.ROOT, body: { nombre: 'X', direccion: 'Y' } })
 
       expect(res.status).toBe(404)
       expect(marcas.detalle).not.toHaveBeenCalled()
@@ -229,7 +224,7 @@ describe('endpoints de marcas de ROOT', () => {
 
   // Decisión 5: "borrar" es una baja lógica y reversible. No hay ruta que borre una marca, ni siquiera para ROOT.
   it.each(['delete', 'put'] as const)('%s /root/marcas/:id no existe (404): las marcas no se borran', async (metodo) => {
-    const res = await api.pedir(metodo, '/root/marcas/m-001', { usuario: USUARIOS.ROOT, body: { nombre: 'X' } })
+    const res = await api.pedir(metodo, '/root/marcas/m-001', { cuenta: CUENTAS.ROOT, body: { nombre: 'X' } })
 
     expect(res.status).toBe(404)
   })
@@ -259,14 +254,14 @@ describe('endpoints de restaurantes de ROOT', () => {
 
   describe.each(RUTAS)('%s', (_nombre, metodo, ruta, servicio, body) => {
     it('ROOT: 200', async () => {
-      const res = await api.pedir(metodo, ruta, { usuario: USUARIOS.ROOT, body })
+      const res = await api.pedir(metodo, ruta, { cuenta: CUENTAS.ROOT, body })
 
       expect(res.status).toBe(200)
       expect(servicio).toHaveBeenCalledTimes(1)
     })
 
-    it.each(OTROS_ROLES)('%s: 403 y el servicio no se llama', async (_rol, usuario) => {
-      const res = await api.pedir(metodo, ruta, { usuario, body })
+    it.each(NO_ROOT)('%s: 403 y el servicio no se llama', async (_rol, cuenta) => {
+      const res = await api.pedir(metodo, ruta, { cuenta, body })
 
       expect(res.status).toBe(403)
       expect(servicio).not.toHaveBeenCalled()
@@ -281,9 +276,9 @@ describe('endpoints de restaurantes de ROOT', () => {
   })
 
   it('PATCH lleva el id (aunque no sea UUID), el nombre recortado y el usuario', async () => {
-    await api.pedir('patch', '/root/restaurantes/r-001', { usuario: USUARIOS.ROOT, body: { nombre: '  Alta Córdoba ' } })
+    await api.pedir('patch', '/root/restaurantes/r-001', { cuenta: CUENTAS.ROOT, body: { nombre: '  Alta Córdoba ' } })
 
-    expect(restaurantes.editar).toHaveBeenCalledWith('r-001', { nombre: 'Alta Córdoba' }, USUARIOS.ROOT)
+    expect(restaurantes.editar).toHaveBeenCalledWith('r-001', { nombre: 'Alta Córdoba' }, CUENTAS.ROOT)
   })
 
   // Plan, sección 7: "Si llega otro campo, 400 (no se ignora en silencio)".
@@ -297,7 +292,7 @@ describe('endpoints de restaurantes de ROOT', () => {
     ['la marca (mover el restaurante)', { marcaId: 'otra' }],
     ['los datos de Mercado Pago', { mpAccessToken: 'x' }],
   ])('PATCH con %s responde 400, no se ignora en silencio, y nada llega al servicio', async (_caso, body) => {
-    const res = await api.pedir('patch', '/root/restaurantes/r-001', { usuario: USUARIOS.ROOT, body })
+    const res = await api.pedir('patch', '/root/restaurantes/r-001', { cuenta: CUENTAS.ROOT, body })
 
     expect(res.status).toBe(400)
     expect(res.body.message).toMatch(/ROOT no puede enviar/)
@@ -307,7 +302,7 @@ describe('endpoints de restaurantes de ROOT', () => {
 
   it('PATCH con un nombre en blanco, null o de 121 caracteres responde 400', async () => {
     const respuestas = await Promise.all(
-      [{ nombre: '  ' }, { nombre: null }, { nombre: 'a'.repeat(121) }].map((body) => api.pedir('patch', '/root/restaurantes/r-001', { usuario: USUARIOS.ROOT, body })),
+      [{ nombre: '  ' }, { nombre: null }, { nombre: 'a'.repeat(121) }].map((body) => api.pedir('patch', '/root/restaurantes/r-001', { cuenta: CUENTAS.ROOT, body })),
     )
 
     expect(respuestas.map((r) => r.status)).toEqual([400, 400, 400])
@@ -315,18 +310,18 @@ describe('endpoints de restaurantes de ROOT', () => {
   })
 
   it('PATCH con un cuerpo vacío llega al servicio, que responde 400', async () => {
-    await api.pedir('patch', '/root/restaurantes/r-001', { usuario: USUARIOS.ROOT, body: {} })
+    await api.pedir('patch', '/root/restaurantes/r-001', { cuenta: CUENTAS.ROOT, body: {} })
 
-    expect(restaurantes.editar).toHaveBeenCalledWith('r-001', {}, USUARIOS.ROOT)
+    expect(restaurantes.editar).toHaveBeenCalledWith('r-001', {}, CUENTAS.ROOT)
   })
 
   it('baja y reactivar llevan el id y el usuario', async () => {
-    await api.pedir('post', '/root/restaurantes/r-001/baja', { usuario: USUARIOS.ROOT })
-    await api.pedir('post', '/root/restaurantes/r-001/reactivar', { usuario: USUARIOS.ROOT })
+    await api.pedir('post', '/root/restaurantes/r-001/baja', { cuenta: CUENTAS.ROOT })
+    await api.pedir('post', '/root/restaurantes/r-001/reactivar', { cuenta: CUENTAS.ROOT })
 
     expect(restaurantes.cambiarEstado.mock.calls).toEqual([
-      ['r-001', false, USUARIOS.ROOT],
-      ['r-001', true, USUARIOS.ROOT],
+      ['r-001', false, CUENTAS.ROOT],
+      ['r-001', true, CUENTAS.ROOT],
     ])
   })
 
@@ -335,7 +330,7 @@ describe('endpoints de restaurantes de ROOT', () => {
     ['post', '/root/restaurantes/a.b/baja'],
     ['post', '/root/restaurantes/a%20b/reactivar'],
   ] as const)('%s %s: un id con forma de no-id responde 404', async (metodo, ruta) => {
-    const res = await api.pedir(metodo, ruta, { usuario: USUARIOS.ROOT, body: { nombre: 'X' } })
+    const res = await api.pedir(metodo, ruta, { cuenta: CUENTAS.ROOT, body: { nombre: 'X' } })
 
     expect(res.status).toBe(404)
     expect(restaurantes.editar).not.toHaveBeenCalled()
@@ -343,7 +338,7 @@ describe('endpoints de restaurantes de ROOT', () => {
   })
 
   it.each(['delete', 'put', 'get'] as const)('%s /root/restaurantes/:id no existe (404): los restaurantes no se borran ni se leen por acá', async (metodo) => {
-    const res = await api.pedir(metodo, '/root/restaurantes/r-001', { usuario: USUARIOS.ROOT, body: { nombre: 'X' } })
+    const res = await api.pedir(metodo, '/root/restaurantes/r-001', { cuenta: CUENTAS.ROOT, body: { nombre: 'X' } })
 
     expect(res.status).toBe(404)
   })
@@ -365,14 +360,14 @@ describe('endpoint del historial de ROOT', () => {
   })
 
   it('ROOT: 200 con la página', async () => {
-    const res = await api.pedir('get', '/root/historial', { usuario: USUARIOS.ROOT })
+    const res = await api.pedir('get', '/root/historial', { cuenta: CUENTAS.ROOT })
 
     expect(res.status).toBe(200)
     expect(res.body).toEqual({ items: [], siguiente: null })
   })
 
-  it.each(OTROS_ROLES)('%s no puede leer el historial: 403', async (_rol, usuario) => {
-    const res = await api.pedir('get', '/root/historial', { usuario })
+  it.each(NO_ROOT)('%s no puede leer el historial: 403', async (_rol, cuenta) => {
+    const res = await api.pedir('get', '/root/historial', { cuenta })
 
     expect(res.status).toBe(403)
     expect(historial.listar).not.toHaveBeenCalled()
@@ -387,7 +382,7 @@ describe('endpoint del historial de ROOT', () => {
 
   it('los filtros llegan al servicio ya convertidos', async () => {
     await api.pedir('get', '/root/historial', {
-      usuario: USUARIOS.ROOT,
+      cuenta: CUENTAS.ROOT,
       query: { actor: ' ana@ejemplo.com ', entidad: 'MARCA', desde: '2026-10-15', hasta: '2026-10-16', cursor: '120' },
     })
 
@@ -395,14 +390,14 @@ describe('endpoint del historial de ROOT', () => {
   })
 
   it('los parámetros vacíos (la pantalla los manda aunque estén en blanco) son "sin filtro"', async () => {
-    await api.pedir('get', '/root/historial', { usuario: USUARIOS.ROOT, query: { actor: '', entidad: '', desde: '', hasta: '', cursor: '' } })
+    await api.pedir('get', '/root/historial', { cuenta: CUENTAS.ROOT, query: { actor: '', entidad: '', desde: '', hasta: '', cursor: '' } })
 
     const filtros = historial.listar.mock.calls[0][0]
     expect(Object.values(filtros).filter((v) => v !== undefined)).toEqual([])
   })
 
   it.each(['MARCA', 'RESTAURANTE', 'OWNER', 'ROOT'])('entidad %s es válida', async (entidad) => {
-    const res = await api.pedir('get', '/root/historial', { usuario: USUARIOS.ROOT, query: { entidad } })
+    const res = await api.pedir('get', '/root/historial', { cuenta: CUENTAS.ROOT, query: { entidad } })
 
     expect(res.status).toBe(200)
   })
@@ -420,7 +415,7 @@ describe('endpoint del historial de ROOT', () => {
     ['un actor larguísimo', { actor: 'a'.repeat(255) }],
     ['el carácter nulo en el actor', { actor: 'a\u0000b' }],
   ])('%s responde 400', async (_caso, query) => {
-    const res = await api.pedir('get', '/root/historial', { usuario: USUARIOS.ROOT, query: query as Record<string, string> })
+    const res = await api.pedir('get', '/root/historial', { cuenta: CUENTAS.ROOT, query: query as Record<string, string> })
 
     expect(res.status).toBe(400)
     expect(historial.listar).not.toHaveBeenCalled()
@@ -428,13 +423,13 @@ describe('endpoint del historial de ROOT', () => {
 
   // El historial es de solo lectura (decisión 17): no hay ninguna ruta que lo cambie, ni siquiera para ROOT.
   it.each(['post', 'put', 'patch', 'delete'] as const)('%s /root/historial no existe (404)', async (metodo) => {
-    const res = await api.pedir(metodo, '/root/historial', { usuario: USUARIOS.ROOT, body: {} })
+    const res = await api.pedir(metodo, '/root/historial', { cuenta: CUENTAS.ROOT, body: {} })
 
     expect(res.status).toBe(404)
   })
 
   it.each(['put', 'patch', 'delete', 'post'] as const)('%s /root/historial/:id no existe (404)', async (metodo) => {
-    const res = await api.pedir(metodo, '/root/historial/1', { usuario: USUARIOS.ROOT, body: {} })
+    const res = await api.pedir(metodo, '/root/historial/1', { cuenta: CUENTAS.ROOT, body: {} })
 
     expect(res.status).toBe(404)
   })

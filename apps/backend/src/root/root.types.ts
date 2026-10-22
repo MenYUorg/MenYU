@@ -11,33 +11,35 @@ export interface MarcaDeCuenta {
   activo: boolean
 }
 
-/** Una cuenta OWNER (en la interfaz, "dueño"). */
+/** Un dueño (en la interfaz, "dueño"): la membresía OWNER de un `Usuario` en una marca. */
 export interface DuenoRoot {
-  id: string
+  /** Lo que se quita con `DELETE /root/duenos/:membresiaId`. */
+  membresiaId: string
+  usuarioId: string
   email: string
-  /** Tiene una contraseña temporal puesta por ROOT: tiene que cambiarla en su primer ingreso. */
-  debeCambiarPassword: boolean
+  nombre: string
+  /** Una cuenta desactivada no entra a ningún lado, aunque tenga la membresía. */
+  activo: boolean
   marca: MarcaDeCuenta | null
 }
 
-/** Un dueño recién creado o con la contraseña restablecida. */
-export interface DuenoConPassword extends DuenoRoot {
-  /** La contraseña generada, SOLO en esta respuesta. `null` si ROOT eligió la contraseña al crear la cuenta. */
-  passwordTemporal: string | null
-}
-
-/** Una cuenta ROOT. */
+/** Una cuenta ROOT: un `Usuario` con `esRoot`. */
 export interface CuentaRoot {
   id: string
   email: string
-  debeCambiarPassword: boolean
+  nombre: string
+  /** Una cuenta desactivada no entra a la consola. */
+  activo: boolean
   /** Es la cuenta de quien pregunta. */
   esPropia: boolean
 }
 
-export interface CuentaRootConPassword extends CuentaRoot {
-  /** La contraseña generada, SOLO en esta respuesta. `null` si ROOT eligió la contraseña al crear la cuenta. */
-  passwordTemporal: string | null
+/** La respuesta de invitar a una cuenta ROOT. */
+export interface CuentaRootInvitada {
+  usuarioId: string
+  email: string
+  /** False si el email ya tenía una cuenta confirmada en Supabase: no se le manda mail. */
+  invitacionEnviada: boolean
 }
 
 // ── Marcas y restaurantes (etapa 1b) ─────────────────────────────────────────
@@ -50,7 +52,7 @@ export interface RootMarcaResumen {
   slug: string
   activo: boolean
   restaurantes: { activos: number; total: number }
-  /** Cuántas cuentas OWNER tiene. 0 es "Sin dueño". */
+  /** Cuántas membresías OWNER tiene. 0 es "Sin dueño". */
   duenos: number
 }
 
@@ -62,11 +64,14 @@ export interface RootRestaurante {
   activo: boolean
 }
 
-/** Un dueño dentro del detalle de una marca. */
+/** Un dueño dentro del detalle de una marca: un `Usuario` con la membresía OWNER de la marca. */
 export interface RootDuenoDeMarca {
+  /** El id del `Usuario`. */
   id: string
+  /** La membresía OWNER: es lo que se quita con `DELETE /root/duenos/:membresiaId`. */
+  membresiaId: string
   email: string
-  debeCambiarPassword: boolean
+  nombre: string
 }
 
 /** Donde ROOT trabaja: los datos de la marca, sus restaurantes y sus dueños. */

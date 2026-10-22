@@ -4,7 +4,6 @@ import {
   AlertTriangle, Bell, ClipboardList, Clock, CreditCard,
   DollarSign, DoorOpen, Printer, QrCode, Users, X,
 } from 'lucide-react'
-import { TOKEN_KEY } from '@menyu/auth'
 import { urlDelSocket } from '@menyu/ui/socket'
 import { io, type Socket } from 'socket.io-client'
 import { useContextStore } from '../../../store/contextStore'
@@ -423,8 +422,8 @@ export function GerenceMesasPage() {
   // WebSocket
   useEffect(() => {
     if (!selectedRestauranteId) return
+    // El gateway no autentica la conexión (docs/auth/specs/auth.md, Fuera de alcance): no se le manda ningún token.
     const socket: Socket = io(`${WS_URL}/ws`, {
-      auth:       { token: localStorage.getItem(TOKEN_KEY) },
       transports: ['websocket'],
     })
     socket.on('connect', () => {

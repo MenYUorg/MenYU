@@ -1,13 +1,11 @@
-import { Controller, Get, Query, UseGuards, ParseIntPipe, DefaultValuePipe } from '@nestjs/common'
+import { Controller, Get, Query, ParseIntPipe, DefaultValuePipe } from '@nestjs/common'
 import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger'
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'
-import { RolesGuard } from '../common/guards/roles.guard'
-import { Roles } from '../common/decorators/roles.decorator'
+import { RequiereRolEn } from '../auth/decorators/requiere-rol.decorator'
 import { ReportesService } from './reportes.service'
 
+// Solo el OWNER del restaurante de la query (ROOT no ve los reportes de las marcas).
 @ApiTags('reportes')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('ROOT', 'OWNER')
+@RequiereRolEn({ query: 'restauranteId' }, 'OWNER')
 @Controller('reportes')
 export class ReportesController {
   constructor(private readonly reportes: ReportesService) {}

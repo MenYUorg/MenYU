@@ -44,19 +44,30 @@ export function Campo({ etiqueta, error, ayuda, monoespaciado = false, style, ..
 export function CampoSelect({
   etiqueta,
   opciones,
+  error,
   ...resto
-}: { etiqueta: string; opciones: Array<{ valor: string; texto: string }> } & Omit<SelectHTMLAttributes<HTMLSelectElement>, 'id' | 'children'>) {
+}: { etiqueta: string; opciones: Array<{ valor: string; texto: string }>; error?: string } & Omit<
+  SelectHTMLAttributes<HTMLSelectElement>,
+  'id' | 'children'
+>) {
   const id = useId()
+  const idError = `${id}-error`
   return (
-    <div className="campo">
+    <div className={`campo${error ? ' con-error' : ''}`}>
       <label htmlFor={id}>{etiqueta}</label>
-      <select id={id} {...resto}>
+      <select id={id} aria-invalid={error ? true : undefined} aria-describedby={error ? idError : undefined} {...resto}>
         {opciones.map((o) => (
           <option key={o.valor} value={o.valor}>
             {o.texto}
           </option>
         ))}
       </select>
+      {error && (
+        <p className="error" id={idError}>
+          <AlertTriangle size={14} aria-hidden="true" />
+          {error}
+        </p>
+      )}
     </div>
   )
 }

@@ -3,10 +3,10 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { io, type Socket } from 'socket.io-client'
 import type { Mesa } from '@menyu/types'
 import { Bell, Clock, DollarSign, DoorOpen, LayoutGrid, ShoppingBag, Users } from 'lucide-react'
-import { useAuth } from '@menyu/auth'
+import { usePerfil } from '@menyu/auth-client'
 import { urlDelSocket } from '@menyu/ui/socket'
-import { useMozoStore } from '../../store/mozoStore'
-import { api, getToken } from '../../services/api'
+import { useNombreDelRol, useRestauranteId } from '../../store/contextoStore'
+import { api } from '../../services/api'
 import type { SesionActivaRico, WaiterCallRico } from '../../services/api'
 import { PageHeader } from '../../components/PageHeader'
 
@@ -72,12 +72,11 @@ function estadoBadge(estado: string): { bg: string; color: string; label: string
 
 // ── MesaTile ──────────────────────────────────────────────────────────────────
 function MesaTile({
-  mesa, sesion, tieneLlamado, esAsignada, onClick,
+  mesa, sesion, tieneLlamado, onClick,
 }: {
   mesa: Mesa
   sesion: SesionActivaRico | undefined
   tieneLlamado: boolean
-  esAsignada: boolean
   onClick: () => void
 }) {
   const ocupada = mesa.estado === 'ocupada'
@@ -91,7 +90,7 @@ function MesaTile({
       style={{
         background:    ocupada ? C.orangeBg : C.greenBg,
         borderRadius:  16,
-        border:        `2px solid ${tieneLlamado ? C.amber : esAsignada ? C.orange : ocupada ? C.orange : C.green}`,
+        border:        `2px solid ${tieneLlamado ? C.amber : ocupada ? C.orange : C.green}`,
         padding:       20,
         cursor:        'pointer',
         minHeight:     160,
@@ -117,15 +116,6 @@ function MesaTile({
           }}>
             {ocupada ? 'Ocupada' : 'Libre'}
           </span>
-          {esAsignada && (
-            <span style={{
-              background: C.navy, color: 'white',
-              fontSize: 10, fontWeight: 700,
-              padding: '2px 6px', borderRadius: 999, fontFamily: 'Inter,sans-serif',
-            }}>
-              Tu mesa
-            </span>
-          )}
         </div>
       </div>
 
@@ -215,12 +205,10 @@ function PedidoSesionCard({ pedido }: { pedido: SesionActivaRico['pedidos'][0] }
 export function MesasPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const { user } = useAuth()
-  const { restauranteId } = useMozoStore()
-  const nombreMozo = user?.nombre ?? user?.email ?? 'Mozo'
-
-  // TODO: agregar mesasAsignadas al payload del JWT del mozo cuando el backend lo soporte
-  const mesasAsignadas: string[] = []
+  const perfil = usePerfil()
+  const restauranteId = useRestauranteId()
+  const nombreMozo = perfil.nombre || perfil.email
+  const rolMostrado = useNombreDelRol()
 
   const [mesas,            setMesas]            = useState<Mesa[]>([])
   const [sesiones,         setSesiones]         = useState<Map<string, SesionActivaRico>>(new Map())
@@ -295,10 +283,8 @@ export function MesasPage() {
   // WebSocket
   useEffect(() => {
     if (!restauranteId) return
-    const socket: Socket = io(`${WS_URL}/ws`, {
-      auth:       { token: getToken() },
-      transports: ['websocket'],
-    })
+    // El gateway no autentica la conexión (docs/auth/specs/auth.md, Fuera de alcance): no se le manda ningún token.
+    const socket: Socket = io(`${WS_URL}/ws`, { transports: ['websocket'] })
     socket.on('connect', () => {
       socket.emit('mozo:join', { restauranteId })
     })
@@ -381,8 +367,8 @@ export function MesasPage() {
           icon={<LayoutGrid size={18} />}
           onBack={() => { setMesaSeleccionada(null); setSesionDetalle(null) }}
           userName={nombreMozo}
-          userRole="Mozo"
-          userInitials={getInitials(user?.nombre ?? user?.email)}
+          userRole={rolMostrado}
+          userInitials={getInitials(nombreMozo)}
         />
 
         {/* Content */}
@@ -485,8 +471,8 @@ export function MesasPage() {
         icon={<LayoutGrid size={18} />}
         onBack={() => navigate('/mozo')}
         userName={nombreMozo}
-        userRole="Mozo"
-        userInitials={getInitials(user?.nombre ?? user?.email)}
+        userRole={rolMostrado}
+        userInitials={getInitials(nombreMozo)}
       />
 
       <main style={{ padding: 20 }}>
@@ -508,7 +494,6 @@ export function MesasPage() {
                 mesa={mesa}
                 sesion={sesiones.get(mesa.id)}
                 tieneLlamado={mesasConLlamado.has(mesa.numero)}
-                esAsignada={mesasAsignadas.includes(mesa.id)}
                 onClick={() => void handleSeleccionarMesa(mesa)}
               />
             ))}

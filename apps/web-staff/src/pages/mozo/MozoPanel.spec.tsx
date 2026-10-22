@@ -3,16 +3,28 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import type { Pedido } from '@menyu/types'
 import { api, type PedidoRico, type WaiterCallRico } from '../../services/api'
 import * as socketService from '../../services/socket'
+import type { Rol } from '@menyu/types'
+import { membresiaDeMarca, perfilDePrueba, reiniciarSesionDePrueba } from '../../test/authClient'
+import { montarContexto, reiniciarContexto } from '../../test/contexto'
 import { MozoPanel } from './MozoPanel'
 
-const logout = vi.fn()
-let usuario: { nombre?: string; email?: string; restauranteId?: string } | null = { nombre: 'Ana Pérez', email: 'ana@menyu.com', restauranteId: 'rest-1' }
+/** El perfil de prueba: un restaurante llamado "La Parrilla" en la marca "Grupo Sabores". */
+const perfilEnLaParrilla = (rol: Rol, nombre = 'Ana Pérez', email = 'ana@menyu.com') =>
+  perfilDePrueba({
+    nombre,
+    email,
+    membresias: rol === 'OWNER'
+      ? [membresiaDeMarca('marca-1', [{ id: 'rest-1', nombre: 'La Parrilla' }], 'Grupo Sabores')]
+      : [{
+          id: `mem-${rol}`,
+          rol,
+          marca: null,
+          restaurante: { id: 'rest-1', nombre: 'La Parrilla', marcaId: 'marca-1', marca: { id: 'marca-1', nombre: 'Grupo Sabores' } },
+        }],
+  })
 
-vi.mock('@menyu/auth', () => ({ useAuth: () => ({ user: usuario, logout }) }))
+vi.mock('@menyu/auth-client', async () => (await import('../../test/authClient')).moduloSimulado())
 vi.mock('@menyu/ui', () => ({ LogoMenYuOscuro: () => <span>MenYU</span> }))
-
-let tienda = { restauranteId: 'rest-store' as string | null, restauranteNombre: 'La Parrilla' as string | null, marcaNombre: 'Grupo Sabores' as string | null }
-vi.mock('../../store/mozoStore', () => ({ useMozoStore: () => tienda }))
 
 vi.mock('../../services/api', () => ({
   api: {
@@ -26,6 +38,7 @@ const alActualizar: { fn?: (p: Pedido) => void } = {}
 const desuscribir = { llamado: vi.fn(), pedido: vi.fn() }
 vi.mock('../../services/socket', () => ({
   joinRestauranteComoMozo: vi.fn(),
+  cerrarSesion: vi.fn(),
   onMozoCalled: vi.fn((fn) => { alLlamar.fn = fn; return desuscribir.llamado }),
   onPedidoActualizado: vi.fn((fn) => { alActualizar.fn = fn; return desuscribir.pedido }),
 }))
@@ -59,6 +72,7 @@ function abrir() {
       <Routes>
         <Route path="/mozo" element={<MozoPanel />} />
         <Route path="/mozo/:pantalla" element={<p>pantalla de destino</p>} />
+        <Route path="*" element={<p>fuera del panel</p>} />
       </Routes>
     </MemoryRouter>,
   )
@@ -68,8 +82,9 @@ const tarjeta = (mesa: string) => screen.getByText(`Mesa ${mesa}`).parentElement
 
 beforeEach(() => {
   vi.clearAllMocks()
-  usuario = { nombre: 'Ana Pérez', email: 'ana@menyu.com', restauranteId: 'rest-1' }
-  tienda = { restauranteId: 'rest-store', restauranteNombre: 'La Parrilla', marcaNombre: 'Grupo Sabores' }
+  reiniciarSesionDePrueba()
+  reiniciarContexto()
+  montarContexto(perfilEnLaParrilla('MOZO'))
   llamadosApi.getAll.mockResolvedValue([])
   pedidosApi.getByRestaurante.mockResolvedValue([])
 })
@@ -87,9 +102,10 @@ describe('MozoPanel', () => {
       expect(await screen.findByText('Sin alertas pendientes')).toBeInTheDocument()
     })
 
-    it('sin nombre usa el email; sin marca ni restaurante muestra guiones', () => {
-      usuario = { email: 'juan.gomez@menyu.com', restauranteId: 'rest-1' }
-      tienda = { restauranteId: null, restauranteNombre: null, marcaNombre: null }
+    it('sin nombre usa el email; sin restaurante elegido, la marca y el restaurante quedan en guiones', () => {
+      reiniciarContexto()
+      montarContexto(perfilEnLaParrilla('MOZO', '', 'juan.gomez@menyu.com'))
+      reiniciarContexto()
 
       abrir()
 
@@ -99,14 +115,45 @@ describe('MozoPanel', () => {
       expect(screen.getAllByText('—')).toHaveLength(2)
     })
 
-    it('sin usuario dice "Mozo" y usa el restaurante guardado', () => {
-      usuario = null
+    it.each([
+      ['MOZO', 'Mozo'],
+      ['JEFE_SALON', 'Jefe de salón'],
+      ['GERENTE', 'Gerente'],
+      ['OWNER', 'Dueño'],
+    ] as const)('el rol del encabezado sale de la membresía: %s muestra "%s"', (rol, etiqueta) => {
+      reiniciarContexto()
+      montarContexto(perfilEnLaParrilla(rol))
 
       abrir()
 
-      expect(screen.getByText('Hola, Mozo 👋')).toBeInTheDocument()
-      expect(screen.getByText('?')).toBeInTheDocument()
-      expect(llamadosApi.getAll).toHaveBeenCalledWith('rest-store')
+      expect(screen.getByText(etiqueta)).toBeInTheDocument()
+    })
+
+    it('consulta el restaurante del contexto, que sale de la membresía', () => {
+      abrir()
+
+      expect(llamadosApi.getAll).toHaveBeenCalledWith('rest-1')
+    })
+
+    it('con un solo restaurante no ofrece cambiarlo', () => {
+      abrir()
+
+      expect(screen.queryByRole('button', { name: 'Cambiar de restaurante' })).not.toBeInTheDocument()
+    })
+
+    it('con varios, "Cambiar de restaurante" vuelve al selector', () => {
+      reiniciarContexto()
+      montarContexto(perfilDePrueba({
+        nombre: 'Ana Pérez',
+        membresias: [
+          membresiaDeMarca('marca-1', [{ id: 'rest-1', nombre: 'La Parrilla' }, { id: 'rest-2', nombre: 'Palermo' }], 'Grupo Sabores'),
+        ],
+      }), 'rest-1')
+      abrir()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Cambiar de restaurante' }))
+
+      expect(screen.getByText('fuera del panel')).toBeInTheDocument()
     })
 
     it('"Salir" cierra la sesión', () => {
@@ -114,12 +161,12 @@ describe('MozoPanel', () => {
 
       fireEvent.click(screen.getByRole('button', { name: /Salir/ }))
 
-      expect(logout).toHaveBeenCalledTimes(1)
+      // `cerrarSesion` desconecta el socket y recién después llama al logout de @menyu/auth-client.
+      expect(socketService.cerrarSesion).toHaveBeenCalledTimes(1)
     })
 
     it('sin restaurante no consulta nada ni se une al socket', () => {
-      usuario = { nombre: 'Ana' }
-      tienda = { restauranteId: null, restauranteNombre: null, marcaNombre: null }
+      reiniciarContexto()
 
       abrir()
 
@@ -171,6 +218,39 @@ describe('MozoPanel', () => {
       fireEvent.click(within(tarjeta('7')).getByRole('button', { name: /Atendido/ }))
       expect(within(tarjeta('7')).getByRole('button', { name: /Guardando…/ })).toBeDisabled()
       expect(await screen.findByText('Sin alertas pendientes')).toBeInTheDocument()
+    })
+
+    it.each([
+      ['MOZO', true],
+      ['JEFE_SALON', true],
+      ['GERENTE', false],
+      ['OWNER', false],
+    ] as const)('%s ve el botón "Atendido": %s', async (rol, loVe) => {
+      reiniciarContexto()
+      montarContexto(perfilEnLaParrilla(rol))
+      llamadosApi.getAll.mockResolvedValue([llamado('ll-1', '4', null, 3)])
+      abrir()
+      await screen.findByText('Mesa 4')
+
+      // Atender necesita el `Mozo` de la cuenta: a un OWNER o GERENTE el backend le responde 403 (matriz de la 4.3).
+      const boton = within(tarjeta('4')).queryByRole('button', { name: /Atendido/ })
+      expect(boton === null).toBe(!loVe)
+    })
+
+    it('la cuenta que es dueña y además mozo del restaurante puede atender', async () => {
+      reiniciarContexto()
+      montarContexto(perfilDePrueba({
+        nombre: 'Varias',
+        membresias: [
+          membresiaDeMarca('marca-1', [{ id: 'rest-1', nombre: 'La Parrilla' }], 'Grupo Sabores'),
+          { id: 'mem-mozo', rol: 'MOZO', marca: null, restaurante: { id: 'rest-1', nombre: 'La Parrilla', marcaId: 'marca-1', marca: { id: 'marca-1', nombre: 'Grupo Sabores' } } },
+        ],
+      }))
+      llamadosApi.getAll.mockResolvedValue([llamado('ll-1', '4', null, 3)])
+      abrir()
+      await screen.findByText('Mesa 4')
+
+      expect(within(tarjeta('4')).getByRole('button', { name: /Atendido/ })).toBeInTheDocument()
     })
 
     it('"Entregado" pasa el pedido a entregado y lo saca (también si el servidor falla)', async () => {

@@ -1,37 +1,37 @@
-import {
-  BadRequestException,
-  ConflictException,
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common'
-import * as bcrypt from 'bcryptjs'
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common'
+import { Prisma, Rol } from '@prisma/client'
 import { PrismaService } from '../prisma/prisma.service'
-import { JwtPayload } from '../auth/auth.service'
-import { CreateMozoDto } from './dto/create-mozo.dto'
+import { ADMINISTRACION } from '../auth/roles-del-personal'
+import { AccesoService } from '../auth/supabase/acceso.service'
+import { UsuarioAutenticado } from '../auth/supabase/usuario-autenticado'
 import { UpdateMozoDto } from './dto/update-mozo.dto'
 
-const BCRYPT_ROUNDS = 10
+/** Lo que se ve de un mozo. Nunca la contraseña del login propio (`passwordHash`). */
+export const MOZO_SELECT = {
+  id: true,
+  restauranteId: true,
+  nombre: true,
+  email: true,
+  telefono: true,
+  activo: true,
+  esJefeSalon: true,
+  createdAt: true,
+  usuarioId: true,
+} satisfies Prisma.MozoSelect
 
+/**
+ * El perfil operativo de los mozos de un restaurante (mesas asignadas, llamados). El acceso se da y se quita desde
+ * Personal (invitar y quitar acceso): acá no se crean mozos ni se cambia su email.
+ */
 @Injectable()
 export class MozosService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly acceso: AccesoService,
+  ) {}
 
-  async create(dto: CreateMozoDto, user: JwtPayload) {
-    await this.assertRestauranteOwnership(dto.restauranteId, user)
-
-    if (dto.email) {
-      const existing = await this.prisma.mozo.findFirst({ where: { email: dto.email } })
-      if (existing) throw new ConflictException('Ya existe un mozo con ese email')
-    }
-
-    const passwordHash = await bcrypt.hash(dto.password, BCRYPT_ROUNDS)
-    const { password: _, ...data } = dto
-    return this.prisma.mozo.create({ data: { ...data, passwordHash } })
-  }
-
-  async findAll(restauranteId: string, user: JwtPayload) {
-    await this.assertRestauranteOwnership(restauranteId, user)
+  /** El rol en el restaurante lo exige la ruta (`@RequiereRolEn`). */
+  async findAll(restauranteId: string) {
     return this.prisma.mozo.findMany({
       where: { restauranteId, activo: true },
       orderBy: { nombre: 'asc' },
@@ -47,35 +47,30 @@ export class MozosService {
     })
   }
 
-  async findOne(id: string, user: JwtPayload) {
-    const mozo = await this.getOrThrow(id)
-    await this.assertRestauranteOwnership(mozo.restauranteId, user)
-    return mozo
+  async findOne(id: string, usuario: UsuarioAutenticado) {
+    return this.getConPermiso(id, usuario)
   }
 
-  async update(id: string, dto: UpdateMozoDto, user: JwtPayload) {
-    const mozo = await this.getOrThrow(id)
-    await this.assertRestauranteOwnership(mozo.restauranteId, user)
+  /** Solo el OWNER. El email y la contraseña son de la cuenta de Supabase; si es jefe de salón, de la membresía. */
+  async update(id: string, dto: UpdateMozoDto, usuario: UsuarioAutenticado) {
+    await this.getConPermiso(id, usuario, ['OWNER'])
+    return this.prisma.mozo.update({ where: { id }, data: dto, select: MOZO_SELECT })
+  }
 
-    const { password, ...rest } = dto
-    const data: Record<string, unknown> = { ...rest }
-
-    if (password) {
-      data.passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS)
+  /**
+   * Da de baja a un mozo del login propio (sin cuenta de Supabase). Solo el OWNER. A uno con cuenta se le quita
+   * el acceso desde Personal, que también borra su membresía.
+   */
+  async remove(id: string, usuario: UsuarioAutenticado) {
+    const mozo = await this.getConPermiso(id, usuario, ['OWNER'])
+    if (mozo.usuarioId) {
+      throw new ConflictException('Este mozo tiene cuenta: quitale el acceso desde Personal')
     }
-
-    return this.prisma.mozo.update({ where: { id }, data })
-  }
-
-  async remove(id: string, user: JwtPayload) {
-    const mozo = await this.getOrThrow(id)
-    await this.assertRestauranteOwnership(mozo.restauranteId, user)
     await this.prisma.mozo.update({ where: { id }, data: { activo: false } })
   }
 
-  async assignMesa(mozoId: string, mesaId: string, user: JwtPayload) {
-    const mozo = await this.getOrThrow(mozoId)
-    await this.assertRestauranteOwnership(mozo.restauranteId, user)
+  async assignMesa(mozoId: string, mesaId: string, usuario: UsuarioAutenticado) {
+    const mozo = await this.getConPermiso(mozoId, usuario)
 
     const mesa = await this.prisma.mesa.findUnique({ where: { id: mesaId } })
     if (!mesa) throw new NotFoundException('Mesa no encontrada')
@@ -90,9 +85,8 @@ export class MozosService {
     }
   }
 
-  async unassignMesa(mozoId: string, mesaId: string, user: JwtPayload) {
-    const mozo = await this.getOrThrow(mozoId)
-    await this.assertRestauranteOwnership(mozo.restauranteId, user)
+  async unassignMesa(mozoId: string, mesaId: string, usuario: UsuarioAutenticado) {
+    await this.getConPermiso(mozoId, usuario)
 
     const asignacion = await this.prisma.mozoMesa.findUnique({
       where: { mesaId_mozoId: { mesaId, mozoId } },
@@ -102,9 +96,8 @@ export class MozosService {
     await this.prisma.mozoMesa.delete({ where: { mesaId_mozoId: { mesaId, mozoId } } })
   }
 
-  async getMesas(mozoId: string, user: JwtPayload) {
-    const mozo = await this.getOrThrow(mozoId)
-    await this.assertRestauranteOwnership(mozo.restauranteId, user)
+  async getMesas(mozoId: string, usuario: UsuarioAutenticado) {
+    await this.getConPermiso(mozoId, usuario)
 
     const asignaciones = await this.prisma.mozoMesa.findMany({
       where: { mozoId },
@@ -117,9 +110,8 @@ export class MozosService {
     return asignaciones.map((a) => a.mesa)
   }
 
-  async llamadosHoy(mozoId: string, user: JwtPayload) {
-    const mozo = await this.getOrThrow(mozoId)
-    await this.assertRestauranteOwnership(mozo.restauranteId, user)
+  async llamadosHoy(mozoId: string, usuario: UsuarioAutenticado) {
+    await this.getConPermiso(mozoId, usuario)
 
     const hoy = new Date()
     hoy.setHours(0, 0, 0, 0)
@@ -135,29 +127,11 @@ export class MozosService {
     return { total }
   }
 
-  private async getOrThrow(id: string) {
-    const mozo = await this.prisma.mozo.findUnique({ where: { id } })
+  /** El mozo (404 si no existe), si el usuario tiene alguno de `roles` en su restaurante (403 si no). */
+  private async getConPermiso(id: string, usuario: UsuarioAutenticado, roles: readonly Rol[] = ADMINISTRACION) {
+    const mozo = await this.prisma.mozo.findUnique({ where: { id }, select: MOZO_SELECT })
     if (!mozo) throw new NotFoundException('Mozo no encontrado')
+    await this.acceso.exigirRol(usuario.id, mozo.restauranteId, roles)
     return mozo
-  }
-
-  private async assertRestauranteOwnership(restauranteId: string, user: JwtPayload) {
-    if (user.rol === 'ROOT') return
-    if (user.rol === 'OWNER') {
-      const admin = await this.prisma.admin.findUnique({ where: { id: user.sub } })
-      const restaurante = await this.prisma.restaurante.findUnique({ where: { id: restauranteId } })
-      if (!admin || !restaurante || admin.marcaId !== restaurante.marcaId) {
-        throw new ForbiddenException('No tenés acceso a este restaurante')
-      }
-      return
-    }
-    if (user.rol === 'GERENTE') {
-      const asignacion = await this.prisma.adminRestaurante.findUnique({
-        where: { adminId_restauranteId: { adminId: user.sub, restauranteId } },
-      })
-      if (!asignacion) throw new ForbiddenException('No tenés acceso a este restaurante')
-      return
-    }
-    throw new ForbiddenException('No tenés acceso a este restaurante')
   }
 }

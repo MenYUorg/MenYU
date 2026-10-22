@@ -479,6 +479,8 @@ model PedidoEdicion {
   pedidoId      String   @map("pedido_id")
   adminId       String?  @map("admin_id")
   mozoId        String?  @map("mozo_id")
+  // Quien editó con su cuenta de Supabase (Fase 4 de auth). Reemplaza a adminId, que se va en la Fase 5.
+  usuarioId     String?  @map("usuario_id")
   justificacion String
   creadoEn      DateTime @default(now()) @map("creado_en")
 
@@ -486,6 +488,7 @@ model PedidoEdicion {
   pedido          Pedido  @relation(fields: [pedidoId], references: [id])
   admin           Admin?  @relation(fields: [adminId], references: [id])
   mozo            Mozo?   @relation(fields: [mozoId], references: [id])
+  usuario         Usuario? @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
 
   @@map("pedido_edicion")
 }
@@ -512,12 +515,15 @@ model Pago {
   estado            String    @default("pendiente")
   referenciaExterna String?   @map("referencia_externa")
   mozoId            String?   @map("mozo_id")
+  // La cuenta de Supabase de quien registró el cobro (Fase 4 de auth).
+  usuarioId         String?   @map("usuario_id")
   cobradoPorNombre  String?   @map("cobrado_por_nombre")
   fechaCobro        DateTime? @map("fecha_cobro") @db.Timestamptz
   createdAt         DateTime  @default(now()) @map("created_at")
 
   sesion   SesionMesa @relation(fields: [sesionId], references: [id])
   mozo     Mozo?      @relation(fields: [mozoId], references: [id])
+  usuario  Usuario?   @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
 
   @@map("pago")
 }
@@ -600,6 +606,8 @@ model Usuario {
 
   membresias Membresia[]
   mozos      Mozo[]
+  ediciones  PedidoEdicion[]
+  cobros     Pago[]
 
   @@map("usuario")
 }

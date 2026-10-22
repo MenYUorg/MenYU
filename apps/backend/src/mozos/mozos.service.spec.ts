@@ -1,19 +1,13 @@
 import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common'
-import * as bcrypt from 'bcryptjs'
-import { JwtPayload } from '../auth/auth.service'
-import {
-  GERENTE,
-  OWNER,
-  PrismaMock,
-  comoPrisma,
-  crearPrismaMock,
-  ownerDeLaMarca,
-  ownerDeOtraMarca,
-} from '../test/prisma-mock'
-import { MozosService } from './mozos.service'
+import { UsuarioAutenticado } from '../auth/supabase/usuario-autenticado'
+import { accesoDeTest, CUENTAS, MUNDO } from '../test/acceso-de-test'
+import { PrismaMock, comoPrisma, crearPrismaMock } from '../test/prisma-mock'
+import { MOZO_SELECT, MozosService } from './mozos.service'
 
-const MOZO = { id: 'mozo-1', nombre: 'Juan', restauranteId: 'rest-1', activo: true }
-const DTO_ALTA = { nombre: 'Juan', email: 'juan@menyu.test', password: 'secreta123', restauranteId: 'rest-1' }
+const REST = MUNDO.REST_1
+const OWNER = CUENTAS.OWNER_A
+const GERENTE = CUENTAS.GERENTE
+const MOZO = { id: 'mozo-1', nombre: 'Juan', restauranteId: REST, activo: true, usuarioId: null as string | null }
 
 describe('MozosService', () => {
   let prisma: PrismaMock
@@ -21,182 +15,118 @@ describe('MozosService', () => {
 
   beforeEach(() => {
     prisma = crearPrismaMock()
-    service = new MozosService(comoPrisma(prisma))
+    service = new MozosService(comoPrisma(prisma), accesoDeTest())
   })
 
-  describe('permisos sobre el restaurante', () => {
-    it('un OWNER de otra marca recibe 403 y no se crea el mozo', async () => {
-      // Arrange
-      ownerDeOtraMarca(prisma)
+  it('ninguna respuesta trae la contraseña del login propio', () => {
+    expect(MOZO_SELECT).not.toHaveProperty('passwordHash')
+  })
 
-      // Act
-      const alta = service.create(DTO_ALTA, OWNER)
+  describe('permisos de las rutas de un mozo (el rol en el restaurante del mozo)', () => {
+    const RUTAS: Array<[string, (u: UsuarioAutenticado) => Promise<unknown>]> = [
+      ['findOne', (u) => service.findOne('mozo-1', u)],
+      ['assignMesa', (u) => service.assignMesa('mozo-1', 'mesa-1', u)],
+      ['unassignMesa', (u) => service.unassignMesa('mozo-1', 'mesa-1', u)],
+      ['getMesas', (u) => service.getMesas('mozo-1', u)],
+      ['llamadosHoy', (u) => service.llamadosHoy('mozo-1', u)],
+    ]
 
-      // Assert
-      await expect(alta).rejects.toThrow(ForbiddenException)
-      expect(prisma.mozo.create).not.toHaveBeenCalled()
+    beforeEach(() => {
+      prisma.mozo.findUnique.mockResolvedValue(MOZO)
+      prisma.mesa.findUnique.mockResolvedValue({ id: 'mesa-1', restauranteId: REST })
+      prisma.mozoMesa.findUnique.mockResolvedValue({ mozoId: 'mozo-1', mesaId: 'mesa-1' })
+      prisma.mozoMesa.findMany.mockResolvedValue([])
+      prisma.llamadoMozo.count.mockResolvedValue(0)
     })
 
-    it('un GERENTE asignado al restaurante puede listar sus mozos', async () => {
-      // Arrange
-      prisma.adminRestaurante.findUnique.mockResolvedValue({ adminId: GERENTE.sub, restauranteId: 'rest-1' })
-      prisma.mozo.findMany.mockResolvedValue([MOZO])
-
-      // Act
-      const mozos = await service.findAll('rest-1', GERENTE)
-
-      // Assert
-      expect(mozos).toEqual([MOZO])
-      expect(prisma.adminRestaurante.findUnique).toHaveBeenCalledWith({
-        where: { adminId_restauranteId: { adminId: GERENTE.sub, restauranteId: 'rest-1' } },
-      })
+    it.each(RUTAS)('%s: el OWNER de la marca y el GERENTE del restaurante pasan', async (_ruta, llamar) => {
+      await llamar(OWNER)
+      await llamar(GERENTE)
     })
 
-    it('un GERENTE sin asignación recibe 403', async () => {
-      // Arrange
-      prisma.adminRestaurante.findUnique.mockResolvedValue(null)
-
-      // Act
-      const listado = service.findAll('rest-1', GERENTE)
-
-      // Assert
-      await expect(listado).rejects.toThrow('No tenés acceso a este restaurante')
-      expect(prisma.mozo.findMany).not.toHaveBeenCalled()
+    it.each(RUTAS)('%s: ROOT, el OWNER de otra marca y el salón reciben 403', async (_ruta, llamar) => {
+      for (const cuenta of [CUENTAS.ROOT, CUENTAS.OWNER_B, CUENTAS.JEFE_SALON, CUENTAS.MOZO]) {
+        await expect(llamar(cuenta)).rejects.toThrow(ForbiddenException)
+      }
+      expect(prisma.mozoMesa.create).not.toHaveBeenCalled()
+      expect(prisma.mozoMesa.delete).not.toHaveBeenCalled()
     })
 
-    it('un usuario que no es admin (un mozo) recibe 403', async () => {
-      // Arrange
-      const mozo: JwtPayload = { sub: 'mozo-9', tipo: 'mozo', restauranteId: 'rest-1' }
+    it('el GERENTE de otro restaurante de la marca recibe 403', async () => {
+      prisma.mozo.findUnique.mockResolvedValue({ ...MOZO, restauranteId: MUNDO.REST_2 })
 
-      // Act
-      const listado = service.findAll('rest-1', mozo)
+      await expect(service.getMesas('mozo-1', GERENTE)).rejects.toThrow(ForbiddenException)
+    })
 
-      // Assert
-      await expect(listado).rejects.toThrow(ForbiddenException)
+    it('un mozo que no existe responde 404', async () => {
+      prisma.mozo.findUnique.mockResolvedValue(null)
+
+      await expect(service.findOne('no-existe', OWNER)).rejects.toThrow(new NotFoundException('Mozo no encontrado'))
     })
   })
 
-  describe('create', () => {
-    it('guarda el hash bcrypt de la contraseña y nunca la contraseña en claro', async () => {
-      // Arrange
-      ownerDeLaMarca(prisma)
-      prisma.mozo.findFirst.mockResolvedValue(null)
-      prisma.mozo.create.mockImplementation(({ data }) => Promise.resolve({ id: 'mozo-nuevo', ...data }))
-
-      // Act
-      await service.create(DTO_ALTA, OWNER)
-
-      // Assert
-      const { data } = prisma.mozo.create.mock.calls[0][0]
-      expect(data).not.toHaveProperty('password')
-      expect(data.passwordHash).not.toBe(DTO_ALTA.password)
-      expect(await bcrypt.compare(DTO_ALTA.password, data.passwordHash)).toBe(true)
-      expect(data).toMatchObject({ nombre: 'Juan', email: 'juan@menyu.test', restauranteId: 'rest-1' })
-    })
-
-    it('si ya existe un mozo con ese email responde 409 y no lo crea', async () => {
-      // Arrange
-      ownerDeLaMarca(prisma)
-      prisma.mozo.findFirst.mockResolvedValue({ id: 'otro-mozo' })
-
-      // Act
-      const alta = service.create(DTO_ALTA, OWNER)
-
-      // Assert
-      await expect(alta).rejects.toThrow(new ConflictException('Ya existe un mozo con ese email'))
-      expect(prisma.mozo.create).not.toHaveBeenCalled()
-    })
-
-    it('sin email no busca duplicados y crea el mozo', async () => {
-      // Arrange
-      ownerDeLaMarca(prisma)
-      const { email: _, ...sinEmail } = DTO_ALTA
-      prisma.mozo.create.mockResolvedValue({ id: 'mozo-nuevo' })
-
-      // Act
-      await service.create(sinEmail, OWNER)
-
-      // Assert
-      expect(prisma.mozo.findFirst).not.toHaveBeenCalled()
-      expect(prisma.mozo.create).toHaveBeenCalledTimes(1)
-    })
-  })
-
-  describe('findAll', () => {
+  describe('findAll (el rol lo exige la ruta)', () => {
     it('lista solo los mozos activos del restaurante, por nombre, sin exponer el hash de la contraseña', async () => {
       // Arrange
-      ownerDeLaMarca(prisma)
       prisma.mozo.findMany.mockResolvedValue([MOZO])
 
       // Act
-      await service.findAll('rest-1', OWNER)
+      await service.findAll(REST)
 
       // Assert
       const consulta = prisma.mozo.findMany.mock.calls[0][0]
-      expect(consulta.where).toEqual({ restauranteId: 'rest-1', activo: true })
+      expect(consulta.where).toEqual({ restauranteId: REST, activo: true })
       expect(consulta.orderBy).toEqual({ nombre: 'asc' })
       expect(consulta.select).not.toHaveProperty('passwordHash')
     })
   })
 
-  describe('findOne, update y remove', () => {
-    it('findOne de un mozo que no existe responde 404', async () => {
-      // Arrange
-      prisma.mozo.findUnique.mockResolvedValue(null)
-
-      // Act
-      const busqueda = service.findOne('no-existe', OWNER)
-
-      // Assert
-      await expect(busqueda).rejects.toThrow(new NotFoundException('Mozo no encontrado'))
-    })
-
-    it('findOne devuelve el mozo si el OWNER es de su marca', async () => {
+  describe('findOne', () => {
+    it('devuelve el mozo pedido con el select sin la contraseña', async () => {
       // Arrange
       prisma.mozo.findUnique.mockResolvedValue(MOZO)
-      ownerDeLaMarca(prisma)
 
       // Act
-      const mozo = await service.findOne('mozo-1', OWNER)
+      const mozo = await service.findOne('mozo-1', GERENTE)
 
       // Assert
       expect(mozo).toEqual(MOZO)
+      expect(prisma.mozo.findUnique).toHaveBeenCalledWith({ where: { id: 'mozo-1' }, select: MOZO_SELECT })
+    })
+  })
+
+  describe('update (solo el OWNER)', () => {
+    beforeEach(() => {
+      prisma.mozo.findUnique.mockResolvedValue(MOZO)
+      prisma.mozo.update.mockResolvedValue(MOZO)
     })
 
-    it('update con contraseña nueva guarda su hash y no la contraseña en claro', async () => {
-      // Arrange
-      prisma.mozo.findUnique.mockResolvedValue(MOZO)
-      ownerDeLaMarca(prisma)
-      prisma.mozo.update.mockResolvedValue(MOZO)
-
+    it('el OWNER cambia el nombre y el teléfono', async () => {
       // Act
-      await service.update('mozo-1', { nombre: 'Juan Pablo', password: 'nueva456' }, OWNER)
+      await service.update('mozo-1', { nombre: 'Juan Pablo', telefono: '123' }, OWNER)
 
       // Assert
-      const { where, data } = prisma.mozo.update.mock.calls[0][0]
-      expect(where).toEqual({ id: 'mozo-1' })
-      expect(data.nombre).toBe('Juan Pablo')
-      expect(data).not.toHaveProperty('password')
-      expect(await bcrypt.compare('nueva456', data.passwordHash)).toBe(true)
+      expect(prisma.mozo.update).toHaveBeenCalledWith({
+        where: { id: 'mozo-1' },
+        data: { nombre: 'Juan Pablo', telefono: '123' },
+        select: MOZO_SELECT,
+      })
     })
 
-    it('update sin contraseña no toca el hash', async () => {
-      // Arrange
-      prisma.mozo.findUnique.mockResolvedValue(MOZO)
-      ownerDeLaMarca(prisma)
-      prisma.mozo.update.mockResolvedValue(MOZO)
-
-      // Act
-      await service.update('mozo-1', { esJefeSalon: true }, OWNER)
-
-      // Assert
-      expect(prisma.mozo.update).toHaveBeenCalledWith({ where: { id: 'mozo-1' }, data: { esJefeSalon: true } })
+    it.each([
+      ['el GERENTE', GERENTE],
+      ['ROOT', CUENTAS.ROOT],
+    ])('%s recibe 403 y no se toca nada', async (_caso, cuenta) => {
+      // Act + Assert
+      await expect(service.update('mozo-1', { nombre: 'Otro' }, cuenta)).rejects.toThrow(ForbiddenException)
+      expect(prisma.mozo.update).not.toHaveBeenCalled()
     })
+  })
 
-    it('remove es una baja lógica: marca al mozo como inactivo', async () => {
+  describe('remove (solo el OWNER y solo un mozo sin cuenta)', () => {
+    it('da de baja (activo: false) a un mozo del login propio', async () => {
       // Arrange
       prisma.mozo.findUnique.mockResolvedValue(MOZO)
-      ownerDeLaMarca(prisma)
 
       // Act
       await service.remove('mozo-1', OWNER)
@@ -205,21 +135,40 @@ describe('MozosService', () => {
       expect(prisma.mozo.update).toHaveBeenCalledWith({ where: { id: 'mozo-1' }, data: { activo: false } })
       expect(prisma.mozo.delete).not.toHaveBeenCalled()
     })
+
+    it('un mozo con cuenta de Supabase responde 409: el acceso se quita desde Personal', async () => {
+      // Arrange
+      prisma.mozo.findUnique.mockResolvedValue({ ...MOZO, usuarioId: 'usuario-mozo' })
+
+      // Act + Assert
+      await expect(service.remove('mozo-1', OWNER)).rejects.toThrow(
+        new ConflictException('Este mozo tiene cuenta: quitale el acceso desde Personal'),
+      )
+      expect(prisma.mozo.update).not.toHaveBeenCalled()
+    })
+
+    it('el GERENTE recibe 403', async () => {
+      // Arrange
+      prisma.mozo.findUnique.mockResolvedValue(MOZO)
+
+      // Act + Assert
+      await expect(service.remove('mozo-1', GERENTE)).rejects.toThrow(ForbiddenException)
+      expect(prisma.mozo.update).not.toHaveBeenCalled()
+    })
   })
 
   describe('asignación de mesas', () => {
     beforeEach(() => {
       prisma.mozo.findUnique.mockResolvedValue(MOZO)
-      ownerDeLaMarca(prisma)
     })
 
     it('asigna una mesa del mismo restaurante', async () => {
       // Arrange
-      prisma.mesa.findUnique.mockResolvedValue({ id: 'mesa-1', restauranteId: 'rest-1' })
+      prisma.mesa.findUnique.mockResolvedValue({ id: 'mesa-1', restauranteId: REST })
       prisma.mozoMesa.create.mockResolvedValue({ mozoId: 'mozo-1', mesaId: 'mesa-1' })
 
       // Act
-      const asignacion = await service.assignMesa('mozo-1', 'mesa-1', OWNER)
+      const asignacion = await service.assignMesa('mozo-1', 'mesa-1', GERENTE)
 
       // Assert
       expect(asignacion).toEqual({ mozoId: 'mozo-1', mesaId: 'mesa-1' })
@@ -239,7 +188,7 @@ describe('MozosService', () => {
 
     it('una mesa de otro restaurante responde 400 y no se asigna', async () => {
       // Arrange
-      prisma.mesa.findUnique.mockResolvedValue({ id: 'mesa-9', restauranteId: 'otro-rest' })
+      prisma.mesa.findUnique.mockResolvedValue({ id: 'mesa-9', restauranteId: MUNDO.REST_2 })
 
       // Act
       const asignacion = service.assignMesa('mozo-1', 'mesa-9', OWNER)
@@ -251,7 +200,7 @@ describe('MozosService', () => {
 
     it('si la mesa ya estaba asignada (falla la clave única) responde 409', async () => {
       // Arrange
-      prisma.mesa.findUnique.mockResolvedValue({ id: 'mesa-1', restauranteId: 'rest-1' })
+      prisma.mesa.findUnique.mockResolvedValue({ id: 'mesa-1', restauranteId: REST })
       prisma.mozoMesa.create.mockRejectedValue(new Error('Unique constraint failed'))
 
       // Act
@@ -307,7 +256,6 @@ describe('MozosService', () => {
     it('cuenta solo los llamados atendidos por ese mozo y devuelve { total }', async () => {
       // Arrange
       prisma.mozo.findUnique.mockResolvedValue(MOZO)
-      ownerDeLaMarca(prisma)
       prisma.llamadoMozo.count.mockResolvedValue(7)
 
       // Act

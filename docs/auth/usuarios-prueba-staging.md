@@ -1,16 +1,22 @@
 # Usuarios de prueba de staging (auth)
 
-Para probar en **staging** la migración de autenticación (dominios propios y, más adelante, las fases de `docs/auth/specs/auth.md`). Nunca usarlos contra producción.
-
-| Rol | Email | Entra a |
-|---|---|---|
-| OWNER | `owner.pruebas-auth@menyu-app.com` | web-admin (toda "Marca Pruebas Auth") |
-| GERENTE | `gerente.pruebas-auth@menyu-app.com` | web-admin ("Restaurante Pruebas Auth") |
-| Mozo | `mozo.pruebas-auth@menyu-app.com` | web-staff ("Restaurante Pruebas Auth") |
+Para probar en **staging** la migración de autenticación (dominios propios y las fases de `docs/auth/specs/auth.md`). Nunca usarlos contra producción.
 
 - Marca: "Marca Pruebas Auth" (slug `pruebas-auth`). Restaurante: "Restaurante Pruebas Auth". Mesa 1, con PIN.
 - **Las contraseñas y el PIN no están en el repo**, que es público: viven en `docs/auth/.env.usuarios-staging`, que git ignora (`.env.*`). Quien lo necesite se lo pide al equipo; no subirlo ni pegarlo en issues o PRs.
-- Se entra por `mesa.staging.menyu-app.com/auth` (o `menyu-cliente-staging.vercel.app/auth`): el login todavía es el legacy de web-cliente.
+- **Las cuentas que se usan son las de Supabase**, más abajo ("Un usuario por rol"). Se entra por `auth.staging.menyu-app.com`.
+
+## Los tres usuarios legacy: ya no sirven
+
+Estos se crearon el 2026-10-20 contra las tablas viejas (`Admin`, `AdminRestaurante`, `Mozo`) y se usaban por `mesa.staging.menyu-app.com/auth`, el login de web-cliente:
+
+| Rol | Email |
+|---|---|
+| OWNER | `owner.pruebas-auth@menyu-app.com` |
+| GERENTE | `gerente.pruebas-auth@menyu-app.com` |
+| Mozo | `mozo.pruebas-auth@menyu-app.com` |
+
+**Con el merge del PR #416 (Fase 4) dejan de abrir el panel y staff**, que ya no tienen login propio: el acceso lo da la `Membresia`, no la tabla `admin`. Si se entra con una de ellas en `/auth` de web-cliente, la pantalla avisa y manda a web-auth (entrega 4.7). Se reemplazan por las cuentas de Supabase de la sección "Un usuario por rol". Las filas quedan en la base hasta que la Fase 5 retire esas tablas.
 
 ## Cómo se crearon (2026-10-20)
 
@@ -27,7 +33,7 @@ Para probar `GET /auth/me` y `POST /auth/invitaciones` en `api.staging.menyu-app
 
 | Para qué | Email | `Usuario` en la base |
 |---|---|---|
-| ROOT (invita a OWNER y GERENTE) | `root.pruebas-auth@menyu-app.com` | `es_root = true`, sin membresías |
+| ROOT (invita a OWNER; desde la 4.4, no a GERENTE) | `root.pruebas-auth@menyu-app.com` | `es_root = true`, sin membresías |
 | Rol incorrecto (MOZO intenta invitar) | `mozo-supabase.pruebas-auth@menyu-app.com` | membresía MOZO en "Restaurante Pruebas Auth" |
 | Sin acceso (cuenta sin `Usuario`) | `sin-acceso.pruebas-auth@menyu-app.com` | ninguno |
 
@@ -108,7 +114,61 @@ JOIN marca m ON m.slug = 'pruebas-auth'
 JOIN restaurante r ON r.marca_id = m.id AND r.nombre = 'Restaurante Pruebas Auth';
 ```
 
-Hasta la Fase 4, web-admin y web-staff no leen la sesión de Supabase: al llegar muestran su login legacy. Lo que se verifica es la URL a la que manda web-auth.
+Desde la entrega 4.5, web-admin lee la sesión de Supabase, y web-staff desde la 4.6. Ninguna tiene login propio.
+
+### Probar la 4.7 en local (2026-10-22)
+
+Lo mismo que abajo, más `apps/web-cliente/.env.local` (`VITE_API_URL=/api` y `VITE_AUTH_URL=http://auth.menyu.local:5173`) y su Vite en el 5176. Lo que agrega la entrega:
+
+- **Personal en el login del comensal:** en `mesa.menyu.local:5176/auth`, con una cuenta de personal (sirve `mozo@menyu.com` / `mozo1234` del seed, porque el login legacy sigue en pie), tiene que avisar y terminar en `auth.menyu.local:5173` **sin** `token` ni `refresh` en la URL y sin nada en el localStorage. Con `cliente1@menyu.com` / `cliente1234` entra como siempre.
+- **Mesa de un restaurante dado de baja:** abrir la mesa 100 (`/check-in?restaurantId=…&tableCode=TEST-QR-SEED-100`), hacer un pedido, dar de baja el restaurante (`UPDATE restaurante SET activo = false WHERE id = '22222222-2222-4222-a222-222222222222'`) y recargar `/menu`: solo "Pagar la cuenta" y "Ver mis pedidos". En `/pagar`, el efectivo responde "Este restaurante no está disponible" y no deja ni `pago` ni `llamado_mozo`. Reactivar al terminar.
+
+### Probar la entrega 4.5 en local (2026-10-21)
+
+La API de staging todavía corre `main`, sin el backend de las entregas 4.2 a 4.4 (está en el PR draft #416): le responde **401** a `GET /restaurantes` y `GET /marcas` con un token de Supabase. Para probar web-admin de punta a punta se levanta el backend de la rama en local y se usa el Supabase de staging solo para autenticar:
+
+1. `apps/web-auth/.env.local` y `apps/web-admin/.env.local` (git los ignora) con `VITE_API_URL=/api`, el `VITE_SUPABASE_URL` y `VITE_SUPABASE_PUBLISHABLE_KEY` de staging, `VITE_AUTH_COOKIE_DOMAIN=.menyu.local` y `VITE_AUTH_URL=http://auth.menyu.local:5173`.
+2. El backend, con la base local (`apps/backend/.env`) más `SUPABASE_URL` del proyecto de staging y una `MP_ENCRYPTION_KEY` cualquiera: `pnpm --filter @menyu/api dev`. Sin `SUPABASE_SERVICE_ROLE_KEY`, invitar responde 502 ("Supabase no está configurado"): la invitación de punta a punta se prueba en staging.
+3. Las cuentas de staging tienen que existir en la base local con su `supabase_user_id`: se pide un token con cada una (`/auth/v1/token?grant_type=password`), se toma el `sub` del JWT y se insertan en `usuario` y `membresia` sobre la Marca Seed y el Restaurante Seed del seed. El `Mozo Seed` se deja sin `usuarioId`: así aparece en "Mozos sin cuenta" de Personal.
+4. Los dos Vite en `127.0.0.1` con `--strictPort` (si el puerto queda tomado por un Vite anterior, el nuevo elige otro y el proxy sigue apuntando al backend viejo: fue una hora perdida en la 4.5).
+
+Con eso andan el login, el SSO por la cookie de `.menyu.local`, el destino por rol, Personal y la consola de ROOT.
+
+### Probar la entrega 4.6 (web-staff) en local (2026-10-22)
+
+Lo mismo que arriba, más `apps/web-staff/.env.local` (igual al de web-admin) y el Vite de staff en el puerto 5175. La base local tenía OWNER, GERENTE, ROOT, MOZO y la cuenta con dos roles, pero **le faltaban JEFE_SALON y COCINA**, que son los roles propios de web-staff, y los `Mozo` de las cuentas de salón (sin ellos, atender un llamado y cobrar responden 403, porque salen de `exigirMozo`).
+
+Para cada cuenta que falte: se pide un token a Supabase (`/auth/v1/token?grant_type=password`), se toma el `sub` del JWT y se inserta en la base local.
+
+```sql
+INSERT INTO usuario (id, supabase_user_id, email, nombre, es_root) VALUES
+  (gen_random_uuid()::text, '<sub>', 'jefe-salon.pruebas-auth@menyu-app.com', 'Jefe Salon Pruebas Auth', false),
+  (gen_random_uuid()::text, '<sub>', 'cocina.pruebas-auth@menyu-app.com',     'Cocina Pruebas Auth',     false);
+
+-- El ámbito es el restaurante (ojo: el enum de la base se llama `rol`, en minúscula).
+INSERT INTO membresia (id, usuario_id, rol, restaurante_id)
+SELECT gen_random_uuid()::text, u.id, v.rol::rol, '22222222-2222-4222-a222-222222222222'
+FROM (VALUES
+  ('jefe-salon.pruebas-auth@menyu-app.com', 'JEFE_SALON'),
+  ('cocina.pruebas-auth@menyu-app.com',     'COCINA'),
+  ('varias.pruebas-auth@menyu-app.com',     'MOZO')  -- ya es OWNER de Marca Seed: así queda la cuenta mixta
+) AS v(email, rol)
+JOIN usuario u ON u.email = v.email;
+
+-- El Mozo de cada cuenta de salón. `Mozo Seed` se deja sin usuario_id: es el "mozo sin cuenta" de Personal.
+INSERT INTO mozo (id, restaurante_id, nombre, email, activo, es_jefe_salon, usuario_id)
+SELECT gen_random_uuid()::text, '22222222-2222-4222-a222-222222222222', v.nombre, v.email, true, v.jefe, u.id
+FROM (VALUES
+  ('mozo-supabase.pruebas-auth@menyu-app.com', 'Mozo Pruebas Auth',       false),
+  ('jefe-salon.pruebas-auth@menyu-app.com',    'Jefe Salon Pruebas Auth', true),
+  ('varias.pruebas-auth@menyu-app.com',        'Varias Pruebas Auth',     false)
+) AS v(email, nombre, jefe)
+JOIN usuario u ON u.email = v.email;
+```
+
+El OWNER y el GERENTE van a web-admin por su destino: para probarlos en staff se entra con `auth.menyu.local:5173/?redirect=http://staff.menyu.local:5175/...`.
+
+Una sesión de mesa hecha a mano tiene que quedar con `estado = 'activa'`: `GET /waiter-calls` solo mira las sesiones activas, así que con cualquier otro valor los llamados no aparecen.
 
 ## Cuentas de Google (desde la Fase 3b)
 

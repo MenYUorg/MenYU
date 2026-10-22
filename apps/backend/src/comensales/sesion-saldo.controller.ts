@@ -4,8 +4,8 @@ import { SessionAuthGuard } from '../auth/guards/session-auth.guard'
 import { DivisionService } from './division.service'
 
 // Superficie del comensal (SessionAuthGuard, igual que el resto de este módulo) — no
-// confundir con SessionsController (apps/backend/src/sessions), que es panel de
-// staff y sí requiere JwtAuthGuard/TipoGuard. El saldo es propiedad de la sesión,
+// confundir con SessionsController (apps/backend/src/sessions), cuyas rutas del salón
+// usan el token de Supabase del personal. El saldo es propiedad de la sesión,
 // no de los comensales, por eso no cuelga de ComensalesController (sesiones/:sesionId/comensales).
 @ApiTags('sesiones')
 @Controller('sesiones/:sesionId')

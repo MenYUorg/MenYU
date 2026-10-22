@@ -7,7 +7,6 @@ import { errorDeNombre, errorDeSlug } from './validaciones'
 import { DialogoBajaRestaurante, DialogoReactivarRestaurante, DialogoRestaurante } from './restaurante'
 import { mensajeDeEnvio } from './envio'
 
-vi.mock('@menyu/auth', () => ({ TOKEN_KEY: 'menyu_access_token', REFRESH_KEY: 'menyu_refresh_token', resolveLoginUrl: vi.fn() }))
 vi.mock('../../../services/api', async (importOriginal) => {
   const original = await importOriginal<typeof import('../../../services/api')>()
   const { apiFalsa } = await import('../../../test/root')
@@ -272,14 +271,14 @@ describe('DialogoBajaMarca', () => {
     expect(alHacer).toHaveBeenCalledWith(dadaDeBaja)
   })
 
-  it('cuenta los restaurantes activos y no promete cortar lo que hoy no se corta', () => {
+  it('cuenta los restaurantes activos y avisa lo que se corta, también el acceso de su gente', () => {
     abrir()
 
     const dialogo = screen.getByRole('dialog')
     expect(dialogo).toHaveTextContent('2 restaurantes dejan de estar disponibles')
     expect(dialogo).toHaveTextContent('no abren mesas nuevas')
-    expect(dialogo).toHaveTextContent('Las mesas que ya están abiertas se pueden terminar')
-    expect(dialogo).toHaveTextContent('siguen pudiendo iniciar sesión')
+    expect(dialogo).toHaveTextContent('Las mesas que ya están abiertas solo pueden pagar con Mercado Pago desde el celular')
+    expect(dialogo).toHaveTextContent('Sus dueños, gerentes, mozos y cocina no pueden iniciar sesión mientras esté de baja')
     expect(dialogo).toHaveTextContent('No se borra ningún dato')
     expect(dialogo).toHaveTextContent('Es reversible')
   })
@@ -430,7 +429,7 @@ describe('DialogoBajaRestaurante y DialogoReactivarRestaurante', () => {
     render(<DialogoBajaRestaurante restaurante={restaurante()} onHecho={alHacer} onCerrar={vi.fn()} />)
     expect(screen.getByRole('dialog')).toHaveTextContent('Deja de estar disponible')
     expect(screen.getByRole('dialog')).toHaveTextContent('no abren mesas nuevas')
-    expect(screen.getByRole('dialog')).toHaveTextContent('siguen pudiendo iniciar sesión')
+    expect(screen.getByRole('dialog')).toHaveTextContent('Sus gerentes, mozos y cocina no pueden iniciar sesión mientras esté de baja')
 
     await userEvent.click(screen.getByRole('button', { name: 'Dar de baja' }))
 

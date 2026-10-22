@@ -9,11 +9,13 @@ const MOZO = { esRoot: false, rolesEnAmbito: ['MOZO'] as Rol[] }
 // Un OWNER o GERENTE de otra marca o restaurante no tiene roles en el ámbito de la invitación.
 const SIN_ROL_EN_EL_AMBITO = { esRoot: false, rolesEnAmbito: [] as Rol[] }
 
-describe('puedeInvitar: quién invita a quién (spec de auth, Fase 2)', () => {
+describe('puedeInvitar: quién invita a quién (spec de auth, Fase 2 y 4.4)', () => {
   it.each([
     ['ROOT', 'OWNER', true, ROOT],
-    ['ROOT', 'GERENTE', true, ROOT],
+    // El GERENTE lo invita el OWNER de la marca (plan de la consola de ROOT, decisión 21).
+    ['ROOT', 'GERENTE', false, ROOT],
     ['ROOT', 'MOZO', false, ROOT],
+    ['ROOT', 'COCINA', false, ROOT],
     ['OWNER', 'OWNER', true, OWNER],
     ['OWNER', 'COCINA', true, OWNER],
     ['GERENTE', 'GERENTE', false, GERENTE],

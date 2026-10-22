@@ -9,7 +9,10 @@ import {
 } from '@nestjs/common'
 import { Prisma, Rol } from '@prisma/client'
 import { AuthError, User } from '@supabase/supabase-js'
+import { restauranteDisponible, SELECT_DISPONIBILIDAD } from '../../common/restaurante-disponible'
 import { PrismaService } from '../../prisma/prisma.service'
+import { HistorialRootService } from '../../root/historial/historial-root.service'
+import { cambioDeInvitacion } from '../../root/historial/registrar-historial'
 import { AccesoService } from '../supabase/acceso.service'
 import { SupabaseAdminService } from '../supabase/supabase-admin.service'
 import { UsuarioAutenticado } from '../supabase/usuario-autenticado'
@@ -37,6 +40,11 @@ interface UsuarioInvitado {
  * Alta de personal por invitación (docs/auth/specs/auth.md, Fase 2). Crea el `Usuario`, su `Membresia`
  * y, para MOZO y JEFE_SALON, el `Mozo` del restaurante. Todo lo que se puede validar en la base se
  * valida antes de llamar a Supabase.
+ *
+ * Cuando invita ROOT (a un OWNER), la invitación queda en el historial de ROOT en la misma transacción
+ * que el `Usuario` y la `Membresia` (decisión 22 de docs/plan-consola-root.md): la llamada a Supabase va
+ * antes y afuera, porque es externa. Si la transacción falla, el mail ya salió, pero nunca queda un
+ * permiso sin su registro.
  */
 @Injectable()
 export class InvitacionesService {
@@ -46,6 +54,7 @@ export class InvitacionesService {
     private readonly prisma: PrismaService,
     private readonly acceso: AccesoService,
     private readonly supabase: SupabaseAdminService,
+    private readonly historial: HistorialRootService,
   ) {}
 
   async invitar(dto: CrearInvitacionDto, invitador: UsuarioAutenticado): Promise<InvitacionCreada> {
@@ -54,29 +63,66 @@ export class InvitacionesService {
     if (dto.email === invitador.email.toLowerCase()) throw new ForbiddenException('No te podés invitar a vos mismo')
     await this.exigirPermiso(ambito, dto.rol, invitador)
 
-    // Ya es parte del personal (de otro restaurante, por ejemplo): solo se suma la membresía.
+    // Ya es parte del personal (de otro restaurante, por ejemplo): solo se suma la membresía, sin pasar por Supabase.
     const existente = await this.prisma.usuario.findUnique({ where: { email: dto.email } })
     if (existente) {
       if (!existente.activo) throw new ConflictException('El usuario está desactivado')
       const yaTiene = await this.prisma.membresia.findFirst({ where: { usuarioId: existente.id, ...ambito } })
       if (yaTiene) throw new ConflictException('El usuario ya tiene un rol ahí')
 
-      const membresia = await this.guardar(async (tx) => this.crearMembresia(tx, existente, dto.rol, ambito))
-      return { usuarioId: existente.id, membresiaId: membresia.id, invitacionEnviada: false }
+      return this.guardar((tx) => this.sumarAcceso(tx, existente, dto.rol, ambito, invitador, false))
     }
 
     const { cuenta, invitacionEnviada } = await this.cuentaDeSupabase(dto.email)
-    const { usuario, membresia } = await this.guardar(async (tx) => {
+    return this.guardar(async (tx) => {
       const usuario = await tx.usuario.create({
         data: { supabaseUserId: cuenta.id, email: (cuenta.email ?? dto.email).toLowerCase(), nombre: dto.nombre },
       })
-      const membresia = await this.crearMembresia(tx, usuario, dto.rol, ambito)
-      return { usuario, membresia }
+      return this.sumarAcceso(tx, usuario, dto.rol, ambito, invitador, invitacionEnviada)
     })
+  }
+
+  /** La membresía (con su Mozo) y, si invita ROOT, el registro en su historial. Corre en la transacción del `Usuario`. */
+  private async sumarAcceso(
+    tx: Prisma.TransactionClient,
+    usuario: UsuarioInvitado,
+    rol: Rol,
+    ambito: Ambito,
+    invitador: UsuarioAutenticado,
+    invitacionEnviada: boolean,
+  ): Promise<InvitacionCreada> {
+    const membresia = await this.crearMembresia(tx, usuario, rol, ambito)
+    // ROOT solo invita a OWNER (puede-invitar.ts). Si una cuenta ROOT con membresías invita a su personal, lo hace
+    // como OWNER o GERENTE y no es una acción de la consola: no va al historial de ROOT.
+    if (invitador.esRoot && ambito.marcaId !== undefined) {
+      await this.registrarDueno(tx, invitador, usuario, ambito.marcaId, invitacionEnviada)
+    }
     return { usuarioId: usuario.id, membresiaId: membresia.id, invitacionEnviada }
   }
 
-  /** 403 si no puede invitar a ese rol ahí; 404 si puede (ROOT) pero la marca o el restaurante no existe. */
+  private async registrarDueno(
+    tx: Prisma.TransactionClient,
+    invitador: UsuarioAutenticado,
+    usuario: UsuarioInvitado,
+    marcaId: string,
+    invitacionEnviada: boolean,
+  ): Promise<void> {
+    const actor = await this.historial.actorDe(tx, invitador)
+    const marca = await tx.marca.findUniqueOrThrow({ where: { id: marcaId }, select: { id: true, nombre: true } })
+    await this.historial.registrar(tx, {
+      actor,
+      accion: 'DUENO_INVITAR',
+      entidad: { tipo: 'OWNER', id: usuario.id, nombre: usuario.email },
+      marca,
+      cambios: [{ campo: 'Dueño de', antes: null, despues: marca.nombre }, cambioDeInvitacion(invitacionEnviada)],
+    })
+  }
+
+  /**
+   * 403 si no puede invitar a ese rol ahí; si puede, 404 si la marca o el restaurante no existe y 409 si está dado de
+   * baja (él o su marca): no se suma gente a algo dado de baja. ROOT llega con una marca; al personal de algo dado de
+   * baja AccesoService ya no le cuenta la membresía y recibe 403 antes, así que el chequeo del restaurante es defensa.
+   */
   private async exigirPermiso(ambito: Ambito, rol: Rol, invitador: UsuarioAutenticado): Promise<void> {
     let rolesEnAmbito: Rol[]
     if (ambito.marcaId !== undefined) {
@@ -90,14 +136,16 @@ export class InvitacionesService {
     }
 
     if (ambito.marcaId !== undefined) {
-      const marca = await this.prisma.marca.findUnique({ where: { id: ambito.marcaId }, select: { id: true } })
+      const marca = await this.prisma.marca.findUnique({ where: { id: ambito.marcaId }, select: { activo: true } })
       if (!marca) throw new NotFoundException('Marca no encontrada')
+      if (!marca.activo) throw new ConflictException('La marca está dada de baja')
     } else {
       const restaurante = await this.prisma.restaurante.findUnique({
         where: { id: ambito.restauranteId },
-        select: { id: true },
+        select: SELECT_DISPONIBILIDAD,
       })
       if (!restaurante) throw new NotFoundException('Restaurante no encontrado')
+      if (!restauranteDisponible(restaurante)) throw new ConflictException('El restaurante o su marca están dados de baja')
     }
   }
 
@@ -116,8 +164,10 @@ export class InvitacionesService {
    *
    * Reutilizar la cuenta confirmada es seguro solo con "Confirm email" activo en el proyecto (Fase 0):
    * si no, un registro público queda confirmado al instante.
+   *
+   * La usa también la consola de ROOT para invitar a otra cuenta ROOT, que no es una membresía.
    */
-  private async cuentaDeSupabase(email: string): Promise<{ cuenta: User; invitacionEnviada: boolean }> {
+  async cuentaDeSupabase(email: string): Promise<{ cuenta: User; invitacionEnviada: boolean }> {
     const busqueda = await this.supabase.auth.generateLink({ type: 'recovery', email })
     if (busqueda.error && !esCuentaInexistente(busqueda.error)) throw this.errorDeSupabase(busqueda.error)
 

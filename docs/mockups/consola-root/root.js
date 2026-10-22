@@ -1,10 +1,11 @@
-/* Consola de ROOT (mockup). Todos los datos son inventados y nada se guarda. */
+/* Consola de ROOT (mockup). Todos los datos son inventados y nada se guarda. Actualizado el 2026-10-21 para la Fase 4 de auth:
+   los dueños y las cuentas ROOT se invitan por mail (no hay contraseñas temporales, ni restablecer, ni primer ingreso). */
 (function () {
   'use strict';
 
   var Q = new URLSearchParams(location.search);
   var S = {
-    vista: Q.get('vista') || 'marcas',     // marcas | marca | duenos
+    vista: Q.get('vista') || 'marcas',     // marcas | marca | duenos | roots | historial
     estado: Q.get('estado') || 'normal',   // normal | cargando | vacio | error | sin-conexion | muchas
     id: Q.get('id') || 'm1',               // marca abierta
     dialogo: Q.get('dialogo') || '',
@@ -18,11 +19,9 @@
     desde: Q.get('desde') || '', hasta: Q.get('hasta') || '',
     abiertos: (Q.get('abierto') || '').split(',').filter(Boolean),   // filas del historial con el detalle desplegado
     mas: Q.get('estado') === 'muchas',
-    primer: Q.get('error') || '',          // primer ingreso: sin-coincidir | corta | igual
-    verPw: false,
     drawer: Q.get('menu') === '1',         // menú lateral abierto (celular)
     pop: Q.get('pop') || '',               // menú de acciones abierto: dd1 (dueño d1) o rr1 (restaurante r1)
-    toast: '', copiado: false, pw: ''
+    toast: ''
   };
 
   var ICONS = {
@@ -59,15 +58,15 @@
         { id: 'r2', nombre: 'La Parrilla Nueva Córdoba', direccion: 'Bv. Illia 450, Córdoba', activo: true },
         { id: 'r3', nombre: 'La Parrilla Villa Allende', direccion: 'Av. Goycoechea 80, Villa Allende', activo: false }
       ],
-      duenos: [{ id: 'd1', email: 'juan.perez@laparrilla.com.ar', temporal: false }] },
+      duenos: [{ id: 'd1', nombre: 'Juan Pérez', email: 'juan.perez@laparrilla.com.ar', desactivada: false }] },
     { id: 'm2', nombre: 'Fiore Cucina', slug: 'fiore-cucina', activa: true,
       restaurantes: [
         { id: 'r4', nombre: 'Fiore Nueva Córdoba', direccion: 'Obispo Trejo 120, Córdoba', activo: true },
         { id: 'r5', nombre: 'Fiore Alta Córdoba', direccion: null, activo: true }
       ],
       duenos: [
-        { id: 'd2', email: 'lucia@fiorecucina.com', temporal: true },
-        { id: 'd3', email: 'administracion@fiorecucina.com', temporal: false }
+        { id: 'd2', nombre: 'Lucía Fiore', email: 'lucia@fiorecucina.com', desactivada: true },
+        { id: 'd3', nombre: 'Administración Fiore', email: 'administracion@fiorecucina.com', desactivada: false }
       ] },
     { id: 'm3', nombre: 'BurgerLab', slug: 'burgerlab', activa: true,
       restaurantes: [
@@ -78,12 +77,12 @@
       duenos: [] },
     { id: 'm4', nombre: 'Café del Puerto', slug: 'cafe-del-puerto', activa: false,
       restaurantes: [{ id: 'r9', nombre: 'Café del Puerto Rosario', direccion: 'Av. Belgrano 800, Rosario', activo: true }],
-      duenos: [{ id: 'd4', email: 'puerto@cafedelpuerto.com.ar', temporal: false }] },
+      duenos: [{ id: 'd4', nombre: 'Mateo Puerto', email: 'puerto@cafedelpuerto.com.ar', desactivada: false }] },
     { id: 'm5', nombre: 'Asociación Gastronómica del Litoral Argentino Sociedad Anónima',
       slug: 'asociacion-gastronomica-del-litoral-argentino-sociedad-anonima', activa: true,
       restaurantes: [{ id: 'r10', nombre: 'Restaurante Sucursal Número Uno del Litoral Argentino Costanera Norte',
         direccion: 'Av. Costanera Norte 1234, entre calle 25 de Mayo y bulevar San Martín, Santa Fe', activo: true }],
-      duenos: [{ id: 'd5', email: 'gerencia.general.administracion.contable@asociacion-gastronomica-del-litoral.com.ar', temporal: false }] }
+      duenos: [{ id: 'd5', nombre: 'Gerencia General de Administración Contable de la Asociación Gastronómica del Litoral', email: 'gerencia.general.administracion.contable@asociacion-gastronomica-del-litoral.com.ar', desactivada: false }] }
   ];
   if (S.estado === 'muchas') {
     ['Almendra', 'Kaori', 'Ñandú Cocina Regional', 'El Rincón', 'Pizzería Nápoli', 'Mesa 7', 'Don Julián', 'Sabores del Sur', 'La Esquina',
@@ -91,28 +90,30 @@
     ].forEach(function (n, i) {
       MARCAS.push({ id: 'x' + i, nombre: n, slug: n.toLowerCase().replace(/[^a-z0-9]+/g, '-'), activa: i % 7 !== 3,
         restaurantes: [{ id: 'rx' + i, nombre: n + ' Centro', direccion: 'Calle ' + (i + 1) + ' 123', activo: true }],
-        duenos: i % 6 === 5 ? [] : [{ id: 'dx' + i, email: 'dueno' + i + '@ejemplo.com', temporal: false }] });
+        duenos: i % 6 === 5 ? [] : [{ id: 'dx' + i, nombre: 'Dueño ' + (i + 1), email: 'dueno' + i + '@ejemplo.com', desactivada: i % 4 === 1 }] });
     });
   }
 
   /* Cuentas ROOT y historial de acciones de ROOT (datos de ejemplo). Quien mira la consola es ana@ejemplo.com. */
   var YO = 'ana@ejemplo.com';
   var ROOTS = [
-    { id: 'ro1', email: 'ana@ejemplo.com', yo: true, temporal: false },
-    { id: 'ro2', email: 'bruno@ejemplo.com', yo: false, temporal: false },
-    { id: 'ro3', email: 'carla@ejemplo.com', yo: false, temporal: true }
+    { id: 'ro1', nombre: 'Ana López', email: 'ana@ejemplo.com', yo: true, desactivada: false },
+    { id: 'ro2', nombre: 'Bruno Gómez', email: 'bruno@ejemplo.com', yo: false, desactivada: false },
+    { id: 'ro3', nombre: 'Carla Díaz', email: 'carla@ejemplo.com', yo: false, desactivada: true }
   ];
   var ACCIONES = {
     MARCA_CREAR: 'Creó la marca', MARCA_EDITAR: 'Editó la marca', MARCA_BAJA: 'Dio de baja la marca', MARCA_REACTIVAR: 'Reactivó la marca',
     RESTAURANTE_CREAR: 'Creó el restaurante', RESTAURANTE_EDITAR: 'Editó el restaurante', RESTAURANTE_BAJA: 'Dio de baja el restaurante', RESTAURANTE_REACTIVAR: 'Reactivó el restaurante',
+    DUENO_INVITAR: 'Invitó al dueño', DUENO_QUITAR: 'Quitó al dueño', ROOT_INVITAR: 'Invitó a la cuenta ROOT', ROOT_PROMOVER: 'Hizo ROOT a la cuenta',
+    /* códigos de antes de las invitaciones: las filas que ya están guardadas se siguen mostrando */
     DUENO_CREAR: 'Creó la cuenta de dueño', DUENO_CAMBIAR_EMAIL: 'Cambió el email del dueño', DUENO_RESTABLECER: 'Restableció la contraseña del dueño', DUENO_ELIMINAR: 'Eliminó la cuenta de dueño',
     ROOT_CREAR: 'Creó la cuenta ROOT', ROOT_RESTABLECER: 'Restableció la contraseña de ROOT', ROOT_ELIMINAR: 'Eliminó la cuenta ROOT'
   };
   var TIPOS = { MARCA: 'Marca', RESTAURANTE: 'Restaurante', OWNER: 'Dueño', ROOT: 'ROOT' };
   // cada acción: quién (o 'script'), qué, sobre qué (tipo, nombre, marca de contexto) y los cambios (campo, antes, después). Nunca una contraseña.
   var HIST = [
-    { id: 'h1', cuando: '2026-10-16T11:20', actor: 'ana@ejemplo.com', accion: 'DUENO_RESTABLECER', tipo: 'OWNER', nombre: 'lucia@fiorecucina.com', ctx: 'Fiore Cucina', cambios: [['Contraseña', '(no se registra)', 'restablecida: la persona tiene que cambiarla al entrar']] },
-    { id: 'h2', cuando: '2026-10-16T10:58', actor: 'bruno@ejemplo.com', accion: 'DUENO_CREAR', tipo: 'OWNER', nombre: 'juan.perez@laparrilla.com.ar', ctx: 'La Parrilla de Juan', cambios: [['Email', '—', 'juan.perez@laparrilla.com.ar'], ['Marca', '—', 'La Parrilla de Juan'], ['Contraseña', '—', 'generada (no se registra)']] },
+    { id: 'h1', cuando: '2026-10-16T11:20', actor: 'ana@ejemplo.com', accion: 'DUENO_QUITAR', tipo: 'OWNER', nombre: 'lucia@fiorecucina.com', ctx: 'Fiore Cucina', cambios: [['Dueño de', 'Fiore Cucina', '—']] },
+    { id: 'h2', cuando: '2026-10-16T10:58', actor: 'bruno@ejemplo.com', accion: 'DUENO_INVITAR', tipo: 'OWNER', nombre: 'juan.perez@laparrilla.com.ar', ctx: 'La Parrilla de Juan', cambios: [['Dueño de', '—', 'La Parrilla de Juan'], ['Invitación', '—', 'mail enviado']] },
     { id: 'h3', cuando: '2026-10-16T10:41', actor: 'bruno@ejemplo.com', accion: 'RESTAURANTE_CREAR', tipo: 'RESTAURANTE', nombre: 'La Parrilla Centro', ctx: 'La Parrilla de Juan', cambios: [['Nombre', '—', 'La Parrilla Centro'], ['Dirección', '—', 'Av. Colón 1200, Córdoba']] },
     { id: 'h4', cuando: '2026-10-16T10:35', actor: 'bruno@ejemplo.com', accion: 'MARCA_CREAR', tipo: 'MARCA', nombre: 'La Parrilla de Juan', ctx: '', cambios: [['Nombre', '—', 'La Parrilla de Juan'], ['Identificador', '—', 'la-parrilla-de-juan']] },
     { id: 'h5', cuando: '2026-10-15T19:20', actor: 'script', operador: 'marga', accion: 'ROOT_ELIMINAR', tipo: 'ROOT', nombre: 'root@menyu.com', ctx: '', cambios: [['Cuenta', 'root@menyu.com', 'eliminada (quedaban 3 cuentas ROOT personales)'], ['Cómo', '—', 'script de línea de comandos, operador: marga']] },
@@ -120,8 +121,8 @@
     { id: 'h7', cuando: '2026-10-15T17:55', actor: 'ana@ejemplo.com', accion: 'RESTAURANTE_EDITAR', tipo: 'RESTAURANTE', nombre: 'Fiore Alta Córdoba', ctx: 'Fiore Cucina', cambios: [['Nombre', 'Fiore Alta', 'Fiore Alta Córdoba']] },
     { id: 'h8', cuando: '2026-10-15T17:31', actor: 'carla@ejemplo.com', accion: 'DUENO_CAMBIAR_EMAIL', tipo: 'OWNER', nombre: 'administracion@fiorecucina.com', ctx: 'Fiore Cucina', cambios: [['Email', 'admin@fiorecucina.com', 'administracion@fiorecucina.com']] },
     { id: 'h9', cuando: '2026-10-15T17:10', actor: 'carla@ejemplo.com', accion: 'MARCA_EDITAR', tipo: 'MARCA', nombre: 'Café del Puerto', ctx: '', cambios: [['Identificador', 'cafe-puerto', 'cafe-del-puerto']] },
-    { id: 'h10', cuando: '2026-10-15T16:12', actor: 'ana@ejemplo.com', accion: 'ROOT_CREAR', tipo: 'ROOT', nombre: 'carla@ejemplo.com', ctx: '', cambios: [['Email', '—', 'carla@ejemplo.com'], ['Contraseña', '—', 'generada (no se registra)']] },
-    { id: 'h11', cuando: '2026-10-15T16:10', actor: 'ana@ejemplo.com', accion: 'ROOT_CREAR', tipo: 'ROOT', nombre: 'bruno@ejemplo.com', ctx: '', cambios: [['Email', '—', 'bruno@ejemplo.com'], ['Contraseña', '—', 'generada (no se registra)']] },
+    { id: 'h10', cuando: '2026-10-15T16:12', actor: 'ana@ejemplo.com', accion: 'ROOT_INVITAR', tipo: 'ROOT', nombre: 'carla@ejemplo.com', ctx: '', cambios: [['Cuenta ROOT', '—', 'carla@ejemplo.com'], ['Invitación', '—', 'mail enviado']] },
+    { id: 'h11', cuando: '2026-10-15T16:10', actor: 'ana@ejemplo.com', accion: 'ROOT_INVITAR', tipo: 'ROOT', nombre: 'bruno@ejemplo.com', ctx: '', cambios: [['Cuenta ROOT', '—', 'bruno@ejemplo.com'], ['Invitación', '—', 'mail enviado']] },
     { id: 'h12', cuando: '2026-10-15T15:40', actor: 'script', operador: 'marga', accion: 'ROOT_CREAR', tipo: 'ROOT', nombre: 'ana@ejemplo.com', ctx: '', cambios: [['Email', '—', 'ana@ejemplo.com'], ['Cómo', '—', 'script de línea de comandos, operador: marga']] },
     { id: 'h13', cuando: '2026-10-14T12:05', actor: 'bruno@ejemplo.com', accion: 'RESTAURANTE_REACTIVAR', tipo: 'RESTAURANTE', nombre: 'La Parrilla Villa Allende', ctx: 'La Parrilla de Juan', cambios: [['Estado', 'De baja', 'Activo']] }
   ];
@@ -129,7 +130,7 @@
     for (var k = 0; k < 40; k++) {
       var dia = 13 - Math.floor(k / 4), hora = 18 - (k % 4) * 2;
       HIST.push({ id: 'hx' + k, cuando: '2026-10-' + (dia < 10 ? '0' : '') + dia + 'T' + (hora < 10 ? '0' : '') + hora + ':' + (10 + k % 5 * 9),
-        actor: ['ana@ejemplo.com', 'bruno@ejemplo.com', 'carla@ejemplo.com'][k % 3], accion: k % 2 ? 'RESTAURANTE_EDITAR' : 'DUENO_CAMBIAR_EMAIL',
+        actor: ['ana@ejemplo.com', 'bruno@ejemplo.com', 'carla@ejemplo.com'][k % 3], accion: k % 2 ? 'RESTAURANTE_EDITAR' : 'DUENO_INVITAR',
         tipo: k % 2 ? 'RESTAURANTE' : 'OWNER', nombre: k % 2 ? 'Sucursal ' + (k + 1) : 'cuenta' + k + '@ejemplo.com', ctx: 'Marca ' + (k % 5 + 1),
         cambios: [['Nombre', 'Antes ' + k, 'Después ' + k]] });
     }
@@ -154,11 +155,6 @@
   function plural(n, a, b) { return n + ' ' + (n === 1 ? a : b); }
   function sinAcentos(s) { return String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
   function slugDe(n) { return sinAcentos(n).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''); }
-  function gen() {
-    var abc = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789', s = '';
-    for (var i = 0; i < 12; i++) s += abc.charAt(Math.floor(Math.random() * abc.length));
-    return s;
-  }
   /** El logo de MenYU para fondos oscuros, recortado igual que `LogoMenYuOscuro` (packages/ui): `alto` es el alto de las letras. */
   function logo(alto) {
     var e = alto / 380, p = function (n) { return Math.round(n * e * 100) / 100; };
@@ -208,7 +204,7 @@
     if (S.estado === 'cargando') return h + skeletonFilas(5);
     if (S.estado === 'error' || S.estado === 'sin-conexion') return h + bannerError();
     if (S.estado === 'vacio') {
-      return h + '<div class="card vacio"><div class="ic">' + ico('store', 22) + '</div><b>Todavía no hay marcas</b><p>Creá la primera, después sumale su dueño y sus restaurantes.</p>' +
+      return h + '<div class="card vacio"><div class="ic">' + ico('store', 22) + '</div><b>Todavía no hay marcas</b><p>Creá la primera, después invitá a su dueño y sumale sus restaurantes.</p>' +
         btn('Crear la primera marca', 'btn-primary', act('abrir', 'data-d="nueva-marca"'), 'plus') + '</div>';
     }
     var q = sinAcentos(S.q.trim());
@@ -248,8 +244,8 @@
         '<br>' + btn('Reactivar la marca', 'btn-primary', act('abrir', 'data-d="reactivar-marca"'), 'undo').replace('class="btn btn-primary"', 'class="btn btn-primary" style="margin-top:8px"'));
     }
     if (m.activa && !m.duenos.length) {
-      h += aviso('amb', 'alert', '<b>Esta marca no tiene dueño.</b> Nadie puede administrar su menú, sus mesas ni su logo hasta que le crees uno.',
-        '<br>' + btn('Agregar dueño', 'btn-primary', act('abrir', 'data-d="nuevo-dueno"'), 'plus').replace('class="btn btn-primary"', 'class="btn btn-primary" style="margin-top:8px"'));
+      h += aviso('amb', 'alert', '<b>Esta marca no tiene dueño.</b> Nadie puede administrar su menú, sus mesas ni su logo hasta que invites a uno.',
+        '<br>' + btn('Invitar dueño', 'btn-primary', act('abrir', 'data-d="invitar-dueno"'), 'mail').replace('class="btn btn-primary"', 'class="btn btn-primary" style="margin-top:8px"'));
     }
 
     // Cabecera
@@ -262,20 +258,11 @@
       '<div class="acciones">' + btn('Editar', '', act('abrir', 'data-d="editar-marca"'), 'pencil') +
       (m.activa ? btn('Dar de baja', 'btn-danger', act('abrir', 'data-d="baja-marca"'), 'trash') : '') + '</div></section>';
 
-    // Dueños
-    h += '<section class="card"><div class="card-head"><div><h3 class="titulo">Dueños</h3><p class="ayuda">Cuentas con acceso total a la marca. Los gerentes los crea el dueño desde su panel.</p></div>' +
-      btn('Agregar dueño', '', act('abrir', 'data-d="nuevo-dueno"'), 'plus') + '</div>';
+    // Dueños (se invitan por mail; el acceso se quita, la cuenta no se borra)
+    h += '<section class="card"><div class="card-head"><div><h3 class="titulo">Dueños</h3><p class="ayuda">Cuentas con acceso total a la marca. Se invitan por mail: la persona elige su contraseña al entrar. Los gerentes los invita el dueño desde su panel.</p></div>' +
+      (m.activa ? btn('Invitar dueño', '', act('abrir', 'data-d="invitar-dueno"'), 'mail') : '') + '</div>';
     if (!m.duenos.length) h += '<p class="vacio-inline">Todavía no hay ningún dueño.</p>';
-    m.duenos.forEach(function (d) {
-      h += '<div class="item"><div class="sigla">' + esc(d.email.slice(0, 2).toUpperCase()) + '</div><div class="item-txt"><b>' + esc(d.email) + '</b>' +
-        (d.temporal ? '<div class="item-chips"><span class="chip chip-temp" title="Todavía no cambió la contraseña inicial">Contraseña temporal</span></div>' : '') + '</div>' +
-        kebab('d' + d.id, [
-          { ic: 'key', t: 'Restablecer contraseña', d: 'restablecer', x: d.id },
-          { ic: 'mail', t: 'Cambiar email', d: 'cambiar-email', x: d.id },
-          '-',
-          { ic: 'trash', t: 'Eliminar cuenta', d: 'eliminar-dueno', x: d.id, peligro: true }
-        ]) + '</div>';
-    });
+    m.duenos.forEach(function (d) { h += filaDueno(d, m, false, 'd'); });
     h += '</section>';
 
     // Restaurantes
@@ -297,44 +284,40 @@
     return h;
   }
 
+  /** Una fila de dueño: nombre, email y, si todavía no aceptó la invitación, el aviso. Su único menú es "Quitar acceso". */
+  function filaDueno(d, m, conMarca, clave) {
+    var marcaLink = conMarca ? '<small><a href="#" style="color:var(--navy);font-weight:600;text-decoration:none" ' + act('ir', 'data-v="marca" data-id="' + m.id + '"') + '>' + esc(m.nombre) + '</a>' + (m.activa ? '' : ' · marca de baja') + '</small>' : '';
+    var chips = conMarca && d.desactivada ? '<div class="item-chips"><span class="chip chip-aviso" title="Su cuenta está desactivada: no entra a ningún lado">Cuenta desactivada</span></div>' : '';
+    return '<div class="item"><div class="sigla">' + esc(siglas(d.nombre)) + '</div><div class="item-txt"><b>' + esc(d.nombre) + '</b><small class="cortar2">' + esc(d.email) + '</small>' + marcaLink + chips + '</div>' +
+      kebab(clave + d.id, [{ ic: 'trash', t: 'Quitar acceso', d: 'quitar-acceso', x: d.id, peligro: true }]) + '</div>';
+  }
+
   function vDuenos() {
     var h = '<div class="barra"><div class="barra-izq"><div class="buscar campo" style="margin:0">' + ico('search', 16) +
-      '<input type="search" placeholder="Buscar por email o marca" aria-label="Buscar dueño" data-in="q" value="' + esc(S.q) + '"></div></div>' +
-      btn('Nuevo dueño', 'btn-primary', act('abrir', 'data-d="nuevo-dueno" data-x="desde-duenos"'), 'plus') + '</div>';
+      '<input type="search" placeholder="Buscar por nombre, email o marca" aria-label="Buscar dueño" data-in="q" value="' + esc(S.q) + '"></div></div>' +
+      btn('Invitar dueño', 'btn-primary', act('abrir', 'data-d="invitar-dueno" data-x="desde-duenos"'), 'mail') + '</div>';
     if (S.estado === 'cargando') return h + skeletonFilas(5);
     if (S.estado === 'error' || S.estado === 'sin-conexion') return h + bannerError();
     var q = sinAcentos(S.q.trim());
-    var lista = todosLosDuenos().filter(function (x) { return !q || sinAcentos(x.d.email).indexOf(q) >= 0 || sinAcentos(x.m.nombre).indexOf(q) >= 0; });
+    var lista = todosLosDuenos().filter(function (x) { return !q || sinAcentos(x.d.email).indexOf(q) >= 0 || sinAcentos(x.d.nombre).indexOf(q) >= 0 || sinAcentos(x.m.nombre).indexOf(q) >= 0; });
     if (S.estado === 'vacio' || !lista.length) {
       return h + '<div class="card vacio"><div class="ic">' + ico('users', 22) + '</div><b>' + (S.estado === 'vacio' ? 'Todavía no hay dueños' : 'No encontramos dueños con «' + esc(S.q) + '»') + '</b><p>' +
-        (S.estado === 'vacio' ? 'Un dueño es la cuenta que administra una marca.' : 'Probá con otro email o con el nombre de la marca.') + '</p></div>';
+        (S.estado === 'vacio' ? 'Un dueño es la cuenta que administra una marca. Se lo invita por mail.' : 'Probá con otro nombre, email o marca.') + '</p></div>';
     }
     h += '<section class="card" style="padding:8px 20px">';
-    lista.forEach(function (x) {
-      var d = x.d, m = x.m;
-      h += '<div class="item"><div class="sigla">' + esc(d.email.slice(0, 2).toUpperCase()) + '</div><div class="item-txt"><b>' + esc(d.email) + '</b>' +
-        '<small><a href="#" style="color:var(--navy);font-weight:600;text-decoration:none" ' + act('ir', 'data-v="marca" data-id="' + m.id + '"') + '>' + esc(m.nombre) + '</a>' + (m.activa ? '' : ' · marca de baja') + '</small>' +
-        (d.temporal ? '<div class="item-chips"><span class="chip chip-temp">Contraseña temporal</span></div>' : '') + '</div>' +
-        kebab('u' + d.id, [
-          { ic: 'key', t: 'Restablecer contraseña', d: 'restablecer', x: d.id },
-          { ic: 'mail', t: 'Cambiar email', d: 'cambiar-email', x: d.id },
-          '-',
-          { ic: 'trash', t: 'Eliminar cuenta', d: 'eliminar-dueno', x: d.id, peligro: true }
-        ]) + '</div>';
-    });
+    lista.forEach(function (x) { h += filaDueno(x.d, x.m, true, 'u'); });
     return h + '</section>';
   }
 
   function vRoots() {
-    var h = '<div class="barra"><span class="ayuda">Cada integrante del equipo tiene la suya.</span>' + btn('Nueva cuenta ROOT', 'btn-primary', act('abrir', 'data-d="nuevo-root"'), 'plus') + '</div>' +
-      aviso('info', 'lock', '<b>Las cuentas ROOT no se eliminan desde la consola.</b> Se retiran con un script del equipo, y nunca la última.');
+    var h = '<div class="barra"><span class="ayuda">Cada integrante del equipo tiene la suya.</span>' + btn('Invitar cuenta ROOT', 'btn-primary', act('abrir', 'data-d="invitar-root"'), 'mail') + '</div>' +
+      aviso('info', 'lock', '<b>Las cuentas ROOT no se quitan desde la consola.</b> Cada persona maneja su contraseña desde la pantalla de ingreso («Olvidé mi contraseña»).');
     if (S.estado === 'cargando') return h + skeletonFilas(3);
     if (S.estado === 'error' || S.estado === 'sin-conexion') return h + bannerError();
     h += '<section class="card" style="padding:8px 20px">';
     ROOTS.forEach(function (r) {
-      var chips = (r.yo ? '<span class="chip chip-ok">Vos</span>' : '') + (r.temporal ? '<span class="chip chip-temp" title="Todavía no cambió la contraseña inicial">Contraseña temporal</span>' : '');
-      h += '<div class="item"><div class="sigla">' + esc(r.email.slice(0, 2).toUpperCase()) + '</div><div class="item-txt"><b>' + esc(r.email) + '</b>' + (chips ? '<div class="item-chips">' + chips + '</div>' : '') + '</div>' +
-        kebab('o' + r.id, r.yo ? [{ ic: 'key', t: 'Cambiar mi contraseña', d: 'cambiar-password' }] : [{ ic: 'key', t: 'Restablecer contraseña', d: 'restablecer-root', x: r.id }]) + '</div>';
+      var chips = (r.yo ? '<span class="chip chip-ok">Vos</span>' : '') + (r.desactivada ? '<span class="chip chip-aviso" title="Su cuenta está desactivada: no entra a la consola">Cuenta desactivada</span>' : '');
+      h += '<div class="item"><div class="sigla">' + esc(siglas(r.nombre)) + '</div><div class="item-txt"><b>' + esc(r.nombre) + '</b><small class="cortar2">' + esc(r.email) + '</small>' + (chips ? '<div class="item-chips">' + chips + '</div>' : '') + '</div></div>';
     });
     return h + '</section>';
   }
@@ -398,21 +381,6 @@
     return h + nota;
   }
 
-  /** Primer ingreso con una contraseña temporal: se muestra sola, sin menú lateral, hasta que la persona elige la suya. */
-  function vPrimerIngreso() {
-    var e = S.primer, tipo = S.verPw ? 'text' : 'password';
-    var lleno = e ? 'Abc123xyz789' : '';
-    return '<div class="solo"><header class="solo-top">' + logo(20) + '</header><div class="solo-main"><section class="card solo-card">' +
-      '<div class="ok-ic" style="background:var(--orange-soft);color:var(--orange)">' + ico('key', 22) + '</div>' +
-      '<h1 class="solo-h">Elegí tu contraseña</h1><p class="lead">Entraste con una contraseña temporal. Para seguir, elegí una propia: solo la vas a saber vos.</p>' +
-      campo('p-actual', 'Contraseña temporal', lleno, { tipo: tipo, ph: 'La que te pasaron' }) +
-      campo('p-nueva', 'Contraseña nueva', e === 'igual' ? lleno : (e ? 'Otra-Clave-Larga-91' : ''), { tipo: tipo, error: e === 'corta' ? 'Tiene que tener al menos 12 caracteres.' : e === 'igual' ? 'No puede ser igual a la contraseña temporal.' : '', ayuda: e ? '' : 'Al menos 12 caracteres.' }) +
-      campo('p-rep', 'Repetila', e === 'sin-coincidir' ? 'Otra-Clave-Larga-92' : (e && e !== 'sin-coincidir' ? (e === 'igual' ? lleno : 'Otra-Clave-Larga-91') : ''), { tipo: tipo, error: e === 'sin-coincidir' ? 'Las contraseñas no coinciden.' : '' }) +
-      '<button type="button" class="interruptor" role="switch" aria-checked="' + S.verPw + '" ' + act('verpw') + '><i></i>Mostrar las contraseñas</button>' +
-      '<div class="dlg-pie" style="margin-top:12px">' + btn('Guardar y entrar', 'btn-primary', act('guardar')) + '</div>' +
-      '<div style="text-align:center;margin-top:8px"><button type="button" class="volver" style="align-self:center">Cerrar sesión</button></div></section></div></div>';
-  }
-
   /* ── Diálogos ─────────────────────────────────────────────────────────── */
   function campo(id, etiqueta, valor, extra) {
     extra = extra || {};
@@ -429,7 +397,7 @@
     var m = marca(S.id), d = S.dialogo, x = S.dato;
     if (d === 'nueva-marca' || d === 'editar-marca') {
       var edit = d === 'editar-marca';
-      return '<h3 id="dlg-t">' + (edit ? 'Editar marca' : 'Nueva marca') + '</h3><p class="lead">' + (edit ? 'ROOT cambia el nombre y el identificador. El logo lo carga el dueño.' : 'Una marca agrupa los restaurantes de un mismo dueño. Después le creás el dueño y los restaurantes.') + '</p>' + errRed() +
+      return '<h3 id="dlg-t">' + (edit ? 'Editar marca' : 'Nueva marca') + '</h3><p class="lead">' + (edit ? 'ROOT cambia el nombre y el identificador. El logo lo carga el dueño.' : 'Una marca agrupa los restaurantes de un mismo dueño. Después invitás al dueño y sumás los restaurantes.') + '</p>' + errRed() +
         campo('f-nombre', 'Nombre *', edit ? m.nombre : (S.error === 'slug' ? 'La Parrilla de Juan' : ''), { ph: 'Ej.: La Parrilla de Juan' }) +
         campo('f-slug', 'Identificador *', edit ? m.slug : (S.error === 'slug' ? 'la-parrilla-de-juan' : ''), { mono: true, ph: 'la-parrilla-de-juan', error: S.error === 'slug' ? 'Ya existe una marca con ese identificador. Cambialo para poder crearla.' : '', ayuda: 'Es interno y único: no lo ven los clientes. Se arma solo con el nombre; podés cambiarlo.' }) +
         pie('Cancelar', btn(edit ? 'Guardar cambios' : 'Crear marca', 'btn-primary', act('guardar')));
@@ -437,7 +405,8 @@
     if (d === 'baja-marca') {
       var act_ = m.restaurantes.filter(function (r) { return r.activo; }).length, ok = S.confirmar.trim().toLowerCase() === m.nombre.toLowerCase();
       return '<h3 id="dlg-t">Dar de baja «' + esc(m.nombre) + '»</h3><p class="lead">Es reversible: la podés reactivar cuando quieras.</p>' + errRed() + '<ul>' +
-        '<li><b>' + plural(act_, 'restaurante deja', 'restaurantes dejan') + ' de estar disponible' + (act_ === 1 ? '' : 's') + '</b>: no aparecen en Discovery, no se ve su carta y los QR de sus mesas no abren sesiones.</li>' +
+        '<li><b>' + plural(act_, 'restaurante deja', 'restaurantes dejan') + ' de estar disponible' + (act_ === 1 ? '' : 's') + '</b>: no aparecen en Discovery, no se ve su carta y los QR y PIN de sus mesas no abren mesas nuevas.</li>' +
+        '<li><b>Las mesas que ya están abiertas se pueden terminar</b>: se sigue pidiendo la cuenta y cobrando.</li>' +
         '<li><b>Sus dueños, gerentes, mozos y cocina no pueden iniciar sesión</b> mientras esté de baja.</li>' +
         '<li><b>No se borra ningún dato</b> (menú, mesas, pedidos, pagos). Al reactivarla vuelve todo como estaba.</li></ul>' +
         campo('f-conf', 'Para confirmar, escribí el nombre de la marca', S.confirmar, { ph: m.nombre, data: 'data-in="confirmar"' }) +
@@ -445,7 +414,7 @@
     }
     if (d === 'reactivar-marca') {
       return '<h3 id="dlg-t">Reactivar «' + esc(m.nombre) + '»</h3><p class="lead">Vuelve a estar disponible tal como estaba.</p><ul>' +
-        '<li>Sus restaurantes activos vuelven a Discovery y sus QR vuelven a abrir mesas.</li><li>Sus dueños, gerentes, mozos y cocina pueden iniciar sesión de nuevo.</li></ul>' +
+        '<li>Sus restaurantes activos vuelven a Discovery, a mostrar su carta y a abrir mesas.</li><li>Sus dueños, gerentes, mozos y cocina pueden iniciar sesión de nuevo.</li></ul>' +
         pie('Cancelar', btn('Reactivar', 'btn-primary', act('guardar')));
     }
     if (d === 'nuevo-restaurante') {
@@ -463,91 +432,59 @@
     if (d === 'baja-restaurante') {
       var rb = buscarRest(m, x);
       return '<h3 id="dlg-t">Dar de baja «' + esc(rb.nombre) + '»</h3><p class="lead">Es reversible: lo podés reactivar cuando quieras.</p><ul>' +
-        '<li><b>Deja de estar disponible</b>: no aparece en Discovery, no se ve su carta y los QR de sus mesas no abren sesiones.</li>' +
+        '<li><b>Deja de estar disponible</b>: no aparece en Discovery, no se ve su carta y los QR y PIN de sus mesas no abren mesas nuevas.</li>' +
+        '<li><b>Las mesas que ya están abiertas se pueden terminar</b>: se sigue pidiendo la cuenta y cobrando.</li>' +
         '<li><b>Sus gerentes, mozos y cocina no pueden iniciar sesión.</b></li><li><b>No se borra ningún dato.</b> Al reactivarlo vuelve todo como estaba.</li></ul>' +
         pie('Cancelar', btn('Dar de baja', 'btn-danger-solid', act('guardar')));
     }
     if (d === 'reactivar-restaurante') {
       var rr = buscarRest(m, x);
-      return '<h3 id="dlg-t">Reactivar «' + esc(rr.nombre) + '»</h3><p class="lead">Vuelve a Discovery y sus QR vuelven a abrir mesas. Sus gerentes, mozos y cocina pueden iniciar sesión de nuevo.</p>' +
+      return '<h3 id="dlg-t">Reactivar «' + esc(rr.nombre) + '»</h3><p class="lead">Vuelve a Discovery, a mostrar su carta y a abrir mesas. Sus gerentes, mozos y cocina pueden iniciar sesión de nuevo.</p>' +
         pie('Cancelar', btn('Reactivar', 'btn-primary', act('guardar')));
     }
-    if (d === 'nuevo-dueno') {
-      if (!S.pw) S.pw = gen();
+    if (d === 'invitar-dueno') {
       var desde = x === 'desde-duenos';
       var selMarca = '<div class="campo"><label for="f-marca">Marca *</label><select id="f-marca">' + MARCAS.filter(function (z) { return z.activa; }).map(function (z) { return '<option>' + esc(z.nombre) + '</option>'; }).join('') + '</select></div>';
-      return '<h3 id="dlg-t">Nuevo dueño</h3><p class="lead">Una cuenta con acceso total a su marca. Los gerentes los crea el dueño.</p>' + errRed() + (desde ? selMarca : fijo(m.nombre)) +
-        campo('f-email', 'Email *', S.error === 'email' ? 'juan.perez@laparrilla.com.ar' : '', { tipo: 'email', ph: 'dueno@restaurante.com', error: S.error === 'email' ? 'Ya existe una cuenta con ese email.' : '' }) +
-        '<div class="campo"><label for="f-pw">Contraseña inicial</label><div class="pw"><input id="f-pw" type="text" value="' + esc(S.pw) + '" readonly>' + btn('Generar otra', '', act('generar'), 'refresh') + '</div>' +
-        '<p class="ayuda">La genera el sistema y se muestra una sola vez, al crear la cuenta. El dueño la tiene que cambiar en su primer ingreso.</p></div>' +
-        pie('Cancelar', btn('Crear cuenta', 'btn-primary', act('guardar', 'data-next="dueno-creado"')));
+      return '<h3 id="dlg-t">Invitar dueño</h3><p class="lead">Una cuenta con acceso total a su marca. Le mandamos un mail con un enlace para que elija su contraseña y entre. Los gerentes los invita el dueño.</p>' + errRed() + (desde ? selMarca : fijo(m.nombre)) +
+        campo('f-nombre', 'Nombre *', S.error === 'email' ? 'Juan Pérez' : '', { ph: 'Ej.: Juan Pérez' }) +
+        campo('f-email', 'Email *', S.error === 'email' ? 'juan.perez@laparrilla.com.ar' : '', { tipo: 'email', ph: 'dueno@restaurante.com', error: S.error === 'email' ? 'Esa persona ya es dueña de esta marca.' : '', ayuda: 'Si ya tiene una cuenta de MenYU, no hace falta mail: entra con la que tiene.' }) +
+        pie('Cancelar', btn('Enviar invitación', 'btn-primary', act('guardar', 'data-next="invitacion-enviada" data-x="dueno"'), 'mail'));
     }
-    if (d === 'dueno-creado' || d === 'restablecido') {
-      var nuevo = d === 'dueno-creado', em = nuevo ? 'juan.perez@laparrilla.com.ar' : buscarDueno(x).d.email;
-      if (!S.pw) S.pw = gen();
-      return '<div class="ok-ic">' + ico('check', 24) + '</div><h3 id="dlg-t">' + (nuevo ? 'Cuenta creada' : 'Contraseña nueva generada') + '</h3>' +
-        '<p class="lead">Pasale estos datos al dueño. <b>La contraseña no se vuelve a mostrar.</b></p>' +
-        '<div class="secreto"><small>Email</small><div class="e">' + esc(em) + '</div><small>Contraseña' + (nuevo ? ' inicial' : ' nueva') + '</small><div class="v">' + esc(S.pw) + '</div></div>' +
-        btn(S.copiado ? 'Copiado' : 'Copiar email y contraseña', 'btn-block', act('copiar'), S.copiado ? 'check' : 'copy').replace('class="btn btn-block"', 'class="btn" style="width:100%"') +
-        '<p class="ayuda" style="margin-top:10px">Va a tener que cambiarla la primera vez que entre. Hasta que lo haga, queda marcada como temporal.</p>' +
+    if (d === 'invitacion-enviada') {
+      var tipo = x || 'dueno', esRoot = tipo.indexOf('root') === 0, ya = tipo.indexOf('existente') >= 0;
+      var quien = esRoot ? 'dana@ejemplo.com' : 'juan.perez@laparrilla.com.ar';
+      return '<div class="ok-ic">' + ico(ya ? 'check' : 'mail', 24) + '</div><h3 id="dlg-t">' + (ya ? 'Ya tenía una cuenta' : 'Invitación enviada') + '</h3>' +
+        '<p class="lead">' + (ya
+          ? '<b>' + esc(quien) + '</b> ya tiene una cuenta ' + (esRoot ? 'de acceso (por ejemplo, la que creó con Google), así que no hace falta ningún mail: ya puede entrar y usar la consola de ROOT' : 'de MenYU, así que no se le mandó ningún mail: ya figura como dueño y entra') + ' con su contraseña de siempre o con Google.'
+          : 'Le mandamos un mail a <b>' + esc(quien) + '</b> con el enlace para elegir su contraseña y entrar. Si no le llega, que revise el correo no deseado.') + '</p>' +
+        (ya ? (esRoot ? '' : '<p class="ayuda">Si nunca llegó a aceptar una invitación anterior, puede pedir un enlace desde «Olvidé mi contraseña» con ese mismo email.</p>') : '<p class="ayuda">Si el enlace deja de servir, puede pedir uno nuevo desde «Olvidé mi contraseña» con ese mismo email.</p>') +
+        '<p class="ayuda" style="margin-top:10px">Esta acción quedó registrada en el historial.</p>' +
         pie(false, btn('Listo', 'btn-primary', act('cerrar')));
     }
-    if (d === 'cambiar-email') {
-      var dd = buscarDueno(x).d;
-      return '<h3 id="dlg-t">Cambiar email</h3><p class="lead">El dueño tiene que entrar con el email nuevo. La contraseña no cambia.</p>' + errRed() +
-        campo('f-email', 'Email nuevo *', S.error === 'email' ? 'lucia@fiorecucina.com' : dd.email, { tipo: 'email', error: S.error === 'email' ? 'Ya existe una cuenta con ese email.' : '' }) +
-        pie('Cancelar', btn('Guardar', 'btn-primary', act('guardar')));
-    }
-    if (d === 'restablecer') {
-      var dr = buscarDueno(x).d;
-      return '<h3 id="dlg-t">Restablecer contraseña</h3><p class="lead">Se genera una contraseña nueva para <b>' + esc(dr.email) + '</b>. La actual deja de servir y la persona tiene que cambiar la nueva al entrar.</p>' +
-        pie('Cancelar', btn('Generar contraseña nueva', 'btn-primary', act('guardar', 'data-next="restablecido" data-x="' + x + '"'), 'key'));
-    }
-    if (d === 'eliminar-dueno') {
-      var de = buscarDueno(x).d;
-      return '<h3 id="dlg-t">Eliminar la cuenta de ' + esc(de.email) + '</h3><p class="lead">La persona deja de poder entrar. La marca y sus restaurantes no se tocan. <b>No se puede deshacer.</b></p>' +
-        pie('Cancelar', btn('Eliminar cuenta', 'btn-danger-solid', act('guardar')));
+    if (d === 'quitar-acceso') {
+      var dq = buscarDueno(x);
+      return '<h3 id="dlg-t">Quitar el acceso de ' + esc(dq.d.nombre) + '</h3><p class="lead"><b>' + esc(dq.d.email) + '</b> deja de poder administrar «' + esc(dq.m.nombre) + '».</p><ul>' +
+        '<li>Su cuenta de MenYU <b>no se borra</b>: si tiene otras marcas o es cliente, todo sigue igual.</li>' +
+        '<li>La marca y sus restaurantes <b>no se tocan</b>.</li><li>Lo podés volver a invitar cuando quieras.</li>' +
+        '</ul>' +
+        pie('Cancelar', btn('Quitar acceso', 'btn-danger-solid', act('guardar')));
     }
     if (d === 'ultimo-dueno') {
-      return '<h3 id="dlg-t">No se puede eliminar todavía</h3><p class="lead"></p>' +
-        aviso('amb', 'alert', 'Es el <b>único dueño</b> de «' + esc(m.nombre) + '». Creá otro antes de eliminar este, así la marca no queda sin nadie que la administre.') +
-        pie('Cerrar', btn('Agregar otro dueño', 'btn-primary', act('abrir', 'data-d="nuevo-dueno"'), 'plus'));
+      return '<h3 id="dlg-t">No se puede quitar todavía</h3><p class="lead"></p>' +
+        aviso('amb', 'alert', 'Es el <b>único dueño</b> de «' + esc(m.nombre) + '». Invitá a otro antes de quitarle el acceso, así la marca no queda sin nadie que la administre.') +
+        pie('Cerrar', btn('Invitar a otro dueño', 'btn-primary', act('abrir', 'data-d="invitar-dueno"'), 'mail'));
     }
-    if (d === 'nuevo-root') {
-      if (!S.pw) S.pw = gen();
-      return '<h3 id="dlg-t">Nueva cuenta ROOT</h3><p class="lead">Para otra persona del equipo. Va a poder lo mismo que vos: administrar marcas, restaurantes y dueños, crear otras cuentas ROOT y ver el historial.</p>' + errRed() +
-        campo('f-email', 'Email *', S.error === 'email' ? 'bruno@ejemplo.com' : '', { tipo: 'email', ph: 'persona@menyu.com', error: S.error === 'email' ? 'Ya existe una cuenta con ese email.' : '' }) +
-        '<div class="campo"><label for="f-pw">Contraseña inicial</label><div class="pw"><input id="f-pw" type="text" value="' + esc(S.pw) + '" readonly>' + btn('Generar otra', '', act('generar'), 'refresh') + '</div>' +
-        '<p class="ayuda">La genera el sistema y se muestra una sola vez, al crear la cuenta. La persona la tiene que cambiar en su primer ingreso.</p></div>' +
-        pie('Cancelar', btn('Crear cuenta ROOT', 'btn-primary', act('guardar', 'data-next="root-creado"')));
-    }
-    if (d === 'root-creado' || d === 'restablecido-root') {
-      var nuevoR = d === 'root-creado', emR = nuevoR ? 'bruno@ejemplo.com' : buscarRoot(x).email;
-      if (!S.pw) S.pw = gen();
-      return '<div class="ok-ic">' + ico('check', 24) + '</div><h3 id="dlg-t">' + (nuevoR ? 'Cuenta ROOT creada' : 'Contraseña nueva generada') + '</h3>' +
-        '<p class="lead">Pasale estos datos a la persona. <b>La contraseña no se vuelve a mostrar.</b></p>' +
-        '<div class="secreto"><small>Email</small><div class="e">' + esc(emR) + '</div><small>Contraseña' + (nuevoR ? ' inicial' : ' nueva') + '</small><div class="v">' + esc(S.pw) + '</div></div>' +
-        btn(S.copiado ? 'Copiado' : 'Copiar email y contraseña', '', act('copiar'), S.copiado ? 'check' : 'copy').replace('class="btn "', 'class="btn" style="width:100%"') +
-        '<p class="ayuda" style="margin-top:10px">Tiene que cambiarla la primera vez que entre. Esta acción quedó registrada en el historial.</p>' +
-        pie(false, btn('Listo', 'btn-primary', act('cerrar')));
-    }
-    if (d === 'restablecer-root') {
-      var ro = buscarRoot(x);
-      return '<h3 id="dlg-t">Restablecer contraseña</h3><p class="lead">Se genera una contraseña nueva para <b>' + esc(ro.email) + '</b>. La actual deja de servir, se cierran sus sesiones y tiene que cambiarla al entrar.</p>' +
-        pie('Cancelar', btn('Generar contraseña nueva', 'btn-primary', act('guardar', 'data-next="restablecido-root" data-x="' + x + '"'), 'key'));
-    }
-    if (d === 'cambiar-password') {
-      return '<h3 id="dlg-t">Cambiar mi contraseña</h3><p class="lead">Se cierran las demás sesiones abiertas de tu cuenta.</p>' + errRed() +
-        campo('f-actual', 'Contraseña actual', '', { tipo: 'password' }) +
-        campo('f-nueva', 'Contraseña nueva', '', { tipo: 'password', ayuda: 'Al menos 12 caracteres.' }) +
-        campo('f-rep', 'Repetila', '', { tipo: 'password' }) +
-        pie('Cancelar', btn('Guardar', 'btn-primary', act('guardar')));
+    if (d === 'invitar-root') {
+      return '<h3 id="dlg-t">Invitar cuenta ROOT</h3><p class="lead">Para otra persona del equipo. Va a poder lo mismo que vos: administrar marcas, restaurantes y dueños, invitar a otras cuentas ROOT y ver el historial. Le mandamos un mail con un enlace para elegir su contraseña.</p>' + errRed() +
+        campo('f-nombre', 'Nombre *', S.error === 'email' ? 'Dana Ruiz' : '', { ph: 'Ej.: Bruno Gómez' }) +
+        campo('f-email', 'Email *', S.error === 'email' ? 'dana@ejemplo.com' : '', { tipo: 'email', ph: 'persona@menyu.com', error: S.error === 'email' ? 'Ese email ya tiene una cuenta de MenYU, así que no se puede invitar desde acá. Para hacerla ROOT, el equipo usa el script de cuentas ROOT.' : '', ayuda: 'Tiene que ser una persona que todavía no tenga cuenta en MenYU.' }) +
+        pie('Cancelar', btn('Enviar invitación', 'btn-primary', act('guardar', 'data-next="invitacion-enviada" data-x="root"'), 'mail'));
     }
     return '';
   }
 
   /** Los diálogos que cambian algo avisan que la acción queda en el historial de ROOT (el que lo muestra ya lo dice por su cuenta). */
-  var SIN_AVISO = ['dueno-creado', 'root-creado', 'restablecido', 'restablecido-root', 'ultimo-dueno', 'cambiar-password'];
+  var SIN_AVISO = ['invitacion-enviada', 'ultimo-dueno'];
   function conRegistro(html) {
     if (SIN_AVISO.indexOf(S.dialogo) >= 0) return html;
     return html.replace('<div class="dlg-pie">', '<p class="ayuda aviso-registro">' + ico('clock', 14) + 'Esta acción queda registrada en el historial.</p><div class="dlg-pie">');
@@ -564,10 +501,6 @@
     var foco = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.in : '';
     var pos = foco ? document.activeElement.selectionStart : 0;
 
-    if (S.vista === 'primer-ingreso') {
-      document.getElementById('app').innerHTML = vPrimerIngreso() + (S.toast ? '<div class="toast" role="status">' + esc(S.toast) + '</div>' : '');
-      return;
-    }
     var VISTAS = { marcas: vMarcas, marca: vMarca, duenos: vDuenos, roots: vRoots, historial: vHistorial };
     var TITULOS = { marcas: ['Marcas', 'Marcas, restaurantes y dueños'], duenos: ['Dueños', 'Cuentas de dueño (OWNER)'], roots: ['Cuentas ROOT', 'Quién administra MenYU'], historial: ['Historial', 'Todo lo que hizo cada ROOT'] };
     var cuerpo = (VISTAS[S.vista] || vMarcas)();
@@ -598,7 +531,7 @@
   }
 
   function mostrarToast(t) { S.toast = t; render(); setTimeout(function () { S.toast = ''; render(); }, 2400); }
-  function cerrar() { S.dialogo = ''; S.dato = ''; S.error = ''; S.pw = ''; S.copiado = false; S.confirmar = ''; }
+  function cerrar() { S.dialogo = ''; S.dato = ''; S.error = ''; S.confirmar = ''; }
 
   document.addEventListener('click', function (e) {
     var t = e.target.closest('[data-act]');
@@ -610,22 +543,19 @@
     if (a === 'ver') { var h = t.dataset.h, i = S.abiertos.indexOf(h); if (i >= 0) S.abiertos.splice(i, 1); else S.abiertos.push(h); render(); return; }
     if (a === 'limpiar') { S.actor = ''; S.tipo = ''; S.desde = ''; S.hasta = ''; render(); return; }
     if (a === 'cargar-mas') { S.fin = true; render(); return; }
-    if (a === 'verpw') { S.verPw = !S.verPw; render(); return; }
     if (a === 'pop') { S.pop = S.pop === t.dataset.k ? '' : t.dataset.k; render(); return; }
     if (a === 'bajas') { S.bajas = !S.bajas; render(); return; }
     if (a === 'reintentar') { S.estado = 'normal'; render(); return; }
-    if (a === 'generar') { S.pw = gen(); render(); return; }
-    if (a === 'copiar') { S.copiado = true; render(); return; }
     if (a === 'cerrar') { cerrar(); render(); return; }
     if (a === 'abrir') {
       var d = t.dataset.d, x = t.dataset.x || '';
-      if (d === 'eliminar-dueno' && marca(S.id).activa && marca(S.id).duenos.length === 1 && S.vista === 'marca') d = 'ultimo-dueno';
-      S.pop = ''; S.dialogo = d; S.dato = x; S.error = ''; S.pw = ''; S.copiado = false; S.confirmar = ''; render(); return;
+      if (d === 'quitar-acceso' && marca(S.id).activa && marca(S.id).duenos.length === 1 && S.vista === 'marca') d = 'ultimo-dueno';
+      S.pop = ''; S.dialogo = d; S.dato = x; S.error = ''; S.confirmar = ''; render(); return;
     }
     if (a === 'guardar') {
       if (t.disabled) return;
       var sig = t.dataset.next;
-      if (sig) { S.dialogo = sig; if (t.dataset.x) S.dato = t.dataset.x; S.copiado = false; render(); return; }
+      if (sig) { S.dialogo = sig; if (t.dataset.x) S.dato = t.dataset.x; render(); return; }
       cerrar(); mostrarToast('Listo. Así quedaría: el mockup no guarda nada.'); return;
     }
   });

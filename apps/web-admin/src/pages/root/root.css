@@ -108,6 +108,8 @@
 .rc .item-txt { flex: 1; min-width: 0; }
 .rc .item-txt b { display: block; font: 600 14px Inter, sans-serif; overflow-wrap: anywhere; }
 .rc .item-txt small { display: block; font-size: 12px; color: var(--muted); }
+.rc .item-txt small a { color: var(--navy); font-weight: 600; text-decoration: none; }
+.rc .item-txt small a:hover { text-decoration: underline; }
 .rc .item-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
 .rc .item-chips .chip { white-space: normal; text-align: left; }
 .rc .item.baja .item-txt b { color: var(--sub); }

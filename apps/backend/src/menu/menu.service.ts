@@ -67,7 +67,8 @@ export class MenuService {
       orderBy: { orden: 'asc' },
       include: {
         items: {
-          where: { disponible: true, ...buscarWhere },
+          // Solo los del restaurante, aunque un ítem de otro haya quedado apuntando a esta categoría.
+          where: { restauranteId, disponible: true, ...buscarWhere },
           include: ITEM_INCLUDE,
           orderBy: { nombre: 'asc' },
         },

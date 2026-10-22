@@ -1,10 +1,10 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAuth } from '@menyu/auth'
+import { usePerfil } from '@menyu/auth-client'
 import { ClipboardList, X, Edit, XCircle, History } from 'lucide-react'
 import { api } from '../../services/api'
 import type { SesionHistorial } from '../../services/api'
-import { useMozoStore } from '../../store/mozoStore'
+import { useNombreDelRol, useRestauranteId } from '../../store/contextoStore'
 import { PageHeader } from '../../components/PageHeader'
 import { PERIOD_LABELS, SesionCard, SesionDetalleModal, getPeriodBounds, type Period } from '@menyu/ui/historial'
 
@@ -16,9 +16,10 @@ function getInitials(name?: string): string {
 
 export function HistorialPage() {
   const navigate            = useNavigate()
-  const { user }            = useAuth()
-  const { restauranteId }   = useMozoStore()
-  const nombreMozo          = user?.nombre ?? user?.email ?? 'Mozo'
+  const perfil              = usePerfil()
+  const restauranteId       = useRestauranteId()
+  const nombreMozo          = perfil.nombre || perfil.email
+  const rolMostrado         = useNombreDelRol()
 
   const [sesiones, setSesiones]                     = useState<SesionHistorial[]>([])
   const [loading, setLoading]                       = useState(false)
@@ -59,8 +60,8 @@ export function HistorialPage() {
         icon={<History size={18} />}
         onBack={() => navigate('/mozo')}
         userName={nombreMozo}
-        userRole="Mozo"
-        userInitials={getInitials(user?.nombre ?? user?.email)}
+        userRole={rolMostrado}
+        userInitials={getInitials(nombreMozo)}
       />
 
       <div

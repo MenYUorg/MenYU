@@ -198,10 +198,11 @@ describe('ClienteMenuPage', () => {
           expect(screen.queryByText('Volver al restaurante')).not.toBeInTheDocument()
         })
 
-        it('desde ahí se llega a pagar, a los pedidos y al mozo', () => {
+        it('desde ahí se llega a pagar y a los pedidos, pero no al mozo', () => {
           conError(404)
           renderizar()
-          expect(screen.getByRole('button', { name: 'Llamar al mozo' })).toBeInTheDocument()
+          // Con la baja, el personal recibe 403 al atender un llamado y al cobrar en efectivo (entrega 4.7).
+          expect(screen.queryByRole('button', { name: /mozo/i })).not.toBeInTheDocument()
 
           fireEvent.click(screen.getByRole('button', { name: 'Pagar la cuenta' }))
 

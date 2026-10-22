@@ -13,12 +13,16 @@ import { UsersService } from '../users/users.service'
 import { MenyuGateway } from '../gateway/menyu.gateway'
 import { JwtPayload } from '../auth/auth.service'
 import { SessionJwtPayload } from '../auth/guards/session-auth.guard'
+import { SALON } from '../auth/roles-del-personal'
+import { AccesoService } from '../auth/supabase/acceso.service'
+import { UsuarioAutenticado } from '../auth/supabase/usuario-autenticado'
 import { OpenSessionDto } from './dto/open-session.dto'
 import { RegistrarCobroDto } from './dto/registrar-cobro.dto'
 import { DivisionService } from '../comensales/division.service'
 import { runSerializableTransaction } from '../common/run-serializable-transaction'
-import { assertStaffAccess } from '../common/assert-staff-access'
+import { atribucionDelCobro } from '../common/atribucion-del-cobro'
 import { LimiteIntentos } from '../common/limite-intentos'
+import { EDITOR_INCLUDE, editorDe } from '../pedidos/editor-de-la-edicion'
 import { restauranteDisponible, SELECT_DISPONIBILIDAD } from '../common/restaurante-disponible'
 import {
   ESTADO_PAGO_APROBADO,
@@ -110,16 +114,17 @@ export class SessionsService {
     private readonly jwt: JwtService,
     private readonly gateway: MenyuGateway,
     private readonly divisionService: DivisionService,
+    private readonly acceso: AccesoService,
   ) {}
 
-  async openStaff(dto: { mesaId: string }, user: JwtPayload): Promise<OpenStaffSessionResult> {
+  async openStaff(dto: { mesaId: string }, usuario: UsuarioAutenticado): Promise<OpenStaffSessionResult> {
     const mesa = await this.prisma.mesa.findUnique({
       where: { id: dto.mesaId },
       select: { id: true, numero: true, restauranteId: true, activo: true },
     })
     if (!mesa || !mesa.activo) throw new NotFoundException('Mesa no encontrada')
 
-    await assertStaffAccess(this.prisma, mesa.restauranteId, user)
+    await this.acceso.exigirRol(usuario.id, mesa.restauranteId, SALON)
 
     const sesionActiva = await this.prisma.sesionMesa.findFirst({
       where: { mesaId: mesa.id, estado: 'activa' },
@@ -283,10 +288,10 @@ export class SessionsService {
     return { ok: true }
   }
 
-  async cerrarMesaAdmin(mesaId: string, user: JwtPayload): Promise<{ ok: boolean }> {
+  async cerrarMesaAdmin(mesaId: string, usuario: UsuarioAutenticado): Promise<{ ok: boolean }> {
     const mesa = await this.prisma.mesa.findUnique({ where: { id: mesaId } })
     if (!mesa) throw new NotFoundException('Mesa no encontrada')
-    await assertStaffAccess(this.prisma, mesa.restauranteId, user)
+    await this.acceso.exigirRol(usuario.id, mesa.restauranteId, SALON)
 
     const sesion = await this.prisma.sesionMesa.findFirst({
       where: { mesaId, estado: 'activa' },
@@ -309,10 +314,10 @@ export class SessionsService {
     return { ok: true }
   }
 
-  async getSessionActiva(mesaId: string, user: JwtPayload): Promise<SessionActivaResult | null> {
+  async getSessionActiva(mesaId: string, usuario: UsuarioAutenticado): Promise<SessionActivaResult | null> {
     const mesa = await this.prisma.mesa.findUnique({ where: { id: mesaId } })
     if (!mesa) throw new NotFoundException('Mesa no encontrada')
-    await assertStaffAccess(this.prisma, mesa.restauranteId, user)
+    await this.acceso.exigirRol(usuario.id, mesa.restauranteId, SALON)
 
     const sesion = await this.prisma.sesionMesa.findFirst({
       where: { mesaId, estado: 'activa' },
@@ -380,9 +385,8 @@ export class SessionsService {
     }
   }
 
-  async getSessionesActivas(restauranteId: string, user: JwtPayload) {
-    await assertStaffAccess(this.prisma, restauranteId, user)
-
+  /** El rol en el restaurante lo exige la ruta (`@RequiereRolEn`). */
+  async getSessionesActivas(restauranteId: string) {
     const sesiones = await this.prisma.sesionMesa.findMany({
       where: { mesa: { restauranteId }, estado: 'activa' },
       include: {
@@ -425,9 +429,8 @@ export class SessionsService {
     })
   }
 
-  async getSessionesPagadas(restauranteId: string, fecha: string | undefined, user: JwtPayload) {
-    await assertStaffAccess(this.prisma, restauranteId, user)
-
+  /** El rol en el restaurante lo exige la ruta (`@RequiereRolEn`). */
+  async getSessionesPagadas(restauranteId: string, fecha: string | undefined) {
     let fechaFilter: { gte: Date; lte: Date } | undefined
     if (fecha === 'hoy') {
       const inicio = new Date(); inicio.setHours(0, 0, 0, 0)
@@ -453,7 +456,7 @@ export class SessionsService {
             items: { select: { cantidad: true, cantidadEditada: true, precioUnitario: true } },
           },
         },
-        pagos: { include: { mozo: { select: { nombre: true } } } },
+        pagos: { include: { mozo: { select: { nombre: true } }, usuario: { select: { nombre: true } } } },
       },
       orderBy: { cerradaEn: 'desc' },
     })
@@ -477,7 +480,7 @@ export class SessionsService {
       if (pagosAprobados.length === 1) {
         const pago = pagosAprobados[0]
         metodoPago = pago.metodo
-        cobradoPorNombre = pago.cobradoPorNombre ?? pago.mozo?.nombre ?? null
+        cobradoPorNombre = pago.cobradoPorNombre ?? pago.mozo?.nombre ?? pago.usuario?.nombre ?? null
         referenciaExterna = pago.referenciaExterna ?? null
         fechaCobro = pago.fechaCobro?.toISOString() ?? s.cerradaEn?.toISOString() ?? ''
       } else if (pagosAprobados.length > 1) {
@@ -517,14 +520,12 @@ export class SessionsService {
     })
   }
 
+  /** El rol en el restaurante lo exige la ruta (`@RequiereRolEn`). */
   async getHistorialSesiones(
     restauranteId: string,
     desde: string | undefined,
     hasta: string | undefined,
-    user: JwtPayload,
   ) {
-    await assertStaffAccess(this.prisma, restauranteId, user)
-
     const hoy = new Date().toISOString().slice(0, 10)
     const desdeStr = desde ?? hoy
     const hastaStr = hasta ?? hoy
@@ -555,11 +556,7 @@ export class SessionsService {
               },
             },
             ediciones: {
-              include: {
-                admin: { select: { email: true } },
-                mozo: { select: { nombre: true } },
-                itemsEliminados: true,
-              },
+              include: { ...EDITOR_INCLUDE, itemsEliminados: true },
             },
           },
           orderBy: { createdAt: 'asc' },
@@ -612,9 +609,7 @@ export class SessionsService {
               id: e.id,
               justificacion: e.justificacion,
               creadoEn: e.creadoEn.toISOString(),
-              editor: e.admin
-                ? { nombre: e.admin.email, tipo: 'gerente' as const }
-                : { nombre: e.mozo?.nombre ?? 'desconocido', tipo: 'mozo' as const },
+              editor: editorDe(e),
               itemsEliminados: e.itemsEliminados.map((item) => ({
                 itemNombre: item.itemNombre,
                 cantidadAntes: item.cantidadAntes,
@@ -629,10 +624,14 @@ export class SessionsService {
     })
   }
 
+  /**
+   * Cobra el saldo de la sesión. Lo registra el salón del restaurante de la mesa, y queda a nombre de quien cobra
+   * (`atribucionDelCobro`): un mozo, con su propio `Mozo`; un OWNER o GERENTE, con su cuenta y, si lo indica, un mozo.
+   */
   async registrarCobro(
     sesionId: string,
     dto: RegistrarCobroDto,
-    user: JwtPayload,
+    usuario: UsuarioAutenticado,
   ) {
     const sesion = await this.prisma.sesionMesa.findUnique({
       where: { id: sesionId },
@@ -641,9 +640,9 @@ export class SessionsService {
       },
     })
     if (!sesion) throw new NotFoundException('Sesión no encontrada')
-    if (sesion.cerradaEn !== null) throw new BadRequestException('La sesión ya fue cerrada')
 
-    await assertStaffAccess(this.prisma, sesion.mesa.restauranteId, user)
+    const { usuarioId, mozoId } = await atribucionDelCobro(this.prisma, this.acceso, usuario, sesion.mesa.restauranteId, dto.mozoId)
+    if (sesion.cerradaEn !== null) throw new BadRequestException('La sesión ya fue cerrada')
 
     const fechaCobro = new Date()
     const ahora = fechaCobro.getTime()
@@ -690,7 +689,8 @@ export class SessionsService {
             estado: ESTADO_PAGO_APROBADO,
             monto: saldoPendiente,
             metodo: dto.metodoPago,
-            mozoId: dto.mozoId || null,
+            mozoId,
+            usuarioId,
             cobradoPorNombre: dto.cobradoPorNombre,
             referenciaExterna: dto.referenciaExterna,
             fechaCobro,
@@ -703,7 +703,8 @@ export class SessionsService {
             monto: saldoPendiente,
             metodo: dto.metodoPago,
             estado: ESTADO_PAGO_APROBADO,
-            mozoId: dto.mozoId || null,
+            mozoId,
+            usuarioId,
             cobradoPorNombre: dto.cobradoPorNombre,
             referenciaExterna: dto.referenciaExterna,
             fechaCobro,

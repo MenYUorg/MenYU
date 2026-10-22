@@ -1,15 +1,15 @@
-import { useAuth } from '@menyu/auth'
+import { logout, usePerfil } from '@menyu/auth-client'
 
 /**
- * La sesión de ROOT, vista desde la consola. Es el ÚNICO lugar de `/root` que sabe de dónde sale: hoy del login actual
- * (`@menyu/auth`, token propio); cuando web-admin pase a Supabase Auth (Fase 4 de docs/auth/specs/auth.md) se cambia acá por
- * `useSession` de `@menyu/auth-client` y `esRoot` sale de `GET /auth/me`. Ninguna pantalla ni diálogo toca `useAuth`.
+ * La sesión de ROOT, vista desde la consola. Es el ÚNICO lugar de `/root` que sabe de dónde sale: desde la entrega 4.5
+ * de docs/auth/specs/auth.md, del perfil de Supabase (`GET /auth/me`, con `esRoot`). Ninguna pantalla ni diálogo de la
+ * consola habla con `@menyu/auth-client`.
  */
 export function useRootSession() {
-  const { user, logout } = useAuth()
+  const perfil = usePerfil()
   return {
-    email: user?.email,
-    esRoot: user?.rol === 'ROOT',
-    cerrarSesion: logout,
+    email: perfil.email,
+    esRoot: perfil.esRoot,
+    cerrarSesion: () => { void logout() },
   }
 }

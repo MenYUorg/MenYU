@@ -121,6 +121,8 @@ En *Authentication → Emails → Templates* de cada proyecto, pegar como cuerpo
 
 ### Fase 4: web-admin, web-staff y web-cliente
 
+**Hay que cargarlas antes del merge del PR #416**: sin ellas, las apps desplegadas no encuentran la sesión. Las carga el equipo a mano en el panel de Vercel.
+
 | Variable | Staging (`*-staging`) | Producción (entorno Production) |
 |---|---|---|
 | `VITE_SUPABASE_URL` | la del Supabase de staging | la del Supabase de producción |
@@ -128,7 +130,24 @@ En *Authentication → Emails → Templates* de cada proyecto, pegar como cuerpo
 | `VITE_AUTH_COOKIE_DOMAIN` | `.staging.menyu-app.com` | `.menyu-app.com` |
 | `VITE_AUTH_URL` | `https://auth.staging.menyu-app.com` | `https://auth.menyu-app.com` |
 
-El entorno Preview de los proyectos de producción corre en `*.vercel.app`, donde no se puede poner la cookie de `.staging.menyu-app.com`: se define en la Fase 4.
+**web-cliente lleva solo `VITE_AUTH_URL`**, para mandar a web-auth a quien es personal y escribe sus datos en `/auth` (entrega 4.7). No lee la sesión de Supabase: su cuenta de comensal llega en la Fase 4b. Si la variable falta, la app la deduce del dominio (`mesa.<ambiente>` → `auth.<ambiente>`), así que un olvido no la rompe; igual conviene definirla.
+
+En **web-admin** y **web-staff** van las cuatro.
+
+Checklist por proyecto:
+
+| Proyecto de Vercel | Entorno | Variables |
+|---|---|---|
+| `menyu-admin-staging`, `menyu-staff-staging` | Production (es staging) | las cuatro, con los valores de staging |
+| `menyu-cliente-staging` | Production (es staging) | `VITE_AUTH_URL` de staging |
+| `menyu-admin`, `menyu-staff` | Production | las cuatro, con los valores de producción |
+| `menyu-admin`, `menyu-staff` | Preview | las cuatro, con los valores de **staging** |
+| `menyu-cliente` | Production | `VITE_AUTH_URL` de producción |
+| `menyu-cliente` | Preview | `VITE_AUTH_URL` de staging |
+
+El entorno Preview de los proyectos de producción corre en `*.vercel.app`, que está en la Public Suffix List: ahí no se puede poner la cookie de `.staging.menyu-app.com`, así que un preview no comparte sesión y rebota a `auth.staging`, que es donde se inicia. Es lo esperado (`auth.md`, Dominios): el SSO se prueba en staging y en `*.menyu.local`.
+
+**Verificar después del deploy:** en `admin.staging.menyu-app.com`, que el bundle apunte al Supabase de staging y que, sin sesión, mande a `auth.staging.menyu-app.com` con su `redirect`.
 
 ## 4. GitHub (Settings → Secrets and variables → Actions)
 

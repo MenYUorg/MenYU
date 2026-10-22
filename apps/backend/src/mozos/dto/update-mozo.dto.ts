@@ -1,35 +1,19 @@
 import { ApiPropertyOptional } from '@nestjs/swagger'
-import { IsBoolean, IsEmail, IsOptional, IsString, MinLength } from 'class-validator'
+import { IsNotEmpty, IsOptional, IsString } from 'class-validator'
 
+/**
+ * El email y la contraseña son de la cuenta de Supabase, si es jefe de salón lo dice su membresía y el acceso se
+ * quita desde Personal: acá solo los datos del perfil.
+ */
 export class UpdateMozoDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
+  @IsNotEmpty()
   nombre?: string
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsEmail()
-  email?: string
 
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
   telefono?: string
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsBoolean()
-  activo?: boolean
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsBoolean()
-  esJefeSalon?: boolean
-
-  @ApiPropertyOptional({ minLength: 8 })
-  @IsOptional()
-  @IsString()
-  @MinLength(8)
-  password?: string
 }

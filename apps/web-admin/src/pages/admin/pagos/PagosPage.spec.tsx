@@ -2,19 +2,22 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { io } from 'socket.io-client'
 import { api } from '../../../services/api'
+import { reiniciarSesionDePrueba, sesionDePrueba } from '../../../test/authClient'
 import { PagosPage } from './PagosPage'
 
-let rolActual = 'GERENTE'
+let rolActual: 'OWNER' | 'GERENTE' | null = 'GERENTE'
 let restauranteActual: string | null = 'rest-1'
 
-vi.mock('@menyu/auth', () => ({
-  TOKEN_KEY: 'menyu_token',
-  useAuth: () => ({ user: { rol: rolActual } }),
-}))
+vi.mock('@menyu/auth-client', async () => (await import('../../../test/authClient')).moduloSimulado())
 vi.mock('../../../store/contextStore', () => ({
   useContextStore: () => ({ selectedRestauranteId: restauranteActual }),
+  useRolActual: () => rolActual,
 }))
-vi.mock('../../../services/api', () => ({ api: { mozos: { list: vi.fn() } } }))
+// `pedirJson` queda el real (pone el token de la sesión y maneja el 401); solo se simula el objeto `api`.
+vi.mock('../../../services/api', async () => ({
+  ...(await vi.importActual<typeof import('../../../services/api')>('../../../services/api')),
+  api: { mozos: { list: vi.fn() } },
+}))
 
 /** Socket falso: guarda los handlers para poder "recibir" eventos del servidor. */
 const socket = {
@@ -67,7 +70,8 @@ beforeEach(() => {
   restauranteActual = 'rest-1'
   vi.clearAllMocks()
   socket.handlers.clear()
-  localStorage.setItem('menyu_token', 'jwt-de-test')
+  reiniciarSesionDePrueba()
+  sesionDePrueba.token = 'jwt-de-test'
   respuestas = {
     '/sessions/activas': json([ACTIVA_4, ACTIVA_7]),
     '/sessions/pagadas': json([PAGADA_EF, PAGADA_MP]),

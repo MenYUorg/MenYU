@@ -1,86 +1,62 @@
-import {
-  Body,
-  Controller,
-  Delete,
-  Get,
-  HttpCode,
-  HttpStatus,
-  Param,
-  Patch,
-  Post,
-  Query,
-  UseGuards,
-} from '@nestjs/common'
-import { ApiBearerAuth } from '@nestjs/swagger'
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'
-import { RolesGuard } from '../common/guards/roles.guard'
-import { Roles } from '../common/decorators/roles.decorator'
-import { TipoGuard } from '../auth/guards/tipo.guard'
-import { RequiresTipo } from '../auth/decorators/requires-tipo.decorator'
-import { CurrentUser } from '../common/decorators/current-user.decorator'
-import { JwtPayload } from '../auth/auth.service'
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Query } from '@nestjs/common'
+import { Personal } from '../auth/decorators/personal.decorator'
+import { RequiereRolEn } from '../auth/decorators/requiere-rol.decorator'
+import { UsuarioActual } from '../auth/decorators/usuario-actual.decorator'
+import { ADMINISTRACION, SALON } from '../auth/roles-del-personal'
+import { UsuarioAutenticado } from '../auth/supabase/usuario-autenticado'
 import { MesasService } from './mesas.service'
 import { CreateMesaDto } from './dto/create-mesa.dto'
 import { UpdateMesaDto } from './dto/update-mesa.dto'
 import { CambiarPinDto } from './dto/cambiar-pin.dto'
 
-@ApiBearerAuth()
+// OWNER y GERENTE del restaurante (borrar, solo OWNER); el listado también lo ve el salón. En las rutas de una
+// mesa, el service pide el rol.
 @Controller('mesas')
-@UseGuards(JwtAuthGuard, RolesGuard)
 export class MesasController {
   constructor(private readonly mesas: MesasService) {}
 
   @Post()
-  @Roles('ROOT', 'OWNER', 'GERENTE')
+  @RequiereRolEn({ body: 'restauranteId' }, ...ADMINISTRACION)
   @HttpCode(HttpStatus.CREATED)
   create(@Body() dto: CreateMesaDto) {
     return this.mesas.create(dto)
   }
 
   @Get()
-  @UseGuards(JwtAuthGuard, TipoGuard)
-  @RequiresTipo('admin', 'mozo')
-  findAll(@Query('restauranteId') restauranteId: string, @CurrentUser() user: JwtPayload) {
-    return this.mesas.findAll(restauranteId, user)
+  @RequiereRolEn({ query: 'restauranteId' }, ...SALON)
+  findAll(@Query('restauranteId') restauranteId: string) {
+    return this.mesas.findAll(restauranteId)
   }
 
   @Get(':id')
-  @Roles('ROOT', 'OWNER', 'GERENTE')
-  findOne(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
-    return this.mesas.findOne(id, user)
+  @Personal()
+  findOne(@Param('id') id: string, @UsuarioActual() usuario: UsuarioAutenticado) {
+    return this.mesas.findOne(id, usuario)
   }
 
   @Patch(':id')
-  @Roles('ROOT', 'OWNER', 'GERENTE')
-  update(
-    @Param('id') id: string,
-    @Body() dto: UpdateMesaDto,
-    @CurrentUser() user: JwtPayload,
-  ) {
-    return this.mesas.update(id, dto, user)
+  @Personal()
+  update(@Param('id') id: string, @Body() dto: UpdateMesaDto, @UsuarioActual() usuario: UsuarioAutenticado) {
+    return this.mesas.update(id, dto, usuario)
   }
 
   @Delete(':id')
-  @Roles('ROOT', 'OWNER')
+  @Personal()
   @HttpCode(HttpStatus.NO_CONTENT)
-  async remove(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
-    await this.mesas.remove(id, user)
+  async remove(@Param('id') id: string, @UsuarioActual() usuario: UsuarioAutenticado) {
+    await this.mesas.remove(id, usuario)
   }
 
   @Post(':id/regenerar-qr')
-  @Roles('ROOT', 'OWNER', 'GERENTE')
+  @Personal()
   @HttpCode(HttpStatus.OK)
-  regenerarQr(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
-    return this.mesas.regenerarQr(id, user)
+  regenerarQr(@Param('id') id: string, @UsuarioActual() usuario: UsuarioAutenticado) {
+    return this.mesas.regenerarQr(id, usuario)
   }
 
   @Patch(':id/pin')
-  @Roles('ROOT', 'OWNER', 'GERENTE')
-  cambiarPin(
-    @Param('id') id: string,
-    @Body() dto: CambiarPinDto,
-    @CurrentUser() user: JwtPayload,
-  ) {
-    return this.mesas.cambiarPin(id, dto.pin, user)
+  @Personal()
+  cambiarPin(@Param('id') id: string, @Body() dto: CambiarPinDto, @UsuarioActual() usuario: UsuarioAutenticado) {
+    return this.mesas.cambiarPin(id, dto.pin, usuario)
   }
 }

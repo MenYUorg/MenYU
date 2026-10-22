@@ -1,9 +1,11 @@
 import { Test } from '@nestjs/testing'
-import { BadRequestException, Logger, NotFoundException } from '@nestjs/common'
+import { BadRequestException, ConflictException, ForbiddenException, Logger, NotFoundException } from '@nestjs/common'
 import { PaymentsService } from './payments.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { MenyuGateway } from '../gateway/menyu.gateway'
 import { MercadoPagoProvider } from './providers/mercado-pago.provider'
+import { AccesoService } from '../auth/supabase/acceso.service'
+import { accesoDeTest, CUENTAS, MOZOS, MUNDO } from '../test/acceso-de-test'
 import { MercadoPagoOAuthService } from './mercado-pago-oauth.service'
 import { DivisionService } from '../comensales/division.service'
 import {
@@ -66,6 +68,7 @@ describe('PaymentsService', () => {
         { provide: MercadoPagoProvider, useValue: mockMpProvider },
         { provide: MercadoPagoOAuthService, useValue: mockMpOAuth },
         { provide: DivisionService, useValue: mockDivision },
+        { provide: AccesoService, useValue: accesoDeTest() },
       ],
     }).compile()
 
@@ -81,8 +84,18 @@ describe('PaymentsService', () => {
     const SESION = {
       id: 'sesion-1',
       cerradaEn: null as Date | null,
-      mesa: { id: 'mesa-1', numero: '5', restauranteId: 'rest-1' },
+      mesa: {
+        id: 'mesa-1',
+        numero: '5',
+        restauranteId: 'rest-1',
+        restaurante: { activo: true, marca: { activo: true } },
+      },
     }
+
+    const conRestaurante = (restaurante: { activo?: boolean; marca?: { activo: boolean } }) => ({
+      ...SESION,
+      mesa: { ...SESION.mesa, restaurante: { activo: true, marca: { activo: true }, ...restaurante } },
+    })
 
     beforeEach(() => {
       tx = createTxMock()
@@ -164,6 +177,35 @@ describe('PaymentsService', () => {
       await expect(service.solicitarEfectivo('sesion-x')).rejects.toThrow(NotFoundException)
 
       expect(tx.pago.create).not.toHaveBeenCalled()
+    })
+
+    // El personal de un restaurante dado de baja recibe 403 al confirmar el efectivo: el pedido quedaba pendiente para
+    // siempre, con un llamado que nadie podía atender (entrega 4.7 de docs/auth/specs/auth.md).
+    describe('restaurante dado de baja', () => {
+      it.each([
+        ['el restaurante', { activo: false }],
+        ['su marca', { marca: { activo: false } }],
+        ['los dos', { activo: false, marca: { activo: false } }],
+      ])('de baja %s → 403 "Este restaurante no está disponible", sin crear el pago ni el llamado', async (_quien, cambios) => {
+        tx.sesionMesa.findUnique.mockResolvedValue(conRestaurante(cambios))
+
+        await expect(service.solicitarEfectivo('sesion-1')).rejects.toThrow(
+          new ForbiddenException('Este restaurante no está disponible'),
+        )
+
+        expect(tx.pago.findFirst).not.toHaveBeenCalled()
+        expect(tx.pago.create).not.toHaveBeenCalled()
+        expect(tx.llamadoMozo.create).not.toHaveBeenCalled()
+        expect(mockGateway.emitMozoCalled).not.toHaveBeenCalled()
+        expect(mockGateway.emitQuierePagar).not.toHaveBeenCalled()
+      })
+
+      it('tampoco devuelve un efectivo pendiente que quedó de antes de la baja', async () => {
+        tx.sesionMesa.findUnique.mockResolvedValue(conRestaurante({ activo: false }))
+        tx.pago.findFirst.mockResolvedValue({ id: 'pago-ef' })
+
+        await expect(service.solicitarEfectivo('sesion-1')).rejects.toThrow(ForbiddenException)
+      })
     })
 
     it('sesión ya pagada por completo → BadRequestException y no crea nada', async () => {
@@ -287,15 +329,19 @@ describe('PaymentsService', () => {
   describe('confirmarEfectivo', () => {
     let tx: ReturnType<typeof createTxMock>
 
+    // La aprobación es un updateMany condicionado al estado pendiente: con count 0, otro lo cobró antes.
+    const APROBACION = { id: 'pago-ef', estado: ESTADO_PAGO_PENDIENTE }
+
     beforeEach(() => {
       tx = createTxMock()
       mockPrisma.$transaction.mockImplementation((fn: any) => fn(tx))
+      tx.pago.updateMany.mockResolvedValue({ count: 1 })
       mockPrisma.pago.findUnique.mockResolvedValue({
         id: 'pago-ef',
         sesionId: 'sesion-1',
         metodo: 'efectivo',
         estado: 'pendiente',
-        sesion: { mesaId: 'mesa-1' },
+        sesion: { mesaId: 'mesa-1', mesa: { restauranteId: MUNDO.REST_1 } },
       })
     })
 
@@ -303,15 +349,15 @@ describe('PaymentsService', () => {
       mockDivision.calcularTotalSesion.mockResolvedValue(1000)
       tx.pago.findMany.mockResolvedValue([{ monto: 1000 }])
 
-      const result = await service.confirmarEfectivo('pago-ef', 'mozo-1')
+      const result = await service.confirmarEfectivo({ pagoId: 'pago-ef' }, CUENTAS.MOZO)
 
-      expect(tx.pago.updateMany).toHaveBeenCalledWith({
+      expect(tx.pago.updateMany).toHaveBeenNthCalledWith(1, expect.objectContaining({ where: APROBACION }))
+      expect(tx.pago.updateMany).toHaveBeenNthCalledWith(2, {
         where: { sesionId: 'sesion-1', estado: ESTADO_PAGO_PENDIENTE }, // sin filtro de método
         data: { estado: ESTADO_PAGO_CANCELADO },
       })
-      const orden = (fn: jest.Mock) => fn.mock.invocationCallOrder[0]
-      expect(orden(tx.pago.update)).toBeLessThan(orden(tx.pago.updateMany))
-      expect(orden(tx.pago.updateMany)).toBeLessThan(orden(tx.sesionMesa.update))
+      const orden = (fn: jest.Mock, vez = 0) => fn.mock.invocationCallOrder[vez]
+      expect(orden(tx.pago.updateMany, 1)).toBeLessThan(orden(tx.sesionMesa.update))
       expect(result).toEqual({ sesionId: 'sesion-1', estado: 'cerrada' })
     })
 
@@ -319,11 +365,97 @@ describe('PaymentsService', () => {
       mockDivision.calcularTotalSesion.mockResolvedValue(2000)
       tx.pago.findMany.mockResolvedValue([{ monto: 1000 }])
 
-      const result = await service.confirmarEfectivo('pago-ef', 'mozo-1')
+      const result = await service.confirmarEfectivo({ pagoId: 'pago-ef' }, CUENTAS.MOZO)
 
-      expect(tx.pago.updateMany).not.toHaveBeenCalled()
+      expect(tx.pago.updateMany).toHaveBeenCalledTimes(1) // solo la aprobación
       expect(tx.sesionMesa.update).not.toHaveBeenCalled()
       expect(result).toEqual({ sesionId: 'sesion-1', estado: 'activa' })
+    })
+
+    describe('a nombre de quién queda (#356)', () => {
+      beforeEach(() => {
+        mockDivision.calcularTotalSesion.mockResolvedValue(2000)
+        tx.pago.findMany.mockResolvedValue([{ monto: 1000 }])
+      })
+
+      it.each([
+        ['ya aprobado (otro mozo lo cobró)', 'aprobado'],
+        ['cancelado', 'cancelado'],
+      ])('un pago %s no se vuelve a confirmar: 409 y no se le cambia el autor', async (_caso, estado) => {
+        mockPrisma.pago.findUnique.mockResolvedValue({
+          id: 'pago-ef',
+          sesionId: 'sesion-1',
+          metodo: 'efectivo',
+          estado,
+          sesion: { mesaId: 'mesa-1', mesa: { restauranteId: MUNDO.REST_1 } },
+        })
+
+        await expect(service.confirmarEfectivo({ pagoId: 'pago-ef' }, CUENTAS.MOZO)).rejects.toThrow(
+          new ConflictException('Ese pago ya no está pendiente'),
+        )
+        expect(mockPrisma.$transaction).not.toHaveBeenCalled()
+        expect(tx.pago.updateMany).not.toHaveBeenCalled()
+      })
+
+      it('si otro lo cobró entre la lectura y la escritura (o en el reintento de la transacción): 409 y la sesión no se toca', async () => {
+        tx.pago.updateMany.mockResolvedValue({ count: 0 })
+
+        await expect(service.confirmarEfectivo({ pagoId: 'pago-ef' }, CUENTAS.MOZO)).rejects.toThrow(
+          new ConflictException('Ese pago ya no está pendiente'),
+        )
+        expect(tx.pago.updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: APROBACION }))
+        expect(tx.sesionMesa.update).not.toHaveBeenCalled()
+        expect(tx.mesa.update).not.toHaveBeenCalled()
+      })
+
+      it('el permiso va antes que el estado: el de otra marca recibe 403 aunque el pago ya esté cobrado', async () => {
+        mockPrisma.pago.findUnique.mockResolvedValue({
+          id: 'pago-ef',
+          sesionId: 'sesion-1',
+          metodo: 'efectivo',
+          estado: 'aprobado',
+          sesion: { mesaId: 'mesa-1', mesa: { restauranteId: MUNDO.REST_1 } },
+        })
+
+        await expect(service.confirmarEfectivo({ pagoId: 'pago-ef' }, CUENTAS.OWNER_B)).rejects.toThrow(ForbiddenException)
+      })
+
+      it('un MOZO lo confirma con su propio Mozo aunque mande el de otro', async () => {
+        await service.confirmarEfectivo({ pagoId: 'pago-ef', mozoId: 'mozo-ajeno' }, CUENTAS.MOZO)
+
+        expect(tx.pago.updateMany).toHaveBeenCalledWith({
+          where: APROBACION,
+          data: { estado: 'aprobado', fechaCobro: expect.any(Date), mozoId: MOZOS.DEL_MOZO.id, usuarioId: CUENTAS.MOZO.id },
+        })
+      })
+
+      it('el OWNER lo confirma a su nombre, sin mozo', async () => {
+        await service.confirmarEfectivo({ pagoId: 'pago-ef' }, CUENTAS.OWNER_A)
+
+        expect(tx.pago.updateMany).toHaveBeenCalledWith({
+          where: APROBACION,
+          data: expect.objectContaining({ mozoId: null, usuarioId: CUENTAS.OWNER_A.id }),
+        })
+      })
+
+      it.each([
+        ['ROOT (no es un bypass)', CUENTAS.ROOT],
+        ['el OWNER de otra marca (antes no se chequeaba la pertenencia)', CUENTAS.OWNER_B],
+        ['la COCINA', CUENTAS.COCINA],
+      ])('%s no lo confirma (403) y no se abre la transacción', async (_caso, cuenta) => {
+        await expect(service.confirmarEfectivo({ pagoId: 'pago-ef' }, cuenta)).rejects.toThrow(ForbiddenException)
+
+        expect(mockPrisma.$transaction).not.toHaveBeenCalled()
+      })
+
+      it.each([
+        ['no existe', null],
+        ['no es en efectivo', { id: 'pago-mp', metodo: 'mercadopago', sesion: { mesaId: 'mesa-1', mesa: { restauranteId: MUNDO.REST_1 } } }],
+      ])('un pago que %s: 404', async (_caso, fila) => {
+        mockPrisma.pago.findUnique.mockResolvedValue(fila)
+
+        await expect(service.confirmarEfectivo({ pagoId: 'pago-x' }, CUENTAS.MOZO)).rejects.toThrow(NotFoundException)
+      })
     })
   })
 

@@ -1,23 +1,23 @@
-import {
-  ConflictException,
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common'
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common'
+import { Rol } from '@prisma/client'
 import { randomInt, randomUUID } from 'crypto'
 import * as QRCode from 'qrcode'
 import { PrismaService } from '../prisma/prisma.service'
-import { JwtPayload } from '../auth/auth.service'
+import { ADMINISTRACION } from '../auth/roles-del-personal'
+import { AccesoService } from '../auth/supabase/acceso.service'
+import { UsuarioAutenticado } from '../auth/supabase/usuario-autenticado'
 import { CreateMesaDto } from './dto/create-mesa.dto'
 import { UpdateMesaDto } from './dto/update-mesa.dto'
 
 @Injectable()
 export class MesasService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly acceso: AccesoService,
+  ) {}
 
+  /** El rol en el restaurante (disponible) lo exige la ruta (`@RequiereRolEn`). */
   async create(dto: CreateMesaDto) {
-    const restaurante = await this.assertRestauranteAccess(dto.restauranteId)
-
     const existing = await this.prisma.mesa.findFirst({
       where: { restauranteId: dto.restauranteId, numero: dto.numero, activo: true },
     })
@@ -32,9 +32,8 @@ export class MesasService {
     return { ...mesa, qrImage: await this.generateQr(qrToken, dto.restauranteId) }
   }
 
-  async findAll(restauranteId: string, user: JwtPayload) {
-    await this.assertRestauranteOwnership(restauranteId, user)
-
+  /** El rol en el restaurante lo exige la ruta (`@RequiereRolEn`). */
+  async findAll(restauranteId: string) {
     const mesas = await this.prisma.mesa.findMany({
       where: { restauranteId, activo: true },
       orderBy: { numero: 'asc' },
@@ -48,15 +47,13 @@ export class MesasService {
     )
   }
 
-  async findOne(id: string, user: JwtPayload) {
-    const mesa = await this.getMesaOrThrow(id)
-    await this.assertRestauranteOwnership(mesa.restauranteId, user)
+  async findOne(id: string, usuario: UsuarioAutenticado) {
+    const mesa = await this.getMesaConPermiso(id, usuario)
     return { ...mesa, qrImage: await this.generateQr(mesa.qrToken, mesa.restauranteId) }
   }
 
-  async update(id: string, dto: UpdateMesaDto, user: JwtPayload) {
-    const mesa = await this.getMesaOrThrow(id)
-    await this.assertRestauranteOwnership(mesa.restauranteId, user)
+  async update(id: string, dto: UpdateMesaDto, usuario: UsuarioAutenticado) {
+    const mesa = await this.getMesaConPermiso(id, usuario)
 
     if (dto.numero && dto.numero !== mesa.numero) {
       const conflict = await this.prisma.mesa.findFirst({
@@ -69,24 +66,21 @@ export class MesasService {
     return { ...updated, qrImage: await this.generateQr(updated.qrToken, updated.restauranteId) }
   }
 
-  async remove(id: string, user: JwtPayload) {
-    const mesa = await this.getMesaOrThrow(id)
-    await this.assertRestauranteOwnership(mesa.restauranteId, user)
+  async remove(id: string, usuario: UsuarioAutenticado) {
+    await this.getMesaConPermiso(id, usuario, ['OWNER'])
     return this.prisma.mesa.update({ where: { id }, data: { activo: false } })
   }
 
-  async regenerarQr(id: string, user: JwtPayload) {
-    const mesa = await this.getMesaOrThrow(id)
-    await this.assertRestauranteOwnership(mesa.restauranteId, user)
+  async regenerarQr(id: string, usuario: UsuarioAutenticado) {
+    const mesa = await this.getMesaConPermiso(id, usuario)
 
     const qrToken = randomUUID()
     const updated = await this.prisma.mesa.update({ where: { id }, data: { qrToken } })
     return { ...updated, qrImage: await this.generateQr(qrToken, mesa.restauranteId) }
   }
 
-  async cambiarPin(id: string, pin: string, user: JwtPayload) {
-    const mesa = await this.getMesaOrThrow(id)
-    await this.assertRestauranteOwnership(mesa.restauranteId, user)
+  async cambiarPin(id: string, pin: string, usuario: UsuarioAutenticado) {
+    const mesa = await this.getMesaConPermiso(id, usuario)
 
     const conflict = await this.prisma.mesa.findFirst({
       where: { restauranteId: mesa.restauranteId, pin, id: { not: id } },
@@ -98,42 +92,12 @@ export class MesasService {
 
   // ── Helpers ────────────────────────────────────────────────────────────
 
-  private async getMesaOrThrow(id: string) {
+  /** La mesa activa (404 si no), si el usuario tiene alguno de `roles` en su restaurante (403 si no). */
+  private async getMesaConPermiso(id: string, usuario: UsuarioAutenticado, roles: readonly Rol[] = ADMINISTRACION) {
     const mesa = await this.prisma.mesa.findUnique({ where: { id } })
-    if (!mesa || !mesa.activo) throw new NotFoundException('Mesa no encontrada')
+    if (!mesa?.activo) throw new NotFoundException('Mesa no encontrada')
+    await this.acceso.exigirRol(usuario.id, mesa.restauranteId, roles)
     return mesa
-  }
-
-  private async assertRestauranteOwnership(restauranteId: string, user: JwtPayload) {
-    if (user.tipo === 'mozo') {
-      if (user.restauranteId !== restauranteId) {
-        throw new ForbiddenException('No tenés acceso a este restaurante')
-      }
-      return
-    }
-    if (user.rol === 'ROOT') return
-    if (user.rol === 'OWNER') {
-      const admin = await this.prisma.admin.findUnique({ where: { id: user.sub } })
-      const restaurante = await this.prisma.restaurante.findUnique({ where: { id: restauranteId } })
-      if (!admin || !restaurante || admin.marcaId !== restaurante.marcaId) {
-        throw new ForbiddenException('No tenés acceso a este restaurante')
-      }
-      return
-    }
-    if (user.rol === 'GERENTE') {
-      const asignacion = await this.prisma.adminRestaurante.findUnique({
-        where: { adminId_restauranteId: { adminId: user.sub, restauranteId } },
-      })
-      if (!asignacion) throw new ForbiddenException('No tenés acceso a este restaurante')
-      return
-    }
-    throw new ForbiddenException('No tenés acceso a este restaurante')
-  }
-
-  private async assertRestauranteAccess(restauranteId: string) {
-    const restaurante = await this.prisma.restaurante.findUnique({ where: { id: restauranteId } })
-    if (!restaurante || !restaurante.activo) throw new NotFoundException('Restaurante no encontrado')
-    return restaurante
   }
 
   private async generatePin(restauranteId: string): Promise<string> {

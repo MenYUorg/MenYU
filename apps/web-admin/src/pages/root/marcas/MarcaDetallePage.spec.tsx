@@ -5,7 +5,6 @@ import { ApiError, api } from '../../../services/api'
 import { marcaDetalle, promesaManual, restaurante } from '../../../test/root'
 import { MarcaDetallePage } from './MarcaDetallePage'
 
-vi.mock('@menyu/auth', () => ({ TOKEN_KEY: 'menyu_access_token', REFRESH_KEY: 'menyu_refresh_token', resolveLoginUrl: vi.fn() }))
 vi.mock('../../../services/api', async (importOriginal) => {
   const original = await importOriginal<typeof import('../../../services/api')>()
   const { apiFalsa } = await import('../../../test/root')
@@ -14,6 +13,7 @@ vi.mock('../../../services/api', async (importOriginal) => {
 
 const marcas = vi.mocked(api.root.marcas)
 const restaurantes = vi.mocked(api.root.restaurantes)
+const duenos = vi.mocked(api.root.duenos)
 
 function renderPagina(id = 'marca-1') {
   return render(
@@ -46,13 +46,13 @@ describe('MarcaDetallePage', () => {
     expect(screen.getByRole('link', { name: 'Marcas' })).toHaveAttribute('href', '/root/marcas')
   })
 
-  it('los dueños se ven pero no se pueden crear, cambiar ni eliminar desde acá (todavía)', async () => {
+  it('los dueños se ven con su nombre y su email', async () => {
     renderPagina()
     await screen.findByRole('heading', { name: 'La Parrilla' })
 
+    expect(seccion('Dueños').getByText('Juan')).toBeInTheDocument()
     expect(seccion('Dueños').getByText('juan@laparrilla.com')).toBeInTheDocument()
-    expect(seccion('Dueños').queryByRole('button')).not.toBeInTheDocument()
-    expect(seccion('Dueños').getByText(/migración de autenticación/)).toBeInTheDocument()
+    expect(seccion('Dueños').getByText(/Se invitan por mail/)).toBeInTheDocument()
   })
 
   it('lista los restaurantes con su dirección, o "Dirección no cargada"', async () => {
@@ -82,12 +82,17 @@ describe('MarcaDetallePage', () => {
     expect(screen.getByText(/ROOT no ve ni decide sobre el menú/)).toBeInTheDocument()
   })
 
-  it('una marca sin dueño lo avisa', async () => {
+  it('una marca sin dueño lo avisa y ofrece invitar a uno', async () => {
     marcas.detalle.mockResolvedValue(marcaDetalle({ duenos: [] }))
     renderPagina()
 
     expect(await screen.findByText('Esta marca no tiene dueño.')).toBeInTheDocument()
     expect(seccion('Dueños').getByText('Todavía no hay ningún dueño.')).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: 'Invitar dueño' })).toHaveLength(2) // el del aviso y el de la sección
+
+    await userEvent.click(screen.getAllByRole('button', { name: 'Invitar dueño' })[0])
+
+    expect(screen.getByRole('dialog', { name: 'Invitar dueño' })).toBeInTheDocument()
   })
 
   it('una marca sin restaurantes lo dice', async () => {
@@ -111,6 +116,7 @@ describe('MarcaDetallePage', () => {
       expect(screen.getByRole('button', { name: 'Reactivar la marca' })).toBeInTheDocument()
       expect(screen.queryByRole('button', { name: 'Dar de baja' })).not.toBeInTheDocument()
       expect(screen.queryByRole('button', { name: 'Agregar restaurante' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Invitar dueño' })).not.toBeInTheDocument() // la API rechaza invitar en una marca de baja
       expect(screen.getAllByText('De baja').length).toBeGreaterThan(0)
     })
 
@@ -232,6 +238,117 @@ describe('MarcaDetallePage', () => {
       expect(await screen.findByRole('alert')).toHaveTextContent('No pudimos completar la acción.')
       expect(screen.getByRole('dialog')).toBeInTheDocument()
       expect(marcas.detalle).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  describe('dueños', () => {
+    const JUAN = { id: 'dueno-1', membresiaId: 'membresia-1', email: 'juan@laparrilla.com', nombre: 'Juan' }
+    const ANA = { id: 'dueno-2', membresiaId: 'membresia-2', email: 'ana@laparrilla.com', nombre: 'Ana' }
+
+    it('el menú de cada dueño tiene una sola acción: "Quitar acceso"', async () => {
+      marcas.detalle.mockResolvedValue(marcaDetalle({ duenos: [JUAN, ANA] }))
+      renderPagina()
+      await screen.findByRole('heading', { name: 'La Parrilla' })
+
+      await userEvent.click(screen.getByRole('button', { name: 'Acciones de Ana' }))
+
+      expect(screen.getAllByRole('menuitem').map((o) => o.textContent)).toEqual(['Quitar acceso'])
+    })
+
+    it('invitar abre el diálogo con la marca ya elegida, invita, cuenta que salió el mail y vuelve a pedir la marca', async () => {
+      duenos.invitar.mockResolvedValue({ usuarioId: 'u', membresiaId: 'm', invitacionEnviada: true })
+      marcas.detalle
+        .mockResolvedValueOnce(marcaDetalle())
+        .mockResolvedValueOnce(marcaDetalle({ duenos: [JUAN, ANA] }))
+      renderPagina()
+      await userEvent.click(await screen.findByRole('button', { name: 'Invitar dueño' }))
+
+      const dialogo = within(screen.getByRole('dialog', { name: 'Invitar dueño' }))
+      expect(dialogo.getByText('La Parrilla')).toBeInTheDocument()
+      await userEvent.type(dialogo.getByLabelText('Nombre *'), 'Ana')
+      await userEvent.type(dialogo.getByLabelText('Email *'), 'ana@laparrilla.com')
+      await userEvent.click(dialogo.getByRole('button', { name: 'Enviar invitación' }))
+
+      expect(duenos.invitar).toHaveBeenCalledWith('marca-1', { email: 'ana@laparrilla.com', nombre: 'Ana' })
+      expect(await screen.findByRole('dialog', { name: 'Invitación enviada' })).toBeInTheDocument()
+      expect(await seccion('Dueños').findByText('Ana')).toBeInTheDocument()
+      expect(marcas.detalle).toHaveBeenCalledTimes(2)
+    })
+
+    it('si la persona ya tenía cuenta, lo cuenta', async () => {
+      duenos.invitar.mockResolvedValue({ usuarioId: 'u', membresiaId: 'm', invitacionEnviada: false })
+      renderPagina()
+      await userEvent.click(await screen.findByRole('button', { name: 'Invitar dueño' }))
+      await userEvent.type(screen.getByLabelText('Nombre *'), 'Ana')
+      await userEvent.type(screen.getByLabelText('Email *'), 'ana@laparrilla.com')
+
+      await userEvent.click(screen.getByRole('button', { name: 'Enviar invitación' }))
+
+      expect(await screen.findByRole('dialog', { name: 'Ya tenía una cuenta' })).toBeInTheDocument()
+    })
+
+    it('quitar a uno de dos dueños pide confirmar, quita con el id de la membresía, vuelve a pedir la marca y avisa', async () => {
+      duenos.quitar.mockResolvedValue(undefined)
+      marcas.detalle
+        .mockResolvedValueOnce(marcaDetalle({ duenos: [JUAN, ANA] }))
+        .mockResolvedValueOnce(marcaDetalle({ duenos: [JUAN] }))
+      renderPagina()
+      await screen.findByRole('heading', { name: 'La Parrilla' })
+
+      await userEvent.click(screen.getByRole('button', { name: 'Acciones de Ana' }))
+      await userEvent.click(screen.getByRole('menuitem', { name: 'Quitar acceso' }))
+      const dialogo = within(screen.getByRole('dialog', { name: 'Quitar el acceso de Ana' }))
+      expect(dialogo.getByText(/deja de poder administrar «La Parrilla»/)).toBeInTheDocument()
+      await userEvent.click(dialogo.getByRole('button', { name: 'Quitar acceso' }))
+
+      expect(duenos.quitar).toHaveBeenCalledWith('membresia-2')
+      expect(await screen.findByRole('status')).toHaveTextContent('Acceso quitado')
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+      expect(marcas.detalle).toHaveBeenCalledTimes(2)
+      expect(seccion('Dueños').queryByText('Ana')).not.toBeInTheDocument()
+    })
+
+    it('el único dueño de una marca activa no se quita: explica y ofrece invitar a otro, sin llamar a la API', async () => {
+      renderPagina()
+      await screen.findByRole('heading', { name: 'La Parrilla' })
+
+      await userEvent.click(screen.getByRole('button', { name: 'Acciones de Juan' }))
+      await userEvent.click(screen.getByRole('menuitem', { name: 'Quitar acceso' }))
+
+      expect(screen.getByRole('dialog', { name: 'No se puede quitar todavía' })).toBeInTheDocument()
+      expect(screen.getByText(/único dueño/)).toBeInTheDocument()
+      expect(duenos.quitar).not.toHaveBeenCalled()
+
+      await userEvent.click(screen.getByRole('button', { name: 'Invitar a otro dueño' }))
+
+      expect(screen.getByRole('dialog', { name: 'Invitar dueño' })).toBeInTheDocument()
+      expect(screen.queryByRole('dialog', { name: 'No se puede quitar todavía' })).not.toBeInTheDocument()
+    })
+
+    it('el único dueño de una marca de baja sí se puede quitar', async () => {
+      marcas.detalle.mockResolvedValue(marcaDetalle({ activo: false }))
+      renderPagina()
+      await screen.findByRole('heading', { name: 'La Parrilla' })
+
+      await userEvent.click(screen.getByRole('button', { name: 'Acciones de Juan' }))
+      await userEvent.click(screen.getByRole('menuitem', { name: 'Quitar acceso' }))
+
+      expect(screen.getByRole('dialog', { name: 'Quitar el acceso de Juan' })).toBeInTheDocument()
+    })
+
+    it('si la API rechaza quitarlo (409 por una carrera), el diálogo muestra el texto y no se vuelve a pedir la marca', async () => {
+      duenos.quitar.mockRejectedValue(new ApiError(409, 'Es el único dueño de «La Parrilla», una marca activa'))
+      marcas.detalle.mockResolvedValue(marcaDetalle({ duenos: [JUAN, ANA] }))
+      renderPagina()
+      await screen.findByRole('heading', { name: 'La Parrilla' })
+      await userEvent.click(screen.getByRole('button', { name: 'Acciones de Ana' }))
+      await userEvent.click(screen.getByRole('menuitem', { name: 'Quitar acceso' }))
+
+      await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Quitar acceso' }))
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('Es el único dueño de «La Parrilla»')
+      expect(marcas.detalle).toHaveBeenCalledTimes(1)
+      expect(screen.queryByRole('status')).not.toBeInTheDocument()
     })
   })
 

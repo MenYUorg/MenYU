@@ -8,17 +8,24 @@ pnpm --filter @menyu/api seed
 
 ---
 
-## Usuarios (login email + password)
+## Usuarios
+
+### Clientes (login email + password en web-cliente)
 
 | Rol | Email | Password | App / URL |
 |---|---|---|---|
-| ROOT (administración general) | `root@menyu.com` | `root1234` | web-admin |
-| OWNER (dueño de marca) | `owner@menyu.com` | `owner1234` | web-admin |
-| GERENTE (de Restaurante Seed) | `gerente@menyu.com` | `gerente1234` | web-admin |
-| OWNER de Marca Seed 2 | `owner2@menyu.com` | `owner21234` | web-admin |
-| Mozo | `mozo@menyu.com` | `mozo1234` | web-staff |
 | Cliente 1 (cuenta registrada) | `cliente1@menyu.com` | `cliente1234` | web-cliente (login, no PIN) |
 | Cliente 2 (cuenta registrada) | `cliente2@menyu.com` | `cliente1234` | web-cliente (login, no PIN) |
+
+### Personal: **estas cuentas del seed ya no abren nada**
+
+Desde la Fase 4 de auth (`docs/auth/specs/auth.md`), web-admin y web-staff no tienen login propio: leen la sesión de Supabase que deja web-auth. El seed sigue creando `root@menyu.com` / `root1234`, `owner@menyu.com` / `owner1234`, `gerente@menyu.com` / `gerente1234`, `owner2@menyu.com` / `owner21234` y `mozo@menyu.com` / `mozo1234`, pero son filas de las tablas viejas (`admin`, `mozo`), que la Fase 5 retira: **no sirven para entrar al panel ni a staff**.
+
+Para probar el personal en local hace falta una cuenta del Supabase de staging con su `Usuario` y su `Membresia` en tu base. El paso a paso (los `.env.local` de cada app, el backend con `SUPABASE_URL`, y el SQL para insertar las seis cuentas de prueba con su `supabase_user_id`) está en **"Probar la entrega 4.5 en local"** y **"Probar la entrega 4.6 (web-staff) en local"** de [`docs/auth/usuarios-prueba-staging.md`](../docs/auth/usuarios-prueba-staging.md).
+
+El `Usuario` OWNER que crea el seed (`owner@menyu.com`) tiene un `supabaseUserId` ficticio: para entrar con él hay que reemplazarlo por el id de una cuenta real de staging. El seed no lo pisa.
+
+Si entrás con una de estas cuentas en el login del comensal (`/auth` de web-cliente), desde la entrega 4.7 te avisa que el ingreso del personal es otro y te manda a web-auth, sin guardar ningún token.
 
 ## Mesas (PIN de ingreso del comensal)
 
@@ -47,6 +54,9 @@ El comensal entra por **web-cliente**: en el home (Discovery) elige el restauran
 | web-cliente | `5176` | Vite asigna el puerto libre más alto de este rango si está ocupado |
 | web-staff | `5175` | mozo + cocina |
 | web-admin | `5174` | dueño / gerente |
+| web-auth | `5173` | el login de todo el personal (Fase 3 de auth) |
+
+Para el personal hay que abrir las apps por `*.menyu.local` y no por `localhost`: la sesión vive en una cookie de dominio compartido, que `localhost` no admite. Vite tiene que escuchar en IPv4 (`exec vite --host 127.0.0.1 --strictPort --port <n>`).
 
 Para levantar todo: `pnpm dev` desde la raíz (turbo corre las 4 apps en paralelo). Ver nota técnica en `modulo-pagos-divididos-sesion5.md` si `pnpm dev` se cuelga mostrando solo el banner de `cmd.exe` sin logs — es un problema puntual de cómo Windows/este entorno lanza el script-shell, no del código.
 

@@ -2,18 +2,12 @@ import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { api } from '../../services/api'
-import { paginaDeHistorial } from '../../test/root'
+import { cuenta, paginaDeHistorial } from '../../test/root'
 import { restaurarPantalla, simularPantalla } from '../../test/pantalla'
+import { logoutSimulado, perfilDeRoot, reiniciarSesionDePrueba, sesionDePrueba } from '../../test/authClient'
 import RootRoutes from './RootRoutes'
 
-const cerrarSesion = vi.fn()
-
-vi.mock('@menyu/auth', () => ({
-  TOKEN_KEY: 'menyu_access_token',
-  REFRESH_KEY: 'menyu_refresh_token',
-  resolveLoginUrl: vi.fn(),
-  useAuth: () => ({ user: { rol: 'ROOT', email: 'root@menyu.com' }, logout: cerrarSesion }),
-}))
+vi.mock('@menyu/auth-client', async () => (await import('../../test/authClient')).moduloSimulado())
 vi.mock('../../services/api', async (importOriginal) => {
   const original = await importOriginal<typeof import('../../services/api')>()
   const { apiFalsa } = await import('../../test/root')
@@ -34,10 +28,13 @@ function renderConsola(ruta: string) {
 beforeEach(() => {
   vi.clearAllMocks()
   localStorage.clear()
+  reiniciarSesionDePrueba()
+  sesionDePrueba.perfil = perfilDeRoot()
   simularPantalla(1280)
   vi.mocked(api.root.marcas.listar).mockResolvedValue([])
   vi.mocked(api.root.historial.listar).mockResolvedValue(paginaDeHistorial([]))
   vi.mocked(api.root.cuentas.listar).mockResolvedValue([])
+  vi.mocked(api.root.duenos.listar).mockResolvedValue([])
 })
 
 afterEach(restaurarPantalla)
@@ -59,22 +56,43 @@ describe('RootRoutes', () => {
     expect(screen.getByText('Todo lo que hizo cada ROOT')).toBeInTheDocument()
   })
 
+  it('/root/duenos muestra la lista de dueños con su título', async () => {
+    renderConsola('/root/duenos')
+
+    expect(await screen.findByText('Todavía no hay dueños')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Dueños', level: 2 })).toBeInTheDocument()
+    expect(screen.getByText('Cuentas de dueño (OWNER)')).toBeInTheDocument()
+    expect(api.root.duenos.listar).toHaveBeenCalledTimes(1)
+  })
+
+  it('/root/roots muestra las cuentas ROOT con su título', async () => {
+    vi.mocked(api.root.cuentas.listar).mockResolvedValue([cuenta()])
+    renderConsola('/root/roots')
+
+    expect(await screen.findByRole('region', { name: 'Cuentas ROOT' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Cuentas ROOT', level: 2 })).toBeInTheDocument()
+    expect(screen.getByText('Quién administra MenYU')).toBeInTheDocument()
+  })
+
   it('una dirección que no existe vuelve a Marcas', async () => {
     renderConsola('/root/algo-que-no-existe')
 
     expect(await screen.findByText('Todavía no hay marcas activas')).toBeInTheDocument()
   })
 
-  it('el menú tiene solo lo que ROOT puede usar hoy, en sus dos grupos', async () => {
+  it('el menú tiene lo que ROOT puede usar, en sus dos grupos', async () => {
     renderConsola('/root/marcas')
     await screen.findByText('Todavía no hay marcas activas')
 
     const menu = within(screen.getByTestId('sidebar'))
     expect(menu.getByText('ADMINISTRACIÓN')).toBeInTheDocument()
     expect(menu.getByText('SISTEMA')).toBeInTheDocument()
-    expect(menu.getByRole('link', { name: 'Marcas' })).toHaveAttribute('href', '/root/marcas')
-    expect(menu.getByRole('link', { name: 'Historial' })).toHaveAttribute('href', '/root/historial')
-    expect(menu.getAllByRole('link')).toHaveLength(2)
+    expect(menu.getAllByRole('link').map((enlace) => [enlace.textContent, enlace.getAttribute('href')])).toEqual([
+      ['Marcas', '/root/marcas'],
+      ['Dueños', '/root/duenos'],
+      ['Cuentas ROOT', '/root/roots'],
+      ['Historial', '/root/historial'],
+    ])
   })
 
   it('no trae nada del panel del dueño: ni menú, ni mesas, ni pedidos, ni selector de restaurante', async () => {
@@ -94,7 +112,7 @@ describe('RootRoutes', () => {
     expect(screen.getAllByText('root@menyu.com').length).toBeGreaterThan(0)
     await userEvent.click(screen.getAllByRole('button', { name: /Cerrar sesión/ })[0])
 
-    expect(cerrarSesion).toHaveBeenCalledTimes(1)
+    expect(logoutSimulado).toHaveBeenCalledTimes(1)
   })
 
   it('navegar por el menú cambia de pantalla', async () => {
@@ -104,6 +122,23 @@ describe('RootRoutes', () => {
     await userEvent.click(within(screen.getByTestId('sidebar')).getByRole('link', { name: 'Historial' }))
 
     expect(await screen.findByText('Todavía no hay acciones registradas')).toBeInTheDocument()
+  })
+
+  it('desde el menú se llega a Dueños y a Cuentas ROOT, y el título sigue a la pantalla', async () => {
+    renderConsola('/root/marcas')
+    await screen.findByText('Todavía no hay marcas activas')
+    const menu = within(screen.getByTestId('sidebar'))
+
+    await userEvent.click(menu.getByRole('link', { name: 'Dueños' }))
+    expect(await screen.findByText('Todavía no hay dueños')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Dueños', level: 2 })).toBeInTheDocument()
+
+    await userEvent.click(menu.getByRole('link', { name: 'Cuentas ROOT' }))
+    expect(await screen.findByRole('heading', { name: 'Cuentas ROOT', level: 2 })).toBeInTheDocument()
+
+    await userEvent.click(menu.getByRole('link', { name: 'Marcas' }))
+    expect(await screen.findByRole('heading', { name: 'Marcas', level: 2 })).toBeInTheDocument()
+    expect(screen.getByText('Marcas y restaurantes')).toBeInTheDocument()
   })
 
   it('en celular el menú arranca cerrado', async () => {

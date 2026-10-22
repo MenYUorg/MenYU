@@ -4,8 +4,8 @@
  * Misma forma que `apps/backend/src/root/root.types.ts`: el backend no depende de `@menyu/types` y declara sus propios tipos
  * (como `PerfilUsuario` en `AccesoService`). Si una respuesta cambia, hay que cambiar las dos.
  *
- * A propósito NO incluyen `debeCambiarPassword` (la API todavía lo manda en dueños y cuentas ROOT): con la migración a Supabase
- * Auth (docs/auth/specs/auth.md) ROOT deja de manejar contraseñas y ese campo desaparece. Ninguna pantalla se ata a él.
+ * Desde la entrega 4.4 de auth (docs/auth/specs/auth.md) ROOT no maneja contraseñas: los dueños y las cuentas ROOT son `Usuario`
+ * de Supabase que se invitan por mail.
  */
 
 // ── Marcas y restaurantes ────────────────────────────────────────────────────
@@ -30,10 +30,14 @@ export interface RootRestaurante {
   activo: boolean
 }
 
-/** Un dueño dentro del detalle de una marca. */
+/** Un dueño dentro del detalle de una marca: un `Usuario` con la membresía OWNER de la marca. */
 export interface RootDuenoDeMarca {
+  /** El id del `Usuario`. */
   id: string
+  /** La membresía OWNER: es lo que se quita con `DELETE /root/duenos/:membresiaId`. */
+  membresiaId: string
   email: string
+  nombre: string
 }
 
 /** Donde ROOT trabaja: los datos de la marca, sus restaurantes y sus dueños. */
@@ -66,9 +70,37 @@ export interface RootEditarRestauranteRequest {
   nombre: string
 }
 
+// ── Dueños y cuentas ROOT (invitaciones por mail) ────────────────────────────
+
+/** Un dueño en `GET /root/duenos`: la membresía OWNER de un `Usuario` en una marca. */
+export interface RootDueno {
+  /** Lo que se quita con `DELETE /root/duenos/:membresiaId`. */
+  membresiaId: string
+  usuarioId: string
+  email: string
+  nombre: string
+  /** Una cuenta desactivada no entra a ningún lado, aunque tenga la membresía. */
+  activo: boolean
+  marca: { id: string; nombre: string; activo: boolean } | null
+}
+
+/**
+ * Para invitar a un dueño (`POST /root/marcas/:id/duenos`, responde `CrearInvitacionResponse`) o a una cuenta ROOT
+ * (`POST /root/roots`, responde `RootCuentaInvitada`). La contraseña la elige la persona desde el mail.
+ */
+export interface RootInvitarCuentaRequest {
+  email: string
+  nombre: string
+}
+
 // ── Historial de acciones de ROOT ────────────────────────────────────────────
 
-/** Las acciones que la API registra hoy. El historial es de solo agregar: las filas viejas no se reescriben. */
+/**
+ * Las acciones que registró la API. El historial es de solo agregar: las filas viejas no se reescriben, así que siguen las de
+ * las cuentas con contraseña (crear, cambiar el email, restablecer y eliminar), que la API ya no registra desde la entrega 4.4
+ * de auth. Desde entonces registra las invitaciones: `DUENO_INVITAR`, `DUENO_QUITAR`, `ROOT_INVITAR` y, desde el script,
+ * `ROOT_PROMOVER`.
+ */
 export type RootAccionConocida =
   | 'MARCA_CREAR'
   | 'MARCA_EDITAR'
@@ -82,9 +114,13 @@ export type RootAccionConocida =
   | 'DUENO_CAMBIAR_EMAIL'
   | 'DUENO_RESTABLECER'
   | 'DUENO_ELIMINAR'
+  | 'DUENO_INVITAR'
+  | 'DUENO_QUITAR'
   | 'ROOT_CREAR'
   | 'ROOT_RESTABLECER'
   | 'ROOT_ELIMINAR'
+  | 'ROOT_INVITAR'
+  | 'ROOT_PROMOVER'
 
 /** Una acción del historial. Admite códigos que todavía no existen: la pantalla los muestra tal cual. */
 export type RootAccion = RootAccionConocida | (string & {})
@@ -132,11 +168,22 @@ export interface RootHistorialFiltros {
   cursor?: number
 }
 
-// ── Cuentas ROOT (solo lo que usa el filtro "Quién" del historial) ───────────
+// ── Cuentas ROOT (`GET /root/roots`; el filtro "Quién" del historial usa el email) ─
 
 export interface RootCuentaResumen {
   id: string
   email: string
+  nombre: string
+  /** Una cuenta desactivada no entra a la consola. */
+  activo: boolean
   /** Es la cuenta de quien pregunta. */
   esPropia: boolean
+}
+
+/** La respuesta de `POST /root/roots`. */
+export interface RootCuentaInvitada {
+  usuarioId: string
+  email: string
+  /** False si el email ya tenía una cuenta confirmada en Supabase: no se le manda mail. */
+  invitacionEnviada: boolean
 }

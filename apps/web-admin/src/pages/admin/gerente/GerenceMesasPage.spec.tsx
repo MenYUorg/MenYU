@@ -6,8 +6,6 @@ import { GerenceMesasPage } from './GerenceMesasPage'
 
 let restauranteActual: string | null = 'rest-1'
 
-vi.mock('@menyu/auth', () => ({ TOKEN_KEY: 'menyu_token' }))
-
 vi.mock('../../../store/contextStore', () => ({
   useContextStore: () => ({ selectedRestauranteId: restauranteActual }),
 }))
@@ -91,7 +89,6 @@ beforeEach(() => {
   restauranteActual = 'rest-1'
   vi.clearAllMocks()
   socket.handlers.clear()
-  localStorage.setItem('menyu_token', 'jwt-de-test')
   sesionesApi.mesaActiva.mockImplementation((id: string) =>
     Promise.resolve(id === 'm2' ? sesion('ses-2') : sesion('ses-3', { cantidadClientes: 1, totalAcumulado: 900, llamadoActivo: { id: 'll-1', motivo: 'general' } })),
   )
@@ -166,11 +163,12 @@ describe('GerenceMesasPage', () => {
   })
 
   describe('tiempo real', () => {
-    it('se conecta con el token y entra a la sala; al salir se desconecta', async () => {
+    it('se conecta sin token y entra a la sala; al salir se desconecta', async () => {
       mesasApi.list.mockResolvedValue([])
       const { unmount } = abrir()
 
-      expect(io).toHaveBeenCalledWith(expect.stringMatching(/\/ws$/), { auth: { token: 'jwt-de-test' }, transports: ['websocket'] })
+      // El gateway no autentica la conexión (docs/auth/specs/auth.md, Fuera de alcance).
+      expect(io).toHaveBeenCalledWith(expect.stringMatching(/\/ws$/), { transports: ['websocket'] })
       recibir('connect')
       expect(socket.emit).toHaveBeenCalledWith('cocina:join', { restauranteId: 'rest-1' })
 

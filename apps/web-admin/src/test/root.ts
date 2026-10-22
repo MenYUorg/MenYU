@@ -1,6 +1,7 @@
 import { vi } from 'vitest'
 import type {
   RootCuentaResumen,
+  RootDueno,
   RootHistorialItem,
   RootHistorialPagina,
   RootMarcaDetalle,
@@ -22,7 +23,8 @@ export const apiFalsa = {
     },
     restaurantes: { editar: vi.fn(), baja: vi.fn(), reactivar: vi.fn() },
     historial: { listar: vi.fn() },
-    cuentas: { listar: vi.fn() },
+    duenos: { listar: vi.fn(), invitar: vi.fn(), quitar: vi.fn() },
+    cuentas: { listar: vi.fn(), invitar: vi.fn() },
   },
 }
 
@@ -49,7 +51,7 @@ export function marcaDetalle(parcial: Partial<RootMarcaDetalle> = {}): RootMarca
     slug: 'la-parrilla',
     activo: true,
     restaurantes: [restaurante(), restaurante({ id: 'rest-2', nombre: 'La Parrilla Norte', direccion: null })],
-    duenos: [{ id: 'dueno-1', email: 'juan@laparrilla.com' }],
+    duenos: [{ id: 'dueno-1', membresiaId: 'membresia-1', email: 'juan@laparrilla.com', nombre: 'Juan' }],
     ...parcial,
   }
 }
@@ -76,7 +78,20 @@ export function paginaDeHistorial(items: RootHistorialItem[], siguiente: number 
 }
 
 export function cuenta(parcial: Partial<RootCuentaResumen> = {}): RootCuentaResumen {
-  return { id: 'root-1', email: 'root@menyu.com', esPropia: true, ...parcial }
+  return { id: 'root-1', email: 'root@menyu.com', nombre: 'Root', activo: true, esPropia: true, ...parcial }
+}
+
+/** Un dueño de `GET /root/duenos`: por defecto, el de «La Parrilla» (la misma persona que trae `marcaDetalle`). */
+export function dueno(parcial: Partial<RootDueno> = {}): RootDueno {
+  return {
+    membresiaId: 'membresia-1',
+    usuarioId: 'dueno-1',
+    email: 'juan@laparrilla.com',
+    nombre: 'Juan',
+    activo: true,
+    marca: { id: 'marca-1', nombre: 'La Parrilla', activo: true },
+    ...parcial,
+  }
 }
 
 /** Una promesa que se resuelve o rechaza cuando el test lo decide (para probar respuestas que llegan tarde). */

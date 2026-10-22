@@ -19,6 +19,11 @@ describe('etiquetaDeAccion', () => {
     ['RESTAURANTE_REACTIVAR', 'Reactivó el restaurante'],
     ['DUENO_ELIMINAR', 'Eliminó la cuenta de dueño'],
     ['ROOT_CREAR', 'Creó la cuenta ROOT'],
+    // Las de las invitaciones (entrega 4.4 de auth).
+    ['DUENO_INVITAR', 'Invitó al dueño'],
+    ['DUENO_QUITAR', 'Quitó al dueño'],
+    ['ROOT_INVITAR', 'Invitó a la cuenta ROOT'],
+    ['ROOT_PROMOVER', 'Hizo ROOT a la cuenta'],
   ])('traduce %s', (codigo, texto) => {
     expect(etiquetaDeAccion(codigo)).toBe(texto)
   })
@@ -48,8 +53,8 @@ describe('etiquetaDeTipo y opciones del filtro', () => {
 })
 
 describe('textos de la baja', () => {
-  it('hoy la baja no corta el inicio de sesión (cuando eso cambie, se activa el interruptor y este test avisa)', () => {
-    expect(BAJA_CORTA_EL_LOGIN).toBe(false)
+  it('la baja corta el acceso de la gente de la marca o el restaurante (AccesoService, desde la Fase 4 de auth)', () => {
+    expect(BAJA_CORTA_EL_LOGIN).toBe(true)
   })
 
   it('con el interruptor apagado dice que lo público se corta y que el login todavía no', () => {
@@ -87,12 +92,26 @@ describe('textos de la baja', () => {
     expect(efectosDeBajaDeMarca(0, corta)[0][0]).toMatch(/^0 restaurantes dejan/)
   })
 
-  it.each([false, true])('siempre aclara que no se borra ningún dato y que las mesas abiertas se terminan (interruptor %s)', (corta) => {
+  it.each([false, true])('siempre aclara que no se borra ningún dato y qué pasa con las mesas abiertas (interruptor %s)', (corta) => {
+    const mesasAbiertas = corta
+      ? 'Las mesas que ya están abiertas solo pueden pagar con Mercado Pago desde el celular'
+      : 'Las mesas que ya están abiertas se pueden terminar'
     expect(textoDe(efectosDeBajaDeMarca(2, corta))).toContain('No se borra ningún dato')
-    expect(textoDe(efectosDeBajaDeMarca(2, corta))).toContain('Las mesas que ya están abiertas se pueden terminar')
+    expect(textoDe(efectosDeBajaDeMarca(2, corta))).toContain(mesasAbiertas)
     expect(textoDe(efectosDeBajaDeRestaurante(corta))).toContain('No se borra ningún dato')
-    expect(textoDe(efectosDeBajaDeRestaurante(corta))).toContain('Las mesas que ya están abiertas se pueden terminar')
+    expect(textoDe(efectosDeBajaDeRestaurante(corta))).toContain(mesasAbiertas)
     expect(textoDe(avisoDeMarcaDeBaja(corta))).toContain('No se borró ningún dato')
+  })
+
+  // La decisión de la entrega 4.5: con el acceso cortado, el personal no puede cobrar ni cerrar una mesa abierta.
+  it('con el acceso cortado, las mesas abiertas solo pagan con Mercado Pago y no prometen que el personal las termine', () => {
+    for (const texto of [textoDe(efectosDeBajaDeMarca(2, true)), textoDe(efectosDeBajaDeRestaurante(true))]) {
+      expect(texto).toContain('solo pueden pagar con Mercado Pago desde el celular')
+      expect(texto).toContain('el personal tampoco puede cobrarlas ni cerrarlas')
+      expect(texto).not.toContain('se sigue pidiendo la cuenta y cobrando')
+    }
+    expect(textoDe(avisoDeMarcaDeBaja(true))).toContain('solo pueden pagar con Mercado Pago desde el celular')
+    expect(textoDe(avisoDeMarcaDeBaja(false))).toContain('las que ya están abiertas se terminan')
   })
 
   it.each([false, true])('cada viñeta tiene un encabezado distinto (se usa como clave de la lista) (interruptor %s)', (corta) => {

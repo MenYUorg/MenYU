@@ -1,15 +1,15 @@
-import {
-  ConflictException,
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common'
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
-import { JwtPayload } from '../auth/auth.service'
+import { ADMINISTRACION } from '../auth/roles-del-personal'
+import { AccesoService } from '../auth/supabase/acceso.service'
+import { UsuarioAutenticado } from '../auth/supabase/usuario-autenticado'
 
 @Injectable()
 export class ClasificacionesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly acceso: AccesoService,
+  ) {}
 
   async findAll(restauranteId: string) {
     const restaurante = await this.prisma.restaurante.findUnique({
@@ -23,7 +23,11 @@ export class ClasificacionesService {
     })
   }
 
-  async create(nombre: string, user: JwtPayload) {
+  // El catálogo es global: lo edita el OWNER o el GERENTE de cualquier restaurante (deuda de la entrega 4.3).
+
+  async create(nombre: string, usuario: UsuarioAutenticado) {
+    await this.acceso.exigirAlgunRol(usuario.id, ADMINISTRACION)
+
     const normalizado = nombre.trim()
     const existing = await this.prisma.clasificacionDieta.findFirst({
       where: { nombre: { equals: normalizado, mode: 'insensitive' } },
@@ -33,7 +37,8 @@ export class ClasificacionesService {
     return this.prisma.clasificacionDieta.create({ data: { nombre: normalizado } })
   }
 
-  async update(id: string, nombre: string, user: JwtPayload) {
+  async update(id: string, nombre: string, usuario: UsuarioAutenticado) {
+    await this.acceso.exigirAlgunRol(usuario.id, ADMINISTRACION)
     await this.getOrThrow(id)
 
     const normalizado = nombre.trim()
@@ -45,7 +50,8 @@ export class ClasificacionesService {
     return this.prisma.clasificacionDieta.update({ where: { id }, data: { nombre: normalizado } })
   }
 
-  async remove(id: string, user: JwtPayload) {
+  async remove(id: string, usuario: UsuarioAutenticado) {
+    await this.acceso.exigirAlgunRol(usuario.id, ADMINISTRACION)
     await this.getOrThrow(id)
 
     const enUso = await this.prisma.itemClasificacion.count({ where: { clasificacionId: id } })
@@ -60,11 +66,11 @@ export class ClasificacionesService {
 
   // ── Asignación a ítems ─────────────────────────────────────────────────
 
-  async addToItem(itemId: string, clasificacionId: string, user: JwtPayload) {
+  async addToItem(itemId: string, clasificacionId: string, usuario: UsuarioAutenticado) {
     const item = await this.prisma.itemMenu.findUnique({ where: { id: itemId } })
     if (!item) throw new NotFoundException('Ítem no encontrado')
 
-    await this.assertRestauranteOwnership(item.restauranteId, user)
+    await this.acceso.exigirRol(usuario.id, item.restauranteId, ADMINISTRACION)
 
     await this.getOrThrow(clasificacionId)
 
@@ -81,11 +87,11 @@ export class ClasificacionesService {
     })
   }
 
-  async removeFromItem(itemId: string, clasificacionId: string, user: JwtPayload) {
+  async removeFromItem(itemId: string, clasificacionId: string, usuario: UsuarioAutenticado) {
     const item = await this.prisma.itemMenu.findUnique({ where: { id: itemId } })
     if (!item) throw new NotFoundException('Ítem no encontrado')
 
-    await this.assertRestauranteOwnership(item.restauranteId, user)
+    await this.acceso.exigirRol(usuario.id, item.restauranteId, ADMINISTRACION)
 
     const asignacion = await this.prisma.itemClasificacion.findUnique({
       where: { itemId_clasificacionId: { itemId, clasificacionId } },
@@ -103,25 +109,5 @@ export class ClasificacionesService {
     const c = await this.prisma.clasificacionDieta.findUnique({ where: { id } })
     if (!c) throw new NotFoundException('Clasificación no encontrada')
     return c
-  }
-
-  private async assertRestauranteOwnership(restauranteId: string, user: JwtPayload) {
-    if (user.rol === 'ROOT') return
-    if (user.rol === 'OWNER') {
-      const admin = await this.prisma.admin.findUnique({ where: { id: user.sub } })
-      const restaurante = await this.prisma.restaurante.findUnique({ where: { id: restauranteId } })
-      if (!admin || !restaurante || admin.marcaId !== restaurante.marcaId) {
-        throw new ForbiddenException('No tenés acceso a este restaurante')
-      }
-      return
-    }
-    if (user.rol === 'GERENTE') {
-      const asignacion = await this.prisma.adminRestaurante.findUnique({
-        where: { adminId_restauranteId: { adminId: user.sub, restauranteId } },
-      })
-      if (!asignacion) throw new ForbiddenException('No tenés acceso a este restaurante')
-      return
-    }
-    throw new ForbiddenException('No tenés acceso a este restaurante')
   }
 }

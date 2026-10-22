@@ -3,16 +3,18 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import type { Mesa } from '@menyu/types'
 import { io } from 'socket.io-client'
 import { api, ApiError, type SesionActivaRico, type WaiterCallRico } from '../../services/api'
+import { perfilDePrueba, membresiaDeRestaurante, reiniciarSesionDePrueba } from '../../test/authClient'
+import { montarContexto, reiniciarContexto } from '../../test/contexto'
 import { MesasPage } from './MesasPage'
 
-let restauranteActual: string | null = 'rest-1'
+const ANA = perfilDePrueba({ nombre: 'Ana Pérez', membresias: [membresiaDeRestaurante('MOZO', 'rest-1')] })
 
-vi.mock('@menyu/auth', () => ({ useAuth: () => ({ user: { nombre: 'Ana Pérez' } }) }))
+vi.mock('@menyu/auth-client', async () => (await import('../../test/authClient')).moduloSimulado())
 vi.mock('@menyu/ui', () => ({ LogoMenYuOscuro: () => <span>MenYU</span> }))
-vi.mock('../../store/mozoStore', () => ({ useMozoStore: () => ({ restauranteId: restauranteActual }) }))
+// `ApiError` real: los casos de error de red, 500 y 503 (SCRUM-16) distinguen por su `status`. El restaurante sale del
+// contexto desde la 4.6, así que ya no hay `mozoStore` que simular, ni `getToken`: el token lo pone el cliente de la API.
 vi.mock('../../services/api', async (importOriginal) => ({
   ApiError: (await importOriginal<typeof import('../../services/api')>()).ApiError,
-  getToken: () => 'jwt-de-test',
   api: {
     mesas: { getAll: vi.fn() },
     sesiones: { getActiva: vi.fn(), cerrar: vi.fn() },
@@ -86,7 +88,9 @@ const tile = (numero: string) => screen.getByText(numero, { selector: 'span' }).
 const recibir = (evento: string, dato?: unknown) => act(() => { socket.handlers.get(evento)!(dato) })
 
 beforeEach(() => {
-  restauranteActual = 'rest-1'
+  reiniciarSesionDePrueba()
+  reiniciarContexto()
+  montarContexto(ANA)
   vi.clearAllMocks()
   socket.handlers.clear()
   llamadosApi.getAll.mockResolvedValue([])
@@ -100,7 +104,7 @@ afterEach(() => {
 
 describe('MesasPage (mozo)', () => {
   it('sin restaurante no consulta ni se conecta; el encabezado vuelve al panel', () => {
-    restauranteActual = null
+    reiniciarContexto()
 
     abrir()
 
@@ -179,11 +183,11 @@ describe('MesasPage (mozo)', () => {
   })
 
   describe('tiempo real', () => {
-    it('se conecta con el token, entra como mozo, recarga los llamados y se desconecta al salir', async () => {
+    it('se conecta sin token, entra como mozo, recarga los llamados y se desconecta al salir', async () => {
       mesasApi.getAll.mockResolvedValue([])
       const { unmount } = abrir()
 
-      expect(io).toHaveBeenCalledWith(expect.stringMatching(/\/ws$/), { auth: { token: 'jwt-de-test' }, transports: ['websocket'] })
+      expect(io).toHaveBeenCalledWith(expect.stringMatching(/\/ws$/), { transports: ['websocket'] })
       recibir('connect')
       expect(socket.emit).toHaveBeenCalledWith('mozo:join', { restauranteId: 'rest-1' })
       recibir('waiter:called')

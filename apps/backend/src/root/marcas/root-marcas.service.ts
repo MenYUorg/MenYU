@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common'
 import { Prisma } from '@prisma/client'
-import { JwtPayload } from '../../auth/auth.service'
+import { UsuarioAutenticado } from '../../auth/supabase/usuario-autenticado'
 import { PrismaService } from '../../prisma/prisma.service'
 import { HistorialRootService } from '../historial/historial-root.service'
 import { CambioHistorial } from '../historial/registrar-historial'
@@ -16,17 +16,21 @@ const SELECT_RESUMEN = {
   slug: true,
   activo: true,
   restaurantes: { select: { activo: true } },
-  admins: { where: { rol: 'OWNER' }, select: { id: true } },
+  membresias: { where: { rol: 'OWNER' }, select: { id: true } },
 } satisfies Prisma.MarcaSelect
 
-// Y en el detalle: sus restaurantes (con la dirección de solo lectura) y sus dueños.
+// Y en el detalle: sus restaurantes (con la dirección de solo lectura) y sus dueños (las membresías OWNER de la marca).
 const SELECT_DETALLE = {
   id: true,
   nombre: true,
   slug: true,
   activo: true,
   restaurantes: { select: { id: true, nombre: true, direccion: true, activo: true }, orderBy: [{ nombre: 'asc' as const }, { id: 'asc' as const }] },
-  admins: { where: { rol: 'OWNER' }, select: { id: true, email: true, debeCambiarPassword: true }, orderBy: { email: 'asc' as const } },
+  membresias: {
+    where: { rol: 'OWNER' },
+    select: { id: true, usuario: { select: { id: true, email: true, nombre: true } } },
+    orderBy: { usuario: { email: 'asc' as const } },
+  },
 } satisfies Prisma.MarcaSelect
 
 type FilaResumen = Prisma.MarcaGetPayload<{ select: typeof SELECT_RESUMEN }>
@@ -39,7 +43,7 @@ function aResumen(fila: FilaResumen): RootMarcaResumen {
     slug: fila.slug,
     activo: fila.activo,
     restaurantes: { activos: fila.restaurantes.filter((r) => r.activo).length, total: fila.restaurantes.length },
-    duenos: fila.admins.length,
+    duenos: fila.membresias.length,
   }
 }
 
@@ -50,7 +54,7 @@ function aDetalle(fila: FilaDetalle): RootMarcaDetalle {
     slug: fila.slug,
     activo: fila.activo,
     restaurantes: fila.restaurantes.map((r) => ({ id: r.id, nombre: r.nombre, direccion: r.direccion, activo: r.activo })),
-    duenos: fila.admins.map((a) => ({ id: a.id, email: a.email, debeCambiarPassword: a.debeCambiarPassword })),
+    duenos: fila.membresias.map((m) => ({ id: m.usuario.id, membresiaId: m.id, email: m.usuario.email, nombre: m.usuario.nombre })),
   }
 }
 
@@ -85,9 +89,9 @@ export class RootMarcasService {
     return leerDetalle(this.prisma, id)
   }
 
-  async crear(dto: CrearMarcaRootDto, user: JwtPayload): Promise<RootMarcaDetalle> {
+  async crear(dto: CrearMarcaRootDto, usuario: UsuarioAutenticado): Promise<RootMarcaDetalle> {
     return this.prisma.$transaction(async (tx) => {
-      const actor = await this.historial.actorDe(tx, user)
+      const actor = await this.historial.actorDe(tx, usuario)
       await this.exigirSlugLibre(tx, dto.slug)
 
       const creada = await this.conConflictoDeSlug(() =>
@@ -107,12 +111,12 @@ export class RootMarcasService {
     })
   }
 
-  async editar(id: string, dto: EditarMarcaRootDto, user: JwtPayload): Promise<RootMarcaDetalle> {
+  async editar(id: string, dto: EditarMarcaRootDto, usuario: UsuarioAutenticado): Promise<RootMarcaDetalle> {
     if (dto.nombre === undefined && dto.slug === undefined) {
       throw new BadRequestException('No hay nada para cambiar: mandá el nombre, el identificador (slug) o los dos')
     }
     return this.prisma.$transaction(async (tx) => {
-      const actor = await this.historial.actorDe(tx, user)
+      const actor = await this.historial.actorDe(tx, usuario)
       const marca = await tx.marca.findUnique({ where: { id }, select: { id: true, nombre: true, slug: true } })
       if (!marca) throw new NotFoundException('Marca no encontrada')
 
@@ -145,9 +149,9 @@ export class RootMarcasService {
   }
 
   /** Da de baja (`activo = false`) o reactiva una marca. Idempotente: si ya está en ese estado no cambia nada ni se registra. */
-  async cambiarEstado(id: string, activo: boolean, user: JwtPayload): Promise<RootMarcaDetalle> {
+  async cambiarEstado(id: string, activo: boolean, usuario: UsuarioAutenticado): Promise<RootMarcaDetalle> {
     return this.prisma.$transaction(async (tx) => {
-      const actor = await this.historial.actorDe(tx, user)
+      const actor = await this.historial.actorDe(tx, usuario)
       const marca = await tx.marca.findUnique({ where: { id }, select: { id: true, nombre: true, activo: true } })
       if (!marca) throw new NotFoundException('Marca no encontrada')
       if (marca.activo === activo) return leerDetalle(tx, id)

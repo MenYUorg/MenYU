@@ -1,14 +1,15 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { api, type SesionHistorial } from '../../services/api'
+import { perfilDePrueba, membresiaDeRestaurante, reiniciarSesionDePrueba } from '../../test/authClient'
+import { montarContexto, reiniciarContexto } from '../../test/contexto'
 import { HistorialPage } from './HistorialPage'
 
-let usuario: { nombre?: string; email?: string } | null = { nombre: 'Ana Pérez', email: 'ana@menyu.com' }
-let restauranteActual: string | null = 'rest-1'
+const mozo = (nombre: string, email = 'ana@menyu.com') =>
+  perfilDePrueba({ nombre, email, membresias: [membresiaDeRestaurante('MOZO', 'rest-1')] })
 
-vi.mock('@menyu/auth', () => ({ useAuth: () => ({ user: usuario }) }))
+vi.mock('@menyu/auth-client', async () => (await import('../../test/authClient')).moduloSimulado())
 vi.mock('@menyu/ui', () => ({ LogoMenYuOscuro: () => <span>MenYU</span> }))
-vi.mock('../../store/mozoStore', () => ({ useMozoStore: () => ({ restauranteId: restauranteActual }) }))
 vi.mock('../../services/api', () => ({ api: { sesiones: { historial: vi.fn() } } }))
 
 const historial = vi.mocked(api.sesiones.historial)
@@ -94,14 +95,15 @@ const tarjeta = (numero: string) => screen.getByText(numero, { selector: 'span, 
 const kpi = (titulo: string) => screen.getByText(titulo).nextElementSibling?.textContent
 
 beforeEach(() => {
-  usuario = { nombre: 'Ana Pérez', email: 'ana@menyu.com' }
-  restauranteActual = 'rest-1'
+  reiniciarSesionDePrueba()
+  reiniciarContexto()
+  montarContexto(mozo('Ana Pérez'))
   vi.clearAllMocks()
 })
 
 describe('HistorialPage (mozo)', () => {
   it('sin restaurante no consulta; el encabezado muestra al mozo y vuelve al panel', () => {
-    restauranteActual = null
+    reiniciarContexto()
 
     abrir()
 
@@ -113,18 +115,14 @@ describe('HistorialPage (mozo)', () => {
     expect(screen.getByText('panel del mozo')).toBeInTheDocument()
   })
 
-  it('sin nombre usa el email, y sin usuario dice "Mozo"', () => {
-    restauranteActual = null
-    usuario = { email: 'juan@menyu.com' }
-    const { unmount } = abrir()
-    expect(screen.getByText('juan@menyu.com')).toBeInTheDocument()
-    unmount()
+  it('sin nombre usa el email, y el rol sale de la membresía', () => {
+    reiniciarContexto()
+    montarContexto(mozo('', 'juan@menyu.com'))
 
-    usuario = null
     abrir()
-    // Nombre y rol dicen "Mozo".
-    expect(screen.getAllByText('Mozo')).toHaveLength(2)
-    expect(screen.getByText('?')).toBeInTheDocument()
+
+    expect(screen.getByText('juan@menyu.com')).toBeInTheDocument()
+    expect(screen.getByText('Mozo')).toBeInTheDocument()
   })
 
   it('lista las sesiones de hoy con duración, pedidos, total, marcas y los indicadores', async () => {

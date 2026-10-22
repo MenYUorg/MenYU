@@ -2,15 +2,12 @@ import { fireEvent, render, screen, within } from '@testing-library/react'
 import { api, type SesionHistorial } from '../../../services/api'
 import { HistorialSesionesPage } from './HistorialSesionesPage'
 
-let rolActual = 'GERENTE'
+let rolActual: 'OWNER' | 'GERENTE' | null = 'GERENTE'
 let restauranteActual: string | null = 'rest-1'
-
-vi.mock('@menyu/auth', () => ({
-  useAuth: () => ({ user: { rol: rolActual, email: 'gerente@menyu.com' } }),
-}))
 
 vi.mock('../../../store/contextStore', () => ({
   useContextStore: () => ({ selectedRestauranteId: restauranteActual }),
+  useRolActual: () => rolActual,
 }))
 
 vi.mock('../../../services/api', () => ({

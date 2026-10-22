@@ -1,8 +1,6 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common'
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger'
-import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard'
-import { Roles } from '../../common/decorators/roles.decorator'
-import { RolesGuard } from '../../common/guards/roles.guard'
+import { Controller, Get, Query } from '@nestjs/common'
+import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger'
+import { RequiereRoot } from '../../auth/decorators/requiere-root.decorator'
 import { ListarHistorialDto } from './dto/listar-historial.dto'
 import { HistorialRootService } from './historial-root.service'
 
@@ -11,10 +9,8 @@ import { HistorialRootService } from './historial-root.service'
  * enrutador y falla si aparece), y la base lo impide con disparadores. Lo ven todos los ROOT; nadie más.
  */
 @ApiTags('root')
-@ApiBearerAuth()
 @Controller('root/historial')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('ROOT')
+@RequiereRoot()
 export class RootHistorialController {
   constructor(private readonly historial: HistorialRootService) {}
 

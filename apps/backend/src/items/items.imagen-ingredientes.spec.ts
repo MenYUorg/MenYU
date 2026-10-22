@@ -1,29 +1,28 @@
 import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common'
 import { Prisma } from '@prisma/client'
-import { JwtPayload } from '../auth/auth.service'
+import { UsuarioAutenticado } from '../auth/supabase/usuario-autenticado'
 import { MenyuGateway } from '../gateway/menyu.gateway'
 import { PrismaService } from '../prisma/prisma.service'
 import { StorageService } from '../storage/storage.service'
+import { accesoDeTest, CUENTAS, MUNDO } from '../test/acceso-de-test'
 import { ItemsService } from './items.service'
 
-// Imagen del ítem, borrado e ingredientes asociados, con el chequeo de pertenencia de OWNER y GERENTE.
-// Los descuentos están en items.service.spec.
+// Imagen del ítem, borrado e ingredientes asociados, y los permisos de todas las rutas de un ítem (con las
+// membresías de CUENTAS). Los descuentos están en items.service.spec.
 const prisma = {
   itemMenu: { findUnique: jest.fn(), update: jest.fn(), delete: jest.fn() },
   itemIngrediente: { findUnique: jest.fn(), findFirst: jest.fn(), create: jest.fn(), update: jest.fn(), delete: jest.fn() },
   ingrediente: { findUnique: jest.fn() },
   pedidoItem: { count: jest.fn() },
   pedidoItemMod: { count: jest.fn() },
-  admin: { findUnique: jest.fn() },
-  restaurante: { findUnique: jest.fn() },
-  adminRestaurante: { findUnique: jest.fn() },
 }
 const storage = { uploadFile: jest.fn(), deleteFile: jest.fn() }
 const gateway = { emitMenuUpdated: jest.fn() }
 
-const OWNER = { sub: 'owner-1', tipo: 'admin', rol: 'OWNER' } as JwtPayload
-const GERENTE = { sub: 'ger-1', tipo: 'admin', rol: 'GERENTE' } as JwtPayload
-const ITEM = { id: 'item-1', restauranteId: 'rest-1', imagenUrl: null as string | null, precioBase: new Prisma.Decimal('1000'), precioDescuento: null, recomendadoEn: null }
+const OWNER = CUENTAS.OWNER_A
+const REST = MUNDO.REST_1
+const ITEM = { id: 'item-1', restauranteId: REST, imagenUrl: null as string | null, precioBase: new Prisma.Decimal('1000'), precioDescuento: null, recomendadoEn: null }
+const ARCHIVO = { buffer: Buffer.from('png'), mimetype: 'image/png' } as Express.Multer.File
 
 describe('ItemsService: imagen, borrado e ingredientes', () => {
   let service: ItemsService
@@ -32,33 +31,63 @@ describe('ItemsService: imagen, borrado e ingredientes', () => {
     jest.clearAllMocks()
     prisma.itemMenu.findUnique.mockResolvedValue(ITEM)
     prisma.itemMenu.update.mockImplementation(({ data }: { data: object }) => Promise.resolve({ ...ITEM, ...data }))
-    // OWNER de la marca del restaurante
-    prisma.admin.findUnique.mockResolvedValue({ id: 'owner-1', marcaId: 'marca-1' })
-    prisma.restaurante.findUnique.mockResolvedValue({ id: 'rest-1', marcaId: 'marca-1' })
-    service = new ItemsService(prisma as unknown as PrismaService, storage as unknown as StorageService, gateway as unknown as MenyuGateway)
+    prisma.itemIngrediente.findUnique.mockResolvedValue({ id: 'ii-1', itemId: 'item-1', item: ITEM })
+    prisma.pedidoItem.count.mockResolvedValue(0)
+    prisma.pedidoItemMod.count.mockResolvedValue(0)
+    service = new ItemsService(
+      prisma as unknown as PrismaService,
+      storage as unknown as StorageService,
+      gateway as unknown as MenyuGateway,
+      accesoDeTest(),
+    )
   })
 
-  describe('pertenencia al restaurante', () => {
-    it('un OWNER de otra marca recibe 403 y no se toca el ítem', async () => {
-      prisma.restaurante.findUnique.mockResolvedValue({ id: 'rest-1', marcaId: 'marca-2' })
+  describe('permisos de las rutas de un ítem (el rol en el restaurante del ítem)', () => {
+    const RUTAS: Array<[string, (u: UsuarioAutenticado) => Promise<unknown>]> = [
+      ['findOne', (u) => service.findOne('item-1', u)],
+      ['update', (u) => service.update('item-1', { disponible: false }, u)],
+      ['uploadImagen', (u) => service.uploadImagen('item-1', ARCHIVO, u)],
+      ['removeImagen', (u) => service.removeImagen('item-1', u)],
+      ['addIngrediente', (u) => service.addIngrediente('item-1', { ingredienteId: 'ing-1' } as never, u)],
+      ['updateIngrediente', (u) => service.updateIngrediente('item-1', 'ii-1', {}, u)],
+      ['removeIngrediente', (u) => service.removeIngrediente('item-1', 'ii-1', u)],
+    ]
 
-      await expect(service.remove('item-1', OWNER)).rejects.toThrow(new ForbiddenException('No tenés acceso a este restaurante'))
+    it.each(RUTAS)('%s: el OWNER de la marca y el GERENTE del restaurante pasan', async (_ruta, llamar) => {
+      prisma.itemMenu.findUnique.mockResolvedValue({ ...ITEM, imagenUrl: 'https://storage.test/x' })
+      prisma.ingrediente.findUnique.mockResolvedValue({ id: 'ing-1', restauranteId: REST })
+      prisma.itemIngrediente.findFirst.mockResolvedValue(null)
+
+      await llamar(OWNER)
+      await llamar(CUENTAS.GERENTE)
+    })
+
+    it.each(RUTAS)('%s: ROOT, el OWNER de otra marca, el MOZO y la COCINA reciben 403 sin tocar nada', async (_ruta, llamar) => {
+      for (const cuenta of [CUENTAS.ROOT, CUENTAS.OWNER_B, CUENTAS.MOZO, CUENTAS.COCINA, CUENTAS.SIN_MEMBRESIAS]) {
+        await expect(llamar(cuenta)).rejects.toThrow(ForbiddenException)
+      }
+      expect(prisma.itemMenu.update).not.toHaveBeenCalled()
+      expect(prisma.itemIngrediente.create).not.toHaveBeenCalled()
+      expect(prisma.itemIngrediente.update).not.toHaveBeenCalled()
+      expect(prisma.itemIngrediente.delete).not.toHaveBeenCalled()
+      expect(storage.uploadFile).not.toHaveBeenCalled()
+      expect(storage.deleteFile).not.toHaveBeenCalled()
+    })
+
+    it('el GERENTE de otro restaurante de la marca recibe 403', async () => {
+      prisma.itemMenu.findUnique.mockResolvedValue({ ...ITEM, restauranteId: MUNDO.REST_2 })
+
+      await expect(service.update('item-1', { disponible: false }, CUENTAS.GERENTE)).rejects.toThrow(ForbiddenException)
+      await expect(service.update('item-1', { disponible: false }, OWNER)).resolves.toBeDefined()
+    })
+
+    it('borrar un ítem es solo del OWNER: el GERENTE y ROOT reciben 403 y no se borra', async () => {
+      await expect(service.remove('item-1', CUENTAS.GERENTE)).rejects.toThrow(ForbiddenException)
+      await expect(service.remove('item-1', CUENTAS.ROOT)).rejects.toThrow(ForbiddenException)
       expect(prisma.itemMenu.delete).not.toHaveBeenCalled()
-    })
 
-    it('un GERENTE asignado puede y uno sin asignación recibe 403', async () => {
-      prisma.pedidoItem.count.mockResolvedValue(0)
-      prisma.adminRestaurante.findUnique.mockResolvedValueOnce({ adminId: 'ger-1', restauranteId: 'rest-1' }).mockResolvedValueOnce(null)
-
-      await expect(service.remove('item-1', GERENTE)).resolves.toBeUndefined()
-      await expect(service.remove('item-1', GERENTE)).rejects.toThrow(ForbiddenException)
-      expect(prisma.adminRestaurante.findUnique).toHaveBeenCalledWith({
-        where: { adminId_restauranteId: { adminId: 'ger-1', restauranteId: 'rest-1' } },
-      })
-    })
-
-    it('un usuario sin rol de admin recibe 403', async () => {
-      await expect(service.remove('item-1', { sub: 'm', tipo: 'mozo' } as JwtPayload)).rejects.toThrow(ForbiddenException)
+      await service.remove('item-1', OWNER)
+      expect(prisma.itemMenu.delete).toHaveBeenCalledWith({ where: { id: 'item-1' } })
     })
 
     it('si el ítem no existe responde 404', async () => {
@@ -69,18 +98,16 @@ describe('ItemsService: imagen, borrado e ingredientes', () => {
   })
 
   describe('imagen', () => {
-    const archivo = { buffer: Buffer.from('png'), mimetype: 'image/png' } as Express.Multer.File
-
     it('sube la imagen a restaurante/ítem y guarda la URL', async () => {
-      storage.uploadFile.mockResolvedValue('https://storage.test/menu-items/rest-1/item-1')
+      storage.uploadFile.mockResolvedValue('https://storage.test/menu-items/x')
 
-      const item = await service.uploadImagen('item-1', archivo, OWNER)
+      const item = await service.uploadImagen('item-1', ARCHIVO, OWNER)
 
-      expect(storage.uploadFile).toHaveBeenCalledWith('menu-items', 'rest-1/item-1', archivo.buffer, 'image/png')
+      expect(storage.uploadFile).toHaveBeenCalledWith('menu-items', `${REST}/item-1`, ARCHIVO.buffer, 'image/png')
       expect(prisma.itemMenu.update).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { id: 'item-1' }, data: { imagenUrl: 'https://storage.test/menu-items/rest-1/item-1' } }),
+        expect.objectContaining({ where: { id: 'item-1' }, data: { imagenUrl: 'https://storage.test/menu-items/x' } }),
       )
-      expect(item).toMatchObject({ imagenUrl: 'https://storage.test/menu-items/rest-1/item-1', esRecomendado: false, precioVigente: 1000 })
+      expect(item).toMatchObject({ imagenUrl: 'https://storage.test/menu-items/x', esRecomendado: false, precioVigente: 1000 })
     })
 
     it('quitarla borra el archivo y deja la URL en null', async () => {
@@ -88,7 +115,7 @@ describe('ItemsService: imagen, borrado e ingredientes', () => {
 
       const item = await service.removeImagen('item-1', OWNER)
 
-      expect(storage.deleteFile).toHaveBeenCalledWith('menu-items', 'rest-1/item-1')
+      expect(storage.deleteFile).toHaveBeenCalledWith('menu-items', `${REST}/item-1`)
       expect(item).toMatchObject({ imagenUrl: null })
     })
 
@@ -99,14 +126,6 @@ describe('ItemsService: imagen, borrado e ingredientes', () => {
   })
 
   describe('remove', () => {
-    it('borra un ítem que no está en ningún pedido', async () => {
-      prisma.pedidoItem.count.mockResolvedValue(0)
-
-      await service.remove('item-1', OWNER)
-
-      expect(prisma.itemMenu.delete).toHaveBeenCalledWith({ where: { id: 'item-1' } })
-    })
-
     it('si está en pedidos responde 409 y sugiere marcarlo como no disponible', async () => {
       prisma.pedidoItem.count.mockResolvedValue(3)
 
@@ -121,7 +140,7 @@ describe('ItemsService: imagen, borrado e ingredientes', () => {
     const DTO = { ingredienteId: 'ing-1', esOriginal: true, cantidad: 1, esRemovible: true, esAgregable: false, precioExtra: 0 }
 
     it('asocia un ingrediente del mismo restaurante y devuelve el ítem actualizado', async () => {
-      prisma.ingrediente.findUnique.mockResolvedValue({ id: 'ing-1', restauranteId: 'rest-1' })
+      prisma.ingrediente.findUnique.mockResolvedValue({ id: 'ing-1', restauranteId: REST })
       prisma.itemIngrediente.findFirst.mockResolvedValue(null)
 
       const item = await service.addIngrediente('item-1', DTO, OWNER)
@@ -132,8 +151,8 @@ describe('ItemsService: imagen, borrado e ingredientes', () => {
 
     it.each([
       ['el ingrediente no existe', null, null, new NotFoundException('Ingrediente no encontrado')],
-      ['el ingrediente es de otro restaurante', { id: 'ing-1', restauranteId: 'rest-2' }, null, new BadRequestException('El ingrediente no pertenece a este restaurante')],
-      ['ya está asociado', { id: 'ing-1', restauranteId: 'rest-1' }, { id: 'ii-1' }, new ConflictException('Ese ingrediente ya está asociado a este ítem')],
+      ['el ingrediente es de otro restaurante', { id: 'ing-1', restauranteId: MUNDO.REST_2 }, null, new BadRequestException('El ingrediente no pertenece a este restaurante')],
+      ['ya está asociado', { id: 'ing-1', restauranteId: REST }, { id: 'ii-1' }, new ConflictException('Ese ingrediente ya está asociado a este ítem')],
     ])('no asocia si %s', async (_, ingrediente, asociado, error) => {
       prisma.ingrediente.findUnique.mockResolvedValue(ingrediente)
       prisma.itemIngrediente.findFirst.mockResolvedValue(asociado)
@@ -143,8 +162,6 @@ describe('ItemsService: imagen, borrado e ingredientes', () => {
     })
 
     it('actualiza una asociación del ítem', async () => {
-      prisma.itemIngrediente.findUnique.mockResolvedValue({ id: 'ii-1', itemId: 'item-1', item: ITEM })
-
       await service.updateIngrediente('item-1', 'ii-1', { precioExtra: 200 }, OWNER)
 
       expect(prisma.itemIngrediente.findUnique).toHaveBeenCalledWith({ where: { id: 'ii-1' }, include: { item: true } })
@@ -164,16 +181,12 @@ describe('ItemsService: imagen, borrado e ingredientes', () => {
     })
 
     it('desasocia un ingrediente que no está en modificaciones de pedidos', async () => {
-      prisma.itemIngrediente.findUnique.mockResolvedValue({ id: 'ii-1', itemId: 'item-1', item: ITEM })
-      prisma.pedidoItemMod.count.mockResolvedValue(0)
-
       await service.removeIngrediente('item-1', 'ii-1', OWNER)
 
       expect(prisma.itemIngrediente.delete).toHaveBeenCalledWith({ where: { id: 'ii-1' } })
     })
 
     it('si aparece en modificaciones de pedidos responde 409 y no lo desasocia', async () => {
-      prisma.itemIngrediente.findUnique.mockResolvedValue({ id: 'ii-1', itemId: 'item-1', item: ITEM })
       prisma.pedidoItemMod.count.mockResolvedValue(2)
 
       await expect(service.removeIngrediente('item-1', 'ii-1', OWNER)).rejects.toThrow(

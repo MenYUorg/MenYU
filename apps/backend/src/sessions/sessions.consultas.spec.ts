@@ -1,19 +1,19 @@
 import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common'
 import { JwtService } from '@nestjs/jwt'
-import { JwtPayload } from '../auth/auth.service'
 import { SessionJwtPayload } from '../auth/guards/session-auth.guard'
-import { assertStaffAccess } from '../common/assert-staff-access'
+import { SALON } from '../auth/roles-del-personal'
+import { AccesoService } from '../auth/supabase/acceso.service'
 import { DivisionService } from '../comensales/division.service'
 import { MenyuGateway } from '../gateway/menyu.gateway'
 import { PrismaService } from '../prisma/prisma.service'
 import { UsersService } from '../users/users.service'
 import { SessionsService } from './sessions.service'
 
-// Cierre de sesiones y las consultas del staff (mesa activa, sesiones activas, pagadas e historial).
-// El chequeo de acceso del staff se prueba en assert-staff-access.spec: acá es un doble.
-jest.mock('../common/assert-staff-access', () => ({ assertStaffAccess: jest.fn() }))
+import { CUENTAS } from '../test/acceso-de-test'
 
-const accesoMock = jest.mocked(assertStaffAccess)
+// Cierre de sesiones y las consultas del salón (mesa activa, sesiones activas, pagadas e historial). El rol lo decide
+// AccesoService (con sus propios tests): acá es un doble. En las consultas por restaurante lo exige la ruta.
+const acceso = { exigirRol: jest.fn() }
 
 const prisma = {
   sesionMesa: { findUnique: jest.fn(), findFirst: jest.fn(), findMany: jest.fn(), update: jest.fn() },
@@ -26,7 +26,7 @@ const prisma = {
 }
 const gateway = { emitSesionCerrada: jest.fn() }
 
-const MOZO: JwtPayload = { sub: 'mozo-1', email: 'mozo@test', tipo: 'mozo', restauranteId: 'rest-1' } as JwtPayload
+const MOZO = CUENTAS.MOZO
 const SESION_JWT: SessionJwtPayload = { sub: 'cli-1', tipo: 'cliente', sesionId: 'ses-1', mesaId: 'mesa-1', restauranteId: 'rest-1' }
 const MESA = { id: 'mesa-1', restauranteId: 'rest-1', numero: '4' }
 
@@ -42,7 +42,7 @@ describe('SessionsService: cierre y consultas del staff', () => {
 
   beforeEach(() => {
     jest.clearAllMocks()
-    accesoMock.mockResolvedValue(undefined)
+    acceso.exigirRol.mockResolvedValue(['MOZO'])
     // $transaction recibe las operaciones ya armadas: devuelve sus resultados.
     prisma.$transaction.mockImplementation((operaciones: unknown[]) => Promise.all(operaciones))
     prisma.sesionMesa.update.mockResolvedValue({})
@@ -53,6 +53,7 @@ describe('SessionsService: cierre y consultas del staff', () => {
       {} as JwtService,
       gateway as unknown as MenyuGateway,
       {} as DivisionService,
+      acceso as unknown as AccesoService,
     )
   })
 
@@ -105,7 +106,7 @@ describe('SessionsService: cierre y consultas del staff', () => {
 
       // Assert
       expect(resultado).toEqual({ ok: true })
-      expect(accesoMock).toHaveBeenCalledWith(prisma, 'rest-1', MOZO)
+      expect(acceso.exigirRol).toHaveBeenCalledWith(MOZO.id, 'rest-1', SALON)
       expect(prisma.sesionMesa.findFirst).toHaveBeenCalledWith({ where: { mesaId: 'mesa-1', estado: 'activa' } })
       expect(prisma.sesionMesa.update).toHaveBeenCalledWith({
         where: { id: 'ses-9' },
@@ -119,12 +120,12 @@ describe('SessionsService: cierre y consultas del staff', () => {
       prisma.mesa.findUnique.mockResolvedValue(null)
 
       await expect(service.cerrarMesaAdmin('mesa-x', MOZO)).rejects.toThrow(new NotFoundException('Mesa no encontrada'))
-      expect(accesoMock).not.toHaveBeenCalled()
+      expect(acceso.exigirRol).not.toHaveBeenCalled()
     })
 
     it('sin acceso al restaurante no busca la sesión', async () => {
       prisma.mesa.findUnique.mockResolvedValue(MESA)
-      accesoMock.mockRejectedValue(new ForbiddenException('No tenés acceso a este restaurante'))
+      acceso.exigirRol.mockRejectedValue(new ForbiddenException('No tenés permiso para esta acción'))
 
       await expect(service.cerrarMesaAdmin('mesa-1', MOZO)).rejects.toThrow(ForbiddenException)
       expect(prisma.sesionMesa.findFirst).not.toHaveBeenCalled()
@@ -173,7 +174,7 @@ describe('SessionsService: cierre y consultas del staff', () => {
       const detalle = await service.getSessionActiva('mesa-1', MOZO)
 
       // Assert
-      expect(accesoMock).toHaveBeenCalledWith(prisma, 'rest-1', MOZO)
+      expect(acceso.exigirRol).toHaveBeenCalledWith(MOZO.id, 'rest-1', SALON)
       expect(prisma.pedidoItem.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ where: { pedido: { sesionId: 'ses-1', estado: { not: 'cancelado' } } } }),
       )
@@ -252,10 +253,9 @@ describe('SessionsService: cierre y consultas del staff', () => {
       ])
 
       // Act
-      const sesiones = await service.getSessionesActivas('rest-1', MOZO)
+      const sesiones = await service.getSessionesActivas('rest-1')
 
       // Assert
-      expect(accesoMock).toHaveBeenCalledWith(prisma, 'rest-1', MOZO)
       expect(prisma.sesionMesa.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ where: { mesa: { restauranteId: 'rest-1' }, estado: 'activa' }, orderBy: { iniciadaEn: 'asc' } }),
       )
@@ -282,6 +282,7 @@ describe('SessionsService: cierre y consultas del staff', () => {
       referenciaExterna: null,
       fechaCobro: null,
       mozo: null,
+      usuario: null,
       ...extra,
     })
 
@@ -295,7 +296,7 @@ describe('SessionsService: cierre y consultas del staff', () => {
       ])
 
       // Act
-      const [sesion] = await service.getSessionesPagadas('rest-1', undefined, MOZO)
+      const [sesion] = await service.getSessionesPagadas('rest-1', undefined)
 
       // Assert
       expect(prisma.sesionMesa.findMany).toHaveBeenCalledWith(
@@ -317,10 +318,18 @@ describe('SessionsService: cierre y consultas del staff', () => {
       })
     })
 
+    it('sin nombre guardado ni mozo, cobró la cuenta que lo registró (un GERENTE o el OWNER)', async () => {
+      prisma.sesionMesa.findMany.mockResolvedValue([sesionPagada([pago('p1', { usuario: { nombre: 'Gabi' } })])])
+
+      const [sesion] = await service.getSessionesPagadas('rest-1', undefined)
+
+      expect(sesion).toMatchObject({ cobradoPorNombre: 'Gabi' })
+    })
+
     it('un pago sin fecha de cobro usa el cierre de la sesión, y el nombre guardado gana al del mozo', async () => {
       prisma.sesionMesa.findMany.mockResolvedValue([sesionPagada([pago('p1', { cobradoPorNombre: 'Caja 1', mozo: { nombre: 'Ana' } })])])
 
-      const [sesion] = await service.getSessionesPagadas('rest-1', undefined, MOZO)
+      const [sesion] = await service.getSessionesPagadas('rest-1', undefined)
 
       expect(sesion).toMatchObject({ metodoPago: 'efectivo', cobradoPorNombre: 'Caja 1', referenciaExterna: null, fechaCobro: '2026-10-18T22:00:00.000Z' })
     })
@@ -334,7 +343,7 @@ describe('SessionsService: cierre y consultas del staff', () => {
         ]),
       ])
 
-      const [sesion] = await service.getSessionesPagadas('rest-1', undefined, MOZO)
+      const [sesion] = await service.getSessionesPagadas('rest-1', undefined)
 
       expect(sesion).toMatchObject({ metodoPago: 'mixto', cobradoPorNombre: null, referenciaExterna: null, fechaCobro: '2026-10-18T21:40:00.000Z' })
       expect(sesion.pagos.map((p) => p.id)).toEqual(['sin-fecha', 'temprano', 'tarde'])
@@ -343,7 +352,7 @@ describe('SessionsService: cierre y consultas del staff', () => {
     it('varios pagos sin fecha de cobro usan el cierre de la sesión', async () => {
       prisma.sesionMesa.findMany.mockResolvedValue([sesionPagada([pago('a', {}), pago('b', {})])])
 
-      const [sesion] = await service.getSessionesPagadas('rest-1', undefined, MOZO)
+      const [sesion] = await service.getSessionesPagadas('rest-1', undefined)
 
       expect(sesion).toMatchObject({ metodoPago: 'mixto', fechaCobro: '2026-10-18T22:00:00.000Z' })
     })
@@ -351,7 +360,7 @@ describe('SessionsService: cierre y consultas del staff', () => {
     it('sin pagos aprobados en la lista el método es "desconocido" (y sin fecha de cierre, vacía)', async () => {
       prisma.sesionMesa.findMany.mockResolvedValue([sesionPagada([pago('p', { estado: 'pendiente' })], null)])
 
-      const [sesion] = await service.getSessionesPagadas('rest-1', undefined, MOZO)
+      const [sesion] = await service.getSessionesPagadas('rest-1', undefined)
 
       expect(sesion).toMatchObject({ metodoPago: 'desconocido', cobradoPorNombre: null, referenciaExterna: null, fechaCobro: '', pagos: [] })
     })
@@ -365,7 +374,7 @@ describe('SessionsService: cierre y consultas del staff', () => {
       prisma.sesionMesa.findMany.mockResolvedValue([])
 
       // Act
-      await service.getSessionesPagadas('rest-1', filtro, MOZO)
+      await service.getSessionesPagadas('rest-1', filtro)
 
       // Assert
       const { where } = prisma.sesionMesa.findMany.mock.calls[0][0] as { where: { cerradaEn: { gte: Date; lte: Date } } }
@@ -400,19 +409,50 @@ describe('SessionsService: cierre y consultas del staff', () => {
               id: 'ed-1',
               justificacion: 'Se cargó de más',
               creadoEn: fecha('2026-10-18T20:20:00Z'),
+              adminId: 'admin-1',
+              mozoId: null,
+              usuarioId: null,
               admin: { email: 'gerente@test' },
               mozo: null,
+              usuario: null,
               itemsEliminados: [{ itemNombre: 'Empanada', cantidadAntes: 3, cantidadDespues: 2, precioUnitario: '1000.00' }],
             },
             {
               id: 'ed-2',
               justificacion: 'Anulado',
               creadoEn: fecha('2026-10-18T20:30:00Z'),
+              adminId: null,
+              mozoId: 'mozo-1',
+              usuarioId: 'usuario-mozo',
               admin: null,
               mozo: { nombre: 'Ana' },
+              usuario: { nombre: 'Ana López' },
               itemsEliminados: [{ itemNombre: 'Agua', cantidadAntes: 1, cantidadDespues: 0, precioUnitario: '500.00' }],
             },
-            { id: 'ed-3', justificacion: 'x', creadoEn: fecha('2026-10-18T20:40:00Z'), admin: null, mozo: null, itemsEliminados: [] },
+            {
+              id: 'ed-3',
+              justificacion: 'x',
+              creadoEn: fecha('2026-10-18T20:40:00Z'),
+              adminId: null,
+              mozoId: null,
+              usuarioId: 'usuario-gerente',
+              admin: null,
+              mozo: null,
+              usuario: { nombre: 'Gabi' },
+              itemsEliminados: [],
+            },
+            {
+              id: 'ed-4',
+              justificacion: 'y',
+              creadoEn: fecha('2026-10-18T20:50:00Z'),
+              adminId: null,
+              mozoId: null,
+              usuarioId: null,
+              admin: null,
+              mozo: null,
+              usuario: null,
+              itemsEliminados: [],
+            },
           ],
         },
         { id: 'ped-2', estado: 'entregado', createdAt: fecha('2026-10-18T21:00:00Z'), items: [], ediciones: [] },
@@ -424,10 +464,9 @@ describe('SessionsService: cierre y consultas del staff', () => {
       prisma.sesionMesa.findMany.mockResolvedValue([sesionCerrada])
 
       // Act
-      const [sesion] = await service.getHistorialSesiones('rest-1', '2026-10-01', '2026-10-18', MOZO)
+      const [sesion] = await service.getHistorialSesiones('rest-1', '2026-10-01', '2026-10-18')
 
       // Assert
-      expect(accesoMock).toHaveBeenCalledWith(prisma, 'rest-1', MOZO)
       expect(prisma.sesionMesa.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: {
@@ -453,7 +492,8 @@ describe('SessionsService: cierre y consultas del staff', () => {
       expect(pedido.ediciones.map((e) => e.editor)).toEqual([
         { nombre: 'gerente@test', tipo: 'gerente' },
         { nombre: 'Ana', tipo: 'mozo' },
-        { nombre: 'desconocido', tipo: 'mozo' },
+        { nombre: 'Gabi', tipo: 'gerente' },
+        { nombre: 'Desconocido', tipo: 'mozo' },
       ])
       expect(pedido.ediciones[0]).toMatchObject({ id: 'ed-1', justificacion: 'Se cargó de más', creadoEn: '2026-10-18T20:20:00.000Z' })
       expect(pedido.ediciones.flatMap((e) => e.itemsEliminados)).toEqual([
@@ -467,7 +507,7 @@ describe('SessionsService: cierre y consultas del staff', () => {
       jest.useFakeTimers({ now: fecha('2026-10-18T15:00:00Z') })
       prisma.sesionMesa.findMany.mockResolvedValue([])
 
-      await service.getHistorialSesiones('rest-1', undefined, undefined, MOZO)
+      await service.getHistorialSesiones('rest-1', undefined, undefined)
 
       const { where } = prisma.sesionMesa.findMany.mock.calls[0][0] as { where: { cerradaEn: object } }
       expect(where.cerradaEn).toEqual({ gte: new Date('2026-10-18T00:00:00.000Z'), lte: new Date('2026-10-18T23:59:59.999Z') })

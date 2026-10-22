@@ -1,7 +1,6 @@
 import { Controller, Delete, Get, Patch, Post, Put } from '@nestjs/common'
-import { ROLES_KEY } from '../common/decorators/roles.decorator'
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'
-import { RolesGuard } from '../common/guards/roles.guard'
+import { RootGuard } from '../auth/guards/root.guard'
+import { SupabaseAuthGuard } from '../auth/guards/supabase-auth.guard'
 import { AppModule } from '../app.module'
 import { CamposPermitidosGuard } from './comun/campos-permitidos.guard'
 import { RutaDeLaApp, rutasDe, rutasDeLaApp } from '../test/rutas'
@@ -18,20 +17,17 @@ describe('el enrutador de la aplicación', () => {
 
   it('recorre los controllers de toda la aplicación (si no, los demás tests de acá no prueban nada)', () => {
     expect(rutas.length).toBeGreaterThan(80)
-    expect(rutas.map(texto)).toEqual(expect.arrayContaining(['POST /auth/login', 'GET /discovery', 'GET /admins', 'DELETE /admins/:id']))
+    expect(rutas.map(texto)).toEqual(expect.arrayContaining(['POST /auth/login', 'GET /discovery', 'GET /marcas', 'DELETE /mozos/:id']))
   })
 
-  it('las rutas de /root son exactamente las de la etapa 1a (si se agrega o se saca una, hay que actualizar esta lista y el plan)', () => {
+  it('las rutas de /root son exactamente las de la entrega 4.4 de auth (si se agrega o se saca una, hay que actualizar esta lista y el plan)', () => {
     expect(deRoot.map(texto).sort()).toEqual(
       [
         'GET /root/duenos',
         'POST /root/marcas/:id/duenos',
-        'PATCH /root/duenos/:id',
-        'POST /root/duenos/:id/restablecer-password',
-        'DELETE /root/duenos/:id',
+        'DELETE /root/duenos/:membresiaId',
         'GET /root/roots',
         'POST /root/roots',
-        'POST /root/roots/:id/restablecer-password',
         'GET /root/marcas',
         'POST /root/marcas',
         'GET /root/marcas/:id',
@@ -54,8 +50,8 @@ describe('el enrutador de la aplicación', () => {
     expect(borrables.map(texto)).toEqual([])
   })
 
-  it('los únicos DELETE de /root son los de dueños (las cuentas OWNER sí se eliminan de verdad)', () => {
-    expect(deRoot.filter((r) => r.metodo === 'DELETE').map(texto)).toEqual(['DELETE /root/duenos/:id'])
+  it('el único DELETE de /root es el de quitar a un dueño (su membresía OWNER; la cuenta queda)', () => {
+    expect(deRoot.filter((r) => r.metodo === 'DELETE').map(texto)).toEqual(['DELETE /root/duenos/:membresiaId'])
   })
 
   it('el historial solo se lee: su única ruta es GET /root/historial', () => {
@@ -76,21 +72,22 @@ describe('el enrutador de la aplicación', () => {
 
   describe('quién entra a /root', () => {
     it.each([...new Set(deRoot.map((r) => r.controller))].map((c) => [c.name, c] as const))(
-      '%s: solo ROOT, con JWT, a nivel de controller (no depende de que cada ruta lo repita)',
+      '%s: solo ROOT (@RequiereRoot), a nivel de controller (no depende de que cada ruta lo repita)',
       (_nombre, controller) => {
-        expect(Reflect.getMetadata(ROLES_KEY, controller)).toEqual(['ROOT'])
         const guards: unknown[] = Reflect.getMetadata('__guards__', controller) ?? []
-        expect(guards).toEqual(expect.arrayContaining([JwtAuthGuard, RolesGuard]))
+        expect(guards).toEqual(expect.arrayContaining([SupabaseAuthGuard, RootGuard]))
+        // Los permisos antes que la validación de los campos: un OWNER con un campo de más recibe 403, no 400.
+        const campos = guards.indexOf(CamposPermitidosGuard)
+        if (campos !== -1) expect(campos).toBeGreaterThan(guards.indexOf(RootGuard))
       },
     )
 
-    it('ninguna ruta de /root cambia el rol que la deja entrar (nadie más que ROOT)', () => {
+    it('ninguna ruta de /root suma guards propios (todo lo decide el controller)', () => {
       for (const { controller } of deRoot) {
         for (const nombre of Object.getOwnPropertyNames(controller.prototype)) {
           const manejador = (controller.prototype as Record<string, unknown>)[nombre]
-          if (typeof manejador !== 'function') continue
-          const roles: string[] | undefined = Reflect.getMetadata(ROLES_KEY, manejador)
-          if (roles) expect(roles).toEqual(['ROOT'])
+          if (typeof manejador !== 'function' || nombre === 'constructor') continue
+          expect([nombre, Reflect.getMetadata('__guards__', manejador)]).toEqual([nombre, undefined])
         }
       }
     })
@@ -104,10 +101,8 @@ describe('el enrutador de la aplicación', () => {
       expect(quePermiteBorrarRoots(rutas).map(texto)).toEqual([])
     })
 
-    it('las únicas rutas de /root/roots son listar, crear y restablecer la contraseña', () => {
-      expect(deRoot.filter((r) => r.ruta.startsWith('/root/roots')).map(texto).sort()).toEqual(
-        ['GET /root/roots', 'POST /root/roots', 'POST /root/roots/:id/restablecer-password'].sort(),
-      )
+    it('las únicas rutas de /root/roots son listar e invitar', () => {
+      expect(deRoot.filter((r) => r.ruta.startsWith('/root/roots')).map(texto).sort()).toEqual(['GET /root/roots', 'POST /root/roots'])
     })
 
     it('la comprobación detecta una ruta de borrado si alguien la agregara', () => {

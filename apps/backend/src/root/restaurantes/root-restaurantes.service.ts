@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common'
 import { Prisma } from '@prisma/client'
-import { JwtPayload } from '../../auth/auth.service'
+import { UsuarioAutenticado } from '../../auth/supabase/usuario-autenticado'
 import { PrismaService } from '../../prisma/prisma.service'
 import { HistorialRootService } from '../historial/historial-root.service'
 import { CrearRestauranteRootDto, EditarRestauranteRootDto } from '../marcas/dto/marca-root.dto'
@@ -36,9 +36,9 @@ export class RootRestaurantesService {
     private readonly historial: HistorialRootService,
   ) {}
 
-  async crear(marcaId: string, dto: CrearRestauranteRootDto, user: JwtPayload): Promise<RootRestaurante> {
+  async crear(marcaId: string, dto: CrearRestauranteRootDto, usuario: UsuarioAutenticado): Promise<RootRestaurante> {
     return this.prisma.$transaction(async (tx) => {
-      const actor = await this.historial.actorDe(tx, user)
+      const actor = await this.historial.actorDe(tx, usuario)
       const marca = await tx.marca.findUnique({ where: { id: marcaId }, select: { id: true, nombre: true, activo: true } })
       if (!marca) throw new NotFoundException('Marca no encontrada')
       if (!marca.activo) throw new ConflictException('La marca está dada de baja: no se le pueden crear restaurantes')
@@ -62,12 +62,12 @@ export class RootRestaurantesService {
     })
   }
 
-  async editar(id: string, dto: EditarRestauranteRootDto, user: JwtPayload): Promise<RootRestaurante> {
+  async editar(id: string, dto: EditarRestauranteRootDto, usuario: UsuarioAutenticado): Promise<RootRestaurante> {
     if (dto.nombre === undefined) throw new BadRequestException('No hay nada para cambiar: mandá el nombre')
     const nombre = dto.nombre
 
     return this.prisma.$transaction(async (tx) => {
-      const actor = await this.historial.actorDe(tx, user)
+      const actor = await this.historial.actorDe(tx, usuario)
       const restaurante = await tx.restaurante.findUnique({ where: { id }, select: SELECT_RESTAURANTE })
       if (!restaurante) throw new NotFoundException('Restaurante no encontrado')
       // El mismo nombre: no hay nada que cambiar ni que registrar.
@@ -90,9 +90,9 @@ export class RootRestaurantesService {
    * Da de baja (`activo = false`) o reactiva un restaurante. Idempotente. Cada restaurante conserva su propio estado: reactivar
    * uno de una marca dada de baja es válido (sigue sin estar disponible mientras la marca lo esté, cuando la baja tenga efecto).
    */
-  async cambiarEstado(id: string, activo: boolean, user: JwtPayload): Promise<RootRestaurante> {
+  async cambiarEstado(id: string, activo: boolean, usuario: UsuarioAutenticado): Promise<RootRestaurante> {
     return this.prisma.$transaction(async (tx) => {
-      const actor = await this.historial.actorDe(tx, user)
+      const actor = await this.historial.actorDe(tx, usuario)
       const restaurante = await tx.restaurante.findUnique({ where: { id }, select: SELECT_RESTAURANTE })
       if (!restaurante) throw new NotFoundException('Restaurante no encontrado')
       if (restaurante.activo === activo) return aRestaurante(restaurante)

@@ -1,4 +1,4 @@
-import { AppDeEndpoints, SESION_CLIENTE, USUARIOS, crearAppDeEndpoints } from '../test/app-endpoints'
+import { AppDeEndpoints, CUENTAS, MUNDO, SESION_CLIENTE, SIN_USUARIO, USUARIOS, crearAppDeEndpoints } from '../test/app-endpoints'
 import { PaymentsController } from './payments.controller'
 import { PaymentsService } from './payments.service'
 
@@ -95,37 +95,65 @@ describe('endpoints de pagos', () => {
     })
   })
 
-  describe('staff (admin o mozo)', () => {
-    it('GET /payments/sesiones: un mozo lista las sesiones del restaurante', async () => {
+  describe('el salón (OWNER, GERENTE, JEFE_SALON y MOZO)', () => {
+    const PAGO_ID = '6f1c2a40-5555-4a1b-9c3d-000000000001'
+
+    it('GET /payments/sesiones: el MOZO lista las sesiones del restaurante', async () => {
       // Arrange
       payments.getSesiones.mockResolvedValue([])
 
       // Act
-      const res = await api.pedir('get', '/payments/sesiones', { usuario: USUARIOS.MOZO, query: { restauranteId: 'rest-1' } })
+      const res = await api.pedir('get', '/payments/sesiones', { cuenta: CUENTAS.MOZO, query: { restauranteId: MUNDO.REST_1 } })
 
       // Assert
       expect(res.status).toBe(200)
-      expect(payments.getSesiones.mock.calls[0][0]).toBe('rest-1')
+      expect(payments.getSesiones).toHaveBeenCalledWith(MUNDO.REST_1)
     })
 
-    it('POST /payments/confirmar-efectivo pasa el pago y el mozo (200)', async () => {
+    it.each([
+      ['la COCINA', CUENTAS.COCINA, MUNDO.REST_1],
+      ['ROOT', CUENTAS.ROOT, MUNDO.REST_1],
+      ['el MOZO de otro restaurante (antes no se chequeaba la pertenencia)', CUENTAS.MOZO, MUNDO.REST_2],
+    ])('GET /payments/sesiones: %s recibe 403', async (_caso, cuenta, restauranteId) => {
+      // Act
+      const res = await api.pedir('get', '/payments/sesiones', { cuenta, query: { restauranteId } })
+
+      // Assert
+      expect(res.status).toBe(403)
+      expect(payments.getSesiones).not.toHaveBeenCalled()
+    })
+
+    it('POST /payments/confirmar-efectivo pasa el body validado y la cuenta (200)', async () => {
       // Arrange
       payments.confirmarEfectivo.mockResolvedValue({ ok: true })
 
       // Act
-      const res = await api.pedir('post', '/payments/confirmar-efectivo', { usuario: USUARIOS.MOZO, body: { pagoId: 'pago-1', mozoId: 'mozo-1' } })
+      const res = await api.pedir('post', '/payments/confirmar-efectivo', {
+        cuenta: CUENTAS.GERENTE,
+        body: { pagoId: PAGO_ID, mozoId: 'mozo-1', otroCampo: 'x' },
+      })
 
       // Assert
       expect(res.status).toBe(200)
-      expect(payments.confirmarEfectivo.mock.calls[0].slice(0, 2)).toEqual(['pago-1', 'mozo-1'])
+      expect(payments.confirmarEfectivo).toHaveBeenCalledWith({ pagoId: PAGO_ID, mozoId: 'mozo-1' }, CUENTAS.GERENTE)
     })
 
-    it('un JWT de comensal no puede confirmar pagos (403)', async () => {
+    it('POST /payments/confirmar-efectivo sin un pagoId UUID: 400', async () => {
       // Act
-      const res = await api.pedir('post', '/payments/confirmar-efectivo', { usuario: USUARIOS.CLIENTE, body: { pagoId: 'pago-1' } })
+      const res = await api.pedir('post', '/payments/confirmar-efectivo', { cuenta: CUENTAS.MOZO, body: { pagoId: 'pago-1' } })
 
       // Assert
-      expect(res.status).toBe(403)
+      expect(res.status).toBe(400)
+      expect(payments.confirmarEfectivo).not.toHaveBeenCalled()
+    })
+
+    it('con el token de la sesión de mesa o sin token no se confirman pagos (401), y sin Usuario 403', async () => {
+      // Act
+      const comensal = await api.pedir('post', '/payments/confirmar-efectivo', { sesion: SESION_CLIENTE, body: { pagoId: PAGO_ID } })
+      const sinUsuario = await api.pedir('post', '/payments/confirmar-efectivo', { cuenta: SIN_USUARIO, body: { pagoId: PAGO_ID } })
+
+      // Assert
+      expect([comensal.status, sinUsuario.status]).toEqual([401, 403])
       expect(payments.confirmarEfectivo).not.toHaveBeenCalled()
     })
   })

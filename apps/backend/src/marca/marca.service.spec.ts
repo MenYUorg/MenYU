@@ -1,29 +1,21 @@
 import { Test } from '@nestjs/testing'
 import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common'
-import { MarcaService, MARCA_DETAIL_INCLUDE } from './marca.service'
+import { MarcaService, MARCA_CON_RESTAURANTES_SELECT, MARCA_DETALLE_SELECT, MARCA_SELECT } from './marca.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { LogosService } from '../storage/logos.service'
-import { JwtPayload } from '../auth/auth.service'
+import { AccesoService } from '../auth/supabase/acceso.service'
+import { UsuarioAutenticado } from '../auth/supabase/usuario-autenticado'
+import { accesoDeTest, CUENTAS, MUNDO } from '../test/acceso-de-test'
 
-const ROOT: JwtPayload = { sub: 'root-1', email: 'root@menyu.com', tipo: 'admin', rol: 'ROOT' }
-const OWNER: JwtPayload = { sub: 'admin-1', email: 'owner@test.com', tipo: 'admin', rol: 'OWNER' }
-const GERENTE: JwtPayload = { sub: 'gerente-1', email: 'gerente@test.com', tipo: 'admin', rol: 'GERENTE' }
-
-const MARCA = { id: 'marca-1', nombre: 'La Parrilla', slug: 'la-parrilla', activo: true }
-const RESTAURANTE = { id: 'rest-1', marcaId: 'marca-1', nombre: 'Sucursal Norte' }
-// marcaId necesario para getMarcaIdForAdmin; restaurante es ignorado por el service actual
-const ADMIN_WITH_REST = { id: 'admin-1', marcaId: 'marca-1', restaurante: RESTAURANTE }
+const MARCA_ID = MUNDO.MARCA_A
+const MARCA = { id: MARCA_ID, nombre: 'La Parrilla', slug: 'la-parrilla', activo: true }
 
 const mockPrisma = {
   marca: {
     findUnique: jest.fn(),
     findFirst: jest.fn(),
     findMany: jest.fn(),
-    create: jest.fn(),
     update: jest.fn(),
-  },
-  admin: {
-    findUnique: jest.fn(),
   },
   restaurante: {
     findMany: jest.fn(),
@@ -38,6 +30,14 @@ const mockLogos = {
 const ARCHIVO = { buffer: Buffer.from('logo'), mimetype: 'image/png' } as Express.Multer.File
 const LOGO_URL = 'https://proyecto.supabase.co/storage/v1/object/public/logos/marcas/marca-1?v=1700000000000'
 
+/** Quien no es OWNER de la marca A: ROOT no es un bypass. */
+const SIN_ACCESO_A_LA_MARCA: Array<[string, UsuarioAutenticado]> = [
+  ['ROOT', CUENTAS.ROOT],
+  ['el OWNER de otra marca', CUENTAS.OWNER_B],
+  ['el GERENTE de una sucursal', CUENTAS.GERENTE],
+  ['el MOZO', CUENTAS.MOZO],
+]
+
 describe('MarcaService', () => {
   let service: MarcaService
 
@@ -47,6 +47,7 @@ describe('MarcaService', () => {
         MarcaService,
         { provide: PrismaService, useValue: mockPrisma },
         { provide: LogosService, useValue: mockLogos },
+        { provide: AccesoService, useValue: accesoDeTest() },
       ],
     }).compile()
 
@@ -54,112 +55,62 @@ describe('MarcaService', () => {
     jest.clearAllMocks()
   })
 
-  // ── create ────────────────────────────────────────────────────────────
-
-  describe('create', () => {
-    it('crea y devuelve la marca', async () => {
-      mockPrisma.marca.findUnique.mockResolvedValue(null)
-      mockPrisma.marca.create.mockResolvedValue(MARCA)
-
-      const result = await service.create({ nombre: 'La Parrilla', slug: 'la-parrilla' })
-
-      expect(mockPrisma.marca.create).toHaveBeenCalledWith(
-        expect.objectContaining({ data: { nombre: 'La Parrilla', slug: 'la-parrilla' } }),
-      )
-      expect(result).toEqual(MARCA)
-    })
-
-    it('lanza 409 si el slug ya existe', async () => {
-      mockPrisma.marca.findUnique.mockResolvedValue(MARCA)
-
-      await expect(service.create({ nombre: 'Otra', slug: 'la-parrilla' }))
-        .rejects.toThrow(ConflictException)
-
-      expect(mockPrisma.marca.create).not.toHaveBeenCalled()
+  describe('las respuestas no tienen las columnas de Mercado Pago de las sucursales', () => {
+    it.each([
+      ['MARCA_CON_RESTAURANTES_SELECT', MARCA_CON_RESTAURANTES_SELECT.restaurantes.select],
+      ['MARCA_DETALLE_SELECT', MARCA_DETALLE_SELECT.restaurantes.select],
+    ])('%s', (_nombre, select) => {
+      expect(Object.keys(select).filter((campo) => campo.startsWith('mp'))).toEqual([])
     })
   })
 
   // ── findAll ───────────────────────────────────────────────────────────
 
   describe('findAll', () => {
-    it('ROOT devuelve todas las marcas activas', async () => {
-      const marcas = [MARCA, { ...MARCA, id: 'marca-2', slug: 'otro' }]
-      mockPrisma.marca.findMany.mockResolvedValue(marcas)
-
-      const result = await service.findAll(ROOT)
-
-      expect(mockPrisma.marca.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ where: expect.objectContaining({ activo: true }) }),
-      )
-      expect(result).toHaveLength(2)
-    })
-
-    it('OWNER solo ve su propia marca', async () => {
-      mockPrisma.admin.findUnique.mockResolvedValue(ADMIN_WITH_REST)
+    it('el OWNER recibe las marcas activas de sus membresías, con sus sucursales', async () => {
       mockPrisma.marca.findMany.mockResolvedValue([MARCA])
 
-      const result = await service.findAll(OWNER)
+      const result = await service.findAll(CUENTAS.OWNER_A)
 
-      expect(mockPrisma.marca.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ where: expect.objectContaining({ id: 'marca-1' }) }),
-      )
-      expect(result).toHaveLength(1)
+      expect(mockPrisma.marca.findMany).toHaveBeenCalledWith({
+        where: { activo: true, membresias: { some: { usuarioId: CUENTAS.OWNER_A.id, rol: 'OWNER' } } },
+        orderBy: { nombre: 'asc' },
+        select: MARCA_CON_RESTAURANTES_SELECT,
+      })
+      expect(result).toEqual([MARCA])
+    })
+
+    it.each([
+      ['ROOT (no es un bypass)', CUENTAS.ROOT],
+      ['el GERENTE', CUENTAS.GERENTE],
+      ['un Usuario sin membresías', CUENTAS.SIN_MEMBRESIAS],
+    ])('%s recibe 403', async (_caso, cuenta) => {
+      await expect(service.findAll(cuenta)).rejects.toThrow(ForbiddenException)
+
+      expect(mockPrisma.marca.findMany).not.toHaveBeenCalled()
     })
   })
 
   // ── findOne ───────────────────────────────────────────────────────────
 
   describe('findOne', () => {
-    it('devuelve la marca con sus relaciones', async () => {
+    it('el OWNER de la marca la recibe con el select de detalle', async () => {
       mockPrisma.marca.findUnique.mockResolvedValue(MARCA)
 
-      const result = await service.findOne('marca-1', ROOT)
+      const result = await service.findOne(MARCA_ID, CUENTAS.OWNER_A)
 
-      expect(mockPrisma.marca.findUnique).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { id: 'marca-1' } }),
-      )
+      expect(mockPrisma.marca.findUnique).toHaveBeenCalledWith({ where: { id: MARCA_ID }, select: MARCA_DETALLE_SELECT })
       expect(result).toEqual(MARCA)
     })
 
-    it('lanza 404 si la marca no existe', async () => {
+    it('lanza 404 si no la encuentra', async () => {
       mockPrisma.marca.findUnique.mockResolvedValue(null)
 
-      await expect(service.findOne('no-existe', ROOT))
-        .rejects.toThrow(NotFoundException)
+      await expect(service.findOne(MARCA_ID, CUENTAS.OWNER_A)).rejects.toThrow(NotFoundException)
     })
 
-    it('lanza 404 si la marca está inactiva', async () => {
-      mockPrisma.marca.findUnique.mockResolvedValue({ ...MARCA, activo: false })
-
-      await expect(service.findOne('marca-1', ROOT))
-        .rejects.toThrow(NotFoundException)
-    })
-
-    it('OWNER lanza 403 si intenta acceder a otra marca', async () => {
-      mockPrisma.admin.findUnique.mockResolvedValue(ADMIN_WITH_REST)
-
-      await expect(service.findOne('marca-otra', OWNER))
-        .rejects.toThrow(ForbiddenException)
-
-      expect(mockPrisma.marca.findUnique).not.toHaveBeenCalled()
-    })
-
-    it('OWNER de la marca la recibe pidiendo el include de detalle', async () => {
-      mockPrisma.admin.findUnique.mockResolvedValue(ADMIN_WITH_REST)
-      mockPrisma.marca.findUnique.mockResolvedValue(MARCA)
-
-      const result = await service.findOne('marca-1', OWNER)
-
-      expect(mockPrisma.marca.findUnique).toHaveBeenCalledWith({
-        where: { id: 'marca-1' },
-        include: MARCA_DETAIL_INCLUDE,
-      })
-      expect(result).toEqual(MARCA)
-    })
-
-    it('GERENTE lanza 403: los gerentes no tienen acceso a marcas', async () => {
-      await expect(service.findOne('marca-1', GERENTE))
-        .rejects.toThrow(ForbiddenException)
+    it.each(SIN_ACCESO_A_LA_MARCA)('%s recibe 403 sin consultar la marca', async (_caso, cuenta) => {
+      await expect(service.findOne(MARCA_ID, cuenta)).rejects.toThrow(ForbiddenException)
 
       expect(mockPrisma.marca.findUnique).not.toHaveBeenCalled()
     })
@@ -168,35 +119,34 @@ describe('MarcaService', () => {
   // ── update ────────────────────────────────────────────────────────────
 
   describe('update', () => {
-    it('actualiza y devuelve la marca', async () => {
-      const updated = { ...MARCA, nombre: 'Nuevo Nombre' }
-      mockPrisma.marca.findUnique.mockResolvedValue(MARCA)
+    it('el OWNER actualiza y recibe la marca sin relaciones', async () => {
       mockPrisma.marca.findFirst.mockResolvedValue(null)
-      mockPrisma.marca.update.mockResolvedValue(updated)
+      mockPrisma.marca.update.mockResolvedValue({ ...MARCA, nombre: 'Nuevo Nombre' })
 
-      const result = await service.update('marca-1', { nombre: 'Nuevo Nombre' }, ROOT)
+      const result = await service.update(MARCA_ID, { nombre: 'Nuevo Nombre', slug: 'nuevo' }, CUENTAS.OWNER_A)
 
-      expect(mockPrisma.marca.update).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { id: 'marca-1' } }),
-      )
+      expect(mockPrisma.marca.update).toHaveBeenCalledWith({
+        where: { id: MARCA_ID },
+        data: { nombre: 'Nuevo Nombre', slug: 'nuevo' },
+        select: MARCA_SELECT,
+      })
       expect(result.nombre).toBe('Nuevo Nombre')
     })
 
     it('lanza 409 si el nuevo slug ya lo usa otra marca', async () => {
-      mockPrisma.marca.findUnique.mockResolvedValue(MARCA)
       mockPrisma.marca.findFirst.mockResolvedValue({ ...MARCA, id: 'marca-otra' })
 
-      await expect(service.update('marca-1', { slug: 'slug-en-uso' }, ROOT))
+      await expect(service.update(MARCA_ID, { slug: 'slug-en-uso' }, CUENTAS.OWNER_A))
         .rejects.toThrow(ConflictException)
 
+      expect(mockPrisma.marca.findFirst).toHaveBeenCalledWith({ where: { slug: 'slug-en-uso', id: { not: MARCA_ID } } })
       expect(mockPrisma.marca.update).not.toHaveBeenCalled()
     })
 
-    it('lanza 404 si la marca no existe', async () => {
-      mockPrisma.marca.findUnique.mockResolvedValue(null)
+    it.each(SIN_ACCESO_A_LA_MARCA)('%s recibe 403 y no se toca nada', async (_caso, cuenta) => {
+      await expect(service.update(MARCA_ID, { nombre: 'X' }, cuenta)).rejects.toThrow(ForbiddenException)
 
-      await expect(service.update('no-existe', { nombre: 'X' }, ROOT))
-        .rejects.toThrow(NotFoundException)
+      expect(mockPrisma.marca.update).not.toHaveBeenCalled()
     })
   })
 
@@ -204,51 +154,25 @@ describe('MarcaService', () => {
 
   describe('uploadLogo', () => {
     it('el OWNER de la marca sube el logo y se guarda la URL', async () => {
-      mockPrisma.admin.findUnique.mockResolvedValue(ADMIN_WITH_REST)
-      mockPrisma.marca.findUnique.mockResolvedValue(MARCA)
       mockLogos.subir.mockResolvedValue(LOGO_URL)
-      mockPrisma.marca.update.mockResolvedValue({ id: 'marca-1', logoUrl: LOGO_URL })
+      mockPrisma.marca.update.mockResolvedValue({ id: MARCA_ID, logoUrl: LOGO_URL })
 
-      const result = await service.uploadLogo('marca-1', ARCHIVO, OWNER)
+      const result = await service.uploadLogo(MARCA_ID, ARCHIVO, CUENTAS.OWNER_A)
 
-      expect(mockLogos.subir).toHaveBeenCalledWith('marcas', 'marca-1', ARCHIVO)
+      expect(mockLogos.subir).toHaveBeenCalledWith('marcas', MARCA_ID, ARCHIVO)
       expect(mockPrisma.marca.update).toHaveBeenCalledWith({
-        where: { id: 'marca-1' },
+        where: { id: MARCA_ID },
         data: { logoUrl: LOGO_URL },
         select: { id: true, logoUrl: true },
       })
-      expect(result).toEqual({ id: 'marca-1', logoUrl: LOGO_URL })
+      expect(result).toEqual({ id: MARCA_ID, logoUrl: LOGO_URL })
     })
 
-    it('un OWNER de otra marca recibe 403 y no se sube nada', async () => {
-      mockPrisma.admin.findUnique.mockResolvedValue({ id: 'admin-2', marcaId: 'marca-otra' })
-
-      await expect(service.uploadLogo('marca-1', ARCHIVO, OWNER))
-        .rejects.toThrow(ForbiddenException)
+    it.each(SIN_ACCESO_A_LA_MARCA)('%s recibe 403 y no se sube nada', async (_caso, cuenta) => {
+      await expect(service.uploadLogo(MARCA_ID, ARCHIVO, cuenta)).rejects.toThrow(ForbiddenException)
 
       expect(mockLogos.subir).not.toHaveBeenCalled()
       expect(mockPrisma.marca.update).not.toHaveBeenCalled()
-    })
-
-    it.each([
-      ['ROOT', ROOT],
-      ['GERENTE', GERENTE],
-    ])('%s recibe 403 y no se sube nada', async (_nombre, user) => {
-      await expect(service.uploadLogo('marca-1', ARCHIVO, user))
-        .rejects.toThrow(ForbiddenException)
-
-      expect(mockLogos.subir).not.toHaveBeenCalled()
-      expect(mockPrisma.marca.update).not.toHaveBeenCalled()
-    })
-
-    it('lanza 404 si la marca está inactiva', async () => {
-      mockPrisma.admin.findUnique.mockResolvedValue(ADMIN_WITH_REST)
-      mockPrisma.marca.findUnique.mockResolvedValue({ ...MARCA, activo: false })
-
-      await expect(service.uploadLogo('marca-1', ARCHIVO, OWNER))
-        .rejects.toThrow(NotFoundException)
-
-      expect(mockLogos.subir).not.toHaveBeenCalled()
     })
   })
 
@@ -256,52 +180,39 @@ describe('MarcaService', () => {
 
   describe('removeLogo', () => {
     it('el OWNER borra el archivo y deja el logo en null', async () => {
-      mockPrisma.admin.findUnique.mockResolvedValue(ADMIN_WITH_REST)
-      mockPrisma.marca.findUnique.mockResolvedValue({ ...MARCA, logoUrl: LOGO_URL })
-      mockPrisma.marca.update.mockResolvedValue({ id: 'marca-1', logoUrl: null })
+      mockPrisma.marca.findUnique.mockResolvedValue({ logoUrl: LOGO_URL })
+      mockPrisma.marca.update.mockResolvedValue({ id: MARCA_ID, logoUrl: null })
 
-      const result = await service.removeLogo('marca-1', OWNER)
+      const result = await service.removeLogo(MARCA_ID, CUENTAS.OWNER_A)
 
-      expect(mockLogos.eliminar).toHaveBeenCalledWith('marcas', 'marca-1')
+      expect(mockLogos.eliminar).toHaveBeenCalledWith('marcas', MARCA_ID)
       expect(mockPrisma.marca.update).toHaveBeenCalledWith({
-        where: { id: 'marca-1' },
+        where: { id: MARCA_ID },
         data: { logoUrl: null },
         select: { id: true, logoUrl: true },
       })
-      expect(result).toEqual({ id: 'marca-1', logoUrl: null })
-    })
-
-    it('lanza 404 si la marca no tiene logo', async () => {
-      mockPrisma.admin.findUnique.mockResolvedValue(ADMIN_WITH_REST)
-      mockPrisma.marca.findUnique.mockResolvedValue({ ...MARCA, logoUrl: null })
-
-      await expect(service.removeLogo('marca-1', OWNER))
-        .rejects.toThrow(NotFoundException)
-
-      expect(mockLogos.eliminar).not.toHaveBeenCalled()
-    })
-
-    it('un OWNER de otra marca recibe 403 y no se borra nada', async () => {
-      mockPrisma.admin.findUnique.mockResolvedValue({ id: 'admin-2', marcaId: 'marca-otra' })
-
-      await expect(service.removeLogo('marca-1', OWNER))
-        .rejects.toThrow(ForbiddenException)
-
-      expect(mockLogos.eliminar).not.toHaveBeenCalled()
+      expect(result).toEqual({ id: MARCA_ID, logoUrl: null })
     })
 
     it.each([
-      ['ROOT', ROOT],
-      ['GERENTE', GERENTE],
-    ])('%s recibe 403 y no se borra nada', async (_nombre, user) => {
-      await expect(service.removeLogo('marca-1', user))
-        .rejects.toThrow(ForbiddenException)
+      ['no tiene logo', { logoUrl: null }, 'Esta marca no tiene logo'],
+      ['no existe', null, 'Marca no encontrada'],
+    ])('lanza 404 si la marca %s', async (_caso, fila, mensaje) => {
+      mockPrisma.marca.findUnique.mockResolvedValue(fila)
+
+      await expect(service.removeLogo(MARCA_ID, CUENTAS.OWNER_A)).rejects.toThrow(new NotFoundException(mensaje))
+
+      expect(mockLogos.eliminar).not.toHaveBeenCalled()
+    })
+
+    it.each(SIN_ACCESO_A_LA_MARCA)('%s recibe 403 y no se borra nada', async (_caso, cuenta) => {
+      await expect(service.removeLogo(MARCA_ID, cuenta)).rejects.toThrow(ForbiddenException)
 
       expect(mockLogos.eliminar).not.toHaveBeenCalled()
     })
   })
 
-  // ── findRestaurantesByMarca (público) ─────────────────────────────────
+  // ── findRestaurantesByMarca y findAllPublicas (públicos) ──────────────
 
   describe('findRestaurantesByMarca', () => {
     it('pide solo los restaurantes activos de una marca activa (la baja de la marca los oculta aunque cada uno siga activo)', async () => {
@@ -324,28 +235,13 @@ describe('MarcaService', () => {
     })
   })
 
-  // ── remove ────────────────────────────────────────────────────────────
+  describe('findAllPublicas', () => {
+    it('devuelve las marcas activas con la cantidad de restaurantes activos', async () => {
+      mockPrisma.marca.findMany.mockResolvedValue([{ id: 'm-1', nombre: 'La Parrilla', _count: { restaurantes: 3 } }])
 
-  describe('remove', () => {
-    it('hace soft delete (activo: false)', async () => {
-      mockPrisma.marca.findUnique.mockResolvedValue(MARCA)
-      mockPrisma.marca.update.mockResolvedValue({ ...MARCA, activo: false })
+      const result = await service.findAllPublicas()
 
-      await service.remove('marca-1')
-
-      expect(mockPrisma.marca.update).toHaveBeenCalledWith({
-        where: { id: 'marca-1' },
-        data: { activo: false },
-      })
-    })
-
-    it('lanza 404 si la marca no existe', async () => {
-      mockPrisma.marca.findUnique.mockResolvedValue(null)
-
-      await expect(service.remove('no-existe'))
-        .rejects.toThrow(NotFoundException)
-
-      expect(mockPrisma.marca.update).not.toHaveBeenCalled()
+      expect(result).toEqual([{ id: 'm-1', nombre: 'La Parrilla', restaurantesActivos: 3 }])
     })
   })
 })

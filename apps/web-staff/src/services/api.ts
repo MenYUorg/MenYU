@@ -1,13 +1,5 @@
-import { TOKEN_KEY } from '@menyu/auth'
+import { irAlLogin, renovarSesion, tokenDeAcceso, urlDeLaApi } from '@menyu/auth-client'
 import type { Mesa, EstadoPedido, SesionHistorial } from '@menyu/types'
-
-const BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? ''
-
-// ── Token ─────────────────────────────────────────────────────────────────────
-
-export function getToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY)
-}
 
 // ── Base fetch ────────────────────────────────────────────────────────────────
 
@@ -18,17 +10,39 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Una llamada a la API con el access token de Supabase (docs/auth/specs/auth.md, API). Ante un 401 pide un token nuevo
+ * con el refresh token y reintenta una sola vez; si no se pudo, vuelve a web-auth. No usa localStorage: el token sale
+ * de la cookie de dominio compartido en cada llamada, así que un logout hecho en otra app se nota acá.
+ */
+async function enviar(path: string, opciones: RequestInit, token: string | null): Promise<Response> {
+  const headers: Record<string, string> = { ...(opciones.headers as Record<string, string> | undefined) }
+  if (token) headers['Authorization'] = `Bearer ${token}`
+  return fetch(`${urlDeLaApi()}${path}`, { ...opciones, headers })
+}
+
+async function pedir(path: string, opciones: RequestInit): Promise<Response> {
+  const res = await enviar(path, opciones, await tokenDeAcceso())
+  if (res.status !== 401) return res
+
+  // supabase-js serializa las renovaciones simultáneas con un lock del browser: dos pedidos en paralelo no piden dos.
+  const nuevo = await renovarSesion()
+  if (!nuevo) {
+    irAlLogin()
+    throw new ApiError('Sesión expirada', 401)
+  }
+  return enviar(path, opciones, nuevo)
+}
+
 async function authFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const token = getToken()
   const headers: Record<string, string> = {
     ...(options.headers as Record<string, string> | undefined),
   }
-  if (token) headers['Authorization'] = `Bearer ${token}`
   if (options.body !== undefined && !headers['Content-Type']) {
     headers['Content-Type'] = 'application/json'
   }
 
-  const res = await fetch(`${BASE}${path}`, { ...options, headers })
+  const res = await pedir(path, { ...options, headers })
 
   if (!res.ok) {
     const err = (await res.json().catch(() => ({}))) as Record<string, unknown>
@@ -155,30 +169,6 @@ export interface SesionActivaItem {
 
 export type { SesionHistorial } from '@menyu/types'
 
-export interface SesionPagadaItem {
-  id: string
-  mesaNumero: string
-  totalCobrado: number
-  metodoPago: string
-  cobradoPorNombre: string | null
-  referenciaExterna: string | null
-  fechaCobro: string | null
-  pagos?: {
-    id: string
-    metodo: string
-    estado: string
-    cobradoPorNombre: string | null
-    referenciaExterna: string | null
-    fechaCobro: string | null
-  }[]
-}
-
-export interface MozoSimple {
-  id: string
-  nombre: string
-  activo: boolean
-}
-
 export interface SesionAbierta {
   sesionId: string
   mesaId: string
@@ -230,9 +220,6 @@ export const api = {
   mesas: {
     getAll: (restauranteId: string) =>
       authFetch<Mesa[]>(`/mesas?restauranteId=${encodeURIComponent(restauranteId)}`),
-
-    getDetalle: (mesaId: string) =>
-      authFetch<Mesa>(`/mesas/${mesaId}`),
   },
 
   pedidos: {
@@ -295,13 +282,12 @@ export const api = {
     getActivas: (restauranteId: string) =>
       authFetch<SesionActivaItem[]>(`/sessions/activas?restauranteId=${encodeURIComponent(restauranteId)}`),
 
-    getPagadas: (restauranteId: string, fecha?: string) => {
-      const params = new URLSearchParams({ restauranteId })
-      if (fecha) params.set('fecha', fecha)
-      return authFetch<SesionPagadaItem[]>(`/sessions/pagadas?${params.toString()}`)
-    },
-
-    registrarCobro: (sesionId: string, body: { metodoPago: string; mozoId?: string; cobradoPorNombre?: string; referenciaExterna?: string; confirmarCancelacionPagosPendientes?: boolean }) =>
+    /**
+     * Quién cobró lo deduce el backend de la cuenta (`common/atribucion-del-cobro.ts`): desde la entrega 4.3 el
+     * `mozoId` del body se ignora para un MOZO o JEFE_SALON, y `cobradoPorNombre` le ganaría al nombre del mozo en las
+     * sesiones pagadas. Por eso no se mandan desde staff.
+     */
+    registrarCobro: (sesionId: string, body: { metodoPago: string; referenciaExterna?: string; confirmarCancelacionPagosPendientes?: boolean }) =>
       authFetch<{ ok: boolean }>(`/sessions/${sesionId}/cobro`, {
         method: 'PATCH',
         body: JSON.stringify(body),
@@ -313,10 +299,5 @@ export const api = {
       if (hasta) params.set('hasta', hasta)
       return authFetch<SesionHistorial[]>(`/sessions/historial?${params.toString()}`)
     },
-  },
-
-  mozos: {
-    list: (restauranteId: string) =>
-      authFetch<MozoSimple[]>(`/mozos?restauranteId=${encodeURIComponent(restauranteId)}`),
   },
 }

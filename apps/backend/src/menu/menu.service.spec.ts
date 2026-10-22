@@ -220,14 +220,15 @@ describe('MenuService', () => {
       expect(result.categorias).toHaveLength(0)
     })
 
-    it('la query a Prisma siempre incluye disponible:true en el where de ítems', async () => {
+    it('la query a Prisma siempre incluye disponible:true y el restaurante en el where de ítems', async () => {
       await service.getMenuPublico('rest-1', {})
 
+      // El restaurante también en los ítems: uno de otro restaurante que apunte a esta categoría no se muestra.
       expect(mockPrisma.categoriaMenu.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           include: expect.objectContaining({
             items: expect.objectContaining({
-              where: expect.objectContaining({ disponible: true }),
+              where: expect.objectContaining({ restauranteId: 'rest-1', disponible: true }),
             }),
           }),
         }),

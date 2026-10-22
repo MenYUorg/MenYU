@@ -1,10 +1,8 @@
 import { Body, Controller, HttpCode, HttpStatus, Param, Patch, Post, UseGuards } from '@nestjs/common'
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger'
-import { JwtPayload } from '../../auth/auth.service'
-import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard'
-import { CurrentUser } from '../../common/decorators/current-user.decorator'
-import { Roles } from '../../common/decorators/roles.decorator'
-import { RolesGuard } from '../../common/guards/roles.guard'
+import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger'
+import { RequiereRoot } from '../../auth/decorators/requiere-root.decorator'
+import { UsuarioActual } from '../../auth/decorators/usuario-actual.decorator'
+import { UsuarioAutenticado } from '../../auth/supabase/usuario-autenticado'
 import { CamposPermitidos, CamposPermitidosGuard } from '../comun/campos-permitidos.guard'
 import { IdPipe } from '../comun/cuentas'
 import { EditarRestauranteRootDto } from '../marcas/dto/marca-root.dto'
@@ -15,10 +13,10 @@ import { RootRestaurantesService } from './root-restaurantes.service'
  * Ni la dirección, ni el logo, ni el modo de sesión: eso lo decide el dueño.
  */
 @ApiTags('root')
-@ApiBearerAuth()
 @Controller('root/restaurantes')
-@UseGuards(JwtAuthGuard, RolesGuard, CamposPermitidosGuard)
-@Roles('ROOT')
+@UseGuards(CamposPermitidosGuard)
+// Debajo, para que los permisos corran antes que la validación de los campos (como en RootMarcasController).
+@RequiereRoot()
 export class RootRestaurantesController {
   constructor(private readonly restaurantes: RootRestaurantesService) {}
 
@@ -31,9 +29,9 @@ export class RootRestaurantesController {
   editar(
     @Param('id', new IdPipe('Restaurante no encontrado')) id: string,
     @Body() dto: EditarRestauranteRootDto,
-    @CurrentUser() user: JwtPayload,
+    @UsuarioActual() usuario: UsuarioAutenticado,
   ) {
-    return this.restaurantes.editar(id, dto, user)
+    return this.restaurantes.editar(id, dto, usuario)
   }
 
   @Post(':id/baja')
@@ -44,8 +42,8 @@ export class RootRestaurantesController {
   })
   @ApiResponse({ status: 200 })
   @ApiResponse({ status: 404, description: 'El restaurante no existe' })
-  baja(@Param('id', new IdPipe('Restaurante no encontrado')) id: string, @CurrentUser() user: JwtPayload) {
-    return this.restaurantes.cambiarEstado(id, false, user)
+  baja(@Param('id', new IdPipe('Restaurante no encontrado')) id: string, @UsuarioActual() usuario: UsuarioAutenticado) {
+    return this.restaurantes.cambiarEstado(id, false, usuario)
   }
 
   @Post(':id/reactivar')
@@ -53,7 +51,7 @@ export class RootRestaurantesController {
   @ApiOperation({ summary: 'Reactiva un restaurante dado de baja', description: 'Idempotente.' })
   @ApiResponse({ status: 200 })
   @ApiResponse({ status: 404, description: 'El restaurante no existe' })
-  reactivar(@Param('id', new IdPipe('Restaurante no encontrado')) id: string, @CurrentUser() user: JwtPayload) {
-    return this.restaurantes.cambiarEstado(id, true, user)
+  reactivar(@Param('id', new IdPipe('Restaurante no encontrado')) id: string, @UsuarioActual() usuario: UsuarioAutenticado) {
+    return this.restaurantes.cambiarEstado(id, true, usuario)
   }
 }

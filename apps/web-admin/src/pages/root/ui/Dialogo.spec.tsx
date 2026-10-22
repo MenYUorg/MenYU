@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
+import { Mail } from 'lucide-react'
 import { Dialogo } from './Dialogo'
 
 function Ejemplo({ ocupado = false, avisaRegistro }: { ocupado?: boolean; avisaRegistro?: boolean }) {
@@ -131,5 +132,27 @@ describe('Dialogo', () => {
     await userEvent.tab({ shift: true })
 
     expect(screen.getByRole('button', { name: 'Guardar' })).toHaveFocus()
+  })
+
+  it('con un icono lo dibuja en un círculo verde justo arriba del título; sin icono no hay círculo', () => {
+    const pie = <button type="button">Listo</button>
+    const { unmount } = render(
+      <Dialogo titulo="Invitación enviada" icono={Mail} onCerrar={vi.fn()} pie={pie}>
+        Texto
+      </Dialogo>,
+    )
+
+    const circulo = screen.getByRole('dialog').querySelector('.ok-ic')
+    expect(circulo).not.toBeNull()
+    expect(circulo?.nextElementSibling).toBe(screen.getByRole('heading', { name: 'Invitación enviada' }))
+    expect(circulo?.querySelector('svg')).toHaveAttribute('aria-hidden', 'true')
+    unmount()
+
+    render(
+      <Dialogo titulo="Sin icono" onCerrar={vi.fn()} pie={pie}>
+        Texto
+      </Dialogo>,
+    )
+    expect(document.querySelector('.ok-ic')).toBeNull()
   })
 })

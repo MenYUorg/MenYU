@@ -3,7 +3,9 @@ import { ConflictException, ForbiddenException, NotFoundException } from '@nestj
 import { randomInt } from 'crypto'
 import { MesasService } from './mesas.service'
 import { PrismaService } from '../prisma/prisma.service'
-import { JwtPayload } from '../auth/auth.service'
+import { AccesoService } from '../auth/supabase/acceso.service'
+import { UsuarioAutenticado } from '../auth/supabase/usuario-autenticado'
+import { accesoDeTest, CUENTAS, MUNDO } from '../test/acceso-de-test'
 
 jest.mock('qrcode', () => ({
   toDataURL: jest.fn().mockResolvedValue('data:image/png;base64,mock_qr_image'),
@@ -16,13 +18,10 @@ jest.mock('crypto', () => ({
   randomInt: jest.fn(jest.requireActual('crypto').randomInt),
 }))
 
-const ROOT: JwtPayload = { sub: 'root-1', tipo: 'admin', rol: 'ROOT' }
-const OWNER: JwtPayload = { sub: 'admin-1', tipo: 'admin', rol: 'OWNER' }
-
-// marcaId necesario para que assertRestauranteOwnership compare admin.marcaId === restaurante.marcaId
-const RESTAURANTE = { id: 'rest-1', activo: true, marcaId: 'marca-1' }
-const ADMIN = { id: 'admin-1', marcaId: 'marca-1' }
-const MESA = { id: 'mesa-1', numero: '1', qrToken: 'token-abc', estado: 'libre', restauranteId: 'rest-1', activo: true }
+const OWNER = CUENTAS.OWNER_A
+const GERENTE = CUENTAS.GERENTE
+const REST = MUNDO.REST_1
+const MESA = { id: 'mesa-1', numero: '1', qrToken: 'token-abc', estado: 'libre', restauranteId: REST, activo: true }
 
 const mockPrisma = {
   mesa: {
@@ -32,8 +31,6 @@ const mockPrisma = {
     create: jest.fn(),
     update: jest.fn(),
   },
-  restaurante: { findUnique: jest.fn() },
-  admin: { findUnique: jest.fn() },
 }
 
 describe('MesasService', () => {
@@ -44,6 +41,7 @@ describe('MesasService', () => {
       providers: [
         MesasService,
         { provide: PrismaService, useValue: mockPrisma },
+        { provide: AccesoService, useValue: accesoDeTest() },
       ],
     }).compile()
 
@@ -53,13 +51,12 @@ describe('MesasService', () => {
 
   // ── create ─────────────────────────────────────────────────────────────
 
-  describe('create', () => {
+  describe('create (el rol en el restaurante lo exige la ruta)', () => {
     it('crea la mesa con qrToken generado y devuelve imagen QR', async () => {
-      mockPrisma.restaurante.findUnique.mockResolvedValue(RESTAURANTE)
       mockPrisma.mesa.findFirst.mockResolvedValue(null)
       mockPrisma.mesa.create.mockResolvedValue({ ...MESA, qrToken: 'nuevo-uuid-generado' })
 
-      const result = await service.create({ numero: '1', restauranteId: 'rest-1' })
+      const result = await service.create({ numero: '1', restauranteId: REST })
 
       expect(mockPrisma.mesa.create).toHaveBeenCalledWith(
         expect.objectContaining({ data: expect.objectContaining({ qrToken: 'nuevo-uuid-generado' }) }),
@@ -68,54 +65,63 @@ describe('MesasService', () => {
     })
 
     it('lanza 409 si el número de mesa ya existe en ese restaurante', async () => {
-      mockPrisma.restaurante.findUnique.mockResolvedValue(RESTAURANTE)
       mockPrisma.mesa.findFirst.mockResolvedValue(MESA)
 
-      await expect(service.create({ numero: '1', restauranteId: 'rest-1' }))
+      await expect(service.create({ numero: '1', restauranteId: REST }))
         .rejects.toThrow(ConflictException)
 
       expect(mockPrisma.mesa.create).not.toHaveBeenCalled()
-    })
-
-    it('lanza 404 si el restaurante no existe', async () => {
-      mockPrisma.restaurante.findUnique.mockResolvedValue(null)
-
-      await expect(service.create({ numero: '1', restauranteId: 'no-existe' }))
-        .rejects.toThrow(NotFoundException)
     })
   })
 
   // ── findAll ────────────────────────────────────────────────────────────
 
-  describe('findAll', () => {
-    it('ROOT puede listar mesas de cualquier restaurante', async () => {
+  describe('findAll (el rol en el restaurante lo exige la ruta)', () => {
+    it('lista las mesas activas del restaurante con su QR', async () => {
       mockPrisma.mesa.findMany.mockResolvedValue([MESA])
 
-      const result = await service.findAll('rest-1', ROOT)
+      const result = await service.findAll(REST)
 
       expect(mockPrisma.mesa.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { restauranteId: 'rest-1', activo: true } }),
+        expect.objectContaining({ where: { restauranteId: REST, activo: true } }),
       )
       expect(result[0]).toHaveProperty('qrImage')
     })
+  })
 
-    it('OWNER solo puede listar mesas de su restaurante', async () => {
-      mockPrisma.admin.findUnique.mockResolvedValue(ADMIN)
-      mockPrisma.restaurante.findUnique.mockResolvedValue(RESTAURANTE)
-      mockPrisma.mesa.findMany.mockResolvedValue([MESA])
+  // ── permisos de las rutas de una mesa ──────────────────────────────────
 
-      const result = await service.findAll('rest-1', OWNER)
+  describe('permisos de las rutas de una mesa (el rol en el restaurante de la mesa)', () => {
+    const RUTAS: Array<[string, (u: UsuarioAutenticado) => Promise<unknown>]> = [
+      ['findOne', (u) => service.findOne('mesa-1', u)],
+      ['update', (u) => service.update('mesa-1', { estado: 'ocupada' }, u)],
+      ['regenerarQr', (u) => service.regenerarQr('mesa-1', u)],
+      ['cambiarPin', (u) => service.cambiarPin('mesa-1', '0420', u)],
+    ]
 
-      expect(result).toHaveLength(1)
+    beforeEach(() => {
+      mockPrisma.mesa.findUnique.mockResolvedValue(MESA)
+      mockPrisma.mesa.findFirst.mockResolvedValue(null)
+      mockPrisma.mesa.update.mockResolvedValue(MESA)
     })
 
-    it('OWNER lanza 403 si intenta listar mesas de otro restaurante', async () => {
-      mockPrisma.admin.findUnique.mockResolvedValue(ADMIN)
-      // Restaurante de otra marca → admin.marcaId !== restaurante.marcaId → 403
-      mockPrisma.restaurante.findUnique.mockResolvedValue({ id: 'rest-otro', marcaId: 'marca-otra' })
+    it.each(RUTAS)('%s: el OWNER de la marca y el GERENTE del restaurante pasan', async (_ruta, llamar) => {
+      await llamar(OWNER)
+      await llamar(GERENTE)
+    })
 
-      await expect(service.findAll('rest-otro', OWNER))
-        .rejects.toThrow(ForbiddenException)
+    it.each(RUTAS)('%s: ROOT, el OWNER de otra marca, el MOZO y el JEFE_SALON reciben 403', async (_ruta, llamar) => {
+      for (const cuenta of [CUENTAS.ROOT, CUENTAS.OWNER_B, CUENTAS.MOZO, CUENTAS.JEFE_SALON]) {
+        await expect(llamar(cuenta)).rejects.toThrow(ForbiddenException)
+      }
+      expect(mockPrisma.mesa.update).not.toHaveBeenCalled()
+    })
+
+    it('el GERENTE de otro restaurante de la marca recibe 403', async () => {
+      mockPrisma.mesa.findUnique.mockResolvedValue({ ...MESA, restauranteId: MUNDO.REST_2 })
+
+      await expect(service.regenerarQr('mesa-1', GERENTE)).rejects.toThrow(ForbiddenException)
+      await expect(service.regenerarQr('mesa-1', OWNER)).resolves.toBeDefined()
     })
   })
 
@@ -124,8 +130,6 @@ describe('MesasService', () => {
   describe('findOne', () => {
     it('devuelve la mesa con imagen QR', async () => {
       mockPrisma.mesa.findUnique.mockResolvedValue(MESA)
-      mockPrisma.admin.findUnique.mockResolvedValue(ADMIN)
-      mockPrisma.restaurante.findUnique.mockResolvedValue(RESTAURANTE)
 
       const result = await service.findOne('mesa-1', OWNER)
 
@@ -136,14 +140,14 @@ describe('MesasService', () => {
     it('lanza 404 si la mesa no existe', async () => {
       mockPrisma.mesa.findUnique.mockResolvedValue(null)
 
-      await expect(service.findOne('no-existe', ROOT))
+      await expect(service.findOne('no-existe', OWNER))
         .rejects.toThrow(NotFoundException)
     })
 
     it('lanza 404 si la mesa está inactiva', async () => {
       mockPrisma.mesa.findUnique.mockResolvedValue({ ...MESA, activo: false })
 
-      await expect(service.findOne('mesa-1', ROOT))
+      await expect(service.findOne('mesa-1', OWNER))
         .rejects.toThrow(NotFoundException)
     })
   })
@@ -151,10 +155,11 @@ describe('MesasService', () => {
   // ── update ─────────────────────────────────────────────────────────────
 
   describe('update', () => {
-    it('actualiza el número y devuelve imagen QR actualizada', async () => {
+    beforeEach(() => {
       mockPrisma.mesa.findUnique.mockResolvedValue(MESA)
-      mockPrisma.admin.findUnique.mockResolvedValue(ADMIN)
-      mockPrisma.restaurante.findUnique.mockResolvedValue(RESTAURANTE)
+    })
+
+    it('actualiza el número y devuelve imagen QR actualizada', async () => {
       mockPrisma.mesa.findFirst.mockResolvedValue(null)
       mockPrisma.mesa.update.mockResolvedValue({ ...MESA, numero: '2' })
 
@@ -167,9 +172,6 @@ describe('MesasService', () => {
     })
 
     it('lanza 409 si el nuevo número ya lo usa otra mesa del mismo restaurante', async () => {
-      mockPrisma.mesa.findUnique.mockResolvedValue(MESA)
-      mockPrisma.admin.findUnique.mockResolvedValue(ADMIN)
-      mockPrisma.restaurante.findUnique.mockResolvedValue(RESTAURANTE)
       mockPrisma.mesa.findFirst.mockResolvedValue({ ...MESA, id: 'mesa-otra' })
 
       await expect(service.update('mesa-1', { numero: '2' }, OWNER))
@@ -177,23 +179,19 @@ describe('MesasService', () => {
     })
 
     it('actualiza el estado', async () => {
-      mockPrisma.mesa.findUnique.mockResolvedValue(MESA)
-      mockPrisma.admin.findUnique.mockResolvedValue(ADMIN)
       mockPrisma.mesa.update.mockResolvedValue({ ...MESA, estado: 'ocupada' })
 
-      const result = await service.update('mesa-1', { estado: 'ocupada' }, ROOT)
+      const result = await service.update('mesa-1', { estado: 'ocupada' }, GERENTE)
 
       expect(result.estado).toBe('ocupada')
     })
   })
 
-  // ── remove ─────────────────────────────────────────────────────────────
+  // ── remove (solo el OWNER) ─────────────────────────────────────────────
 
   describe('remove', () => {
-    it('hace soft delete (activo: false)', async () => {
+    it('el OWNER hace soft delete (activo: false)', async () => {
       mockPrisma.mesa.findUnique.mockResolvedValue(MESA)
-      mockPrisma.admin.findUnique.mockResolvedValue(ADMIN)
-      mockPrisma.restaurante.findUnique.mockResolvedValue(RESTAURANTE)
       mockPrisma.mesa.update.mockResolvedValue({ ...MESA, activo: false })
 
       await service.remove('mesa-1', OWNER)
@@ -204,10 +202,20 @@ describe('MesasService', () => {
       })
     })
 
+    it.each([
+      ['el GERENTE', GERENTE],
+      ['ROOT', CUENTAS.ROOT],
+    ])('%s recibe 403 y la mesa no se toca', async (_caso, cuenta) => {
+      mockPrisma.mesa.findUnique.mockResolvedValue(MESA)
+
+      await expect(service.remove('mesa-1', cuenta)).rejects.toThrow(ForbiddenException)
+      expect(mockPrisma.mesa.update).not.toHaveBeenCalled()
+    })
+
     it('lanza 404 si la mesa no existe', async () => {
       mockPrisma.mesa.findUnique.mockResolvedValue(null)
 
-      await expect(service.remove('no-existe', ROOT))
+      await expect(service.remove('no-existe', OWNER))
         .rejects.toThrow(NotFoundException)
     })
   })
@@ -217,13 +225,13 @@ describe('MesasService', () => {
   describe('generatePin', () => {
     it('genera un string de exactamente 4 caracteres', async () => {
       mockPrisma.mesa.findFirst.mockResolvedValue(null)
-      const pin = await (service as any).generatePin('rest-1')
+      const pin = await (service as any).generatePin(REST)
       expect(pin).toHaveLength(4)
     })
 
     it('el valor está entre "0001" y "9999"', async () => {
       mockPrisma.mesa.findFirst.mockResolvedValue(null)
-      const pin = await (service as any).generatePin('rest-1')
+      const pin = await (service as any).generatePin(REST)
       const num = parseInt(pin, 10)
       expect(num).toBeGreaterThanOrEqual(1)
       expect(num).toBeLessThanOrEqual(9999)
@@ -233,13 +241,13 @@ describe('MesasService', () => {
       // randomInt(1, 10000) = 1 → padStart(4, '0') = '0001'
       ;(randomInt as unknown as jest.Mock).mockReturnValueOnce(1)
       mockPrisma.mesa.findFirst.mockResolvedValue(null)
-      const pin = await (service as any).generatePin('rest-1')
+      const pin = await (service as any).generatePin(REST)
       expect(pin).toBe('0001')
     })
 
     it('lanza ConflictException si todos los PINs están ocupados (100 colisiones seguidas)', async () => {
       mockPrisma.mesa.findFirst.mockResolvedValue({ id: 'mesa-existente' })
-      await expect((service as any).generatePin('rest-1')).rejects.toThrow(ConflictException)
+      await expect((service as any).generatePin(REST)).rejects.toThrow(ConflictException)
       expect(mockPrisma.mesa.findFirst).toHaveBeenCalledTimes(100)
     })
   })
@@ -257,14 +265,13 @@ describe('MesasService', () => {
 
     it('al crear la mesa, el PIN sale de crypto.randomInt (1 a 9999) y no de Math.random', async () => {
       // Arrange
-      mockPrisma.restaurante.findUnique.mockResolvedValue(RESTAURANTE)
       mockPrisma.mesa.findFirst.mockResolvedValue(null)
       mockPrisma.mesa.create.mockImplementation(({ data }) => Promise.resolve({ ...MESA, ...data }))
       ;(randomInt as unknown as jest.Mock).mockReturnValueOnce(42)
       mathRandom = jest.spyOn(Math, 'random')
 
       // Act
-      const mesa = await service.create({ numero: '1', restauranteId: 'rest-1' })
+      const mesa = await service.create({ numero: '1', restauranteId: REST })
 
       // Assert
       expect(randomInt).toHaveBeenCalledWith(1, 10000)
@@ -273,13 +280,11 @@ describe('MesasService', () => {
     })
   })
 
-  // ── regenerarQr ────────────────────────────────────────────────────────
+  // ── regenerarQr y cambiarPin ───────────────────────────────────────────
 
   describe('regenerarQr', () => {
     it('genera un nuevo token UUID y devuelve nueva imagen QR', async () => {
       mockPrisma.mesa.findUnique.mockResolvedValue(MESA)
-      mockPrisma.admin.findUnique.mockResolvedValue(ADMIN)
-      mockPrisma.restaurante.findUnique.mockResolvedValue(RESTAURANTE)
       mockPrisma.mesa.update.mockResolvedValue({ ...MESA, qrToken: 'nuevo-uuid-generado' })
 
       const result = await service.regenerarQr('mesa-1', OWNER)
@@ -291,15 +296,27 @@ describe('MesasService', () => {
       expect(result).toHaveProperty('qrImage', 'data:image/png;base64,mock_qr_image')
       expect(result.qrToken).toBe('nuevo-uuid-generado')
     })
+  })
 
-    it('lanza 403 si OWNER intenta regenerar QR de mesa de otro restaurante', async () => {
-      mockPrisma.mesa.findUnique.mockResolvedValue({ ...MESA, restauranteId: 'rest-otro' })
-      mockPrisma.admin.findUnique.mockResolvedValue(ADMIN)
-      // Restaurante de otra marca → admin.marcaId !== restaurante.marcaId → 403
-      mockPrisma.restaurante.findUnique.mockResolvedValue({ id: 'rest-otro', marcaId: 'marca-otra' })
+  describe('cambiarPin', () => {
+    it('con un PIN que ya usa otra mesa del restaurante responde 409', async () => {
+      mockPrisma.mesa.findUnique.mockResolvedValue(MESA)
+      mockPrisma.mesa.findFirst.mockResolvedValue({ ...MESA, id: 'mesa-2' })
 
-      await expect(service.regenerarQr('mesa-1', OWNER))
-        .rejects.toThrow(ForbiddenException)
+      await expect(service.cambiarPin('mesa-1', '0420', GERENTE)).rejects.toThrow(
+        new ConflictException('El PIN 0420 ya está en uso en este restaurante'),
+      )
+      expect(mockPrisma.mesa.update).not.toHaveBeenCalled()
+    })
+
+    it('guarda el PIN nuevo', async () => {
+      mockPrisma.mesa.findUnique.mockResolvedValue(MESA)
+      mockPrisma.mesa.findFirst.mockResolvedValue(null)
+      mockPrisma.mesa.update.mockResolvedValue({ ...MESA, pin: '0420' })
+
+      await service.cambiarPin('mesa-1', '0420', GERENTE)
+
+      expect(mockPrisma.mesa.update).toHaveBeenCalledWith({ where: { id: 'mesa-1' }, data: { pin: '0420' } })
     })
   })
 })

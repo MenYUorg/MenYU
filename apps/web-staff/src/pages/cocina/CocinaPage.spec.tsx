@@ -1,18 +1,16 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import type { Pedido } from '@menyu/types'
 import { api, type PedidoRico } from '../../services/api'
 import * as impresora from '../../services/impresora'
 import * as socketService from '../../services/socket'
+import { membresiaDeRestaurante, perfilDeCocina, perfilDePrueba, reiniciarSesionDePrueba } from '../../test/authClient'
+import { montarContexto, reiniciarContexto } from '../../test/contexto'
 import { CocinaPage } from './CocinaPage'
 
-let usuario: { restauranteId?: string } | null = { restauranteId: 'rest-1' }
-let restauranteStore: string | null = 'rest-store'
 let conectada = false
 
-vi.mock('@menyu/auth', () => ({ useAuth: () => ({ user: usuario }) }))
-vi.mock('../../store/mozoStore', () => ({
-  useMozoStore: (selector: (s: { restauranteId: string | null }) => unknown) => selector({ restauranteId: restauranteStore }),
-}))
+vi.mock('@menyu/auth-client', async () => (await import('../../test/authClient')).moduloSimulado())
 vi.mock('../../services/api', () => ({ api: { pedidos: { getByRestaurante: vi.fn(), cambiarEstado: vi.fn() } } }))
 vi.mock('../../services/impresora', () => ({
   conectarImpresora: vi.fn(),
@@ -24,10 +22,25 @@ const oyentes: { nuevo?: (p: Pedido) => void; actualizado?: (p: Pedido) => void;
 const desuscribir = { nuevo: vi.fn(), actualizado: vi.fn(), editado: vi.fn() }
 vi.mock('../../services/socket', () => ({
   joinRestauranteComoCocina: vi.fn(),
+  cerrarSesion: vi.fn(),
   onPedidoNuevo: vi.fn((fn) => { oyentes.nuevo = fn; return desuscribir.nuevo }),
   onPedidoActualizado: vi.fn((fn) => { oyentes.actualizado = fn; return desuscribir.actualizado }),
   onPedidoEditado: vi.fn((fn) => { oyentes.editado = fn; return desuscribir.editado }),
 }))
+
+function Destino() {
+  return <p>destino {useLocation().pathname}</p>
+}
+
+/** La pantalla necesita un Router: su encabezado puede llevar al selector. */
+const conRouter = () => (
+  <MemoryRouter initialEntries={['/cocina']}>
+    <Routes>
+      <Route path="/cocina" element={<CocinaPage />} />
+      <Route path="*" element={<Destino />} />
+    </Routes>
+  </MemoryRouter>
+)
 
 const pedidosApi = vi.mocked(api.pedidos)
 const impresoraMock = vi.mocked(impresora)
@@ -83,7 +96,7 @@ async function abrir(enPrep = [EN_PREP, EDITADO], listos = [LISTO]) {
   pedidosApi.getByRestaurante.mockImplementation((_r: string, f?: { estado?: string }) =>
     Promise.resolve(f?.estado === 'en_preparacion' ? enPrep : listos) as never,
   )
-  const vista = render(<CocinaPage />)
+  const vista = render(conRouter())
   await vi.waitFor(() => expect(screen.getByRole('button', { name: /Actualizar/ })).toBeEnabled())
   return vista
 }
@@ -94,8 +107,9 @@ const recibir = (canal: keyof typeof oyentes, p: PedidoRico) => act(() => { oyen
 
 beforeEach(() => {
   vi.clearAllMocks()
-  usuario = { restauranteId: 'rest-1' }
-  restauranteStore = 'rest-store'
+  reiniciarSesionDePrueba()
+  reiniciarContexto()
+  montarContexto(perfilDeCocina('rest-1'))
   conectada = false
   tonos.length = 0
   vi.stubGlobal('AudioContext', AudioFalso)
@@ -107,21 +121,49 @@ afterEach(() => {
 })
 
 describe('CocinaPage', () => {
-  it('sin restaurante no consulta ni se une a la cocina', () => {
-    usuario = null
-    restauranteStore = null
+  it('con varios restaurantes, "Cambiar de restaurante" vuelve al selector', async () => {
+    reiniciarContexto()
+    montarContexto(perfilDePrueba({
+      nombre: 'Cocina de Prueba',
+      membresias: [
+        membresiaDeRestaurante('COCINA', 'rest-1'),
+        membresiaDeRestaurante('COCINA', 'rest-2'),
+      ],
+    }), 'rest-1')
+    await abrir()
 
-    render(<CocinaPage />)
+    fireEvent.click(screen.getByRole('button', { name: 'Cambiar de restaurante' }))
+
+    expect(screen.getByText('destino /selector')).toBeInTheDocument()
+  })
+
+  it('con un solo restaurante no ofrece cambiarlo', async () => {
+    await abrir()
+
+    expect(screen.queryByRole('button', { name: 'Cambiar de restaurante' })).not.toBeInTheDocument()
+  })
+
+  it('"Salir" desconecta el socket y cierra la sesión', async () => {
+    await abrir()
+
+    fireEvent.click(screen.getByRole('button', { name: /Salir/ }))
+
+    expect(socketService.cerrarSesion).toHaveBeenCalledTimes(1)
+  })
+
+  it('sin restaurante elegido no consulta ni se une a la cocina', () => {
+    reiniciarContexto()
+
+    render(conRouter())
 
     expect(pedidosApi.getByRestaurante).not.toHaveBeenCalled()
     expect(socketService.joinRestauranteComoCocina).not.toHaveBeenCalled()
   })
 
-  it('sin usuario usa el restaurante guardado', async () => {
-    usuario = null
+  it('consulta el restaurante del contexto, que sale de la membresía', async () => {
     await abrir()
 
-    expect(pedidosApi.getByRestaurante).toHaveBeenCalledWith('rest-store', { estado: 'en_preparacion' })
+    expect(pedidosApi.getByRestaurante).toHaveBeenCalledWith('rest-1', { estado: 'en_preparacion' })
   })
 
   describe('tablero', () => {
@@ -164,7 +206,7 @@ describe('CocinaPage', () => {
 
     it('si la carga falla lo dice; "Actualizar" vuelve a pedir', async () => {
       pedidosApi.getByRestaurante.mockRejectedValueOnce(new Error('caído'))
-      render(<CocinaPage />)
+      render(conRouter())
       expect(await screen.findByText('No se pudieron cargar los pedidos.')).toBeInTheDocument()
 
       pedidosApi.getByRestaurante.mockResolvedValue([EN_PREP] as never)

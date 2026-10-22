@@ -65,8 +65,8 @@ export interface MembresiaPerfil {
   rol: Rol
   /** Solo en la de OWNER, con los restaurantes activos de la marca (la membresía los cubre a todos). */
   marca: { id: string; nombre: string; restaurantes: { id: string; nombre: string }[] } | null
-  /** En las demás. */
-  restaurante: { id: string; nombre: string; marcaId: string } | null
+  /** En las demás, con su marca (para el selector de contexto). */
+  restaurante: { id: string; nombre: string; marcaId: string; marca: { id: string; nombre: string } } | null
 }
 
 /** El usuario autenticado con Supabase y sus permisos según nuestra base. */

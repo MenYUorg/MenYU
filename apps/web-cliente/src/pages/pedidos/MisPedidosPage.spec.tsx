@@ -88,8 +88,12 @@ describe('MisPedidosPage', () => {
     expect(screen.getAllByText('En preparación')).toHaveLength(2)
     expect(screen.getByText('Entregado')).toBeInTheDocument()
     expect(screen.getByText('Anulado')).toBeInTheDocument()
+    // `toLocaleTimeString` separa "p. m." con un espacio fino (U+202F) según el ICU de la máquina. Testing Library
+    // normaliza el texto del DOM pero no el del matcher, así que comparar el string pelado falla en Windows y pasa en
+    // el CI. Se normalizan los dos lados.
     const hora = new Date('2026-10-18T20:00:00').toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
-    expect(screen.getByText(`Enviado a las ${hora}`)).toBeInTheDocument()
+    const sinEspaciosRaros = (texto: string) => texto.replace(/\s+/g, ' ')
+    expect(screen.getByText((contenido) => sinEspaciosRaros(contenido) === sinEspaciosRaros(`Enviado a las ${hora}`))).toBeInTheDocument()
     expect(screen.getAllByText('2× Milanesa · 1× Agua')).toHaveLength(5)
     expect(progreso('aaaaaa-pend')).toBe('25%')
     expect(progreso('bbbbbb-prep')).toBe('60%')

@@ -1,5 +1,6 @@
-import { Logger, NotFoundException } from '@nestjs/common'
+import { ForbiddenException, Logger, NotFoundException } from '@nestjs/common'
 import { DivisionService } from '../comensales/division.service'
+import { AccesoService } from '../auth/supabase/acceso.service'
 import { MenyuGateway } from '../gateway/menyu.gateway'
 import { PrismaService } from '../prisma/prisma.service'
 import { MercadoPagoOAuthService } from './mercado-pago-oauth.service'
@@ -40,6 +41,7 @@ describe('PaymentsService: caja, cuenta, back_urls y webhooks sin cambios', () =
       mpProvider as unknown as MercadoPagoProvider,
       mpOAuth as unknown as MercadoPagoOAuthService,
       division as unknown as DivisionService,
+      {} as AccesoService,
     )
   })
 
@@ -99,7 +101,7 @@ describe('PaymentsService: caja, cuenta, back_urls y webhooks sin cambios', () =
       // Arrange
       prisma.sesionMesa.findUnique.mockResolvedValue({
         id: 'ses-1',
-        mesa: { id: 'mesa-1', numero: '4', restauranteId: 'rest-1' },
+        mesa: { id: 'mesa-1', numero: '4', restauranteId: 'rest-1', restaurante: { activo: true, marca: { activo: true } } },
         pedidos: [{ items: [{ cantidad: 2, precioUnitario: '1000.00' }] }, { items: [{ cantidad: 1, precioUnitario: '500.00' }] }],
       })
       prisma.llamadoMozo.create.mockResolvedValue({ id: 'll-1' })
@@ -120,6 +122,25 @@ describe('PaymentsService: caja, cuenta, back_urls y webhooks sin cambios', () =
 
       await expect(service.avisarMozoPedidoDeCuenta('ses-x')).rejects.toThrow(new NotFoundException('Sesión no encontrada'))
       expect(prisma.llamadoMozo.deleteMany).not.toHaveBeenCalled()
+      expect(gateway.emitMozoCalled).not.toHaveBeenCalled()
+    })
+
+    // Igual que `solicitarEfectivo`: con la baja nadie puede atender el llamado (entrega 4.7).
+    it.each([
+      ['el restaurante', { activo: false }],
+      ['su marca', { marca: { activo: false } }],
+    ])('con %s dado de baja responde 403 y no toca los llamados', async (_quien, cambios) => {
+      prisma.sesionMesa.findUnique.mockResolvedValue({
+        id: 'ses-1',
+        mesa: { id: 'mesa-1', numero: '4', restauranteId: 'rest-1', restaurante: { activo: true, marca: { activo: true }, ...cambios } },
+        pedidos: [],
+      })
+
+      await expect(service.avisarMozoPedidoDeCuenta('ses-1')).rejects.toThrow(
+        new ForbiddenException('Este restaurante no está disponible'),
+      )
+      expect(prisma.llamadoMozo.deleteMany).not.toHaveBeenCalled()
+      expect(prisma.llamadoMozo.create).not.toHaveBeenCalled()
       expect(gateway.emitMozoCalled).not.toHaveBeenCalled()
     })
   })
