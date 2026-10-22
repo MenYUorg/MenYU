@@ -3,6 +3,12 @@ import {
   disconnect,
   joinRestauranteComoCocina,
   joinRestauranteComoMozo,
+  onMozoCalled,
+  onPedidoActualizado,
+  onPedidoEditado,
+  onPedidoNuevo,
+  onSesionCobrada,
+  onSesionQuierePagar,
 } from './socket'
 import { logoutSimulado, reiniciarSesionDePrueba } from '../test/authClient'
 
@@ -30,6 +36,8 @@ beforeEach(() => {
   ioFalso.mockClear()
   socketFalso.emit.mockClear()
   socketFalso.once.mockClear()
+  socketFalso.on.mockClear()
+  socketFalso.off.mockClear()
   socketFalso.disconnect.mockClear()
   reiniciarSesionDePrueba()
 })
@@ -67,6 +75,24 @@ describe('el socket de web-staff', () => {
     const alConectar = socketFalso.once.mock.calls[0]?.[1] as () => void
     alConectar()
     expect(socketFalso.emit).toHaveBeenCalledWith('cocina:join', { restauranteId: 'rest-1' })
+  })
+
+  it.each([
+    ['waiter:called', onMozoCalled],
+    ['order:new', onPedidoNuevo],
+    ['order:updated', onPedidoActualizado],
+    ['order:edited', onPedidoEditado],
+    ['sesion:quierePagar', onSesionQuierePagar],
+    ['sesion:cobrada', onSesionCobrada],
+  ] as const)('%s se escucha y se puede dejar de escuchar', (evento, suscribir) => {
+    const oyente = vi.fn()
+
+    // Cada `on*` recibe el dato de su evento; acá solo importa a qué canal se engancha y que devuelva la baja.
+    const desuscribir = (suscribir as (cb: unknown) => () => void)(oyente)
+
+    expect(socketFalso.on).toHaveBeenCalledWith(evento, oyente)
+    desuscribir()
+    expect(socketFalso.off).toHaveBeenCalledWith(evento, oyente)
   })
 
   it('cerrar sesión desconecta el socket antes de irse a web-auth', async () => {
