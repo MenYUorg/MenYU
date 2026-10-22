@@ -18,9 +18,8 @@ import { TipoGuard } from './guards/tipo.guard'
  * abajo), de la sesión de mesa (SessionAuthGuard) o del personal con el token de Supabase (SupabaseAuthGuard), y ninguna mezcla
  * dos sistemas: es la garantía de "no mezclar los dos sistemas en un mismo endpoint" (CLAUDE.md).
  *
- * Mientras dura la Fase 4, las rutas que todavía usan el JWT legacy están en PENDIENTES_4_4 (las de la 4.3 ya pasaron), que tiene
- * que coincidir exactamente con las que lo usan: pasar una ruta a Supabase obliga a sacarla de acá, y no se puede sumar una ruta
- * nueva con el JWT legacy. Al cerrar la entrega 4.4 quedan todas vacías y se borran.
+ * Desde la entrega 4.4 ninguna ruta del personal usa el JWT legacy (JwtAuthGuard, RolesGuard, TipoGuard, `@Roles` ni
+ * `@RequiresTipo`), que siguen existiendo hasta la Fase 5: no se puede sumar una ruta nueva con ellos.
  */
 
 /** Sin autenticación, a propósito. */
@@ -114,37 +113,6 @@ const CON_PERMISO_EN_EL_SERVICE = [
   'PATCH /waiter-calls/:id/atender',
 ]
 
-/** Del personal sin guard, con el JWT legacy verificado a mano en el service. Vacía desde la entrega 4.3. */
-const PENDIENTES_A_MANO: string[] = []
-
-/** Del personal con JwtAuthGuard, RolesGuard o TipoGuard fuera de /root. Vacía desde la entrega 4.3. */
-const PENDIENTES_4_3: string[] = []
-
-/** La consola de ROOT: pasa a `@RequiereRoot()` en la entrega 4.4. */
-const PENDIENTES_4_4 = [
-  'GET /root/marcas',
-  'POST /root/marcas',
-  'GET /root/marcas/:id',
-  'PATCH /root/marcas/:id',
-  'POST /root/marcas/:id/baja',
-  'POST /root/marcas/:id/reactivar',
-  'POST /root/marcas/:id/restaurantes',
-  'PATCH /root/restaurantes/:id',
-  'POST /root/restaurantes/:id/baja',
-  'POST /root/restaurantes/:id/reactivar',
-  'GET /root/duenos',
-  'POST /root/marcas/:id/duenos',
-  'PATCH /root/duenos/:id',
-  'POST /root/duenos/:id/restablecer-password',
-  'DELETE /root/duenos/:id',
-  'GET /root/roots',
-  'POST /root/roots',
-  'POST /root/roots/:id/restablecer-password',
-  'GET /root/historial',
-]
-
-const PENDIENTES = [...PENDIENTES_4_3, ...PENDIENTES_4_4]
-
 const texto = (r: RutaDeLaApp) => `${r.metodo} ${r.ruta}`
 const ordenadas = (lista: string[]) => [...lista].sort((a, b) => a.localeCompare(b))
 const tiene = (r: RutaDeLaApp, guard: unknown) => guardsDe(r).includes(guard)
@@ -179,11 +147,11 @@ function problemasDeRequiereRol(r: RutaDeLaApp): string[] {
   return []
 }
 
-/** RootGuard es de la consola: solo en /root/*. Y la consola, ya en Supabase, solo deja entrar a ROOT. */
+/** RootGuard es de la consola: solo en /root/*. Y la consola solo deja entrar a ROOT. */
 function problemasDeRoot(r: RutaDeLaApp): string[] {
   const deLaConsola = r.ruta.startsWith('/root/')
   if (tiene(r, RootGuard) && !deLaConsola) return [`${texto(r)}: RootGuard fuera de /root`]
-  if (deLaConsola && tiene(r, SupabaseAuthGuard) && !tiene(r, RootGuard)) return [`${texto(r)}: en /root sin RootGuard`]
+  if (deLaConsola && !tiene(r, RootGuard)) return [`${texto(r)}: en /root sin RootGuard`]
   if (deLaConsola && tiene(r, MembresiaGuard)) return [`${texto(r)}: en /root con MembresiaGuard`]
   return []
 }
@@ -198,18 +166,17 @@ describe('el enrutador: un solo sistema de autenticación por ruta', () => {
   })
 
   it('las listas de este archivo no tienen rutas que no existen ni repetidas', () => {
-    const listadas = [...PUBLICAS, ...PENDIENTES_A_MANO, ...PENDIENTES]
+    const listadas = [...PUBLICAS, ...CON_PERMISO_EN_EL_SERVICE]
 
     expect(listadas.filter((t) => !textos.includes(t))).toEqual([])
     expect(listadas.filter((t, i) => listadas.indexOf(t) !== i)).toEqual([])
   })
 
-  it('cada ruta es pública, de la sesión de mesa o del personal con Supabase (o está pendiente de la Fase 4)', () => {
+  it('cada ruta es pública, de la sesión de mesa o del personal con Supabase', () => {
     const sinClasificar = rutas.filter((r) => {
       const sistemas = sistemasDe(r)
-      if (sistemas.length === 0) return !PUBLICAS.includes(texto(r)) && !PENDIENTES_A_MANO.includes(texto(r))
-      if (sistemas.includes('JWT legacy')) return !PENDIENTES.includes(texto(r))
-      return false
+      if (sistemas.length === 0) return !PUBLICAS.includes(texto(r))
+      return sistemas.includes('JWT legacy')
     })
 
     expect(sinClasificar.map(texto)).toEqual([])
@@ -221,15 +188,10 @@ describe('el enrutador: un solo sistema de autenticación por ruta', () => {
     expect(conGuards.map(texto)).toEqual([])
   })
 
-  it('las que usan el JWT legacy son exactamente las pendientes: al pasar una a Supabase, hay que sacarla de la lista', () => {
+  it('ninguna ruta usa el JWT legacy (JwtAuthGuard, RolesGuard, TipoGuard, @Roles ni @RequiresTipo)', () => {
     const conLegacy = rutas.filter((r) => sistemasDe(r).includes('JWT legacy'))
 
-    expect(ordenadas(conLegacy.map(texto))).toEqual(ordenadas(PENDIENTES))
-  })
-
-  it('las pendientes de la 4.4 son las de /root, y las de la 4.3 ninguna de /root', () => {
-    expect(PENDIENTES_4_4.filter((t) => !t.split(' ')[1].startsWith('/root/'))).toEqual([])
-    expect(PENDIENTES_4_3.filter((t) => t.split(' ')[1].startsWith('/root/'))).toEqual([])
+    expect(conLegacy.map(texto)).toEqual([])
   })
 
   it('ninguna ruta mezcla dos sistemas (JWT legacy, sesión de mesa, Supabase)', () => {
@@ -254,7 +216,7 @@ describe('el enrutador: un solo sistema de autenticación por ruta', () => {
     expect(rutas.flatMap(problemasDeRequiereRol)).toEqual([])
   })
 
-  it('RootGuard solo está en /root, y las rutas de /root que ya usan Supabase lo exigen', () => {
+  it('RootGuard solo está en /root, y las rutas de /root lo exigen', () => {
     expect(rutas.flatMap(problemasDeRoot)).toEqual([])
   })
 

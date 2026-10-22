@@ -175,7 +175,7 @@ describe('RootMarcasService', () => {
       expect(filas).toHaveLength(1)
       expect(filas[0]).toMatchObject({
         actorTipo: 'ROOT',
-        actorId: 'root-1',
+        actorId: ROOT_USER.id,
         actorNombre: EMAIL_DEL_ROOT,
         accion: 'MARCA_CREAR',
         entidadTipo: 'MARCA',
@@ -210,7 +210,7 @@ describe('RootMarcasService', () => {
     })
 
     it('si la cuenta ROOT que actúa ya no existe responde 401 y no escribe nada', async () => {
-      tx.admin.findUnique.mockResolvedValue(null)
+      tx.usuario.findUnique.mockResolvedValue(null)
 
       await expect(servicio.crear({ nombre: 'La Parrilla', slug: 'la-parrilla' }, ROOT_USER)).rejects.toThrow(UnauthorizedException)
 
@@ -307,7 +307,7 @@ describe('RootMarcasService', () => {
     })
 
     it('si la cuenta ROOT que actúa ya no existe responde 401', async () => {
-      tx.admin.findUnique.mockResolvedValue(null)
+      tx.usuario.findUnique.mockResolvedValue(null)
 
       await expect(servicio.editar('marca-1', { nombre: 'X' }, ROOT_USER)).rejects.toThrow(UnauthorizedException)
       expect(tx.marca.update).not.toHaveBeenCalled()
@@ -390,7 +390,7 @@ describe('RootMarcasService', () => {
     })
 
     it('si la cuenta ROOT que actúa ya no existe responde 401, también si no habría nada que cambiar', async () => {
-      tx.admin.findUnique.mockResolvedValue(null)
+      tx.usuario.findUnique.mockResolvedValue(null)
 
       await expect(servicio.cambiarEstado('marca-1', false, ROOT_USER)).rejects.toThrow(UnauthorizedException)
       expect(tx.marca.update).not.toHaveBeenCalled()

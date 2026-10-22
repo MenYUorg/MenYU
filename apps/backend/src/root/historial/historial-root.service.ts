@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common'
 import type { Prisma } from '@prisma/client'
-import { JwtPayload } from '../../auth/auth.service'
+import { UsuarioAutenticado } from '../../auth/supabase/usuario-autenticado'
 import { PrismaService } from '../../prisma/prisma.service'
 import { comoTextoLiteral } from '../comun/cuentas'
 import { RootCambio, RootHistorialItem, RootHistorialPagina } from '../root.types'
@@ -92,13 +92,20 @@ export class HistorialRootService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * La cuenta ROOT que actúa, leída de la base DENTRO de la transacción del cambio. El token puede estar vigente hasta 8 horas
-   * después de que la cuenta se retiró o dejó de ser ROOT: en ese caso no se hace nada (401), y el email que queda en el historial
-   * es el de ahora, no el que dice el token.
+   * La cuenta ROOT que actúa, leída de la base DENTRO de la transacción del cambio. SupabaseAuthGuard la leyó al empezar el
+   * pedido, pero la cuenta puede dejar de ser ROOT o desactivarse mientras tanto: en ese caso no se hace nada (401), y el email
+   * que queda en el historial es el de la base. `actor_id` es el id del `Usuario` (las filas anteriores a la Fase 4 guardan el
+   * de `admin`).
    */
-  async actorDe(tx: Pick<Prisma.TransactionClient, 'admin'>, user: JwtPayload): Promise<Extract<ActorHistorial, { tipo: 'ROOT' }>> {
-    const cuenta = await tx.admin.findUnique({ where: { id: user.sub }, select: { id: true, email: true, rol: true } })
-    if (!cuenta || cuenta.rol !== 'ROOT') throw new UnauthorizedException('Tu cuenta ROOT ya no existe')
+  async actorDe(
+    tx: Pick<Prisma.TransactionClient, 'usuario'>,
+    usuario: Pick<UsuarioAutenticado, 'id'>,
+  ): Promise<Extract<ActorHistorial, { tipo: 'ROOT' }>> {
+    const cuenta = await tx.usuario.findUnique({
+      where: { id: usuario.id },
+      select: { id: true, email: true, esRoot: true, activo: true },
+    })
+    if (!cuenta?.esRoot || !cuenta.activo) throw new UnauthorizedException('Tu cuenta ROOT ya no existe')
     return { tipo: 'ROOT', id: cuenta.id, nombre: cuenta.email }
   }
 

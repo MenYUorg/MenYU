@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
 import { Prisma } from '@prisma/client'
-import { JwtPayload } from '../../auth/auth.service'
+import { UsuarioAutenticado } from '../../auth/supabase/usuario-autenticado'
 import { PrismaService } from '../../prisma/prisma.service'
 import { conConflictoDeEmail, exigirEmailLibre, generarPasswordTemporal, prepararPassword, revocarSesiones } from '../comun/cuentas'
 import { CrearCuentaDto } from '../comun/dto/crear-cuenta.dto'
@@ -31,17 +31,17 @@ export class RootRootsService {
     private readonly historial: HistorialRootService,
   ) {}
 
-  async listar(user: JwtPayload): Promise<CuentaRoot[]> {
+  async listar(usuario: UsuarioAutenticado): Promise<CuentaRoot[]> {
     const filas = await this.prisma.admin.findMany({ where: { rol: 'ROOT' }, select: SELECT_CUENTA_ROOT, orderBy: { email: 'asc' } })
-    return filas.map((fila) => aCuenta(fila, user.sub))
+    return filas.map((fila) => aCuenta(fila, usuario.id))
   }
 
-  async crear(dto: CrearCuentaDto, user: JwtPayload): Promise<CuentaRootConPassword> {
+  async crear(dto: CrearCuentaDto, usuario: UsuarioAutenticado): Promise<CuentaRootConPassword> {
     const email = dto.email
     const { passwordHash, passwordTemporal, generada } = await prepararPassword(dto.password, email)
 
     return this.prisma.$transaction(async (tx) => {
-      const actor = await this.historial.actorDe(tx, user)
+      const actor = await this.historial.actorDe(tx, usuario)
       await exigirEmailLibre(tx, email)
 
       const creada = await conConflictoDeEmail(() =>
@@ -61,16 +61,16 @@ export class RootRootsService {
     })
   }
 
-  async restablecerPassword(id: string, user: JwtPayload): Promise<CuentaRootConPassword> {
+  async restablecerPassword(id: string, usuario: UsuarioAutenticado): Promise<CuentaRootConPassword> {
     // Para cambiar la propia contraseña está "cambiar mi contraseña" (etapa 3), que pide la actual: restablecerse a uno mismo
     // sin saberla dejaría a una sesión robada cambiar la clave sin conocerla.
-    if (id === user.sub) {
+    if (id === usuario.id) {
       throw new BadRequestException('No podés restablecer tu propia contraseña: para cambiarla usá «cambiar mi contraseña»')
     }
     const { passwordHash, passwordTemporal } = await generarPasswordTemporal()
 
     return this.prisma.$transaction(async (tx) => {
-      const actor = await this.historial.actorDe(tx, user)
+      const actor = await this.historial.actorDe(tx, usuario)
       const cuenta = await tx.admin.findFirst({ where: { id, rol: 'ROOT' }, select: SELECT_CUENTA_ROOT })
       if (!cuenta) throw new NotFoundException('Cuenta ROOT no encontrada')
 

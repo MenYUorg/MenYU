@@ -1,4 +1,5 @@
-import { AppDeEndpoints, USUARIOS, crearAppDeEndpoints } from '../test/app-endpoints'
+import { AppDeEndpoints, CUENTAS, crearAppDeEndpoints } from '../test/app-endpoints'
+import { NO_ROOT } from '../test/root-mock'
 import { RootDuenosController } from './duenos/root-duenos.controller'
 import { RootDuenosService } from './duenos/root-duenos.service'
 import { RootRootsController } from './roots/root-roots.controller'
@@ -6,12 +7,6 @@ import { RootRootsService } from './roots/root-roots.service'
 
 type Metodo = 'get' | 'post' | 'patch' | 'put' | 'delete'
 
-const OTROS_ROLES = [
-  ['OWNER', USUARIOS.OWNER],
-  ['GERENTE', USUARIOS.GERENTE],
-  ['mozo', USUARIOS.MOZO],
-  ['cliente', USUARIOS.CLIENTE],
-] as const
 
 describe('endpoints de dueños de ROOT', () => {
   let api: AppDeEndpoints
@@ -42,14 +37,14 @@ describe('endpoints de dueños de ROOT', () => {
 
   describe.each(RUTAS)('%s', (_nombre, metodo, ruta, exito, servicio, body) => {
     it(`ROOT: ${exito}`, async () => {
-      const res = await api.pedir(metodo, ruta, { usuario: USUARIOS.ROOT, body })
+      const res = await api.pedir(metodo, ruta, { cuenta: CUENTAS.ROOT, body })
 
       expect(res.status).toBe(exito)
       expect(servicio).toHaveBeenCalledTimes(1)
     })
 
-    it.each(OTROS_ROLES)('%s: 403 y el servicio no se llama', async (_rol, usuario) => {
-      const res = await api.pedir(metodo, ruta, { usuario, body })
+    it.each(NO_ROOT)('%s: 403 y el servicio no se llama', async (_rol, cuenta) => {
+      const res = await api.pedir(metodo, ruta, { cuenta, body })
 
       expect(res.status).toBe(403)
       expect(servicio).not.toHaveBeenCalled()
@@ -65,56 +60,56 @@ describe('endpoints de dueños de ROOT', () => {
 
   describe('lo que le llega al servicio', () => {
     it('POST /root/marcas/:id/duenos: el id de la marca (aunque no sea UUID), el email y el usuario ROOT', async () => {
-      await api.pedir('post', '/root/marcas/m-001/duenos', { usuario: USUARIOS.ROOT, body: { email: 'juan@laparrilla.com' } })
+      await api.pedir('post', '/root/marcas/m-001/duenos', { cuenta: CUENTAS.ROOT, body: { email: 'juan@laparrilla.com' } })
 
-      expect(duenos.crear).toHaveBeenCalledWith('m-001', { email: 'juan@laparrilla.com' }, USUARIOS.ROOT)
+      expect(duenos.crear).toHaveBeenCalledWith('m-001', { email: 'juan@laparrilla.com' }, CUENTAS.ROOT)
     })
 
     it('el email se normaliza: sin espacios y en minúsculas', async () => {
-      await api.pedir('post', '/root/marcas/m-001/duenos', { usuario: USUARIOS.ROOT, body: { email: '  Juan@LaParrilla.COM ' } })
+      await api.pedir('post', '/root/marcas/m-001/duenos', { cuenta: CUENTAS.ROOT, body: { email: '  Juan@LaParrilla.COM ' } })
 
-      expect(duenos.crear).toHaveBeenCalledWith('m-001', { email: 'juan@laparrilla.com' }, USUARIOS.ROOT)
+      expect(duenos.crear).toHaveBeenCalledWith('m-001', { email: 'juan@laparrilla.com' }, CUENTAS.ROOT)
     })
 
     it('una contraseña elegida llega al servicio', async () => {
       await api.pedir('post', '/root/marcas/m-001/duenos', {
-        usuario: USUARIOS.ROOT,
+        cuenta: CUENTAS.ROOT,
         body: { email: 'juan@laparrilla.com', password: 'Caracol-Violeta-48' },
       })
 
-      expect(duenos.crear).toHaveBeenCalledWith('m-001', { email: 'juan@laparrilla.com', password: 'Caracol-Violeta-48' }, USUARIOS.ROOT)
+      expect(duenos.crear).toHaveBeenCalledWith('m-001', { email: 'juan@laparrilla.com', password: 'Caracol-Violeta-48' }, CUENTAS.ROOT)
     })
 
     it('se descartan los campos de más: no se puede mandar el rol, la marca ni el hash por el body', async () => {
       await api.pedir('post', '/root/marcas/m-001/duenos', {
-        usuario: USUARIOS.ROOT,
+        cuenta: CUENTAS.ROOT,
         body: { email: 'juan@laparrilla.com', rol: 'ROOT', marcaId: 'otra', passwordHash: 'x', debeCambiarPassword: false, nombre: 'Juan' },
       })
 
-      expect(duenos.crear).toHaveBeenCalledWith('m-001', { email: 'juan@laparrilla.com' }, USUARIOS.ROOT)
+      expect(duenos.crear).toHaveBeenCalledWith('m-001', { email: 'juan@laparrilla.com' }, CUENTAS.ROOT)
     })
 
     it('PATCH: solo el email, y se descartan los campos de más', async () => {
       await api.pedir('patch', '/root/duenos/owner-1', {
-        usuario: USUARIOS.ROOT,
+        cuenta: CUENTAS.ROOT,
         body: { email: 'nuevo@laparrilla.com', password: 'otra', rol: 'ROOT' },
       })
 
-      expect(duenos.cambiarEmail).toHaveBeenCalledWith('owner-1', { email: 'nuevo@laparrilla.com' }, USUARIOS.ROOT)
+      expect(duenos.cambiarEmail).toHaveBeenCalledWith('owner-1', { email: 'nuevo@laparrilla.com' }, CUENTAS.ROOT)
     })
 
     it('GET con q: llega recortada', async () => {
-      await api.pedir('get', '/root/duenos', { usuario: USUARIOS.ROOT, query: { q: '  fiore ' } })
+      await api.pedir('get', '/root/duenos', { cuenta: CUENTAS.ROOT, query: { q: '  fiore ' } })
 
       expect(duenos.listar).toHaveBeenCalledWith({ q: 'fiore' })
     })
 
     it('restablecer y eliminar llevan el id y el usuario', async () => {
-      await api.pedir('post', '/root/duenos/owner-1/restablecer-password', { usuario: USUARIOS.ROOT })
-      await api.pedir('delete', '/root/duenos/owner-1', { usuario: USUARIOS.ROOT })
+      await api.pedir('post', '/root/duenos/owner-1/restablecer-password', { cuenta: CUENTAS.ROOT })
+      await api.pedir('delete', '/root/duenos/owner-1', { cuenta: CUENTAS.ROOT })
 
-      expect(duenos.restablecerPassword).toHaveBeenCalledWith('owner-1', USUARIOS.ROOT)
-      expect(duenos.eliminar).toHaveBeenCalledWith('owner-1', USUARIOS.ROOT)
+      expect(duenos.restablecerPassword).toHaveBeenCalledWith('owner-1', CUENTAS.ROOT)
+      expect(duenos.eliminar).toHaveBeenCalledWith('owner-1', CUENTAS.ROOT)
     })
   })
 
@@ -126,23 +121,23 @@ describe('endpoints de dueños de ROOT', () => {
       ['un email larguísimo', { email: `${'a'.repeat(250)}@ejemplo.com` }],
       ['una contraseña que no es texto', { email: 'juan@laparrilla.com', password: 12345678901234 }],
     ])('POST con %s responde 400', async (_caso, body) => {
-      const res = await api.pedir('post', '/root/marcas/m-001/duenos', { usuario: USUARIOS.ROOT, body })
+      const res = await api.pedir('post', '/root/marcas/m-001/duenos', { cuenta: CUENTAS.ROOT, body })
 
       expect(res.status).toBe(400)
       expect(duenos.crear).not.toHaveBeenCalled()
     })
 
     it('PATCH sin email o con uno inválido responde 400', async () => {
-      const sin = await api.pedir('patch', '/root/duenos/owner-1', { usuario: USUARIOS.ROOT, body: {} })
-      const mal = await api.pedir('patch', '/root/duenos/owner-1', { usuario: USUARIOS.ROOT, body: { email: 'no-es-email' } })
+      const sin = await api.pedir('patch', '/root/duenos/owner-1', { cuenta: CUENTAS.ROOT, body: {} })
+      const mal = await api.pedir('patch', '/root/duenos/owner-1', { cuenta: CUENTAS.ROOT, body: { email: 'no-es-email' } })
 
       expect([sin.status, mal.status]).toEqual([400, 400])
       expect(duenos.cambiarEmail).not.toHaveBeenCalled()
     })
 
     it('GET con una q de más de 100 caracteres o con el carácter nulo responde 400', async () => {
-      const larga = await api.pedir('get', '/root/duenos', { usuario: USUARIOS.ROOT, query: { q: 'a'.repeat(101) } })
-      const nula = await api.pedir('get', '/root/duenos', { usuario: USUARIOS.ROOT, query: { q: 'a\u0000b' } })
+      const larga = await api.pedir('get', '/root/duenos', { cuenta: CUENTAS.ROOT, query: { q: 'a'.repeat(101) } })
+      const nula = await api.pedir('get', '/root/duenos', { cuenta: CUENTAS.ROOT, query: { q: 'a\u0000b' } })
 
       expect([larga.status, nula.status]).toEqual([400, 400])
       expect(duenos.listar).not.toHaveBeenCalled()
@@ -154,7 +149,7 @@ describe('endpoints de dueños de ROOT', () => {
       ['/root/duenos/%00', 'delete'],
       ['/root/marcas/a.b/duenos', 'post'],
     ] as const)('un id con forma de no-id (%s) responde 404 sin llegar al servicio', async (ruta, metodo) => {
-      const res = await api.pedir(metodo, ruta, { usuario: USUARIOS.ROOT, body: { email: 'juan@laparrilla.com' } })
+      const res = await api.pedir(metodo, ruta, { cuenta: CUENTAS.ROOT, body: { email: 'juan@laparrilla.com' } })
 
       expect(res.status).toBe(404)
       expect(duenos.crear).not.toHaveBeenCalled()
@@ -189,14 +184,14 @@ describe('endpoints de cuentas ROOT', () => {
 
   describe.each(RUTAS)('%s', (_nombre, metodo, ruta, exito, servicio, body) => {
     it(`ROOT: ${exito}`, async () => {
-      const res = await api.pedir(metodo, ruta, { usuario: USUARIOS.ROOT, body })
+      const res = await api.pedir(metodo, ruta, { cuenta: CUENTAS.ROOT, body })
 
       expect(res.status).toBe(exito)
       expect(servicio).toHaveBeenCalledTimes(1)
     })
 
-    it.each(OTROS_ROLES)('%s: 403 y el servicio no se llama', async (_rol, usuario) => {
-      const res = await api.pedir(metodo, ruta, { usuario, body })
+    it.each(NO_ROOT)('%s: 403 y el servicio no se llama', async (_rol, cuenta) => {
+      const res = await api.pedir(metodo, ruta, { cuenta, body })
 
       expect(res.status).toBe(403)
       expect(servicio).not.toHaveBeenCalled()
@@ -211,26 +206,26 @@ describe('endpoints de cuentas ROOT', () => {
   })
 
   it('POST /root/roots lleva el email normalizado y el usuario; descarta el rol y otros campos', async () => {
-    await api.pedir('post', '/root/roots', { usuario: USUARIOS.ROOT, body: { email: ' Carla@Ejemplo.com', rol: 'OWNER', marcaId: 'x' } })
+    await api.pedir('post', '/root/roots', { cuenta: CUENTAS.ROOT, body: { email: ' Carla@Ejemplo.com', rol: 'OWNER', marcaId: 'x' } })
 
-    expect(roots.crear).toHaveBeenCalledWith({ email: 'carla@ejemplo.com' }, USUARIOS.ROOT)
+    expect(roots.crear).toHaveBeenCalledWith({ email: 'carla@ejemplo.com' }, CUENTAS.ROOT)
   })
 
   it('POST /root/roots con un email inválido responde 400', async () => {
-    const res = await api.pedir('post', '/root/roots', { usuario: USUARIOS.ROOT, body: { email: 'no-es-email' } })
+    const res = await api.pedir('post', '/root/roots', { cuenta: CUENTAS.ROOT, body: { email: 'no-es-email' } })
 
     expect(res.status).toBe(400)
     expect(roots.crear).not.toHaveBeenCalled()
   })
 
   it('restablecer lleva el id y el usuario', async () => {
-    await api.pedir('post', '/root/roots/root-2/restablecer-password', { usuario: USUARIOS.ROOT })
+    await api.pedir('post', '/root/roots/root-2/restablecer-password', { cuenta: CUENTAS.ROOT })
 
-    expect(roots.restablecerPassword).toHaveBeenCalledWith('root-2', USUARIOS.ROOT)
+    expect(roots.restablecerPassword).toHaveBeenCalledWith('root-2', CUENTAS.ROOT)
   })
 
   it('un id con forma de no-id responde 404 sin llegar al servicio', async () => {
-    const res = await api.pedir('post', '/root/roots/a.b/restablecer-password', { usuario: USUARIOS.ROOT })
+    const res = await api.pedir('post', '/root/roots/a.b/restablecer-password', { cuenta: CUENTAS.ROOT })
 
     expect(res.status).toBe(404)
     expect(roots.restablecerPassword).not.toHaveBeenCalled()
@@ -238,13 +233,13 @@ describe('endpoints de cuentas ROOT', () => {
 
   // Decisión 15: las cuentas ROOT no se borran desde la app ni la API. No hay ruta, ni siquiera para ROOT.
   it.each(['delete', 'put', 'patch'] as const)('%s /root/roots/:id no existe (404), tampoco para ROOT', async (metodo) => {
-    const res = await api.pedir(metodo, '/root/roots/root-2', { usuario: USUARIOS.ROOT, body: { email: 'x@ejemplo.com' } })
+    const res = await api.pedir(metodo, '/root/roots/root-2', { cuenta: CUENTAS.ROOT, body: { email: 'x@ejemplo.com' } })
 
     expect(res.status).toBe(404)
   })
 
   it('DELETE /root/roots tampoco existe', async () => {
-    const res = await api.pedir('delete', '/root/roots', { usuario: USUARIOS.ROOT })
+    const res = await api.pedir('delete', '/root/roots', { cuenta: CUENTAS.ROOT })
 
     expect(res.status).toBe(404)
   })

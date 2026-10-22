@@ -1,10 +1,8 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, UseGuards } from '@nestjs/common'
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger'
-import { JwtPayload } from '../../auth/auth.service'
-import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard'
-import { CurrentUser } from '../../common/decorators/current-user.decorator'
-import { Roles } from '../../common/decorators/roles.decorator'
-import { RolesGuard } from '../../common/guards/roles.guard'
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post } from '@nestjs/common'
+import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger'
+import { RequiereRoot } from '../../auth/decorators/requiere-root.decorator'
+import { UsuarioActual } from '../../auth/decorators/usuario-actual.decorator'
+import { UsuarioAutenticado } from '../../auth/supabase/usuario-autenticado'
 import { IdPipe } from '../comun/cuentas'
 import { CrearCuentaDto } from '../comun/dto/crear-cuenta.dto'
 import { RootRootsService } from './root-roots.service'
@@ -14,18 +12,16 @@ import { RootRootsService } from './root-roots.service'
  * (decisión 15 de docs/plan-consola-root.md). Un test recorre el enrutador y falla si aparece una ruta para borrarlas.
  */
 @ApiTags('root')
-@ApiBearerAuth()
 @Controller('root/roots')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('ROOT')
+@RequiereRoot()
 export class RootRootsController {
   constructor(private readonly roots: RootRootsService) {}
 
   @Get()
   @ApiOperation({ summary: 'Lista las cuentas ROOT (marca cuál es la propia)' })
   @ApiResponse({ status: 200 })
-  listar(@CurrentUser() user: JwtPayload) {
-    return this.roots.listar(user)
+  listar(@UsuarioActual() usuario: UsuarioAutenticado) {
+    return this.roots.listar(usuario)
   }
 
   @Post()
@@ -36,8 +32,8 @@ export class RootRootsController {
   })
   @ApiResponse({ status: 201 })
   @ApiResponse({ status: 409, description: 'Email ya en uso' })
-  crear(@Body() dto: CrearCuentaDto, @CurrentUser() user: JwtPayload) {
-    return this.roots.crear(dto, user)
+  crear(@Body() dto: CrearCuentaDto, @UsuarioActual() usuario: UsuarioAutenticado) {
+    return this.roots.crear(dto, usuario)
   }
 
   @Post(':id/restablecer-password')
@@ -49,7 +45,7 @@ export class RootRootsController {
   @ApiResponse({ status: 200 })
   @ApiResponse({ status: 400, description: 'Es la cuenta propia' })
   @ApiResponse({ status: 404, description: 'No hay una cuenta ROOT con ese id' })
-  restablecerPassword(@Param('id', new IdPipe('Cuenta ROOT no encontrada')) id: string, @CurrentUser() user: JwtPayload) {
-    return this.roots.restablecerPassword(id, user)
+  restablecerPassword(@Param('id', new IdPipe('Cuenta ROOT no encontrada')) id: string, @UsuarioActual() usuario: UsuarioAutenticado) {
+    return this.roots.restablecerPassword(id, usuario)
   }
 }

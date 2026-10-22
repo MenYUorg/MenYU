@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common'
 import { Prisma } from '@prisma/client'
-import { JwtPayload } from '../../auth/auth.service'
+import { UsuarioAutenticado } from '../../auth/supabase/usuario-autenticado'
 import { PrismaService } from '../../prisma/prisma.service'
 import { HistorialRootService } from '../historial/historial-root.service'
 import { CambioHistorial } from '../historial/registrar-historial'
@@ -85,9 +85,9 @@ export class RootMarcasService {
     return leerDetalle(this.prisma, id)
   }
 
-  async crear(dto: CrearMarcaRootDto, user: JwtPayload): Promise<RootMarcaDetalle> {
+  async crear(dto: CrearMarcaRootDto, usuario: UsuarioAutenticado): Promise<RootMarcaDetalle> {
     return this.prisma.$transaction(async (tx) => {
-      const actor = await this.historial.actorDe(tx, user)
+      const actor = await this.historial.actorDe(tx, usuario)
       await this.exigirSlugLibre(tx, dto.slug)
 
       const creada = await this.conConflictoDeSlug(() =>
@@ -107,12 +107,12 @@ export class RootMarcasService {
     })
   }
 
-  async editar(id: string, dto: EditarMarcaRootDto, user: JwtPayload): Promise<RootMarcaDetalle> {
+  async editar(id: string, dto: EditarMarcaRootDto, usuario: UsuarioAutenticado): Promise<RootMarcaDetalle> {
     if (dto.nombre === undefined && dto.slug === undefined) {
       throw new BadRequestException('No hay nada para cambiar: mandá el nombre, el identificador (slug) o los dos')
     }
     return this.prisma.$transaction(async (tx) => {
-      const actor = await this.historial.actorDe(tx, user)
+      const actor = await this.historial.actorDe(tx, usuario)
       const marca = await tx.marca.findUnique({ where: { id }, select: { id: true, nombre: true, slug: true } })
       if (!marca) throw new NotFoundException('Marca no encontrada')
 
@@ -145,9 +145,9 @@ export class RootMarcasService {
   }
 
   /** Da de baja (`activo = false`) o reactiva una marca. Idempotente: si ya está en ese estado no cambia nada ni se registra. */
-  async cambiarEstado(id: string, activo: boolean, user: JwtPayload): Promise<RootMarcaDetalle> {
+  async cambiarEstado(id: string, activo: boolean, usuario: UsuarioAutenticado): Promise<RootMarcaDetalle> {
     return this.prisma.$transaction(async (tx) => {
-      const actor = await this.historial.actorDe(tx, user)
+      const actor = await this.historial.actorDe(tx, usuario)
       const marca = await tx.marca.findUnique({ where: { id }, select: { id: true, nombre: true, activo: true } })
       if (!marca) throw new NotFoundException('Marca no encontrada')
       if (marca.activo === activo) return leerDetalle(tx, id)

@@ -1,10 +1,8 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, UseGuards } from '@nestjs/common'
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger'
-import { JwtPayload } from '../../auth/auth.service'
-import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard'
-import { CurrentUser } from '../../common/decorators/current-user.decorator'
-import { Roles } from '../../common/decorators/roles.decorator'
-import { RolesGuard } from '../../common/guards/roles.guard'
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Query } from '@nestjs/common'
+import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger'
+import { RequiereRoot } from '../../auth/decorators/requiere-root.decorator'
+import { UsuarioActual } from '../../auth/decorators/usuario-actual.decorator'
+import { UsuarioAutenticado } from '../../auth/supabase/usuario-autenticado'
 import { IdPipe } from '../comun/cuentas'
 import { CambiarEmailDto, CrearCuentaDto } from '../comun/dto/crear-cuenta.dto'
 import { ListarDuenosDto } from './dto/listar-duenos.dto'
@@ -12,10 +10,8 @@ import { RootDuenosService } from './root-duenos.service'
 
 /** Cuentas OWNER ("dueños") de las marcas. Solo ROOT. Cada cambio queda en el historial dentro de la misma transacción. */
 @ApiTags('root')
-@ApiBearerAuth()
 @Controller('root')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('ROOT')
+@RequiereRoot()
 export class RootDuenosController {
   constructor(private readonly duenos: RootDuenosService) {}
 
@@ -36,8 +32,8 @@ export class RootDuenosController {
   @ApiResponse({ status: 201, description: 'Dueño creado (con la contraseña generada, una sola vez)' })
   @ApiResponse({ status: 404, description: 'La marca no existe' })
   @ApiResponse({ status: 409, description: 'Email ya en uso, o la marca está dada de baja' })
-  crear(@Param('id', new IdPipe('Marca no encontrada')) marcaId: string, @Body() dto: CrearCuentaDto, @CurrentUser() user: JwtPayload) {
-    return this.duenos.crear(marcaId, dto, user)
+  crear(@Param('id', new IdPipe('Marca no encontrada')) marcaId: string, @Body() dto: CrearCuentaDto, @UsuarioActual() usuario: UsuarioAutenticado) {
+    return this.duenos.crear(marcaId, dto, usuario)
   }
 
   @Patch('duenos/:id')
@@ -45,8 +41,8 @@ export class RootDuenosController {
   @ApiResponse({ status: 200 })
   @ApiResponse({ status: 404, description: 'No hay un dueño con ese id' })
   @ApiResponse({ status: 409, description: 'Email ya en uso' })
-  cambiarEmail(@Param('id', new IdPipe('Dueño no encontrado')) id: string, @Body() dto: CambiarEmailDto, @CurrentUser() user: JwtPayload) {
-    return this.duenos.cambiarEmail(id, dto, user)
+  cambiarEmail(@Param('id', new IdPipe('Dueño no encontrado')) id: string, @Body() dto: CambiarEmailDto, @UsuarioActual() usuario: UsuarioAutenticado) {
+    return this.duenos.cambiarEmail(id, dto, usuario)
   }
 
   @Post('duenos/:id/restablecer-password')
@@ -58,8 +54,8 @@ export class RootDuenosController {
   })
   @ApiResponse({ status: 200 })
   @ApiResponse({ status: 404, description: 'No hay un dueño con ese id' })
-  restablecerPassword(@Param('id', new IdPipe('Dueño no encontrado')) id: string, @CurrentUser() user: JwtPayload) {
-    return this.duenos.restablecerPassword(id, user)
+  restablecerPassword(@Param('id', new IdPipe('Dueño no encontrado')) id: string, @UsuarioActual() usuario: UsuarioAutenticado) {
+    return this.duenos.restablecerPassword(id, usuario)
   }
 
   @Delete('duenos/:id')
@@ -68,7 +64,7 @@ export class RootDuenosController {
   @ApiResponse({ status: 204 })
   @ApiResponse({ status: 404, description: 'No hay un dueño con ese id' })
   @ApiResponse({ status: 409, description: 'Es el único dueño de una marca activa' })
-  async eliminar(@Param('id', new IdPipe('Dueño no encontrado')) id: string, @CurrentUser() user: JwtPayload) {
-    await this.duenos.eliminar(id, user)
+  async eliminar(@Param('id', new IdPipe('Dueño no encontrado')) id: string, @UsuarioActual() usuario: UsuarioAutenticado) {
+    await this.duenos.eliminar(id, usuario)
   }
 }

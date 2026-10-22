@@ -1,7 +1,6 @@
 import { Controller, Delete, Get, Patch, Post, Put } from '@nestjs/common'
-import { ROLES_KEY } from '../common/decorators/roles.decorator'
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'
-import { RolesGuard } from '../common/guards/roles.guard'
+import { RootGuard } from '../auth/guards/root.guard'
+import { SupabaseAuthGuard } from '../auth/guards/supabase-auth.guard'
 import { AppModule } from '../app.module'
 import { CamposPermitidosGuard } from './comun/campos-permitidos.guard'
 import { RutaDeLaApp, rutasDe, rutasDeLaApp } from '../test/rutas'
@@ -76,21 +75,22 @@ describe('el enrutador de la aplicación', () => {
 
   describe('quién entra a /root', () => {
     it.each([...new Set(deRoot.map((r) => r.controller))].map((c) => [c.name, c] as const))(
-      '%s: solo ROOT, con JWT, a nivel de controller (no depende de que cada ruta lo repita)',
+      '%s: solo ROOT (@RequiereRoot), a nivel de controller (no depende de que cada ruta lo repita)',
       (_nombre, controller) => {
-        expect(Reflect.getMetadata(ROLES_KEY, controller)).toEqual(['ROOT'])
         const guards: unknown[] = Reflect.getMetadata('__guards__', controller) ?? []
-        expect(guards).toEqual(expect.arrayContaining([JwtAuthGuard, RolesGuard]))
+        expect(guards).toEqual(expect.arrayContaining([SupabaseAuthGuard, RootGuard]))
+        // Los permisos antes que la validación de los campos: un OWNER con un campo de más recibe 403, no 400.
+        const campos = guards.indexOf(CamposPermitidosGuard)
+        if (campos !== -1) expect(campos).toBeGreaterThan(guards.indexOf(RootGuard))
       },
     )
 
-    it('ninguna ruta de /root cambia el rol que la deja entrar (nadie más que ROOT)', () => {
+    it('ninguna ruta de /root suma guards propios (todo lo decide el controller)', () => {
       for (const { controller } of deRoot) {
         for (const nombre of Object.getOwnPropertyNames(controller.prototype)) {
           const manejador = (controller.prototype as Record<string, unknown>)[nombre]
-          if (typeof manejador !== 'function') continue
-          const roles: string[] | undefined = Reflect.getMetadata(ROLES_KEY, manejador)
-          if (roles) expect(roles).toEqual(['ROOT'])
+          if (typeof manejador !== 'function' || nombre === 'constructor') continue
+          expect([nombre, Reflect.getMetadata('__guards__', manejador)]).toEqual([nombre, undefined])
         }
       }
     })

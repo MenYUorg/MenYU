@@ -1,6 +1,6 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common'
 import { Prisma } from '@prisma/client'
-import { JwtPayload } from '../../auth/auth.service'
+import { UsuarioAutenticado } from '../../auth/supabase/usuario-autenticado'
 import { runSerializableTransaction } from '../../common/run-serializable-transaction'
 import { PrismaService } from '../../prisma/prisma.service'
 import { conConflictoDeEmail, exigirEmailLibre, generarPasswordTemporal, prepararPassword, revocarSesiones } from '../comun/cuentas'
@@ -56,13 +56,13 @@ export class RootDuenosService {
     return filas.map(aDueno)
   }
 
-  async crear(marcaId: string, dto: CrearCuentaDto, user: JwtPayload): Promise<DuenoConPassword> {
+  async crear(marcaId: string, dto: CrearCuentaDto, usuario: UsuarioAutenticado): Promise<DuenoConPassword> {
     const email = dto.email
     // El hash (bcrypt, lento) se calcula antes de abrir la transacción para no tenerla abierta mientras tanto.
     const { passwordHash, passwordTemporal, generada } = await prepararPassword(dto.password, email)
 
     return this.prisma.$transaction(async (tx) => {
-      const actor = await this.historial.actorDe(tx, user)
+      const actor = await this.historial.actorDe(tx, usuario)
       const marca = await tx.marca.findUnique({ where: { id: marcaId }, select: { id: true, nombre: true, activo: true } })
       if (!marca) throw new NotFoundException('Marca no encontrada')
       if (!marca.activo) throw new ConflictException('La marca está dada de baja: no se le pueden crear dueños')
@@ -90,10 +90,10 @@ export class RootDuenosService {
     })
   }
 
-  async cambiarEmail(id: string, dto: CambiarEmailDto, user: JwtPayload): Promise<DuenoRoot> {
+  async cambiarEmail(id: string, dto: CambiarEmailDto, usuario: UsuarioAutenticado): Promise<DuenoRoot> {
     const email = dto.email
     return this.prisma.$transaction(async (tx) => {
-      const actor = await this.historial.actorDe(tx, user)
+      const actor = await this.historial.actorDe(tx, usuario)
       const dueno = await tx.admin.findFirst({ where: { id, rol: 'OWNER' }, select: SELECT_DUENO })
       if (!dueno) throw new NotFoundException('Dueño no encontrado')
       // Mismo email: no hay nada que cambiar ni que registrar.
@@ -115,10 +115,10 @@ export class RootDuenosService {
     })
   }
 
-  async restablecerPassword(id: string, user: JwtPayload): Promise<DuenoConPassword> {
+  async restablecerPassword(id: string, usuario: UsuarioAutenticado): Promise<DuenoConPassword> {
     const { passwordHash, passwordTemporal } = await generarPasswordTemporal()
     return this.prisma.$transaction(async (tx) => {
-      const actor = await this.historial.actorDe(tx, user)
+      const actor = await this.historial.actorDe(tx, usuario)
       const dueno = await tx.admin.findFirst({ where: { id, rol: 'OWNER' }, select: SELECT_DUENO })
       if (!dueno) throw new NotFoundException('Dueño no encontrado')
 
@@ -141,12 +141,12 @@ export class RootDuenosService {
     })
   }
 
-  async eliminar(id: string, user: JwtPayload): Promise<void> {
+  async eliminar(id: string, usuario: UsuarioAutenticado): Promise<void> {
     // Serializable: dos pedidos que eliminan a los dos últimos dueños de una marca a la vez no pueden pasar los dos el control.
     await runSerializableTransaction(
       this.prisma,
       async (tx) => {
-        const actor = await this.historial.actorDe(tx, user)
+        const actor = await this.historial.actorDe(tx, usuario)
         const dueno = await tx.admin.findFirst({ where: { id, rol: 'OWNER' }, select: SELECT_DUENO })
         if (!dueno) throw new NotFoundException('Dueño no encontrado')
 

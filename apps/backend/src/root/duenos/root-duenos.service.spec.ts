@@ -145,7 +145,7 @@ describe('RootDuenosService', () => {
       expect(filas).toHaveLength(1)
       expect(filas[0]).toMatchObject({
         actorTipo: 'ROOT',
-        actorId: 'root-1',
+        actorId: ROOT_USER.id,
         actorNombre: EMAIL_DEL_ROOT,
         accion: 'DUENO_CREAR',
         entidadTipo: 'OWNER',
@@ -254,7 +254,7 @@ describe('RootDuenosService', () => {
     })
 
     it('si la cuenta ROOT que actúa ya no existe (token vigente), responde 401 y no escribe nada', async () => {
-      tx.admin.findUnique.mockResolvedValue(null)
+      tx.usuario.findUnique.mockResolvedValue(null)
 
       await expect(servicio.crear('marca-1', { email: 'juan@laparrilla.com' }, ROOT_USER)).rejects.toThrow(UnauthorizedException)
 
@@ -424,7 +424,7 @@ describe('RootDuenosService', () => {
     })
 
     it('si la cuenta ROOT que actúa ya no existe responde 401', async () => {
-      tx.admin.findUnique.mockResolvedValue(null)
+      tx.usuario.findUnique.mockResolvedValue(null)
 
       await expect(servicio.restablecerPassword('owner-1', ROOT_USER)).rejects.toThrow(UnauthorizedException)
       expect(tx.admin.update).not.toHaveBeenCalled()

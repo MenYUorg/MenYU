@@ -1,9 +1,11 @@
 import { BadRequestException, UnauthorizedException } from '@nestjs/common'
+import { CUENTAS } from '../../test/acceso-de-test'
 import { PrismaMock, comoPrisma, crearPrismaMock } from '../../test/prisma-mock'
 import { HistorialRootService } from './historial-root.service'
 import { EntradaHistorial } from './registrar-historial'
 
-const ROOT = { sub: 'root-1', tipo: 'admin', rol: 'ROOT', email: 'email-viejo-del-token@ejemplo.com' } as const
+// El email de la sesión es el que leyó SupabaseAuthGuard al empezar el pedido; el de la base puede haber cambiado.
+const ROOT = { ...CUENTAS.ROOT, email: 'email-viejo-de-la-sesion@ejemplo.com' }
 
 // Una fila como la devolvería la base, con campos de más (que el servicio no tiene que dejar pasar).
 const fila = (id: number, extra: Record<string, unknown> = {}) => ({
@@ -32,28 +34,31 @@ describe('HistorialRootService', () => {
   })
 
   describe('actorDe', () => {
-    it('devuelve la cuenta ROOT con el email que tiene AHORA en la base, no el que dice el token', async () => {
+    const cuentaEnLaBase = (cambios: Record<string, unknown> = {}) => ({ id: ROOT.id, email: 'ana@ejemplo.com', esRoot: true, activo: true, ...cambios })
+
+    it('devuelve el Usuario ROOT con el email que tiene AHORA en la base, no el de la sesión', async () => {
       // Arrange
-      const tx = { admin: { findUnique: jest.fn().mockResolvedValue({ id: 'root-1', email: 'ana@ejemplo.com', rol: 'ROOT' }) } }
+      const tx = { usuario: { findUnique: jest.fn().mockResolvedValue(cuentaEnLaBase()) } }
 
       // Act
       const actor = await servicio.actorDe(tx as never, ROOT)
 
       // Assert
-      expect(actor).toEqual({ tipo: 'ROOT', id: 'root-1', nombre: 'ana@ejemplo.com' })
-      expect(tx.admin.findUnique).toHaveBeenCalledWith({ where: { id: 'root-1' }, select: { id: true, email: true, rol: true } })
+      expect(actor).toEqual({ tipo: 'ROOT', id: ROOT.id, nombre: 'ana@ejemplo.com' })
+      expect(tx.usuario.findUnique).toHaveBeenCalledWith({
+        where: { id: ROOT.id },
+        select: { id: true, email: true, esRoot: true, activo: true },
+      })
     })
 
-    it('si la cuenta ya no existe (se retiró y el token sigue vigente), responde 401', async () => {
-      const tx = { admin: { findUnique: jest.fn().mockResolvedValue(null) } }
+    it.each([
+      ['ya no existe', null],
+      ['dejó de ser ROOT', cuentaEnLaBase({ esRoot: false })],
+      ['está desactivada', cuentaEnLaBase({ activo: false })],
+    ])('si la cuenta %s mientras el pedido estaba en curso, responde 401', async (_caso, cuenta) => {
+      const tx = { usuario: { findUnique: jest.fn().mockResolvedValue(cuenta) } }
 
-      await expect(servicio.actorDe(tx as never, ROOT)).rejects.toThrow(UnauthorizedException)
-    })
-
-    it.each(['OWNER', 'GERENTE'])('si la cuenta dejó de ser ROOT (ahora es %s), responde 401', async (rol) => {
-      const tx = { admin: { findUnique: jest.fn().mockResolvedValue({ id: 'root-1', email: 'ana@ejemplo.com', rol }) } }
-
-      await expect(servicio.actorDe(tx as never, ROOT)).rejects.toThrow(UnauthorizedException)
+      await expect(servicio.actorDe(tx as never, ROOT)).rejects.toThrow(new UnauthorizedException('Tu cuenta ROOT ya no existe'))
     })
   })
 

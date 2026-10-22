@@ -106,7 +106,7 @@ describe('RootRestaurantesService', () => {
     })
 
     it('si la cuenta ROOT que actúa ya no existe responde 401 y no escribe nada', async () => {
-      tx.admin.findUnique.mockResolvedValue(null)
+      tx.usuario.findUnique.mockResolvedValue(null)
 
       await expect(servicio.crear('marca-1', { nombre: 'X', direccion: 'Y' }, ROOT_USER)).rejects.toThrow(UnauthorizedException)
 
@@ -174,7 +174,7 @@ describe('RootRestaurantesService', () => {
     })
 
     it('si la cuenta ROOT que actúa ya no existe responde 401', async () => {
-      tx.admin.findUnique.mockResolvedValue(null)
+      tx.usuario.findUnique.mockResolvedValue(null)
 
       await expect(servicio.editar('rest-1', { nombre: 'X' }, ROOT_USER)).rejects.toThrow(UnauthorizedException)
       expect(tx.restaurante.update).not.toHaveBeenCalled()
@@ -241,7 +241,7 @@ describe('RootRestaurantesService', () => {
     })
 
     it('si la cuenta ROOT que actúa ya no existe responde 401', async () => {
-      tx.admin.findUnique.mockResolvedValue(null)
+      tx.usuario.findUnique.mockResolvedValue(null)
 
       await expect(servicio.cambiarEstado('rest-1', false, ROOT_USER)).rejects.toThrow(UnauthorizedException)
       expect(tx.restaurante.update).not.toHaveBeenCalled()

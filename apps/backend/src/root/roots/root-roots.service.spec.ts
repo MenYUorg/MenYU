@@ -39,7 +39,7 @@ describe('RootRootsService', () => {
   describe('listar', () => {
     it('trae solo cuentas ROOT con un select explícito, y marca cuál es la propia', async () => {
       // Arrange
-      prisma.admin.findMany.mockResolvedValue([filaRoot({ id: 'root-1', email: EMAIL_DEL_ROOT }), filaRoot()])
+      prisma.admin.findMany.mockResolvedValue([filaRoot({ id: ROOT_USER.id, email: EMAIL_DEL_ROOT }), filaRoot()])
 
       // Act
       const lista = await servicio.listar(ROOT_USER)
@@ -96,7 +96,7 @@ describe('RootRootsService', () => {
       expect(filas).toHaveLength(1)
       expect(filas[0]).toMatchObject({
         actorTipo: 'ROOT',
-        actorId: 'root-1',
+        actorId: ROOT_USER.id,
         actorNombre: EMAIL_DEL_ROOT,
         accion: 'ROOT_CREAR',
         entidadTipo: 'ROOT',
@@ -155,7 +155,7 @@ describe('RootRootsService', () => {
     })
 
     it('si la cuenta ROOT que actúa ya no existe responde 401 y no escribe nada', async () => {
-      tx.admin.findUnique.mockResolvedValue(null)
+      tx.usuario.findUnique.mockResolvedValue(null)
 
       await expect(servicio.crear({ email: 'carla@ejemplo.com' }, ROOT_USER)).rejects.toThrow(UnauthorizedException)
 
@@ -212,7 +212,7 @@ describe('RootRootsService', () => {
 
     it('la propia contraseña no se restablece por acá: 400 sin tocar nada', async () => {
       // Act
-      const restablecimiento = servicio.restablecerPassword('root-1', ROOT_USER)
+      const restablecimiento = servicio.restablecerPassword(ROOT_USER.id, ROOT_USER)
 
       // Assert
       await expect(restablecimiento).rejects.toThrow(BadRequestException)
@@ -234,7 +234,7 @@ describe('RootRootsService', () => {
     })
 
     it('si la cuenta ROOT que actúa ya no existe responde 401', async () => {
-      tx.admin.findUnique.mockResolvedValue(null)
+      tx.usuario.findUnique.mockResolvedValue(null)
 
       await expect(servicio.restablecerPassword('root-2', ROOT_USER)).rejects.toThrow(UnauthorizedException)
       expect(tx.admin.update).not.toHaveBeenCalled()
