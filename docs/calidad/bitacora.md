@@ -17,14 +17,17 @@ Registro de lo que se hizo para poner SonarCloud en el CI de MenYU y tomar la l�
 | `/health` con SHA (PR #374) | Mergeado (17/10/2026, merge `90bbb81`). Staging muestra ese SHA |
 | Smoke post-deploy en staging (PR #375) | Mergeado (17/10/2026, merge `beb2d18`). Primer run (`39032870161`): smoke en verde |
 | CI en verde y smoke en producción (PR #377) | Mergeado (17/10/2026, merge `8dc7c72`). Staging posterior al merge en verde (run `39036386891`). Falta el tag de ensayo |
-| e2e del backend con Postgres efímero y `check-ci` que los exige (PR #408, SCRUM-37) | **Abierto** (20/10/2026), CI en verde (run `39438348924`, e2e en 66 s). Falta el merge, sumar el check al ruleset y confirmar la versión de Postgres |
+| e2e del backend con Postgres efímero y `check-ci` que los exige (PR #408, SCRUM-37) | **Mergeado** (21/10/2026 19:32:48 UTC, merge `3dab479`). Postgres de Supabase confirmado en 17 (proyecto de `.env.qa`). Falta sumar el check al ruleset |
+| Limpieza de los e2e por marcador de corrida (PR #420) | **Borrador** (21/10/2026), rojo `39704886533` y verde `39705620870` |
+| Pruebas de carga con k6 (PR #421) | **Borrador** (22/10/2026), CI en verde (`39709392785`). Sin corridas contra staging |
+| Diseño del E2E contra staging (PR #422) | **Borrador** (22/10/2026), solo documento |
 
 ## Pendientes
 
 1. **Cambiar el código nuevo de `main`** en SonarCloud (Administration → New Code) a "Number of days" o "Reference branch". Hoy la referencia queda fija en el análisis automático del 17/10 (`7072d67`), que tuvo otro alcance y no tuvo cobertura, y como no se manda `projectVersion` nunca avanza. Después del cambio, verificar por API en el próximo análisis de `main` (`api/qualitygates/project_status?projectKey=MenYUorg_MenYU&branch=main`, campo `periods`).
 2. **Subir los umbrales del gate el 23/10/2026.**
 3. **Confirmar la Deployment Protection de las previews de Vercel** (queda a cargo del equipo). En el run `39032870161` los tres frontends respondieron 200, así que hoy no hay protección que bloquee el smoke.
-4. **Producción:** #377 mergeado y variables `PROD_WEB_*_URL` cargadas (17/10/2026). Falta el tag de ensayo y anotar su resultado (`check-ci`, deploy, smoke y el SHA de `/health` de producción). Con el #408, `check-ci` exige también el check del e2e: el tag tiene que ser sobre un commit que lo tenga.
+4. **Producción:** #377 mergeado y variables `PROD_WEB_*_URL` cargadas (17/10/2026). Falta el tag de ensayo y anotar su resultado (`check-ci`, deploy, smoke y el SHA de `/health` de producción). Con el #408, `check-ci` exige también el check del e2e: el tag tiene que ser sobre un commit que lo tenga. **`v1.0.6`, `v1.0.7` y `v1.1.0` ya existen** (21/10): el ensayo necesita otro número.
 5. Opcionales que salieron en el camino:
    - Fijar la versión de `@railway/cli` en los workflows: hecho en el PR #396 (`@5.70.0`), mergeado el 19/10 (`a4c4c53`). El deploy de staging `39311475958` ya lo usó.
    - Revisar en Railway (Settings → Healthcheck Path) si el servicio tiene healthcheck en `/health`. No cambia nada hoy, porque `/health` responde siempre 200.
@@ -643,3 +646,90 @@ Si el informe cita los números de Sonar, hay que nombrar los dos commits: el me
 7. **Jueves 22/10:** ensayo de producción con un tag `vX.Y.Z` **sobre un commit con el #408 mergeado**. Anotar `check-ci` (los dos checks), deploy, smoke y el SHA de `/health`.
 8. **Viernes 23/10:** subir los umbrales del gate (80 % y 5 % sobre código nuevo) y aplicar la definición de código nuevo elegida en el punto 4.
 9. Abrir el PR único de esta bitácora después del ensayo.
+
+### 21/10/2026: merge del #408, tests inestables en `main`, caída de Railway, tags y PRs de calidad (k6 y E2E)
+
+Horas en UTC (ART = UTC − 3). Desde esta sesión se mergearon el #408 y el #417. Además se pushearon y abrieron en borrador el #419, el #420, el #421 y el #422: ninguno está mergeado. No se crearon tags, no se hizo push a `main` y no se corrió nada contra producción ni contra Mercado Pago. Contra Supabase solo se hizo un `select` de la versión (más abajo).
+
+**#408 (SCRUM-37): conflicto, merge y CI de `main`**
+- **El conflicto:** uno solo, en `.github/workflows/ci.yml`. `main` había sumado `--filter=@menyu/web-auth` al Build, y la rama, el job `e2e-backend` debajo. Quedaron los dos. Merge de `origin/main` en la rama: `8e9d31c`. CI de la rama: `39661462996`, en verde.
+- **Merge:** 19:32:48, `3dab479`. El CI de `main` (`39662588187`) salió **rojo** por un test inestable de `@menyu/auth-client`, `RequireAuth › una vez adentro, si en otra pestaña entró otra cuenta, recarga`. El mismo código había pasado en la rama.
+- **#417** (`d42beed`): el test disparaba un solo `focus` apenas aparecía el perfil. El listener se registra en un `useEffect` posterior, así que el evento se podía perder. Ahora el `focus` se reintenta dentro del `waitFor`.
+  - **Cómo se verificó:** en local pasaba 15 de 15. Demorando 50 ms el registro del listener, el test original falla con el mismo error y el nuevo pasa.
+  - **CI:** de la rama `39664495553`, y `39667032362` después de actualizarla con `main`. Merge 20:09:55, `734cba2`. El repo no permite auto-merge y el ruleset exige la rama al día: hubo que actualizarla y esperar el CI.
+- **El CI de `main` del `734cba2`** (`39667914465`) también salió **rojo**, por otro test inestable, ahora de web-staff: `MesasPage (mozo) › detalle › si la sesión abierta en el detalle se cierra por socket, se limpia`. Con `gh run rerun --failed` (intento 2) pasó a verde.
+- **#418** (`lautiod`, "un token de invitado ya no lee pedidos ni llamados, y un comensal solo actúa sobre su sesión"): merge 21:20:52, `12c7bb4`. Es el HEAD de `main` al cierre. CI de `main`: `39678039006`, en verde.
+  - **Tests que pasan:** backend 1.671 (más 25 salteados de `historial-root.base.spec.ts`, que necesita `URL_DE_PRUEBA`), web-admin 686, web-cliente 729, web-staff 120, web-auth 53, `packages/ui` 41 y `packages/auth-client` 79. **Total: 3.379.** Además, 9 e2e.
+- **Ruleset de `main` (16770555):** sigue exigiendo un solo check, `CI — typecheck, lint, test, build`. `E2E — backend (Postgres efímero)` todavía no está.
+- **Postgres de Supabase:** un `select` de solo lectura sobre la `DIRECT_URL` de `apps/backend/.env.qa` dio **versión mayor 17**. La `.env` local apunta a un Postgres que no es Supabase. Se mantiene `postgres:17.6` en el job; el comentario "a confirmar con Supabase" de `ci.yml` se corrige en el próximo PR que toque ese archivo. **Producción no se consultó.**
+
+**Railway: caída del 21/10 y `Deploy — Staging`**
+- **El incidente:** status.railway.com tiene abierto desde las 07:24 un "Major Outage" con los builds pausados. A las 22:10 se sumó un incidente de seguridad con rotación de credenciales. A las 01:22 del 22/10 seguía **sin resolver**, y el estado dice que afectó **variables de entorno y credenciales** de los servicios.
+- **Los deploys a staging que fallaron:**
+  - `39534619683` (#410, 02:43): `railway up` con 502.
+  - `39610446322` (#415, 13:43): `Invalid RAILWAY_TOKEN` en `Set APP_COMMIT_SHA`.
+  - `39662588357` (#408): el intento 1 dio `Invalid RAILWAY_TOKEN`. `RAILWAY_TOKEN_STAGING` se actualizó a las 19:55:27, y en el intento 2 (19:56) ese paso pasó y falló `railway up` con "Deploys have been paused" y 502. No se puede separar si lo arregló el token nuevo o la API de Railway que volvía.
+  - `39678038916` (#418, 21:21): 502 y "Deploys have been paused".
+- **Último deploy en verde antes del primer fallo:** `39556008907` (06:32, `9e8eaba`). Es lo último que llegó a staging. Entre ese run y el primer fallo no cambiaron ni el workflow ni la CLI (`@railway/cli@5.70.0` desde `ba61590`).
+- **No se re-ejecutó el deploy a staging:** Railway sigue con los builds pausados.
+- **Cómo se usan los secrets:** staging usa `RAILWAY_TOKEN_STAGING` y `RAILWAY_SERVICE_ID_STAGING` en `variable set` y en `up`; producción, los `_PROD`. `deploy-production.yml` no mezcla secrets.
+
+**Tags y producción**
+- **Los tags `v1.0.6`, `v1.0.7` y `v1.1.0` ya existen.** Son livianos y los empujó `lautiod`; ningún workflow crea tags.
+
+| Tag | SHA | Run de `deploy-production.yml` | Resultado |
+|---|---|---|---|
+| `v1.0.6` | `39522af` | `39381340103` (20/10 06:36) | Todo en verde; smoke de backend y 3 frontends |
+| `v1.0.7` | `a6fb6b1` | `39394686027` (20/10 08:37) | Todo en verde; smoke de backend y 3 frontends |
+| `v1.1.0` | `b4d2dcb` | `39552799290` (21/10 06:00) | Todo en verde; smoke de backend y 4 frontends (con web-auth) |
+
+- **`check-ci` de esos tres:** revisó solo el check `CI` y tardó menos de 1 s. La exigencia del e2e entró recién con el #408.
+- **Qué sirve producción:** según el log de `39552799290`, `/health` muestra `b4d2dcb`.
+- **SHA del ensayo:** hoy `12c7bb4` cumple las dos condiciones de `check-ci` (CI y E2E en verde).
+
+**Sonar sobre `main`**
+- **El último análisis es de `734cba2`** (22:11:39), por el re-run del CI. Llegó **después** del de `12c7bb4` (21:25:25), así que `main` en Sonar muestra un commit anterior al HEAD. El próximo push a `main` lo corrige.
+- **Números**, iguales en los análisis de `77d7622`, `12c7bb4` y `734cba2`:
+  - cobertura de líneas **83,5 %** y mixta **85,0 %** (4.817 sin cubrir de 29.113);
+  - duplicación **3,4 %** (1.525 líneas, 88 bloques);
+  - `new_coverage` **94,8 %** y `new_duplicated_lines_density` 0,05 %;
+  - gate **OK**, con las 6 condiciones.
+- **Por app (líneas):** backend 92,1 %, web-admin 84,4 %, web-cliente 85,8 %, web-staff 72,1 %, web-auth 93,2 %, `packages/ui` 65,0 % y `packages/auth-client` 100 %.
+- **web-auth y auth-client:** web-auth entró al repo y a `sonar.sources` con el #409 (`e05ff5a`), y `packages/auth-client`, con el #415 (`ef98793`).
+
+**PRs nuevos, todos en borrador y sin mergear**
+
+| PR | Rama | Qué | Commits y runs |
+|---|---|---|---|
+| #419 | `fix/test-mesaspage-sesion-cerrada-socket` | `MesasPage` (web-staff) reabría el socket cada vez que se abría el detalle de una mesa, y un `sesion:cerrada` que llegaba antes del efecto nuevo lo atendía el handler viejo. El handler pasa a una actualización funcional y el efecto deja de depender del detalle | Rojo `54a4a7c` (test "abrir el detalle no reabre el socket"; run rojo de `main` `39667914465`, intento 1). Verde `dbabc7a` (`39685607299`). En local, el spec pasó de fallar 1 de 30 a 0 de 30, y la suite de web-staff dio 10 de 10 (121 tests) |
+| #420 | `fix/e2e-limpieza-por-marcador` | `clearE2eData` pasa a borrar solo lo de la corrida, con un marcador por corrida (`e2e-<run_id>-<intento>-` en CI y aleatorio en local). `jest.e2e.config.js` no deja correr los e2e contra una base que no sea local, salvo `E2E_PERMITIR_BASE_REMOTA=si` | Rojo `bee62ce` (`39704886533`: falla solo el test nuevo, 1 de 10). Verde `06fefb2` (`39705620870`, 10 de 10). Probado en local contra un Postgres 17.6 descartable en Docker, ya borrado |
+| #421 | `feat/k6-carga` | Pruebas de carga con k6: `scripts/carga/` (humo, stress y soak, con guardas de staging confirmado y nunca producción), workflow `carga-k6.yml` (solo `workflow_dispatch`, k6 2.3.0 fijado por digest) y `docs/calidad/k6.md` | `d7725cd`, CI `39709392785` (las guardas suman 31 tests al paso "Test — smoke scripts", que da 48 de 48). Probado solo contra un servidor falso local; **sin corridas contra staging** |
+| #422 | `docs/e2e-supabase` | `docs/calidad/e2e-supabase.md`: diseño del E2E contra staging (flujo, datos por marcador, cuándo corre, secrets, usuario de base, riesgos y reporte). Sin implementación | CI en verde |
+
+- **Deployments de Vercel:** ninguno de los cuatro PRs disparó estados ni deployments. Al mergear:
+  - el #420 dispara `Deploy — Staging` (`*.e2e-spec.ts` y `jest.e2e.config.js` no caen en `paths-ignore`);
+  - el #421 lo dispara una vez (cambia `deploy-staging.yml`); después, `scripts/carga/**` y `carga-k6.yml` quedan en `paths-ignore`;
+  - el #419 lo dispara, porque cambia código de web-staff;
+  - el #422 no.
+- **Contrato de Mercado Pago** (`test/mercadopago-contrato`): **no se abrió**. No hay payloads reales en el repo ni en el disco: el spec del proveedor usa objetos armados a mano. Faltan los de `merchant_order` (aprobado que cubre, `in_process`, `rejected`, parcial o sin pagos), los de `payment` (con orden y sin orden; `approved`, `rejected`, `in_process`, `pending` y uno fuera del mapa) y la query de la notificación en sus dos formas. Los consigue Coty desde el panel.
+
+**Jira**
+- `privado/jira-bloque-2.md` (fuera del repo): los tests de regresión de QrScanner, #386, #388, #398 y #399, con su archivo y su `describe › it`, y lo que faltaba del #386 y del #388.
+- En `jira-bloque.md`, el #383, el #386 y el #388 figuran "abierto": están mergeados (`52a5448`, `6438e72` y `40bbf50`).
+
+**Worktrees y estado local**
+- `../MenYU-e2e`: quedó en `docs/e2e-supabase`. Ahí también están las ramas de los #419, #420 y #421. Hay dependencias instaladas y `@menyu/types`, `@menyu/ui` y `@menyu/auth` compilados (los `dist` no se commitean).
+- `../MenYU-bitacora`: `docs/bitacora-ensayo-produccion`, con esta entrada commiteada y sin push.
+- El servidor falso de k6 y el contenedor `menyu-e2e-tmp` quedaron apagados. `menyu-postgres` no se tocó. Quedaron descargadas las imágenes `grafana/k6:2.3.0` y `postgres:17.6`.
+
+**Pendiente al retomar** (en este orden)
+1. **Railway (urgente):** el incidente de seguridad afectó variables de entorno y credenciales. Revisar las variables de los servicios de staging y producción (base, `JWT_SECRET`, claves de Mercado Pago y de Supabase) y rotar lo que corresponda; también decidir si se rota `RAILWAY_TOKEN_PROD`, que es del 23/05. Cuando vuelvan los builds, re-ejecutar `39678038916` (`gh run rerun 39678038916 --failed`) y anotar el SHA que muestra staging.
+2. **Ensayo de producción:** elegir un número de tag nuevo (`v1.1.1` o `v1.2.0`) sobre un commit con CI y E2E en verde (hoy `12c7bb4`). Si Railway sigue caído, el deploy falla: no crear el tag hasta que vuelva.
+3. **Coty:** agregar `E2E — backend (Postgres efímero)` como check requerido en el ruleset 16770555.
+4. **Revisar los borradores** #419, #420, #421 y #422.
+5. **k6:** confirmar los umbrales iniciales y autorizar el primer humo (`gh workflow run carga-k6.yml -f escenario=humo -f confirmar=si`). Decidir si se implementa el flujo que escribe (sección 5.4 de `k6.md`).
+6. **E2E contra staging:** elegir entre un workflow aparte o un job en `deploy-staging.yml`; crear el restaurante, el plato y el mozo de prueba, el usuario `e2e_staging`, las funciones y los secrets del doc.
+7. **Mercado Pago:** conseguir los payloads reales que faltan para el PR de contrato.
+8. **Jira:** pasar a Jira lo de `privado/jira-bloque-2.md` y actualizar los estados en `jira-bloque.md`.
+9. **Viernes 23/10:** subir los umbrales del gate y aplicar la definición de código nuevo (pendiente desde el 20/10).
+10. Abrir el PR único de esta bitácora después del ensayo.
