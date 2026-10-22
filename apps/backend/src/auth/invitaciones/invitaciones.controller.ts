@@ -19,7 +19,7 @@ export class InvitacionesController {
   @ApiOperation({
     summary: 'Invitar a alguien del personal por email',
     description:
-      'ROOT invita a OWNER y GERENTE; OWNER, a cualquier rol de su marca; GERENTE, a JEFE_SALON, MOZO y COCINA ' +
+      'ROOT invita a OWNER; OWNER, a cualquier rol de su marca; GERENTE, a JEFE_SALON, MOZO y COCINA ' +
       'de sus restaurantes. OWNER va con marcaId; el resto, con restauranteId.',
   })
   @ApiResponse({ status: 201, description: 'Usuario y membresía creados (invitacionEnviada: si se mandó el mail)' })

@@ -78,9 +78,9 @@ export class InvitacionesService {
   }
 
   /**
-   * 403 si no puede invitar a ese rol ahí; si puede (ROOT), 404 si la marca o el restaurante no existe y 409 si está
-   * dado de baja (él o su marca): no se suma gente a algo dado de baja. Para el resto, AccesoService ya no cuenta las
-   * membresías de algo dado de baja, así que reciben 403.
+   * 403 si no puede invitar a ese rol ahí; si puede, 404 si la marca o el restaurante no existe y 409 si está dado de
+   * baja (él o su marca): no se suma gente a algo dado de baja. ROOT llega con una marca; al personal de algo dado de
+   * baja AccesoService ya no le cuenta la membresía y recibe 403 antes, así que el chequeo del restaurante es defensa.
    */
   private async exigirPermiso(ambito: Ambito, rol: Rol, invitador: UsuarioAutenticado): Promise<void> {
     let rolesEnAmbito: Rol[]

@@ -64,28 +64,31 @@ describe('InvitacionesService', () => {
       ['el GERENTE a otro GERENTE', CUENTAS.GERENTE, invitacion('GERENTE', { restauranteId: REST })],
       ['el OWNER de otra marca', CUENTAS.OWNER_B, invitacion('MOZO', { restauranteId: REST })],
       ['ROOT a un MOZO', CUENTAS.ROOT, invitacion('MOZO', { restauranteId: REST })],
+      ['ROOT a un GERENTE', CUENTAS.ROOT, invitacion('GERENTE', { restauranteId: REST })],
     ])('%s: 403 sin tocar Supabase', async (_caso, cuenta, dto) => {
       await expect(service.invitar(dto, cuenta)).rejects.toThrow(new ForbiddenException('No podés invitar a ese rol ahí'))
       expect(supabase.inviteUserByEmail).not.toHaveBeenCalled()
     })
 
+    // El AccesoService de test no mira si el restaurante está disponible: así se llega al chequeo del restaurante,
+    // que con el real queda como defensa (al personal de algo dado de baja ya le da 403 el permiso).
     it.each([
-      ['la marca', invitacion('OWNER', { marcaId: MUNDO.MARCA_A }), () => prisma.marca.findUnique.mockResolvedValue(null), 'Marca no encontrada'],
-      ['el restaurante', invitacion('GERENTE', { restauranteId: REST }), () => prisma.restaurante.findUnique.mockResolvedValue(null), 'Restaurante no encontrado'],
-    ])('ROOT invitando a %s que no existe: 404', async (_caso, dto, preparar, mensaje) => {
+      ['ROOT', 'la marca', CUENTAS.ROOT, invitacion('OWNER', { marcaId: MUNDO.MARCA_A }), () => prisma.marca.findUnique.mockResolvedValue(null), 'Marca no encontrada'],
+      ['el OWNER', 'el restaurante', CUENTAS.OWNER_A, invitacion('GERENTE', { restauranteId: REST }), () => prisma.restaurante.findUnique.mockResolvedValue(null), 'Restaurante no encontrado'],
+    ])('%s invitando a %s que no existe: 404', async (_quien, _caso, cuenta, dto, preparar, mensaje) => {
       preparar()
 
-      await expect(service.invitar(dto, CUENTAS.ROOT)).rejects.toThrow(new NotFoundException(mensaje))
+      await expect(service.invitar(dto, cuenta)).rejects.toThrow(new NotFoundException(mensaje))
     })
 
     it.each([
-      ['un OWNER a una marca dada de baja', invitacion('OWNER', { marcaId: MUNDO.MARCA_A }), () => prisma.marca.findUnique.mockResolvedValue({ activo: false }), 'La marca está dada de baja'],
-      ['un GERENTE a un restaurante dado de baja', invitacion('GERENTE', { restauranteId: REST }), () => prisma.restaurante.findUnique.mockResolvedValue({ activo: false, marca: { activo: true } }), 'El restaurante o su marca están dados de baja'],
-      ['un GERENTE a un restaurante de una marca dada de baja', invitacion('GERENTE', { restauranteId: REST }), () => prisma.restaurante.findUnique.mockResolvedValue({ activo: true, marca: { activo: false } }), 'El restaurante o su marca están dados de baja'],
-    ])('ROOT invitando %s: 409 sin tocar Supabase', async (_caso, dto, preparar, mensaje) => {
+      ['ROOT', 'un OWNER a una marca dada de baja', CUENTAS.ROOT, invitacion('OWNER', { marcaId: MUNDO.MARCA_A }), () => prisma.marca.findUnique.mockResolvedValue({ activo: false }), 'La marca está dada de baja'],
+      ['el OWNER', 'un GERENTE a un restaurante dado de baja', CUENTAS.OWNER_A, invitacion('GERENTE', { restauranteId: REST }), () => prisma.restaurante.findUnique.mockResolvedValue({ activo: false, marca: { activo: true } }), 'El restaurante o su marca están dados de baja'],
+      ['el OWNER', 'un GERENTE a un restaurante de una marca dada de baja', CUENTAS.OWNER_A, invitacion('GERENTE', { restauranteId: REST }), () => prisma.restaurante.findUnique.mockResolvedValue({ activo: true, marca: { activo: false } }), 'El restaurante o su marca están dados de baja'],
+    ])('%s invitando %s: 409 sin tocar Supabase', async (_quien, _caso, cuenta, dto, preparar, mensaje) => {
       preparar()
 
-      await expect(service.invitar(dto, CUENTAS.ROOT)).rejects.toThrow(new ConflictException(mensaje))
+      await expect(service.invitar(dto, cuenta)).rejects.toThrow(new ConflictException(mensaje))
       expect(supabase.generateLink).not.toHaveBeenCalled()
     })
   })

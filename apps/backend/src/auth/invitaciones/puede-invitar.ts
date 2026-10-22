@@ -1,11 +1,11 @@
 import { Rol } from '@prisma/client'
 
-const ROLES_DE_ROOT: Rol[] = ['OWNER', 'GERENTE']
+const ROLES_DE_ROOT: Rol[] = ['OWNER']
 const ROLES_DE_GERENTE: Rol[] = ['JEFE_SALON', 'MOZO', 'COCINA']
 
 /**
- * Quién puede invitar a quién (docs/auth/specs/auth.md, Fase 2):
- * - ROOT: a OWNER y GERENTE.
+ * Quién puede invitar a quién (docs/auth/specs/auth.md, Fase 2, con la regla de ROOT de la 4.4):
+ * - ROOT: a OWNER. Las cuentas ROOT se invitan desde la consola (`POST /root/roots`), no con un rol.
  * - OWNER: a cualquier rol de su marca.
  * - GERENTE: a JEFE_SALON, MOZO y COCINA de sus restaurantes.
  *
