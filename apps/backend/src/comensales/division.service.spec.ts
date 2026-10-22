@@ -1,4 +1,5 @@
 import { Test } from '@nestjs/testing'
+import { Prisma } from '@prisma/client'
 import { BadRequestException, NotFoundException } from '@nestjs/common'
 import { DivisionService } from './division.service'
 import { ComensalesService } from './comensales.service'
@@ -7,6 +8,8 @@ import { PrismaService } from '../prisma/prisma.service'
 const mockPrisma = {
   sesionMesa: { findUnique: jest.fn() },
   pedidoItem: { findMany: jest.fn() },
+  pedido: { findMany: jest.fn() },
+  pago: { findMany: jest.fn() },
 }
 const mockComensales = { listarComensales: jest.fn() }
 
@@ -173,5 +176,240 @@ describe('DivisionService.calcularPorConsumo', () => {
     expect(mockPrisma.sesionMesa.findUnique).not.toHaveBeenCalled()
     expect(mockPrisma.pedidoItem.findMany).not.toHaveBeenCalled()
     expect(mockComensales.listarComensales).toHaveBeenCalledWith('sesion-1', tx)
+  })
+})
+
+// ── Saldo y total de la sesión ───────────────────────────────────────────────
+// Son los que deciden cuánto se cobra. La "base" simulada filtra filas con el `where` que recibe (igualdad, `not`
+// e `in`), así que qué pedidos y qué pagos cuentan lo decide la consulta del servicio, no el test.
+
+type Fila = Record<string, unknown>
+const cumple = (where: Fila) => (fila: Fila) =>
+  Object.entries(where).every(([campo, condicion]) => {
+    if (condicion && typeof condicion === 'object' && 'not' in condicion) return fila[campo] !== condicion.not
+    if (condicion && typeof condicion === 'object' && 'in' in condicion) {
+      return (condicion.in as unknown[]).includes(fila[campo])
+    }
+    return fila[campo] === condicion
+  })
+
+type ItemDePedido = { precioUnitario: unknown; cantidad: number; cantidadEditada?: number | null }
+const pedido = (estado: string, items: ItemDePedido[]): Fila => ({
+  sesionId: 'sesion-1',
+  estado,
+  items: items.map((i) => ({ cantidadEditada: null, ...i })),
+})
+const pago = (estado: string, monto: unknown): Fila => ({ sesionId: 'sesion-1', estado, monto })
+
+describe('DivisionService.calcularTotalSesion', () => {
+  let service: DivisionService
+  const tx = { pedido: { findMany: jest.fn() } }
+
+  function pedidosEnLaBase(pedidos: Fila[]) {
+    tx.pedido.findMany.mockImplementation(({ where }: { where: Fila }) => Promise.resolve(pedidos.filter(cumple(where))))
+  }
+
+  beforeEach(async () => {
+    const module = await Test.createTestingModule({
+      providers: [
+        DivisionService,
+        { provide: PrismaService, useValue: mockPrisma },
+        { provide: ComensalesService, useValue: mockComensales },
+      ],
+    }).compile()
+
+    service = module.get(DivisionService)
+    jest.clearAllMocks()
+  })
+
+  it.each<[string, number, Fila[]]>([
+    ['sin pedidos', 0, []],
+    ['un pedido sin ítems', 0, [pedido('pendiente', [])]],
+    ['precio por cantidad', 3000, [pedido('pendiente', [{ precioUnitario: 1500, cantidad: 2 }])]],
+    [
+      'cantidadEditada reemplaza a la cantidad',
+      1000,
+      [pedido('entregado', [{ precioUnitario: 1000, cantidad: 3, cantidadEditada: 1 }])],
+    ],
+    [
+      'cantidadEditada 0 (ítem anulado) suma 0',
+      0,
+      [pedido('entregado', [{ precioUnitario: 1000, cantidad: 3, cantidadEditada: 0 }])],
+    ],
+    [
+      'varios pedidos e ítems se suman',
+      6400,
+      [
+        pedido('pendiente', [{ precioUnitario: 1500, cantidad: 2 }, { precioUnitario: 800, cantidad: 1 }]),
+        pedido('listo', [{ precioUnitario: 2600, cantidad: 1 }]),
+      ],
+    ],
+    [
+      'el precio como Decimal de Prisma',
+      2469,
+      [pedido('pendiente', [{ precioUnitario: new Prisma.Decimal('1234.50'), cantidad: 2 }])],
+    ],
+  ])('%s → %d', async (_caso, esperado, pedidos) => {
+    // Arrange
+    pedidosEnLaBase(pedidos)
+
+    // Act
+    const total = await service.calcularTotalSesion(tx as never, 'sesion-1')
+
+    // Assert
+    expect(total).toBe(esperado)
+  })
+
+  it('no suma los pedidos cancelados', async () => {
+    // Arrange
+    pedidosEnLaBase([
+      pedido('pendiente', [{ precioUnitario: 1000, cantidad: 1 }]),
+      pedido('cancelado', [{ precioUnitario: 5000, cantidad: 2 }]),
+    ])
+
+    // Act
+    const total = await service.calcularTotalSesion(tx as never, 'sesion-1')
+
+    // Assert
+    expect(total).toBe(1000)
+  })
+
+  it('suma los centavos sin perderlos (a dos decimales)', async () => {
+    // Arrange
+    pedidosEnLaBase([pedido('pendiente', [{ precioUnitario: 100.1, cantidad: 1 }, { precioUnitario: 200.2, cantidad: 1 }])])
+
+    // Act
+    const total = await service.calcularTotalSesion(tx as never, 'sesion-1')
+
+    // Assert
+    expect(total).toBeCloseTo(300.3, 2)
+  })
+
+  it('usa el precio guardado en cada ítem del pedido: no consulta el menú ni sus descuentos', async () => {
+    // Arrange
+    pedidosEnLaBase([])
+
+    // Act
+    await service.calcularTotalSesion(tx as never, 'sesion-1')
+
+    // Assert
+    expect(tx.pedido.findMany).toHaveBeenCalledWith({
+      where: { sesionId: 'sesion-1', estado: { not: 'cancelado' } },
+      include: { items: { select: { cantidad: true, cantidadEditada: true, precioUnitario: true } } },
+    })
+  })
+
+  it('consulta con el cliente que recibe (la transacción), no con PrismaService', async () => {
+    // Arrange
+    pedidosEnLaBase([])
+
+    // Act
+    await service.calcularTotalSesion(tx as never, 'sesion-1')
+
+    // Assert
+    expect(tx.pedido.findMany).toHaveBeenCalledTimes(1)
+    expect(mockPrisma.pedido.findMany).not.toHaveBeenCalled()
+  })
+})
+
+describe('DivisionService.obtenerSaldo', () => {
+  let service: DivisionService
+
+  function enLaBase({ pedidos = [], pagos = [] }: { pedidos?: Fila[]; pagos?: Fila[] }) {
+    mockPrisma.pedido.findMany.mockImplementation(({ where }: { where: Fila }) => Promise.resolve(pedidos.filter(cumple(where))))
+    mockPrisma.pago.findMany.mockImplementation(({ where }: { where: Fila }) => Promise.resolve(pagos.filter(cumple(where))))
+  }
+  const consumoDe1000 = [pedido('entregado', [{ precioUnitario: 1000, cantidad: 1 }])]
+
+  beforeEach(async () => {
+    const module = await Test.createTestingModule({
+      providers: [
+        DivisionService,
+        { provide: PrismaService, useValue: mockPrisma },
+        { provide: ComensalesService, useValue: mockComensales },
+      ],
+    }).compile()
+
+    service = module.get(DivisionService)
+    jest.clearAllMocks()
+    mockPrisma.sesionMesa.findUnique.mockResolvedValue({ id: 'sesion-1', estado: 'activa' })
+  })
+
+  it('sesión inexistente → NotFoundException, sin consultar pedidos ni pagos', async () => {
+    // Arrange
+    mockPrisma.sesionMesa.findUnique.mockResolvedValue(null)
+
+    // Act
+    const saldo = service.obtenerSaldo('sesion-x')
+
+    // Assert
+    await expect(saldo).rejects.toThrow(NotFoundException)
+    await expect(saldo).rejects.toThrow('Sesión no encontrada')
+    expect(mockPrisma.pedido.findMany).not.toHaveBeenCalled()
+    expect(mockPrisma.pago.findMany).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['aprobado', 400, 600],
+    ['pendiente', 0, 1000],
+    ['rechazado', 0, 1000],
+    ['cancelado', 0, 1000],
+  ])('un pago %s de $400 sobre $1000 → cobrado %d, saldo %d', async (estado, cobrado, saldo) => {
+    // Arrange
+    enLaBase({ pedidos: consumoDe1000, pagos: [pago(estado, 400)] })
+
+    // Act
+    const resultado = await service.obtenerSaldo('sesion-1')
+
+    // Assert
+    expect(resultado).toEqual({ totalSesion: 1000, totalCobrado: cobrado, saldoPendiente: saldo })
+  })
+
+  it('varios pagos aprobados se suman (también como Decimal) y el saldo es lo que falta', async () => {
+    // Arrange
+    enLaBase({
+      pedidos: consumoDe1000,
+      pagos: [pago('aprobado', new Prisma.Decimal('250.50')), pago('aprobado', 300), pago('pendiente', 449.5)],
+    })
+
+    // Act
+    const resultado = await service.obtenerSaldo('sesion-1')
+
+    // Assert
+    expect(resultado).toEqual({ totalSesion: 1000, totalCobrado: 550.5, saldoPendiente: 449.5 })
+  })
+
+  it('un sobrepago deja el saldo en 0, nunca negativo', async () => {
+    // Arrange
+    enLaBase({ pedidos: consumoDe1000, pagos: [pago('aprobado', 700), pago('aprobado', 500)] })
+
+    // Act
+    const resultado = await service.obtenerSaldo('sesion-1')
+
+    // Assert
+    expect(resultado).toEqual({ totalSesion: 1000, totalCobrado: 1200, saldoPendiente: 0 })
+  })
+
+  it('una sesión sin pedidos tiene total 0 y saldo 0', async () => {
+    // Arrange
+    enLaBase({})
+
+    // Act
+    const resultado = await service.obtenerSaldo('sesion-1')
+
+    // Assert
+    expect(resultado).toEqual({ totalSesion: 0, totalCobrado: 0, saldoPendiente: 0 })
+  })
+
+  it('no mira el estado de la sesión: una sesión cerrada también da su saldo', async () => {
+    // Arrange
+    mockPrisma.sesionMesa.findUnique.mockResolvedValue({ id: 'sesion-1', estado: 'cerrada' })
+    enLaBase({ pedidos: consumoDe1000, pagos: [pago('aprobado', 1000)] })
+
+    // Act
+    const resultado = await service.obtenerSaldo('sesion-1')
+
+    // Assert
+    expect(resultado).toEqual({ totalSesion: 1000, totalCobrado: 1000, saldoPendiente: 0 })
   })
 })
