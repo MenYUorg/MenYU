@@ -83,23 +83,28 @@ describe('DivisionService.calcularPorConsumo', () => {
     ])
   })
 
-  it('un ítem compartido se divide entre sus etiquetados y el resto de centavos va al primero', async () => {
-    // $100.01 entre Ana y Beto = 10001 centavos → 5000 cada uno, el centavo sobrante a Ana.
-    mockPrisma.pedidoItem.findMany.mockResolvedValue([
-      pedidoItem('pi-1', 'Pizza', 100.01, 1, ['c-ana', 'c-beto']),
-    ])
+  // Las partes esperadas van en el orden de las asignaciones (createdAt asc). Las asignaciones vienen al revés
+  // que la lista de comensales, para que se vea que el resto sigue a la primera asignación y no al primer comensal.
+  it.each([
+    ['una sola parte', 100.01, 1, [10001]],
+    ['resto 0', 90, 3, [3000, 3000, 3000]],
+    ['resto 1 ($100,01 entre 2)', 100.01, 2, [5001, 5000]],
+    ['resto 2 con 3 partes', 100.01, 3, [3335, 3333, 3333]],
+    ['resto 4 con 5 partes', 100.04, 5, [2004, 2000, 2000, 2000, 2000]],
+  ])('reparto de un ítem compartido, %s: el resto entero de centavos va a la primera asignación', async (_caso, total, cantidadPartes, esperadas) => {
+    // Arrange
+    const comensales = Array.from({ length: cantidadPartes }, (_, i) => ({ id: `c-${i + 1}`, nombre: `Comensal ${i + 1}` }))
+    const asignados = comensales.map((c) => c.id).reverse()
+    mockComensales.listarComensales.mockResolvedValue(comensales)
+    mockPrisma.pedidoItem.findMany.mockResolvedValue([pedidoItem('pi-1', 'Pizza', total, 1, asignados)])
 
+    // Act
     const r = await service.calcularPorConsumo('sesion-1')
 
-    expect(r.partes.find((p) => p.comensalId === 'c-ana')).toMatchObject({
-      montoCentavos: 5001,
-      monto: 50.01,
-    })
-    expect(r.partes.find((p) => p.comensalId === 'c-beto')).toMatchObject({
-      montoCentavos: 5000,
-      monto: 50,
-    })
-    expect(r.partes.find((p) => p.comensalId === 'c-carla')).toMatchObject({ montoCentavos: 0 })
+    // Assert
+    const obtenidas = asignados.map((id) => r.partes.find((p) => p.comensalId === id)?.montoCentavos)
+    expect(obtenidas).toEqual(esperadas)
+    expect(r.partes.reduce((acc, p) => acc + p.montoCentavos, 0)).toBe(Math.round(total * 100))
   })
 
   it('usa cantidadEditada cuando existe (precio 100, cantidad 3, editada 2 → 200)', async () => {
