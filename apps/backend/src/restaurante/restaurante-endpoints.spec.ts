@@ -64,6 +64,17 @@ describe('endpoints de restaurantes', () => {
     expect(restaurantes.update).not.toHaveBeenCalled()
   })
 
+  // El mismo tope que la consola de ROOT: el nombre va a su historial.
+  it.each([
+    ['un nombre de 121 caracteres', { nombre: 'a'.repeat(121) }],
+    ['el carácter nulo en el nombre', { nombre: 'Cen\u0000tro' }],
+  ])('PATCH con %s: 400', async (_caso, body) => {
+    const res = await api.pedir('patch', `/restaurantes/${REST}`, { cuenta: CUENTAS.GERENTE, body })
+
+    expect(res.status).toBe(400)
+    expect(restaurantes.update).not.toHaveBeenCalled()
+  })
+
   it('sin token 401 y sin Usuario 403', async () => {
     const anonimo = await api.pedir('get', '/restaurantes')
     const sinUsuario = await api.pedir('get', `/restaurantes/${REST}`, { cuenta: SIN_USUARIO })

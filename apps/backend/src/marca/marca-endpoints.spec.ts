@@ -39,6 +39,25 @@ describe('endpoints de marcas', () => {
     expect(marcas.update).not.toHaveBeenCalled()
   })
 
+  // Los mismos topes que la consola de ROOT: el nombre y el identificador van a su historial.
+  it.each([
+    ['un nombre de 121 caracteres', { nombre: 'a'.repeat(121) }],
+    ['el carácter nulo en el nombre', { nombre: 'La\u0000Parrilla' }],
+    ['un identificador de 81 caracteres', { slug: 'a'.repeat(81) }],
+    ['el carácter nulo en el identificador', { slug: 'la\u0000parrilla' }],
+  ])('PATCH con %s: 400', async (_caso, body) => {
+    const res = await api.pedir('patch', `/marcas/${MARCA}`, { cuenta: CUENTAS.OWNER_A, body })
+
+    expect(res.status).toBe(400)
+    expect(marcas.update).not.toHaveBeenCalled()
+  })
+
+  it('PATCH con un nombre de 120 caracteres pasa', async () => {
+    const res = await api.pedir('patch', `/marcas/${MARCA}`, { cuenta: CUENTAS.OWNER_A, body: { nombre: 'a'.repeat(120) } })
+
+    expect(res.status).toBe(200)
+  })
+
   it('sin token 401 y sin Usuario 403', async () => {
     const anonimo = await api.pedir('get', '/marcas')
     const sinUsuario = await api.pedir('get', `/marcas/${MARCA}`, { cuenta: SIN_USUARIO })

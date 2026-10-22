@@ -5,9 +5,11 @@ import {
   AccionRoot,
   ENTIDAD_DE_ACCION,
   EntradaHistorial,
+  LARGO_MAXIMO_TEXTO,
   RegistroInvalido,
   cambioDeInvitacion,
   registrarEnHistorial,
+  textoRegistrable,
 } from './registrar-historial'
 
 const ENTRADA: EntradaHistorial = {
@@ -113,18 +115,56 @@ describe('registrarEnHistorial', () => {
     it('un ROOT sin id de cuenta', () => rechaza({ ...ENTRADA, actor: { tipo: 'ROOT', id: '', nombre: 'ana@ejemplo.com' } }, /id de la cuenta ROOT/))
 
     it('un actor sin nombre', () => rechaza({ ...ENTRADA, actor: { tipo: 'SCRIPT', nombre: '  ' } }, /nombre de quien/))
+  })
+
+  // Muchos textos vienen de la base y los eligió otra persona (el nombre de la marca lo pone su dueño): rechazarlos le
+  // impediría a ROOT dar de baja esa marca. Se ajustan, y un hash nunca se guarda.
+  describe('lo que ajusta antes de guardar (nunca un hash; nada de más de 500 caracteres)', () => {
+    const hash = bcrypt.hashSync('Clave-Secreta-77', 4)
+    const guardado = async (entrada: EntradaHistorial) => {
+      const tx = clienteFalso()
+      await registrarEnHistorial(tx as never, entrada)
+      return tx.historialRoot.create.mock.calls[0][0].data
+    }
 
     it.each([
-      ['en el valor de antes', { campo: 'Contraseña', antes: bcrypt.hashSync('Clave-Secreta-77', 4), despues: null }],
-      ['en el valor de después', { campo: 'Contraseña', antes: null, despues: bcrypt.hashSync('Clave-Secreta-77', 4) }],
-      ['dentro de un texto', { campo: 'Nota', antes: null, despues: `hash: ${bcrypt.hashSync('Clave-Secreta-77', 4)} (listo)` }],
-      ['en el nombre del campo', { campo: bcrypt.hashSync('Clave-Secreta-77', 4), antes: null, despues: 'x' }],
-    ])('un hash de contraseña %s', (_donde, cambio) => rechaza({ ...ENTRADA, cambios: [cambio] }, /no guarda hashes/))
+      ['en el valor de antes', { campo: 'Contraseña', antes: hash, despues: null }, { campo: 'Contraseña', antes: '(no se registra)', despues: null }],
+      ['en el valor de después', { campo: 'Contraseña', antes: null, despues: hash }, { campo: 'Contraseña', antes: null, despues: '(no se registra)' }],
+      ['dentro de un texto', { campo: 'Nota', antes: null, despues: `hash: ${hash} (listo)` }, { campo: 'Nota', antes: null, despues: 'hash: (no se registra) (listo)' }],
+      ['en el nombre del campo', { campo: hash, antes: null, despues: 'x' }, { campo: '(no se registra)', antes: null, despues: 'x' }],
+    ])('un hash de contraseña %s se tapa', async (_donde, cambio, esperado) => {
+      const data = await guardado({ ...ENTRADA, cambios: [cambio] })
 
-    it('un hash de contraseña en el nombre de la entidad', () =>
-      rechaza({ ...ENTRADA, entidad: { tipo: 'OWNER', id: 'o', nombre: bcrypt.hashSync('Clave-Secreta-77', 4) } }, /no guarda hashes/))
+      expect(data.detalle).toEqual([esperado])
+      expect(JSON.stringify(data)).not.toContain(hash)
+    })
 
-    it('un texto larguísimo', () => rechaza({ ...ENTRADA, cambios: [{ campo: 'Nota', antes: null, despues: 'x'.repeat(501) }] }, /supera los 500/))
+    it('una marca o una entidad con nombre de hash se registran igual, con el hash tapado', async () => {
+      const data = await guardado({ ...ENTRADA, entidad: { tipo: 'OWNER', id: 'o', nombre: hash }, marca: { id: 'm', nombre: `${hash}${hash}` } })
+
+      expect(data.entidadNombre).toBe('(no se registra)')
+      expect(data.marcaNombre).toBe('(no se registra)(no se registra)')
+      expect(JSON.stringify(data)).not.toMatch(/\$2[abxy]?\$/)
+    })
+
+    it('un texto de más de 500 caracteres se recorta a 500, con puntos suspensivos', async () => {
+      const largo = 'x'.repeat(600)
+      const data = await guardado({ ...ENTRADA, entidad: { ...ENTRADA.entidad, nombre: largo }, marca: { id: 'm', nombre: largo }, cambios: [{ campo: 'Nombre', antes: largo, despues: 'Corto' }] })
+
+      expect(data.entidadNombre).toBe(`${'x'.repeat(499)}…`)
+      expect(Array.from(data.marcaNombre as string)).toHaveLength(LARGO_MAXIMO_TEXTO)
+      expect(data.detalle).toEqual([{ campo: 'Nombre', antes: `${'x'.repeat(499)}…`, despues: 'Corto' }])
+    })
+
+    it('el recorte cuenta caracteres, no mitades de un emoji', () => {
+      const conEmojis = '🍕'.repeat(600)
+
+      expect(textoRegistrable(conEmojis)).toBe(`${'🍕'.repeat(499)}…`)
+    })
+
+    it('un texto de 500 caracteres justos queda igual', () => {
+      expect(textoRegistrable('x'.repeat(500))).toBe('x'.repeat(500))
+    })
   })
 })
 

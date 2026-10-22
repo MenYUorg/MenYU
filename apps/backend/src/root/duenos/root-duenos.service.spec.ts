@@ -99,6 +99,17 @@ describe('RootDuenosService', () => {
       })
     })
 
+    it('q se busca como texto literal: _ y % no son comodines', async () => {
+      prisma.membresia.findMany.mockResolvedValue([])
+
+      await servicio.listar({ q: 'juan_%' })
+
+      expect(prisma.membresia.findMany.mock.calls[0][0].where.OR).toEqual([
+        { usuario: { is: { email: { contains: 'juan\\_\\%', mode: 'insensitive' } } } },
+        { marca: { is: { nombre: { contains: 'juan\\_\\%', mode: 'insensitive' } } } },
+      ])
+    })
+
     it('q vacía no filtra', async () => {
       prisma.membresia.findMany.mockResolvedValue([])
 
@@ -157,6 +168,15 @@ describe('RootDuenosService', () => {
       ])
       expect(prisma.membresia.delete).not.toHaveBeenCalled()
       expect(prisma.historialRoot.create).not.toHaveBeenCalled()
+    })
+
+    it('una marca con un nombre larguísimo (lo elige el dueño) no impide quitarlo: el registro lo recorta', async () => {
+      tx.membresia.findFirst.mockResolvedValue(filaDueno({ marca: { ...MARCA, nombre: 'x'.repeat(600) } }))
+
+      await servicio.quitar('membresia-1', ROOT_USER)
+
+      expect(tx.membresia.delete).toHaveBeenCalledTimes(1)
+      expect(filasDelHistorial(tx)[0]).toMatchObject({ marcaNombre: `${'x'.repeat(499)}…` })
     })
 
     it('cuenta a los otros dueños de la misma marca', async () => {

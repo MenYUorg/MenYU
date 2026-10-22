@@ -4,6 +4,7 @@ import { InvitacionCreada, InvitacionesService } from '../../auth/invitaciones/i
 import { UsuarioAutenticado } from '../../auth/supabase/usuario-autenticado'
 import { runSerializableTransaction } from '../../common/run-serializable-transaction'
 import { PrismaService } from '../../prisma/prisma.service'
+import { comoTextoLiteral } from '../comun/cuentas'
 import { InvitarCuentaDto } from '../comun/dto/invitar-cuenta.dto'
 import { HistorialRootService } from '../historial/historial-root.service'
 import { DuenoRoot } from '../root.types'
@@ -42,13 +43,10 @@ export class RootDuenosService {
   ) {}
 
   async listar({ q }: ListarDuenosDto): Promise<DuenoRoot[]> {
-    const filtro: Prisma.MembresiaWhereInput = q
-      ? {
-          OR: [
-            { usuario: { is: { email: { contains: q, mode: 'insensitive' } } } },
-            { marca: { is: { nombre: { contains: q, mode: 'insensitive' } } } },
-          ],
-        }
+    // `contains` es un LIKE: sin escaparlos, `_` y `%` serían comodines y `q=_` traería a todos.
+    const texto = q ? { contains: comoTextoLiteral(q), mode: 'insensitive' as const } : undefined
+    const filtro: Prisma.MembresiaWhereInput = texto
+      ? { OR: [{ usuario: { is: { email: texto } } }, { marca: { is: { nombre: texto } } }] }
       : {}
     const filas = await this.prisma.membresia.findMany({
       where: { rol: 'OWNER', ...filtro },

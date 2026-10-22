@@ -344,6 +344,19 @@ describe('RootMarcasService', () => {
       nadaPorFuera()
     })
 
+    // El nombre lo elige el dueño: un nombre larguísimo o con forma de hash no puede impedir que ROOT corte el acceso.
+    it.each([
+      ['larguísimo', 'x'.repeat(600), `${'x'.repeat(499)}…`],
+      ['con forma de hash de contraseña', `$2a$10$${'a'.repeat(53)}`, '(no se registra)'],
+    ])('una marca con un nombre %s se da de baja igual, y el registro lo ajusta', async (_caso, nombre, registrado) => {
+      marcaEnLaTransaccion({ id: 'marca-1', nombre, activo: true })
+
+      await servicio.cambiarEstado('marca-1', false, ROOT_USER)
+
+      expect(tx.marca.update).toHaveBeenCalledWith({ where: { id: 'marca-1' }, data: { activo: false }, select: { id: true } })
+      expect(filasDelHistorial(tx)[0]).toMatchObject({ accion: 'MARCA_BAJA', entidadNombre: registrado })
+    })
+
     it('reactivar pone activo = true y deja un registro MARCA_REACTIVAR', async () => {
       marcaEnLaTransaccion({ id: 'marca-1', nombre: 'La Parrilla', activo: false })
 
