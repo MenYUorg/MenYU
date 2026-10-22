@@ -23,7 +23,15 @@ describe('urlDeAuth', () => {
     expect(urlDeAuth('localhost', 'http:')).toBe('http://localhost:5173')
   })
 
-  it('sin la variable y con un dominio desconocido (un preview de Vercel), va a producción', () => {
-    expect(urlDeAuth('menyu-cliente-git-rama.vercel.app', 'https:')).toBe('https://auth.menyu-app.com')
+  // Los dominios viejos de Vercel siguen activos: un staging que cayera en el default iría al login de producción.
+  it.each([
+    'menyu-cliente-staging.vercel.app',
+    'menyu-cliente-git-rama-men-yu-s-projects.vercel.app',
+  ])('sin la variable, %s va al auth de staging', (hostname) => {
+    expect(urlDeAuth(hostname, 'https:')).toBe('https://auth.staging.menyu-app.com')
+  })
+
+  it('sin la variable, el dominio viejo de producción va a producción', () => {
+    expect(urlDeAuth('menyu-cliente.vercel.app', 'https:')).toBe('https://auth.menyu-app.com')
   })
 })

@@ -42,6 +42,14 @@ describe('MesaSinCarta (la mesa sigue abierta pero el restaurante se dio de baja
     expect(guia).toHaveTextContent('El pago en efectivo no está disponible')
   })
 
+  // Un restaurante que nunca conectó Mercado Pago deja la mesa sin ninguna salida dentro de la app.
+  it('dice qué hacer si el pago no funciona, para no dejar a la mesa sin salida', () => {
+    renderPantalla()
+
+    expect(screen.getByRole('region', { name: 'Cómo pedir la cuenta' }))
+      .toHaveTextContent('arreglá la cuenta con el personal del local')
+  })
+
   it('no ofrece llamar al mozo ni pagar en efectivo', () => {
     renderPantalla()
 

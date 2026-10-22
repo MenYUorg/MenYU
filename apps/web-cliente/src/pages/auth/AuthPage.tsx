@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { AppHeader } from '../../components/AppHeader'
 import { api } from '../../services/api'
@@ -45,6 +45,9 @@ function destinoDespuesDeIngresar(volver: string | null): string {
 
 const AVISO_PERSONAL = 'Esta cuenta es del personal de un restaurante. El ingreso de MenYU está en otra pantalla: te estamos llevando ahí.'
 
+/** Lo que tarda en irse a web-auth, para que el aviso se alcance a leer y no parezca que la contraseña falló. */
+const ESPERA_DEL_AVISO_MS = 1800
+
 // ── Login form ────────────────────────────────────────────────────────────────
 
 function LoginForm({ volver }: { volver: string | null }) {
@@ -54,6 +57,9 @@ function LoginForm({ volver }: { volver: string | null }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [urlDelPersonal, setUrlDelPersonal] = useState<string | null>(null)
+  const irseAAuth = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => () => { if (irseAAuth.current) clearTimeout(irseAAuth.current) }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -64,10 +70,11 @@ function LoginForm({ volver }: { volver: string | null }) {
       const tipo = decodeJwtPayload(data.accessToken)?.tipo
       // El personal entra por web-auth, con su sesión de Supabase. No se guardan ni se le pasan por la URL los tokens
       // legacy: web-admin y web-staff ya no los leen, y terminaban en el historial y los logs de los dos dominios.
+      // La navegación espera un momento: si no, el aviso no se llega a leer y parece que la contraseña falló.
       if (tipo === 'admin' || tipo === 'mozo') {
         const destino = urlDeAuth()
         setUrlDelPersonal(destino)
-        window.location.href = destino
+        irseAAuth.current = setTimeout(() => { window.location.href = destino }, ESPERA_DEL_AVISO_MS)
         return
       }
       storeTokens(data.accessToken, data.refreshToken)

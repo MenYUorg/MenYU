@@ -3,6 +3,9 @@
 // (docs/auth/VariablesACambiar.md); si falta, sale del dominio de esta app, que convive con los de Vercel mientras dure
 // la migración.
 const DOMINIO_PROPIO = /^mesa\.((staging\.)?menyu-app\.com|menyu\.local)$/
+// Los dominios viejos de Vercel siguen activos (los QR impresos llevan ahí). Un staging que caiga en el default iría al
+// login de producción, así que se distingue, como hacía `resolveAppUrl`.
+const VERCEL_STAGING = /^menyu-cliente-staging\.vercel\.app$|-staging-|^menyu-cliente-git-/
 
 export function urlDeAuth(
   hostname: string = window.location.hostname,
@@ -17,6 +20,7 @@ export function urlDeAuth(
     return sufijo === 'menyu.local' ? `${protocolo}//auth.menyu.local:5173` : `https://auth.${sufijo}`
   }
   if (hostname === 'localhost') return `${protocolo}//localhost:5173`
+  if (VERCEL_STAGING.test(hostname)) return 'https://auth.staging.menyu-app.com'
 
   return 'https://auth.menyu-app.com'
 }

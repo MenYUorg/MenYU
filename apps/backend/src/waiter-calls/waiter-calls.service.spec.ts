@@ -13,6 +13,12 @@ const bearer = (payload: object) => `Bearer ${jwt.sign(payload)}`
 const SESION_CLIENTE = { sub: 'cliente-1', tipo: 'cliente', sesionId: 'sesion-1', mesaId: 'mesa-1', restauranteId: 'rest-1' }
 const MOZO_LEGACY = { sub: 'mozo-1', tipo: 'mozo' }
 
+/** La mesa como la trae `llamar`, con la disponibilidad del restaurante y su marca. */
+const mesaDe = (restaurante: { activo?: boolean; marca?: { activo: boolean } } = {}) => ({
+  numero: '7',
+  restaurante: { activo: true, marca: { activo: true }, ...restaurante },
+})
+
 describe('WaiterCallsService', () => {
   let prisma: PrismaMock
   let gateway: { emitMozoCalled: jest.Mock }
@@ -76,7 +82,7 @@ describe('WaiterCallsService', () => {
   describe('llamar', () => {
     it('guarda el llamado y avisa a los mozos del restaurante por socket', async () => {
       // Arrange
-      prisma.sesionMesa.findUnique.mockResolvedValue({ id: 'sesion-1', estado: 'activa', mesa: { numero: '7' } })
+      prisma.sesionMesa.findUnique.mockResolvedValue({ id: 'sesion-1', estado: 'activa', mesa: mesaDe() })
       prisma.llamadoMozo.create.mockResolvedValue({ id: 'llamado-1', motivo: 'cuenta' })
 
       // Act
@@ -95,7 +101,7 @@ describe('WaiterCallsService', () => {
 
     it('sin motivo lo guarda como "general"', async () => {
       // Arrange
-      prisma.sesionMesa.findUnique.mockResolvedValue({ id: 'sesion-1', estado: 'activa', mesa: { numero: '7' } })
+      prisma.sesionMesa.findUnique.mockResolvedValue({ id: 'sesion-1', estado: 'activa', mesa: mesaDe() })
       prisma.llamadoMozo.create.mockResolvedValue({ id: 'llamado-1', motivo: null })
 
       // Act
@@ -160,7 +166,7 @@ describe('WaiterCallsService', () => {
 
     it('una sesión cerrada responde 400 y no guarda el llamado', async () => {
       // Arrange
-      prisma.sesionMesa.findUnique.mockResolvedValue({ id: 'sesion-1', estado: 'cerrada', mesa: { numero: '7' } })
+      prisma.sesionMesa.findUnique.mockResolvedValue({ id: 'sesion-1', estado: 'cerrada', mesa: mesaDe() })
 
       // Act
       const llamado = service.llamar({ sesionId: 'sesion-1' }, bearer(SESION_CLIENTE))
@@ -168,6 +174,23 @@ describe('WaiterCallsService', () => {
       // Assert
       await expect(llamado).rejects.toThrow(new BadRequestException('La sesión no está activa'))
       expect(prisma.llamadoMozo.create).not.toHaveBeenCalled()
+    })
+
+    // Con la baja, el personal recibe 403 al atender: el llamado quedaría pendiente para siempre (entrega 4.7).
+    it.each([
+      ['el restaurante', { activo: false }],
+      ['su marca', { marca: { activo: false } }],
+    ])('con %s dado de baja responde 403 y no guarda el llamado', async (_quien, cambios) => {
+      // Arrange
+      prisma.sesionMesa.findUnique.mockResolvedValue({ id: 'sesion-1', estado: 'activa', mesa: mesaDe(cambios) })
+
+      // Act
+      const llamado = service.llamar({ sesionId: 'sesion-1' }, bearer(SESION_CLIENTE))
+
+      // Assert
+      await expect(llamado).rejects.toThrow(new ForbiddenException('Este restaurante no está disponible'))
+      expect(prisma.llamadoMozo.create).not.toHaveBeenCalled()
+      expect(gateway.emitMozoCalled).not.toHaveBeenCalled()
     })
   })
 

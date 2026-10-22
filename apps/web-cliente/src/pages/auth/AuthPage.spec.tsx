@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { api } from '../../services/api'
 import { useSessionStore } from '../../store/sessionStore'
@@ -152,32 +152,53 @@ describe('AuthPage', () => {
     afterEach(() => {
       vi.unstubAllGlobals()
       vi.unstubAllEnvs()
+      vi.useRealTimers()
     })
 
     it.each([
       ['un admin', TOKEN_ADMIN],
       ['un mozo', TOKEN_MOZO],
-    ])('con %s avisa y lo manda a web-auth, sin tokens', async (_quien, token) => {
+    ])('con %s avisa y, después de dejarlo leer, lo manda a web-auth', async (_quien, token) => {
+      vi.useFakeTimers({ shouldAdvanceTime: true })
       login.mockResolvedValue({ accessToken: token, refreshToken: 'refresh' } as never)
       renderAuth()
 
       ingresar('pedro@menyu.com')
 
+      // El aviso se ve antes de navegar: si no, parecería que la contraseña falló.
       expect(await screen.findByRole('status')).toHaveTextContent('El ingreso de MenYU está en otra pantalla')
-      expect(location.href).toBe('http://auth.menyu.local:5173')
       expect(screen.getByRole('link', { name: 'Ir al ingreso de MenYU' })).toHaveAttribute('href', 'http://auth.menyu.local:5173')
+      expect(location.href).toBe('http://mesa.menyu.local/auth')
+
+      await act(async () => { await vi.advanceTimersByTimeAsync(2000) })
+      expect(location.href).toBe('http://auth.menyu.local:5173')
     })
 
     it('no guarda los tokens legacy ni los pasa por la URL', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true })
       login.mockResolvedValue({ accessToken: TOKEN_MOZO, refreshToken: 'refresh' } as never)
       renderAuth()
 
       ingresar('pedro@menyu.com')
 
       await screen.findByRole('status')
+      await act(async () => { await vi.advanceTimersByTimeAsync(2000) })
       expect(localStorage.getItem('menyu_access_token')).toBeNull()
       expect(localStorage.getItem('menyu_refresh_token')).toBeNull()
       expect(location.href).not.toContain('token')
+    })
+
+    it('si la persona se va antes, no queda ninguna navegación pendiente', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true })
+      login.mockResolvedValue({ accessToken: TOKEN_MOZO, refreshToken: 'refresh' } as never)
+      const { unmount } = renderAuth()
+
+      ingresar('pedro@menyu.com')
+      await screen.findByRole('status')
+      unmount()
+
+      await act(async () => { await vi.advanceTimersByTimeAsync(2000) })
+      expect(location.href).toBe('http://mesa.menyu.local/auth')
     })
   })
 

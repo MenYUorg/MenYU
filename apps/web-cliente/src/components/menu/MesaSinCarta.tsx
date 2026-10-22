@@ -67,6 +67,9 @@ export function MesaSinCarta() {
           <ul style={{ margin: '8px 0 0', paddingLeft: 18, listStyle: 'disc', fontFamily: 'Inter, sans-serif', fontSize: 13.5, lineHeight: 1.5, color: C.text }}>
             <li>Tocá «Pagar la cuenta» y pagá con Mercado Pago desde tu celular.</li>
             <li style={{ marginTop: 6 }}>El pago en efectivo no está disponible: el personal de este restaurante ya no puede cobrarlo.</li>
+            {/* Si el restaurante nunca conectó Mercado Pago, «Pagar la cuenta» falla y la mesa no tiene ninguna salida
+                dentro de la app: lo único que queda es arreglarlo en el local. */}
+            <li style={{ marginTop: 6 }}>Si el pago no te funciona, arreglá la cuenta con el personal del local.</li>
           </ul>
         </section>
 

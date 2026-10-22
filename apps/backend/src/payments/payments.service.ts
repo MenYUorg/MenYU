@@ -202,11 +202,22 @@ export class PaymentsService {
     const sesion = await this.prisma.sesionMesa.findUnique({
       where: { id: sesionId },
       include: {
-        mesa: { select: { id: true, numero: true, restauranteId: true } },
+        mesa: {
+          select: {
+            id: true,
+            numero: true,
+            restauranteId: true,
+            restaurante: { select: SELECT_DISPONIBILIDAD },
+          },
+        },
         pedidos: { include: { items: { select: { cantidad: true, precioUnitario: true } } } },
       },
     })
     if (!sesion) throw new NotFoundException('Sesión no encontrada')
+    // Igual que en `solicitarEfectivo`: con la baja, nadie puede atender el llamado.
+    if (!restauranteDisponible(sesion.mesa.restaurante)) {
+      throw new ForbiddenException('Este restaurante no está disponible')
+    }
 
     // Reemplazar cualquier llamado pendiente y crear uno con motivo pedir_cuenta
     await this.prisma.llamadoMozo.deleteMany({
