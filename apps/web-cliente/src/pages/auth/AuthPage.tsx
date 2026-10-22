@@ -2,8 +2,8 @@ import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { AppHeader } from '../../components/AppHeader'
 import { api } from '../../services/api'
-import { resolveAppUrl } from '../../utils/resolveAppUrl'
 import { rutaInterna } from '../../utils/rutaInterna'
+import { urlDeAuth } from '../../utils/urlDeAuth'
 import { useSessionStore } from '../../store/sessionStore'
 
 const C = {
@@ -43,6 +43,8 @@ function destinoDespuesDeIngresar(volver: string | null): string {
   return useSessionStore.getState().sesionId ? '/menu' : '/'
 }
 
+const AVISO_PERSONAL = 'Esta cuenta es del personal de un restaurante. El ingreso de MenYU está en otra pantalla: te estamos llevando ahí.'
+
 // ── Login form ────────────────────────────────────────────────────────────────
 
 function LoginForm({ volver }: { volver: string | null }) {
@@ -51,6 +53,7 @@ function LoginForm({ volver }: { volver: string | null }) {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [urlDelPersonal, setUrlDelPersonal] = useState<string | null>(null)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -58,24 +61,35 @@ function LoginForm({ volver }: { volver: string | null }) {
     setLoading(true)
     try {
       const data = await api.auth.login(email, password)
-      storeTokens(data.accessToken, data.refreshToken)
-      const payload = decodeJwtPayload(data.accessToken)
-      const tipo = payload?.tipo
+      const tipo = decodeJwtPayload(data.accessToken)?.tipo
+      // El personal entra por web-auth, con su sesión de Supabase. No se guardan ni se le pasan por la URL los tokens
+      // legacy: web-admin y web-staff ya no los leen, y terminaban en el historial y los logs de los dos dominios.
       if (tipo === 'admin' || tipo === 'mozo') {
-        const baseUrl = resolveAppUrl(tipo)
-        const params = new URLSearchParams({
-          token: data.accessToken,
-          refresh: data.refreshToken,
-        })
-        window.location.href = `${baseUrl}?${params.toString()}`
-      } else {
-        navigate(destinoDespuesDeIngresar(volver))
+        const destino = urlDeAuth()
+        setUrlDelPersonal(destino)
+        window.location.href = destino
+        return
       }
+      storeTokens(data.accessToken, data.refreshToken)
+      navigate(destinoDespuesDeIngresar(volver))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Credenciales incorrectas. Verificá e intentá de nuevo.')
     } finally {
       setLoading(false)
     }
+  }
+
+  if (urlDelPersonal) {
+    return (
+      <div role="status" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, lineHeight: 1.5, color: C.textSub, margin: 0 }}>
+          {AVISO_PERSONAL}
+        </p>
+        <a href={urlDelPersonal} style={{ ...submitBtnStyle(false), boxSizing: 'border-box', display: 'block', textAlign: 'center', textDecoration: 'none' }}>
+          Ir al ingreso de MenYU
+        </a>
+      </div>
+    )
   }
 
   return (
