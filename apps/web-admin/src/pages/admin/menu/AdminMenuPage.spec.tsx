@@ -6,15 +6,11 @@ import { useMenuStore } from '../../../store/menuStore'
 import { restaurarPantalla, simularPantalla } from '../../../test/pantalla'
 import { AdminMenuPage } from './AdminMenuPage'
 
-let rolActual = 'OWNER'
-
-vi.mock('@menyu/auth', () => ({
-  useAuth: () => ({ user: { rol: rolActual, email: 'usuario@menyu.com' } }),
-}))
+let rolActual: 'OWNER' | 'GERENTE' | null = 'OWNER'
 
 vi.mock('../../../store/contextStore', () => {
-  const estado = { selectedRestauranteId: 'rest-1', restaurantes: [], loadContext: () => Promise.resolve() }
-  return { useContextStore: () => estado }
+  const estado = { selectedRestauranteId: 'rest-1', restaurantes: [], refreshContext: () => Promise.resolve() }
+  return { useContextStore: () => estado, useRolActual: () => rolActual }
 })
 
 vi.mock('../../../services/api', () => ({
@@ -102,7 +98,7 @@ describe('AdminMenuPage — descuentos', () => {
   })
 
   describe('quién ve el botón', () => {
-    it.each(['OWNER', 'GERENTE'])('el %s lo ve en cada plato', async (rol) => {
+    it.each(['OWNER', 'GERENTE'] as const)('el %s lo ve en cada plato', async (rol) => {
       rolActual = rol
 
       await renderPagina()
@@ -112,13 +108,13 @@ describe('AdminMenuPage — descuentos', () => {
       expect(screen.getByRole('button', { name: 'Descuento de Provoleta' })).toBeInTheDocument()
     })
 
-    it('ROOT no lo ve (puede editar el menú, pero no poner descuentos)', async () => {
-      rolActual = 'ROOT'
+    // Una cuenta ROOT no tiene rol en ningún restaurante: el backend le da 403 en el menú y /admin/* la devuelve a /root.
+    it('sin rol en el restaurante no lo ve', async () => {
+      rolActual = null
 
       await renderPagina()
 
       expect(screen.queryByRole('button', { name: /Descuento de/ })).not.toBeInTheDocument()
-      expect(screen.getAllByRole('button', { name: 'Editar' })).toHaveLength(3)
     })
   })
 

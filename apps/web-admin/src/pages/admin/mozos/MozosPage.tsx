@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, ArrowLeft, ChevronRight, Users, X } from 'lucide-react'
-import { useAuth } from '@menyu/auth'
-import { useContextStore } from '../../../store/contextStore'
+import { useContextStore, useRolActual } from '../../../store/contextStore'
 import { api, ApiError } from '../../../services/api'
 
 /* ── types ─────────────────────────────────────────────────────────────────── */
@@ -771,8 +770,7 @@ function GerenteDetailContent({
 /* ── MozosPage ──────────────────────────────────────────────────────────────── */
 
 export function MozosPage() {
-  const { user } = useAuth()
-  const isOwner = user?.rol === 'OWNER' || user?.rol === 'ROOT'
+  const isOwner = useRolActual() === 'OWNER'
   const { selectedRestauranteId, restaurantes: todosRestaurantes } = useContextStore()
 
   // ── Mozos state ────────────────────────────────────────────────────────────

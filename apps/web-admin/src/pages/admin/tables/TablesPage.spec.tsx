@@ -3,11 +3,7 @@ import type { Restaurante } from '@menyu/types'
 import { api, type MesaConQr, type SesionActiva } from '../../../services/api'
 import { TablesPage } from './TablesPage'
 
-let rolActual = 'OWNER'
-
-vi.mock('@menyu/auth', () => ({
-  useAuth: () => ({ user: { rol: rolActual, email: 'owner@menyu.com' } }),
-}))
+let rolActual: 'OWNER' | 'GERENTE' | null = 'OWNER'
 
 vi.mock('../../../store/contextStore', async () => {
   const { create } = await vi.importActual<typeof import('zustand')>('zustand')
@@ -15,7 +11,7 @@ vi.mock('../../../store/contextStore', async () => {
     selectedRestauranteId: 'rest-1' as string | null,
     restaurantes: [{ id: 'rest-1', nombre: 'La Parrilla', modoSesion: 'abierto' }] as { id: string; nombre: string; modoSesion: string }[],
   }))
-  return { useContextStore }
+  return { useContextStore, useRolActual: () => rolActual }
 })
 
 vi.mock('../../../services/api', () => ({

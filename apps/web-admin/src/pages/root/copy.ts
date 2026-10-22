@@ -6,8 +6,9 @@
  * ¿Dar de baja una marca o un restaurante corta el acceso de su gente (dueños, gerentes, mozos y cocina)? Sí, desde la Fase 4 de
  * auth: `AccesoService` no cuenta las membresías de una marca o un restaurante dados de baja, y al reactivarlos vuelven a contar.
  * Lo público también se corta (desde el 2026-10-21): la marca o el restaurante dejan de aparecer en Discovery, su carta deja de
- * verse y sus QR y PIN no abren mesas nuevas; las mesas que ya están abiertas se dejan terminar. Un test cuida que los dos juegos
- * de textos existan.
+ * verse y sus QR y PIN no abren mesas nuevas. Una mesa que ya estaba abierta sigue pidiendo y puede pagar con Mercado Pago desde
+ * el celular, pero el personal no puede cobrarla ni cerrarla: también perdió el acceso. Un test cuida que los dos juegos de
+ * textos existan.
  */
 export const BAJA_CORTA_EL_LOGIN = true
 
@@ -71,6 +72,20 @@ function vinetaDelLogin(cortaElLogin: boolean, quienes: string, mientras: string
     : [`${quienes} siguen pudiendo iniciar sesión`, ': el corte del acceso llega con la migración de autenticación.']
 }
 
+/**
+ * Qué pasa con las mesas que ya estaban abiertas. Con el acceso cortado, el personal recibe 403 al cobrar en efectivo, cerrar la
+ * mesa o atender un llamado: a esa mesa le queda pagar con Mercado Pago desde el celular (decisión de la entrega 4.5 de
+ * docs/auth/specs/auth.md; antes el texto prometía que el personal podía terminarlas).
+ */
+function vinetaDeMesasAbiertas(cortaElLogin: boolean): [string, string] {
+  return cortaElLogin
+    ? [
+        'Las mesas que ya están abiertas solo pueden pagar con Mercado Pago desde el celular',
+        ': el personal tampoco puede cobrarlas ni cerrarlas mientras esté de baja.',
+      ]
+    : ['Las mesas que ya están abiertas se pueden terminar', ': se sigue pidiendo la cuenta y cobrando.']
+}
+
 /** Lo que pasa al dar de baja una marca, en viñetas (el primer fragmento de cada una va en negrita). */
 export function efectosDeBajaDeMarca(restaurantesActivos: number, cortaElLogin = BAJA_CORTA_EL_LOGIN): Array<[string, string]> {
   const n = restaurantesActivos
@@ -79,7 +94,7 @@ export function efectosDeBajaDeMarca(restaurantesActivos: number, cortaElLogin =
       `${n} ${n === 1 ? 'restaurante deja' : 'restaurantes dejan'} de estar disponible${n === 1 ? '' : 's'}`,
       ': no aparecen en Discovery, no se ve su carta y los QR y PIN de sus mesas no abren mesas nuevas.',
     ],
-    ['Las mesas que ya están abiertas se pueden terminar', ': se sigue pidiendo la cuenta y cobrando.'],
+    vinetaDeMesasAbiertas(cortaElLogin),
     vinetaDelLogin(cortaElLogin, 'Sus dueños, gerentes, mozos y cocina', 'mientras esté de baja'),
     ['No se borra ningún dato', ' (menú, mesas, pedidos, pagos). Al reactivarla vuelve todo como estaba.'],
   ]
@@ -95,7 +110,7 @@ export function efectosDeReactivarMarca(cortaElLogin = BAJA_CORTA_EL_LOGIN): str
 export function efectosDeBajaDeRestaurante(cortaElLogin = BAJA_CORTA_EL_LOGIN): Array<[string, string]> {
   return [
     ['Deja de estar disponible', ': no aparece en Discovery, no se ve su carta y los QR y PIN de sus mesas no abren mesas nuevas.'],
-    ['Las mesas que ya están abiertas se pueden terminar', ': se sigue pidiendo la cuenta y cobrando.'],
+    vinetaDeMesasAbiertas(cortaElLogin),
     vinetaDelLogin(cortaElLogin, 'Sus gerentes, mozos y cocina', 'mientras esté de baja'),
     ['No se borra ningún dato.', ' Al reactivarlo vuelve todo como estaba.'],
   ]
@@ -112,7 +127,9 @@ export function avisoDeMarcaDeBaja(cortaElLogin = BAJA_CORTA_EL_LOGIN): Array<[s
   return [
     [
       'Esta marca está dada de baja.',
-      ` Sus restaurantes no aparecen en Discovery, no muestran su carta y no abren mesas nuevas (las que ya están abiertas se terminan). ${
+      ` Sus restaurantes no aparecen en Discovery, no muestran su carta y no abren mesas nuevas (las que ya están abiertas ${
+        cortaElLogin ? 'solo pueden pagar con Mercado Pago desde el celular' : 'se terminan'
+      }). ${
         cortaElLogin ? 'Su dueño no puede iniciar sesión.' : 'Su gente todavía puede iniciar sesión.'
       } No se borró ningún dato: al reactivarla vuelve todo como estaba.`,
     ],

@@ -278,7 +278,7 @@ describe('DialogoBajaMarca', () => {
     const dialogo = screen.getByRole('dialog')
     expect(dialogo).toHaveTextContent('2 restaurantes dejan de estar disponibles')
     expect(dialogo).toHaveTextContent('no abren mesas nuevas')
-    expect(dialogo).toHaveTextContent('Las mesas que ya están abiertas se pueden terminar')
+    expect(dialogo).toHaveTextContent('Las mesas que ya están abiertas solo pueden pagar con Mercado Pago desde el celular')
     expect(dialogo).toHaveTextContent('Sus dueños, gerentes, mozos y cocina no pueden iniciar sesión mientras esté de baja')
     expect(dialogo).toHaveTextContent('No se borra ningún dato')
     expect(dialogo).toHaveTextContent('Es reversible')

@@ -7,15 +7,15 @@ import { C, tarjeta, textoAyuda, tituloSeccion } from './estilos'
 
 /** Logo y dirección de la marca y sus sucursales. Solo la ve el OWNER (la ruta está protegida en App.tsx). */
 export function MarcaPage() {
-  const { marcas, selectedMarcaId, restaurantes, loadContext } = useContextStore()
+  const { marcas, selectedMarcaId, restaurantes, refreshContext } = useContextStore()
   const [cargado, setCargado] = useState(false)
   const idTituloMarca = useId()
   const idTituloSucursales = useId()
 
   // Se piden los datos al entrar para ver siempre lo último guardado.
   useEffect(() => {
-    void loadContext().finally(() => setCargado(true))
-  }, [loadContext])
+    void refreshContext().finally(() => setCargado(true))
+  }, [refreshContext])
 
   const marca = marcas.find((m) => m.id === selectedMarcaId) ?? marcas[0] ?? null
   const sucursales = marca ? restaurantes.filter((r) => r.marcaId === marca.id) : []
@@ -63,11 +63,11 @@ export function MarcaPage() {
           avisoAlQuitar="Las sucursales que no tengan logo propio van a quedar sin logo."
           onSubir={async (archivo) => {
             await api.marcas.uploadLogo(marca.id, archivo)
-            await loadContext()
+            await refreshContext()
           }}
           onQuitar={async () => {
             await api.marcas.deleteLogo(marca.id)
-            await loadContext()
+            await refreshContext()
           }}
         />
       </section>
@@ -85,7 +85,7 @@ export function MarcaPage() {
               key={sucursal.id}
               restaurante={sucursal}
               logoMarcaUrl={marca.logoUrl}
-              onCambio={loadContext}
+              onCambio={refreshContext}
             />
           ))
         )}

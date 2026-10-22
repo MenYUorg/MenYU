@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { useAuth } from '@menyu/auth'
-import { useContextStore } from '../../../store/contextStore'
+import { useContextStore, useRolActual } from '../../../store/contextStore'
 import { api } from '../../../services/api'
 import type { SesionHistorial } from '../../../services/api'
 import { ClipboardList, X, Edit, XCircle } from 'lucide-react'
@@ -48,7 +47,6 @@ function accionEditarPedido(canEdit: boolean, onEdit: (p: PedidoParaEditar) => v
 }
 
 export function HistorialSesionesPage() {
-  const { user }                  = useAuth()
   const { selectedRestauranteId } = useContextStore()
 
   const [sesiones, setSesiones]                     = useState<SesionHistorial[]>([])
@@ -59,7 +57,7 @@ export function HistorialSesionesPage() {
   const [sesionSeleccionada, setSesionSeleccionada] = useState<SesionHistorial | null>(null)
   const [editingPedido, setEditingPedido]           = useState<PedidoParaEditar | null>(null)
 
-  const canEdit = user?.rol === 'GERENTE' || user?.rol === 'ROOT'
+  const canEdit = useRolActual() === 'GERENTE'
 
   const { desde, hasta } = useMemo(() => getPeriodBounds(period), [period])
 

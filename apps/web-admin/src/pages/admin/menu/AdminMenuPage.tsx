@@ -2,8 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import type { FormEvent } from 'react'
 import type { ItemMenu } from '@menyu/types'
 import { Search, Trash2, Pencil, GripVertical } from 'lucide-react'
-import { useAuth } from '@menyu/auth'
-import { useContextStore } from '../../../store/contextStore'
+import { useContextStore, useRolActual } from '../../../store/contextStore'
 import { useMenuStore } from '../../../store/menuStore'
 import { ItemFormModal } from './ItemFormModal'
 import { api } from '../../../services/api'
@@ -607,9 +606,8 @@ function CategoriasTabContent({
 
 /* ─── CatalogModal ──────────────────────────────────────────────────────── */
 function CatalogModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { user } = useAuth()
-  const isOwner = user?.rol === 'OWNER' || user?.rol === 'ROOT'
-  const { selectedRestauranteId, restaurantes, loadContext } = useContextStore()
+  const isOwner = useRolActual() === 'OWNER'
+  const { selectedRestauranteId, restaurantes, refreshContext } = useContextStore()
   const restaurante = restaurantes.find((r) => r.id === selectedRestauranteId)
   const {
     categorias, ingredientes, clasificaciones,
@@ -652,7 +650,7 @@ function CatalogModal({ open, onClose }: { open: boolean; onClose: () => void })
     setErrorNombreRecomendados(null)
     try {
       await api.restaurantes.update(selectedRestauranteId, { nombreSeccionRecomendados: nombreRecomendadosInput.trim() })
-      await loadContext()
+      await refreshContext()
       setEditandoNombreRecomendados(false)
     } catch (e) {
       setErrorNombreRecomendados(e instanceof Error ? e.message : 'Error al guardar')
@@ -896,10 +894,10 @@ function CatalogModal({ open, onClose }: { open: boolean; onClose: () => void })
 
 /* ─── AdminMenuPage ─────────────────────────────────────────────────────── */
 export function AdminMenuPage() {
-  const { user } = useAuth()
-  const isOwner = user?.rol === 'OWNER' || user?.rol === 'ROOT'
+  const rolActual = useRolActual()
+  const isOwner = rolActual === 'OWNER'
   // Los descuentos los ponen el OWNER y el GERENTE; ROOT no (administra marcas y usuarios, no el menú).
-  const puedeGestionarDescuento = user?.rol === 'OWNER' || user?.rol === 'GERENTE'
+  const puedeGestionarDescuento = rolActual !== null
   const esEscritorio = useMediaQuery('(min-width: 768px)')
   const { selectedRestauranteId } = useContextStore()
   const {

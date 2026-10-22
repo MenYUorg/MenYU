@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Bell, CheckCircle, RefreshCw, X } from 'lucide-react'
-import { useAuth } from '@menyu/auth'
 import { urlDelSocket } from '@menyu/ui/socket'
 import { io, type Socket } from 'socket.io-client'
-import { useContextStore } from '../../../store/contextStore'
+import { useContextStore, useRolActual } from '../../../store/contextStore'
 import { api, pedirJson } from '../../../services/api'
 
 // ── Palette ───────────────────────────────────────────────────────────────────
@@ -383,9 +382,8 @@ function SesionPagadaCard({ sesion }: { sesion: SesionPagada }) {
 
 // ── PagosPage ─────────────────────────────────────────────────────────────────
 export function PagosPage() {
-  const { user }                   = useAuth()
   const { selectedRestauranteId }  = useContextStore()
-  const esGerente                  = user?.rol === 'GERENTE'
+  const esGerente                  = useRolActual() === 'GERENTE'
 
   const [activas,        setActivas]        = useState<SesionActiva[]>([])
   const [pagadas,        setPagadas]        = useState<SesionPagada[]>([])

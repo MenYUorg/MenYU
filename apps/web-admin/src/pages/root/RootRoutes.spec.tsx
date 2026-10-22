@@ -4,16 +4,10 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { api } from '../../services/api'
 import { paginaDeHistorial } from '../../test/root'
 import { restaurarPantalla, simularPantalla } from '../../test/pantalla'
+import { logoutSimulado, perfilDeRoot, reiniciarSesionDePrueba, sesionDePrueba } from '../../test/authClient'
 import RootRoutes from './RootRoutes'
 
-const cerrarSesion = vi.fn()
-
-vi.mock('@menyu/auth', () => ({
-  TOKEN_KEY: 'menyu_access_token',
-  REFRESH_KEY: 'menyu_refresh_token',
-  resolveLoginUrl: vi.fn(),
-  useAuth: () => ({ user: { rol: 'ROOT', email: 'root@menyu.com' }, logout: cerrarSesion }),
-}))
+vi.mock('@menyu/auth-client', async () => (await import('../../test/authClient')).moduloSimulado())
 vi.mock('../../services/api', async (importOriginal) => {
   const original = await importOriginal<typeof import('../../services/api')>()
   const { apiFalsa } = await import('../../test/root')
@@ -34,6 +28,8 @@ function renderConsola(ruta: string) {
 beforeEach(() => {
   vi.clearAllMocks()
   localStorage.clear()
+  reiniciarSesionDePrueba()
+  sesionDePrueba.perfil = perfilDeRoot()
   simularPantalla(1280)
   vi.mocked(api.root.marcas.listar).mockResolvedValue([])
   vi.mocked(api.root.historial.listar).mockResolvedValue(paginaDeHistorial([]))
@@ -94,7 +90,7 @@ describe('RootRoutes', () => {
     expect(screen.getAllByText('root@menyu.com').length).toBeGreaterThan(0)
     await userEvent.click(screen.getAllByRole('button', { name: /Cerrar sesión/ })[0])
 
-    expect(cerrarSesion).toHaveBeenCalledTimes(1)
+    expect(logoutSimulado).toHaveBeenCalledTimes(1)
   })
 
   it('navegar por el menú cambia de pantalla', async () => {

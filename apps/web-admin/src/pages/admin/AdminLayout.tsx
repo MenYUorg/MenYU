@@ -1,7 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
-import { useAuth } from '@menyu/auth'
-import { useContextStore } from '../../store/contextStore'
+import { logout, usePerfil } from '@menyu/auth-client'
+import {
+  preferenciaDeLaUrl,
+  useContextStore,
+  useRolActual,
+  type RolDeAdmin,
+} from '../../store/contextStore'
 import { Shell, type NavSection } from '../../components/shell/Shell'
 import {
   LayoutDashboard,
@@ -19,7 +24,8 @@ import {
 } from 'lucide-react'
 
 /* ── nav structure ─────────────────────────────────────────────────────────── */
-const NAV_BY_ROL: Record<string, NavSection[]> = {
+// Solo OWNER y GERENTE: ROOT no entra a las pantallas de datos (docs/auth/specs/auth.md, 4.3), tiene su consola en /root.
+const NAV_BY_ROL: Record<RolDeAdmin, NavSection[]> = {
   OWNER: [
     {
       label: 'OPERACIÓN',
@@ -80,34 +86,6 @@ const NAV_BY_ROL: Record<string, NavSection[]> = {
     },
   ],
 }
-NAV_BY_ROL['ROOT'] = [
-  {
-    label: 'OPERACIÓN',
-    items: [
-      { to: '/admin/dashboard', label: 'Dashboard', Icon: LayoutDashboard },
-      { to: '/admin/tables',    label: 'Mesas',     Icon: Grid2x2 },
-    ],
-  },
-  {
-    label: 'CATÁLOGO',
-    items: [
-      { to: '/admin/menu', label: 'Menú', Icon: UtensilsCrossed },
-    ],
-  },
-  {
-    label: 'PERSONAL',
-    items: [
-      { to: '/admin/mozos', label: 'Mozos', Icon: Users },
-    ],
-  },
-  {
-    label: 'ANÁLISIS',
-    items: [
-      { to: '/admin/reportes',  label: 'Reportes',  Icon: BarChart2 },
-      { to: '/admin/auditoria', label: 'Auditoría', Icon: ShieldIcon },
-    ],
-  },
-]
 
 const SECTION_TITLES: Record<string, string> = {
   '/admin/dashboard':     'Dashboard',
@@ -230,13 +208,16 @@ function SelectorDeRestaurante() {
 
 /* ── layout ────────────────────────────────────────────────────────────────── */
 export function AdminLayout() {
-  const { user, logout } = useAuth()
-  const navSections = NAV_BY_ROL[user?.rol ?? 'GERENTE'] ?? NAV_BY_ROL['GERENTE']
+  const perfil = usePerfil()
+  const navSections = NAV_BY_ROL[useRolActual() ?? 'GERENTE']
   const { restaurantes, selectedRestauranteId, loadContext } = useContextStore()
   const location = useLocation()
+  // web-auth manda ?marcaId= o ?restauranteId= con lo que eligió la persona. Se lee del primer render, antes de que
+  // AdminRedirect cambie la URL, y vale como preferencia: el acceso lo decide el backend.
+  const busquedaInicial = useRef(location.search).current
 
   useEffect(() => {
-    void loadContext()
+    void loadContext(perfil, preferenciaDeLaUrl(busquedaInicial))
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const selectedRestaurante = restaurantes.find((r) => r.id === selectedRestauranteId)
@@ -252,8 +233,8 @@ export function AdminLayout() {
       titulo={sectionTitle}
       subtitulo={selectedRestaurante?.nombre}
       contexto={<SelectorDeRestaurante />}
-      email={user?.email}
-      onCerrarSesion={logout}
+      email={perfil.email}
+      onCerrarSesion={() => { void logout() }}
     />
   )
 }

@@ -2,14 +2,11 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { api, ApiError } from '../../../services/api'
 import { MozosPage } from './MozosPage'
 
-let rolActual = 'OWNER'
+let rolActual: 'OWNER' | 'GERENTE' | null = 'OWNER'
 let restauranteActual: string | null = 'rest-1'
 
-vi.mock('@menyu/auth', () => ({
-  useAuth: () => ({ user: { rol: rolActual, email: 'owner@menyu.com' } }),
-}))
-
 vi.mock('../../../store/contextStore', () => ({
+  useRolActual: () => rolActual,
   useContextStore: () => ({
     selectedRestauranteId: restauranteActual,
     restaurantes: [

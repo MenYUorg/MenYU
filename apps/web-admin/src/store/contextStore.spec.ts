@@ -1,9 +1,12 @@
-import { useContextStore } from './contextStore'
+import type { PerfilUsuario } from '@menyu/types'
+import {
+  membresiaDeMarca,
+  membresiaDeRestaurante,
+  perfilDePrueba,
+} from '../test/authClient'
+import { preferenciaDeLaUrl, rolEnElRestaurante, useContextStore } from './contextStore'
 
-vi.mock('@menyu/auth', () => ({
-  TOKEN_KEY: 'menyu_access_token',
-  REFRESH_KEY: 'menyu_refresh_token',
-}))
+vi.mock('@menyu/auth-client', async () => (await import('../test/authClient')).moduloSimulado())
 
 vi.mock('../services/api', () => ({
   api: {
@@ -12,12 +15,7 @@ vi.mock('../services/api', () => ({
   },
 }))
 
-const TOKEN_KEY = 'menyu_access_token'
 const RESTAURANTE_KEY = 'menyu-admin-restaurante-id'
-
-function makeJwt(payload: Record<string, unknown>): string {
-  return `header.${btoa(JSON.stringify(payload))}.signature`
-}
 
 const MARCA_X = {
   id: 'marca-1',
@@ -27,6 +25,7 @@ const MARCA_X = {
   activo: true,
   createdAt: '2024-01-01',
 }
+const MARCA_Y = { ...MARCA_X, id: 'marca-2', nombre: 'Marca Y', slug: 'marca-y' }
 
 const RESTAURANTE_BASE = {
   marcaId: 'marca-1',
@@ -41,114 +40,247 @@ const RESTAURANTE_BASE = {
 
 const RESTAURANTE_A = { ...RESTAURANTE_BASE, id: 'rest-1', nombre: 'Resto A' }
 const RESTAURANTE_B = { ...RESTAURANTE_BASE, id: 'rest-2', nombre: 'Resto B' }
+const RESTAURANTE_C = { ...RESTAURANTE_BASE, id: 'rest-3', nombre: 'Resto C', marcaId: 'marca-2', marca: MARCA_Y }
+
+const OWNER: PerfilUsuario = perfilDePrueba({ membresias: [membresiaDeMarca('marca-1')] })
+const GERENTE: PerfilUsuario = perfilDePrueba({ membresias: [membresiaDeRestaurante('GERENTE', 'rest-1')] })
+
+async function apiFalsa() {
+  const { api } = await import('../services/api')
+  return { marcas: vi.mocked(api.marcas.list), restaurantes: vi.mocked(api.restaurantes.list) }
+}
 
 describe('contextStore', () => {
-  beforeEach(async () => {
+  beforeEach(() => {
     localStorage.clear()
     useContextStore.setState({
       marcas: [],
       restaurantes: [],
       selectedMarcaId: null,
       selectedRestauranteId: null,
+      perfil: null,
     })
     vi.clearAllMocks()
   })
 
-  // ── loadContext — GERENTE ─────────────────────────────────────────────────
+  describe('loadContext con un perfil de GERENTE', () => {
+    it('solo pide los restaurantes: GET /marcas es del OWNER y al GERENTE le da 403', async () => {
+      const api = await apiFalsa()
+      api.restaurantes.mockResolvedValue([RESTAURANTE_A])
 
-  describe('loadContext — rol GERENTE', () => {
-    it('solo llama api.restaurantes.list (no api.marcas.list)', async () => {
-      localStorage.setItem(TOKEN_KEY, makeJwt({ rol: 'GERENTE' }))
-      const { api } = await import('../services/api')
-      vi.mocked(api.restaurantes.list).mockResolvedValue([RESTAURANTE_A])
-      vi.mocked(api.marcas.list).mockResolvedValue([MARCA_X])
+      await useContextStore.getState().loadContext(GERENTE)
 
-      await useContextStore.getState().loadContext()
-
-      expect(api.restaurantes.list).toHaveBeenCalled()
-      expect(api.marcas.list).not.toHaveBeenCalled()
+      expect(api.restaurantes).toHaveBeenCalled()
+      expect(api.marcas).not.toHaveBeenCalled()
+      // Su marca sale del restaurante, que ya la trae.
+      expect(useContextStore.getState().marcas).toEqual([MARCA_X])
+      expect(useContextStore.getState().selectedMarcaId).toBe('marca-1')
     })
 
-    it('selecciona el primer restaurante si no hay guardado', async () => {
-      localStorage.setItem(TOKEN_KEY, makeJwt({ rol: 'GERENTE' }))
-      const { api } = await import('../services/api')
-      vi.mocked(api.restaurantes.list).mockResolvedValue([RESTAURANTE_A, RESTAURANTE_B])
+    it('elige el primero si no hay nada guardado, y respeta lo guardado si sigue en la lista', async () => {
+      const api = await apiFalsa()
+      api.restaurantes.mockResolvedValue([RESTAURANTE_A, RESTAURANTE_B])
 
-      await useContextStore.getState().loadContext()
-
+      await useContextStore.getState().loadContext(GERENTE)
       expect(useContextStore.getState().selectedRestauranteId).toBe('rest-1')
+
+      localStorage.setItem(RESTAURANTE_KEY, 'rest-2')
+      useContextStore.setState({ selectedRestauranteId: null })
+      await useContextStore.getState().loadContext(GERENTE)
+      expect(useContextStore.getState().selectedRestauranteId).toBe('rest-2')
     })
 
-    it('respeta el restauranteId guardado si sigue existiendo en la lista', async () => {
-      localStorage.setItem(TOKEN_KEY, makeJwt({ rol: 'GERENTE' }))
-      localStorage.setItem(RESTAURANTE_KEY, 'rest-2')
-      const { api } = await import('../services/api')
-      vi.mocked(api.restaurantes.list).mockResolvedValue([RESTAURANTE_A, RESTAURANTE_B])
+    it('un restaurante guardado que ya no está en la lista se descarta', async () => {
+      const api = await apiFalsa()
+      localStorage.setItem(RESTAURANTE_KEY, 'rest-borrado')
+      api.restaurantes.mockResolvedValue([RESTAURANTE_B])
 
-      await useContextStore.getState().loadContext()
+      await useContextStore.getState().loadContext(GERENTE)
 
       expect(useContextStore.getState().selectedRestauranteId).toBe('rest-2')
     })
   })
 
-  // ── loadContext — OWNER / ROOT ────────────────────────────────────────────
+  describe('loadContext con un perfil de OWNER', () => {
+    it('pide marcas y restaurantes a la vez y los guarda', async () => {
+      const api = await apiFalsa()
+      api.marcas.mockResolvedValue([MARCA_X])
+      api.restaurantes.mockResolvedValue([RESTAURANTE_A, RESTAURANTE_B])
 
-  describe('loadContext — rol OWNER', () => {
-    it('llama api.marcas.list y api.restaurantes.list en paralelo', async () => {
-      localStorage.setItem(TOKEN_KEY, makeJwt({ rol: 'OWNER' }))
-      const { api } = await import('../services/api')
-      vi.mocked(api.marcas.list).mockResolvedValue([MARCA_X])
-      vi.mocked(api.restaurantes.list).mockResolvedValue([RESTAURANTE_A])
+      await useContextStore.getState().loadContext(OWNER)
 
-      await useContextStore.getState().loadContext()
-
-      expect(api.marcas.list).toHaveBeenCalled()
-      expect(api.restaurantes.list).toHaveBeenCalled()
-    })
-
-    it('carga marcas y restaurantes en el estado', async () => {
-      localStorage.setItem(TOKEN_KEY, makeJwt({ rol: 'OWNER' }))
-      const { api } = await import('../services/api')
-      vi.mocked(api.marcas.list).mockResolvedValue([MARCA_X])
-      vi.mocked(api.restaurantes.list).mockResolvedValue([RESTAURANTE_A, RESTAURANTE_B])
-
-      await useContextStore.getState().loadContext()
-
-      expect(useContextStore.getState().marcas).toHaveLength(1)
+      expect(api.marcas).toHaveBeenCalled()
+      expect(api.restaurantes).toHaveBeenCalled()
+      expect(useContextStore.getState().marcas).toEqual([MARCA_X])
       expect(useContextStore.getState().restaurantes).toHaveLength(2)
     })
 
-    it('sin token → igual intenta cargar como OWNER (rol null)', async () => {
-      const { api } = await import('../services/api')
-      vi.mocked(api.marcas.list).mockResolvedValue([])
-      vi.mocked(api.restaurantes.list).mockResolvedValue([])
+    it('la marca elegida es la del restaurante elegido', async () => {
+      const api = await apiFalsa()
+      api.marcas.mockResolvedValue([MARCA_X, MARCA_Y])
+      api.restaurantes.mockResolvedValue([RESTAURANTE_C, RESTAURANTE_A])
 
-      await useContextStore.getState().loadContext()
+      await useContextStore.getState().loadContext(OWNER)
 
-      expect(api.marcas.list).toHaveBeenCalled()
+      expect(useContextStore.getState().selectedRestauranteId).toBe('rest-3')
+      expect(useContextStore.getState().selectedMarcaId).toBe('marca-2')
+    })
+
+    it('sin restaurantes queda la primera marca y nada elegido', async () => {
+      const api = await apiFalsa()
+      api.marcas.mockResolvedValue([MARCA_X])
+      api.restaurantes.mockResolvedValue([])
+
+      await useContextStore.getState().loadContext(OWNER)
+
+      expect(useContextStore.getState().selectedRestauranteId).toBeNull()
+      expect(useContextStore.getState().selectedMarcaId).toBe('marca-1')
+    })
+
+    it('si la API falla, el contexto queda como estaba y no rompe', async () => {
+      const api = await apiFalsa()
+      api.marcas.mockRejectedValue(new Error('403'))
+      api.restaurantes.mockRejectedValue(new Error('403'))
+
+      await expect(useContextStore.getState().loadContext(OWNER)).resolves.toBeUndefined()
+
+      expect(useContextStore.getState().restaurantes).toEqual([])
     })
   })
 
-  // ── setRestaurante ────────────────────────────────────────────────────────
+  describe('la preferencia que manda web-auth en la URL', () => {
+    it('?restauranteId= le gana a lo guardado, si ese restaurante está en la lista', async () => {
+      const api = await apiFalsa()
+      localStorage.setItem(RESTAURANTE_KEY, 'rest-1')
+      api.marcas.mockResolvedValue([MARCA_X, MARCA_Y])
+      api.restaurantes.mockResolvedValue([RESTAURANTE_A, RESTAURANTE_B])
 
-  describe('setRestaurante', () => {
-    it('actualiza selectedRestauranteId en el store', () => {
-      useContextStore.getState().setRestaurante('rest-99')
-      expect(useContextStore.getState().selectedRestauranteId).toBe('rest-99')
+      await useContextStore.getState().loadContext(OWNER, { restauranteId: 'rest-2' })
+
+      expect(useContextStore.getState().selectedRestauranteId).toBe('rest-2')
+      // Queda guardado: al volver sin la URL se mantiene.
+      expect(localStorage.getItem(RESTAURANTE_KEY)).toBe('rest-2')
     })
 
-    it('persiste la selección en localStorage', () => {
+    it('?marcaId= elige el primer restaurante de esa marca', async () => {
+      const api = await apiFalsa()
+      api.marcas.mockResolvedValue([MARCA_X, MARCA_Y])
+      api.restaurantes.mockResolvedValue([RESTAURANTE_A, RESTAURANTE_C])
+
+      await useContextStore.getState().loadContext(OWNER, { marcaId: 'marca-2' })
+
+      expect(useContextStore.getState().selectedRestauranteId).toBe('rest-3')
+      expect(useContextStore.getState().selectedMarcaId).toBe('marca-2')
+    })
+
+    it('un id que no está en la lista se ignora: es una preferencia, no un permiso', async () => {
+      const api = await apiFalsa()
+      api.marcas.mockResolvedValue([MARCA_X])
+      api.restaurantes.mockResolvedValue([RESTAURANTE_A])
+
+      await useContextStore.getState().loadContext(OWNER, { restauranteId: 'rest-de-otra-marca' })
+
+      expect(useContextStore.getState().selectedRestauranteId).toBe('rest-1')
+    })
+
+    it('una marca sin restaurantes en la lista deja la marca elegida y el primer restaurante que haya', async () => {
+      const api = await apiFalsa()
+      api.marcas.mockResolvedValue([MARCA_X, MARCA_Y])
+      api.restaurantes.mockResolvedValue([])
+
+      await useContextStore.getState().loadContext(OWNER, { marcaId: 'marca-2' })
+
+      expect(useContextStore.getState().selectedRestauranteId).toBeNull()
+      expect(useContextStore.getState().selectedMarcaId).toBe('marca-2')
+    })
+
+    it('preferenciaDeLaUrl lee los dos parámetros y tolera que no estén', () => {
+      expect(preferenciaDeLaUrl('?marcaId=m1&restauranteId=r1')).toEqual({ marcaId: 'm1', restauranteId: 'r1' })
+      expect(preferenciaDeLaUrl('')).toEqual({ marcaId: null, restauranteId: null })
+      expect(preferenciaDeLaUrl('?otra=cosa')).toEqual({ marcaId: null, restauranteId: null })
+    })
+  })
+
+  describe('refreshContext', () => {
+    it('vuelve a pedir los datos con el perfil de la última carga', async () => {
+      const api = await apiFalsa()
+      api.restaurantes.mockResolvedValue([RESTAURANTE_A])
+      await useContextStore.getState().loadContext(GERENTE)
+
+      api.restaurantes.mockResolvedValue([RESTAURANTE_A, RESTAURANTE_B])
+      await useContextStore.getState().refreshContext()
+
+      expect(useContextStore.getState().restaurantes).toHaveLength(2)
+      expect(useContextStore.getState().selectedRestauranteId).toBe('rest-1')
+    })
+
+    it('sin una carga previa no pide nada', async () => {
+      const api = await apiFalsa()
+
+      await useContextStore.getState().refreshContext()
+
+      expect(api.restaurantes).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('setRestaurante y setMarca', () => {
+    it('setRestaurante guarda la elección en el store y en localStorage', () => {
       useContextStore.getState().setRestaurante('rest-99')
+
+      expect(useContextStore.getState().selectedRestauranteId).toBe('rest-99')
       expect(localStorage.getItem(RESTAURANTE_KEY)).toBe('rest-99')
     })
-  })
 
-  // ── setMarca ──────────────────────────────────────────────────────────────
-
-  describe('setMarca', () => {
-    it('actualiza selectedMarcaId en el store', () => {
+    it('setMarca actualiza la marca elegida', () => {
       useContextStore.getState().setMarca('marca-42')
+
       expect(useContextStore.getState().selectedMarcaId).toBe('marca-42')
     })
+  })
+})
+
+describe('rolEnElRestaurante', () => {
+  const restaurantes = [RESTAURANTE_A, RESTAURANTE_C]
+
+  it('el dueño de la marca es OWNER en los restaurantes de esa marca', () => {
+    expect(rolEnElRestaurante(OWNER, restaurantes, 'rest-1')).toBe('OWNER')
+  })
+
+  it('el gerente es GERENTE solo en su restaurante', () => {
+    expect(rolEnElRestaurante(GERENTE, restaurantes, 'rest-1')).toBe('GERENTE')
+    expect(rolEnElRestaurante(GERENTE, restaurantes, 'rest-3')).toBeNull()
+  })
+
+  it('una persona puede ser OWNER de una marca y GERENTE de un restaurante de otra', () => {
+    const mixto = perfilDePrueba({
+      membresias: [membresiaDeMarca('marca-1'), membresiaDeRestaurante('GERENTE', 'rest-3', 'marca-2')],
+    })
+
+    expect(rolEnElRestaurante(mixto, restaurantes, 'rest-1')).toBe('OWNER')
+    expect(rolEnElRestaurante(mixto, restaurantes, 'rest-3')).toBe('GERENTE')
+  })
+
+  it('mientras no hay restaurante elegido, el rol sale de las membresías', () => {
+    expect(rolEnElRestaurante(OWNER, [], null)).toBe('OWNER')
+    expect(rolEnElRestaurante(GERENTE, [], null)).toBe('GERENTE')
+    expect(rolEnElRestaurante(OWNER, restaurantes, 'rest-que-no-esta')).toBe('OWNER')
+  })
+
+  it('una cuenta ROOT sin membresías no tiene rol en ningún restaurante', () => {
+    const root = perfilDePrueba({ esRoot: true })
+
+    expect(rolEnElRestaurante(root, restaurantes, 'rest-1')).toBeNull()
+    expect(rolEnElRestaurante(root, [], null)).toBeNull()
+  })
+
+  it('las membresías del salón y la cocina no dan rol en web-admin', () => {
+    const mozo = perfilDePrueba({ membresias: [membresiaDeRestaurante('MOZO', 'rest-1')] })
+
+    expect(rolEnElRestaurante(mozo, restaurantes, 'rest-1')).toBeNull()
+    expect(rolEnElRestaurante(mozo, [], null)).toBeNull()
+  })
+
+  it('sin perfil no hay rol', () => {
+    expect(rolEnElRestaurante(null, restaurantes, 'rest-1')).toBeNull()
   })
 })

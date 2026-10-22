@@ -1,7 +1,6 @@
-import { Suspense, lazy } from 'react'
+import { Suspense, lazy, type ReactNode } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { ProtectedRoute, useAuth } from '@menyu/auth'
-import { LoginPage } from './pages/login/LoginPage'
+import { RequireAuth, tieneAcceso, usePerfil } from '@menyu/auth-client'
 import { AdminLayout } from './pages/admin/AdminLayout'
 import { AdminMenuPage } from './pages/admin/menu/AdminMenuPage'
 import { TablesPage } from './pages/admin/tables/TablesPage'
@@ -16,11 +15,12 @@ import { TomaPedidosPage } from './pages/admin/gerente/TomaPedidosPage'
 import { AuditoriaPage } from './pages/admin/auditoria/AuditoriaPage'
 import { MarcaPage } from './pages/admin/marca/MarcaPage'
 import { RoleGuard } from './components/RoleGuard'
+import { useRolActual } from './store/contextStore'
 
 // La consola de ROOT se descarga recién cuando entra un ROOT: OWNER y GERENTE no bajan ni su código ni su CSS.
 const RootRoutes = lazy(() => import('./pages/root/RootRoutes'))
 
-function CargandoConsola() {
+function Cargando() {
   return (
     <div role="status" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6b7280', fontFamily: 'Inter, sans-serif' }}>
       Cargando…
@@ -28,56 +28,70 @@ function CargandoConsola() {
   )
 }
 
+/** Solo ROOT entra a la consola; el resto vuelve a /admin. */
+function SoloRoot({ children }: { children: ReactNode }) {
+  const perfil = usePerfil()
+  if (!perfil.esRoot) return <Navigate to="/admin" replace />
+  return <>{children}</>
+}
+
+/**
+ * Las pantallas de datos son para quien trabaja en la marca. Una cuenta ROOT sin membresías recibe 403 del backend en
+ * todas (docs/auth/specs/auth.md, 4.3): va a su consola.
+ */
+function SoloAdministracion({ children }: { children: ReactNode }) {
+  const rol = useRolActual()
+  const perfil = usePerfil()
+  if (!rol) return <Navigate to={perfil.esRoot ? '/root' : '/admin'} replace />
+  return <>{children}</>
+}
+
 function MesasRouter() {
-  const { user } = useAuth()
-  if (user?.rol === 'GERENTE') return <GerenceMesasPage />
+  if (useRolActual() === 'GERENTE') return <GerenceMesasPage />
   return <TablesPage />
 }
 
 function AdminRedirect() {
-  const { user } = useAuth()
-  if (user?.rol === 'ROOT') {
-    return <Navigate to="/root" replace />
-  }
-  if (user?.rol === 'GERENTE') {
-    return <Navigate to="/admin/tables" replace />
-  }
+  const perfil = usePerfil()
+  const rol = useRolActual()
+  if (!rol && perfil.esRoot) return <Navigate to="/root" replace />
+  if (rol === 'GERENTE') return <Navigate to="/admin/tables" replace />
   return <Navigate to="/admin/dashboard" replace />
 }
 
 export function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/login" element={<LoginPage />} />
-        <Route element={<ProtectedRoute roles={['OWNER', 'ROOT', 'GERENTE']} />}>
-          {/* Consola de ROOT: tiene su propio shell, por eso va afuera de AdminLayout. Solo entra ROOT; el resto vuelve a /admin. */}
+      {/* Sin sesión va a web-auth; con una cuenta sin acceso a esta app, web-auth la manda a la suya (sin loop). */}
+      <RequireAuth puedeEntrar={(perfil) => tieneAcceso(perfil, 'admin')} cargando={<Cargando />}>
+        <Routes>
+          {/* Consola de ROOT: tiene su propio shell, por eso va afuera de AdminLayout. */}
           <Route
             path="/root/*"
             element={
-              <RoleGuard roles={['ROOT']}>
-                <Suspense fallback={<CargandoConsola />}>
+              <SoloRoot>
+                <Suspense fallback={<Cargando />}>
                   <RootRoutes />
                 </Suspense>
-              </RoleGuard>
+              </SoloRoot>
             }
           />
-          <Route element={<AdminLayout />}>
+          <Route element={<SoloAdministracion><AdminLayout /></SoloAdministracion>}>
             <Route path="/admin" element={<AdminRedirect />} />
 
-            {/* Todos los roles */}
+            {/* OWNER y GERENTE */}
             <Route path="/admin/menu"   element={<AdminMenuPage />} />
             <Route path="/admin/tables" element={<MesasRouter />} />
             <Route path="/admin/mozos"  element={<MozosPage />} />
 
-            {/* Solo OWNER y ROOT */}
+            {/* Solo OWNER */}
             <Route path="/admin/dashboard" element={
-              <RoleGuard roles={['OWNER', 'ROOT']}>
+              <RoleGuard roles={['OWNER']}>
                 <DashboardPage />
               </RoleGuard>
             } />
             <Route path="/admin/reportes" element={
-              <RoleGuard roles={['OWNER', 'ROOT']}>
+              <RoleGuard roles={['OWNER']}>
                 <ReportesPage />
               </RoleGuard>
             } />
@@ -87,7 +101,7 @@ export function App() {
               </RoleGuard>
             } />
             <Route path="/admin/auditoria" element={
-              <RoleGuard roles={['OWNER', 'ROOT']}>
+              <RoleGuard roles={['OWNER']}>
                 <AuditoriaPage />
               </RoleGuard>
             } />
@@ -99,26 +113,26 @@ export function App() {
               </RoleGuard>
             } />
 
-            {/* Solo GERENTE (y ROOT) */}
+            {/* Solo GERENTE */}
             <Route path="/admin/pedidos" element={
-              <RoleGuard roles={['GERENTE', 'ROOT']}>
+              <RoleGuard roles={['GERENTE']}>
                 <PedidosPage />
               </RoleGuard>
             } />
             <Route path="/admin/historial" element={
-              <RoleGuard roles={['GERENTE', 'ROOT']}>
+              <RoleGuard roles={['GERENTE']}>
                 <HistorialSesionesPage />
               </RoleGuard>
             } />
             <Route path="/admin/toma-pedidos" element={
-              <RoleGuard roles={['GERENTE', 'ROOT']}>
+              <RoleGuard roles={['GERENTE']}>
                 <TomaPedidosPage />
               </RoleGuard>
             } />
           </Route>
-        </Route>
-        <Route path="*" element={<Navigate to="/login" replace />} />
-      </Routes>
+          <Route path="*" element={<Navigate to="/admin" replace />} />
+        </Routes>
+      </RequireAuth>
     </BrowserRouter>
   )
 }

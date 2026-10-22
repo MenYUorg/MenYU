@@ -5,15 +5,13 @@ import { api } from '../../../services/api'
 import { reiniciarSesionDePrueba, sesionDePrueba } from '../../../test/authClient'
 import { PagosPage } from './PagosPage'
 
-let rolActual = 'GERENTE'
+let rolActual: 'OWNER' | 'GERENTE' | null = 'GERENTE'
 let restauranteActual: string | null = 'rest-1'
 
-vi.mock('@menyu/auth', () => ({
-  useAuth: () => ({ user: { rol: rolActual } }),
-}))
 vi.mock('@menyu/auth-client', async () => (await import('../../../test/authClient')).moduloSimulado())
 vi.mock('../../../store/contextStore', () => ({
   useContextStore: () => ({ selectedRestauranteId: restauranteActual }),
+  useRolActual: () => rolActual,
 }))
 // `pedirJson` queda el real (pone el token de la sesión y maneja el 401); solo se simula el objeto `api`.
 vi.mock('../../../services/api', async () => ({
