@@ -166,8 +166,8 @@ Un cambio en web-admin no afecta ni rebuilda web-cliente.
 - Cada app exige lo suyo: web-admin, `esRoot` o una membresía OWNER o GERENTE;
   web-staff, cualquier membresía. A quien no le toca, la manda a web-auth, que la
   deriva a su app (sin loop).
-- `packages/auth` quedó sin consumidores con la 4.6 (web-cliente nunca lo
-  importó: su login usa su propio `services/api`). La Fase 5 lo borra.
+- `packages/auth` (el login legacy) se borró en la 4.7: no tenía ningún
+  consumidor desde la 4.6 y web-cliente nunca lo importó.
 
 **Flujo alternativo QR/PIN (solo web-cliente):**
 - Exclusivo de apps/web-cliente — nunca en web-admin ni web-staff
@@ -178,8 +178,6 @@ Un cambio en web-admin no afecta ni rebuilda web-cliente.
 ### Código compartido entre apps web
 
 Vive en packages/:
-- `packages/auth`  → LoginForm, useAuth, authService (legacy)
-                     sin consumidores desde la 4.6. La Fase 5 lo borra
 - `packages/auth-client` → cliente de Supabase con la cookie de dominio compartido, `useSession`,
                      `RequireAuth`, `logout` y qué app le toca a cada perfil (Fase 4 de auth)
 - `packages/ui`    → componentes visuales idénticos entre apps
@@ -355,8 +353,8 @@ pnpm typecheck
 - El patrón de pagos es `PaymentProvider` — nunca llamar Mercado Pago directamente desde el controller.
 - El QR es un identificador interno de la app, **no** una URL directa a una ruta web.
 - Cada feature nueva de frontend va en la app correspondiente a su rol: web-cliente, web-staff o web-admin.
-- El login QR/PIN del comensal es independiente del login común — nunca mezclarlos ni importar packages/auth en web-cliente.
-- Componentes compartidos entre apps van en packages/ui o packages/auth. Nunca duplicar lógica idéntica en cada app.
+- El login QR/PIN del comensal es independiente del login común — nunca mezclarlos. web-cliente no monta `RequireAuth`: su sesión de mesa no es una cuenta (la cuenta opcional del cliente llega en la Fase 4b).
+- Componentes compartidos entre apps van en packages/ui o packages/auth-client. Nunca duplicar lógica idéntica en cada app.
 - Nunca agregar lógica de un rol en la app de otro rol. El comensal no debe tener acceso al código del admin ni siquiera en el bundle compilado.
 
 ---

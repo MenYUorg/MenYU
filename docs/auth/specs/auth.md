@@ -449,9 +449,9 @@ Decisiones de la planificación de la 4.6:
 ### Fase 5 — Limpieza
 
 - Quitar de web-cliente la pantalla `/auth` (login del personal y login/registro de clientes, que ahora viven en web-auth).
-- Quitar el pasaje de tokens por URL (`?token=&refresh=` y el script de `index.html` de web-admin y web-staff), `resolveLoginUrl`, `resolveAppUrl` y `packages/auth`.
+- Quitar `resolveAppUrl` de web-cliente, que quedó sin uso con la 4.7. El pasaje de tokens por URL (`?token=&refresh=`), el script de `index.html` de web-admin y web-staff, `resolveLoginUrl` y `packages/auth` ya no están: los retiraron la 4.5, la 4.6 y la 4.7.
 - Quitar los endpoints legacy `/auth/login`, `/auth/register`, `/auth/guest`, `/auth/refresh` y `/auth/logout`, la tabla `RefreshToken`, `Admin` y `AdminRestaurante` (después de pasar `PedidoEdicion.adminId` a `Usuario`) y los `passwordHash` de `Mozo` y `Cliente`.
-- Actualizar CLAUDE.md (roles, dominios y la regla "no importar packages/auth en web-cliente": web-cliente sí usa `@menyu/auth-client`, solo para la sesión opcional del cliente) y Swagger.
+- Actualizar CLAUDE.md (roles, dominios y la regla del login del comensal: con la Fase 4b web-cliente usa `@menyu/auth-client`, solo para la sesión opcional del cliente) y Swagger.
 - Documentar en la tesis las decisiones de esta spec.
 
 ## Fuera de alcance
