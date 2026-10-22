@@ -2,11 +2,13 @@
 // (node --test scripts/carga/guardas.test.mjs). Nunca imprimen URLs ni hosts: solo qué regla no se cumplió.
 
 /**
- * Hosts de producción conocidos (CLAUDE.md, "Cuatro apps web independientes"). Se suman a los de las variables
+ * Hosts de producción conocidos (CLAUDE.md, "Cuatro apps web independientes"), más el dominio de Railway de la API de
+ * producción, que sigue activo (docs/auth/VariablesACambiar.md, tabla de dominios). Se suman a los de las variables
  * PROD_* que pasa el workflow: aunque falte alguna variable, estos nunca se aceptan.
  */
 export const HOSTS_DE_PRODUCCION = [
   'api.menyu-app.com',
+  'menyu-backend-production.up.railway.app',
   'mesa.menyu-app.com',
   'staff.menyu-app.com',
   'admin.menyu-app.com',

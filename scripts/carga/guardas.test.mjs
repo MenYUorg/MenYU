@@ -81,6 +81,14 @@ describe('erroresDeConfiguracion', () => {
     })
   }
 
+  it('el dominio de Railway de la API de producción no corre (docs/auth/VariablesACambiar.md:10)', () => {
+    // Act
+    const errores = erroresDeConfiguracion(valido({ BASE_URL: 'https://menyu-backend-production.up.railway.app/api' }))
+
+    // Assert
+    assert.ok(errores.some((e) => /producción/.test(e)))
+  })
+
   it('un host que viene en PROD_HOSTS tampoco se acepta', () => {
     // Arrange
     const env = valido({ PROD_HOSTS: 'https://api.staging.test' })
