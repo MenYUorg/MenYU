@@ -1,8 +1,9 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
 import { JwtService } from '@nestjs/jwt'
 import { exigirSuSesion, verificarSesionDeMesa } from '../auth/guards/session-auth.guard'
 import { AccesoService } from '../auth/supabase/acceso.service'
 import { UsuarioAutenticado } from '../auth/supabase/usuario-autenticado'
+import { SELECT_DISPONIBILIDAD, restauranteDisponible } from '../common/restaurante-disponible'
 import { PrismaService } from '../prisma/prisma.service'
 import { MenyuGateway } from '../gateway/menyu.gateway'
 import { CreateWaiterCallDto } from './dto/create-waiter-call.dto'
@@ -56,11 +57,16 @@ export class WaiterCallsService {
     // a. Verificar sesión activa con mesa
     const sesion = await this.prisma.sesionMesa.findUnique({
       where: { id: dto.sesionId },
-      include: { mesa: { select: { numero: true } } },
+      include: { mesa: { select: { numero: true, restaurante: { select: SELECT_DISPONIBILIDAD } } } },
     })
     if (!sesion) throw new NotFoundException('Sesión no encontrada')
     if (sesion.estado !== 'activa') {
       throw new BadRequestException('La sesión no está activa')
+    }
+    // Con el restaurante (o su marca) dado de baja, el personal perdió el acceso y recibe 403 al atender: el llamado
+    // quedaría pendiente para siempre (entrega 4.7 de docs/auth/specs/auth.md).
+    if (!restauranteDisponible(sesion.mesa.restaurante)) {
+      throw new ForbiddenException('Este restaurante no está disponible')
     }
 
     // b. Persistir llamado (se acumulan todos)

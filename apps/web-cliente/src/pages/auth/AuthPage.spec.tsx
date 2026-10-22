@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { api } from '../../services/api'
 import { useSessionStore } from '../../store/sessionStore'
@@ -14,6 +14,8 @@ const login = vi.mocked(api.auth.login)
 const registrar = vi.mocked(api.auth.register)
 
 const TOKEN_CLIENTE = crearTokenJwt({ tipo: 'cliente', nombre: 'Ana' })
+const TOKEN_ADMIN = crearTokenJwt({ tipo: 'admin', nombre: 'Dueña' })
+const TOKEN_MOZO = crearTokenJwt({ tipo: 'mozo', nombre: 'Pedro' })
 
 function Destino({ nombre }: { nombre: string }) {
   const { pathname, search } = useLocation()
@@ -133,6 +135,70 @@ describe('AuthPage', () => {
 
       expect(await screen.findByText('Credenciales inválidas')).toBeInTheDocument()
       expect(screen.queryByText(/^carta:/)).not.toBeInTheDocument()
+    })
+  })
+
+  // El personal entra por web-auth (docs/auth/specs/auth.md, Fase 4). Antes se le guardaban los tokens legacy y se le
+  // pasaban por la URL a web-admin o web-staff, que ya no los leen: terminaban en el historial de los dos dominios.
+  describe('si la cuenta es del personal', () => {
+    let location: Location
+
+    beforeEach(() => {
+      location = { ...window.location, hostname: 'mesa.menyu.local', protocol: 'http:', href: 'http://mesa.menyu.local/auth' } as Location
+      vi.stubGlobal('location', location)
+      vi.stubEnv('VITE_AUTH_URL', 'http://auth.menyu.local:5173')
+    })
+
+    afterEach(() => {
+      vi.unstubAllGlobals()
+      vi.unstubAllEnvs()
+      vi.useRealTimers()
+    })
+
+    it.each([
+      ['un admin', TOKEN_ADMIN],
+      ['un mozo', TOKEN_MOZO],
+    ])('con %s avisa y, después de dejarlo leer, lo manda a web-auth', async (_quien, token) => {
+      vi.useFakeTimers({ shouldAdvanceTime: true })
+      login.mockResolvedValue({ accessToken: token, refreshToken: 'refresh' } as never)
+      renderAuth()
+
+      ingresar('pedro@menyu.com')
+
+      // El aviso se ve antes de navegar: si no, parecería que la contraseña falló.
+      expect(await screen.findByRole('status')).toHaveTextContent('El ingreso de MenYU está en otra pantalla')
+      expect(screen.getByRole('link', { name: 'Ir al ingreso de MenYU' })).toHaveAttribute('href', 'http://auth.menyu.local:5173')
+      expect(location.href).toBe('http://mesa.menyu.local/auth')
+
+      await act(async () => { await vi.advanceTimersByTimeAsync(2000) })
+      expect(location.href).toBe('http://auth.menyu.local:5173')
+    })
+
+    it('no guarda los tokens legacy ni los pasa por la URL', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true })
+      login.mockResolvedValue({ accessToken: TOKEN_MOZO, refreshToken: 'refresh' } as never)
+      renderAuth()
+
+      ingresar('pedro@menyu.com')
+
+      await screen.findByRole('status')
+      await act(async () => { await vi.advanceTimersByTimeAsync(2000) })
+      expect(localStorage.getItem('menyu_access_token')).toBeNull()
+      expect(localStorage.getItem('menyu_refresh_token')).toBeNull()
+      expect(location.href).not.toContain('token')
+    })
+
+    it('si la persona se va antes, no queda ninguna navegación pendiente', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true })
+      login.mockResolvedValue({ accessToken: TOKEN_MOZO, refreshToken: 'refresh' } as never)
+      const { unmount } = renderAuth()
+
+      ingresar('pedro@menyu.com')
+      await screen.findByRole('status')
+      unmount()
+
+      await act(async () => { await vi.advanceTimersByTimeAsync(2000) })
+      expect(location.href).toBe('http://mesa.menyu.local/auth')
     })
   })
 

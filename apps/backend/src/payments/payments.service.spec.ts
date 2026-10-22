@@ -84,8 +84,18 @@ describe('PaymentsService', () => {
     const SESION = {
       id: 'sesion-1',
       cerradaEn: null as Date | null,
-      mesa: { id: 'mesa-1', numero: '5', restauranteId: 'rest-1' },
+      mesa: {
+        id: 'mesa-1',
+        numero: '5',
+        restauranteId: 'rest-1',
+        restaurante: { activo: true, marca: { activo: true } },
+      },
     }
+
+    const conRestaurante = (restaurante: { activo?: boolean; marca?: { activo: boolean } }) => ({
+      ...SESION,
+      mesa: { ...SESION.mesa, restaurante: { activo: true, marca: { activo: true }, ...restaurante } },
+    })
 
     beforeEach(() => {
       tx = createTxMock()
@@ -167,6 +177,35 @@ describe('PaymentsService', () => {
       await expect(service.solicitarEfectivo('sesion-x')).rejects.toThrow(NotFoundException)
 
       expect(tx.pago.create).not.toHaveBeenCalled()
+    })
+
+    // El personal de un restaurante dado de baja recibe 403 al confirmar el efectivo: el pedido quedaba pendiente para
+    // siempre, con un llamado que nadie podía atender (entrega 4.7 de docs/auth/specs/auth.md).
+    describe('restaurante dado de baja', () => {
+      it.each([
+        ['el restaurante', { activo: false }],
+        ['su marca', { marca: { activo: false } }],
+        ['los dos', { activo: false, marca: { activo: false } }],
+      ])('de baja %s → 403 "Este restaurante no está disponible", sin crear el pago ni el llamado', async (_quien, cambios) => {
+        tx.sesionMesa.findUnique.mockResolvedValue(conRestaurante(cambios))
+
+        await expect(service.solicitarEfectivo('sesion-1')).rejects.toThrow(
+          new ForbiddenException('Este restaurante no está disponible'),
+        )
+
+        expect(tx.pago.findFirst).not.toHaveBeenCalled()
+        expect(tx.pago.create).not.toHaveBeenCalled()
+        expect(tx.llamadoMozo.create).not.toHaveBeenCalled()
+        expect(mockGateway.emitMozoCalled).not.toHaveBeenCalled()
+        expect(mockGateway.emitQuierePagar).not.toHaveBeenCalled()
+      })
+
+      it('tampoco devuelve un efectivo pendiente que quedó de antes de la baja', async () => {
+        tx.sesionMesa.findUnique.mockResolvedValue(conRestaurante({ activo: false }))
+        tx.pago.findFirst.mockResolvedValue({ id: 'pago-ef' })
+
+        await expect(service.solicitarEfectivo('sesion-1')).rejects.toThrow(ForbiddenException)
+      })
     })
 
     it('sesión ya pagada por completo → BadRequestException y no crea nada', async () => {

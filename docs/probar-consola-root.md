@@ -2,20 +2,16 @@
 
 Guía para probar cada etapa de la consola de ROOT ([`plan-consola-root.md`](plan-consola-root.md)) sin tocar staging ni producción. Se actualiza en cada etapa: hoy cubre el backend (etapas 1a y 1b), la pantalla de marcas, restaurantes e historial (etapa 2a) y la de dueños y cuentas ROOT (etapa 2b, sección 5.1).
 
-> **En la rama `feat/auth-fase-4` (desde la entrega 4.4 de auth, 2026-10-21) esta guía no sirve tal cual.** La API de `/root/*` pide el token de Supabase de una cuenta ROOT (un `Usuario` con `es_root`), no el de `POST /api/auth/login`: con `root@menyu.com` / `root1234` responde 401. Ya no existen las rutas de restablecer contraseñas ni la de cambiar el email de un dueño, los dueños y las cuentas ROOT se invitan con `{ email, nombre }`, y el script solo tiene `listar` y `promover <email>` (no `crear`). Las rutas actuales están en "4.4, cómo quedó" de [`docs/auth/specs/auth.md`](auth/specs/auth.md).
->
-> Para probar la API en local hace falta el backend apuntando al Supabase de staging (`SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY`, ver "Desarrollo local" en [`docs/auth/VariablesACambiar.md`](auth/VariablesACambiar.md)), un `Usuario` con `es_root` en tu base con el `supabase_user_id` de una cuenta de prueba de staging, y el access token de esa cuenta (por ejemplo, el de la cookie de sesión después de entrar en `auth.menyu.local:5173`). Desde la entrega 4.5 las pantallas vuelven a funcionar: web-admin lee la sesión de Supabase, así que se entra por `auth.menyu.local:5173` con una cuenta ROOT y la consola queda en `admin.menyu.local:5174/root`. El paso a paso de ese entorno (los `.env.local`, el backend de la rama con la base local y las cuentas de staging en `usuario`) está en "Probar la entrega 4.5 en local" de [`docs/auth/usuarios-prueba-staging.md`](auth/usuarios-prueba-staging.md). Lo de abajo, pensado para el login propio, se reescribe cuando se cierre la Fase 4.
+> **Desde la Fase 4 de auth, la consola se entra con una cuenta de Supabase** (un `Usuario` con `es_root`), no con `POST /api/auth/login`: `root@menyu.com` / `root1234` ya no abre nada. Montar el entorno local lleva unos pasos (los `.env.local`, el backend de la rama contra tu base local y las cuentas de staging en `usuario`): el paso a paso está en "Probar la entrega 4.5 en local" de [`docs/auth/usuarios-prueba-staging.md`](auth/usuarios-prueba-staging.md), y las rutas actuales en "4.4, cómo quedó" de [`docs/auth/specs/auth.md`](auth/specs/auth.md).
 
 ## 0. Una vez, al traer la rama
 
 Con el backend parado, desde `apps/backend`:
 
 ```bash
-npx prisma migrate deploy     # aplica la migración del historial a tu base local
+npx prisma migrate deploy     # aplica las migraciones nuevas a tu base local
 npx prisma generate           # regenera el cliente (falla con EPERM si el backend está corriendo)
 ```
-
-Sin eso el login da 500: el cliente nuevo pide la columna `debe_cambiar_password`, que tu base todavía no tiene.
 
 ## 1. Conviene una base aparte para jugar (recomendado)
 
@@ -44,38 +40,42 @@ Git Bash es igual, con `export DATABASE_URL=...` en lugar de `$env:`.
 
 ## 2. Entrar como ROOT
 
-En la base de prueba (con el seed) la cuenta ROOT es `root@menyu.com` / `root1234`. **Solo existe en local**: en staging y producción hay que crearla con el script (`apps/backend/scripts/cuentas-root.ts`).
+La cuenta ROOT es un `Usuario` con `es_root` en tu base, vinculado por `supabase_user_id` a una cuenta del Supabase de **staging** (en local no hay Supabase propio). La de prueba es `root.pruebas-auth@menyu-app.com`; cómo dejarla en tu base está en "Probar la entrega 4.5 en local" de [`docs/auth/usuarios-prueba-staging.md`](auth/usuarios-prueba-staging.md), junto con las contraseñas (en `docs/auth/.env.usuarios-staging`, que git ignora).
 
-### Con Swagger (lo más cómodo)
+> El seed sigue creando `root@menyu.com`, pero es de la tabla `admin`: no abre la consola. Las cuentas ROOT nuevas se invitan desde la consola o se promueven con el script (sección 7).
 
-1. Abrí <http://localhost:3000/docs>.
-2. `POST /api/auth/login` con `{ "email": "root@menyu.com", "password": "root1234" }` y copiá el `accessToken`.
-3. Botón **Authorize** (arriba a la derecha), pegá el token y confirmá. Ya podés probar todas las rutas de la sección **root**.
+### Por la pantalla (lo normal)
 
-### Con la terminal (Git Bash)
+Entrá por `http://auth.menyu.local:5173` con la cuenta ROOT y aterrizás en `http://admin.menyu.local:5174/root`. Necesitás las cuatro apps y el backend como dice la guía de arriba.
+
+### Con la terminal (Git Bash), para pegarle a la API
+
+El access token sale de Supabase con la contraseña de la cuenta:
 
 ```bash
 API=http://localhost:3000/api
-TOKEN=$(curl -s -X POST $API/auth/login -H 'Content-Type: application/json' \
-  -d '{"email":"root@menyu.com","password":"root1234"}' | node -pe "JSON.parse(require('fs').readFileSync(0,'utf8')).accessToken")
+TOKEN=$(curl -s -X POST "$SUPABASE_URL/auth/v1/token?grant_type=password" \
+  -H "apikey: $SUPABASE_PUBLISHABLE_KEY" -H 'Content-Type: application/json' \
+  -d '{"email":"root.pruebas-auth@menyu-app.com","password":"…"}' \
+  | node -pe "JSON.parse(require('fs').readFileSync(0,'utf8')).access_token")
 curl -s $API/root/marcas -H "Authorization: Bearer $TOKEN"
 ```
 
-El token dura 8 horas.
+El token dura una hora (el default de Supabase). En Swagger (<http://localhost:3000/docs>) se pega con el botón **Authorize**.
 
 ## 3. Etapa 1a: dueños y cuentas ROOT
 
+Los dueños y las cuentas ROOT se dan de alta **por invitación**: no hay contraseñas temporales (las maneja la persona desde web-auth). Invitar necesita `SUPABASE_SERVICE_ROLE_KEY` en el backend; sin ella responde 502, así que la invitación de punta a punta se prueba en staging.
+
 | Probá | Qué tendría que pasar |
 |---|---|
-| `GET /api/root/duenos` | Los dueños del seed con su marca. Ningún gerente. |
-| `POST /api/root/marcas/{idMarca}/duenos` con `{ "email": "prueba@ejemplo.com" }` | 201 con `passwordTemporal` (12 caracteres, **se muestra una sola vez**: copiala). |
-| Entrar a web-admin (<http://localhost:5174>) con ese email y esa contraseña | Entra como dueño de esa marca. (Todavía no se le pide cambiarla: eso llega en la etapa 3.) |
-| Repetir el mismo email, o uno de un mozo (`mozo@menyu.com`) | 409, sin decir quién lo usa. |
-| `POST /api/root/duenos/{id}/restablecer-password` | Otra contraseña temporal. La vieja deja de servir y las sesiones del dueño se cierran. |
-| `DELETE /api/root/duenos/{id}` del único dueño de una marca activa | 409. |
-| `GET /api/root/roots`, `POST /api/root/roots` con un email | La lista (con "esPropia") y una cuenta ROOT nueva con su contraseña temporal. |
-| `POST /api/root/roots/{id}/restablecer-password` con **tu propio** id | 400. Con el de otra ROOT, 200. |
-| `DELETE /api/root/roots/{id}` | 404: **no existe** ruta para borrar cuentas ROOT. |
+| `GET /api/root/duenos` | Las membresías OWNER con su marca y su email. Ningún gerente. `?q=` filtra (ignora mayúsculas; `_` y `%` son literales). |
+| `POST /api/root/marcas/{idMarca}/duenos` con `{ "email": "prueba@ejemplo.com", "nombre": "Prueba" }` | 201 con `{ usuarioId, membresiaId, invitacionEnviada }`. Le llega un mail para definir su contraseña. |
+| Repetir el mismo email en esa marca | 409. Con tu propio email, 403. Con una marca dada de baja, 409. |
+| `DELETE /api/root/duenos/{membresiaId}` del único dueño de una marca activa | 409. Con otro dueño, 200: se quita la membresía y el `Usuario` queda (puede tener otras). |
+| `GET /api/root/roots` | Los `Usuario` con `es_root`, con `esPropia`. |
+| `POST /api/root/roots` con `{ "email": "otra@ejemplo.com", "nombre": "Otra" }` | 201. Con un email que ya es de un `Usuario` (también el tuyo), 409: hacer ROOT a alguien que ya existe es del script. |
+| `DELETE /api/root/roots/{id}`, `PATCH /api/root/duenos/{id}` | 404: **no existen**. Cambiar el email o la contraseña es de la persona, desde web-auth. |
 
 ## 4. Etapa 1b: marcas, restaurantes e historial
 
@@ -95,7 +95,7 @@ Un recorrido de punta a punta (copiando los `id` que va devolviendo cada paso):
    - `POST /api/root/marcas/{id}/reactivar` → vuelven a aparecer.
    - Lo mismo con `POST /api/root/restaurantes/{id}/baja` y `/reactivar`.
    - **Qué corta la baja hoy:** lo público. Con la marca (o el restaurante) dada de baja, `GET /api/menu/{idRestaurante}` y `GET /api/discovery/restaurantes/{id}` dan **404**, `GET /api/marca/{idMarca}/restaurantes` da una lista vacía y `POST /api/sessions/open` (por QR o por PIN) en una mesa libre da **403 "Este restaurante no está disponible"**. Una mesa que **ya tenía una sesión abierta** sigue funcionando: quien vuelve a escanear su QR o se suma entra igual, para poder pedir la cuenta y pagar. Al reactivar, todo vuelve.
-   - **Qué todavía no corta:** el inicio de sesión del personal. El dueño, el gerente y los mozos de una marca dada de baja pueden seguir entrando (eso va con la migración de autenticación).
+   - **Qué corta además, desde la Fase 4 de auth:** el acceso del personal. `AccesoService` no cuenta las membresías de una marca o un restaurante dados de baja, así que su dueño, gerentes, mozos y cocina reciben 403 en las rutas de datos (y web-admin y web-staff los mandan a "sin acceso"). A la mesa que ya estaba abierta le queda pagar con Mercado Pago: el efectivo también da 403, porque nadie puede confirmarlo. Al reactivar, todo vuelve.
 9. `GET /api/root/historial` → todo lo que hiciste, de lo más nuevo a lo más viejo, con quién (tu email), qué, sobre qué y el antes y después.
    - Filtros: `?actor=root@menyu.com` (o `script`), `?entidad=MARCA` (o `RESTAURANTE`, `OWNER`, `ROOT`), `?desde=2026-10-20&hasta=2026-10-20` (días en hora de Buenos Aires, los dos incluidos).
    - De a 50: si hay más, la respuesta trae `siguiente`; se pide `?cursor=<ese número>`. Para probarlo hacé unos 60 `PATCH` cambiando el nombre de una marca.
@@ -110,7 +110,9 @@ Un recorrido de punta a punta (copiando los `id` que va devolviendo cada paso):
 
 ### Que los otros roles no entran
 
-Con el token de un dueño (`owner@menyu.com` / `owner1234`), de un gerente (`gerente@menyu.com` / `gerente1234`) o de un mozo, **todas** las rutas de `/api/root/*` dan 403, y sin token, 401.
+Con el token de Supabase de un dueño, un gerente, un mozo o una cuenta sin `Usuario`, **todas** las rutas de `/api/root/*` dan 403, y sin token, 401. Las cuentas de prueba de cada rol están en [`docs/auth/usuarios-prueba-staging.md`](auth/usuarios-prueba-staging.md).
+
+Y al revés: ROOT **no** entra a los datos. Con el token de la cuenta ROOT, `GET /api/restaurantes`, `GET /api/pedidos` y las demás rutas del personal dan 403 (`AccesoService` ignora `esRoot`).
 
 ## 5. Etapa 2a: la pantalla (marcas, restaurantes, bajas e historial)
 
@@ -119,17 +121,20 @@ La consola vive en web-admin, en `/root/*`. Usa el mismo backend de la etapa ant
 ```bash
 pnpm install                              # una vez: la rama trae dependencias nuevas
 pnpm --filter @menyu/types build          # una vez: los tipos de la consola se consumen compilados
-pnpm --filter @menyu/web-admin dev        # http://localhost:5174
+pnpm --filter @menyu/web-auth  exec vite --host 127.0.0.1 --strictPort --port 5173
+pnpm --filter @menyu/web-admin exec vite --host 127.0.0.1 --strictPort --port 5174
 ```
 
-Abrí <http://localhost:5174>: web-admin no tiene login propio y te manda al de la app de clientes (<http://localhost:5176/auth>, que tiene que estar levantada y apuntando al mismo backend). Entrá con `root@menyu.com` / `root1234` y volvés a web-admin, donde aterrizás en **Marcas** (`/root/marcas`). Un dueño o un gerente que escriba `/root` a mano vuelve a su pantalla de siempre; y un ROOT que escriba `/admin` termina en `/root`.
+web-admin no tiene login propio: entrá por <http://auth.menyu.local:5173> con la cuenta ROOT y volvés a web-admin, donde aterrizás en **Marcas** (`http://admin.menyu.local:5174/root/marcas`). Un dueño o un gerente que escriba `/root` a mano vuelve a su pantalla de siempre; y un ROOT que escriba `/admin` termina en `/root`.
+
+> Los `*.menyu.local` necesitan el archivo hosts o un Chrome abierto con `--host-resolver-rules="MAP *.menyu.local 127.0.0.1"`, y por eso Vite va con `--host 127.0.0.1` (ver "Desarrollo local" en [`docs/auth/VariablesACambiar.md`](auth/VariablesACambiar.md)).
 
 Un recorrido para ver todo (con el backend en la base de prueba, porque deja filas en el historial):
 
 1. **Marcas.** La lista con las marcas del seed, cuántos restaurantes y dueños tiene cada una y si están activas. Buscá `cafe` (sin acento ni mayúsculas) y probá el interruptor **Mostrar dadas de baja**.
 2. **Nueva marca.** Escribí un nombre: el identificador se arma solo. Probá dejarlo vacío, ponerle espacios o repetir el de una marca existente: el error aparece debajo del campo, sin cerrar el diálogo. Al crearla te lleva a su detalle.
 3. **Detalle de la marca.** Datos, dueños (se invitan y se les quita el acceso: ver 5.1) y restaurantes. **Agregar restaurante** pide nombre y dirección (esa es la única vez que ROOT la carga). Desde el menú ⋮ de cada restaurante: **Editar nombre** y **Dar de baja** / **Reactivar**. No existe ningún botón de eliminar.
-4. **Dar de baja una marca.** Pide escribir su nombre. El texto dice lo que pasa: sus restaurantes dejan de aparecer en Discovery, no muestran su carta y no abren mesas nuevas; las mesas que ya están abiertas se pueden terminar; y **su gente todavía puede iniciar sesión** (ese corte llega con la migración de autenticación). Comprobalo en la app del comensal (<http://localhost:5176>): el restaurante desaparece del inicio; `/restaurante/<id>/carta` y el ingreso por QR o PIN dicen que no está disponible. Para ver qué le pasa a quien **ya estaba en una mesa**: abrí una mesa (por ejemplo la 100, con su QR `TEST-QR-SEED-100`), hacé un pedido, dá de baja la marca y recargá `/menu`: aparece "Este restaurante ya no está disponible", que explica que la mesa sigue abierta y cómo pedir la cuenta, con los botones **Pagar la cuenta**, **Ver mis pedidos** y **Llamar al mozo**. Después **Reactivar la marca**: todo vuelve.
+4. **Dar de baja una marca.** Pide escribir su nombre. El texto dice lo que pasa: sus restaurantes dejan de aparecer en Discovery, no muestran su carta y no abren mesas nuevas; **las mesas que ya están abiertas solo pueden pagar con Mercado Pago desde el celular**; y **su gente pierde el acceso** mientras dure la baja. Comprobalo en la app del comensal (<http://mesa.menyu.local:5176>): el restaurante desaparece del inicio; `/restaurante/<id>/carta` y el ingreso por QR o PIN dicen que no está disponible. Para ver qué le pasa a quien **ya estaba en una mesa**: abrí una mesa (por ejemplo la 100, con su QR `TEST-QR-SEED-100`), hacé un pedido, dá de baja la marca y recargá `/menu`: aparece "Este restaurante ya no está disponible", que explica que la mesa sigue abierta y cómo pedir la cuenta, con los botones **Pagar la cuenta** y **Ver mis pedidos** (desde la 4.7 no ofrece llamar al mozo ni pagar en efectivo: el personal perdió el acceso y recibiría 403). En `/pagar`, "Pagar toda la cuenta en efectivo" responde "Este restaurante no está disponible". Después **Reactivar la marca**: todo vuelve, también el efectivo.
 5. **Historial** (menú lateral → *Historial*). Lo que hiciste aparece agrupado por día (hora de Buenos Aires): tocá la flecha de una fila para ver el antes y el después. Probá los filtros **Quién**, **Sobre qué**, **Desde** y **Hasta** (poné un **Hasta** anterior al **Desde**: lo avisa y no pide nada). Para ver **Cargar más** hacen falta más de 50 acciones: cambiá el nombre de una marca unas 60 veces con Swagger.
 6. **Celular.** En el navegador, abrí las herramientas de desarrollo y probá el ancho 390: el menú pasa a ser un cajón con el botón de las tres rayas y los diálogos suben desde abajo.
 
@@ -172,12 +177,12 @@ Contra la base de prueba (nunca contra staging o producción desde acá):
 cd apps/backend
 $env:DATABASE_URL = 'postgresql://menyu:menyu@localhost:5433/menyu_probar'
 pnpm exec ts-node --transpile-only scripts/cuentas-root.ts listar
-pnpm exec ts-node --transpile-only scripts/cuentas-root.ts crear ana@ejemplo.com
+pnpm exec ts-node --transpile-only scripts/cuentas-root.ts promover ana@ejemplo.com
 ```
 
-Pide la contraseña sin eco y el nombre de la base para confirmar. Lo que hace queda en el historial con el actor `script` y tu usuario de Windows como operador: `GET /api/root/historial?actor=script`.
+`promover` marca `es_root` en un `Usuario` que **ya existe** (el que no existe se invita desde la consola). Pide el nombre de la base para confirmar. Lo que hace queda en el historial como `ROOT_PROMOVER`, con el actor `SCRIPT` y tu usuario de Windows como operador: `GET /api/root/historial?actor=script`.
 
 ## Etapas que faltan
 
 - **Etapa 2b** (dueños y cuentas ROOT por invitación): hecha (2026-10-22), ver 5.1.
-- **Etapa 3:** la baja corta de verdad (mesas, menú, login) y el cambio de contraseña obligatorio en el primer ingreso.
+- ~~**Etapa 3**~~ (contraseñas): descartada. La baja ya corta de verdad desde la Fase 4, y las contraseñas las maneja web-auth.

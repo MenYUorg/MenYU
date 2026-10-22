@@ -331,9 +331,9 @@ Orden de magnitud, una persona en días de trabajo enfocado (no son las horas de
 | **E1a** Backend: historial, cuentas ROOT y dueños | La migración (historial, disparadores, `debe_cambiar_password`), el servicio de historial, `POST /root/marcas/:id/duenos` y el resto de dueños, las rutas de cuentas ROOT, y que el script también registre. **Es lo que destraba el QA sin puente:** con el token de ROOT, desde el Swagger de staging, se crea un OWNER. **Hecha** (2026-10-20): detalle en 7.2. | 2,5 a 3,5 días (hecha) |
 | **E1b** Backend: marcas, restaurantes y lectura del historial | El resto de `/root/*` (marcas, restaurantes, baja y reactivar, todavía sin efecto fuera de Discovery) y `GET /root/historial` con filtros y cursor. **Hecha** (2026-10-20): decisiones de implementación en 7.2. | 1,5 a 2 días (hecha) |
 | **E2** Consola (web-admin) | `Shell` compartido, rutas `/root/*` con `React.lazy`, las pantallas (marcas, detalle, dueños, **cuentas ROOT**, **historial**), los diálogos y estados, tipos y `api.root`, tests, verificación con Playwright contra el backend real. **Se parte en dos (13.4):** E2a (shell, marcas, restaurantes, bajas e historial) se hizo primero; E2b (dueños y cuentas ROOT) esperó a `feat/auth`. **E2a hecha** (2026-10-21): cómo quedó, en 8.1. **E2b hecha** (2026-10-22), sobre la 4.4 de auth: en 8.2. | 4,5 a 6 días (E2a: 3,5 a 4,5; E2b: 1 a 1,5) |
-| **E3** Baja efectiva y contraseñas | Sección 6 (menú público, apertura de mesas, login, pruebas de que reactivar devuelve todo). **Lo público está hecho (2026-10-21); falta el login.** `POST /auth/cambiar-password`, la pantalla de primer ingreso con cambio obligatorio (y que el backend lo exija), revocación de refresh tokens. **Con Supabase desaparece la mitad de contraseñas** (cambiar contraseña, primer ingreso, refresh tokens propios): queda la baja efectiva, que va en `AccesoService` (13.3). | 2 a 2,5 días (ahora 0,5 a 1) |
-| **E4** Sacarle a ROOT lo viejo | El Apéndice A del plan de Discovery: ~35 `@Roles(…ROOT…)` en 11 controllers, ~15 `rol === 'ROOT'`, un servicio de acceso central, `isOwner` y `canEdit` en ~6 pantallas, `SelectorPage` de web-staff, los specs invertidos y un "ROOT → 403" por cada ruta cerrada. **Se hace dentro de la Fase 4 de `feat/auth`**, que migra esos mismos controllers a `@RequiereRol`; acá se dan los criterios de aceptación (13.3). | 3 a 4 días (a cargo de la Fase 4) |
-| **E5** Retirar `root@menyu.com` | Sección 7.1: crear las cuentas personales, probarlas, eliminar la compartida con el script y verificar, en staging y en producción. **Con Supabase** la cuenta compartida desaparece con la tabla `Admin` (Fase 5); si se adelanta, se hace con el script actual. | 0,25 a 0,5 día |
+| **E3** Baja efectiva y contraseñas | Sección 6 (menú público, apertura de mesas, login, pruebas de que reactivar devuelve todo). **Hecha:** lo público el 2026-10-21 y el corte del acceso en la entrega 4.2 de auth (`AccesoService` no cuenta las membresías de una marca o un restaurante de baja). La mitad de contraseñas (cambiar contraseña, primer ingreso, refresh tokens propios) **se descartó**: con Supabase es de web-auth. | 2 a 2,5 días (hecha) |
+| **E4** Sacarle a ROOT lo viejo | El Apéndice A del plan de Discovery: ~35 `@Roles(…ROOT…)` en 11 controllers, ~15 `rol === 'ROOT'`, un servicio de acceso central, `isOwner` y `canEdit` en ~6 pantallas, `SelectorPage` de web-staff, los specs invertidos y un "ROOT → 403" por cada ruta cerrada. **Hecha dentro de la Fase 4 de `feat/auth`** (entregas 4.3, 4.5 y 4.6): ROOT recibe 403 en todas las rutas de datos y no aparece en las pantallas. | 3 a 4 días (hecha) |
+| **E5** Retirar `root@menyu.com` | Sección 7.1: crear las cuentas personales, probarlas, eliminar la compartida con el script y verificar, en staging y en producción. **Con Supabase** la cuenta compartida ya no abre la consola (Fase 4) y desaparece con la tabla `Admin` (Fase 5). | 0,25 a 0,5 día |
 | **Subtotal E1 a E3** (consola usable y segura) | | **10,5 a 14 días** |
 | **Total con E4 y E5** | | **14 a 18,5 días** |
 
@@ -387,7 +387,9 @@ Orden de magnitud, una persona en días de trabajo enfocado (no son las horas de
 
 ## 13. Autenticación con Supabase (`feat/auth`): qué cambia para la consola
 
-*Agregado el 2026-10-20, después de leer [`docs/auth/specs/auth.md`](auth/specs/auth.md) con las Fases 1 y 2 ya en `main` (producción en v1.0.7).* Hasta acá este plan suponía el login propio (`Admin`, contraseñas, JWT propio). La spec lo reemplaza por Supabase Auth: el personal entra por **invitación por mail**, ROOT es el indicador `Usuario.esRoot` (no una membresía) y los permisos salen de `Usuario` y `Membresia`, que decide `AccesoService`. Los endpoints existentes pasan al guard nuevo **en la Fase 4**, en la misma entrega que los frontends; hasta entonces rige el login actual, y lo hecho en las etapas 1a y 1b sirve tal cual para el QA de staging.
+*Agregado el 2026-10-20, después de leer [`docs/auth/specs/auth.md`](auth/specs/auth.md) con las Fases 1 y 2 ya en `main` (producción en v1.0.7).* Hasta acá este plan suponía el login propio (`Admin`, contraseñas, JWT propio). La spec lo reemplaza por Supabase Auth: el personal entra por **invitación por mail**, ROOT es el indicador `Usuario.esRoot` (no una membresía) y los permisos salen de `Usuario` y `Membresia`, que decide `AccesoService`.
+
+> **Al día 2026-10-22: la Fase 4 está completa en código** (PR #416, a la espera del merge). La consola corre entera sobre Supabase: el backend de `/root/*` en la entrega 4.4 y las pantallas en la 4.5. De esta sección queda pendiente **solo E2b** (las pantallas de dueños y cuentas ROOT, sobre una API que ya existe). El login propio ya no abre el panel: `root@menyu.com` no sirve para la consola.
 
 ### 13.1 Qué cambia, pieza por pieza
 
@@ -401,8 +403,8 @@ Orden de magnitud, una persona en días de trabajo enfocado (no son las horas de
 | Cuentas ROOT (rutas de 1a, pantalla y script) | **Se rehacen.** | `esRoot`. El primer ROOT de cada ambiente se crea a mano (Supabase → Authentication y un `INSERT`, como dice `docs/auth/usuarios-prueba-staging.md`). Los demás: la invitación de un ROOT a otro, que hay que construir. La última cuenta ROOT se protege con un disparador sobre `usuario.es_root`, que reemplaza al de `admin`. El script pasa a "promover" un `Usuario`. |
 | E3 | **Desaparece la mitad.** | Sin cambiar contraseña, sin primer ingreso, sin refresh tokens propios y sin `debeCambiarPassword`. Queda la baja efectiva (13.3). |
 | E4 | **Se funde con la Fase 4 de la spec**, que pasa los 43 `@Roles` legacy de 13 controllers a `@RequiereRol`. | No se hace aparte: se le pasan los criterios del Apéndice A del plan de Discovery (ROOT fuera de las rutas de datos y un "ROOT → 403" por ruta). |
-| E5 | **Pierde sentido a mediano plazo.** | `root@menyu.com` desaparece con la tabla `Admin` (Fase 5). Si el riesgo de producción apura, se adelanta con el script actual. |
-| 11.4 (tokens en la URL) | **Supersedido.** | Las Fases 4 y 5 reemplazan el pase por la URL con una cookie de sesión de dominio compartido y borran `?token=&refresh=`: el "arreglo de fondo" de 11.4 no se hace. La exposición sigue hasta la Fase 5. |
+| E5 | **Pierde sentido a mediano plazo.** | `root@menyu.com` desaparece con la tabla `Admin` (Fase 5). Desde la Fase 4 ya no abre la consola: su riesgo es el de una fila muerta. |
+| 11.4 (tokens en la URL) | **Resuelto.** | La Fase 4 reemplazó el pase por la URL con la cookie de sesión de dominio compartido: web-admin y web-staff dejaron de leer `?token=&refresh=` (4.5 y 4.6) y web-cliente dejó de mandarlos (4.7). El "arreglo de fondo" de 11.4 no hizo falta. |
 
 ### 13.2 Decisiones reemplazadas y decisiones nuevas
 
@@ -416,7 +418,7 @@ Orden de magnitud, una persona en días de trabajo enfocado (no son las horas de
 
 ### 13.3 Lo que se le pide a `feat/auth`
 
-> **Hecho por la Fase 4 de auth (2026-10-21).** El 1 (`ROLES_DE_ROOT` es `['OWNER']`), el 2 (`POST /root/roots` con `cuentaDeSupabase()`, el disparador `usuario_proteger_ultimo_root` de la 4.2 y `promover` en el script), el 3 (la baja efectiva en `AccesoService`, en la 4.2), el 4 (el registro `DUENO_INVITAR` en la transacción de la invitación) y el 5 (`@RequiereRoot()` en las 19 rutas, hecho por `feat/auth` y no por la consola). Falta reenviar una invitación que no se aceptó. Detalle en "4.4, cómo quedó" de `docs/auth/specs/auth.md`.
+> **Hecho, los cinco puntos (Fase 4 de auth, 2026-10-21).** El 1 (`ROLES_DE_ROOT` es `['OWNER']`), el 2 (`POST /root/roots` con `cuentaDeSupabase()`, el disparador `usuario_proteger_ultimo_root` de la 4.2 y `promover` en el script), el 3 (la baja efectiva en `AccesoService`, en la 4.2), el 4 (el registro `DUENO_INVITAR` en la transacción de la invitación) y el 5 (`@RequiereRoot()` en las rutas de `/root`, hecho por `feat/auth` y no por la consola). Queda pendiente, como deuda, reenviar una invitación que no se aceptó. Detalle en "4.4, cómo quedó" de `docs/auth/specs/auth.md`.
 
 Con el código de la Fase 2 a la vista (`apps/backend/src/auth/`):
 
@@ -440,7 +442,5 @@ Con el código de la Fase 2 a la vista (`apps/backend/src/auth/`):
 | E2b (dueños y cuentas ROOT sobre invitaciones, front) | 1 a 1,5 | Hecha (2026-10-22), sobre la rama de la Fase 4 |
 | Dueños y cuentas ROOT sobre invitaciones (backend), `@RequiereRoot()` en `/root/*`, actor desde `Usuario`, disparador y script | 2 a 2,5 | Hecho en la entrega 4.4 de `feat/auth` (2026-10-21) |
 | Baja efectiva (en `AccesoService`) | 0,5 a 1 | Hecha en la entrega 4.2 de `feat/auth` (2026-10-21) |
-| E4 | — | La Fase 4 de `feat/auth` |
+| E4 | — | Hecho en la entrega 4.3 de `feat/auth` (2026-10-21) |
 | E3 (contraseñas) | 0 | Descartada |
-
-Mientras tanto, lo hecho en 1a y 1b se usa tal cual en staging con el login actual.

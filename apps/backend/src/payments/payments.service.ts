@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -14,6 +15,7 @@ import { DivisionService } from '../comensales/division.service'
 import { PaymentStatus } from './providers/payment-provider.interface'
 import { isAllowedOrigin } from '../common/is-allowed-origin'
 import { runSerializableTransaction } from '../common/run-serializable-transaction'
+import { SELECT_DISPONIBILIDAD, restauranteDisponible } from '../common/restaurante-disponible'
 import { atribucionDelCobro } from '../common/atribucion-del-cobro'
 import { AccesoService } from '../auth/supabase/acceso.service'
 import { UsuarioAutenticado } from '../auth/supabase/usuario-autenticado'
@@ -128,10 +130,25 @@ export class PaymentsService {
       async (tx) => {
         const sesion = await tx.sesionMesa.findUnique({
           where: { id: sesionId },
-          include: { mesa: { select: { id: true, numero: true, restauranteId: true } } },
+          include: {
+            mesa: {
+              select: {
+                id: true,
+                numero: true,
+                restauranteId: true,
+                restaurante: { select: SELECT_DISPONIBILIDAD },
+              },
+            },
+          },
         })
         if (!sesion) throw new NotFoundException('Sesión no encontrada')
         if (sesion.cerradaEn !== null) throw new BadRequestException('La sesión ya fue cerrada')
+        // El efectivo lo cobra el mozo, y con el restaurante (o su marca) dado de baja el personal perdió el acceso:
+        // recibe 403 al confirmarlo. El pedido quedaba pendiente para siempre, con un llamado que nadie podía atender
+        // (entrega 4.7 de docs/auth/specs/auth.md). A esa mesa le queda Mercado Pago, que no pasa por el personal.
+        if (!restauranteDisponible(sesion.mesa.restaurante)) {
+          throw new ForbiddenException('Este restaurante no está disponible')
+        }
 
         // Un efectivo ya pedido y sin cobrar se reutiliza; uno aprobado o cancelado no cuenta.
         const existing = await tx.pago.findFirst({
@@ -185,11 +202,22 @@ export class PaymentsService {
     const sesion = await this.prisma.sesionMesa.findUnique({
       where: { id: sesionId },
       include: {
-        mesa: { select: { id: true, numero: true, restauranteId: true } },
+        mesa: {
+          select: {
+            id: true,
+            numero: true,
+            restauranteId: true,
+            restaurante: { select: SELECT_DISPONIBILIDAD },
+          },
+        },
         pedidos: { include: { items: { select: { cantidad: true, precioUnitario: true } } } },
       },
     })
     if (!sesion) throw new NotFoundException('Sesión no encontrada')
+    // Igual que en `solicitarEfectivo`: con la baja, nadie puede atender el llamado.
+    if (!restauranteDisponible(sesion.mesa.restaurante)) {
+      throw new ForbiddenException('Este restaurante no está disponible')
+    }
 
     // Reemplazar cualquier llamado pendiente y crear uno con motivo pedir_cuenta
     await this.prisma.llamadoMozo.deleteMany({
