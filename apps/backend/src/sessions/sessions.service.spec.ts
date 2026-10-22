@@ -293,6 +293,63 @@ describe('SessionsService', () => {
       })
     })
 
+    // Caracterización: el primer cliente de una sesión que abrió el staff (clienteId null, sin participantes) entra
+    // sin código y queda como anfitrión, aun en modo seguro. Lo deciden sesionActiva.clienteId y la cantidad de
+    // participantes de la sesión, no el cliente que entra.
+    describe('sesión abierta por el staff (modo seguro)', () => {
+      const SESION_DEL_STAFF = { id: 'sesion-staff', mesaId: 'mesa-1', codigoSesion: '042', clienteId: null, estado: 'activa' }
+
+      function sesionDelStaffCon(participantes: number) {
+        mockPrisma.mesa.findFirst.mockResolvedValue(MESA_SEGURA)
+        mockPrisma.sesionMesa.findFirst.mockResolvedValue(SESION_DEL_STAFF)
+        mockPrisma.sesionMesaCliente.count.mockResolvedValue(participantes)
+        mockPrisma.sesionMesaCliente.findUnique.mockResolvedValue(null)
+        mockPrisma.sesionMesaCliente.create.mockResolvedValue({})
+      }
+
+      it('el primer cliente entra sin código, como anfitrión, y queda como participante 1', async () => {
+        // Arrange
+        sesionDelStaffCon(0)
+
+        // Act
+        const result = await service.open({ tableCode: 'qr-abc' })
+
+        // Assert
+        expect(result).toMatchObject({ sesionId: 'sesion-staff', esAnfitrion: true, clienteId: INVITADO.id, codigoSesion: '042' })
+        expect(mockPrisma.sesionMesaCliente.create).toHaveBeenCalledWith({
+          data: { sesionId: 'sesion-staff', clienteId: INVITADO.id, orden: 1 },
+        })
+        expect(mockPrisma.sesionMesa.create).not.toHaveBeenCalled()
+      })
+
+      it('con un participante ya adentro, el siguiente cliente sin código recibe 403', async () => {
+        // Arrange
+        sesionDelStaffCon(1)
+
+        // Act
+        const unirse = service.open({ tableCode: 'qr-abc' })
+
+        // Assert
+        await expect(unirse).rejects.toThrow(ForbiddenException)
+        await expect(unirse).rejects.toThrow('Esta mesa requiere código de sesión para unirse')
+        expect(mockPrisma.sesionMesaCliente.create).not.toHaveBeenCalled()
+      })
+
+      it('con un participante ya adentro, el siguiente cliente con el código correcto entra sin ser anfitrión', async () => {
+        // Arrange
+        sesionDelStaffCon(1)
+
+        // Act
+        const result = await service.open({ tableCode: 'qr-abc', codigoSesion: '042' })
+
+        // Assert
+        expect(result).toMatchObject({ sesionId: 'sesion-staff', esAnfitrion: false })
+        expect(mockPrisma.sesionMesaCliente.create).toHaveBeenCalledWith({
+          data: { sesionId: 'sesion-staff', clienteId: INVITADO.id, orden: 2 },
+        })
+      })
+    })
+
     describe('restauranteId junto con tableCode (D11)', () => {
       it('QR de una mesa de otro restaurante → 409 con un mensaje claro', async () => {
         mockPrisma.mesa.findFirst.mockResolvedValue(MESA_ABIERTA)

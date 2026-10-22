@@ -212,6 +212,64 @@ describe('POST /api/sessions/open (e2e)', () => {
     expect(res.body.esAnfitrion).toBe(false)
   })
 
+  // ── Sesión abierta por el staff (caracterización) ─────────────────────
+  // La sesión se siembra como la deja POST /sessions/open-staff: activa, clienteId null y sin participantes.
+
+  async function sesionDelStaff(mesa: { id: string }) {
+    return prisma.sesionMesa.create({ data: { mesaId: mesa.id, clienteId: null, codigoSesion: '042' } })
+  }
+
+  it('sesión del staff en modo seguro: el primer cliente entra sin código como anfitrión y queda como participante 1', async () => {
+    // Arrange
+    const { mesa } = await seedMesa(prisma, { modoSesion: 'seguro' })
+    const sesion = await sesionDelStaff(mesa)
+
+    // Act
+    const res = await request(app.getHttpServer())
+      .post('/api/sessions/open')
+      .send({ tableCode: mesa.qrToken })
+
+    // Assert
+    expect(res.status).toBe(200)
+    expect(res.body).toMatchObject({ sesionId: sesion.id, esAnfitrion: true, codigoSesion: '042' })
+    const participantes = await prisma.sesionMesaCliente.findMany({ where: { sesionId: sesion.id } })
+    expect(participantes).toEqual([expect.objectContaining({ clienteId: res.body.clienteId, orden: 1 })])
+  })
+
+  it('sesión del staff en modo seguro: el segundo cliente sin código → 403', async () => {
+    // Arrange
+    const { mesa } = await seedMesa(prisma, { modoSesion: 'seguro' })
+    const sesion = await sesionDelStaff(mesa)
+    await request(app.getHttpServer()).post('/api/sessions/open').send({ tableCode: mesa.qrToken })
+
+    // Act
+    const res = await request(app.getHttpServer())
+      .post('/api/sessions/open')
+      .send({ tableCode: mesa.qrToken })
+
+    // Assert
+    expect(res.status).toBe(403)
+    expect(res.body.message).toBe('Esta mesa requiere código de sesión para unirse')
+    expect(await prisma.sesionMesaCliente.count({ where: { sesionId: sesion.id } })).toBe(1)
+  })
+
+  it('sesión del staff en modo seguro: el segundo cliente con el código correcto entra sin ser anfitrión', async () => {
+    // Arrange
+    const { mesa } = await seedMesa(prisma, { modoSesion: 'seguro' })
+    const sesion = await sesionDelStaff(mesa)
+    await request(app.getHttpServer()).post('/api/sessions/open').send({ tableCode: mesa.qrToken })
+
+    // Act
+    const res = await request(app.getHttpServer())
+      .post('/api/sessions/open')
+      .send({ tableCode: mesa.qrToken, codigoSesion: '042' })
+
+    // Assert
+    expect(res.status).toBe(200)
+    expect(res.body).toMatchObject({ sesionId: sesion.id, esAnfitrion: false })
+    expect(await prisma.sesionMesaCliente.count({ where: { sesionId: sesion.id } })).toBe(2)
+  })
+
   // ── Idempotencia ──────────────────────────────────────────────────────
 
   it('mismo cliente llama open dos veces → no duplica SesionMesaCliente', async () => {
