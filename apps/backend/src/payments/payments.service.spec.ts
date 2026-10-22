@@ -507,5 +507,20 @@ describe('PaymentsService', () => {
       expect(tx.pago.update).not.toHaveBeenCalled()
       expect(String(warnSpy.mock.calls[0][0])).toContain('no es de Mercado Pago')
     })
+
+    it('pago no encontrado → no escribe, no emite y deja un warning (la notificación se ignora sin error)', async () => {
+      // Arrange
+      mockPrisma.pago.findUnique.mockResolvedValue(null)
+
+      // Act
+      const resultado = await webhook('APROBADO')
+
+      // Assert
+      expect(resultado).toBeUndefined()
+      expect(mockPrisma.$transaction).not.toHaveBeenCalled()
+      expect(mockGateway.emitSesionCobrada).not.toHaveBeenCalled()
+      expect(warnSpy).toHaveBeenCalledTimes(1)
+      expect(String(warnSpy.mock.calls[0][0])).toContain('pago pago-1 no encontrado, ignorando notificación')
+    })
   })
 })
