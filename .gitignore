@@ -52,3 +52,6 @@ apps/backend/prisma/migrations/*.sql.bak
 
 # Guías de prueba personales (no se versionan)
 /docs/guia-prueba-celulares.md
+
+# Artefactos de playwright-cli (snapshots y logs de las pruebas en el navegador)
+.playwright-cli/
