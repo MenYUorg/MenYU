@@ -76,7 +76,7 @@ export function paginaDeHistorial(items: RootHistorialItem[], siguiente: number 
 }
 
 export function cuenta(parcial: Partial<RootCuentaResumen> = {}): RootCuentaResumen {
-  return { id: 'root-1', email: 'root@menyu.com', esPropia: true, ...parcial }
+  return { id: 'root-1', email: 'root@menyu.com', nombre: 'Root', activo: true, esPropia: true, ...parcial }
 }
 
 /** Una promesa que se resuelve o rechaza cuando el test lo decide (para probar respuestas que llegan tarde). */

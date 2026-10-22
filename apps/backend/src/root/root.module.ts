@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common'
+import { InvitacionesModule } from '../auth/invitaciones/invitaciones.module'
 import { PrismaModule } from '../prisma/prisma.module'
 import { RootDuenosController } from './duenos/root-duenos.controller'
 import { RootDuenosService } from './duenos/root-duenos.service'
@@ -16,7 +17,7 @@ import { RootRootsService } from './roots/root-roots.service'
  * Todo `/root/*` es solo para ROOT y cada cambio queda registrado en el historial dentro de su transacción.
  */
 @Module({
-  imports: [PrismaModule, HistorialRootModule],
+  imports: [PrismaModule, HistorialRootModule, InvitacionesModule],
   controllers: [RootMarcasController, RootRestaurantesController, RootDuenosController, RootRootsController, RootHistorialController],
   providers: [RootMarcasService, RootRestaurantesService, RootDuenosService, RootRootsService],
 })

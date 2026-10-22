@@ -20,17 +20,14 @@ describe('el enrutador de la aplicación', () => {
     expect(rutas.map(texto)).toEqual(expect.arrayContaining(['POST /auth/login', 'GET /discovery', 'GET /marcas', 'DELETE /mozos/:id']))
   })
 
-  it('las rutas de /root son exactamente las de la etapa 1a (si se agrega o se saca una, hay que actualizar esta lista y el plan)', () => {
+  it('las rutas de /root son exactamente las de la entrega 4.4 de auth (si se agrega o se saca una, hay que actualizar esta lista y el plan)', () => {
     expect(deRoot.map(texto).sort()).toEqual(
       [
         'GET /root/duenos',
         'POST /root/marcas/:id/duenos',
-        'PATCH /root/duenos/:id',
-        'POST /root/duenos/:id/restablecer-password',
-        'DELETE /root/duenos/:id',
+        'DELETE /root/duenos/:membresiaId',
         'GET /root/roots',
         'POST /root/roots',
-        'POST /root/roots/:id/restablecer-password',
         'GET /root/marcas',
         'POST /root/marcas',
         'GET /root/marcas/:id',
@@ -53,8 +50,8 @@ describe('el enrutador de la aplicación', () => {
     expect(borrables.map(texto)).toEqual([])
   })
 
-  it('los únicos DELETE de /root son los de dueños (las cuentas OWNER sí se eliminan de verdad)', () => {
-    expect(deRoot.filter((r) => r.metodo === 'DELETE').map(texto)).toEqual(['DELETE /root/duenos/:id'])
+  it('el único DELETE de /root es el de quitar a un dueño (su membresía OWNER; la cuenta queda)', () => {
+    expect(deRoot.filter((r) => r.metodo === 'DELETE').map(texto)).toEqual(['DELETE /root/duenos/:membresiaId'])
   })
 
   it('el historial solo se lee: su única ruta es GET /root/historial', () => {
@@ -104,10 +101,8 @@ describe('el enrutador de la aplicación', () => {
       expect(quePermiteBorrarRoots(rutas).map(texto)).toEqual([])
     })
 
-    it('las únicas rutas de /root/roots son listar, crear y restablecer la contraseña', () => {
-      expect(deRoot.filter((r) => r.ruta.startsWith('/root/roots')).map(texto).sort()).toEqual(
-        ['GET /root/roots', 'POST /root/roots', 'POST /root/roots/:id/restablecer-password'].sort(),
-      )
+    it('las únicas rutas de /root/roots son listar e invitar', () => {
+      expect(deRoot.filter((r) => r.ruta.startsWith('/root/roots')).map(texto).sort()).toEqual(['GET /root/roots', 'POST /root/roots'])
     })
 
     it('la comprobación detecta una ruta de borrado si alguien la agregara', () => {

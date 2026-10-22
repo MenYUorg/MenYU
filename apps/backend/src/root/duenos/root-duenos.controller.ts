@@ -1,14 +1,17 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Query } from '@nestjs/common'
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Post, Query } from '@nestjs/common'
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger'
 import { RequiereRoot } from '../../auth/decorators/requiere-root.decorator'
 import { UsuarioActual } from '../../auth/decorators/usuario-actual.decorator'
 import { UsuarioAutenticado } from '../../auth/supabase/usuario-autenticado'
 import { IdPipe } from '../comun/cuentas'
-import { CambiarEmailDto, CrearCuentaDto } from '../comun/dto/crear-cuenta.dto'
+import { InvitarCuentaDto } from '../comun/dto/invitar-cuenta.dto'
 import { ListarDuenosDto } from './dto/listar-duenos.dto'
 import { RootDuenosService } from './root-duenos.service'
 
-/** Cuentas OWNER ("dueños") de las marcas. Solo ROOT. Cada cambio queda en el historial dentro de la misma transacción. */
+/**
+ * Los dueños (membresías OWNER) de las marcas. Solo ROOT. Invitar y quitar quedan en el historial dentro de la misma
+ * transacción. No hay rutas para cambiar el email ni la contraseña de un dueño: son de la persona (web-auth).
+ */
 @ApiTags('root')
 @Controller('root')
 @RequiereRoot()
@@ -16,7 +19,7 @@ export class RootDuenosController {
   constructor(private readonly duenos: RootDuenosService) {}
 
   @Get('duenos')
-  @ApiOperation({ summary: 'Lista las cuentas OWNER con su marca (q busca por email o nombre de la marca)' })
+  @ApiOperation({ summary: 'Lista los dueños (membresías OWNER) con su cuenta y su marca (q busca por email o nombre de la marca)' })
   @ApiResponse({ status: 200 })
   listar(@Query() dto: ListarDuenosDto) {
     return this.duenos.listar(dto)
@@ -25,46 +28,30 @@ export class RootDuenosController {
   @Post('marcas/:id/duenos')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
-    summary: 'Crea una cuenta OWNER en una marca',
+    summary: 'Invita a un dueño (OWNER) a una marca',
     description:
-      'Sin `password`, genera una contraseña temporal y la devuelve en `passwordTemporal`, SOLO en esta respuesta. El dueño tiene que cambiarla en su primer ingreso. Normaliza el email y rechaza el de otra cuenta, mozo o cliente.',
+      'Manda el mail de invitación de Supabase. Si el email ya tiene cuenta (el dueño de otra marca, alguien del personal o un cliente registrado), le suma la membresía sin mandar mail: `invitacionEnviada` es false. Queda en el historial (DUENO_INVITAR).',
   })
-  @ApiResponse({ status: 201, description: 'Dueño creado (con la contraseña generada, una sola vez)' })
+  @ApiResponse({ status: 201, description: '{ usuarioId, membresiaId, invitacionEnviada }' })
+  @ApiResponse({ status: 400, description: 'Email o nombre inválidos' })
+  @ApiResponse({ status: 403, description: 'El email es el de la propia cuenta' })
   @ApiResponse({ status: 404, description: 'La marca no existe' })
-  @ApiResponse({ status: 409, description: 'Email ya en uso, o la marca está dada de baja' })
-  crear(@Param('id', new IdPipe('Marca no encontrada')) marcaId: string, @Body() dto: CrearCuentaDto, @UsuarioActual() usuario: UsuarioAutenticado) {
-    return this.duenos.crear(marcaId, dto, usuario)
+  @ApiResponse({ status: 409, description: 'La marca está dada de baja, ya es dueño de esa marca o su cuenta está desactivada' })
+  @ApiResponse({ status: 502, description: 'Supabase rechazó la invitación' })
+  invitar(@Param('id', new IdPipe('Marca no encontrada')) marcaId: string, @Body() dto: InvitarCuentaDto, @UsuarioActual() usuario: UsuarioAutenticado) {
+    return this.duenos.invitar(marcaId, dto, usuario)
   }
 
-  @Patch('duenos/:id')
-  @ApiOperation({ summary: 'Cambia el email de un dueño (la contraseña no)' })
-  @ApiResponse({ status: 200 })
-  @ApiResponse({ status: 404, description: 'No hay un dueño con ese id' })
-  @ApiResponse({ status: 409, description: 'Email ya en uso' })
-  cambiarEmail(@Param('id', new IdPipe('Dueño no encontrado')) id: string, @Body() dto: CambiarEmailDto, @UsuarioActual() usuario: UsuarioAutenticado) {
-    return this.duenos.cambiarEmail(id, dto, usuario)
-  }
-
-  @Post('duenos/:id/restablecer-password')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary: 'Genera una contraseña nueva para un dueño',
-    description:
-      'La devuelve en `passwordTemporal`, SOLO en esta respuesta; marca la cuenta para cambiarla al entrar y cierra sus sesiones renovables.',
-  })
-  @ApiResponse({ status: 200 })
-  @ApiResponse({ status: 404, description: 'No hay un dueño con ese id' })
-  restablecerPassword(@Param('id', new IdPipe('Dueño no encontrado')) id: string, @UsuarioActual() usuario: UsuarioAutenticado) {
-    return this.duenos.restablecerPassword(id, usuario)
-  }
-
-  @Delete('duenos/:id')
+  @Delete('duenos/:membresiaId')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Elimina la cuenta de un dueño (no al último dueño de una marca activa)' })
+  @ApiOperation({
+    summary: 'Quita a un dueño de su marca (no al último de una marca activa)',
+    description: 'Borra la membresía OWNER; la cuenta queda. Queda en el historial (DUENO_QUITAR).',
+  })
   @ApiResponse({ status: 204 })
-  @ApiResponse({ status: 404, description: 'No hay un dueño con ese id' })
+  @ApiResponse({ status: 404, description: 'No hay una membresía OWNER con ese id' })
   @ApiResponse({ status: 409, description: 'Es el único dueño de una marca activa' })
-  async eliminar(@Param('id', new IdPipe('Dueño no encontrado')) id: string, @UsuarioActual() usuario: UsuarioAutenticado) {
-    await this.duenos.eliminar(id, usuario)
+  async quitar(@Param('membresiaId', new IdPipe('Dueño no encontrado')) membresiaId: string, @UsuarioActual() usuario: UsuarioAutenticado) {
+    await this.duenos.quitar(membresiaId, usuario)
   }
 }

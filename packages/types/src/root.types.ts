@@ -70,6 +70,29 @@ export interface RootEditarRestauranteRequest {
   nombre: string
 }
 
+// ── Dueños y cuentas ROOT (invitaciones por mail) ────────────────────────────
+
+/** Un dueño en `GET /root/duenos`: la membresía OWNER de un `Usuario` en una marca. */
+export interface RootDueno {
+  /** Lo que se quita con `DELETE /root/duenos/:membresiaId`. */
+  membresiaId: string
+  usuarioId: string
+  email: string
+  nombre: string
+  /** Una cuenta desactivada no entra a ningún lado, aunque tenga la membresía. */
+  activo: boolean
+  marca: { id: string; nombre: string; activo: boolean } | null
+}
+
+/**
+ * Para invitar a un dueño (`POST /root/marcas/:id/duenos`, responde `CrearInvitacionResponse`) o a una cuenta ROOT
+ * (`POST /root/roots`, responde `RootCuentaInvitada`). La contraseña la elige la persona desde el mail.
+ */
+export interface RootInvitarCuentaRequest {
+  email: string
+  nombre: string
+}
+
 // ── Historial de acciones de ROOT ────────────────────────────────────────────
 
 /**
@@ -145,11 +168,22 @@ export interface RootHistorialFiltros {
   cursor?: number
 }
 
-// ── Cuentas ROOT (solo lo que usa el filtro "Quién" del historial) ───────────
+// ── Cuentas ROOT (`GET /root/roots`; el filtro "Quién" del historial usa el email) ─
 
 export interface RootCuentaResumen {
   id: string
   email: string
+  nombre: string
+  /** Una cuenta desactivada no entra a la consola. */
+  activo: boolean
   /** Es la cuenta de quien pregunta. */
   esPropia: boolean
+}
+
+/** La respuesta de `POST /root/roots`. */
+export interface RootCuentaInvitada {
+  usuarioId: string
+  email: string
+  /** False si el email ya tenía una cuenta confirmada en Supabase: no se le manda mail. */
+  invitacionEnviada: boolean
 }

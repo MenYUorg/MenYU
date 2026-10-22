@@ -1,15 +1,15 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post } from '@nestjs/common'
+import { Body, Controller, Get, HttpCode, HttpStatus, Post } from '@nestjs/common'
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger'
 import { RequiereRoot } from '../../auth/decorators/requiere-root.decorator'
 import { UsuarioActual } from '../../auth/decorators/usuario-actual.decorator'
 import { UsuarioAutenticado } from '../../auth/supabase/usuario-autenticado'
-import { IdPipe } from '../comun/cuentas'
-import { CrearCuentaDto } from '../comun/dto/crear-cuenta.dto'
+import { InvitarCuentaDto } from '../comun/dto/invitar-cuenta.dto'
 import { RootRootsService } from './root-roots.service'
 
 /**
- * Cuentas ROOT. Solo ROOT. A propósito NO hay `DELETE /root/roots/:id`: las cuentas ROOT no se borran desde la app ni la API
- * (decisión 15 de docs/plan-consola-root.md). Un test recorre el enrutador y falla si aparece una ruta para borrarlas.
+ * Cuentas ROOT. Solo ROOT. A propósito NO hay `DELETE` ni `PATCH /root/roots/:id`: las cuentas ROOT no se borran ni dejan de
+ * ser ROOT desde la app ni la API (decisión 15 de docs/plan-consola-root.md). Un test recorre el enrutador y falla si aparece
+ * una ruta para eso. Tampoco hay "restablecer la contraseña": la persona la cambia desde "Olvidé mi contraseña" de web-auth.
  */
 @ApiTags('root')
 @Controller('root/roots')
@@ -27,25 +27,15 @@ export class RootRootsController {
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
-    summary: 'Crea una cuenta ROOT',
-    description: 'Igual que un dueño: sin `password` genera una contraseña temporal y la devuelve una sola vez. La persona la cambia en su primer ingreso.',
+    summary: 'Invita a una persona nueva como cuenta ROOT',
+    description:
+      'Manda el mail de invitación de Supabase (si el email ya tenía una cuenta confirmada en Supabase, la usa sin mandar mail: `invitacionEnviada` es false). Un email que ya es de una cuenta de MenYU responde 409: para hacerla ROOT está el script de cuentas ROOT. Queda en el historial (ROOT_INVITAR).',
   })
-  @ApiResponse({ status: 201 })
-  @ApiResponse({ status: 409, description: 'Email ya en uso' })
-  crear(@Body() dto: CrearCuentaDto, @UsuarioActual() usuario: UsuarioAutenticado) {
-    return this.roots.crear(dto, usuario)
-  }
-
-  @Post(':id/restablecer-password')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary: 'Restablece la contraseña de OTRA cuenta ROOT',
-    description: 'La devuelve en `passwordTemporal`, SOLO en esta respuesta, y cierra las sesiones renovables de esa cuenta. Para la propia contraseña no sirve (400).',
-  })
-  @ApiResponse({ status: 200 })
-  @ApiResponse({ status: 400, description: 'Es la cuenta propia' })
-  @ApiResponse({ status: 404, description: 'No hay una cuenta ROOT con ese id' })
-  restablecerPassword(@Param('id', new IdPipe('Cuenta ROOT no encontrada')) id: string, @UsuarioActual() usuario: UsuarioAutenticado) {
-    return this.roots.restablecerPassword(id, usuario)
+  @ApiResponse({ status: 201, description: '{ usuarioId, email, invitacionEnviada }' })
+  @ApiResponse({ status: 400, description: 'Email o nombre inválidos' })
+  @ApiResponse({ status: 409, description: 'El email ya es de una cuenta de MenYU' })
+  @ApiResponse({ status: 502, description: 'Supabase rechazó la invitación' })
+  invitar(@Body() dto: InvitarCuentaDto, @UsuarioActual() usuario: UsuarioAutenticado) {
+    return this.roots.invitar(dto, usuario)
   }
 }

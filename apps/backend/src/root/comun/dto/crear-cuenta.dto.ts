@@ -2,9 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 import { Transform } from 'class-transformer'
 import { IsEmail, IsOptional, IsString, MaxLength } from 'class-validator'
 import { MIN_LARGO_PASSWORD } from '../contrasenas'
-
-/** El email se recorta y se pasa a minúsculas antes de validarlo: el login lo busca así. */
-export const enMinusculas = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim().toLowerCase() : value)
+import { enMinusculas } from './invitar-cuenta.dto'
 
 /** Alta de una cuenta (dueño o ROOT): el email y, opcionalmente, una contraseña elegida. Sin `nombre`: una cuenta es email + contraseña. */
 export class CrearCuentaDto {
@@ -24,10 +22,3 @@ export class CrearCuentaDto {
   password?: string
 }
 
-export class CambiarEmailDto {
-  @ApiProperty({ example: 'nuevo@restaurante.com' })
-  @Transform(enMinusculas)
-  @IsEmail()
-  @MaxLength(254)
-  email!: string
-}

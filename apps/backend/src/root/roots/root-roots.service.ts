@@ -1,93 +1,80 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
+import { ConflictException, Injectable } from '@nestjs/common'
 import { Prisma } from '@prisma/client'
+import { InvitacionesService } from '../../auth/invitaciones/invitaciones.service'
 import { UsuarioAutenticado } from '../../auth/supabase/usuario-autenticado'
 import { PrismaService } from '../../prisma/prisma.service'
-import { conConflictoDeEmail, exigirEmailLibre, generarPasswordTemporal, prepararPassword, revocarSesiones } from '../comun/cuentas'
-import { CrearCuentaDto } from '../comun/dto/crear-cuenta.dto'
+import { InvitarCuentaDto } from '../comun/dto/invitar-cuenta.dto'
 import { HistorialRootService } from '../historial/historial-root.service'
-import { CAMBIO_PASSWORD } from '../historial/registrar-historial'
-import { CuentaRoot, CuentaRootConPassword } from '../root.types'
+import { cambioDeInvitacion } from '../historial/registrar-historial'
+import { CuentaRoot, CuentaRootInvitada } from '../root.types'
 
-const SELECT_CUENTA_ROOT = { id: true, email: true, debeCambiarPassword: true } satisfies Prisma.AdminSelect
+export const MENSAJE_EMAIL_CON_CUENTA =
+  'Ese email ya tiene una cuenta en MenYU: para hacerla ROOT está el script de cuentas ROOT (promover)'
 
-type FilaRoot = Prisma.AdminGetPayload<{ select: typeof SELECT_CUENTA_ROOT }>
+const SELECT_CUENTA_ROOT = { id: true, email: true, nombre: true, activo: true } satisfies Prisma.UsuarioSelect
+
+type FilaRoot = Prisma.UsuarioGetPayload<{ select: typeof SELECT_CUENTA_ROOT }>
 
 const aCuenta = (fila: FilaRoot, propiaId: string): CuentaRoot => ({
   id: fila.id,
   email: fila.email,
-  debeCambiarPassword: fila.debeCambiarPassword,
+  nombre: fila.nombre,
+  activo: fila.activo,
   esPropia: fila.id === propiaId,
 })
 
 /**
- * Cuentas ROOT que administra ROOT: ver, crear y restablecer la contraseña de otra. NO hay forma de borrar una cuenta ROOT desde
- * la app ni la API (decisión 15): ni este servicio ni ninguna ruta tiene un `eliminar`, y un test recorre el enrutador. La única vía
- * es el script de cuentas ROOT, que nunca borra a la última; la base también lo impide con un disparador.
+ * Cuentas ROOT (`Usuario.esRoot`): verlas e invitar a otra por mail. NO hay forma de borrar una cuenta ROOT ni de quitarle el
+ * ROOT desde la app ni la API (decisión 15 de docs/plan-consola-root.md): ni este servicio ni ninguna ruta lo hacen, y un test
+ * recorre el enrutador. La base además impide dejarla sin ninguna cuenta ROOT activa (disparador `usuario_proteger_ultimo_root`).
  */
 @Injectable()
 export class RootRootsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly historial: HistorialRootService,
+    private readonly invitaciones: InvitacionesService,
   ) {}
 
   async listar(usuario: UsuarioAutenticado): Promise<CuentaRoot[]> {
-    const filas = await this.prisma.admin.findMany({ where: { rol: 'ROOT' }, select: SELECT_CUENTA_ROOT, orderBy: { email: 'asc' } })
+    const filas = await this.prisma.usuario.findMany({ where: { esRoot: true }, select: SELECT_CUENTA_ROOT, orderBy: { email: 'asc' } })
     return filas.map((fila) => aCuenta(fila, usuario.id))
   }
 
-  async crear(dto: CrearCuentaDto, usuario: UsuarioAutenticado): Promise<CuentaRootConPassword> {
-    const email = dto.email
-    const { passwordHash, passwordTemporal, generada } = await prepararPassword(dto.password, email)
+  /**
+   * Invita a una persona nueva como ROOT. Una cuenta que ya existe (del personal, un dueño u otra cuenta ROOT, también la propia)
+   * no se hace ROOT desde acá: eso es `promover` del script, que corre una persona del equipo con acceso a la base.
+   *
+   * Como en las invitaciones del personal, la llamada a Supabase va antes y afuera de la transacción, y el `Usuario` y su registro
+   * en el historial van juntos (decisión 22).
+   */
+  async invitar(dto: InvitarCuentaDto, usuario: UsuarioAutenticado): Promise<CuentaRootInvitada> {
+    const existente = await this.prisma.usuario.findUnique({ where: { email: dto.email }, select: { id: true } })
+    if (existente) throw new ConflictException(MENSAJE_EMAIL_CON_CUENTA)
 
-    return this.prisma.$transaction(async (tx) => {
-      const actor = await this.historial.actorDe(tx, usuario)
-      await exigirEmailLibre(tx, email)
+    const { cuenta, invitacionEnviada } = await this.invitaciones.cuentaDeSupabase(dto.email)
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const actor = await this.historial.actorDe(tx, usuario)
+        const creada = await tx.usuario.create({
+          data: { supabaseUserId: cuenta.id, email: (cuenta.email ?? dto.email).toLowerCase(), nombre: dto.nombre, esRoot: true },
+          select: { id: true, email: true },
+        })
 
-      const creada = await conConflictoDeEmail(() =>
-        tx.admin.create({
-          data: { email, passwordHash, rol: 'ROOT', debeCambiarPassword: true },
-          select: SELECT_CUENTA_ROOT,
-        }),
-      )
-
-      await this.historial.registrar(tx, {
-        actor,
-        accion: 'ROOT_CREAR',
-        entidad: { tipo: 'ROOT', id: creada.id, nombre: creada.email },
-        cambios: [{ campo: 'Email', antes: null, despues: creada.email }, generada ? CAMBIO_PASSWORD.generada : CAMBIO_PASSWORD.elegida],
+        await this.historial.registrar(tx, {
+          actor,
+          accion: 'ROOT_INVITAR',
+          entidad: { tipo: 'ROOT', id: creada.id, nombre: creada.email },
+          cambios: [{ campo: 'Cuenta ROOT', antes: null, despues: creada.email }, cambioDeInvitacion(invitacionEnviada)],
+        })
+        return { usuarioId: creada.id, email: creada.email, invitacionEnviada }
       })
-      return { ...aCuenta(creada, actor.id), passwordTemporal }
-    })
-  }
-
-  async restablecerPassword(id: string, usuario: UsuarioAutenticado): Promise<CuentaRootConPassword> {
-    // Para cambiar la propia contraseña está "cambiar mi contraseña" (etapa 3), que pide la actual: restablecerse a uno mismo
-    // sin saberla dejaría a una sesión robada cambiar la clave sin conocerla.
-    if (id === usuario.id) {
-      throw new BadRequestException('No podés restablecer tu propia contraseña: para cambiarla usá «cambiar mi contraseña»')
+    } catch (error) {
+      // Dos invitaciones al mismo email a la vez, o una cuenta de Supabase que ya es de otro `Usuario`: 409, no 500.
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new ConflictException(MENSAJE_EMAIL_CON_CUENTA)
+      }
+      throw error
     }
-    const { passwordHash, passwordTemporal } = await generarPasswordTemporal()
-
-    return this.prisma.$transaction(async (tx) => {
-      const actor = await this.historial.actorDe(tx, usuario)
-      const cuenta = await tx.admin.findFirst({ where: { id, rol: 'ROOT' }, select: SELECT_CUENTA_ROOT })
-      if (!cuenta) throw new NotFoundException('Cuenta ROOT no encontrada')
-
-      const actualizada = await tx.admin.update({
-        where: { id: cuenta.id },
-        data: { passwordHash, debeCambiarPassword: true },
-        select: SELECT_CUENTA_ROOT,
-      })
-      await revocarSesiones(tx, cuenta.id)
-
-      await this.historial.registrar(tx, {
-        actor,
-        accion: 'ROOT_RESTABLECER',
-        entidad: { tipo: 'ROOT', id: cuenta.id, nombre: cuenta.email },
-        cambios: [CAMBIO_PASSWORD.restablecida],
-      })
-      return { ...aCuenta(actualizada, actor.id), passwordTemporal }
-    })
   }
 }
