@@ -222,8 +222,13 @@ export function MesasPage() {
 
   const mesasRef    = useRef<Mesa[]>([])
   const sesionesRef = useRef<Map<string, SesionActivaRico>>(new Map())
+  // Por ref y no por dependencia del efecto del socket: con `sesionDetalle?.sesionId` en las dependencias, abrir una mesa
+  // desconectaba y volvía a conectar el socket, y hasta que eso pasaba el handler leía la sesión anterior (un
+  // `sesion:cerrada` que llegaba en el medio dejaba el detalle de una sesión ya cerrada).
+  const sesionDetalleRef = useRef<SesionActivaRico | null>(null)
   useEffect(() => { mesasRef.current = mesas },       [mesas])
   useEffect(() => { sesionesRef.current = sesiones }, [sesiones])
+  useEffect(() => { sesionDetalleRef.current = sesionDetalle }, [sesionDetalle])
 
   const cargarSesiones = useCallback(async (ocupadas: Mesa[]) => {
     if (ocupadas.length === 0) return
@@ -303,12 +308,12 @@ export function MesasPage() {
         }
         return next
       })
-      if (sesionDetalle?.sesionId === sesionId) setSesionDetalle(null)
+      if (sesionDetalleRef.current?.sesionId === sesionId) setSesionDetalle(null)
     }
     socket.on('sesion:cerrada', onSesionCerrada)
     socket.on('session:closed', onSesionCerrada)
     return () => { socket.disconnect() }
-  }, [restauranteId, cargarLlamados, sesionDetalle?.sesionId])
+  }, [restauranteId, cargarLlamados])
 
   const mesasConLlamado = useMemo(
     () => new Set(llamados.map((l) => l.sesion.mesa.numero)),

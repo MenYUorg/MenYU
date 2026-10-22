@@ -286,7 +286,17 @@ describe('MesasPage (mozo)', () => {
 
       recibir('sesion:cerrada', { sesionId: 'ses-2' })
 
-      expect(screen.getByText('Sin información de sesión.')).toBeInTheDocument()
+      expect(await screen.findByText('Sin información de sesión.')).toBeInTheDocument()
+    })
+
+    // El socket se suscribe una sola vez: antes el efecto dependía de la sesión del detalle, así que abrir una mesa lo
+    // reconectaba y, hasta que eso pasaba, un `sesion:cerrada` de esa sesión no limpiaba nada (test inestable en el CI).
+    it('abrir una mesa no reconecta el socket', async () => {
+      await abrirMesa()
+      await screen.findByText('Pedidos de la sesión')
+
+      expect(io).toHaveBeenCalledTimes(1)
+      expect(socket.disconnect).not.toHaveBeenCalled()
     })
 
     it('con ?mesaId abre esa mesa directamente', async () => {
