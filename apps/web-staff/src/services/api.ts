@@ -169,24 +169,6 @@ export interface SesionActivaItem {
 
 export type { SesionHistorial } from '@menyu/types'
 
-export interface SesionPagadaItem {
-  id: string
-  mesaNumero: string
-  totalCobrado: number
-  metodoPago: string
-  cobradoPorNombre: string | null
-  referenciaExterna: string | null
-  fechaCobro: string | null
-  pagos?: {
-    id: string
-    metodo: string
-    estado: string
-    cobradoPorNombre: string | null
-    referenciaExterna: string | null
-    fechaCobro: string | null
-  }[]
-}
-
 export interface SesionAbierta {
   sesionId: string
   mesaId: string
@@ -299,12 +281,6 @@ export const api = {
 
     getActivas: (restauranteId: string) =>
       authFetch<SesionActivaItem[]>(`/sessions/activas?restauranteId=${encodeURIComponent(restauranteId)}`),
-
-    getPagadas: (restauranteId: string, fecha?: string) => {
-      const params = new URLSearchParams({ restauranteId })
-      if (fecha) params.set('fecha', fecha)
-      return authFetch<SesionPagadaItem[]>(`/sessions/pagadas?${params.toString()}`)
-    },
 
     /**
      * Quién cobró lo deduce el backend de la cuenta (`common/atribucion-del-cobro.ts`): desde la entrega 4.3 el

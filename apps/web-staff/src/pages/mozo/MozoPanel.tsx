@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import {
   puedeAtenderLlamados,
+  useNombreDelRol,
   useRestauranteActual,
   useRestauranteId,
   useRolesActuales,
@@ -335,6 +336,7 @@ export function MozoPanel() {
   const restauranteNombre = restaurante?.nombre ?? null
   const marcaNombre       = restaurante?.marcaNombre ?? null
   const puedeAtender      = puedeAtenderLlamados(useRolesActuales())
+  const rolMostrado       = useNombreDelRol()
 
   const [llamados,      setLlamados]      = useState<WaiterCallRico[]>([])
   const [pedidosListos, setPedidosListos] = useState<PedidoRico[]>([])
@@ -429,7 +431,7 @@ export function MozoPanel() {
                 {nombreMozo}
               </p>
               <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 11, color: 'rgba(255,255,255,0.6)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                Mozo
+                {rolMostrado}
               </p>
             </div>
             <div style={{

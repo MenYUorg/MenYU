@@ -114,6 +114,20 @@ describe('MozoPanel', () => {
       expect(screen.getAllByText('—')).toHaveLength(2)
     })
 
+    it.each([
+      ['MOZO', 'Mozo'],
+      ['JEFE_SALON', 'Jefe de salón'],
+      ['GERENTE', 'Gerente'],
+      ['OWNER', 'Dueño'],
+    ] as const)('el rol del encabezado sale de la membresía: %s muestra "%s"', (rol, etiqueta) => {
+      reiniciarContexto()
+      montarContexto(perfilEnLaParrilla(rol))
+
+      abrir()
+
+      expect(screen.getByText(etiqueta)).toBeInTheDocument()
+    })
+
     it('consulta el restaurante del contexto, que sale de la membresía', () => {
       abrir()
 
