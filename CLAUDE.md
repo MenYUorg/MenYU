@@ -166,8 +166,8 @@ Un cambio en web-admin no afecta ni rebuilda web-cliente.
 - Cada app exige lo suyo: web-admin, `esRoot` o una membresía OWNER o GERENTE;
   web-staff, cualquier membresía. A quien no le toca, la manda a web-auth, que la
   deriva a su app (sin loop).
-- `packages/auth` queda solo para el login legacy de web-cliente, que la Fase 5
-  retira.
+- `packages/auth` quedó sin consumidores con la 4.6 (web-cliente nunca lo
+  importó: su login usa su propio `services/api`). La Fase 5 lo borra.
 
 **Flujo alternativo QR/PIN (solo web-cliente):**
 - Exclusivo de apps/web-cliente — nunca en web-admin ni web-staff
@@ -179,8 +179,7 @@ Un cambio en web-admin no afecta ni rebuilda web-cliente.
 
 Vive en packages/:
 - `packages/auth`  → LoginForm, useAuth, authService (legacy)
-                     lo usa el login de web-cliente; web-admin y web-staff ya no.
-                     La Fase 5 lo borra
+                     sin consumidores desde la 4.6. La Fase 5 lo borra
 - `packages/auth-client` → cliente de Supabase con la cookie de dominio compartido, `useSession`,
                      `RequireAuth`, `logout` y qué app le toca a cada perfil (Fase 4 de auth)
 - `packages/ui`    → componentes visuales idénticos entre apps

@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import {
   puedeAtenderLlamados,
+  useContextoStore,
   useNombreDelRol,
   useRestauranteActual,
   useRestauranteId,
@@ -330,6 +331,7 @@ function NavCard({ icon, chipBg, iconColor, title, titleBadge, description, to, 
 
 // ── MozoPanel ─────────────────────────────────────────────────────────────────
 export function MozoPanel() {
+  const navigate          = useNavigate()
   const perfil            = usePerfil()
   const restauranteId     = useRestauranteId()
   const restaurante       = useRestauranteActual()
@@ -337,6 +339,7 @@ export function MozoPanel() {
   const marcaNombre       = restaurante?.marcaNombre ?? null
   const puedeAtender      = puedeAtenderLlamados(useRolesActuales())
   const rolMostrado       = useNombreDelRol()
+  const trabajaEnVarios   = useContextoStore((s) => s.restaurantes.length > 1)
 
   const [llamados,      setLlamados]      = useState<WaiterCallRico[]>([])
   const [pedidosListos, setPedidosListos] = useState<PedidoRico[]>([])
@@ -491,6 +494,18 @@ export function MozoPanel() {
             {restauranteNombre ?? '—'}
           </p>
         </div>
+        {/* Cambiar de restaurante — solo si trabaja en más de uno */}
+        {trabajaEnVarios && (
+          <button
+            onClick={() => navigate('/selector')}
+            style={{
+              background: 'none', border: '1px solid #E6E8EF', borderRadius: 8, padding: '6px 12px',
+              fontFamily: 'Inter, sans-serif', fontSize: 12, color: '#6B7280', cursor: 'pointer', flexShrink: 0,
+            }}
+          >
+            Cambiar de restaurante
+          </button>
+        )}
         {/* Badge abierto */}
         <div style={{
           display:      'flex',

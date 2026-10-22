@@ -112,10 +112,13 @@ describe('PagosMozo', () => {
 
     fireEvent.click(within(tarjeta('4')).getByRole('button', { name: 'Registrar pago' }))
     fireEvent.click(screen.getByRole('button', { name: 'Efectivo' }))
-    fireEvent.click(screen.getByRole('button', { name: /Confirmar pago/ }))
+    // El cobro deja el toast y vuelve a pedir las mesas: se espera a que terminen las dos actualizaciones.
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Confirmar pago/ }))
+    })
 
-    await vi.waitFor(() => expect(cobroApi).toHaveBeenCalledWith('ses-1', { metodoPago: 'efectivo' }))
-    expect(await screen.findByText('Pago registrado · Mesa 4')).toBeInTheDocument()
+    expect(cobroApi).toHaveBeenCalledWith('ses-1', { metodoPago: 'efectivo' })
+    expect(screen.getByText('Pago registrado · Mesa 4')).toBeInTheDocument()
     expect(activasApi).toHaveBeenCalledTimes(2)
   })
 

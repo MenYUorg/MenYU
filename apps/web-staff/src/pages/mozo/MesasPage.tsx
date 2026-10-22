@@ -72,12 +72,11 @@ function estadoBadge(estado: string): { bg: string; color: string; label: string
 
 // ── MesaTile ──────────────────────────────────────────────────────────────────
 function MesaTile({
-  mesa, sesion, tieneLlamado, esAsignada, onClick,
+  mesa, sesion, tieneLlamado, onClick,
 }: {
   mesa: Mesa
   sesion: SesionActivaRico | undefined
   tieneLlamado: boolean
-  esAsignada: boolean
   onClick: () => void
 }) {
   const ocupada = mesa.estado === 'ocupada'
@@ -91,7 +90,7 @@ function MesaTile({
       style={{
         background:    ocupada ? C.orangeBg : C.greenBg,
         borderRadius:  16,
-        border:        `2px solid ${tieneLlamado ? C.amber : esAsignada ? C.orange : ocupada ? C.orange : C.green}`,
+        border:        `2px solid ${tieneLlamado ? C.amber : ocupada ? C.orange : C.green}`,
         padding:       20,
         cursor:        'pointer',
         minHeight:     160,
@@ -117,15 +116,6 @@ function MesaTile({
           }}>
             {ocupada ? 'Ocupada' : 'Libre'}
           </span>
-          {esAsignada && (
-            <span style={{
-              background: C.navy, color: 'white',
-              fontSize: 10, fontWeight: 700,
-              padding: '2px 6px', borderRadius: 999, fontFamily: 'Inter,sans-serif',
-            }}>
-              Tu mesa
-            </span>
-          )}
         </div>
       </div>
 
@@ -219,9 +209,6 @@ export function MesasPage() {
   const restauranteId = useRestauranteId()
   const nombreMozo = perfil.nombre || perfil.email
   const rolMostrado = useNombreDelRol()
-
-  // TODO: agregar mesasAsignadas al payload del JWT del mozo cuando el backend lo soporte
-  const mesasAsignadas: string[] = []
 
   const [mesas,            setMesas]            = useState<Mesa[]>([])
   const [sesiones,         setSesiones]         = useState<Map<string, SesionActivaRico>>(new Map())
@@ -505,7 +492,6 @@ export function MesasPage() {
                 mesa={mesa}
                 sesion={sesiones.get(mesa.id)}
                 tieneLlamado={mesasConLlamado.has(mesa.numero)}
-                esAsignada={mesasAsignadas.includes(mesa.id)}
                 onClick={() => void handleSeleccionarMesa(mesa)}
               />
             ))}

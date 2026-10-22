@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { usePerfil } from '@menyu/auth-client'
 import type { PerfilUsuario, Rol } from '@menyu/types'
+import { disconnect } from '../services/socket'
 
 const RESTAURANTE_KEY = 'menyu-staff-restaurante-id'
 
@@ -115,7 +116,7 @@ interface ContextoStore {
   setRestaurante: (id: string) => void
 }
 
-export const useContextoStore = create<ContextoStore>()((set) => ({
+export const useContextoStore = create<ContextoStore>()((set, get) => ({
   restaurantes: [],
   restauranteId: null,
   perfil: null,
@@ -128,6 +129,9 @@ export const useContextoStore = create<ContextoStore>()((set) => ({
   },
 
   setRestaurante: (id) => {
+    // El gateway une la conexión a la sala del restaurante y nunca la saca (`menyu.gateway.ts`), así que al cambiar de
+    // restaurante hay que cortar el socket: si no, seguirían llegando los pedidos y llamados de la sucursal anterior.
+    if (id !== get().restauranteId) disconnect()
     localStorage.setItem(RESTAURANTE_KEY, id)
     set({ restauranteId: id })
   },

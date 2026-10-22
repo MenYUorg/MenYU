@@ -72,6 +72,7 @@ function abrir() {
       <Routes>
         <Route path="/mozo" element={<MozoPanel />} />
         <Route path="/mozo/:pantalla" element={<p>pantalla de destino</p>} />
+        <Route path="*" element={<p>fuera del panel</p>} />
       </Routes>
     </MemoryRouter>,
   )
@@ -132,6 +133,27 @@ describe('MozoPanel', () => {
       abrir()
 
       expect(llamadosApi.getAll).toHaveBeenCalledWith('rest-1')
+    })
+
+    it('con un solo restaurante no ofrece cambiarlo', () => {
+      abrir()
+
+      expect(screen.queryByRole('button', { name: 'Cambiar de restaurante' })).not.toBeInTheDocument()
+    })
+
+    it('con varios, "Cambiar de restaurante" vuelve al selector', () => {
+      reiniciarContexto()
+      montarContexto(perfilDePrueba({
+        nombre: 'Ana Pérez',
+        membresias: [
+          membresiaDeMarca('marca-1', [{ id: 'rest-1', nombre: 'La Parrilla' }, { id: 'rest-2', nombre: 'Palermo' }], 'Grupo Sabores'),
+        ],
+      }), 'rest-1')
+      abrir()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Cambiar de restaurante' }))
+
+      expect(screen.getByText('fuera del panel')).toBeInTheDocument()
     })
 
     it('"Salir" cierra la sesión', () => {
