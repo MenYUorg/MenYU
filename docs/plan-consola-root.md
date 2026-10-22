@@ -145,6 +145,8 @@ La reactivación no puede fallar por "restaurantes dados de baja a mano": cada r
 
 ## 7. API: `/root/*`, cuentas ROOT e historial
 
+> **Desde la entrega 4.4 de auth (2026-10-21)** la consola usa el token de Supabase (`@RequiereRoot()`) y los dueños y las cuentas ROOT son `Usuario` y `Membresia` que se invitan por mail: sin contraseñas, sin `debeCambiarPassword` y sin "cambiar el email" ni "restablecer". Las rutas de dueños y cuentas ROOT de la tabla de abajo quedaron así: `GET /root/duenos`, `POST /root/marcas/:id/duenos` `{ email, nombre }`, `DELETE /root/duenos/:membresiaId`, `GET /root/roots` y `POST /root/roots` `{ email, nombre }`. El detalle, en "4.4, cómo quedó" de [`docs/auth/specs/auth.md`](auth/specs/auth.md). La tabla queda como el diseño de las etapas 1a y 1b.
+
 Módulo nuevo `root/` con `@Roles('ROOT')` a nivel de controller. Cada consulta con `select` explícito: nunca `include` sin `select`. Ningún DTO exige UUID: los ids de la ruta se validan solo por su forma. Las contraseñas se guardan con bcrypt y las generadas salen de `crypto.randomInt` (12 caracteres, sin los que se confunden: 0/O, 1/l/I). **Cada ruta que cambia algo registra la acción en el historial dentro de la misma transacción** (sección 7.2).
 
 | Método y ruta | Qué hace | Errores |
@@ -174,6 +176,8 @@ Solo actúa sobre cuentas con rol `OWNER` (las rutas de dueños) o `ROOT` (las d
 **Rutas viejas** (etapa 4): `POST` y `DELETE /marcas` y `/restaurantes` (solo ROOT) pasan a vivir en `/root/*` y se sacan; ROOT sale de `PATCH /marcas/:id`, `PATCH /restaurantes/:id`, `POST`, `PATCH` y `DELETE /admins` y del resto del Apéndice A; `GET /marcas` y `GET /restaurantes` dejan de devolver las columnas `mp_*`.
 
 ### 7.1 Cuentas ROOT: el script y el retiro de `root@menyu.com`
+
+> **Desde la entrega 4.4 de auth** el script tiene solo `listar` y `promover <email>` (hace ROOT a un `Usuario` que ya existe y lo registra como `ROOT_PROMOVER`), con la misma forma de conectarse a la base. `crear`, `restablecer` y `eliminar` sobre `admin` ya no existen. Lo de abajo describe el script de la etapa 0.
 
 > **Con la migración a Supabase (sección 13)** este script y el retiro de `root@menyu.com` son del login actual: `Admin` se retira en la Fase 5 de la spec de autenticación. El script pasa a "promover" un `Usuario` a ROOT, y mientras exista el login actual sigue siendo la forma de crear las cuentas personales.
 
@@ -384,6 +388,8 @@ Orden de magnitud, una persona en días de trabajo enfocado (no son las horas de
 
 ### 13.3 Lo que se le pide a `feat/auth`
 
+> **Hecho por la Fase 4 de auth (2026-10-21).** El 1 (`ROLES_DE_ROOT` es `['OWNER']`), el 2 (`POST /root/roots` con `cuentaDeSupabase()`, el disparador `usuario_proteger_ultimo_root` de la 4.2 y `promover` en el script), el 3 (la baja efectiva en `AccesoService`, en la 4.2), el 4 (el registro `DUENO_INVITAR` en la transacción de la invitación) y el 5 (`@RequiereRoot()` en las 19 rutas, hecho por `feat/auth` y no por la consola). Falta reenviar una invitación que no se aceptó. Detalle en "4.4, cómo quedó" de `docs/auth/specs/auth.md`.
+
 Con el código de la Fase 2 a la vista (`apps/backend/src/auth/`):
 
 1. **Corregir la regla de ROOT.** `ROLES_DE_ROOT` de `puede-invitar.ts` y su test de tabla, la descripción del endpoint y la tabla de roles de la spec dicen "ROOT → OWNER y GERENTE". Tiene que ser solo OWNER (más ROOT, punto 2).
@@ -404,8 +410,8 @@ Con el código de la Fase 2 a la vista (`apps/backend/src/auth/`):
 |---|---|---|
 | E2a (pantallas que no dependen de auth) | 3,5 a 4,5 | Ya |
 | E2b (dueños y cuentas ROOT sobre invitaciones, front) | 1 a 1,5 | Después de la Fase 4 |
-| Dueños y cuentas ROOT sobre invitaciones (backend), `@RequiereRoot()` en `/root/*`, actor desde `Usuario`, disparador y script | 2 a 2,5 | Después de la Fase 4 |
-| Baja efectiva (en `AccesoService`) | 0,5 a 1 | La Fase 2 o la 4 de `feat/auth` |
+| Dueños y cuentas ROOT sobre invitaciones (backend), `@RequiereRoot()` en `/root/*`, actor desde `Usuario`, disparador y script | 2 a 2,5 | Hecho en la entrega 4.4 de `feat/auth` (2026-10-21) |
+| Baja efectiva (en `AccesoService`) | 0,5 a 1 | Hecha en la entrega 4.2 de `feat/auth` (2026-10-21) |
 | E4 | — | La Fase 4 de `feat/auth` |
 | E3 (contraseñas) | 0 | Descartada |
 

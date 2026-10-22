@@ -94,7 +94,7 @@ packages/types/src/
 ### Roles de administración (enum `RolAdmin` en DB)
 | Rol | Descripción |
 |---|---|
-| `ROOT` | Administración general del sistema MenYu: crea, edita y borra marcas, restaurantes y usuarios OWNER (asignados a su marca) y crea otras cuentas ROOT (las cuentas ROOT no se borran desde la app, y la primera de cada entorno sale de `apps/backend/scripts/cuentas-root.ts`). Todo lo que hace queda en un historial que nadie puede editar ni borrar y que ven todos los ROOT. **No** crea GERENTE (los crea el OWNER), **no** decide sobre marcas ni restaurantes (menú, precios, descuentos, mesas, pedidos, logo, dirección…) y **no** accede a sus datos privados. No es un bypass. Su consola (`/root` en web-admin) está en `docs/plan-consola-root.md` |
+| `ROOT` | Administración general del sistema MenYu: crea, edita y da de baja marcas y restaurantes, invita por mail a los OWNER (a su marca) y a otras cuentas ROOT, y les quita la membresía a los OWNER. Es `Usuario.esRoot`, no una membresía. Las cuentas ROOT no se borran desde la app: la primera de cada entorno se crea a mano (`docs/auth/usuarios-prueba-staging.md`) y `apps/backend/scripts/cuentas-root.ts` hace ROOT a un `Usuario` que ya existe. Todo lo que hace queda en un historial que nadie puede editar ni borrar y que ven todos los ROOT. **No** crea GERENTE (los crea el OWNER), **no** decide sobre marcas ni restaurantes (menú, precios, descuentos, mesas, pedidos, logo, dirección…) y **no** accede a sus datos privados. No es un bypass. Su consola (`/root` en web-admin) está en `docs/plan-consola-root.md` |
 | `OWNER` | Dueño de una marca — acceso a toda su marca y sus restaurantes. Lo crea ROOT |
 | `GERENTE` | Gerente de restaurantes específicos (una `Membresia` por restaurante; antes, la tabla `AdminRestaurante`, que se retira en la Fase 5). Lo invita el OWNER desde Personal |
 
@@ -107,19 +107,20 @@ packages/types/src/
 
 ### Guards NestJS
 - Las rutas del personal usan el token de Supabase (ver "Autenticación con Supabase"): `@RequiereRol`/`@RequiereRolEn` o `@Personal()` más `AccesoService` en el service. Los grupos de roles de la matriz por ruta están en `apps/backend/src/auth/roles-del-personal.ts`.
-- `@Roles(RolAdmin.ROOT)` con el JWT legacy queda solo en la consola de ROOT (`/root/*`) hasta la entrega 4.4, que la pasa a `@RequiereRoot()`
+- La consola de ROOT (`/root/*`) usa `@RequiereRoot()` a nivel de controller (desde la entrega 4.4). Donde también va `@UseGuards(CamposPermitidosGuard)`, `@RequiereRoot()` va debajo, para que los permisos corran antes que la validación de los campos
 - ROOT no es un bypass: no figura en ningún rol ni chequeo de pertenencia y recibe 403 en las rutas de datos (`AccesoService` ignora `esRoot`). Sus rutas van en `/root/*`, con un `select` explícito en cada consulta
 - El comensal no usa guards del personal — se autentica por sesión de mesa (`SessionAuthGuard`)
 
 ### Autenticación con Supabase (migración en curso)
-Spec, decisiones y fases: `docs/auth/specs/auth.md` (una fase por sesión; al cerrar cada una, el subagente `revisor`). Hechas: Fase 1 (modelo de datos), Fase 2 (backend), Fase 3 (web-auth) y Fase 3b (Google y `/privacidad`), en staging y en producción desde v1.1.0, con la pantalla de consentimiento de Google publicada. En curso: Fase 4 (SSO en las apps), por entregas, en el PR draft #416 desde la 4.2; están hechas la 4.1 (`@menyu/auth-client` y web-auth sobre la cookie de dominio compartido), la 4.2 (base de permisos del backend) y la 4.3 (los controllers del personal sobre Supabase, sin ROOT, los cobros de #356 y Personal).
+Spec, decisiones y fases: `docs/auth/specs/auth.md` (una fase por sesión; al cerrar cada una, el subagente `revisor`). Hechas: Fase 1 (modelo de datos), Fase 2 (backend), Fase 3 (web-auth) y Fase 3b (Google y `/privacidad`), en staging y en producción desde v1.1.0, con la pantalla de consentimiento de Google publicada. En curso: Fase 4 (SSO en las apps), por entregas, en el PR draft #416 desde la 4.2; están hechas la 4.1 (`@menyu/auth-client` y web-auth sobre la cookie de dominio compartido), la 4.2 (base de permisos del backend), la 4.3 (los controllers del personal sobre Supabase, sin ROOT, los cobros de #356 y Personal) y la 4.4 (el backend de la consola de ROOT sobre Supabase: dueños y cuentas ROOT por invitación, con su historial).
 - Modelos nuevos: `Usuario` (`supabaseUserId`, `esRoot` para ROOT) y `Membresia` con el enum `Rol`: `OWNER` por marca; `GERENTE`, `JEFE_SALON`, `MOZO` y `COCINA` por restaurante (CHECK `membresia_ambito_check` en la migración). Además `Mozo.usuarioId` (los mozos invitados no tienen `passwordHash`) y `Cliente.supabaseUserId`. `usuario` y `membresia` tienen RLS sin políticas.
 - Backend (en `apps/backend/src/auth/`):
   - `SupabaseAuthGuard` verifica el access token de Supabase contra el JWKS de `SUPABASE_URL` y deja el `Usuario` en `request.usuario` (lo lee `@UsuarioActual()`).
   - `@RequiereRol(...)` suma `MembresiaGuard` y exige el rol en el restaurante de `:restauranteId` (la membresía OWNER de la marca cubre sus sucursales). `@RequiereRolEn({ param | query | body }, ...)` lo toma de otro lugar.
   - `@Personal()` solo autentica: en las rutas de un recurso (`/items/:id`) el service llama a `AccesoService.exigirRol` o `exigirOwnerDeMarca`. `@RequiereRoot()` suma `RootGuard` (`esRoot`), solo para `/root/*`.
   - Los permisos los decide `AccesoService`, que ignora `esRoot` y no cuenta las membresías de un restaurante o una marca dados de baja. `exigirMozo` da el `Mozo` activo de la cuenta (quien atiende, edita o cobra sale de ahí, nunca del body), y `exigirAlgunRol` es para lo que no es de un restaurante.
-  - Desde la 4.3 los usan todas las rutas del personal; la matriz por ruta está en `docs/auth/specs/auth.md`. `src/auth/rutas-por-autenticacion.spec.ts` lista las que todavía usan el JWT legacy (solo `/root/*`, hasta la 4.4): al pasar una a Supabase, sacarla de ahí.
+  - Desde la 4.4 los usan todas las rutas del personal y de la consola de ROOT; la matriz por ruta está en `docs/auth/specs/auth.md`. Ninguna ruta usa el JWT legacy del personal: `src/auth/rutas-por-autenticacion.spec.ts` falla si aparece una, y las que solo autentican (`@Personal()`) tienen que estar en su lista.
+  - Las invitaciones de ROOT (`POST /root/marcas/:id/duenos`, también `POST /auth/invitaciones` con una cuenta ROOT) quedan en el historial en la misma transacción que el `Usuario` y la `Membresia`; la llamada a Supabase va antes (decisión 22 de `docs/plan-consola-root.md`). `InvitacionesModule` exporta `InvitacionesService` (con `cuentaDeSupabase`) y el historial está en `HistorialRootModule`.
   - Ninguna respuesta del personal devuelve las columnas `mp_*` ni `passwordHash`: `select` explícito (`RESTAURANTE_SELECT` y compañía), con un test de contrato en `prisma/includes-contract.spec.ts`.
   - Personal (`GET` y `DELETE /restaurantes/:restauranteId/personal`, en `src/personal/`) lista y quita el acceso; el alta es `POST /auth/invitaciones`. `/admins`, `/admin-restaurante` y `POST /mozos` ya no existen.
   - Los cobros guardan la cuenta en `Pago.usuarioId` (`common/atribucion-del-cobro.ts`): un mozo cobra a su nombre, un OWNER o GERENTE puede atribuírselo a un mozo.
@@ -132,7 +133,7 @@ Spec, decisiones y fases: `docs/auth/specs/auth.md` (una fase por sesión; al ce
   - Los links del mail traen un `token_hash` que se canjea con `verifyOtp` (plantillas: `docs/auth/VariablesACambiar.md`).
   - La sesión vive en la cookie de dominio compartido de `@menyu/auth-client` (`VITE_AUTH_COOKIE_DOMAIN`). web-admin y web-staff todavía no la leen (entregas 4.5 y 4.6).
   - Probar en local contra staging: `docs/auth/VariablesACambiar.md`, Desarrollo local.
-- Siguen con la autenticación actual la consola de ROOT (hasta la 4.4), web-admin y web-staff (hasta la 4.5 y la 4.6: mientras tanto no funcionan contra este backend, dentro del PR #416) y el login en `/auth` de web-cliente: JWT propio con `JWT_SECRET`, `@Roles`, `RolesGuard` y `@CurrentUser`. No mezclar los dos sistemas en un mismo endpoint.
+- Siguen con la autenticación actual web-admin, con su consola de ROOT, y web-staff (hasta la 4.5 y la 4.6: mientras tanto no funcionan contra este backend, dentro del PR #416) y el login en `/auth` de web-cliente: JWT propio con `JWT_SECRET`, `@Roles`, `RolesGuard` y `@CurrentUser`. No mezclar los dos sistemas en un mismo endpoint.
 - En el seed, el `Usuario` OWNER de Marca Seed (`owner@menyu.com`) tiene un `supabaseUserId` ficticio que no existe en ningún proyecto de Supabase. Para iniciar sesión con él (desde la Fase 2) hay que reemplazarlo por el id de un usuario real del Supabase de staging; el seed no lo pisa.
 
 ---
@@ -307,7 +308,7 @@ Un descuento se guarda como `precio_descuento` (entero, con un CHECK en la base:
 - `/check-in?restaurantId=…&tableCode=…` es lo que codifica el QR impreso de cada mesa: abre la sesión y sigue al menú; si falla, ofrece el PIN.
 - `/auth` acepta `?volver=` (solo rutas internas de la app).
 
-**web-admin**: `/admin/marca` ("Marca y sucursales", solo OWNER) con el logo de la marca, el de cada sucursal y su dirección. El botón "Descuento" de la lista del menú lo ven OWNER y GERENTE. La consola de ROOT vive en `/root/*` (marcas, restaurantes con baja y reactivar, e historial; solo ROOT, con carga aparte vía `React.lazy`); lo que falta (dueños y cuentas ROOT) espera a `feat/auth`: ver `docs/plan-consola-root.md` y, para probarla en local, `docs/probar-consola-root.md`.
+**web-admin**: `/admin/marca` ("Marca y sucursales", solo OWNER) con el logo de la marca, el de cada sucursal y su dirección. El botón "Descuento" de la lista del menú lo ven OWNER y GERENTE. La consola de ROOT vive en `/root/*` (marcas, restaurantes con baja y reactivar, e historial; solo ROOT, con carga aparte vía `React.lazy`); las pantallas de dueños y cuentas ROOT (E2b) faltan, sobre la API de la entrega 4.4 de auth: ver `docs/plan-consola-root.md` y, para probarla en local, `docs/probar-consola-root.md`.
 
 **Fuera de alcance:** combos, fidelización, vigencia o programación de descuentos.
 

@@ -124,7 +124,7 @@ Hecha con los nombres que propone esta sección: `SupabaseAuthGuard`, `@Requiere
 - `SupabaseAuthGuard`: valida el JWT de Supabase con `jose` contra el JWKS del proyecto (`<SUPABASE_URL>/auth/v1/.well-known/jwks.json`, issuer `<SUPABASE_URL>/auth/v1`, audience `authenticated`) y resuelve el `Usuario` por `supabaseUserId`. Usuario inexistente → 403. Usuario inactivo → 403. Token inválido o vencido → 401.
 - Decorador de roles + guard que valida el rol en el restaurante del recurso pedido (una membresía de `OWNER` cubre todos los restaurantes de su marca). `@Roles`, `RolesGuard` y `@CurrentUser` ya existen (legacy, en uso hasta la Fase 5): los nuevos usan otros nombres, por ejemplo `@RequiereRol(...)`, `MembresiaGuard` y `@UsuarioActual()`.
 - Endpoint `GET /auth/me`: devuelve usuario + membresías. Reemplaza al `GET /auth/me` legacy, que ningún frontend usa.
-- Endpoint `POST /auth/invitaciones`: invita por email vía Supabase Admin API, crea el `Usuario` con el `supabaseUserId` devuelto y su `Membresia`. Quién invita a quién: ROOT → OWNER y GERENTE; OWNER → cualquier rol de su marca; GERENTE → JEFE_SALON, MOZO y COCINA de sus restaurantes. Si el email ya tiene cuenta confirmada en Supabase (por ejemplo, un cliente registrado), no se reinvita: se usa ese id. Si la cuenta existe sin confirmar, se borra y se invita de nuevo (decisión 2 de la planificación de la Fase 2). Para MOZO y JEFE_SALON crea el `Mozo` del restaurante o vincula el existente con el mismo email.
+- Endpoint `POST /auth/invitaciones`: invita por email vía Supabase Admin API, crea el `Usuario` con el `supabaseUserId` devuelto y su `Membresia`. Quién invita a quién: ROOT → OWNER y GERENTE (desde la 4.4, solo OWNER: decisión 2 de la Fase 4); OWNER → cualquier rol de su marca; GERENTE → JEFE_SALON, MOZO y COCINA de sus restaurantes. Si el email ya tiene cuenta confirmada en Supabase (por ejemplo, un cliente registrado), no se reinvita: se usa ese id. Si la cuenta existe sin confirmar, se borra y se invita de nuevo (decisión 2 de la planificación de la Fase 2). Para MOZO y JEFE_SALON crea el `Mozo` del restaurante o vincula el existente con el mismo email.
 - Pendientes que dejó la Fase 1:
   - `Usuario.email` es único pero distingue mayúsculas: guardar siempre el email que devuelve Supabase (en minúscula) y comparar en minúscula al vincular un `Mozo`.
   - `Mozo.passwordHash` es obligatorio: hacerlo opcional (migración) para poder crear el `Mozo` de un invitado.
@@ -218,7 +218,7 @@ Entregas (ver Decisiones de la planificación de la Fase 4):
 | 4.1 | `@menyu/auth-client` y web-auth sobre la cookie de dominio compartido | Hecha (2026-10-21): ver abajo |
 | 4.2 | Backend: `AccesoService` con la baja efectiva, `@RequiereRol` con origen explícito, `@Personal()`, `@RequiereRoot()`, la migración de autoría (`pedido_edicion.usuario_id`, `pago.usuario_id`) y el test que recorre el enrutador | Hecha (2026-10-21): ver abajo |
 | 4.3 | Backend: los 16 controllers del personal pasan al guard nuevo, sin ROOT; los cobros de #356; el Personal (listar y quitar acceso); se quitan las rutas legacy de la decisión 5 | Hecha (2026-10-21): ver abajo |
-| 4.4 | Backend: la consola de ROOT (decisión 2) | |
+| 4.4 | Backend: la consola de ROOT (decisión 2) | Hecha (2026-10-21): ver abajo |
 | 4.5 | web-admin: `RequireAuth`, contexto desde `/auth/me`, Personal, `useRootSession` | |
 | 4.6 | web-staff: `RequireAuth`, selector por membresías, `mozoId` desde el backend | |
 | 4.7 | web-cliente, variables, documentación, verificación en `*.menyu.local` y staging, revisor | |
@@ -270,7 +270,7 @@ Entregas (ver Decisiones de la planificación de la Fase 4):
 - **Tests:**
   - `test/app-endpoints.ts`: la opción `cuenta` (header `x-test-usuario`) deja un `UsuarioAutenticado` en la request; `SIN_USUARIO` da 403. MembresiaGuard y RootGuard son los reales.
   - `AccesoService` responde con las membresías de `CUENTAS` en `MUNDO`: ROOT sin membresías, OWNER de las marcas A y B, y GERENTE, JEFE_SALON, MOZO y COCINA del restaurante 1. Solo simula `rolesEnRestaurante` y `esOwnerDeMarca`; si un test llega a `mozoDe` o `restaurantesDe`, falla con un error que lo dice.
-  - La opción legacy `usuario` (`x-test-user`) sigue hasta la 4.4.
+  - La opción legacy `usuario` (`x-test-user`) siguió hasta la 4.4, que la borró junto con las listas de pendientes del test del enrutador.
   - `auth/rutas-por-autenticacion.spec.ts` recorre el enrutador. Las rutas con el JWT legacy tienen que coincidir exactamente con `PENDIENTES_4_3` y `PENDIENTES_4_4`: al pasar una a Supabase, hay que sacarla de la lista. `PATCH /waiter-calls/:id/atender` está aparte, porque verifica el JWT legacy a mano.
   - Contra la base local, con `TEST_DATABASE_URL` (en el CI se saltan): `acceso.service.base.spec.ts` (la baja efectiva) y `usuario-migracion.base.spec.ts` (la autoría y el disparador).
 
@@ -331,6 +331,40 @@ Decisiones de la planificación de la 4.3:
   - La subida de la imagen de un ítem tiene el límite de 5 MB en multer (413), como el logo: con `@Personal()` el archivo se leía entero antes del 403.
   - Un OWNER o GERENTE no puede atribuirle un cobro a un mozo dado de baja.
   - El test del enrutador lista las rutas con `@Personal()` (`CON_PERMISO_EN_EL_SERVICE`): sumar una obliga a revisar que su service pida el rol. El de los selects detecta también una relación seleccionada entera (`mozos: true`) y cubre los selects base.
+
+**4.4, cómo quedó (2026-10-21).** En el PR draft #416. Ninguna ruta usa el JWT legacy del personal: el test del enrutador perdió las listas de pendientes y falla si aparece una.
+- **Las 19 rutas de `/root`** pasan a `@RequiereRoot()`, a nivel de controller. En marcas y restaurantes va debajo de `@UseGuards(CamposPermitidosGuard)`, para que los permisos corran antes que la validación de los campos (un OWNER con un campo de más recibe 403, no 400). `root-routes.spec.ts` lo comprueba.
+- **El actor del historial** sale del `Usuario` (`esRoot` y `activo`), leído dentro de la transacción del cambio: si la cuenta dejó de ser ROOT o se desactivó mientras tanto, 401 y no se hace nada. `actor_id` guarda el id del `Usuario` (las filas anteriores, el de `admin`). No hizo falta migración: la columna es texto sin FK y `accion` no tiene CHECK.
+- **Las rutas de la consola que cambian:**
+
+  | Ruta | Qué hace |
+  |---|---|
+  | `GET /root/marcas` y `GET /root/marcas/:id` | Los dueños salen de las membresías OWNER de la marca. El detalle trae `{ id, membresiaId, email, nombre }` (`id` es el del `Usuario`), sin `debeCambiarPassword` |
+  | `GET /root/duenos?q=` | Las membresías OWNER: `{ membresiaId, usuarioId, email, nombre, activo, marca }` |
+  | `POST /root/marcas/:id/duenos` `{ email, nombre }` | `InvitacionesService.invitar` con el rol OWNER. 201 con `{ usuarioId, membresiaId, invitacionEnviada }`; 403 con el email propio, 404 si la marca no existe, 409 si está de baja, ya es dueño de esa marca o la cuenta está desactivada, 502 si Supabase la rechaza |
+  | `DELETE /root/duenos/:membresiaId` | Quita la membresía; el `Usuario` queda (puede tener otras). 409 si es el último dueño de una marca activa, en una transacción serializable |
+  | `GET /root/roots` | Los `Usuario` con `esRoot`: `{ id, email, nombre, activo, esPropia }` |
+  | `POST /root/roots` `{ email, nombre }` | Invita a una persona nueva como ROOT: 201 con `{ usuarioId, email, invitacionEnviada }`. 409 si el email ya es de un `Usuario` (también el propio): hacerlo ROOT es del script |
+
+  Se fueron `PATCH /root/duenos/:id` (cambiar el email), `POST /root/duenos/:id/restablecer-password` y `POST /root/roots/:id/restablecer-password`: el email y la contraseña son de la persona, que los maneja desde web-auth. Siguen sin existir `DELETE`, `PUT` y `PATCH` en `/root/roots`.
+- **Las invitaciones de ROOT, en el historial** (decisión 22 de `docs/plan-consola-root.md`). `invitar` llama a Supabase antes y afuera de la transacción, y guarda el `Usuario`, la `Membresia` y el registro `DUENO_INVITAR` juntos, también cuando el email ya era de un `Usuario` (sin mail). Registra cuando una cuenta ROOT invita a un OWNER, desde la consola o desde `POST /auth/invitaciones`. Si una cuenta ROOT que además tiene membresías invita a su personal, actúa como OWNER o GERENTE y no va al historial de ROOT. `ROLES_DE_ROOT` es `['OWNER']`.
+- **Códigos del historial:** `DUENO_INVITAR`, `DUENO_QUITAR`, `ROOT_INVITAR` y `ROOT_PROMOVER`. Los de las cuentas con contraseña (`DUENO_CREAR`, `DUENO_CAMBIAR_EMAIL`, `DUENO_RESTABLECER`, `DUENO_ELIMINAR`, `ROOT_CREAR`, `ROOT_RESTABLECER` y `ROOT_ELIMINAR`) ya no se pueden escribir; sus filas viejas se leen igual.
+- **Módulos:** el historial pasa a `HistorialRootModule`, que importan `RootModule` e `InvitacionesModule`. `InvitacionesModule` exporta `InvitacionesService`, y `cuentaDeSupabase` es pública para invitar cuentas ROOT.
+- **El script `cuentas-root.ts`** queda con `listar` y `promover <email>` sobre `usuario`, con la misma conexión (`DATABASE_URL` de la terminal, sin leer el `.env`) y la confirmación del nombre de la base. Se probó contra una base descartable con todas las migraciones: promueve y registra `ROOT_PROMOVER` con el actor `SCRIPT`; con una cuenta que ya es ROOT no cambia nada; rechaza un email sin cuenta, una cuenta desactivada, el nombre de la base mal escrito y la entrada cerrada.
+- **Se borró:** los helpers de contraseñas de la consola (`root/comun/contrasenas.ts`, casi todo `cuentas.ts` y `CrearCuentaDto`), `CAMBIO_PASSWORD`, la opción `usuario` de `test/app-endpoints.ts` y los fixtures del JWT legacy que nadie usaba.
+- **web-admin**, sin tocar pantallas:
+  - Los tipos de `@menyu/types`: `RootDuenoDeMarca` y `RootCuentaResumen` suman campos, y hay `RootDueno`, `RootInvitarCuentaRequest` y `RootCuentaInvitada` para E2b.
+  - Los textos de las cuatro acciones nuevas en la pantalla del historial.
+  - `BAJA_CORTA_EL_LOGIN = true`: la baja corta el acceso desde la 4.2.
+- **Tests:**
+  - Los specs de endpoints de `/root` usan la opción `cuenta`: ROOT 200 o 201; el personal de cada rol, una cuenta sin membresías y una sin `Usuario`, 403; sin token, 401.
+  - Los de los services de dueños y cuentas ROOT se reescribieron, con "si el registro falla, el cambio se revierte" y el 401 de una cuenta que dejó de ser ROOT. El de invitaciones suma el bloque del historial.
+  - El código nuevo de la entrega queda en 100 % de líneas.
+- **Decisiones de la implementación** (a revisar):
+  1. `ROOT_PROMOVER`, un código más, para el script (no estaba en la planificación; decidido con el usuario).
+  2. `POST /root/marcas/:id/duenos` no exige un UUID en la marca, porque la base tiene ids como `m-001`; `POST /auth/invitaciones` sí lo exige.
+  3. "El último dueño" cuenta todas las membresías OWNER de la marca, también las de un `Usuario` desactivado, igual que el "Sin dueño" de la lista.
+  4. Si una invitación de ROOT falla después de llamar a Supabase (por ejemplo, porque la cuenta que invita dejó de ser ROOT), el mail ya salió pero no queda ningún `Usuario`. Al reintentar, `cuentaDeSupabase` borra la cuenta sin confirmar e invita de nuevo.
 
 - Paquete compartido en el monorepo (`@menyu/auth-client`) con:
   - Cliente Supabase con cookie de dominio desde `VITE_AUTH_COOKIE_DOMAIN`.
@@ -417,13 +451,17 @@ Observaciones que dejaron las Fases 0 a 3b (2026-10-20 y 2026-10-21). Revisarlas
   - Resuelto en la 4.1: el `redirect` ya no le gana al rol. web-auth lo sigue solo si `puedeIrA` (de `@menyu/auth-client`), y `RequireAuth` manda a quien no tiene acceso a web-auth sin `redirect`.
   - Con una sesión abierta, `/` de web-auth redirige enseguida, y quien tiene un solo lugar no tiene cómo cerrar sesión ahí. Lo resuelve el `logout()` de `@menyu/auth-client`. Si hace falta antes, sumar "Ingresar con otra cuenta".
 - **Lo que dejó la 4.3 (2026-10-21):**
-  - Para la 4.4: `ROLES_DE_ROOT` de `puede-invitar.ts` todavía incluye GERENTE (pasa a `['OWNER']`), y `PENDIENTES_4_4` del test del enrutador es el checklist de la consola.
   - Para la 4.5: `GET /marcas` es solo del OWNER (al GERENTE le da 403; el contexto de web-admin ya le pide solo `GET /restaurantes`). Personal usa `GET` y `DELETE /restaurantes/:restauranteId/personal` y `POST /auth/invitaciones`. El `CobroModal` de `PagosPage` puede seguir mandando `mozoId`: al OWNER y al GERENTE se les respeta. `api.pagos.confirmarEfectivo` de web-admin manda `{ sesionId }` y el endpoint pide `{ pagoId }` (ya estaba roto y nadie la llama): borrarla o corregirla.
   - Para la 4.6: el mozo ya no manda su `mozoId` al cobrar (lo deduce el backend). Las vistas del mozo usan `GET /mesas`, que ahora también es del JEFE_SALON y el MOZO; `GET /mesas/:id` sigue siendo de OWNER y GERENTE, como antes. `cobradoPorNombre` sigue siendo texto libre del body y gana al nombre del mozo en las sesiones pagadas: al simplificar `CobroModal`, ignorarlo cuando cobra un MOZO o JEFE_SALON.
   - Antes del merge del PR #416: buscar en staging y en producción, con una consulta de solo lectura, ítems que hayan quedado en una categoría o una comanda de otro restaurante (`SELECT i.id, i.restaurante_id, c.restaurante_id FROM item_menu i JOIN categoria_menu c ON c.id = i.categoria_id WHERE c.restaurante_id <> i.restaurante_id`, y la equivalente con `comanda`). La carta pública ya no los muestra, pero el dueño del ítem vería la categoría ajena en web-admin.
   - Deuda: el catálogo de clasificaciones es global y lo edita cualquier OWNER o GERENTE (como antes, sin ROOT).
   - Deuda (ya estaba en `main`, la señaló la revisión): cerrar una mesa (`close` o `cerrarMesaAdmin`) no cancela los pagos pendientes, y `confirmarEfectivo` no mira si la sesión sigue abierta: un efectivo pendiente de una mesa cerrada se puede confirmar después, y eso reescribe `cerradaEn` y libera la mesa aunque ya tenga otra sesión. En `registrarCobro`, el chequeo de `cerradaEn` está fuera de la transacción. Conviene condicionar la aprobación a que la sesión siga abierta.
-  - Quitarle el acceso a un OWNER por Personal da 404 (su membresía es de la marca, no del restaurante): los dueños se quitan desde la consola de ROOT (4.4).
+  - Quitarle el acceso a un OWNER por Personal da 404 (su membresía es de la marca, no del restaurante): los dueños se quitan desde la consola de ROOT, con `DELETE /root/duenos/:membresiaId` (4.4).
+- **Lo que dejó la 4.4 (2026-10-21):**
+  - Para la 4.5: `useRootSession` pasa a `usePerfil()` (`esRoot` y el email) y `logout()`. `api.root` de web-admin todavía no tiene dueños ni la invitación de cuentas ROOT: las pantallas de E2b las suman sobre las rutas de la tabla de la 4.4 y los tipos de `@menyu/types`.
+  - Para cambiar de dueño se invita al nuevo y después se quita al anterior: al último dueño de una marca activa no se lo puede quitar (409).
+  - Sigue sin haber forma de reenviar una invitación que no se aceptó (ver "Para la Fase 4"), tampoco la de una cuenta ROOT.
+  - Producción: el primer ROOT se crea a mano (un `INSERT` en `usuario` con `es_root`, como en staging) y los demás se invitan desde la consola o se promueven con el script. Las cuentas ROOT de la tabla `admin` (`root@menyu.com` y las que creó el script viejo) dejan de servir para la consola.
 - **Producción, incidente del 2026-10-20:** un cambio manual de `CORS_ORIGINS` en Railway de producción redesplegó el servicio construyendo el último commit de `main` (31 migraciones) en lugar del tag v1.0.5 (18). `prisma migrate deploy` aplicó las migraciones pendientes hasta que `20260906183320_division_pagos_campos` falló (P3009): su índice único `comensal(sesion_id, nombre_normalizado)` chocó con los comensales "Invitado" que el backfill de `20260722175451_split_pagos_comensales` crea uno por pago, como ya había pasado en QA. La base de producción ya no servía para el código de v1.0.5 (`pago.pedido_id` y `restaurante.qr_base_url` se borraron), así que se recuperó hacia adelante: se borraron esos comensales, se marcó la migración como revertida y se desplegó `main` con el tag v1.0.6 (`39522af`, con las 32 migraciones aplicadas y el smoke de producción en verde).
   - En Railway, un cambio de variables redespliega el servicio y corre las migraciones. El servicio de producción quedó desconectado de GitHub (*Settings → Source*) para que salga solo de `deploy-production.yml`: no reconectarlo.
 - **Dominios propios: falta Mercado Pago y `BASE_URL` (2026-10-20).** Staging y producción ya usan `*.menyu-app.com` (v1.0.7, con las variables de `docs/auth/VariablesACambiar.md`), salvo `BASE_URL`, que en los dos ambientes sigue con la URL vieja de Railway: nadie del equipo tiene acceso al panel de la app de Mercado Pago. `BASE_URL` arma el `redirect_uri` del OAuth con el que cada restaurante conecta su cuenta de MP y la `notification_url` de cada pago. MP rechaza un `redirect_uri` que no esté registrado, así que cambiar `BASE_URL` antes de registrarlo rompe la conexión de MP. Mientras tanto todo funciona por la URL vieja, que no hay que dar de baja: las preferencias ya creadas notifican ahí. Cuando haya acceso al panel:
