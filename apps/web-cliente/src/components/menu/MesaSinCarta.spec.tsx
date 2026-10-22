@@ -1,14 +1,7 @@
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import { api } from '../../services/api'
 import { useSessionStore } from '../../store/sessionStore'
 import { MesaSinCarta } from './MesaSinCarta'
-
-vi.mock('../../services/api', () => ({
-  api: { waiterCalls: { llamar: vi.fn() } },
-}))
-
-const llamar = vi.mocked(api.waiterCalls.llamar)
 
 function renderPantalla() {
   return render(
@@ -24,14 +17,10 @@ function renderPantalla() {
 
 describe('MesaSinCarta (la mesa sigue abierta pero el restaurante se dio de baja)', () => {
   beforeEach(() => {
-    llamar.mockReset().mockResolvedValue({ ok: true })
     useSessionStore.setState({ sesionId: 'ses-1', mesaId: 'mesa-1', jwt: 'jwt', numeroMesa: '5' })
   })
 
-  afterEach(() => {
-    cleanup()
-    vi.useRealTimers()
-  })
+  afterEach(cleanup)
 
   it('explica qué pasó y que la mesa sigue abierta, sin culpar a la persona ni decir "no se pudo cargar"', () => {
     renderPantalla()
@@ -42,14 +31,22 @@ describe('MesaSinCarta (la mesa sigue abierta pero el restaurante se dio de baja
     expect(screen.queryByRole('button', { name: 'Reintentar' })).not.toBeInTheDocument()
   })
 
-  it('dice cómo pedir la cuenta: pagando (Mercado Pago o efectivo) o llamando al mozo', () => {
+  // Con la baja, el personal recibe 403 al cobrar en efectivo o atender un llamado (entrega 4.7): ofrecerlos era mandar a
+  // la persona a una espera que nadie podía atender.
+  it('dice que se paga con Mercado Pago, y que el efectivo no está disponible', () => {
     renderPantalla()
 
     const guia = screen.getByRole('region', { name: 'Cómo pedir la cuenta' })
     expect(guia).toHaveTextContent('Pagar la cuenta')
-    expect(guia).toHaveTextContent('Mercado Pago o efectivo')
-    expect(guia).toHaveTextContent('el mozo te la cobra en la mesa')
-    expect(guia).toHaveTextContent('Llamar al mozo')
+    expect(guia).toHaveTextContent('Mercado Pago desde tu celular')
+    expect(guia).toHaveTextContent('El pago en efectivo no está disponible')
+  })
+
+  it('no ofrece llamar al mozo ni pagar en efectivo', () => {
+    renderPantalla()
+
+    expect(screen.queryByRole('button', { name: /mozo/i })).not.toBeInTheDocument()
+    expect(screen.queryByText(/el mozo te la cobra/i)).not.toBeInTheDocument()
   })
 
   it('muestra el número de la mesa', () => {
@@ -72,75 +69,16 @@ describe('MesaSinCarta (la mesa sigue abierta pero el restaurante se dio de baja
   it('los botones miden 44 px o más', () => {
     renderPantalla()
 
-    for (const nombre of ['Pagar la cuenta', 'Ver mis pedidos', 'Llamar al mozo']) {
+    for (const nombre of ['Pagar la cuenta', 'Ver mis pedidos']) {
       expect(screen.getByRole('button', { name: nombre })).toHaveStyle({ minHeight: '44px' })
     }
   })
 
-  describe('"Llamar al mozo"', () => {
-    it('avisa al mozo de la mesa y dice que está en camino', async () => {
-      renderPantalla()
+  it('sin una sesión muestra lo mismo: la pantalla ya no depende del token de la mesa', () => {
+    useSessionStore.setState({ sesionId: null, jwt: null })
+    renderPantalla()
 
-      fireEvent.click(screen.getByRole('button', { name: 'Llamar al mozo' }))
-
-      expect(await screen.findByRole('button', { name: '¡Ya avisamos! El mozo va en camino' })).toBeInTheDocument()
-      expect(llamar).toHaveBeenCalledTimes(1)
-      expect(llamar).toHaveBeenCalledWith('ses-1', 'jwt')
-    })
-
-    it('mientras llama queda deshabilitado, y un segundo toque no vuelve a llamar', async () => {
-      let responder!: (valor: { ok: boolean }) => void
-      llamar.mockReturnValue(new Promise((res) => { responder = res }))
-      renderPantalla()
-
-      fireEvent.click(screen.getByRole('button', { name: 'Llamar al mozo' }))
-      const llamando = await screen.findByRole('button', { name: 'Llamando…' })
-      fireEvent.click(llamando)
-
-      expect(llamando).toBeDisabled()
-      expect(llamar).toHaveBeenCalledTimes(1)
-      await act(async () => responder({ ok: true }))
-    })
-
-    it('con el aviso ya hecho, otro toque no vuelve a llamar hasta que el botón se reponga', async () => {
-      renderPantalla()
-      fireEvent.click(screen.getByRole('button', { name: 'Llamar al mozo' }))
-      const avisado = await screen.findByRole('button', { name: '¡Ya avisamos! El mozo va en camino' })
-
-      fireEvent.click(avisado)
-
-      expect(llamar).toHaveBeenCalledTimes(1)
-    })
-
-    it('si falla, lo dice y deja volver a intentar a los pocos segundos', async () => {
-      vi.useFakeTimers({ shouldAdvanceTime: true })
-      llamar.mockRejectedValueOnce(new Error('sin conexión'))
-      renderPantalla()
-
-      fireEvent.click(screen.getByRole('button', { name: 'Llamar al mozo' }))
-      expect(await screen.findByRole('button', { name: 'No pudimos avisar. Probá de nuevo' })).toBeInTheDocument()
-
-      await act(async () => { await vi.advanceTimersByTimeAsync(4100) })
-      expect(screen.getByRole('button', { name: 'Llamar al mozo' })).toBeEnabled()
-      fireEvent.click(screen.getByRole('button', { name: 'Llamar al mozo' }))
-      await screen.findByRole('button', { name: '¡Ya avisamos! El mozo va en camino' })
-      expect(llamar).toHaveBeenCalledTimes(2)
-    })
-
-    it('sin una sesión (sin token) no se ofrece llamar al mozo, pero sí lo demás', () => {
-      useSessionStore.setState({ sesionId: null, jwt: null })
-      renderPantalla()
-
-      expect(screen.queryByRole('button', { name: 'Llamar al mozo' })).not.toBeInTheDocument()
-      expect(screen.getByRole('button', { name: 'Pagar la cuenta' })).toBeInTheDocument()
-    })
-
-    it('desmontar la pantalla con el aviso en curso no deja nada pendiente', async () => {
-      const { unmount } = renderPantalla()
-      fireEvent.click(screen.getByRole('button', { name: 'Llamar al mozo' }))
-      await screen.findByRole('button', { name: '¡Ya avisamos! El mozo va en camino' })
-
-      expect(() => unmount()).not.toThrow()
-    })
+    expect(screen.getByRole('button', { name: 'Pagar la cuenta' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Ver mis pedidos' })).toBeInTheDocument()
   })
 })
