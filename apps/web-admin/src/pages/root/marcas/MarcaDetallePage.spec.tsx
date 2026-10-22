@@ -5,7 +5,6 @@ import { ApiError, api } from '../../../services/api'
 import { marcaDetalle, promesaManual, restaurante } from '../../../test/root'
 import { MarcaDetallePage } from './MarcaDetallePage'
 
-vi.mock('@menyu/auth', () => ({ TOKEN_KEY: 'menyu_access_token', REFRESH_KEY: 'menyu_refresh_token', resolveLoginUrl: vi.fn() }))
 vi.mock('../../../services/api', async (importOriginal) => {
   const original = await importOriginal<typeof import('../../../services/api')>()
   const { apiFalsa } = await import('../../../test/root')

@@ -412,6 +412,25 @@ describe('MozosPage (Personal)', () => {
       expect(await screen.findByText('No hay mozos en este restaurante todavía.')).toBeInTheDocument()
     })
 
+    it('si la consulta de mozos falla, lo dice en lugar de quedar vacía', async () => {
+      mozosApi.list.mockRejectedValue(new ApiError(500, 'Error interno'))
+
+      render(<MozosPage />)
+      fireEvent.click(await screen.findByRole('button', { name: 'Mozos' }))
+
+      expect(await screen.findByText('Error interno')).toBeInTheDocument()
+      expect(screen.queryByText('No hay mozos en este restaurante todavía.')).not.toBeInTheDocument()
+    })
+
+    it('un error que no es de la API dice que no se pudieron cargar', async () => {
+      mozosApi.list.mockRejectedValue(new Error('red'))
+
+      render(<MozosPage />)
+      fireEvent.click(await screen.findByRole('button', { name: 'Mozos' }))
+
+      expect(await screen.findByText('No se pudieron cargar los mozos')).toBeInTheDocument()
+    })
+
     describe('detalle de un mozo', () => {
       async function abrirAna() {
         await abrirMozos()

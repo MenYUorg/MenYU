@@ -7,7 +7,6 @@ import { errorDeNombre, errorDeSlug } from './validaciones'
 import { DialogoBajaRestaurante, DialogoReactivarRestaurante, DialogoRestaurante } from './restaurante'
 import { mensajeDeEnvio } from './envio'
 
-vi.mock('@menyu/auth', () => ({ TOKEN_KEY: 'menyu_access_token', REFRESH_KEY: 'menyu_refresh_token', resolveLoginUrl: vi.fn() }))
 vi.mock('../../../services/api', async (importOriginal) => {
   const original = await importOriginal<typeof import('../../../services/api')>()
   const { apiFalsa } = await import('../../../test/root')

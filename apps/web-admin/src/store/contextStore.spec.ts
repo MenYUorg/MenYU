@@ -223,12 +223,75 @@ describe('contextStore', () => {
     })
   })
 
+  describe('dos cargas a la vez y las marcas ajenas', () => {
+    it('el layout y una pantalla que carga a la par comparten los pedidos', async () => {
+      const api = await apiFalsa()
+      api.restaurantes.mockResolvedValue([RESTAURANTE_A])
+      api.marcas.mockResolvedValue([MARCA_X])
+
+      await Promise.all([
+        useContextStore.getState().loadContext(OWNER),
+        useContextStore.getState().loadContext(OWNER),
+      ])
+
+      expect(api.restaurantes).toHaveBeenCalledTimes(1)
+      expect(api.marcas).toHaveBeenCalledTimes(1)
+      expect(useContextStore.getState().restaurantes).toHaveLength(1)
+    })
+
+    it('una carga nueva después de la anterior sí vuelve a pedir', async () => {
+      const api = await apiFalsa()
+      api.restaurantes.mockResolvedValue([RESTAURANTE_A])
+      api.marcas.mockResolvedValue([MARCA_X])
+
+      await useContextStore.getState().loadContext(OWNER)
+      await useContextStore.getState().loadContext(OWNER)
+
+      expect(api.restaurantes).toHaveBeenCalledTimes(2)
+    })
+
+    it('la marca de un restaurante que no es suyo se suma, para poder nombrarla', async () => {
+      const api = await apiFalsa()
+      // Dueña de la marca 1 y gerente de un restaurante de la marca 2: GET /marcas solo trae la suya.
+      api.marcas.mockResolvedValue([MARCA_X])
+      api.restaurantes.mockResolvedValue([RESTAURANTE_A, RESTAURANTE_C])
+      const mixto = perfilDePrueba({
+        membresias: [membresiaDeMarca('marca-1'), membresiaDeRestaurante('GERENTE', 'rest-3', 'marca-2')],
+      })
+
+      await useContextStore.getState().loadContext(mixto, { restauranteId: 'rest-3' })
+
+      expect(useContextStore.getState().marcas.map((m) => m.id)).toEqual(['marca-1', 'marca-2'])
+      expect(useContextStore.getState().selectedMarcaId).toBe('marca-2')
+    })
+  })
+
   describe('setRestaurante y setMarca', () => {
     it('setRestaurante guarda la elección en el store y en localStorage', () => {
       useContextStore.getState().setRestaurante('rest-99')
 
       expect(useContextStore.getState().selectedRestauranteId).toBe('rest-99')
       expect(localStorage.getItem(RESTAURANTE_KEY)).toBe('rest-99')
+    })
+
+    it('setRestaurante lleva la marca del restaurante elegido, así el encabezado queda coherente', () => {
+      useContextStore.setState({
+        restaurantes: [RESTAURANTE_A, RESTAURANTE_C],
+        selectedRestauranteId: 'rest-1',
+        selectedMarcaId: 'marca-1',
+      })
+
+      useContextStore.getState().setRestaurante('rest-3')
+
+      expect(useContextStore.getState().selectedMarcaId).toBe('marca-2')
+    })
+
+    it('un restaurante que no está en la lista no cambia la marca elegida', () => {
+      useContextStore.setState({ restaurantes: [RESTAURANTE_A], selectedMarcaId: 'marca-1' })
+
+      useContextStore.getState().setRestaurante('rest-desconocido')
+
+      expect(useContextStore.getState().selectedMarcaId).toBe('marca-1')
     })
 
     it('setMarca actualiza la marca elegida', () => {

@@ -645,6 +645,7 @@ export function MozosPage() {
   const [llamadosPorMozo, setLlamadosPorMozo] = useState<Map<string, number>>(new Map())
   const [todasLasMesas,   setTodasLasMesas]   = useState<MesaConMozos[]>([])
   const [loading,         setLoading]         = useState(true)
+  const [errorMozos,      setErrorMozos]      = useState('')
 
   const [selectedMozo, setSelectedMozo] = useState<MozoItem | null>(null)
   const [mesasDelMozo, setMesasDelMozo] = useState<MesaAsignada[]>([])
@@ -680,6 +681,7 @@ export function MozosPage() {
 
   async function loadData(rid: string) {
     setLoading(true)
+    setErrorMozos('')
     try {
       const [mozosList, mesasList] = await Promise.all([
         api.mozos.list(rid),
@@ -713,6 +715,9 @@ export function MozosPage() {
       }
       setMesasPorMozo(mesasMap)
       setLlamadosPorMozo(llamadosMap)
+    } catch (e) {
+      // Sin esto, un error del servidor quedaba como promesa sin manejar y la pestaña Mozos vacía, sin explicación.
+      setErrorMozos(e instanceof ApiError ? e.message : 'No se pudieron cargar los mozos')
     } finally {
       setLoading(false)
     }
@@ -1078,6 +1083,10 @@ export function MozosPage() {
           loading ? (
             <div style={{ padding: '32px 0', color: C.muted, fontFamily: 'Inter, sans-serif', fontSize: 14 }}>
               Cargando...
+            </div>
+          ) : errorMozos ? (
+            <div style={{ padding: '32px 0', fontFamily: 'Inter, sans-serif', fontSize: 14, color: C.red }}>
+              {errorMozos}
             </div>
           ) : mozos.length === 0 ? (
             <div style={{

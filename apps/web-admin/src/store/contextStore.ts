@@ -46,9 +46,15 @@ export function rolEnElRestaurante(
   return null
 }
 
-function marcasDeLosRestaurantes(restaurantes: Restaurante[]): Marca[] {
+/**
+ * Las marcas que la interfaz necesita nombrar. A las del OWNER (`GET /marcas`) se suman las que traen los
+ * restaurantes: un GERENTE de un restaurante de otra marca no la tiene en su lista, y sin esto el encabezado
+ * mostraba «—» en lugar de su nombre.
+ */
+function marcasConLasDeLosRestaurantes(propias: Marca[], restaurantes: Restaurante[]): Marca[] {
   const porId = new Map<string, Marca>()
-  restaurantes.forEach((r) => { if (r.marca) porId.set(r.marca.id, r.marca) })
+  propias.forEach((m) => porId.set(m.id, m))
+  restaurantes.forEach((r) => { if (r.marca && !porId.has(r.marca.id)) porId.set(r.marca.id, r.marca) })
   return Array.from(porId.values())
 }
 
@@ -85,6 +91,9 @@ interface ContextStore {
   setRestaurante: (id: string) => void
 }
 
+/** La carga del contexto que está en vuelo, para que dos llamadas simultáneas no pidan los datos dos veces. */
+let cargaEnCurso: Promise<void> | null = null
+
 export const useContextStore = create<ContextStore>()((set, get) => ({
   marcas: [],
   restaurantes: [],
@@ -98,39 +107,51 @@ export const useContextStore = create<ContextStore>()((set, get) => ({
   },
 
   loadContext: async (perfil, preferencia) => {
+    // El layout y una pantalla que se monta al mismo tiempo (MarcaPage al entrar por la URL) piden el contexto a la
+    // vez: comparten la carga en curso en lugar de duplicar los pedidos.
+    const enCurso = cargaEnCurso
+    if (enCurso) return enCurso
+
     set({ perfil })
     const esOwner = perfil.membresias.some((m) => m.rol === 'OWNER')
-    try {
-      // `GET /marcas` es solo del OWNER: al GERENTE le responde 403 (docs/auth/specs/auth.md, 4.3). Sus marcas salen
-      // de los restaurantes, que ya las traen.
-      const [restaurantes, marcasDelOwner] = await Promise.all([
-        api.restaurantes.list(),
-        esOwner ? api.marcas.list() : Promise.resolve(null),
-      ])
-      const marcas = marcasDelOwner ?? marcasDeLosRestaurantes(restaurantes)
-      const selectedRestauranteId = elegirRestaurante(restaurantes, preferencia, get().selectedRestauranteId)
-      if (selectedRestauranteId) localStorage.setItem(RESTAURANTE_KEY, selectedRestauranteId)
+    cargaEnCurso = (async () => {
+      try {
+        // `GET /marcas` es solo del OWNER: al GERENTE le responde 403 (docs/auth/specs/auth.md, 4.3). Sus marcas salen
+        // de los restaurantes, que ya las traen.
+        const [restaurantes, marcasDelOwner] = await Promise.all([
+          api.restaurantes.list(),
+          esOwner ? api.marcas.list() : Promise.resolve(null),
+        ])
+        const marcas = marcasConLasDeLosRestaurantes(marcasDelOwner ?? [], restaurantes)
+        const selectedRestauranteId = elegirRestaurante(restaurantes, preferencia, get().selectedRestauranteId)
+        if (selectedRestauranteId) localStorage.setItem(RESTAURANTE_KEY, selectedRestauranteId)
 
-      const marcaDelRestaurante = restaurantes.find((r) => r.id === selectedRestauranteId)?.marcaId ?? null
-      const marcaPreferida = preferencia?.marcaId && marcas.some((m) => m.id === preferencia.marcaId)
-        ? preferencia.marcaId
-        : null
+        const marcaDelRestaurante = restaurantes.find((r) => r.id === selectedRestauranteId)?.marcaId ?? null
+        const marcaPreferida = preferencia?.marcaId && marcas.some((m) => m.id === preferencia.marcaId)
+          ? preferencia.marcaId
+          : null
 
-      set({
-        marcas,
-        restaurantes,
-        selectedMarcaId: marcaDelRestaurante ?? marcaPreferida ?? marcas[0]?.id ?? null,
-        selectedRestauranteId,
-      })
-    } catch {
-      // Un 401 lo resuelve services/api (renueva la sesión o vuelve a web-auth); un 403 deja el contexto vacío.
-    }
+        set({
+          marcas,
+          restaurantes,
+          selectedMarcaId: marcaDelRestaurante ?? marcaPreferida ?? marcas[0]?.id ?? null,
+          selectedRestauranteId,
+        })
+      } catch {
+        // Un 401 lo resuelve services/api (renueva la sesión o vuelve a web-auth); un 403 deja el contexto vacío.
+      } finally {
+        cargaEnCurso = null
+      }
+    })()
+    return cargaEnCurso
   },
 
   setMarca: (id) => set({ selectedMarcaId: id }),
   setRestaurante: (id) => {
     localStorage.setItem(RESTAURANTE_KEY, id)
-    set({ selectedRestauranteId: id })
+    // La marca acompaña al restaurante: si no, el encabezado sigue mostrando la marca del restaurante anterior.
+    const marcaId = get().restaurantes.find((r) => r.id === id)?.marcaId
+    set({ selectedRestauranteId: id, ...(marcaId ? { selectedMarcaId: marcaId } : {}) })
   },
 }))
 
