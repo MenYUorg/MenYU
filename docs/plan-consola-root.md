@@ -389,7 +389,7 @@ Orden de magnitud, una persona en días de trabajo enfocado (no son las horas de
 
 *Agregado el 2026-10-20, después de leer [`docs/auth/specs/auth.md`](auth/specs/auth.md) con las Fases 1 y 2 ya en `main` (producción en v1.0.7).* Hasta acá este plan suponía el login propio (`Admin`, contraseñas, JWT propio). La spec lo reemplaza por Supabase Auth: el personal entra por **invitación por mail**, ROOT es el indicador `Usuario.esRoot` (no una membresía) y los permisos salen de `Usuario` y `Membresia`, que decide `AccesoService`.
 
-> **Al día 2026-10-22: la Fase 4 está completa en código** (PR #416, a la espera del merge). La consola corre entera sobre Supabase: el backend de `/root/*` en la entrega 4.4 y las pantallas en la 4.5. De esta sección queda pendiente **solo E2b** (las pantallas de dueños y cuentas ROOT, sobre una API que ya existe). El login propio ya no abre el panel: `root@menyu.com` no sirve para la consola.
+> **Al día 2026-10-22: la Fase 4 está completa en código** (PR #416, a la espera del merge), y E2b también (8.2), sobre esa misma rama. La consola corre entera sobre Supabase: el backend de `/root/*` en la entrega 4.4 y las pantallas en la 4.5. El login propio ya no abre el panel: `root@menyu.com` no sirve para la consola. De esta sección no queda nada pendiente salvo poder reenviar una invitación que no se aceptó (13.3).
 
 ### 13.1 Qué cambia, pieza por pieza
 
