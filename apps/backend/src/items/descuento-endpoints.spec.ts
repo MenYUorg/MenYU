@@ -126,11 +126,28 @@ describe('endpoints de descuento de ítems', () => {
         ['porcentaje 100', { porcentaje: 100 }],
         ['porcentaje con decimales', { porcentaje: 12.5 }],
         ['porcentaje como texto', { porcentaje: '20' }],
+        ['porcentaje negativo', { porcentaje: -5 }],
+        ['precio no numérico', { precioDescuento: 'abc' }],
+        ['porcentaje no numérico', { porcentaje: 'abc' }],
       ])('%s → 400 y no llega al servicio', async (_caso, body) => {
         const res = await poner(USUARIOS.OWNER, body)
 
         expect(res.status).toBe(400)
         expect(mockItems.setDescuento).not.toHaveBeenCalled()
+      })
+
+      // @IsOptional() deja pasar null igual que undefined: la validación no lo frena y el body llega al servicio
+      // con el null. Este test fija lo que pasa hoy en el controller.
+      it.each([
+        ['precio null', { precioDescuento: null }],
+        ['porcentaje null', { porcentaje: null }],
+      ])('%s pasa la validación y llega al servicio', async (_caso, body) => {
+        // Act
+        const res = await poner(USUARIOS.OWNER, body)
+
+        // Assert
+        expect(res.status).toBe(200)
+        expect(mockItems.setDescuento).toHaveBeenCalledWith('item-1', body, expect.anything())
       })
 
       it('descarta los campos que no corresponden (no se puede cambiar el precio base por acá)', async () => {
