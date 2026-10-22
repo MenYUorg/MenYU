@@ -23,10 +23,12 @@ describe('urlDeAuth', () => {
     expect(urlDeAuth('localhost', 'http:')).toBe('http://localhost:5173')
   })
 
-  // Los dominios viejos de Vercel siguen activos: un staging que cayera en el default iría al login de producción.
+  // Los dominios viejos de Vercel siguen activos: un staging o un preview que cayera en el default iría al login de
+  // producción. Vercel nombra los previews por rama y también por hash.
   it.each([
     'menyu-cliente-staging.vercel.app',
     'menyu-cliente-git-rama-men-yu-s-projects.vercel.app',
+    'menyu-cliente-k3f9zq1xa-men-yu-s-projects.vercel.app',
   ])('sin la variable, %s va al auth de staging', (hostname) => {
     expect(urlDeAuth(hostname, 'https:')).toBe('https://auth.staging.menyu-app.com')
   })
