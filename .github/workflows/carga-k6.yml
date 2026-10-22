@@ -1,0 +1,92 @@
+name: Carga — k6 (staging)
+
+# Pruebas de carga con k6 contra STAGING. Solo a mano (workflow_dispatch): nunca en push, pull_request ni schedule.
+# Proceso, umbrales y cómo leer el resultado: docs/calidad/k6.md.
+on:
+  workflow_dispatch:
+    inputs:
+      escenario:
+        description: 'Escenario: humo (1 min), stress (12 min) o soak (33 min)'
+        required: true
+        type: choice
+        options: [humo, stress, soak]
+        default: humo
+      confirmar:
+        description: 'Escribí "si" para confirmar que se carga STAGING (nunca producción)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+# Una sola prueba de carga a la vez: dos en paralelo se miden entre sí.
+concurrency:
+  group: carga-k6
+  cancel-in-progress: false
+
+jobs:
+  k6:
+    name: k6 — ${{ inputs.escenario }} contra staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+
+    env:
+      # k6 2.3.0, fijado por digest (docs/calidad/k6.md, "Versión de k6")
+      K6_IMAGE: grafana/k6:2.3.0@sha256:9c2dee7f8ed74d317e4027c06a10f169b625638189de8d4555d0b3486a5aeb34
+
+    steps:
+      - name: Check confirmation
+        run: |
+          if [ "$CONFIRMAR" != "si" ]; then
+            echo "::error::Para cargar staging hay que escribir \"si\" en el input confirmar."
+            exit 1
+          fi
+        env:
+          CONFIRMAR: ${{ inputs.confirmar }}
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # La URL de la API es la VITE_API_URL de PREVIEW de web-cliente en Vercel, la misma que usa el smoke de
+      # staging (deploy-staging.yml). Se lee solo esa línea, el archivo no se imprime ni se sube y se borra al terminar.
+      - name: Resolve staging API URL
+        run: |
+          dir="$RUNNER_TEMP/vercel-cliente"
+          trap 'rm -rf "$dir"' EXIT
+          mkdir -p "$dir"
+          npx vercel@54.6.1 pull --yes --environment=preview --cwd "$dir" --token ${{ secrets.VERCEL_TOKEN }}
+          node scripts/smoke/leer-api-url.mjs "$dir/.vercel/.env.preview.local"
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_CLIENTE }}
+
+      # Los scripts se niegan a correr sin CONFIRMAR_STAGING=si o si el host es de producción: los de
+      # scripts/carga/guardas.mjs más los de las variables PROD_* del repo.
+      - name: k6 — ${{ inputs.escenario }}
+        run: |
+          mkdir -p resultados
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE/scripts/carga:/carga:ro" \
+            -v "$GITHUB_WORKSPACE/resultados:/resultados" \
+            -e CONFIRMAR_STAGING=si \
+            -e BASE_URL="$SMOKE_API_URL" \
+            -e PROD_HOSTS="$PROD_HOSTS" \
+            -e K6_RESUMEN="/resultados/${ESCENARIO}-resumen.json" \
+            "$K6_IMAGE" run --quiet "/carga/${ESCENARIO}.js"
+        env:
+          ESCENARIO: ${{ inputs.escenario }}
+          PROD_HOSTS: ${{ vars.PROD_WEB_ADMIN_URL }},${{ vars.PROD_WEB_CLIENTE_URL }},${{ vars.PROD_WEB_STAFF_URL }},${{ vars.PROD_WEB_AUTH_URL }}
+
+      - name: Upload k6 summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: k6-${{ inputs.escenario }}-${{ github.run_id }}
+          path: resultados/
+          if-no-files-found: warn
+          retention-days: 30

@@ -20,12 +20,12 @@ Un error menor se arregla con un tag nuevo (`vX.Y.Z+1`), no con rollback.
 ## 1. Backend (Railway, producción)
 
 - Panel de Railway → servicio de producción → *Deployments* → el deploy del tag sano → *Redeploy*. No hace falta el CLI ni un token en una máquina local.
-- Verificar `GET /api/health`: el SHA tiene que volver a ser el del tag sano.
+- Verificar `GET /health`: el SHA tiene que volver a ser el del tag sano.
   `APP_COMMIT_SHA` es una variable del servicio: si el redeploy no la restaura, `/health` sigue mostrando el SHA malo aunque el código sea el sano. Corregirla desde el panel.
 
-## 2. Frontends (Vercel, los 3 proyectos)
+## 2. Frontends (Vercel, los 4 proyectos)
 
-Para web-admin, web-cliente y web-staff, por separado:
+Para web-admin, web-auth, web-cliente y web-staff, por separado:
 
 - Panel de Vercel → proyecto → *Deployments* → el deploy de producción del tag sano → *Promote to Production* (o *Instant Rollback* sobre el actual).
 - Un rollback de Vercel no crea deployments nuevos, así que no gasta la cuota diaria.
@@ -37,6 +37,7 @@ Prisma no tiene migraciones "down". De menor a mayor riesgo:
 1. **La migración es compatible hacia atrás** (solo agrega columnas o tablas, con default o nullables): dejar la base como está y volver atrás solo el código.
 2. **No es compatible**: no volver atrás el backend. Corregir hacia adelante con un tag nuevo.
 3. **Pérdida o corrupción de datos**: restaurar el backup de Supabase a un punto en el tiempo. Es una decisión del equipo, con la ventana de datos que se pierde anotada.
+   > Nota: con el plan Free de Supabase este paso no se puede ejecutar hoy, porque el plan no incluye backups del proyecto. El plan Pro incluye hasta 7 días de backups programados (dato del panel de Supabase, 22/10/2026).
 
 Para que el rollback siga siendo posible, las migraciones de un release solo agregan. Lo que borra o renombra va en un release posterior, cuando el código viejo ya no lo usa.
 
