@@ -1,20 +1,33 @@
 import { useLocation } from 'react-router-dom'
-import { Clock, Store } from 'lucide-react'
+import { Clock, Shield, Store, Users } from 'lucide-react'
 import { Shell, type NavSection } from '../../components/shell/Shell'
 import { useRootSession } from './useRootSession'
 
-// Los grupos del diseño aprobado. "Dueños" y "Cuentas ROOT" se suman cuando estén las pantallas (esperan a la migración de
-// autenticación): un enlace a una pantalla que no existe sería un callejón sin salida.
+// Los grupos del diseño aprobado.
 const SECCIONES: NavSection[] = [
   {
     label: 'ADMINISTRACIÓN',
-    items: [{ to: '/root/marcas', label: 'Marcas', Icon: Store }],
+    items: [
+      { to: '/root/marcas', label: 'Marcas', Icon: Store },
+      { to: '/root/duenos', label: 'Dueños', Icon: Users },
+    ],
   },
   {
     label: 'SISTEMA',
-    items: [{ to: '/root/historial', label: 'Historial', Icon: Clock }],
+    items: [
+      { to: '/root/roots', label: 'Cuentas ROOT', Icon: Shield },
+      { to: '/root/historial', label: 'Historial', Icon: Clock },
+    ],
   },
 ]
+
+/** El título y el subtítulo de la barra de arriba, según la pantalla. Marcas (y el detalle de una marca) es la de por defecto. */
+function encabezadoDe(pathname: string): { titulo: string; subtitulo: string } {
+  if (pathname.startsWith('/root/historial')) return { titulo: 'Historial', subtitulo: 'Todo lo que hizo cada ROOT' }
+  if (pathname.startsWith('/root/duenos')) return { titulo: 'Dueños', subtitulo: 'Cuentas de dueño (OWNER)' }
+  if (pathname.startsWith('/root/roots')) return { titulo: 'Cuentas ROOT', subtitulo: 'Quién administra MenYU' }
+  return { titulo: 'Marcas', subtitulo: 'Marcas y restaurantes' }
+}
 
 /** ROOT no opera ninguna marca ni restaurante: en vez del selector de web-admin, un cartel que lo dice. */
 function ContextoDeRoot() {
@@ -50,13 +63,13 @@ function ContextoDeRoot() {
 export function RootLayout() {
   const { email, cerrarSesion } = useRootSession()
   const { pathname } = useLocation()
-  const enHistorial = pathname.startsWith('/root/historial')
+  const { titulo, subtitulo } = encabezadoDe(pathname)
 
   return (
     <Shell
       secciones={SECCIONES}
-      titulo={enHistorial ? 'Historial' : 'Marcas'}
-      subtitulo={enHistorial ? 'Todo lo que hizo cada ROOT' : 'Marcas y restaurantes'}
+      titulo={titulo}
+      subtitulo={subtitulo}
       contexto={<ContextoDeRoot />}
       email={email}
       onCerrarSesion={cerrarSesion}

@@ -22,6 +22,9 @@ import type {
   RootHistorialFiltros,
   RootHistorialPagina,
   RootCuentaResumen,
+  RootCuentaInvitada,
+  RootDueno,
+  RootInvitarCuentaRequest,
 } from '@menyu/types'
 
 export class ApiError extends Error {
@@ -464,9 +467,21 @@ export const api = {
         return req<RootHistorialPagina>('GET', `/root/historial${texto ? `?${texto}` : ''}`)
       },
     },
-    /** Solo para armar el filtro "Quién" del historial. */
+    /** Los dueños (membresías OWNER) se invitan por mail y se les quita el acceso: la cuenta de la persona no se toca. */
+    duenos: {
+      /** Todos, ordenados por email y marca. La búsqueda se hace en pantalla (sin acentos). */
+      listar: () => req<RootDueno[]>('GET', '/root/duenos'),
+      /** `invitacionEnviada: false` es que la persona ya tenía una cuenta: se le suma la marca sin mandarle mail. */
+      invitar: (marcaId: string, data: RootInvitarCuentaRequest) =>
+        req<CrearInvitacionResponse>('POST', `/root/marcas/${encodeURIComponent(marcaId)}/duenos`, data),
+      /** Se manda el id de la membresía. 409 si es el último dueño de una marca activa. */
+      quitar: (membresiaId: string) => req<void>('DELETE', `/root/duenos/${encodeURIComponent(membresiaId)}`),
+    },
+    /** Las cuentas ROOT: el filtro "Quién" del historial y la pantalla de Cuentas ROOT. No hay forma de quitarlas desde la API. */
     cuentas: {
       listar: () => req<RootCuentaResumen[]>('GET', '/root/roots'),
+      /** 409 si el email ya tiene una cuenta de MenYU: hacerla ROOT es del script de cuentas ROOT. */
+      invitar: (data: RootInvitarCuentaRequest) => req<RootCuentaInvitada>('POST', '/root/roots', data),
     },
   },
 }

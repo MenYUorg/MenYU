@@ -1,9 +1,12 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ChevronLeft, Lock, Pencil, Plus, Store, Trash2, Undo2 } from 'lucide-react'
-import type { RootMarcaDetalle, RootRestaurante } from '@menyu/types'
+import { ChevronLeft, Lock, Mail, Pencil, Plus, Store, Trash2, Undo2 } from 'lucide-react'
+import type { RootDuenoDeMarca, RootMarcaDetalle, RootRestaurante } from '@menyu/types'
 import { ApiError, api } from '../../../services/api'
+import { DialogoInvitacionEnviada } from '../dialogos/invitacion-enviada'
+import { DialogoInvitarDueno } from '../dialogos/invitar-dueno'
 import { DialogoBajaMarca, DialogoMarca, DialogoReactivarMarca } from '../dialogos/marca'
+import { DialogoNoSePuedeQuitar, DialogoQuitarDueno } from '../dialogos/quitar-dueno'
 import { DialogoBajaRestaurante, DialogoReactivarRestaurante, DialogoRestaurante } from '../dialogos/restaurante'
 import { avisoDeMarcaDeBaja } from '../copy'
 import {
@@ -15,6 +18,7 @@ import {
   Sigla,
   Vacio,
 } from '../ui/piezas'
+import { FilaDeDueno } from '../ui/FilaDeDueno'
 import { PaginaRoot } from '../ui/PaginaRoot'
 import { useAvisoTemporal } from '../ui/useAvisoTemporal'
 import { useCarga } from '../useCarga'
@@ -27,6 +31,10 @@ type Dialogo =
   | { tipo: 'editar-restaurante'; restaurante: RootRestaurante }
   | { tipo: 'baja-restaurante'; restaurante: RootRestaurante }
   | { tipo: 'reactivar-restaurante'; restaurante: RootRestaurante }
+  | { tipo: 'invitar-dueno' }
+  | { tipo: 'invitacion-enviada'; email: string; enviada: boolean }
+  | { tipo: 'quitar-dueno'; dueno: RootDuenoDeMarca }
+  | { tipo: 'ultimo-dueno' }
 
 function Volver() {
   return (
@@ -38,8 +46,8 @@ function Volver() {
 }
 
 /**
- * Donde ROOT trabaja una marca: sus datos, sus dueños (solo se ven: crearlos, cambiarles el email o eliminarlos llega con la
- * migración de autenticación) y sus restaurantes. Cierra con el recordatorio de lo que ROOT no ve.
+ * Donde ROOT trabaja una marca: sus datos, sus dueños (se invitan por mail y se les quita el acceso) y sus restaurantes. Cierra
+ * con el recordatorio de lo que ROOT no ve.
  */
 export function MarcaDetallePage() {
   const { id = '' } = useParams()
@@ -97,11 +105,15 @@ function DetalleDeMarca({ id }: { id: string }) {
     cerrar()
     mostrarAviso(texto)
   }
-  /** Una acción sobre un restaurante: se vuelve a pedir el detalle (cambian las cuentas de la marca). */
-  const restauranteCambiado = (texto: string) => () => {
+  /** Una acción sobre un restaurante o un dueño: se vuelve a pedir el detalle (cambian las cuentas de la marca). */
+  const detalleCambiado = (texto: string) => () => {
     cerrar()
     actualizar()
     mostrarAviso(texto)
+  }
+  /** El último dueño de una marca activa no se quita (la API también lo rechaza con 409). */
+  const quitarDueno = (dueno: RootDuenoDeMarca) => {
+    setDialogo(marca.activo && marca.duenos.length === 1 ? { tipo: 'ultimo-dueno' } : { tipo: 'quitar-dueno', dueno })
   }
 
   return (
@@ -131,8 +143,19 @@ function DetalleDeMarca({ id }: { id: string }) {
       )}
 
       {marca.activo && marca.duenos.length === 0 && (
-        <Aviso tipo="amb">
-          <b>Esta marca no tiene dueño.</b> Nadie puede administrar su menú, sus mesas ni su logo hasta que le crees uno.
+        <Aviso
+          tipo="amb"
+          accion={
+            <>
+              <br />
+              <button type="button" className="btn btn-primary" style={{ marginTop: 8 }} onClick={() => setDialogo({ tipo: 'invitar-dueno' })}>
+                <Mail size={16} aria-hidden="true" />
+                Invitar dueño
+              </button>
+            </>
+          }
+        >
+          <b>Esta marca no tiene dueño.</b> Nadie puede administrar su menú, sus mesas ni su logo hasta que invites a uno.
         </Aviso>
       )}
 
@@ -181,33 +204,29 @@ function DetalleDeMarca({ id }: { id: string }) {
         </div>
       </section>
 
-      {/* Dueños (solo lectura) */}
+      {/* Dueños (se invitan por mail; el acceso se quita, la cuenta no se borra) */}
       <section className="card" aria-labelledby="titulo-duenos">
         <div className="card-head">
           <div>
             <h3 className="titulo" id="titulo-duenos">
               Dueños
             </h3>
-            <p className="ayuda">Cuentas con acceso total a la marca. Los gerentes los crea el dueño desde su panel.</p>
+            <p className="ayuda">
+              Cuentas con acceso total a la marca. Se invitan por mail: la persona elige su contraseña al entrar. Los gerentes los invita
+              el dueño desde su panel.
+            </p>
           </div>
+          {marca.activo && (
+            <button type="button" className="btn" onClick={() => setDialogo({ tipo: 'invitar-dueno' })}>
+              <Mail size={16} aria-hidden="true" />
+              Invitar dueño
+            </button>
+          )}
         </div>
         {marca.duenos.length === 0 && <p className="vacio-inline">Todavía no hay ningún dueño.</p>}
         {marca.duenos.map((dueno) => (
-          <div className="item" key={dueno.id}>
-            <div className="sigla" aria-hidden="true">
-              {dueno.email.slice(0, 2).toUpperCase()}
-            </div>
-            <div className="item-txt">
-              <b>{dueno.email}</b>
-            </div>
-          </div>
+          <FilaDeDueno key={dueno.membresiaId} nombre={dueno.nombre} email={dueno.email} onQuitar={() => quitarDueno(dueno)} />
         ))}
-        <div style={{ marginTop: 12 }}>
-          <Aviso tipo="info">
-            Crear, cambiar el email o eliminar un dueño todavía no se hace desde esta pantalla: llega cuando termine la migración de
-            autenticación. Mientras tanto, se hace desde la documentación de la API (<code>/docs</code>).
-          </Aviso>
-        </div>
       </section>
 
       {/* Restaurantes */}
@@ -264,16 +283,35 @@ function DetalleDeMarca({ id }: { id: string }) {
       {dialogo?.tipo === 'baja-marca' && <DialogoBajaMarca marca={marca} onHecho={marcaCambiada('Marca dada de baja')} onCerrar={cerrar} />}
       {dialogo?.tipo === 'reactivar-marca' && <DialogoReactivarMarca marca={marca} onHecho={marcaCambiada('Marca reactivada')} onCerrar={cerrar} />}
       {dialogo?.tipo === 'nuevo-restaurante' && (
-        <DialogoRestaurante marca={marca} onGuardado={restauranteCambiado('Restaurante creado')} onCerrar={cerrar} />
+        <DialogoRestaurante marca={marca} onGuardado={detalleCambiado('Restaurante creado')} onCerrar={cerrar} />
       )}
       {dialogo?.tipo === 'editar-restaurante' && (
-        <DialogoRestaurante marca={marca} restaurante={dialogo.restaurante} onGuardado={restauranteCambiado('Cambios guardados')} onCerrar={cerrar} />
+        <DialogoRestaurante marca={marca} restaurante={dialogo.restaurante} onGuardado={detalleCambiado('Cambios guardados')} onCerrar={cerrar} />
       )}
       {dialogo?.tipo === 'baja-restaurante' && (
-        <DialogoBajaRestaurante restaurante={dialogo.restaurante} onHecho={restauranteCambiado('Restaurante dado de baja')} onCerrar={cerrar} />
+        <DialogoBajaRestaurante restaurante={dialogo.restaurante} onHecho={detalleCambiado('Restaurante dado de baja')} onCerrar={cerrar} />
       )}
       {dialogo?.tipo === 'reactivar-restaurante' && (
-        <DialogoReactivarRestaurante restaurante={dialogo.restaurante} onHecho={restauranteCambiado('Restaurante reactivado')} onCerrar={cerrar} />
+        <DialogoReactivarRestaurante restaurante={dialogo.restaurante} onHecho={detalleCambiado('Restaurante reactivado')} onCerrar={cerrar} />
+      )}
+      {dialogo?.tipo === 'invitar-dueno' && (
+        <DialogoInvitarDueno
+          marca={marca}
+          onInvitado={({ email, enviada }) => {
+            actualizar()
+            setDialogo({ tipo: 'invitacion-enviada', email, enviada })
+          }}
+          onCerrar={cerrar}
+        />
+      )}
+      {dialogo?.tipo === 'invitacion-enviada' && (
+        <DialogoInvitacionEnviada email={dialogo.email} enviada={dialogo.enviada} onCerrar={cerrar} />
+      )}
+      {dialogo?.tipo === 'quitar-dueno' && (
+        <DialogoQuitarDueno dueno={dialogo.dueno} marcaNombre={marca.nombre} onHecho={detalleCambiado('Acceso quitado')} onCerrar={cerrar} />
+      )}
+      {dialogo?.tipo === 'ultimo-dueno' && (
+        <DialogoNoSePuedeQuitar marcaNombre={marca.nombre} onInvitar={() => setDialogo({ tipo: 'invitar-dueno' })} onCerrar={cerrar} />
       )}
     </PaginaRoot>
   )
