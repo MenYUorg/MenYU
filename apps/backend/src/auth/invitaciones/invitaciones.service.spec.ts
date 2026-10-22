@@ -4,38 +4,57 @@ import {
   ConflictException,
   ForbiddenException,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common'
 import { Prisma, Rol } from '@prisma/client'
+import { HistorialRootService } from '../../root/historial/historial-root.service'
 import { accesoDeTest, CUENTAS, MUNDO } from '../../test/acceso-de-test'
 import { comoPrisma, crearPrismaMock, PrismaMock } from '../../test/prisma-mock'
+import { armarTransaccionRoot, EMAIL_DEL_ROOT, filasDelHistorial } from '../../test/root-mock'
 import { SupabaseAdminService } from '../supabase/supabase-admin.service'
 import { InvitacionesService } from './invitaciones.service'
 
 // La invitación con las membresías de CUENTAS y Supabase simulado. La matriz de quién invita a quién está completa en
-// puede-invitar.spec; acá, el flujo: ámbito, permisos, cuentas existentes, Supabase y el vínculo con el Mozo.
+// puede-invitar.spec; acá, el flujo: ámbito, permisos, cuentas existentes, Supabase, el vínculo con el Mozo y el
+// historial de ROOT.
 const REST = MUNDO.REST_1
 const CUENTA_NUEVA = { id: '6f1c2a40-7777-4a1b-9c3d-000000000001', email: 'nuevo@menyu.test', email_confirmed_at: null }
 
+type SupabaseSimulado = { generateLink: jest.Mock; deleteUser: jest.Mock; inviteUserByEmail: jest.Mock }
+
+function supabaseSimulado(): SupabaseSimulado {
+  return {
+    generateLink: jest.fn().mockResolvedValue({ data: null, error: { code: 'user_not_found', status: 404, message: 'no existe' } }),
+    deleteUser: jest.fn().mockResolvedValue({ error: null }),
+    inviteUserByEmail: jest.fn().mockResolvedValue({ data: { user: CUENTA_NUEVA }, error: null }),
+  }
+}
+
+function crearServicio(prisma: PrismaMock, supabase: SupabaseSimulado): InvitacionesService {
+  return new InvitacionesService(
+    comoPrisma(prisma),
+    accesoDeTest(),
+    { auth: supabase } as unknown as SupabaseAdminService,
+    new HistorialRootService(comoPrisma(prisma)),
+  )
+}
+
+const invitacion = (rol: Rol, ambito: { marcaId?: string; restauranteId?: string }, email = 'nuevo@menyu.test') => ({
+  email,
+  nombre: 'Nuevo',
+  rol,
+  ...ambito,
+})
+
 describe('InvitacionesService', () => {
   let prisma: PrismaMock
-  let supabase: { generateLink: jest.Mock; deleteUser: jest.Mock; inviteUserByEmail: jest.Mock }
+  let supabase: SupabaseSimulado
   let service: InvitacionesService
-
-  const invitacion = (rol: Rol, ambito: { marcaId?: string; restauranteId?: string }, email = 'nuevo@menyu.test') => ({
-    email,
-    nombre: 'Nuevo',
-    rol,
-    ...ambito,
-  })
 
   beforeEach(() => {
     prisma = crearPrismaMock()
-    supabase = {
-      generateLink: jest.fn().mockResolvedValue({ data: null, error: { code: 'user_not_found', status: 404, message: 'no existe' } }),
-      deleteUser: jest.fn().mockResolvedValue({ error: null }),
-      inviteUserByEmail: jest.fn().mockResolvedValue({ data: { user: CUENTA_NUEVA }, error: null }),
-    }
-    service = new InvitacionesService(comoPrisma(prisma), accesoDeTest(), { auth: supabase } as unknown as SupabaseAdminService)
+    supabase = supabaseSimulado()
+    service = crearServicio(prisma, supabase)
 
     prisma.usuario.findUnique.mockResolvedValue(null)
     prisma.usuario.create.mockResolvedValue({ id: 'u-nuevo', email: 'nuevo@menyu.test', nombre: 'Nuevo' })
@@ -108,6 +127,7 @@ describe('InvitacionesService', () => {
       expect(prisma.mozo.create).toHaveBeenCalledWith({
         data: { restauranteId: REST, nombre: 'Nuevo', email: 'nuevo@menyu.test', usuarioId: 'u-nuevo', esJefeSalon: false },
       })
+      expect(prisma.historialRoot.create).not.toHaveBeenCalled()
     })
 
     it('un JEFE_SALON vincula el Mozo del login propio con su email y lo reactiva', async () => {
@@ -181,17 +201,18 @@ describe('InvitacionesService', () => {
   })
 
   describe('un email que ya es de un Usuario', () => {
-    it('ROOT le suma la membresía de OWNER sin tocar Supabase', async () => {
+    it('el OWNER le suma la membresía sin tocar Supabase', async () => {
       // Arrange
       prisma.usuario.findUnique.mockResolvedValue({ id: 'u-existente', email: 'nuevo@menyu.test', nombre: 'Ya', activo: true })
       prisma.membresia.findFirst.mockResolvedValue(null)
 
       // Act
-      const creada = await service.invitar(invitacion('OWNER', { marcaId: MUNDO.MARCA_A }), CUENTAS.ROOT)
+      const creada = await service.invitar(invitacion('COCINA', { restauranteId: REST }), CUENTAS.OWNER_A)
 
       // Assert
       expect(creada).toEqual({ usuarioId: 'u-existente', membresiaId: 'm-nueva', invitacionEnviada: false })
-      expect(prisma.membresia.create).toHaveBeenCalledWith({ data: { usuarioId: 'u-existente', rol: 'OWNER', marcaId: MUNDO.MARCA_A } })
+      expect(prisma.membresia.create).toHaveBeenCalledWith({ data: { usuarioId: 'u-existente', rol: 'COCINA', restauranteId: REST } })
+      expect(prisma.usuario.create).not.toHaveBeenCalled()
       expect(supabase.generateLink).not.toHaveBeenCalled()
     })
 
@@ -209,5 +230,143 @@ describe('InvitacionesService', () => {
       )
       expect(prisma.membresia.create).not.toHaveBeenCalled()
     })
+  })
+})
+
+// Decisión 22 de docs/plan-consola-root.md: Supabase antes y afuera; el Usuario, la membresía y el registro, en una sola
+// transacción. `prisma` y `tx` son distintos: lo que no pasa por `tx` no se revierte.
+describe('InvitacionesService: lo que invita ROOT queda en su historial', () => {
+  let prisma: PrismaMock
+  let tx: PrismaMock
+  let supabase: SupabaseSimulado
+  let service: InvitacionesService
+  const DUENO = invitacion('OWNER', { marcaId: MUNDO.MARCA_A }, 'juan@laparrilla.com')
+
+  beforeEach(() => {
+    ;({ prisma, tx } = armarTransaccionRoot())
+    supabase = supabaseSimulado()
+    supabase.inviteUserByEmail.mockResolvedValue({ data: { user: { ...CUENTA_NUEVA, email: 'juan@laparrilla.com' } }, error: null })
+    service = crearServicio(prisma, supabase)
+
+    prisma.usuario.findUnique.mockResolvedValue(null)
+    prisma.marca.findUnique.mockResolvedValue({ activo: true })
+    tx.usuario.create.mockResolvedValue({ id: 'u-juan', email: 'juan@laparrilla.com', nombre: 'Nuevo' })
+    tx.membresia.create.mockResolvedValue({ id: 'm-juan' })
+    tx.marca.findUniqueOrThrow.mockResolvedValue({ id: MUNDO.MARCA_A, nombre: 'La Parrilla' })
+  })
+
+  /** Nada se escribió con el cliente suelto: todo fue por la transacción. */
+  const nadaPorFuera = () => {
+    expect(prisma.usuario.create).not.toHaveBeenCalled()
+    expect(prisma.membresia.create).not.toHaveBeenCalled()
+    expect(prisma.historialRoot.create).not.toHaveBeenCalled()
+  }
+
+  it('un dueño nuevo: primero la invitación de Supabase y después, en una transacción, el Usuario, la membresía y un registro', async () => {
+    // Act
+    const creada = await service.invitar(DUENO, CUENTAS.ROOT)
+
+    // Assert
+    expect(creada).toEqual({ usuarioId: 'u-juan', membresiaId: 'm-juan', invitacionEnviada: true })
+    expect(supabase.inviteUserByEmail.mock.invocationCallOrder[0]).toBeLessThan(prisma.$transaction.mock.invocationCallOrder[0])
+    expect(tx.membresia.create).toHaveBeenCalledWith({ data: { usuarioId: 'u-juan', rol: 'OWNER', marcaId: MUNDO.MARCA_A } })
+    expect(filasDelHistorial(tx)).toEqual([
+      {
+        actorTipo: 'ROOT',
+        actorId: CUENTAS.ROOT.id,
+        actorNombre: EMAIL_DEL_ROOT,
+        accion: 'DUENO_INVITAR',
+        entidadTipo: 'OWNER',
+        entidadId: 'u-juan',
+        entidadNombre: 'juan@laparrilla.com',
+        marcaId: MUNDO.MARCA_A,
+        marcaNombre: 'La Parrilla',
+        detalle: [
+          { campo: 'Dueño de', antes: null, despues: 'La Parrilla' },
+          { campo: 'Invitación', antes: null, despues: 'mail enviado' },
+        ],
+      },
+    ])
+    expect(tx.usuario.findUnique).toHaveBeenCalledWith(expect.objectContaining({ where: { id: CUENTAS.ROOT.id } }))
+    nadaPorFuera()
+  })
+
+  it('un email que ya es de un Usuario (dueño de otra marca): se suma la membresía, sin Supabase, y también se registra', async () => {
+    // Arrange
+    prisma.usuario.findUnique.mockResolvedValue({ id: 'u-juan', email: 'juan@laparrilla.com', nombre: 'Juan', activo: true })
+    prisma.membresia.findFirst.mockResolvedValue(null)
+
+    // Act
+    const creada = await service.invitar(DUENO, CUENTAS.ROOT)
+
+    // Assert
+    expect(creada).toEqual({ usuarioId: 'u-juan', membresiaId: 'm-juan', invitacionEnviada: false })
+    expect(supabase.generateLink).not.toHaveBeenCalled()
+    expect(tx.usuario.create).not.toHaveBeenCalled()
+    expect(filasDelHistorial(tx)).toEqual([
+      expect.objectContaining({
+        accion: 'DUENO_INVITAR',
+        entidadId: 'u-juan',
+        detalle: [
+          { campo: 'Dueño de', antes: null, despues: 'La Parrilla' },
+          { campo: 'Invitación', antes: null, despues: 'ya tenía cuenta: no se le mandó mail' },
+        ],
+      }),
+    ])
+    nadaPorFuera()
+  })
+
+  it('una cuenta de Supabase ya confirmada (un cliente registrado) queda registrada como "ya tenía cuenta"', async () => {
+    // Arrange
+    supabase.generateLink.mockResolvedValue({ data: { user: { ...CUENTA_NUEVA, email_confirmed_at: '2026-10-01' } }, error: null })
+
+    // Act
+    const creada = await service.invitar(DUENO, CUENTAS.ROOT)
+
+    // Assert
+    expect(creada.invitacionEnviada).toBe(false)
+    expect(filasDelHistorial(tx)[0].detalle[1]).toEqual({ campo: 'Invitación', antes: null, despues: 'ya tenía cuenta: no se le mandó mail' })
+  })
+
+  it('si no se puede registrar, la invitación falla y la transacción no deja nada escrito', async () => {
+    // Arrange
+    tx.historialRoot.create.mockRejectedValue(new Error('sin espacio en el disco'))
+
+    // Act + Assert
+    await expect(service.invitar(DUENO, CUENTAS.ROOT)).rejects.toThrow('sin espacio en el disco')
+    expect(tx.membresia.create).toHaveBeenCalled()
+    nadaPorFuera()
+  })
+
+  it('si la cuenta dejó de ser ROOT mientras tanto, responde 401 y no se registra nada', async () => {
+    // Arrange
+    tx.usuario.findUnique.mockResolvedValue({ id: CUENTAS.ROOT.id, email: EMAIL_DEL_ROOT, esRoot: false, activo: true })
+
+    // Act + Assert
+    await expect(service.invitar(DUENO, CUENTAS.ROOT)).rejects.toThrow(UnauthorizedException)
+    expect(tx.historialRoot.create).not.toHaveBeenCalled()
+    nadaPorFuera()
+  })
+
+  it('una cuenta ROOT que además es OWNER e invita a su personal actúa como OWNER: no va al historial de ROOT', async () => {
+    // Arrange
+    const rootQueEsOwner = { ...CUENTAS.OWNER_A, esRoot: true }
+    prisma.restaurante.findUnique.mockResolvedValue({ activo: true, marca: { activo: true } })
+
+    // Act
+    await service.invitar(invitacion('MOZO', { restauranteId: REST }), rootQueEsOwner)
+
+    // Assert
+    expect(tx.membresia.create).toHaveBeenCalledWith({ data: { usuarioId: 'u-juan', rol: 'MOZO', restauranteId: REST } })
+    expect(tx.historialRoot.create).not.toHaveBeenCalled()
+  })
+
+  it('el OWNER que invita a otro OWNER de su marca no escribe en el historial de ROOT', async () => {
+    // Act
+    await service.invitar(DUENO, CUENTAS.OWNER_A)
+
+    // Assert
+    expect(tx.membresia.create).toHaveBeenCalled()
+    expect(tx.historialRoot.create).not.toHaveBeenCalled()
   })
 })

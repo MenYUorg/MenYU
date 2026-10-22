@@ -19,6 +19,11 @@ describe('etiquetaDeAccion', () => {
     ['RESTAURANTE_REACTIVAR', 'Reactivó el restaurante'],
     ['DUENO_ELIMINAR', 'Eliminó la cuenta de dueño'],
     ['ROOT_CREAR', 'Creó la cuenta ROOT'],
+    // Las de las invitaciones (entrega 4.4 de auth).
+    ['DUENO_INVITAR', 'Invitó al dueño'],
+    ['DUENO_QUITAR', 'Quitó al dueño'],
+    ['ROOT_INVITAR', 'Invitó a la cuenta ROOT'],
+    ['ROOT_PROMOVER', 'Hizo ROOT a la cuenta'],
   ])('traduce %s', (codigo, texto) => {
     expect(etiquetaDeAccion(codigo)).toBe(texto)
   })

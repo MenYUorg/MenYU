@@ -16,7 +16,10 @@ import type { Prisma } from '@prisma/client'
 /** Sobre qué tipo de cosa fue la acción. Es la columna `entidad_tipo` (con un CHECK en la base). */
 export type EntidadRoot = 'MARCA' | 'RESTAURANTE' | 'OWNER' | 'ROOT'
 
-/** Cada acción y sobre qué tipo de entidad es. `ROOT_ELIMINAR` solo la hace el script (no hay ruta para borrar cuentas ROOT). */
+/**
+ * Cada acción y sobre qué tipo de entidad es. `ROOT_ELIMINAR` y `ROOT_PROMOVER` solo las hace el script (no hay ruta para
+ * borrar cuentas ROOT ni para hacer ROOT a una cuenta que ya existe).
+ */
 export const ENTIDAD_DE_ACCION = {
   MARCA_CREAR: 'MARCA',
   MARCA_EDITAR: 'MARCA',
@@ -30,9 +33,13 @@ export const ENTIDAD_DE_ACCION = {
   DUENO_CAMBIAR_EMAIL: 'OWNER',
   DUENO_RESTABLECER: 'OWNER',
   DUENO_ELIMINAR: 'OWNER',
+  DUENO_INVITAR: 'OWNER',
+  DUENO_QUITAR: 'OWNER',
   ROOT_CREAR: 'ROOT',
   ROOT_RESTABLECER: 'ROOT',
   ROOT_ELIMINAR: 'ROOT',
+  ROOT_INVITAR: 'ROOT',
+  ROOT_PROMOVER: 'ROOT',
 } as const satisfies Record<string, EntidadRoot>
 
 export type AccionRoot = keyof typeof ENTIDAD_DE_ACCION
@@ -72,6 +79,11 @@ export const CAMBIO_PASSWORD = {
     despues: 'restablecida: la persona tiene que cambiarla al entrar',
   },
 } as const satisfies Record<string, CambioHistorial>
+
+/** Si la invitación mandó un mail o sumó a alguien que ya tenía cuenta (en Supabase o como `Usuario`). */
+export function cambioDeInvitacion(invitacionEnviada: boolean): CambioHistorial {
+  return { campo: 'Invitación', antes: null, despues: invitacionEnviada ? 'mail enviado' : 'ya tenía cuenta: no se le mandó mail' }
+}
 
 // Un hash de bcrypt ($2a$10$… de 60 caracteres), esté solo o dentro de un texto. Red de seguridad: ningún detalle lo lleva.
 const HASH_BCRYPT = /\$2[abxy]?\$\d{2}\$[./A-Za-z0-9]{40,}/

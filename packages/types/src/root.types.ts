@@ -72,7 +72,12 @@ export interface RootEditarRestauranteRequest {
 
 // ── Historial de acciones de ROOT ────────────────────────────────────────────
 
-/** Las acciones que la API registra hoy. El historial es de solo agregar: las filas viejas no se reescriben. */
+/**
+ * Las acciones que registró la API. El historial es de solo agregar: las filas viejas no se reescriben, así que siguen las de
+ * las cuentas con contraseña (crear, cambiar el email, restablecer y eliminar), que la API ya no registra desde la entrega 4.4
+ * de auth. Desde entonces registra las invitaciones: `DUENO_INVITAR`, `DUENO_QUITAR`, `ROOT_INVITAR` y, desde el script,
+ * `ROOT_PROMOVER`.
+ */
 export type RootAccionConocida =
   | 'MARCA_CREAR'
   | 'MARCA_EDITAR'
@@ -86,9 +91,13 @@ export type RootAccionConocida =
   | 'DUENO_CAMBIAR_EMAIL'
   | 'DUENO_RESTABLECER'
   | 'DUENO_ELIMINAR'
+  | 'DUENO_INVITAR'
+  | 'DUENO_QUITAR'
   | 'ROOT_CREAR'
   | 'ROOT_RESTABLECER'
   | 'ROOT_ELIMINAR'
+  | 'ROOT_INVITAR'
+  | 'ROOT_PROMOVER'
 
 /** Una acción del historial. Admite códigos que todavía no existen: la pantalla los muestra tal cual. */
 export type RootAccion = RootAccionConocida | (string & {})

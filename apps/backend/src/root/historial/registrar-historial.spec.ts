@@ -7,6 +7,7 @@ import {
   ENTIDAD_DE_ACCION,
   EntradaHistorial,
   RegistroInvalido,
+  cambioDeInvitacion,
   registrarEnHistorial,
 } from './registrar-historial'
 
@@ -152,8 +153,17 @@ describe('las acciones', () => {
         'RESTAURANTE_CREAR', 'RESTAURANTE_EDITAR', 'RESTAURANTE_BAJA', 'RESTAURANTE_REACTIVAR',
         'DUENO_CREAR', 'DUENO_CAMBIAR_EMAIL', 'DUENO_RESTABLECER', 'DUENO_ELIMINAR',
         'ROOT_CREAR', 'ROOT_RESTABLECER', 'ROOT_ELIMINAR',
+        // Con Supabase (entrega 4.4 de auth): invitar y quitar dueños, invitar cuentas ROOT y, desde el script, promover una.
+        'DUENO_INVITAR', 'DUENO_QUITAR', 'ROOT_INVITAR', 'ROOT_PROMOVER',
       ].sort(),
     )
+  })
+
+  it.each([
+    [true, 'mail enviado'],
+    [false, 'ya tenía cuenta: no se le mandó mail'],
+  ])('la invitación con invitacionEnviada=%s dice «%s»', (enviada, texto) => {
+    expect(cambioDeInvitacion(enviada)).toEqual({ campo: 'Invitación', antes: null, despues: texto })
   })
 
   it('las constantes que describen una contraseña no llevan nunca un valor real', () => {

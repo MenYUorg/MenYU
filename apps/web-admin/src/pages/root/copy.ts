@@ -31,14 +31,18 @@ const ACCIONES: Record<string, string> = {
   DUENO_CAMBIAR_EMAIL: 'Cambió el email del dueño',
   DUENO_RESTABLECER: 'Restableció la contraseña del dueño',
   DUENO_ELIMINAR: 'Eliminó la cuenta de dueño',
+  DUENO_INVITAR: 'Invitó al dueño',
+  DUENO_QUITAR: 'Quitó al dueño',
   ROOT_CREAR: 'Creó la cuenta ROOT',
   ROOT_RESTABLECER: 'Restableció la contraseña de ROOT',
   ROOT_ELIMINAR: 'Eliminó la cuenta ROOT',
+  ROOT_INVITAR: 'Invitó a la cuenta ROOT',
+  ROOT_PROMOVER: 'Hizo ROOT a la cuenta',
 }
 
 /**
- * Qué hizo, en palabras. El historial es de solo agregar y la lista de acciones va a crecer (con la autenticación nueva habrá
- * invitaciones): un código que no está acá se muestra TAL CUAL, nunca rompe la pantalla ni se esconde.
+ * Qué hizo, en palabras. El historial es de solo agregar y la lista de acciones puede crecer: un código que no está acá se
+ * muestra TAL CUAL, nunca rompe la pantalla ni se esconde.
  */
 export function etiquetaDeAccion(codigo: string): string {
   return tieneClave(ACCIONES, codigo) ? ACCIONES[codigo] : codigo
