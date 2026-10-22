@@ -108,7 +108,18 @@ JOIN marca m ON m.slug = 'pruebas-auth'
 JOIN restaurante r ON r.marca_id = m.id AND r.nombre = 'Restaurante Pruebas Auth';
 ```
 
-Hasta la Fase 4, web-admin y web-staff no leen la sesión de Supabase: al llegar muestran su login legacy. Lo que se verifica es la URL a la que manda web-auth.
+Desde la entrega 4.5, web-admin lee la sesión de Supabase; web-staff la lee desde la 4.6 (hasta entonces muestra su login legacy).
+
+### Probar la entrega 4.5 en local (2026-10-21)
+
+La API de staging todavía corre `main`, sin el backend de las entregas 4.2 a 4.4 (está en el PR draft #416): le responde **401** a `GET /restaurantes` y `GET /marcas` con un token de Supabase. Para probar web-admin de punta a punta se levanta el backend de la rama en local y se usa el Supabase de staging solo para autenticar:
+
+1. `apps/web-auth/.env.local` y `apps/web-admin/.env.local` (git los ignora) con `VITE_API_URL=/api`, el `VITE_SUPABASE_URL` y `VITE_SUPABASE_PUBLISHABLE_KEY` de staging, `VITE_AUTH_COOKIE_DOMAIN=.menyu.local` y `VITE_AUTH_URL=http://auth.menyu.local:5173`.
+2. El backend, con la base local (`apps/backend/.env`) más `SUPABASE_URL` del proyecto de staging y una `MP_ENCRYPTION_KEY` cualquiera: `pnpm --filter @menyu/api dev`. Sin `SUPABASE_SERVICE_ROLE_KEY`, invitar responde 502 ("Supabase no está configurado"): la invitación de punta a punta se prueba en staging.
+3. Las cuentas de staging tienen que existir en la base local con su `supabase_user_id`: se pide un token con cada una (`/auth/v1/token?grant_type=password`), se toma el `sub` del JWT y se insertan en `usuario` y `membresia` sobre la Marca Seed y el Restaurante Seed del seed. El `Mozo Seed` se deja sin `usuarioId`: así aparece en "Mozos sin cuenta" de Personal.
+4. Los dos Vite en `127.0.0.1` con `--strictPort` (si el puerto queda tomado por un Vite anterior, el nuevo elige otro y el proxy sigue apuntando al backend viejo: fue una hora perdida en la 4.5).
+
+Con eso andan el login, el SSO por la cookie de `.menyu.local`, el destino por rol, Personal y la consola de ROOT.
 
 ## Cuentas de Google (desde la Fase 3b)
 
