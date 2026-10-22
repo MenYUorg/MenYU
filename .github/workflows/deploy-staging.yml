@@ -16,6 +16,8 @@ on:
       - '**/*.test.tsx'
       - 'apps/backend/test/**'
       - '.github/workflows/ci.yml'
+      - '.github/workflows/carga-k6.yml'
+      - 'scripts/carga/**'
       - 'sonar-project.properties'
 
 jobs:
