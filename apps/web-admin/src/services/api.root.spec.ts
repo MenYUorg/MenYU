@@ -1,6 +1,7 @@
 import { api } from './api'
+import { reiniciarSesionDePrueba, sesionDePrueba } from '../test/authClient'
 
-vi.mock('@menyu/auth', () => ({ TOKEN_KEY: 'menyu_access_token', REFRESH_KEY: 'menyu_refresh_token', resolveLoginUrl: vi.fn() }))
+vi.mock('@menyu/auth-client', async () => (await import('../test/authClient')).moduloSimulado())
 
 const fetchFalso = vi.fn()
 
@@ -12,19 +13,15 @@ beforeEach(() => {
   fetchFalso.mockReset()
   fetchFalso.mockResolvedValue(respuesta([]))
   vi.stubGlobal('fetch', fetchFalso)
-  localStorage.clear()
+  reiniciarSesionDePrueba()
 })
 
 afterEach(() => vi.unstubAllGlobals())
 
-// Si hay un `.env.local` con `VITE_API_URL` (como en la compu de desarrollo), api.ts lo antepone a cada ruta: se saca para que
-// el test mire solo la ruta y dé lo mismo con el entorno que sea.
-const BASE = import.meta.env.VITE_API_URL ?? ''
-
 const ultimaLlamada = () => {
   const [url, opciones] = fetchFalso.mock.calls[fetchFalso.mock.calls.length - 1] as [string, RequestInit]
   return {
-    url: BASE && url.startsWith(BASE) ? url.slice(BASE.length) : url,
+    url,
     metodo: opciones.method,
     cuerpo: opciones.body,
     encabezados: opciones.headers as Record<string, string>,
@@ -45,7 +42,7 @@ describe('api.root', () => {
     })
 
     it('manda el token de la sesión', async () => {
-      localStorage.setItem('menyu_access_token', 'token-de-root')
+      sesionDePrueba.token = 'token-de-root'
 
       await api.root.marcas.listar()
 

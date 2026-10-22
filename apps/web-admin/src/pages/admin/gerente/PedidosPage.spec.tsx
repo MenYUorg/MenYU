@@ -5,8 +5,6 @@ import { PedidosPage } from './PedidosPage'
 
 let restauranteActual: string | null = 'rest-1'
 
-vi.mock('@menyu/auth', () => ({ TOKEN_KEY: 'menyu_token' }))
-
 vi.mock('../../../store/contextStore', () => ({
   useContextStore: () => ({ selectedRestauranteId: restauranteActual }),
 }))
@@ -74,7 +72,6 @@ beforeEach(() => {
   restauranteActual = 'rest-1'
   vi.clearAllMocks()
   socket.handlers.clear()
-  localStorage.setItem('menyu_token', 'jwt-de-test')
 })
 
 describe('PedidosPage', () => {
@@ -139,11 +136,12 @@ describe('PedidosPage', () => {
   })
 
   describe('tiempo real', () => {
-    it('se conecta con el token, entra a la sala del restaurante y se desconecta al salir', async () => {
+    it('se conecta sin token, entra a la sala del restaurante y se desconecta al salir', async () => {
       listar.mockResolvedValue([])
       const { unmount } = render(<PedidosPage />)
 
-      expect(io).toHaveBeenCalledWith(expect.stringMatching(/\/ws$/), { auth: { token: 'jwt-de-test' }, transports: ['websocket'] })
+      // El gateway no autentica la conexión (docs/auth/specs/auth.md, Fuera de alcance).
+      expect(io).toHaveBeenCalledWith(expect.stringMatching(/\/ws$/), { transports: ['websocket'] })
       recibir('connect')
       expect(socket.emit).toHaveBeenCalledWith('cocina:join', { restauranteId: 'rest-1' })
 

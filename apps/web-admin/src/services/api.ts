@@ -1,4 +1,4 @@
-import { TOKEN_KEY, REFRESH_KEY, resolveLoginUrl } from '@menyu/auth'
+import { irAlLogin, renovarSesion, tokenDeAcceso, urlDeLaApi } from '@menyu/auth-client'
 import type {
   Marca,
   Restaurante,
@@ -7,7 +7,6 @@ import type {
   Ingrediente,
   ClasificacionDieta,
   LogoResponse,
-  TokenPair,
   UpdateItemDescuentoRequest,
   SesionHistorial,
   RootMarcaResumen,
@@ -32,93 +31,61 @@ export class ApiError extends Error {
   }
 }
 
-const BASE = import.meta.env.VITE_API_URL ?? ''
-
-let isRefreshing = false
-let refreshQueue: Array<(token: string | null) => void> = []
-
-async function tryRefresh(): Promise<string | null> {
-  const refreshToken = localStorage.getItem(REFRESH_KEY)
-  if (!refreshToken) return null
-  try {
-    const res = await fetch(`${BASE}/auth/refresh`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refreshToken }),
-    })
-    if (!res.ok) return null
-    const data = (await res.json()) as TokenPair
-    localStorage.setItem(TOKEN_KEY, data.accessToken)
-    localStorage.setItem(REFRESH_KEY, data.refreshToken)
-    return data.accessToken
-  } catch {
-    return null
-  }
+/**
+ * Una llamada a la API con el access token de Supabase (docs/auth/specs/auth.md, API). Ante un 401 pide un token nuevo
+ * con el refresh token y reintenta una sola vez; si no se pudo, vuelve a web-auth. No usa localStorage: el token sale
+ * de la cookie de dominio compartido en cada llamada, así que un logout hecho en otra app se nota acá.
+ */
+async function enviar(path: string, opciones: RequestInit, token: string | null): Promise<Response> {
+  const headers: Record<string, string> = { ...(opciones.headers as Record<string, string> | undefined) }
+  if (token) headers['Authorization'] = `Bearer ${token}`
+  return fetch(`${urlDeLaApi()}${path}`, { ...opciones, headers })
 }
 
-async function req<T>(method: string, path: string, body?: unknown, isRetry = false): Promise<T> {
-  const token = localStorage.getItem(TOKEN_KEY)
-  const headers: Record<string, string> = {}
-  if (token) headers['Authorization'] = `Bearer ${token}`
-  if (body !== undefined) headers['Content-Type'] = 'application/json'
+async function pedir(path: string, opciones: RequestInit): Promise<Response> {
+  const res = await enviar(path, opciones, await tokenDeAcceso())
+  if (res.status !== 401) return res
 
-  const res = await fetch(`${BASE}${path}`, {
-    method,
-    headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  })
-
-  if (res.status === 401 && !isRetry) {
-    if (!isRefreshing) {
-      isRefreshing = true
-      const newToken = await tryRefresh()
-      isRefreshing = false
-      refreshQueue.forEach((cb) => cb(newToken))
-      refreshQueue = []
-      if (!newToken) {
-        localStorage.removeItem(TOKEN_KEY)
-        localStorage.removeItem(REFRESH_KEY)
-        window.location.replace(resolveLoginUrl())
-        throw new ApiError(401, 'Sesión expirada')
-      }
-      return req<T>(method, path, body, true)
-    }
-    return new Promise<T>((resolve, reject) => {
-      refreshQueue.push((newToken) => {
-        if (!newToken) reject(new ApiError(401, 'Sesión expirada'))
-        else req<T>(method, path, body, true).then(resolve).catch(reject)
-      })
-    })
+  // supabase-js serializa las renovaciones simultáneas con un lock del browser: dos pedidos en paralelo no piden dos.
+  const nuevo = await renovarSesion()
+  if (!nuevo) {
+    irAlLogin()
+    throw new ApiError(401, 'Sesión expirada')
   }
+  return enviar(path, opciones, nuevo)
+}
 
-  if (!res.ok) {
-    const err = (await res.json().catch(() => ({}))) as Record<string, unknown>
-    throw new ApiError(
-      res.status,
-      typeof err['message'] === 'string' ? err['message'] : `Error ${res.status}`,
-    )
-  }
+async function leerError(res: Response): Promise<never> {
+  const err = (await res.json().catch(() => ({}))) as Record<string, unknown>
+  throw new ApiError(
+    res.status,
+    typeof err['message'] === 'string' ? err['message'] : `Error ${res.status}`,
+  )
+}
 
+/** Para las pantallas que arman su propio pedido (PagosPage). Mismo token, mismo 401 y el mismo `ApiError`. */
+export async function pedirJson<T>(path: string, opciones: RequestInit = {}): Promise<T> {
+  const headers: Record<string, string> = { ...(opciones.headers as Record<string, string> | undefined) }
+  if (opciones.body !== undefined && !headers['Content-Type']) headers['Content-Type'] = 'application/json'
+
+  const res = await pedir(path, { ...opciones, headers })
+  if (!res.ok) return leerError(res)
   if (res.status === 204) return undefined as T
   return res.json() as Promise<T>
 }
 
+async function req<T>(method: string, path: string, body?: unknown): Promise<T> {
+  return pedirJson<T>(path, {
+    method,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  })
+}
+
 async function upload<T>(path: string, fieldName: string, file: File): Promise<T> {
-  const token = localStorage.getItem(TOKEN_KEY)
   const fd = new FormData()
   fd.append(fieldName, file)
-  const res = await fetch(`${BASE}${path}`, {
-    method: 'POST',
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-    body: fd,
-  })
-  if (!res.ok) {
-    const err = (await res.json().catch(() => ({}))) as Record<string, unknown>
-    throw new ApiError(
-      res.status,
-      typeof err['message'] === 'string' ? err['message'] : `Error ${res.status}`,
-    )
-  }
+  const res = await pedir(path, { method: 'POST', body: fd })
+  if (!res.ok) return leerError(res)
   return res.json() as Promise<T>
 }
 
@@ -340,8 +307,6 @@ export const api = {
     pagos: {
       listSesiones: (restauranteId: string) =>
         req<SesionResumen[]>('GET', `/payments/sesiones?restauranteId=${encodeURIComponent(restauranteId)}`),
-      confirmarEfectivo: (sesionId: string) =>
-        req<{ sesionId: string; estado: string }>('POST', '/payments/confirmar-efectivo', { sesionId }),
     },
 
     sessions: {

@@ -14,8 +14,10 @@
   },
   "dependencies": {
     "@menyu/auth": "workspace:*",
+    "@menyu/auth-client": "workspace:*",
     "@menyu/types": "workspace:*",
     "@menyu/ui": "workspace:*",
+    "@supabase/supabase-js": "2.117.0",
     "lucide-react": "^1.16.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

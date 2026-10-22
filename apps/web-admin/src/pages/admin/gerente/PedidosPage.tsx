@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { io, Socket } from 'socket.io-client'
-import { TOKEN_KEY } from '@menyu/auth'
 import { api, PedidoAdmin } from '../../../services/api'
 import { useContextStore } from '../../../store/contextStore'
 import { ClipboardList, Clock, ChevronRight, RefreshCw, AlertTriangle } from 'lucide-react'
@@ -315,8 +314,8 @@ export function PedidosPage() {
 
   useEffect(() => {
     if (!selectedRestauranteId) return
+    // El gateway no autentica la conexión (docs/auth/specs/auth.md, Fuera de alcance): no se le manda ningún token.
     const socket: Socket = io(`${WS_URL}/ws`, {
-      auth:       { token: localStorage.getItem(TOKEN_KEY) },
       transports: ['websocket'],
     })
     socketRef.current = socket
