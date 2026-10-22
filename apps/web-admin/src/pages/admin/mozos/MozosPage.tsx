@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, ArrowLeft, ChevronRight, Users, X } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, ChevronRight, Mail, Users, X } from 'lucide-react'
+import { usePerfil } from '@menyu/auth-client'
+import type { MiembroDelPersonal, PersonalDelRestaurante, Rol } from '@menyu/types'
 import { useContextStore, useRolActual } from '../../../store/contextStore'
 import { api, ApiError } from '../../../services/api'
+import { ambitoDeLaInvitacion, etiquetaDeRol, puedeQuitarAcceso, rolesQuePuedeInvitar } from './personal'
 
 /* ── types ─────────────────────────────────────────────────────────────────── */
 
@@ -23,15 +26,6 @@ interface MesaConMozos {
 }
 
 type MesaAsignada = { id: string; numero: string; estado: string }
-
-interface AdminItem {
-  id: string
-  email: string
-  rol: string
-  marcaId: string | null
-}
-
-type RestauranteAsignado = { id: string; nombre: string }
 
 /* ── palette ────────────────────────────────────────────────────────────────── */
 const C = {
@@ -135,9 +129,9 @@ function MozoAvatar({ nombre, esJefeSalon, size = 40 }: { nombre: string; esJefe
   )
 }
 
-/* ── GerenteAvatar ──────────────────────────────────────────────────────────── */
+/* ── PersonaAvatar ──────────────────────────────────────────────────────────── */
 
-function GerenteAvatar({ email, size = 40 }: { email: string; size?: number }) {
+function PersonaAvatar({ email, size = 40 }: { email: string; size?: number }) {
   return (
     <div style={{
       width: size, height: size, borderRadius: '50%',
@@ -279,38 +273,97 @@ function MozoRow({
   )
 }
 
-/* ── GerenteRow ─────────────────────────────────────────────────────────────── */
+/* ── MiembroRow ─────────────────────────────────────────────────────────────── */
 
-function GerenteRow({
-  gerente, restaurantes, onClick,
+function MiembroRow({
+  miembro, esPropia, puedeQuitar, onQuitar,
 }: {
-  gerente: AdminItem; restaurantes: RestauranteAsignado[]; onClick: () => void
+  miembro: MiembroDelPersonal; esPropia: boolean; puedeQuitar: boolean; onQuitar: () => void
 }) {
-  const [hov, setHov] = useState(false)
   return (
-    <div
-      onClick={onClick}
-      onMouseEnter={() => setHov(true)}
-      onMouseLeave={() => setHov(false)}
-      style={{
-        display: 'flex', alignItems: 'center', gap: 16,
-        background: 'white', border: `1px solid ${hov ? C.navy : C.border}`,
-        borderRadius: 12, padding: '14px 20px', cursor: 'pointer',
-        marginBottom: 10, transition: 'border-color 0.15s',
-      }}
-    >
-      <GerenteAvatar email={gerente.email} size={40} />
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 16,
+      background: 'white', border: `1px solid ${C.border}`,
+      borderRadius: 12, padding: '14px 20px', marginBottom: 10,
+    }}>
+      <PersonaAvatar email={miembro.email} size={40} />
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 15, fontWeight: 600, color: C.text, fontFamily: 'Inter, sans-serif', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {gerente.email}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 15, fontWeight: 600, color: C.text, fontFamily: 'Inter, sans-serif' }}>
+            {miembro.nombre}
+          </span>
+          <span style={{
+            background: C.navyBg, color: C.navy, fontSize: 10,
+            padding: '2px 8px', borderRadius: 999,
+            fontFamily: 'Inter, sans-serif', fontWeight: 600,
+          }}>
+            {etiquetaDeRol(miembro.rol)}
+          </span>
+          {esPropia && (
+            <span style={{ fontSize: 11, color: C.sub, fontFamily: 'Inter, sans-serif' }}>Vos</span>
+          )}
         </div>
-        <div style={{ fontSize: 12, color: C.sub, fontFamily: 'Inter, sans-serif', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {restaurantes.length === 0
-            ? 'Sin restaurantes asignados'
-            : restaurantes.map((r) => r.nombre).join(', ')}
+        <div style={{ fontSize: 13, color: C.sub, fontFamily: 'Inter, sans-serif', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {miembro.email}
         </div>
       </div>
-      <ChevronRight size={16} color={C.muted} />
+      {/* Nadie se quita el acceso a sí mismo, y cada rol solo puede quitar a quien podría invitar. */}
+      {puedeQuitar && !esPropia && (
+        <button
+          onClick={onQuitar}
+          style={{
+            border: `1px solid ${C.border}`, borderRadius: 8, background: 'white',
+            color: C.red, fontFamily: 'Inter, sans-serif', fontWeight: 600,
+            fontSize: 13, padding: '7px 14px', cursor: 'pointer',
+          }}
+        >
+          Quitar acceso
+        </button>
+      )}
+    </div>
+  )
+}
+
+/* ── SinCuentaRow ───────────────────────────────────────────────────────────── */
+
+/** Un mozo del login propio que todavía no tiene cuenta: se lo invita con su email. */
+function SinCuentaRow({
+  mozo, puedeInvitar, onInvitar,
+}: {
+  mozo: { mozoId: string; nombre: string; email: string | null; esJefeSalon: boolean }
+  puedeInvitar: boolean
+  onInvitar: () => void
+}) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 16,
+      background: 'white', border: `1px dashed ${C.border}`,
+      borderRadius: 12, padding: '14px 20px', marginBottom: 10,
+    }}>
+      <MozoAvatar nombre={mozo.nombre} esJefeSalon={mozo.esJefeSalon} size={40} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 15, fontWeight: 600, color: C.text, fontFamily: 'Inter, sans-serif' }}>
+          {mozo.nombre}
+        </div>
+        <div style={{ fontSize: 13, color: C.sub, fontFamily: 'Inter, sans-serif' }}>
+          {mozo.email ?? 'Sin email'} · Sin cuenta
+        </div>
+      </div>
+      {puedeInvitar && (
+        <button
+          onClick={onInvitar}
+          disabled={!mozo.email}
+          title={mozo.email ? undefined : 'Para invitarlo hace falta su email'}
+          style={{
+            border: `1px solid ${C.navy}`, borderRadius: 8, background: 'white',
+            color: C.navy, fontFamily: 'Montserrat, sans-serif', fontWeight: 700,
+            fontSize: 13, padding: '7px 14px', cursor: mozo.email ? 'pointer' : 'not-allowed',
+            opacity: mozo.email ? 1 : 0.5,
+          }}
+        >
+          Invitar
+        </button>
+      )}
     </div>
   )
 }
@@ -347,39 +400,16 @@ function MesaDisponibleTile({ mesa, onAssign }: { mesa: MesaConMozos; onAssign: 
   )
 }
 
-/* ── GerenteRestauranteTile ─────────────────────────────────────────────────── */
-
-function GerenteRestauranteTile({ restaurante, onAssign }: { restaurante: RestauranteAsignado; onAssign: () => void }) {
-  const [hov, setHov] = useState(false)
-  return (
-    <div
-      onClick={onAssign}
-      onMouseEnter={() => setHov(true)}
-      onMouseLeave={() => setHov(false)}
-      style={{
-        borderRadius: 8, border: `2px solid ${hov ? C.green : C.border}`,
-        background: hov ? '#f0fdf4' : 'white',
-        padding: '10px 14px', cursor: 'pointer',
-        fontSize: 13, fontFamily: 'Inter, sans-serif', color: C.text, fontWeight: 500,
-        transition: 'border-color 0.15s, background 0.15s',
-      }}
-    >
-      {restaurante.nombre}
-    </div>
-  )
-}
-
 /* ── DetailContent ──────────────────────────────────────────────────────────── */
 
 function DetailContent({
   mozo, mesasDelMozo, mesasDisponibles,
   editExpanded, setEditExpanded,
   editNombre, setEditNombre,
-  editEmail, setEditEmail,
-  editPassword, setEditPassword,
+  editTelefono, setEditTelefono,
   editLoading, editError,
   onAssign, onUnassign, onGuardar, onEliminar, onCancelEdit,
-  canEdit, eliminarError,
+  canEdit, sinCuenta, eliminarError,
 }: {
   mozo: MozoItem
   mesasDelMozo: MesaAsignada[]
@@ -387,8 +417,7 @@ function DetailContent({
   editExpanded: boolean
   setEditExpanded: (v: boolean) => void
   editNombre: string; setEditNombre: (v: string) => void
-  editEmail: string; setEditEmail: (v: string) => void
-  editPassword: string; setEditPassword: (v: string) => void
+  editTelefono: string; setEditTelefono: (v: string) => void
   editLoading: boolean; editError: string
   onAssign: (mesa: MesaConMozos) => void
   onUnassign: (mesa: MesaAsignada) => void
@@ -396,6 +425,8 @@ function DetailContent({
   onEliminar: () => void
   onCancelEdit: () => void
   canEdit: boolean
+  /** Un mozo sin cuenta se puede borrar; con cuenta, el acceso se quita desde Personal (el backend da 409). */
+  sinCuenta: boolean
   eliminarError: string
 }) {
   const tileGrid: React.CSSProperties = {
@@ -511,14 +542,10 @@ function DetailContent({
           borderRadius: 12, padding: 20, marginTop: 12,
         }}>
           <InputField label="Nombre" value={editNombre} onChange={setEditNombre} required />
-          <InputField label="Email" type="email" value={editEmail} onChange={setEditEmail} />
-          <InputField
-            label="Nueva contraseña"
-            type="password"
-            value={editPassword}
-            onChange={setEditPassword}
-            placeholder="Dejar vacío para no cambiar"
-          />
+          <InputField label="Teléfono" value={editTelefono} onChange={setEditTelefono} placeholder="Opcional" />
+          <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, color: C.sub, margin: '0 0 14px' }}>
+            El email y la contraseña son de su cuenta, y los maneja desde el inicio de sesión de MenYU.
+          </p>
 
           {editError && (
             <div style={{ color: C.red, fontSize: 13, marginBottom: 14, fontFamily: 'Inter, sans-serif' }}>
@@ -552,209 +579,22 @@ function DetailContent({
           </div>
 
           <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 16 }}>
-            <button
-              onClick={onEliminar}
-              style={{
-                border: `1px solid ${C.red}`, borderRadius: 8, background: 'white',
-                color: C.red, fontFamily: 'Inter, sans-serif', fontWeight: 600,
-                fontSize: 13, padding: '8px 16px', cursor: 'pointer',
-              }}
-            >
-              Eliminar mozo
-            </button>
-            {eliminarError && (
-              <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: C.red, margin: '10px 0 0' }}>
-                {eliminarError}
+            {sinCuenta ? (
+              <button
+                onClick={onEliminar}
+                style={{
+                  border: `1px solid ${C.red}`, borderRadius: 8, background: 'white',
+                  color: C.red, fontFamily: 'Inter, sans-serif', fontWeight: 600,
+                  fontSize: 13, padding: '8px 16px', cursor: 'pointer',
+                }}
+              >
+                Eliminar mozo
+              </button>
+            ) : (
+              <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: C.sub, margin: 0 }}>
+                Para que deje de trabajar acá, quitale el acceso desde Personal.
               </p>
             )}
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-/* ── GerenteDetailContent ───────────────────────────────────────────────────── */
-
-function GerenteDetailContent({
-  restaurantesAsignados, restaurantesDisponibles,
-  editExpanded, setEditExpanded,
-  editEmail, setEditEmail,
-  editPassword, setEditPassword,
-  editLoading, editError,
-  onGuardar, onEliminar, onCancelEdit, onAsignar, onQuitar,
-  canEdit, eliminarError,
-}: {
-  gerente: AdminItem
-  restaurantesAsignados: RestauranteAsignado[]
-  restaurantesDisponibles: RestauranteAsignado[]
-  editExpanded: boolean
-  setEditExpanded: (v: boolean) => void
-  editEmail: string; setEditEmail: (v: string) => void
-  editPassword: string; setEditPassword: (v: string) => void
-  editLoading: boolean; editError: string
-  onGuardar: () => void
-  onEliminar: () => void
-  onCancelEdit: () => void
-  onAsignar: (r: RestauranteAsignado) => void
-  onQuitar: (r: RestauranteAsignado) => void
-  canEdit: boolean
-  eliminarError: string
-}) {
-  return (
-    <div>
-      {/* Panel restaurantes */}
-      <div style={{
-        background: 'white', border: `1px solid ${C.border}`,
-        borderRadius: 12, padding: 20, marginBottom: 16,
-      }}>
-        <div style={{
-          fontFamily: 'Montserrat, sans-serif', fontWeight: 700,
-          fontSize: 15, color: C.navy, marginBottom: 20,
-        }}>
-          Acceso a restaurantes
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-
-          {/* Izquierda: asignados */}
-          <div>
-            <div style={{
-              fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em',
-              color: C.sub, fontFamily: 'Inter, sans-serif', fontWeight: 600, marginBottom: 12,
-            }}>
-              Acceso actual
-            </div>
-            {restaurantesAsignados.length === 0 ? (
-              <div style={{ color: C.muted, fontSize: 13, fontFamily: 'Inter, sans-serif', padding: '12px 0' }}>
-                Sin restaurantes asignados
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {restaurantesAsignados.map((r) => (
-                  <div key={r.id} style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    background: '#f0fdf4', border: '1px solid #bbf7d0',
-                    borderRadius: 8, padding: '10px 12px',
-                  }}>
-                    <span style={{ fontSize: 13, fontFamily: 'Inter, sans-serif', color: C.text, fontWeight: 500 }}>
-                      {r.nombre}
-                    </span>
-                    {canEdit && (
-                      <button
-                        onClick={() => onQuitar(r)}
-                        style={{
-                          background: 'none', border: 'none', cursor: 'pointer',
-                          color: C.red, fontSize: 11, fontFamily: 'Inter, sans-serif', padding: '0 4px',
-                        }}
-                      >
-                        × quitar
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Derecha: disponibles */}
-          <div>
-            <div style={{
-              fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em',
-              color: C.sub, fontFamily: 'Inter, sans-serif', fontWeight: 600, marginBottom: 12,
-            }}>
-              Agregar acceso
-            </div>
-            {!canEdit ? (
-              <div style={{ color: C.muted, fontSize: 13, fontFamily: 'Inter, sans-serif', padding: '12px 0' }}>
-                —
-              </div>
-            ) : restaurantesDisponibles.length === 0 ? (
-              <div style={{ color: C.muted, fontSize: 13, fontFamily: 'Inter, sans-serif', padding: '12px 0' }}>
-                Sin restaurantes disponibles
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {restaurantesDisponibles.map((r) => (
-                  <GerenteRestauranteTile key={r.id} restaurante={r} onAssign={() => onAsignar(r)} />
-                ))}
-              </div>
-            )}
-          </div>
-
-        </div>
-      </div>
-
-      {/* Toggle edición */}
-      {canEdit && (
-        <button
-          onClick={() => setEditExpanded(!editExpanded)}
-          style={{
-            background: 'none', border: 'none', cursor: 'pointer',
-            fontSize: 13, color: editExpanded ? C.navy : C.sub,
-            fontFamily: 'Inter, sans-serif', padding: 0,
-          }}
-        >
-          ⚙ Editar datos del gerente
-        </button>
-      )}
-
-      {canEdit && editExpanded && (
-        <div style={{
-          background: C.bg, border: `1px solid ${C.border}`,
-          borderRadius: 12, padding: 20, marginTop: 12,
-        }}>
-          <InputField label="Email" type="email" value={editEmail} onChange={setEditEmail} />
-          <InputField
-            label="Nueva contraseña"
-            type="password"
-            value={editPassword}
-            onChange={setEditPassword}
-            placeholder="Dejar vacío para no cambiar"
-          />
-
-          {editError && (
-            <div style={{ color: C.red, fontSize: 13, marginBottom: 14, fontFamily: 'Inter, sans-serif' }}>
-              {editError}
-            </div>
-          )}
-
-          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginBottom: 16 }}>
-            <button
-              onClick={onCancelEdit}
-              style={{
-                border: `1px solid ${C.border}`, borderRadius: 8, background: 'white',
-                color: C.sub, fontFamily: 'Inter, sans-serif', fontSize: 13,
-                padding: '8px 16px', cursor: 'pointer',
-              }}
-            >
-              Cancelar
-            </button>
-            <button
-              onClick={onGuardar}
-              disabled={editLoading}
-              style={{
-                border: 'none', borderRadius: 8, background: C.orange,
-                color: 'white', fontFamily: 'Montserrat, sans-serif', fontWeight: 700,
-                fontSize: 13, padding: '8px 16px', cursor: 'pointer',
-                opacity: editLoading ? 0.7 : 1,
-              }}
-            >
-              {editLoading ? 'Guardando...' : 'Guardar cambios'}
-            </button>
-          </div>
-
-          <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 16 }}>
-            <button
-              onClick={onEliminar}
-              style={{
-                border: `1px solid ${C.red}`, borderRadius: 8, background: 'white',
-                color: C.red, fontFamily: 'Inter, sans-serif', fontWeight: 600,
-                fontSize: 13, padding: '8px 16px', cursor: 'pointer',
-              }}
-            >
-              Eliminar gerente
-            </button>
             {eliminarError && (
               <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: C.red, margin: '10px 0 0' }}>
                 {eliminarError}
@@ -769,11 +609,37 @@ function GerenteDetailContent({
 
 /* ── MozosPage ──────────────────────────────────────────────────────────────── */
 
+/**
+ * Personal del restaurante (docs/auth/specs/auth.md, entrega 4.5): quién tiene acceso, invitar y quitar acceso, más el
+ * perfil operativo de los mozos (mesas asignadas y llamados de hoy). El alta con contraseña ya no existe: con el token
+ * de Supabase, una cuenta sin invitación no entra a nada.
+ */
 export function MozosPage() {
-  const isOwner = useRolActual() === 'OWNER'
+  const rolActual = useRolActual()
+  const isOwner = rolActual === 'OWNER'
+  const perfil = usePerfil()
   const { selectedRestauranteId, restaurantes: todosRestaurantes } = useContextStore()
+  const marcaId = todosRestaurantes.find((r) => r.id === selectedRestauranteId)?.marcaId ?? null
 
-  // ── Mozos state ────────────────────────────────────────────────────────────
+  const [activeTab, setActiveTab] = useState<'personal' | 'mozos'>('personal')
+
+  // ── Personal ───────────────────────────────────────────────────────────────
+  const [personal,        setPersonal]        = useState<PersonalDelRestaurante | null>(null)
+  const [loadingPersonal, setLoadingPersonal] = useState(true)
+  const [errorPersonal,   setErrorPersonal]   = useState('')
+  const [porQuitar,       setPorQuitar]       = useState<MiembroDelPersonal | null>(null)
+  const [quitarError,     setQuitarError]     = useState('')
+
+  // Invitar
+  const [showInvitar,     setShowInvitar]     = useState(false)
+  const [invitarEmail,    setInvitarEmail]    = useState('')
+  const [invitarNombre,   setInvitarNombre]   = useState('')
+  const [invitarRol,      setInvitarRol]      = useState<Rol>('MOZO')
+  const [invitarLoading,  setInvitarLoading]  = useState(false)
+  const [invitarError,    setInvitarError]    = useState('')
+  const [invitadoAviso,   setInvitadoAviso]   = useState('')
+
+  // ── Mozos ──────────────────────────────────────────────────────────────────
   const [mozos,           setMozos]           = useState<MozoItem[]>([])
   const [mesasPorMozo,    setMesasPorMozo]    = useState<Map<string, MesaAsignada[]>>(new Map())
   const [llamadosPorMozo, setLlamadosPorMozo] = useState<Map<string, number>>(new Map())
@@ -787,60 +653,30 @@ export function MozosPage() {
   const [confirmQuitarMesa, setConfirmQuitarMesa] = useState<{ mesaId: string; numero: string } | null>(null)
   const [eliminarError,     setEliminarError]     = useState('')
 
-  // Crear mozo
-  const [showCrearMozo,  setShowCrearMozo]  = useState(false)
-  const [crearNombre,    setCrearNombre]    = useState('')
-  const [crearEmail,     setCrearEmail]     = useState('')
-  const [crearPassword,  setCrearPassword]  = useState('')
-  const [crearLoading,   setCrearLoading]   = useState(false)
-  const [crearError,     setCrearError]     = useState('')
-
-  // Editar mozo
   const [editNombre,   setEditNombre]   = useState('')
-  const [editEmail,    setEditEmail]    = useState('')
-  const [editPassword, setEditPassword] = useState('')
+  const [editTelefono, setEditTelefono] = useState('')
   const [editLoading,  setEditLoading]  = useState(false)
   const [editError,    setEditError]    = useState('')
-
-  // ── Gerentes state ─────────────────────────────────────────────────────────
-  const [activeTab, setActiveTab] = useState<'mozos' | 'gerentes'>('mozos')
-
-  const [gerentes,              setGerentes]              = useState<AdminItem[]>([])
-  const [restaurantesPorGerente, setRestaurantesPorGerente] = useState<Map<string, RestauranteAsignado[]>>(new Map())
-  const [loadingGerentes,       setLoadingGerentes]       = useState(false)
-
-  const [selectedGerente,        setSelectedGerente]        = useState<AdminItem | null>(null)
-  const [restaurantesDelGerente, setRestaurantesDelGerente] = useState<RestauranteAsignado[]>([])
-  const [gerenteEditExpanded,    setGerenteEditExpanded]    = useState(false)
-  const [gerenteEditEmail,       setGerenteEditEmail]       = useState('')
-  const [gerenteEditPassword,    setGerenteEditPassword]    = useState('')
-  const [gerenteEditLoading,     setGerenteEditLoading]     = useState(false)
-  const [gerenteEditError,       setGerenteEditError]       = useState('')
-  const [confirmEliminarGerente,    setConfirmEliminarGerente]    = useState(false)
-  const [confirmQuitarRestaurante,  setConfirmQuitarRestaurante]  = useState<RestauranteAsignado | null>(null)
-  const [eliminarGerenteError,      setEliminarGerenteError]      = useState('')
-
-  // Crear gerente
-  const [showCrearGerente,  setShowCrearGerente]  = useState(false)
-  const [gerenteNombre,     setGerenteNombre]     = useState('')
-  const [gerenteEmail,      setGerenteEmail]      = useState('')
-  const [gerentePassword,   setGerentePassword]   = useState('')
-  const [gerenteLoading,    setGerenteLoading]    = useState(false)
-  const [gerenteError,      setGerenteError]      = useState('')
-  const [gerenteSuccess,    setGerenteSuccess]    = useState(false)
 
   /* ── data loading ─────────────────────────────────────────────────────────── */
 
   useEffect(() => {
     if (!selectedRestauranteId) return
+    void loadPersonal(selectedRestauranteId)
     void loadData(selectedRestauranteId)
   }, [selectedRestauranteId])
 
-  useEffect(() => {
-    if (activeTab === 'gerentes' && isOwner) {
-      void loadGerentes()
+  async function loadPersonal(rid: string) {
+    setLoadingPersonal(true)
+    setErrorPersonal('')
+    try {
+      setPersonal(await api.personal.listar(rid))
+    } catch (e) {
+      setErrorPersonal(e instanceof ApiError ? e.message : 'No se pudo cargar el personal')
+    } finally {
+      setLoadingPersonal(false)
     }
-  }, [activeTab, isOwner])
+  }
 
   async function loadData(rid: string) {
     setLoading(true)
@@ -882,32 +718,69 @@ export function MozosPage() {
     }
   }
 
-  async function loadGerentes() {
-    setLoadingGerentes(true)
+  /* ── invitar ──────────────────────────────────────────────────────────────── */
+
+  const rolesOfrecidos = useMemo(
+    () => (rolActual ? rolesQuePuedeInvitar(rolActual) : []),
+    [rolActual],
+  )
+
+  function abrirInvitar(datos: { email?: string; nombre?: string; rol?: Rol } = {}) {
+    setInvitarEmail(datos.email ?? '')
+    setInvitarNombre(datos.nombre ?? '')
+    setInvitarRol(datos.rol ?? (rolesOfrecidos.includes('MOZO') ? 'MOZO' : rolesOfrecidos[0] ?? 'MOZO'))
+    setInvitarError('')
+    setShowInvitar(true)
+  }
+
+  async function handleInvitar() {
+    if (!selectedRestauranteId || !rolActual) return
+    if (!invitarEmail || !invitarNombre) {
+      setInvitarError('Completá el email y el nombre')
+      return
+    }
+    const ambito = ambitoDeLaInvitacion(invitarRol, marcaId, selectedRestauranteId)
+    if (!ambito) {
+      setInvitarError('No se pudo determinar la marca de este restaurante')
+      return
+    }
+    setInvitarLoading(true)
+    setInvitarError('')
     try {
-      const list = await api.admins.list()
-      const gerentesList = list.filter((a) => a.rol === 'GERENTE')
-      setGerentes(gerentesList)
-
-      const perGerente = await Promise.allSettled(
-        gerentesList.map(async (g) => {
-          const rels = await api.adminRestaurante.porAdmin(g.id)
-          return {
-            gerenteId: g.id,
-            restaurantes: rels.map((r) => ({ id: r.restauranteId, nombre: r.restaurante.nombre })),
-          }
-        }),
+      const { invitacionEnviada } = await api.invitaciones.crear({
+        email: invitarEmail,
+        nombre: invitarNombre,
+        rol: invitarRol,
+        ...ambito,
+      })
+      setShowInvitar(false)
+      setInvitadoAviso(
+        invitacionEnviada
+          ? `Invitación enviada a ${invitarEmail}`
+          : `${invitarEmail} ya tenía cuenta en MenYU: ya puede entrar, sin mail de invitación`,
       )
-
-      const map = new Map<string, RestauranteAsignado[]>()
-      for (const result of perGerente) {
-        if (result.status === 'fulfilled') {
-          map.set(result.value.gerenteId, result.value.restaurantes)
-        }
-      }
-      setRestaurantesPorGerente(map)
+      await loadPersonal(selectedRestauranteId)
+      await loadData(selectedRestauranteId)
+    } catch (e) {
+      setInvitarError(e instanceof ApiError ? e.message : 'No se pudo invitar')
     } finally {
-      setLoadingGerentes(false)
+      setInvitarLoading(false)
+    }
+  }
+
+  /* ── quitar acceso ────────────────────────────────────────────────────────── */
+
+  async function ejecutarQuitarAcceso() {
+    if (!selectedRestauranteId || !porQuitar) return
+    const miembro = porQuitar
+    setPorQuitar(null)
+    setQuitarError('')
+    try {
+      await api.personal.quitarAcceso(selectedRestauranteId, miembro.membresiaId)
+      await loadPersonal(selectedRestauranteId)
+      await loadData(selectedRestauranteId)
+    } catch (e) {
+      setQuitarError(e instanceof ApiError ? e.message : 'No se pudo quitar el acceso')
     }
   }
 
@@ -918,21 +791,9 @@ export function MozosPage() {
     setMesasDelMozo(mesasPorMozo.get(mozo.id) ?? [])
     setEditExpanded(false)
     setEditNombre(mozo.nombre)
-    setEditEmail(mozo.email ?? '')
-    setEditPassword('')
+    setEditTelefono(mozo.telefono ?? '')
     setEditError('')
-  }
-
-  /* ── select gerente ──────────────────────────────────────────────────────── */
-
-  function handleSelectGerente(g: AdminItem) {
-    setSelectedGerente(g)
-    setRestaurantesDelGerente(restaurantesPorGerente.get(g.id) ?? [])
-    setGerenteEditExpanded(false)
-    setGerenteEditEmail(g.email)
-    setGerenteEditPassword('')
-    setGerenteEditError('')
-    setEliminarGerenteError('')
+    setEliminarError('')
   }
 
   /* ── mesa assign / unassign ──────────────────────────────────────────────── */
@@ -976,8 +837,7 @@ export function MozosPage() {
     try {
       const updated = await api.mozos.update(selectedMozo.id, {
         nombre: editNombre,
-        email: editEmail || undefined,
-        password: editPassword || undefined,
+        telefono: editTelefono,
       })
       setSelectedMozo(updated)
       setMozos((prev) => prev.map((m) => (m.id === updated.id ? updated : m)))
@@ -997,141 +857,9 @@ export function MozosPage() {
       await api.mozos.delete(selectedMozo.id)
       setMozos((prev) => prev.filter((m) => m.id !== selectedMozo.id))
       setSelectedMozo(null)
+      if (selectedRestauranteId) await loadPersonal(selectedRestauranteId)
     } catch (e) {
       setEliminarError(e instanceof ApiError ? e.message : 'Error al eliminar mozo')
-    }
-  }
-
-  /* ── edit gerente ────────────────────────────────────────────────────────── */
-
-  async function handleGuardarGerente() {
-    if (!selectedGerente) return
-    setGerenteEditLoading(true)
-    setGerenteEditError('')
-    try {
-      const updated = await api.admins.update(selectedGerente.id, {
-        email: gerenteEditEmail || undefined,
-        password: gerenteEditPassword || undefined,
-      })
-      const newGerente: AdminItem = { ...selectedGerente, email: updated.email }
-      setSelectedGerente(newGerente)
-      setGerentes((prev) => prev.map((g) => (g.id === updated.id ? newGerente : g)))
-      setGerenteEditExpanded(false)
-    } catch (e) {
-      setGerenteEditError(e instanceof ApiError ? e.message : 'Error al guardar')
-    } finally {
-      setGerenteEditLoading(false)
-    }
-  }
-
-  async function ejecutarEliminarGerente() {
-    if (!selectedGerente) return
-    setConfirmEliminarGerente(false)
-    setEliminarGerenteError('')
-    try {
-      await api.admins.delete(selectedGerente.id)
-      setGerentes((prev) => prev.filter((g) => g.id !== selectedGerente.id))
-      setSelectedGerente(null)
-    } catch (e) {
-      setEliminarGerenteError(e instanceof ApiError ? e.message : 'Error al eliminar gerente')
-    }
-  }
-
-  /* ── restaurante assign / unassign ──────────────────────────────────────── */
-
-  async function handleAsignarRestaurante(r: RestauranteAsignado) {
-    if (!selectedGerente) return
-    try {
-      await api.adminRestaurante.asignar(selectedGerente.id, r.id)
-      const nuevos = [...restaurantesDelGerente, r]
-      setRestaurantesDelGerente(nuevos)
-      setRestaurantesPorGerente((prev) => new Map(prev).set(selectedGerente.id, nuevos))
-    } catch (e) {
-      console.error(e instanceof ApiError ? e.message : 'Error al asignar restaurante')
-    }
-  }
-
-  function handleQuitarRestaurante(r: RestauranteAsignado) {
-    setConfirmQuitarRestaurante(r)
-  }
-
-  async function ejecutarQuitarRestaurante() {
-    if (!selectedGerente || !confirmQuitarRestaurante) return
-    const r = confirmQuitarRestaurante
-    setConfirmQuitarRestaurante(null)
-    try {
-      await api.adminRestaurante.desasignar(selectedGerente.id, r.id)
-      const nuevos = restaurantesDelGerente.filter((x) => x.id !== r.id)
-      setRestaurantesDelGerente(nuevos)
-      setRestaurantesPorGerente((prev) => new Map(prev).set(selectedGerente.id, nuevos))
-    } catch (e) {
-      console.error(e instanceof ApiError ? e.message : 'Error al quitar restaurante')
-    }
-  }
-
-  /* ── crear mozo ──────────────────────────────────────────────────────────── */
-
-  function resetCrearForm() {
-    setCrearNombre(''); setCrearEmail(''); setCrearPassword('')
-    setCrearError('')
-  }
-
-  async function handleCrearMozo() {
-    if (!selectedRestauranteId || !crearNombre || !crearEmail || !crearPassword) {
-      setCrearError('Completá todos los campos requeridos')
-      return
-    }
-    setCrearLoading(true)
-    setCrearError('')
-    try {
-      const mozo = await api.mozos.create({
-        restauranteId: selectedRestauranteId,
-        nombre: crearNombre, email: crearEmail,
-        password: crearPassword, esJefeSalon: false,
-      })
-      setMozos((prev) => [...prev, mozo])
-      setMesasPorMozo((prev) => new Map(prev).set(mozo.id, []))
-      setLlamadosPorMozo((prev) => new Map(prev).set(mozo.id, 0))
-      setShowCrearMozo(false)
-      resetCrearForm()
-    } catch (e) {
-      setCrearError(e instanceof ApiError ? e.message : 'Error al crear mozo')
-    } finally {
-      setCrearLoading(false)
-    }
-  }
-
-  /* ── crear gerente ───────────────────────────────────────────────────────── */
-
-  function resetGerenteForm() {
-    setGerenteNombre(''); setGerenteEmail(''); setGerentePassword('')
-    setGerenteError(''); setGerenteSuccess(false)
-  }
-
-  async function handleCrearGerente() {
-    if (!selectedRestauranteId || !gerenteNombre || !gerenteEmail || !gerentePassword) {
-      setGerenteError('Completá todos los campos requeridos')
-      return
-    }
-    setGerenteLoading(true)
-    setGerenteError('')
-    try {
-      await api.admins.create({
-        nombre: gerenteNombre,
-        email: gerenteEmail,
-        password: gerentePassword,
-        restauranteId: selectedRestauranteId,
-      })
-      setGerenteSuccess(true)
-      setTimeout(() => {
-        setShowCrearGerente(false)
-        resetGerenteForm()
-        setActiveTab('gerentes')
-      }, 1500)
-    } catch (e) {
-      setGerenteError(e instanceof ApiError ? e.message : 'Error al crear gerente')
-    } finally {
-      setGerenteLoading(false)
     }
   }
 
@@ -1142,24 +870,22 @@ export function MozosPage() {
     return todasLasMesas.filter((m) => !ids.has(m.id))
   }, [mesasDelMozo, todasLasMesas])
 
-  const restaurantesDisponiblesParaGerente = useMemo(() => {
-    const ids = new Set(restaurantesDelGerente.map((r) => r.id))
-    return todosRestaurantes
-      .filter((r) => !ids.has(r.id))
-      .map((r) => ({ id: r.id, nombre: r.nombre }))
-  }, [restaurantesDelGerente, todosRestaurantes])
+  const mozosSinCuenta = useMemo(
+    () => new Set((personal?.sinCuenta ?? []).map((m) => m.mozoId)),
+    [personal],
+  )
 
   /* ── render ──────────────────────────────────────────────────────────────── */
 
   if (!selectedRestauranteId) {
     return (
       <div style={{ padding: '32px 28px', color: C.sub, fontFamily: 'Inter, sans-serif', fontSize: 14 }}>
-        Seleccioná un restaurante para ver los mozos.
+        Seleccioná un restaurante para ver el personal.
       </div>
     )
   }
 
-  const inDetail = !!selectedMozo || !!selectedGerente
+  const inDetail = !!selectedMozo
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -1172,72 +898,50 @@ export function MozosPage() {
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <Users size={20} color={C.navy} />
                 <span style={{ fontFamily: 'Montserrat, sans-serif', fontWeight: 700, fontSize: 22, color: C.navy }}>
-                  {activeTab === 'gerentes' && isOwner ? 'Gerentes' : 'Mozos'}
+                  {activeTab === 'personal' ? 'Personal' : 'Mozos'}
                 </span>
               </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                {isOwner && activeTab === 'gerentes' && (
-                  <button
-                    onClick={() => setShowCrearGerente(true)}
-                    style={{
-                      border: `1px solid ${C.navy}`, borderRadius: 8, background: 'white',
-                      color: C.navy, fontFamily: 'Montserrat, sans-serif', fontWeight: 700,
-                      fontSize: 13, padding: '8px 16px', cursor: 'pointer',
-                      transition: 'background 150ms',
-                    }}
-                    onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = C.navyBg }}
-                    onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'white' }}
-                  >
-                    + Crear gerente
-                  </button>
-                )}
-                {isOwner && activeTab === 'mozos' && (
-                  <button
-                    onClick={() => setShowCrearMozo(true)}
-                    style={{
-                      border: 'none', borderRadius: 8, background: C.orange,
-                      color: 'white', fontFamily: 'Montserrat, sans-serif', fontWeight: 700,
-                      fontSize: 13, padding: '8px 14px', cursor: 'pointer',
-                    }}
-                  >
-                    + Agregar mozo
-                  </button>
-                )}
-              </div>
+              {activeTab === 'personal' && rolesOfrecidos.length > 0 && (
+                <button
+                  onClick={() => abrirInvitar()}
+                  style={{
+                    border: 'none', borderRadius: 8, background: C.orange,
+                    color: 'white', fontFamily: 'Montserrat, sans-serif', fontWeight: 700,
+                    fontSize: 13, padding: '8px 14px', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', gap: 6,
+                  }}
+                >
+                  <Mail size={14} /> Invitar
+                </button>
+              )}
             </div>
 
-            {/* Tab bar — solo para OWNER/ROOT */}
-            {isOwner && (
-              <div style={{
-                display: 'flex', gap: 2, marginBottom: 8,
-                background: C.bg, borderRadius: 10, padding: 4,
-                width: 'fit-content',
-              }}>
-                {(['mozos', 'gerentes'] as const).map((tab) => (
-                  <button
-                    key={tab}
-                    onClick={() => setActiveTab(tab)}
-                    style={{
-                      border: 'none', borderRadius: 7, padding: '6px 20px',
-                      background: activeTab === tab ? C.navy : 'transparent',
-                      color: activeTab === tab ? 'white' : C.sub,
-                      fontFamily: 'Montserrat, sans-serif', fontWeight: 600, fontSize: 13,
-                      cursor: 'pointer', transition: 'background 0.15s',
-                    }}
-                  >
-                    {tab === 'mozos' ? 'Mozos' : 'Gerentes'}
-                  </button>
-                ))}
-              </div>
-            )}
+            <div style={{
+              display: 'flex', gap: 2, marginBottom: 8,
+              background: C.bg, borderRadius: 10, padding: 4,
+              width: 'fit-content',
+            }}>
+              {(['personal', 'mozos'] as const).map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  style={{
+                    border: 'none', borderRadius: 7, padding: '6px 20px',
+                    background: activeTab === tab ? C.navy : 'transparent',
+                    color: activeTab === tab ? 'white' : C.sub,
+                    fontFamily: 'Montserrat, sans-serif', fontWeight: 600, fontSize: 13,
+                    cursor: 'pointer', transition: 'background 0.15s',
+                  }}
+                >
+                  {tab === 'personal' ? 'Personal' : 'Mozos'}
+                </button>
+              ))}
+            </div>
           </>
         ) : (
           <div style={{ marginBottom: 20 }}>
             <button
-              onClick={() => {
-                if (selectedMozo) setSelectedMozo(null)
-                else setSelectedGerente(null)
-              }}
+              onClick={() => setSelectedMozo(null)}
               style={{
                 display: 'flex', alignItems: 'center', gap: 6,
                 background: 'none', border: 'none', cursor: 'pointer',
@@ -1246,7 +950,7 @@ export function MozosPage() {
               }}
             >
               <ArrowLeft size={14} />
-              {selectedMozo ? 'Mozos' : 'Gerentes'}
+              Mozos
             </button>
 
             {selectedMozo && (
@@ -1275,86 +979,135 @@ export function MozosPage() {
                 </div>
               </div>
             )}
-
-            {selectedGerente && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <GerenteAvatar email={selectedGerente.email} size={52} />
-                <div>
-                  <span style={{ fontFamily: 'Montserrat, sans-serif', fontWeight: 700, fontSize: 22, color: C.navy }}>
-                    {selectedGerente.email}
-                  </span>
-                  <div style={{ fontSize: 12, color: C.sub, fontFamily: 'Inter, sans-serif', marginTop: 2 }}>
-                    Gerente
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         )}
       </div>
 
       {/* ── Content ── */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '0 28px 28px' }}>
-        {!inDetail ? (
-          activeTab === 'mozos' || !isOwner ? (
-            // ── Lista de mozos ──
-            loading ? (
-              <div style={{ padding: '32px 0', color: C.muted, fontFamily: 'Inter, sans-serif', fontSize: 14 }}>
-                Cargando...
-              </div>
-            ) : mozos.length === 0 ? (
-              <div style={{
-                textAlign: 'center', padding: '60px 20px',
-                color: C.muted, fontFamily: 'Inter, sans-serif', fontSize: 14,
-              }}>
-                No hay mozos en este restaurante todavía.
-              </div>
-            ) : (
-              mozos.map((mozo) => (
-                <MozoRow
-                  key={mozo.id}
-                  mozo={mozo}
-                  mesas={mesasPorMozo.get(mozo.id) ?? []}
-                  llamadosHoy={llamadosPorMozo.get(mozo.id) ?? 0}
-                  onClick={() => handleSelectMozo(mozo)}
-                />
-              ))
-            )
+        {invitadoAviso && (
+          <div
+            role="status"
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+              background: '#E4F6EC', border: '1px solid #bbf7d0', borderRadius: 10,
+              padding: '10px 14px', marginBottom: 14,
+              fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#166534',
+            }}
+          >
+            {invitadoAviso}
+            <button
+              onClick={() => setInvitadoAviso('')}
+              aria-label="Cerrar aviso"
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#166534', padding: 2 }}
+            >
+              <X size={14} />
+            </button>
+          </div>
+        )}
+
+        {!inDetail && activeTab === 'personal' && (
+          loadingPersonal ? (
+            <div style={{ padding: '32px 0', color: C.muted, fontFamily: 'Inter, sans-serif', fontSize: 14 }}>
+              Cargando...
+            </div>
+          ) : errorPersonal ? (
+            <div style={{ padding: '32px 0', fontFamily: 'Inter, sans-serif', fontSize: 14, color: C.red }}>
+              {errorPersonal}
+            </div>
           ) : (
-            // ── Lista de gerentes ──
-            loadingGerentes ? (
-              <div style={{ padding: '32px 0', color: C.muted, fontFamily: 'Inter, sans-serif', fontSize: 14 }}>
-                Cargando...
-              </div>
-            ) : gerentes.length === 0 ? (
-              <div style={{
-                textAlign: 'center', padding: '60px 20px',
-                color: C.muted, fontFamily: 'Inter, sans-serif', fontSize: 14,
-              }}>
-                No hay gerentes creados todavía.
-              </div>
-            ) : (
-              gerentes.map((g) => (
-                <GerenteRow
-                  key={g.id}
-                  gerente={g}
-                  restaurantes={restaurantesPorGerente.get(g.id) ?? []}
-                  onClick={() => handleSelectGerente(g)}
-                />
-              ))
-            )
+            <>
+              {quitarError && (
+                <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: C.red, margin: '0 0 12px' }}>
+                  {quitarError}
+                </p>
+              )}
+
+              <Seccion titulo="Dueños de la marca" aclaracion="Tienen acceso a todas las sucursales. Los administra MenYU.">
+                {(personal?.duenos ?? []).length === 0 ? (
+                  <Vacio texto="Esta marca no tiene dueños cargados." />
+                ) : (
+                  personal?.duenos.map((d) => (
+                    <MiembroRow
+                      key={d.membresiaId}
+                      miembro={d}
+                      esPropia={d.usuarioId === perfil.id}
+                      puedeQuitar={false}
+                      onQuitar={() => undefined}
+                    />
+                  ))
+                )}
+              </Seccion>
+
+              <Seccion titulo="Con acceso a este restaurante">
+                {(personal?.miembros ?? []).length === 0 ? (
+                  <Vacio texto="Todavía no invitaste a nadie a este restaurante." />
+                ) : (
+                  personal?.miembros.map((m) => (
+                    <MiembroRow
+                      key={m.membresiaId}
+                      miembro={m}
+                      esPropia={m.usuarioId === perfil.id}
+                      puedeQuitar={!!rolActual && puedeQuitarAcceso(rolActual, m.rol)}
+                      onQuitar={() => { setQuitarError(''); setPorQuitar(m) }}
+                    />
+                  ))
+                )}
+              </Seccion>
+
+              {(personal?.sinCuenta ?? []).length > 0 && (
+                <Seccion
+                  titulo="Mozos sin cuenta"
+                  aclaracion="Trabajaban con el inicio de sesión anterior. Invitalos para que entren con su cuenta."
+                >
+                  {personal?.sinCuenta.map((m) => (
+                    <SinCuentaRow
+                      key={m.mozoId}
+                      mozo={m}
+                      puedeInvitar={rolesOfrecidos.includes('MOZO')}
+                      onInvitar={() => abrirInvitar({ email: m.email ?? '', nombre: m.nombre, rol: m.esJefeSalon ? 'JEFE_SALON' : 'MOZO' })}
+                    />
+                  ))}
+                </Seccion>
+              )}
+            </>
           )
-        ) : selectedMozo ? (
-          // ── Detalle de mozo ──
+        )}
+
+        {!inDetail && activeTab === 'mozos' && (
+          loading ? (
+            <div style={{ padding: '32px 0', color: C.muted, fontFamily: 'Inter, sans-serif', fontSize: 14 }}>
+              Cargando...
+            </div>
+          ) : mozos.length === 0 ? (
+            <div style={{
+              textAlign: 'center', padding: '60px 20px',
+              color: C.muted, fontFamily: 'Inter, sans-serif', fontSize: 14,
+            }}>
+              No hay mozos en este restaurante todavía.
+            </div>
+          ) : (
+            mozos.map((mozo) => (
+              <MozoRow
+                key={mozo.id}
+                mozo={mozo}
+                mesas={mesasPorMozo.get(mozo.id) ?? []}
+                llamadosHoy={llamadosPorMozo.get(mozo.id) ?? 0}
+                onClick={() => handleSelectMozo(mozo)}
+              />
+            ))
+          )
+        )}
+
+        {inDetail && selectedMozo && (
           <DetailContent
             mozo={selectedMozo}
             mesasDelMozo={mesasDelMozo}
             mesasDisponibles={mesasDisponibles}
             editExpanded={editExpanded}
             setEditExpanded={setEditExpanded}
-            editNombre={editNombre}    setEditNombre={setEditNombre}
-            editEmail={editEmail}      setEditEmail={setEditEmail}
-            editPassword={editPassword} setEditPassword={setEditPassword}
+            editNombre={editNombre}     setEditNombre={setEditNombre}
+            editTelefono={editTelefono} setEditTelefono={setEditTelefono}
             editLoading={editLoading}
             editError={editError}
             onAssign={handleAssignMesa}
@@ -1364,48 +1117,32 @@ export function MozosPage() {
             onCancelEdit={() => {
               setEditExpanded(false)
               setEditNombre(selectedMozo.nombre)
-              setEditEmail(selectedMozo.email ?? '')
-              setEditPassword('')
+              setEditTelefono(selectedMozo.telefono ?? '')
               setEditError('')
             }}
             canEdit={isOwner}
+            sinCuenta={mozosSinCuenta.has(selectedMozo.id)}
             eliminarError={eliminarError}
           />
-        ) : selectedGerente ? (
-          // ── Detalle de gerente ──
-          <GerenteDetailContent
-            gerente={selectedGerente}
-            restaurantesAsignados={restaurantesDelGerente}
-            restaurantesDisponibles={restaurantesDisponiblesParaGerente}
-            editExpanded={gerenteEditExpanded}
-            setEditExpanded={setGerenteEditExpanded}
-            editEmail={gerenteEditEmail}
-            setEditEmail={setGerenteEditEmail}
-            editPassword={gerenteEditPassword}
-            setEditPassword={setGerenteEditPassword}
-            editLoading={gerenteEditLoading}
-            editError={gerenteEditError}
-            onGuardar={handleGuardarGerente}
-            onEliminar={() => { setEliminarGerenteError(''); setConfirmEliminarGerente(true) }}
-            onCancelEdit={() => {
-              setGerenteEditExpanded(false)
-              setGerenteEditEmail(selectedGerente.email)
-              setGerenteEditPassword('')
-              setGerenteEditError('')
-            }}
-            onAsignar={handleAsignarRestaurante}
-            onQuitar={handleQuitarRestaurante}
-            canEdit={isOwner}
-            eliminarError={eliminarGerenteError}
-          />
-        ) : null}
+        )}
       </div>
 
-      {/* ── Modal: Confirmar eliminar mozo ── */}
+      {/* ── Modal: Confirmar quitar acceso ── */}
+      <ModalConfirmar
+        open={!!porQuitar}
+        titulo="¿Quitarle el acceso?"
+        mensaje={`${porQuitar?.nombre ?? 'Esta persona'} deja de entrar a este restaurante. Su cuenta no se borra: se la puede volver a invitar.`}
+        labelConfirmar="Sí, quitar acceso"
+        colorConfirmar={C.red}
+        onConfirmar={() => { void ejecutarQuitarAcceso() }}
+        onCancelar={() => setPorQuitar(null)}
+      />
+
+      {/* ── Modal: Confirmar eliminar mozo (solo sin cuenta) ── */}
       <ModalConfirmar
         open={confirmEliminar}
         titulo="¿Eliminar mozo?"
-        mensaje="Esta acción no se puede deshacer. El mozo perderá acceso al sistema."
+        mensaje="Esta acción no se puede deshacer. Se borra su perfil de mozo, que no tiene cuenta."
         labelConfirmar="Sí, eliminar"
         colorConfirmar={C.red}
         onConfirmar={() => { void ejecutarEliminar() }}
@@ -1423,88 +1160,46 @@ export function MozosPage() {
         onCancelar={() => setConfirmQuitarMesa(null)}
       />
 
-      {/* ── Modal: Confirmar eliminar gerente ── */}
-      <ModalConfirmar
-        open={confirmEliminarGerente}
-        titulo="¿Eliminar gerente?"
-        mensaje="Esta acción no se puede deshacer. El gerente perderá acceso al sistema."
-        labelConfirmar="Sí, eliminar"
-        colorConfirmar={C.red}
-        onConfirmar={() => { void ejecutarEliminarGerente() }}
-        onCancelar={() => setConfirmEliminarGerente(false)}
-      />
-
-      {/* ── Modal: Confirmar quitar restaurante ── */}
-      <ModalConfirmar
-        open={!!confirmQuitarRestaurante}
-        titulo={`¿Quitar acceso a ${confirmQuitarRestaurante?.nombre ?? ''}?`}
-        mensaje={`${selectedGerente?.email ?? 'El gerente'} ya no podrá administrar este restaurante.`}
-        labelConfirmar="Sí, quitar"
-        colorConfirmar={C.orange}
-        onConfirmar={() => { void ejecutarQuitarRestaurante() }}
-        onCancelar={() => setConfirmQuitarRestaurante(null)}
-      />
-
-      {/* ── Modal: Crear gerente ── */}
-      {showCrearGerente && (
-        <ModalBase title="Nuevo gerente" onClose={() => { setShowCrearGerente(false); resetGerenteForm() }}>
+      {/* ── Modal: Invitar ── */}
+      {showInvitar && (
+        <ModalBase title="Invitar a alguien" onClose={() => setShowInvitar(false)}>
           <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: C.sub, marginBottom: 16, marginTop: -8 }}>
-            El gerente podrá acceder al panel de administración con permisos limitados.
+            Le llega un mail para elegir su contraseña. No hace falta cargarle ninguna.
           </p>
-          <InputField label="Nombre" value={gerenteNombre} onChange={setGerenteNombre} required />
-          <InputField label="Email" type="email" value={gerenteEmail} onChange={setGerenteEmail} required />
-          <InputField label="Contraseña" type="password" value={gerentePassword} onChange={setGerentePassword} required />
-          {gerenteError && (
-            <div style={{ color: C.red, fontSize: 13, marginBottom: 14, fontFamily: 'Inter, sans-serif' }}>
-              {gerenteError}
-            </div>
-          )}
-          {gerenteSuccess && (
-            <div style={{ color: C.green, fontSize: 13, marginBottom: 14, fontFamily: 'Inter, sans-serif', fontWeight: 600 }}>
-              Gerente creado correctamente
-            </div>
-          )}
-          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-            <button
-              onClick={() => { setShowCrearGerente(false); resetGerenteForm() }}
+          <InputField label="Email" type="email" value={invitarEmail} onChange={setInvitarEmail} required />
+          <InputField label="Nombre" value={invitarNombre} onChange={setInvitarNombre} required />
+          <div style={{ marginBottom: 14 }}>
+            <label
+              htmlFor="invitar-rol"
+              style={{ display: 'block', fontSize: 13, fontWeight: 500, color: C.text, marginBottom: 5, fontFamily: 'Inter, sans-serif' }}
+            >
+              Rol<span style={{ color: C.red }}> *</span>
+            </label>
+            <select
+              id="invitar-rol"
+              value={invitarRol}
+              onChange={(e) => setInvitarRol(e.target.value as Rol)}
               style={{
-                border: `1px solid ${C.border}`, borderRadius: 8, background: 'white',
-                color: C.sub, fontFamily: 'Inter, sans-serif', fontSize: 13,
-                padding: '8px 16px', cursor: 'pointer',
+                width: '100%', border: `1px solid ${C.border}`, borderRadius: 8,
+                padding: '9px 12px', fontSize: 14, fontFamily: 'Inter, sans-serif',
+                color: C.text, outline: 'none', boxSizing: 'border-box', background: 'white',
               }}
             >
-              Cancelar
-            </button>
-            <button
-              onClick={() => void handleCrearGerente()}
-              disabled={gerenteLoading || gerenteSuccess}
-              style={{
-                border: 'none', borderRadius: 8, background: C.navy,
-                color: 'white', fontFamily: 'Montserrat, sans-serif', fontWeight: 700,
-                fontSize: 13, padding: '8px 16px', cursor: gerenteLoading || gerenteSuccess ? 'not-allowed' : 'pointer',
-                opacity: gerenteLoading || gerenteSuccess ? 0.7 : 1,
-              }}
-            >
-              {gerenteLoading ? 'Creando...' : 'Crear gerente'}
-            </button>
+              {rolesOfrecidos.map((rol) => (
+                <option key={rol} value={rol}>
+                  {rol === 'OWNER' ? `${etiquetaDeRol(rol)} (toda la marca)` : etiquetaDeRol(rol)}
+                </option>
+              ))}
+            </select>
           </div>
-        </ModalBase>
-      )}
-
-      {/* ── Modal: Crear mozo ── */}
-      {showCrearMozo && (
-        <ModalBase title="Nuevo mozo" onClose={() => { setShowCrearMozo(false); resetCrearForm() }}>
-          <InputField label="Nombre" value={crearNombre} onChange={setCrearNombre} required />
-          <InputField label="Email" type="email" value={crearEmail} onChange={setCrearEmail} required />
-          <InputField label="Contraseña" type="password" value={crearPassword} onChange={setCrearPassword} required />
-          {crearError && (
+          {invitarError && (
             <div style={{ color: C.red, fontSize: 13, marginBottom: 14, fontFamily: 'Inter, sans-serif' }}>
-              {crearError}
+              {invitarError}
             </div>
           )}
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
             <button
-              onClick={() => { setShowCrearMozo(false); resetCrearForm() }}
+              onClick={() => setShowInvitar(false)}
               style={{
                 border: `1px solid ${C.border}`, borderRadius: 8, background: 'white',
                 color: C.sub, fontFamily: 'Inter, sans-serif', fontSize: 13,
@@ -1514,21 +1209,51 @@ export function MozosPage() {
               Cancelar
             </button>
             <button
-              onClick={() => void handleCrearMozo()}
-              disabled={crearLoading}
+              onClick={() => void handleInvitar()}
+              disabled={invitarLoading}
               style={{
                 border: 'none', borderRadius: 8, background: C.orange,
                 color: 'white', fontFamily: 'Montserrat, sans-serif', fontWeight: 700,
-                fontSize: 13, padding: '8px 16px', cursor: 'pointer',
-                opacity: crearLoading ? 0.7 : 1,
+                fontSize: 13, padding: '8px 16px', cursor: invitarLoading ? 'not-allowed' : 'pointer',
+                opacity: invitarLoading ? 0.7 : 1,
               }}
             >
-              {crearLoading ? 'Creando...' : 'Crear mozo'}
+              {invitarLoading ? 'Enviando...' : 'Enviar invitación'}
             </button>
           </div>
         </ModalBase>
       )}
 
     </div>
+  )
+}
+
+/* ── piezas de la lista de personal ─────────────────────────────────────────── */
+
+function Seccion({ titulo, aclaracion, children }: { titulo: string; aclaracion?: string; children: React.ReactNode }) {
+  return (
+    <section aria-label={titulo} style={{ marginBottom: 24 }}>
+      <h3 style={{
+        fontFamily: 'Montserrat, sans-serif', fontWeight: 700, fontSize: 14,
+        color: C.navy, margin: '0 0 4px',
+      }}>
+        {titulo}
+      </h3>
+      {aclaracion && (
+        <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, color: C.sub, margin: '0 0 12px' }}>
+          {aclaracion}
+        </p>
+      )}
+      {!aclaracion && <div style={{ height: 12 }} />}
+      {children}
+    </section>
+  )
+}
+
+function Vacio({ texto }: { texto: string }) {
+  return (
+    <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: C.muted, margin: 0 }}>
+      {texto}
+    </p>
   )
 }

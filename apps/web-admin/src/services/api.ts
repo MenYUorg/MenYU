@@ -7,6 +7,9 @@ import type {
   Ingrediente,
   ClasificacionDieta,
   LogoResponse,
+  PersonalDelRestaurante,
+  CrearInvitacionRequest,
+  CrearInvitacionResponse,
   UpdateItemDescuentoRequest,
   SesionHistorial,
   RootMarcaResumen,
@@ -353,14 +356,12 @@ export const api = {
       req<{ id: string; nombre: string; email: string | null; telefono: string | null; activo: boolean; esJefeSalon: boolean; createdAt: string }[]>(
         'GET', `/mozos?restauranteId=${encodeURIComponent(restauranteId)}`,
       ),
-    create: (data: { restauranteId: string; nombre: string; email: string; password: string; esJefeSalon?: boolean }) =>
-      req<{ id: string; nombre: string; email: string | null; telefono: string | null; activo: boolean; esJefeSalon: boolean; createdAt: string }>(
-        'POST', '/mozos', data,
-      ),
-    update: (id: string, data: { nombre?: string; email?: string; password?: string; esJefeSalon?: boolean; activo?: boolean }) =>
+    /** El email y la contraseña son de la cuenta de Supabase; si es jefe de salón, lo dice su membresía. */
+    update: (id: string, data: { nombre?: string; telefono?: string }) =>
       req<{ id: string; nombre: string; email: string | null; telefono: string | null; activo: boolean; esJefeSalon: boolean; createdAt: string }>(
         'PATCH', `/mozos/${id}`, data,
       ),
+    /** Solo para un mozo sin cuenta: con cuenta, el backend responde 409 y el acceso se quita desde Personal. */
     delete: (id: string) => req<void>('DELETE', `/mozos/${id}`),
     getMesas: (mozoId: string) =>
       req<{ id: string; numero: string; estado: string }[]>('GET', `/mozos/${mozoId}/mesas`),
@@ -372,25 +373,21 @@ export const api = {
       req<{ total: number }>('GET', `/mozos/${mozoId}/llamados-hoy`),
   },
 
-  admins: {
-    create: (data: { nombre: string; email: string; password: string; restauranteId: string }) =>
-      req<{ id: string; email: string; rol: string }>('POST', '/admins', data),
-    list: () =>
-      req<{ id: string; email: string; rol: string; marcaId: string | null }[]>('GET', '/admins'),
-    update: (id: string, data: { email?: string; password?: string }) =>
-      req<{ id: string; email: string; rol: string; marcaId: string | null }>('PATCH', `/admins/${id}`, data),
-    delete: (id: string) => req<void>('DELETE', `/admins/${id}`),
+  /** Quién tiene acceso al restaurante y cómo quitárselo. El alta es la invitación (`api.invitaciones.crear`). */
+  personal: {
+    listar: (restauranteId: string) =>
+      req<PersonalDelRestaurante>('GET', `/restaurantes/${encodeURIComponent(restauranteId)}/personal`),
+    quitarAcceso: (restauranteId: string, membresiaId: string) =>
+      req<void>(
+        'DELETE',
+        `/restaurantes/${encodeURIComponent(restauranteId)}/personal/${encodeURIComponent(membresiaId)}`,
+      ),
   },
 
-  adminRestaurante: {
-    asignar: (adminId: string, restauranteId: string) =>
-      req<{ id: string }>('POST', '/admin-restaurante', { adminId, restauranteId }),
-    desasignar: (adminId: string, restauranteId: string) =>
-      req<void>('DELETE', `/admin-restaurante/${adminId}/${restauranteId}`),
-    porAdmin: (adminId: string) =>
-      req<{ restauranteId: string; restaurante: { id: string; nombre: string } }[]>(
-        'GET', `/admin-restaurante/${adminId}`,
-      ),
+  /** El alta de personal: Supabase le manda el mail para que elija su contraseña. */
+  invitaciones: {
+    crear: (data: CrearInvitacionRequest) =>
+      req<CrearInvitacionResponse>('POST', '/auth/invitaciones', data),
   },
 
   pedidos: {

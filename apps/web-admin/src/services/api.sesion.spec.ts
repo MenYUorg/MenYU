@@ -150,6 +150,43 @@ describe('el cliente de la API usa la sesión de Supabase', () => {
     })
   })
 
+  describe('personal e invitaciones', () => {
+    it('lista el personal de un restaurante', async () => {
+      fetchFalso.mockResolvedValue(respuesta({ duenos: [], miembros: [], sinCuenta: [] }))
+
+      await expect(api.personal.listar('rest-1')).resolves.toEqual({ duenos: [], miembros: [], sinCuenta: [] })
+
+      const [url, opciones] = fetchFalso.mock.calls[0] as [string, RequestInit]
+      expect(url).toBe('/restaurantes/rest-1/personal')
+      expect(opciones.method).toBe('GET')
+    })
+
+    it('quitar el acceso usa la membresía, y los ids raros no se escapan de la ruta', async () => {
+      fetchFalso.mockResolvedValue({ ok: true, status: 204, json: () => Promise.reject(new Error('sin cuerpo')) } as unknown as Response)
+
+      await expect(api.personal.quitarAcceso('rest-1', 'mem-1')).resolves.toBeUndefined()
+      expect((fetchFalso.mock.calls[0] as [string, RequestInit])[0]).toBe('/restaurantes/rest-1/personal/mem-1')
+
+      await api.personal.quitarAcceso('../../root/marcas', 'x?y=1')
+      expect((fetchFalso.mock.calls[1] as [string, RequestInit])[0]).toBe(
+        '/restaurantes/..%2F..%2Froot%2Fmarcas/personal/x%3Fy%3D1',
+      )
+    })
+
+    it('la invitación manda el email, el nombre, el rol y el ámbito', async () => {
+      fetchFalso.mockResolvedValue(respuesta({ usuarioId: 'u-1', membresiaId: 'mem-1', invitacionEnviada: true }))
+
+      await api.invitaciones.crear({ email: 'sol@menyu.com', nombre: 'Sol', rol: 'MOZO', restauranteId: 'rest-1' })
+
+      const [url, opciones] = fetchFalso.mock.calls[0] as [string, RequestInit]
+      expect(url).toBe('/auth/invitaciones')
+      expect(opciones.method).toBe('POST')
+      expect(opciones.body).toBe(
+        JSON.stringify({ email: 'sol@menyu.com', nombre: 'Sol', rol: 'MOZO', restauranteId: 'rest-1' }),
+      )
+    })
+  })
+
   describe('pedirJson', () => {
     it('lo usan las pantallas que arman su propio pedido, con el mismo token y el mismo 401', async () => {
       sesionDePrueba.token = 'token-de-supabase'
