@@ -95,7 +95,7 @@ packages/types/src/
 | Rol | Descripción |
 |---|---|
 | `ROOT` | Administración general del sistema MenYu: crea, edita y da de baja marcas y restaurantes, invita por mail a los OWNER (a su marca) y a otras cuentas ROOT, y les quita la membresía a los OWNER. Es `Usuario.esRoot`, no una membresía. Las cuentas ROOT no se borran desde la app: la primera de cada entorno se crea a mano (`docs/auth/usuarios-prueba-staging.md`) y `apps/backend/scripts/cuentas-root.ts` hace ROOT a un `Usuario` que ya existe. Todo lo que hace queda en un historial que nadie puede editar ni borrar y que ven todos los ROOT. **No** crea GERENTE (los crea el OWNER), **no** decide sobre marcas ni restaurantes (menú, precios, descuentos, mesas, pedidos, logo, dirección…) y **no** accede a sus datos privados. No es un bypass. Su consola (`/root` en web-admin) está en `docs/plan-consola-root.md` |
-| `OWNER` | Dueño de una marca — acceso a toda su marca y sus restaurantes. Lo crea ROOT |
+| `OWNER` | Dueño de una marca — acceso a toda su marca y sus restaurantes. Lo invita ROOT (una `Membresia` OWNER por marca) |
 | `GERENTE` | Gerente de restaurantes específicos (una `Membresia` por restaurante; antes, la tabla `AdminRestaurante`, que se retira en la Fase 5). Lo invita el OWNER desde Personal |
 
 ### Tipos de usuario adicionales (tablas separadas, NO son RolAdmin)

@@ -27,7 +27,7 @@ Para probar `GET /auth/me` y `POST /auth/invitaciones` en `api.staging.menyu-app
 
 | Para qué | Email | `Usuario` en la base |
 |---|---|---|
-| ROOT (invita a OWNER y GERENTE) | `root.pruebas-auth@menyu-app.com` | `es_root = true`, sin membresías |
+| ROOT (invita a OWNER; desde la 4.4, no a GERENTE) | `root.pruebas-auth@menyu-app.com` | `es_root = true`, sin membresías |
 | Rol incorrecto (MOZO intenta invitar) | `mozo-supabase.pruebas-auth@menyu-app.com` | membresía MOZO en "Restaurante Pruebas Auth" |
 | Sin acceso (cuenta sin `Usuario`) | `sin-acceso.pruebas-auth@menyu-app.com` | ninguno |
 

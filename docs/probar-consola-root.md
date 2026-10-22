@@ -2,6 +2,10 @@
 
 Guía para probar cada etapa de la consola de ROOT ([`plan-consola-root.md`](plan-consola-root.md)) sin tocar staging ni producción. Se actualiza en cada etapa: hoy cubre el backend (etapas 1a y 1b) y la pantalla de marcas, restaurantes e historial (etapa 2a).
 
+> **En la rama `feat/auth-fase-4` (desde la entrega 4.4 de auth, 2026-10-21) esta guía no sirve tal cual.** La API de `/root/*` pide el token de Supabase de una cuenta ROOT (un `Usuario` con `es_root`), no el de `POST /api/auth/login`: con `root@menyu.com` / `root1234` responde 401. Ya no existen las rutas de restablecer contraseñas ni la de cambiar el email de un dueño, los dueños y las cuentas ROOT se invitan con `{ email, nombre }`, y el script solo tiene `listar` y `promover <email>` (no `crear`). Las rutas actuales están en "4.4, cómo quedó" de [`docs/auth/specs/auth.md`](auth/specs/auth.md).
+>
+> Para probar la API en local hace falta el backend apuntando al Supabase de staging (`SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY`, ver "Desarrollo local" en [`docs/auth/VariablesACambiar.md`](auth/VariablesACambiar.md)), un `Usuario` con `es_root` en tu base con el `supabase_user_id` de una cuenta de prueba de staging, y el access token de esa cuenta (por ejemplo, el de la cookie de sesión después de entrar en `auth.menyu.local:5173`). Las pantallas de la consola vuelven a funcionar con la entrega 4.5, cuando web-admin lea la sesión de Supabase. Esta guía se reescribe entonces.
+
 ## 0. Una vez, al traer la rama
 
 Con el backend parado, desde `apps/backend`:
