@@ -71,7 +71,7 @@
   <header class="top">
     <strong>Mockups · Consola de ROOT</strong>
     <span class="fase">Aprobado el 2026-10-15</span>
-    <span class="fase">Novedades para aprobar</span>
+    <span class="fase">Actualizado para la Fase 4 · 2026-10-21</span>
     <span class="espacio"></span>
     <div class="anchos" id="anchos" role="group" aria-label="Ancho de pantalla">
       <button type="button" data-ancho="320">320</button>
@@ -114,10 +114,10 @@
           { id: 'marca', titulo: 'Detalle de una marca', src: P + '?vista=marca&id=m1',
             nota: 'Es la pantalla donde ROOT trabaja: <b>los datos</b> (nombre, identificador, estado) con <b>Editar</b> y <b>Dar de baja</b>; <b>los dueños</b> de la marca con su menú de acciones (⋮); y <b>los restaurantes</b>, con su dirección <b>solo de lectura</b> y su estado. Abajo, el recordatorio de lo que ROOT <b>no</b> ve ni decide. No hay nada de menú, mesas, pedidos ni precios.' },
           { id: 'marca-acciones-dueno', titulo: 'Acciones de un dueño', src: P + '?vista=marca&id=m2&pop=dd2',
-            nota: 'El menú ⋮ de un dueño: <b>Restablecer contraseña</b>, <b>Cambiar email</b> y <b>Eliminar cuenta</b>. Esta cuenta tiene el aviso <b>"Contraseña temporal"</b>: todavía no la cambió (ver "Para confirmar" 8).' },
+            nota: 'El menú ⋮ de un dueño tiene una sola acción: <b>Quitar acceso</b> (la cuenta de MenYU no se borra). El aviso <b>«Cuenta desactivada»</b> (no entra a ningún lado aunque conserve la membresía) solo está en la lista de <b>Dueños</b>: el detalle de la marca no trae ese dato.' },
           { id: 'marca-acciones-rest', titulo: 'Acciones de un restaurante', src: P + '?vista=marca&id=m1&pop=rr1', nota: 'El menú ⋮ de un restaurante activo: <b>Editar nombre</b> y <b>Dar de baja</b>. En uno de baja la acción es <b>Reactivar</b> (mirá "La Parrilla Villa Allende").' },
           { id: 'marca-sin-dueno', titulo: 'Sin dueño (BurgerLab)', src: P + '?vista=marca&id=m3',
-            nota: 'Una marca sin ninguna cuenta de dueño: aviso arriba con el botón <b>Agregar dueño</b>. Es el caso de la marca de demostración <b>BurgerLab</b>, a la que se le va a <b>dar de baja</b>.' },
+            nota: 'Una marca sin ninguna cuenta de dueño: aviso arriba con el botón <b>Invitar dueño</b>. Es el caso de la marca de demostración <b>BurgerLab</b>, a la que se le va a <b>dar de baja</b>.' },
           { id: 'marca-baja', titulo: 'Marca de baja', src: P + '?vista=marca&id=m4',
             nota: 'El aviso dice qué pasa con una marca de baja y ofrece <b>Reactivar</b>. Desaparece "Dar de baja" y "Agregar restaurante".' },
           { id: 'marca-larga', titulo: 'Nombres larguísimos', src: P + '?vista=marca&id=m5', nota: 'Nombre de marca, identificador, restaurante, dirección y email enormes: se parten, no rompen la pantalla.' },
@@ -126,22 +126,20 @@
         ] },
         { nombre: 'Dueños (todas las marcas)', items: [
           { id: 'duenos', titulo: 'Lista de dueños', src: P + '?vista=duenos',
-            nota: 'Todas las cuentas de dueño, con su marca (se toca para abrirla) y el mismo menú de acciones. Sirve para <b>buscar una cuenta por email</b> sin saber de qué marca es. <span class="pregunta">OPCIONAL</span> Si preferís una consola más corta, esta pantalla se puede dejar para después: todo lo demás se hace desde el detalle de la marca.' },
-          { id: 'duenos-buscando', titulo: 'Buscando', src: P + '?vista=duenos&q=fiore', nota: 'Filtra por email o por nombre de marca.' },
+            nota: 'Todas las cuentas de dueño, con su marca (se toca para abrirla) y su único menú: <b>Quitar acceso</b>. Sirve para <b>buscar una cuenta por nombre o email</b> sin saber de qué marca es. <span class="pregunta">NUEVO</span> Se invitan por mail desde <b>Invitar dueño</b>. Ya no hay contraseñas temporales, restablecer ni cambiar email. <span class="pregunta">OPCIONAL</span> Si preferís una consola más corta, esta pantalla se puede dejar para después: todo se puede hacer desde el detalle de la marca.' },
+          { id: 'duenos-buscando', titulo: 'Buscando', src: P + '?vista=duenos&q=fiore', nota: 'Filtra por nombre, email o nombre de marca.' },
           { id: 'duenos-vacio', titulo: 'Vacío', src: P + '?vista=duenos&estado=vacio', nota: 'Todavía no hay dueños.' },
           { id: 'duenos-cargando', titulo: 'Cargando', src: P + '?vista=duenos&estado=cargando', nota: 'Esqueletos.' },
         ] },
-        { nombre: 'Cuentas ROOT (novedad)', items: [
+        { nombre: 'Cuentas ROOT', items: [
           { id: 'roots', titulo: 'Lista de cuentas ROOT', src: P + '?vista=roots',
-            nota: '<b>Novedad.</b> Las cuentas ROOT del equipo, una por integrante; con <b>Nueva cuenta ROOT</b>. "Vos" marca la propia y "Contraseña temporal" avisa que todavía no la cambió. <b>No hay "Eliminar":</b> ninguna cuenta ROOT se borra desde la consola; se retira con un script del equipo y nunca la última (decisión 15). Está en un grupo aparte del menú, "Sistema".' },
-          { id: 'roots-acciones', titulo: 'Acciones de otra cuenta', src: P + '?vista=roots&pop=oro2', nota: 'Un ROOT puede <b>restablecer la contraseña de otro ROOT</b> (decisión 19). Queda en el historial.' },
-          { id: 'roots-yo', titulo: 'Acciones de la propia cuenta', src: P + '?vista=roots&pop=oro1', nota: 'En la propia cuenta, el menú ofrece <b>cambiar mi contraseña</b>.' },
+            nota: 'Las cuentas ROOT del equipo, con <b>Invitar cuenta ROOT</b>. «Vos» marca la propia y <b>Cuenta desactivada</b> a la que no puede entrar. <b>Sin acciones por fila:</b> no hay restablecer contraseña (cada persona la recupera desde la pantalla de ingreso) ni eliminar (decisión 15: ninguna cuenta ROOT se quita desde la consola).' },
           { id: 'roots-cargando', titulo: 'Cargando', src: P + '?vista=roots&estado=cargando', nota: 'Esqueletos.' },
           { id: 'roots-error', titulo: 'Error', src: P + '?vista=roots&estado=error', nota: 'Mensaje y "Reintentar".' },
         ] },
-        { nombre: 'Historial de acciones de ROOT (novedad)', items: [
+        { nombre: 'Historial de acciones de ROOT', items: [
           { id: 'historial', titulo: 'Historial', src: P + '?vista=historial',
-            nota: '<b>Novedad.</b> Todo lo que hace un ROOT queda registrado: <b>quién</b>, <b>qué</b>, <b>sobre qué</b> (marca, restaurante, dueño u otro ROOT) y <b>cuándo</b>, incluidos crear una cuenta ROOT y restablecer contraseñas. <b>No se puede editar ni borrar</b>, ni desde la consola ni desde la API, y la base de datos también lo impide. Nunca guarda una contraseña. <b>Lo ven todos los ROOT.</b> Se agrupa por día, lo más nuevo arriba.' },
+            nota: '<b>Novedad.</b> Todo lo que hace un ROOT queda registrado: <b>quién</b>, <b>qué</b>, <b>sobre qué</b> (marca, restaurante, dueño u otro ROOT) y <b>cuándo</b>, incluidos invitar a un dueño o a otra cuenta ROOT y quitar un acceso. <b>No se puede editar ni borrar</b>, ni desde la consola ni desde la API, y la base de datos también lo impide. Nunca guarda una contraseña. <b>Lo ven todos los ROOT.</b> Se agrupa por día, lo más nuevo arriba.' },
           { id: 'historial-detalle', titulo: 'Con el detalle abierto', src: P + '?vista=historial&abierto=h1,h5', nota: 'La flecha de cada fila muestra <b>qué cambió</b>: antes y después. Una contraseña nunca aparece ("no se registra"). Las acciones del script (la primera cuenta ROOT, retirar <code>root@menyu.com</code>) figuran como <b>Script</b>, con la persona que lo corrió.' },
           { id: 'historial-persona', titulo: 'Filtrado por persona', src: P + '?vista=historial&actor=bruno@ejemplo.com', nota: 'Filtros por <b>quién</b>, <b>sobre qué</b> (marcas, restaurantes, dueños, cuentas ROOT) y fechas <b>desde</b> y <b>hasta</b>. Con filtros aparece "Limpiar filtros".' },
           { id: 'historial-script', titulo: 'Las acciones del script', src: P + '?vista=historial&actor=script&abierto=h12', nota: 'Filtrado por "Script (línea de comandos)".' },
@@ -151,13 +149,6 @@
           { id: 'historial-vacio', titulo: 'Vacío', src: P + '?vista=historial&estado=vacio', nota: 'Todavía no hay acciones registradas.' },
           { id: 'historial-cargando', titulo: 'Cargando', src: P + '?vista=historial&estado=cargando', nota: 'Esqueletos.' },
           { id: 'historial-error', titulo: 'Error', src: P + '?vista=historial&estado=error', nota: 'Mensaje y "Reintentar".' },
-        ] },
-        { nombre: 'Primer ingreso (contraseña temporal)', items: [
-          { id: 'primer-ingreso', titulo: 'Elegí tu contraseña', src: P + '?vista=primer-ingreso',
-            nota: '<b>Novedad (etapa 3).</b> Lo que ve un dueño o un ROOT la primera vez que entra con una contraseña temporal, y de nuevo cada vez que se la restablecen: una pantalla sola, sin menú lateral, hasta que elige la suya (decisión 8). Al menos 12 caracteres y distinta de la temporal. Se puede mostrar lo escrito.' },
-          { id: 'primer-ingreso-corta', titulo: 'Contraseña corta', src: P + '?vista=primer-ingreso&error=corta', nota: 'Menos de 12 caracteres.' },
-          { id: 'primer-ingreso-no-coincide', titulo: 'No coinciden', src: P + '?vista=primer-ingreso&error=sin-coincidir', nota: 'La repetición no es igual.' },
-          { id: 'primer-ingreso-igual', titulo: 'Igual a la temporal', src: P + '?vista=primer-ingreso&error=igual', nota: 'No se acepta la misma contraseña que le pasaron.' },
         ] },
         { nombre: 'Celular: menú lateral', items: [
           { id: 'menu-lateral', titulo: 'Menú lateral abierto', src: P + '?vista=marcas&menu=1',
@@ -180,43 +171,38 @@
           { id: 'd-baja-restaurante', titulo: 'Dar de baja un restaurante', src: P + '?vista=marca&id=m1&dialogo=baja-restaurante&dato=r1', nota: 'Mismo criterio que la marca, sin pedir el nombre.' },
         ] },
         { nombre: 'Diálogos · dueños', items: [
-          { id: 'd-nuevo-dueno', titulo: 'Nuevo dueño (desde una marca)', src: P + '?vista=marca&id=m1&dialogo=nuevo-dueno',
-            nota: '<span class="pregunta">PARA CONFIRMAR 7 y 8</span> Solo <b>email</b> y <b>contraseña inicial</b>: la cuenta de admin no tiene nombre. La contraseña <b>la genera el sistema</b> (se puede generar otra) y se muestra una sola vez; el dueño la tiene que cambiar en su primer ingreso. La marca viene fija.' },
-          { id: 'd-nuevo-dueno-global', titulo: 'Nuevo dueño (desde Dueños)', src: P + '?vista=duenos&dialogo=nuevo-dueno&dato=desde-duenos', nota: 'Desde la lista general hay que elegir la marca.' },
-          { id: 'd-nuevo-dueno-email', titulo: 'Email repetido', src: P + '?vista=marca&id=m1&dialogo=nuevo-dueno&error=email', nota: 'Ya existe una cuenta con ese email (los emails son únicos en todo el sistema).' },
-          { id: 'd-dueno-creado', titulo: 'Cuenta creada', src: P + '?vista=marca&id=m1&dialogo=dueno-creado', nota: 'La contraseña se muestra <b>una sola vez</b>, con un botón para copiar el email y la contraseña y pasárselos al dueño. Al cerrar no hay forma de volver a verla (solo restablecerla).' },
-          { id: 'd-restablecer', titulo: 'Restablecer contraseña', src: P + '?vista=marca&id=m2&dialogo=restablecer&dato=d2', nota: 'Para quien olvidó la contraseña (no hay mail de recuperación). La anterior deja de servir.' },
-          { id: 'd-restablecido', titulo: 'Contraseña nueva generada', src: P + '?vista=marca&id=m2&dialogo=restablecido&dato=d2', nota: 'Igual que al crear: se muestra una vez.' },
-          { id: 'd-cambiar-email', titulo: 'Cambiar email', src: P + '?vista=marca&id=m2&dialogo=cambiar-email&dato=d3', nota: 'La contraseña no cambia.' },
-          { id: 'd-eliminar-dueno', titulo: 'Eliminar cuenta', src: P + '?vista=marca&id=m2&dialogo=eliminar-dueno&dato=d3', nota: 'Esta marca tiene dos dueños: se puede eliminar uno. Las cuentas se eliminan de verdad (son solo credenciales).' },
-          { id: 'd-ultimo-dueno', titulo: 'No se puede eliminar al último', src: P + '?vista=marca&id=m1&dialogo=ultimo-dueno', nota: '<span class="pregunta">PARA CONFIRMAR 7</span> Una marca activa no puede quedarse sin dueño: primero se crea el reemplazo. Probalo desde el detalle de "La Parrilla de Juan": ⋮ → Eliminar cuenta.' },
+          { id: 'd-invitar-dueno', titulo: 'Invitar dueño (desde una marca)', src: P + '?vista=marca&id=m1&dialogo=invitar-dueno',
+            nota: '<b>Nombre</b> y <b>email</b>, que es lo que pide <code>POST /root/marcas/:id/duenos</code>. No hay contraseña: a la persona le llega un mail con un enlace para elegirla. Si el email ya tiene una cuenta, no se manda mail.' },
+          { id: 'd-invitar-dueno-global', titulo: 'Invitar dueño (desde Dueños)', src: P + '?vista=duenos&dialogo=invitar-dueno&dato=desde-duenos', nota: 'Desde la lista general hay que elegir la marca.' },
+          { id: 'd-invitar-dueno-email', titulo: 'Esa persona ya es dueña', src: P + '?vista=marca&id=m1&dialogo=invitar-dueno&error=email', nota: 'El servidor responde 409 cuando esa persona ya es dueña de esa marca (y 403 si el email es el propio). Una persona sí puede ser dueña de más de una marca.' },
+          { id: 'd-invitacion-enviada', titulo: 'Invitación enviada', src: P + '?vista=marca&id=m1&dialogo=invitacion-enviada&dato=dueno', nota: 'Dice a quién se le mandó el mail y qué hacer si no le llega. No hay contraseña que copiar. Ya avisa que quedó en el historial.' },
+          { id: 'd-dueno-existente', titulo: 'Ya tenía una cuenta', src: P + '?vista=marca&id=m1&dialogo=invitacion-enviada&dato=existente', nota: 'Cuando la respuesta trae <code>invitacionEnviada: false</code>: la persona ya tenía una cuenta de MenYU (es dueña de otra marca, del personal de un restaurante o alguien a quien ya se había invitado) y solo se le suma la marca, sin mail. Como puede ser alguien que <b>nunca aceptó</b> la invitación anterior, el texto no promete que ya pueda entrar: dice cómo pedir un enlace desde «Olvidé mi contraseña».' },
+          { id: 'd-quitar-acceso', titulo: 'Quitar acceso', src: P + '?vista=marca&id=m2&dialogo=quitar-acceso&dato=d3', nota: 'Esta marca tiene dos dueños: se puede quitar uno. Se quita la membresía; <b>la cuenta de MenYU no se borra</b> y se puede volver a invitar.' },
+          { id: 'd-ultimo-dueno', titulo: 'No se puede quitar al último', src: P + '?vista=marca&id=m1&dialogo=ultimo-dueno', nota: 'El servidor responde 409 si es el último dueño de una marca activa: primero se invita al reemplazo.' },
         ] },
-        { nombre: 'Diálogos · cuentas ROOT (novedad)', items: [
-          { id: 'd-nuevo-root', titulo: 'Nueva cuenta ROOT', src: P + '?vista=roots&dialogo=nuevo-root', nota: 'Email y contraseña inicial generada, igual que un dueño. La persona la cambia en su primer ingreso.' },
-          { id: 'd-nuevo-root-email', titulo: 'Email repetido', src: P + '?vista=roots&dialogo=nuevo-root&error=email', nota: 'Ya existe una cuenta con ese email.' },
-          { id: 'd-root-creado', titulo: 'Cuenta ROOT creada', src: P + '?vista=roots&dialogo=root-creado', nota: 'La contraseña se muestra una sola vez. Dice que la acción quedó registrada en el historial.' },
-          { id: 'd-restablecer-root', titulo: 'Restablecer contraseña de un ROOT', src: P + '?vista=roots&dialogo=restablecer-root&dato=ro2', nota: 'Cierra las sesiones de esa cuenta y la obliga a cambiarla al entrar. Los diálogos que cambian algo avisan <b>"Esta acción queda registrada en el historial"</b>.' },
-          { id: 'd-restablecido-root', titulo: 'Contraseña nueva generada', src: P + '?vista=roots&dialogo=restablecido-root&dato=ro2', nota: 'Se muestra una vez.' },
-          { id: 'd-cambiar-password', titulo: 'Cambiar mi contraseña', src: P + '?vista=roots&dialogo=cambiar-password', nota: 'La contraseña actual y la nueva dos veces. Cierra las demás sesiones de la propia cuenta.' },
-          { id: 'd-baja-aviso', titulo: 'Aviso del historial en otro diálogo', src: P + '?vista=marca&id=m3&dialogo=baja-marca', nota: 'Ahora todos los diálogos que cambian algo (marcas, restaurantes, dueños y cuentas ROOT) llevan el aviso del historial, arriba de los botones.' },
+        { nombre: 'Diálogos · cuentas ROOT', items: [
+          { id: 'd-invitar-root', titulo: 'Invitar cuenta ROOT', src: P + '?vista=roots&dialogo=invitar-root', nota: 'Nombre y email (<code>POST /root/roots</code>). Le llega un mail con el enlace para elegir su contraseña. Solo para quien todavía no tiene cuenta en MenYU.' },
+          { id: 'd-invitar-root-email', titulo: 'Ese email ya tiene una cuenta', src: P + '?vista=roots&dialogo=invitar-root&error=email', nota: 'El servidor responde 409 si el email ya es de una cuenta de MenYU (también si ya es ROOT, o es el propio): hacerla ROOT es del script de cuentas ROOT.' },
+          { id: 'd-invitacion-root-enviada', titulo: 'Invitación enviada', src: P + '?vista=roots&dialogo=invitacion-enviada&dato=root', nota: 'Igual que con un dueño.' },
+          { id: 'd-root-existente', titulo: 'Ya tenía una cuenta', src: P + '?vista=roots&dialogo=invitacion-enviada&dato=root-existente', nota: 'Si el email ya tenía una cuenta de acceso confirmada (por ejemplo, la que creó con Google) pero todavía no era de MenYU, pasa a ser ROOT sin mail.' },
+          { id: 'd-baja-aviso', titulo: 'Aviso del historial en otro diálogo', src: P + '?vista=marca&id=m3&dialogo=baja-marca', nota: 'Todos los diálogos que cambian algo (marcas, restaurantes, dueños y cuentas ROOT) llevan el aviso "Esta acción queda registrada en el historial", arriba de los botones.' },
         ] },
       ]
 
-      var DECISIONES = '<h2>Aprobado el 2026-10-15</h2>' +
-        '<p class="nota-chica">Los mockups originales y los nueve supuestos del plan, <b>incluidos el 6 (la baja corta de verdad) y el 8 (contraseña generada con cambio obligatorio en el primer ingreso)</b>. La etapa 4, sacarle a ROOT los permisos viejos, va al final.</p>' +
-        '<h2>Se agregó el mismo día, a pedido del equipo</h2><ol start="13">' +
-        '<li><b>Un ROOT crea otras cuentas ROOT</b> desde la consola (una por integrante: tres). <a data-ir="roots">Cuentas ROOT</a>.</li>' +
-        '<li><b>El primer ROOT se crea con un script</b> que corre el equipo, con la contraseña elegida al correrlo (sin eco; no queda escrita en el repo). Ya está hecho: <code>apps/backend/scripts/cuentas-root.ts</code>.</li>' +
-        '<li><b>Las cuentas ROOT no se pueden borrar:</b> ni a sí mismo ni el último. Se ve en <a data-ir="roots">Cuentas ROOT</a>: no hay "Eliminar".</li>' +
-        '<li><b><code>root@menyu.com</code> se retira</b> de staging y de producción cuando las cuentas personales anden bien (etapa 5 del plan). Se ve en <a data-ir="historial-detalle">el historial</a>, como acción del script.</li>' +
-        '<li><b>Historial de acciones de ROOT:</b> quién, qué, sobre qué y cuándo, incluidos crear un ROOT y restablecer contraseñas. No se puede editar ni borrar (ni la app, ni la API, ni la base), y todos los ROOT lo ven. <a data-ir="historial">Historial</a>.</li></ol>' +
-        '<h2>Para confirmar (suposiciones mías sobre eso)</h2><ol start="15">' +
-        '<li><b>15 · Cómo leí "las cuentas root no se pueden borrar":</b> ninguna cuenta ROOT se borra desde la consola ni desde la API; la única vía es el script, que nunca borra al último, y la base de datos también lo impide. Si querías que un ROOT pueda borrar a otro (menos a sí mismo y al último), es un cambio chico.</li>' +
-        '<li><b>18 · Qué se registra:</b> todo cambio que haga un ROOT (crear, editar, dar de baja, reactivar, restablecer, eliminar un dueño). Mirar listas no. Cada registro se guarda en la <b>misma transacción</b> que el cambio (si no se puede registrar, el cambio no se hace), con el email de quien lo hizo copiado (para que siga ahí aunque esa cuenta se retire) y sin contraseñas. <b>Opcional:</b> registrar también los inicios de sesión de ROOT.</li>' +
-        '<li><b>19 · Un ROOT puede restablecer la contraseña de otro ROOT</b> (queda registrado; la otra persona la cambia al entrar). Lo necesitan si alguien la olvida.</li>' +
-        '<li><b>20 · Mínimo de 12 caracteres</b> al elegir la contraseña en el primer ingreso, para dueños y ROOT (hoy los dueños tienen 8 como mínimo al crear la cuenta). <a data-ir="primer-ingreso">Se ve acá</a>.</li></ol>' +
+      var DECISIONES = '<h2>Qué cambió el 2026-10-21 (Fase 4 de autenticación)</h2>' +
+        '<p class="nota-chica">Con Supabase Auth, ROOT ya no maneja contraseñas: <b>invita por mail</b>. Cada persona elige la suya con el enlace y la recupera sola desde la pantalla de ingreso. El resto del diseño vale como se aprobó el 2026-10-15.</p><ol>' +
+        '<li><b>Dueños:</b> se <b>invitan</b> (nombre y email) y se les <b>quita el acceso</b>. Ya no hay contraseña inicial, «Contraseña temporal», restablecer, cambiar email ni eliminar la cuenta. <a data-ir="marca">Detalle de una marca</a> · <a data-ir="duenos">Dueños</a>.</li>' +
+        '<li><b>Cuentas ROOT:</b> también por invitación, sin acciones por fila. <a data-ir="roots">Cuentas ROOT</a>.</li>' +
+        '<li><b>Primer ingreso:</b> ya no es una pantalla de la consola. El enlace del mail lleva a la pantalla de ingreso de web-auth.</li>' +
+        '<li><b>Historial:</b> los códigos nuevos son <code>DUENO_INVITAR</code>, <code>DUENO_QUITAR</code>, <code>ROOT_INVITAR</code> y, desde el script, <code>ROOT_PROMOVER</code>. Los códigos viejos se siguen mostrando: lo que ya está guardado no se reescribe. <a data-ir="historial-detalle">Historial</a>.</li>' +
+        '<li><b>La baja</b> de una marca o un restaurante ya corta la carta y las mesas nuevas, y las mesas abiertas se pueden terminar. Los textos de los diálogos de baja son los reales.</li></ol>' +
+        '<h2>Cómo quedó la 4.4 (backend de la consola)</h2><ol>' +
+        '<li><b>La lista de dueños</b> trae el id de la membresía, el nombre, el email, si la cuenta está activa y la marca. <b>No dice si la invitación está pendiente</b>: no existe ese dato, por eso no hay aviso de invitación pendiente.</li>' +
+        '<li><b>La respuesta de invitar</b> trae <code>invitacionEnviada: true|false</code>.</li>' +
+        '<li><b>Los errores:</b> 409 si ya es dueño de esa marca, si la marca está de baja o si su cuenta está desactivada; 403 si el email es el propio; para una cuenta ROOT, 409 si el email ya tiene cuenta de MenYU.</li>' +
+        '<li><b>Reenviar una invitación</b> todavía no existe: hoy la persona pide un enlace desde «Olvidé mi contraseña» con el mismo email.</li></ol>' +
         '<h2>Lo que ROOT hace y lo que no</h2><ul>' +
-        '<li><b>Crea, edita y da de baja</b> marcas y restaurantes; <b>crea, edita y elimina</b> cuentas de dueño; <b>crea</b> otras cuentas ROOT. <a data-ir="marca">Detalle de una marca</a>.</li>' +
+        '<li><b>Crea, edita y da de baja</b> marcas y restaurantes; <b>invita y quita el acceso</b> de los dueños; <b>invita</b> a otras cuentas ROOT. <a data-ir="marca">Detalle de una marca</a>.</li>' +
         '<li><b>Los gerentes no los crea ROOT:</b> los crea el dueño desde su panel.</li>' +
         '<li><b>ROOT no ve ni decide</b> sobre menú, precios, descuentos, mesas, mozos, pedidos, reportes ni caja, y <b>no cambia el logo ni la dirección</b>.</li></ul>' +
         '<h2>Colores y letras</h2><p class="nota-chica">Los de <b>web-admin</b> (<code>AdminLayout.tsx</code> y <code>pages/admin/marca/estilos.ts</code>): azul <b>#2D3561</b>, naranja <b>#E8563A</b>, bordes <b>#e5e7eb</b>, fondo <b>#f9fafb</b>, rojo <b>#dc2626</b> y verde <b>#16a34a</b>. Montserrat e Inter. Botones y áreas táctiles de al menos 44 px y campos de 16 px. Detalle técnico, etapas y estimación: <b>docs/plan-consola-root.md</b>.</p>'
@@ -236,7 +222,7 @@
       var abrir = document.getElementById('abrir');
       var botonesAncho = Array.prototype.slice.call(document.querySelectorAll('#anchos button'));
 
-      var todos = [{ id: 'decidir', titulo: 'Qué se aprobó y qué confirmar', texto: true }];
+      var todos = [{ id: 'decidir', titulo: 'Qué se aprobó y cómo quedó', texto: true }];
       GRUPOS.forEach(function (g) { g.items.forEach(function (i) { todos.push(i); }); });
 
       var actual = 'decidir';
