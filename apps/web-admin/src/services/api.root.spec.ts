@@ -120,10 +120,64 @@ describe('api.root', () => {
     })
   })
 
-  it('cuentas.listar pide las cuentas ROOT', async () => {
-    await api.root.cuentas.listar()
+  describe('duenos', () => {
+    it('listar pide todos los dueños, sin parámetros (la búsqueda se hace en pantalla)', async () => {
+      await api.root.duenos.listar()
 
-    expect(ultimaLlamada()).toMatchObject({ url: '/root/roots', metodo: 'GET' })
+      expect(ultimaLlamada()).toMatchObject({ url: '/root/duenos', metodo: 'GET' })
+    })
+
+    it('invitar manda nombre y email a la marca', async () => {
+      await api.root.duenos.invitar('m1', { email: 'juan@laparrilla.com', nombre: 'Juan' })
+
+      expect(ultimaLlamada()).toMatchObject({
+        url: '/root/marcas/m1/duenos',
+        metodo: 'POST',
+        cuerpo: JSON.stringify({ email: 'juan@laparrilla.com', nombre: 'Juan' }),
+      })
+    })
+
+    it('quitar manda el id de la membresía y entiende la respuesta vacía (204)', async () => {
+      fetchFalso.mockResolvedValue({ ok: true, status: 204, json: () => Promise.reject(new Error('sin cuerpo')) } as Response)
+
+      await expect(api.root.duenos.quitar('mem-1')).resolves.toBeUndefined()
+
+      expect(ultimaLlamada()).toMatchObject({ url: '/root/duenos/mem-1', metodo: 'DELETE' })
+    })
+
+    it('un id con caracteres raros no se escapa de la ruta', async () => {
+      await api.root.duenos.quitar('../marcas/m1')
+      expect(ultimaLlamada().url).toBe('/root/duenos/..%2Fmarcas%2Fm1')
+
+      await api.root.duenos.invitar('m1/../../roots', { email: 'a@b.com', nombre: 'A' })
+      expect(ultimaLlamada().url).toBe('/root/marcas/m1%2F..%2F..%2Froots/duenos')
+    })
+
+    it('no hay forma de cambiarles el email ni la contraseña desde la API', () => {
+      expect(Object.keys(api.root.duenos).sort()).toEqual(['invitar', 'listar', 'quitar'])
+    })
+  })
+
+  describe('cuentas ROOT', () => {
+    it('listar pide las cuentas ROOT', async () => {
+      await api.root.cuentas.listar()
+
+      expect(ultimaLlamada()).toMatchObject({ url: '/root/roots', metodo: 'GET' })
+    })
+
+    it('invitar manda nombre y email', async () => {
+      await api.root.cuentas.invitar({ email: 'bruno@menyu.com', nombre: 'Bruno' })
+
+      expect(ultimaLlamada()).toMatchObject({
+        url: '/root/roots',
+        metodo: 'POST',
+        cuerpo: JSON.stringify({ email: 'bruno@menyu.com', nombre: 'Bruno' }),
+      })
+    })
+
+    it('no hay forma de quitarlas, ni restablecerles la contraseña, desde la API (decisión 15)', () => {
+      expect(Object.keys(api.root.cuentas).sort()).toEqual(['invitar', 'listar'])
+    })
   })
 
   it('un error del servidor llega con su código y su mensaje', async () => {

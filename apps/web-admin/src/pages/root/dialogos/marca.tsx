@@ -1,24 +1,13 @@
 import { useState, type FormEvent } from 'react'
 import type { RootMarcaDetalle } from '@menyu/types'
 import { ApiError, api } from '../../../services/api'
-import { Aviso } from '../ui/piezas'
 import { slugDe } from '../ui/texto'
 import { Campo } from '../ui/Campo'
 import { Dialogo } from '../ui/Dialogo'
 import { efectosDeBajaDeMarca, efectosDeReactivarMarca } from '../copy'
+import { AvisoDeError } from './AvisoDeError'
 import { useEnvio } from './envio'
 import { errorDeNombre, errorDeSlug } from './validaciones'
-
-function AvisoDeError({ texto }: { texto: string }) {
-  if (!texto) return null
-  return (
-    <div style={{ marginBottom: 14 }}>
-      <Aviso tipo="err">
-        <b>No pudimos completar la acción.</b> {texto}
-      </Aviso>
-    </div>
-  )
-}
 
 interface DialogoMarcaProps {
   /** Sin marca, crea; con marca, edita. */

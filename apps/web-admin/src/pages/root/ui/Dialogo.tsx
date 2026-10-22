@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { Clock } from 'lucide-react'
+import { Clock, type LucideIcon } from 'lucide-react'
 
 const ENFOCABLES =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
@@ -17,6 +17,8 @@ interface DialogoProps {
   ocupado?: boolean
   /** Los diálogos que cambian algo avisan que la acción queda registrada en el historial de ROOT. */
   avisaRegistro?: boolean
+  /** Un círculo verde con este icono arriba del título: para los diálogos que cuentan que algo salió bien. */
+  icono?: LucideIcon
 }
 
 /**
@@ -25,7 +27,7 @@ interface DialogoProps {
  * se cierra con Escape y devuelve el foco a lo que lo abrió. Tocar el fondo NO la cierra: una pantalla con datos escritos no
  * se pierde por un toque de más.
  */
-export function Dialogo({ titulo, descripcion, children, pie, onCerrar, ocupado = false, avisaRegistro = true }: DialogoProps) {
+export function Dialogo({ titulo, descripcion, children, pie, onCerrar, ocupado = false, avisaRegistro = true, icono: Icono }: DialogoProps) {
   const idTitulo = useId()
   const contenedor = useRef<HTMLDivElement>(null)
   const cerrar = useRef(onCerrar)
@@ -69,6 +71,11 @@ export function Dialogo({ titulo, descripcion, children, pie, onCerrar, ocupado 
     <div className="rc">
       <div className="dlg-bg">
         <div ref={contenedor} className="dlg" role="dialog" aria-modal="true" aria-labelledby={idTitulo} tabIndex={-1}>
+          {Icono && (
+            <div className="ok-ic">
+              <Icono size={24} aria-hidden="true" />
+            </div>
+          )}
           <h3 id={idTitulo}>{titulo}</h3>
           {descripcion && <p className="lead">{descripcion}</p>}
           {children}
