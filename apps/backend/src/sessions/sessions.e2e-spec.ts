@@ -252,4 +252,36 @@ describe('POST /api/sessions/open (e2e)', () => {
     })
     expect(totalClientes).toBe(1)
   })
+
+  // ── Limpieza ──────────────────────────────────────────────────────────
+
+  it('la limpieza no borra un comensal invitado ni una sesión que no son de la corrida', async () => {
+    // Datos sin el marcador de la corrida: como los de una base de desarrollo o los de otra corrida
+    const ajeno = `ajeno-${Date.now()}-${Math.random()}`
+    const marca = await prisma.marca.create({ data: { nombre: 'Marca ajena', slug: ajeno } })
+    const restaurante = await prisma.restaurante.create({ data: { nombre: 'Restaurante ajeno', marcaId: marca.id } })
+    const mesa = await prisma.mesa.create({
+      data: { numero: '1', qrToken: `qr-${ajeno}`, pin: '0002', restauranteId: restaurante.id },
+    })
+    const invitado = await prisma.cliente.create({ data: { nombre: 'Invitado ajeno' } })
+    const sesion = await prisma.sesionMesa.create({
+      data: { mesaId: mesa.id, clienteId: invitado.id, codigoSesion: '123' },
+    })
+    await prisma.sesionMesaCliente.create({ data: { sesionId: sesion.id, clienteId: invitado.id, orden: 1 } })
+
+    try {
+      await clearE2eData(prisma)
+
+      expect(await prisma.cliente.findUnique({ where: { id: invitado.id } })).not.toBeNull()
+      expect(await prisma.sesionMesa.findUnique({ where: { id: sesion.id } })).not.toBeNull()
+      expect(await prisma.sesionMesaCliente.count({ where: { sesionId: sesion.id } })).toBe(1)
+    } finally {
+      await prisma.sesionMesaCliente.deleteMany({ where: { sesionId: sesion.id } })
+      await prisma.sesionMesa.deleteMany({ where: { id: sesion.id } })
+      await prisma.cliente.deleteMany({ where: { id: invitado.id } })
+      await prisma.mesa.deleteMany({ where: { id: mesa.id } })
+      await prisma.restaurante.deleteMany({ where: { id: restaurante.id } })
+      await prisma.marca.deleteMany({ where: { id: marca.id } })
+    }
+  })
 })
