@@ -5,7 +5,7 @@
 Parte de lo que ya existe en el repo:
 
 - **Los e2e del backend:** `apps/backend/src/sessions/sessions.e2e-spec.ts`. Corren en CI contra un Postgres efímero (job `E2E — backend (Postgres efímero)` de `.github/workflows/ci.yml`).
-- **La limpieza por marcador:** está en la rama `fix/e2e-limpieza-por-marcador` (PR #420, en borrador y todavía no mergeado al 22/10/2026). Las referencias de la sección 2 son a esa rama, commit `06fefb2`.
+- **La limpieza por marcador:** está en la rama `fix/e2e-limpieza-por-marcador` (PR #420, en borrador y todavía no mergeado al 22/10/2026). Las referencias de la sección 2 son a esa rama, commit `e0ddf05`.
 - **El smoke de staging:** `.github/workflows/deploy-staging.yml`, job `smoke-staging`.
 
 Ningún número de este documento es una medición: lo que se mida va en la sección 7, hoy `[PENDIENTE: corrida del dd/mm]`.
@@ -72,11 +72,11 @@ El criterio es el de `clearE2eData` en la rama del PR #420:
 - **Borra en orden de claves foráneas:** `:70-84`.
 - **Un cliente se borra solo si ya no aparece en sesiones, participantes, ítems de pedido ni comensales:** `:73-80`.
 
-En la misma rama, `apps/backend/jest.e2e.config.js:15-37` no deja correr los e2e del backend si `DATABASE_URL` o `DIRECT_URL` no son locales, salvo `E2E_PERMITIR_BASE_REMOTA=si`.
+En la misma rama, `apps/backend/jest.e2e.config.js:14-38` no deja correr los e2e del backend si `DATABASE_URL` o `DIRECT_URL` no son locales (o el service container del CI). No hay excepción.
 
 **Diferencias con el E2E de staging:**
 - **Pedidos y pagos:** el E2E de staging los crea; los e2e del backend no. Por eso su limpieza tiene que incluirlos (sección 2.2).
-- **Variable de escape:** el E2E de staging **no** usa `E2E_PERMITIR_BASE_REMOTA`. No corre los e2e del backend contra staging: es un job aparte que habla con la API y lee la base.
+- **No usa Jest ni `clearE2eData`:** el E2E de staging es un job aparte que habla con la API y lee la base. Los e2e del backend siguen corriendo solo contra un Postgres local o el del CI.
 
 ### 2.4 Qué garantiza que no toca datos reales
 
