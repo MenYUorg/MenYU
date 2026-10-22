@@ -12,7 +12,6 @@ vi.mock('@menyu/auth', () => ({ useAuth: () => ({ user: { nombre: 'Ana Pérez' }
 vi.mock('@menyu/ui', () => ({ LogoMenYuOscuro: () => <span>MenYU</span> }))
 vi.mock('../../store/mozoStore', () => ({ useMozoStore: () => ({ restauranteId: restauranteActual }) }))
 vi.mock('../../services/api', () => ({
-  getToken: () => 'jwt-de-test',
   api: { pedidos: { getByRestaurante: vi.fn(), cambiarEstado: vi.fn(), editarItem: vi.fn() } },
 }))
 vi.mock('../../services/impresora', () => ({
@@ -187,11 +186,11 @@ describe('PedidosPage (mozo)', () => {
   })
 
   describe('tiempo real', () => {
-    it('se conecta con el token, entra a la sala y se desconecta al salir', async () => {
+    it('se conecta sin token, entra a la sala y se desconecta al salir', async () => {
       pedidosApi.getByRestaurante.mockResolvedValue([] as never)
       const { unmount } = abrir()
 
-      expect(io).toHaveBeenCalledWith(expect.stringMatching(/\/ws$/), { auth: { token: 'jwt-de-test' }, transports: ['websocket'] })
+      expect(io).toHaveBeenCalledWith(expect.stringMatching(/\/ws$/), { transports: ['websocket'] })
       recibir('connect')
       expect(socket.emit).toHaveBeenCalledWith('cocina:join', { restauranteId: 'rest-1' })
 

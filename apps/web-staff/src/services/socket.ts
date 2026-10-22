@@ -1,5 +1,5 @@
 import { io, Socket } from 'socket.io-client'
-import { TOKEN_KEY } from '@menyu/auth'
+import { logout } from '@menyu/auth-client'
 import type { Pedido } from '@menyu/types'
 import { urlDelSocket } from '@menyu/ui/socket'
 
@@ -9,10 +9,8 @@ let socket: Socket | null = null
 
 function getSocket(): Socket {
   if (!socket) {
-    socket = io(`${WS_URL}/ws`, {
-      auth: { token: localStorage.getItem(TOKEN_KEY) },
-      transports: ['websocket'],
-    })
+    // El gateway no autentica la conexión (docs/auth/specs/auth.md, Fuera de alcance): no se le manda ningún token.
+    socket = io(`${WS_URL}/ws`, { transports: ['websocket'] })
   }
   return socket
 }
@@ -20,6 +18,15 @@ function getSocket(): Socket {
 export function disconnect() {
   socket?.disconnect()
   socket = null
+}
+
+/**
+ * Cerrar sesión desde web-staff: antes de irse a web-auth corta el socket, que si no queda escuchando los eventos del
+ * restaurante hasta que el browser descarga la página.
+ */
+export async function cerrarSesion(): Promise<void> {
+  disconnect()
+  await logout()
 }
 
 export function joinRestauranteComoMozo(restauranteId: string) {

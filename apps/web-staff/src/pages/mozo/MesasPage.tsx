@@ -6,7 +6,7 @@ import { Bell, Clock, DollarSign, DoorOpen, LayoutGrid, ShoppingBag, Users } fro
 import { useAuth } from '@menyu/auth'
 import { urlDelSocket } from '@menyu/ui/socket'
 import { useMozoStore } from '../../store/mozoStore'
-import { api, getToken } from '../../services/api'
+import { api } from '../../services/api'
 import type { SesionActivaRico, WaiterCallRico } from '../../services/api'
 import { PageHeader } from '../../components/PageHeader'
 
@@ -295,10 +295,8 @@ export function MesasPage() {
   // WebSocket
   useEffect(() => {
     if (!restauranteId) return
-    const socket: Socket = io(`${WS_URL}/ws`, {
-      auth:       { token: getToken() },
-      transports: ['websocket'],
-    })
+    // El gateway no autentica la conexión (docs/auth/specs/auth.md, Fuera de alcance): no se le manda ningún token.
+    const socket: Socket = io(`${WS_URL}/ws`, { transports: ['websocket'] })
     socket.on('connect', () => {
       socket.emit('mozo:join', { restauranteId })
     })

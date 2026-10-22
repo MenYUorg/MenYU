@@ -11,7 +11,6 @@ vi.mock('@menyu/auth', () => ({ useAuth: () => ({ user: { nombre: 'Ana Pérez' }
 vi.mock('@menyu/ui', () => ({ LogoMenYuOscuro: () => <span>MenYU</span> }))
 vi.mock('../../store/mozoStore', () => ({ useMozoStore: () => ({ restauranteId: restauranteActual }) }))
 vi.mock('../../services/api', () => ({
-  getToken: () => 'jwt-de-test',
   api: {
     mesas: { getAll: vi.fn() },
     sesiones: { getActiva: vi.fn(), cerrar: vi.fn() },
@@ -165,11 +164,11 @@ describe('MesasPage (mozo)', () => {
   })
 
   describe('tiempo real', () => {
-    it('se conecta con el token, entra como mozo, recarga los llamados y se desconecta al salir', async () => {
+    it('se conecta sin token, entra como mozo, recarga los llamados y se desconecta al salir', async () => {
       mesasApi.getAll.mockResolvedValue([])
       const { unmount } = abrir()
 
-      expect(io).toHaveBeenCalledWith(expect.stringMatching(/\/ws$/), { auth: { token: 'jwt-de-test' }, transports: ['websocket'] })
+      expect(io).toHaveBeenCalledWith(expect.stringMatching(/\/ws$/), { transports: ['websocket'] })
       recibir('connect')
       expect(socket.emit).toHaveBeenCalledWith('mozo:join', { restauranteId: 'rest-1' })
       recibir('waiter:called')

@@ -5,7 +5,7 @@ import { AlertTriangle, ChevronRight, ClipboardList, Clock, RefreshCw } from 'lu
 import { useAuth } from '@menyu/auth'
 import { APARIENCIA_PEDIDOS, EditarPedidoModal, type AparienciaEditarPedido, type ItemEditable } from '@menyu/ui/editar-pedido'
 import { urlDelSocket } from '@menyu/ui/socket'
-import { getToken, api } from '../../services/api'
+import { api } from '../../services/api'
 import type { PedidoRico } from '../../services/api'
 import { useMozoStore } from '../../store/mozoStore'
 import { PageHeader } from '../../components/PageHeader'
@@ -233,7 +233,8 @@ export function PedidosPage() {
 
   useEffect(() => {
     if (!restauranteId) return
-    const socket: Socket = io(`${WS_URL}/ws`, { auth: { token: getToken() }, transports: ['websocket'] })
+    // El gateway no autentica la conexión (docs/auth/specs/auth.md, Fuera de alcance): no se le manda ningún token.
+    const socket: Socket = io(`${WS_URL}/ws`, { transports: ['websocket'] })
     socketRef.current = socket
     socket.on('connect', () => { socket.emit('cocina:join', { restauranteId }) })
     socket.on('order:new', (pedido: PedidoRico) => {
