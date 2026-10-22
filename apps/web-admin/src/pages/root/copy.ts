@@ -3,13 +3,13 @@
  */
 
 /**
- * ¿Dar de baja una marca o un restaurante YA corta el inicio de sesión de su gente (dueños, gerentes, mozos y cocina)? Hoy NO:
- * eso va en `AccesoService` de la migración a Supabase (`feat/auth`). Lo público sí se corta (desde el 2026-10-21): la marca o
- * el restaurante dejan de aparecer en Discovery, su carta deja de verse y sus QR y PIN no abren mesas nuevas; las mesas que ya
- * están abiertas se dejan terminar. Mientras esto sea `false` los textos no prometen el corte del login; al activarlo se
- * muestran los del diseño aprobado. Un test cuida que los dos juegos de textos existan.
+ * ¿Dar de baja una marca o un restaurante corta el acceso de su gente (dueños, gerentes, mozos y cocina)? Sí, desde la Fase 4 de
+ * auth: `AccesoService` no cuenta las membresías de una marca o un restaurante dados de baja, y al reactivarlos vuelven a contar.
+ * Lo público también se corta (desde el 2026-10-21): la marca o el restaurante dejan de aparecer en Discovery, su carta deja de
+ * verse y sus QR y PIN no abren mesas nuevas; las mesas que ya están abiertas se dejan terminar. Un test cuida que los dos juegos
+ * de textos existan.
  */
-export const BAJA_CORTA_EL_LOGIN = false
+export const BAJA_CORTA_EL_LOGIN = true
 
 // ── Historial ────────────────────────────────────────────────────────────────
 

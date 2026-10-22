@@ -53,8 +53,8 @@ describe('etiquetaDeTipo y opciones del filtro', () => {
 })
 
 describe('textos de la baja', () => {
-  it('hoy la baja no corta el inicio de sesión (cuando eso cambie, se activa el interruptor y este test avisa)', () => {
-    expect(BAJA_CORTA_EL_LOGIN).toBe(false)
+  it('la baja corta el acceso de la gente de la marca o el restaurante (AccesoService, desde la Fase 4 de auth)', () => {
+    expect(BAJA_CORTA_EL_LOGIN).toBe(true)
   })
 
   it('con el interruptor apagado dice que lo público se corta y que el login todavía no', () => {
