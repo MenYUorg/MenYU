@@ -27,12 +27,12 @@ if (!process.env.DATABASE_URL) {
 for (const nombre of ['DATABASE_URL', 'DIRECT_URL']) {
   const valor = process.env[nombre]
   if (valor === undefined) continue
-  // Se dice solo el host (o "no local" si la URL no se puede leer), nunca la URL: lleva la contraseña
-  const host = hostDe(valor)
-  if (!HOSTS_LOCALES.has(host)) {
+  // Se dice solo qué variable no es local: ni la URL (lleva la contraseña) ni el host (identifica el proyecto, y los
+  // logs de CI son públicos)
+  if (!HOSTS_LOCALES.has(hostDe(valor))) {
     throw new Error(
-      `${nombre} apunta a ${host ? `"${host}"` : 'un host no local'}: los e2e borran datos y solo corren contra un ` +
-        'Postgres local o el service container del CI.',
+      `${nombre} no apunta a un Postgres local: los e2e borran datos y solo corren contra un Postgres local o el ` +
+        'service container del CI.',
     )
   }
 }

@@ -35,13 +35,14 @@ describe('jest.e2e.config.js: guarda de base local', () => {
         DIRECT_URL: `postgresql://postgres:${CLAVE}@db.ejemplo.supabase.co:5432/postgres`,
       },
     ],
-  ])('rechaza un host remoto en %s, sin excepción y sin mostrar la URL', (variable, urls) => {
+  ])('rechaza un host remoto en %s, sin excepción y sin mostrar la URL ni el host', (variable, urls) => {
     // Act
     const resultado = cargarConfig(urls)
 
     // Assert
     expect(resultado.status).not.toBe(0)
-    expect(resultado.stderr).toContain(`${variable} apunta a "db.ejemplo.supabase.co"`)
+    expect(resultado.stderr).toContain(`${variable} no apunta a un Postgres local`)
+    expect(resultado.stderr).not.toContain('supabase.co')
     expect(resultado.stderr).not.toContain(CLAVE)
     expect(resultado.stderr).not.toContain('postgresql://')
     expect(resultado.stderr).not.toContain('E2E_')
