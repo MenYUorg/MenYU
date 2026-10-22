@@ -3,10 +3,11 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  HttpException,
   NotFoundException,
 } from '@nestjs/common'
 import { JwtService } from '@nestjs/jwt'
-import { SessionsService } from './sessions.service'
+import { LIMITE_CODIGO_SESION, SessionsService } from './sessions.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { UsersService } from '../users/users.service'
 import { MenyuGateway } from '../gateway/menyu.gateway'
@@ -251,6 +252,97 @@ describe('SessionsService', () => {
         expect(mockUsers.createCliente).not.toHaveBeenCalled()
         expect(mockPrisma.sesionMesa.findFirst).not.toHaveBeenCalled()
         expect(mockPrisma.sesionMesa.create).not.toHaveBeenCalled()
+      })
+    })
+
+    describe('un rechazo al unirse a una sesión no deja un cliente invitado', () => {
+      const unirseConCodigo = (codigoSesion?: string): Promise<unknown> => service.open({ tableCode: 'qr-abc', codigoSesion })
+
+      it.each<[string, number, string | undefined, () => Promise<void>]>([
+        ['sin código', 403, undefined, async () => undefined],
+        ['con código incorrecto', 403, '999', async () => undefined],
+        [
+          'con la mesa bloqueada por códigos incorrectos',
+          429,
+          '042',
+          async () => {
+            for (let i = 0; i < LIMITE_CODIGO_SESION.maxFallos; i++) {
+              await unirseConCodigo('999').catch(() => undefined)
+            }
+            mockUsers.createCliente.mockClear()
+          },
+        ],
+      ])('modo seguro %s → %i y no crea al cliente invitado', async (_caso, estado, codigoSesion, preparar) => {
+        // Arrange
+        mockPrisma.mesa.findFirst.mockResolvedValue(MESA_SEGURA)
+        mockPrisma.sesionMesa.findFirst.mockResolvedValue(SESION_ACTIVA)
+        await preparar()
+
+        // Act
+        const error = await unirseConCodigo(codigoSesion).catch((e: unknown) => e)
+
+        // Assert
+        expect(error).toBeInstanceOf(HttpException)
+        expect((error as HttpException).getStatus()).toBe(estado)
+        expect(mockUsers.createCliente).not.toHaveBeenCalled()
+        expect(mockPrisma.sesionMesaCliente.create).not.toHaveBeenCalled()
+      })
+    })
+
+    // Caracterización: el primer cliente de una sesión que abrió el staff (clienteId null, sin participantes) entra
+    // sin código y queda como anfitrión, aun en modo seguro. Lo deciden sesionActiva.clienteId y la cantidad de
+    // participantes de la sesión, no el cliente que entra.
+    describe('sesión abierta por el staff (modo seguro)', () => {
+      const SESION_DEL_STAFF = { id: 'sesion-staff', mesaId: 'mesa-1', codigoSesion: '042', clienteId: null, estado: 'activa' }
+
+      function sesionDelStaffCon(participantes: number) {
+        mockPrisma.mesa.findFirst.mockResolvedValue(MESA_SEGURA)
+        mockPrisma.sesionMesa.findFirst.mockResolvedValue(SESION_DEL_STAFF)
+        mockPrisma.sesionMesaCliente.count.mockResolvedValue(participantes)
+        mockPrisma.sesionMesaCliente.findUnique.mockResolvedValue(null)
+        mockPrisma.sesionMesaCliente.create.mockResolvedValue({})
+      }
+
+      it('el primer cliente entra sin código, como anfitrión, y queda como participante 1', async () => {
+        // Arrange
+        sesionDelStaffCon(0)
+
+        // Act
+        const result = await service.open({ tableCode: 'qr-abc' })
+
+        // Assert
+        expect(result).toMatchObject({ sesionId: 'sesion-staff', esAnfitrion: true, clienteId: INVITADO.id, codigoSesion: '042' })
+        expect(mockPrisma.sesionMesaCliente.create).toHaveBeenCalledWith({
+          data: { sesionId: 'sesion-staff', clienteId: INVITADO.id, orden: 1 },
+        })
+        expect(mockPrisma.sesionMesa.create).not.toHaveBeenCalled()
+      })
+
+      it('con un participante ya adentro, el siguiente cliente sin código recibe 403', async () => {
+        // Arrange
+        sesionDelStaffCon(1)
+
+        // Act
+        const unirse = service.open({ tableCode: 'qr-abc' })
+
+        // Assert
+        await expect(unirse).rejects.toThrow(ForbiddenException)
+        await expect(unirse).rejects.toThrow('Esta mesa requiere código de sesión para unirse')
+        expect(mockPrisma.sesionMesaCliente.create).not.toHaveBeenCalled()
+      })
+
+      it('con un participante ya adentro, el siguiente cliente con el código correcto entra sin ser anfitrión', async () => {
+        // Arrange
+        sesionDelStaffCon(1)
+
+        // Act
+        const result = await service.open({ tableCode: 'qr-abc', codigoSesion: '042' })
+
+        // Assert
+        expect(result).toMatchObject({ sesionId: 'sesion-staff', esAnfitrion: false })
+        expect(mockPrisma.sesionMesaCliente.create).toHaveBeenCalledWith({
+          data: { sesionId: 'sesion-staff', clienteId: INVITADO.id, orden: 2 },
+        })
       })
     })
 
