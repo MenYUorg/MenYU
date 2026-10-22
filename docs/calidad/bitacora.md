@@ -711,6 +711,7 @@ Horas en UTC (ART = UTC − 3). Desde esta sesión se mergearon el #408 y el #41
   - el #421 lo dispara una vez (cambia `deploy-staging.yml`); después, `scripts/carga/**` y `carga-k6.yml` quedan en `paths-ignore`;
   - el #419 lo dispara, porque cambia código de web-staff;
   - el #422 no.
+- **#420, salvedad de base remota:** se quitó el 22/10/2026 en `e0ddf05`. Los e2e no corren contra una base que no sea local o el service container del CI, sin excepción.
 - **Contrato de Mercado Pago** (`test/mercadopago-contrato`): **no se abrió**. No hay payloads reales en el repo ni en el disco: el spec del proveedor usa objetos armados a mano. Faltan los de `merchant_order` (aprobado que cubre, `in_process`, `rejected`, parcial o sin pagos), los de `payment` (con orden y sin orden; `approved`, `rejected`, `in_process`, `pending` y uno fuera del mapa) y la query de la notificación en sus dos formas. Los consigue Coty desde el panel.
 
 **Jira**
@@ -729,7 +730,7 @@ Horas en UTC (ART = UTC − 3). Desde esta sesión se mergearon el #408 y el #41
 4. **Revisar los borradores** #419, #420, #421 y #422.
 5. **k6:** confirmar los umbrales iniciales y autorizar el primer humo (`gh workflow run carga-k6.yml -f escenario=humo -f confirmar=si`). Decidir si se implementa el flujo que escribe (sección 5.4 de `k6.md`).
 6. **E2E contra staging:** elegir entre un workflow aparte o un job en `deploy-staging.yml`; crear el restaurante, el plato y el mozo de prueba, el usuario `e2e_staging`, las funciones y los secrets del doc.
-7. **Mercado Pago:** conseguir los payloads reales que faltan para el PR de contrato.
+7. **Mercado Pago:** fuera del alcance del TP: los tests usan objetos armados a mano; el contrato con payloads reales y la revisión de la conexión desde la interfaz quedan para la tesis.
 8. **Jira:** pasar a Jira lo de `privado/jira-bloque-2.md` y actualizar los estados en `jira-bloque.md`.
 9. **Viernes 23/10:** subir los umbrales del gate y aplicar la definición de código nuevo (pendiente desde el 20/10).
 10. Abrir el PR único de esta bitácora después del ensayo.
