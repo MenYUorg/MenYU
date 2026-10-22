@@ -108,7 +108,7 @@ JOIN marca m ON m.slug = 'pruebas-auth'
 JOIN restaurante r ON r.marca_id = m.id AND r.nombre = 'Restaurante Pruebas Auth';
 ```
 
-Desde la entrega 4.5, web-admin lee la sesión de Supabase; web-staff la lee desde la 4.6 (hasta entonces muestra su login legacy).
+Desde la entrega 4.5, web-admin lee la sesión de Supabase, y web-staff desde la 4.6. Ninguna tiene login propio.
 
 ### Probar la entrega 4.5 en local (2026-10-21)
 
@@ -120,6 +120,42 @@ La API de staging todavía corre `main`, sin el backend de las entregas 4.2 a 4.
 4. Los dos Vite en `127.0.0.1` con `--strictPort` (si el puerto queda tomado por un Vite anterior, el nuevo elige otro y el proxy sigue apuntando al backend viejo: fue una hora perdida en la 4.5).
 
 Con eso andan el login, el SSO por la cookie de `.menyu.local`, el destino por rol, Personal y la consola de ROOT.
+
+### Probar la entrega 4.6 (web-staff) en local (2026-10-22)
+
+Lo mismo que arriba, más `apps/web-staff/.env.local` (igual al de web-admin) y el Vite de staff en el puerto 5175. La base local tenía OWNER, GERENTE, ROOT, MOZO y la cuenta con dos roles, pero **le faltaban JEFE_SALON y COCINA**, que son los roles propios de web-staff, y los `Mozo` de las cuentas de salón (sin ellos, atender un llamado y cobrar responden 403, porque salen de `exigirMozo`).
+
+Para cada cuenta que falte: se pide un token a Supabase (`/auth/v1/token?grant_type=password`), se toma el `sub` del JWT y se inserta en la base local.
+
+```sql
+INSERT INTO usuario (id, supabase_user_id, email, nombre, es_root) VALUES
+  (gen_random_uuid()::text, '<sub>', 'jefe-salon.pruebas-auth@menyu-app.com', 'Jefe Salon Pruebas Auth', false),
+  (gen_random_uuid()::text, '<sub>', 'cocina.pruebas-auth@menyu-app.com',     'Cocina Pruebas Auth',     false);
+
+-- El ámbito es el restaurante (ojo: el enum de la base se llama `rol`, en minúscula).
+INSERT INTO membresia (id, usuario_id, rol, restaurante_id)
+SELECT gen_random_uuid()::text, u.id, v.rol::rol, '22222222-2222-4222-a222-222222222222'
+FROM (VALUES
+  ('jefe-salon.pruebas-auth@menyu-app.com', 'JEFE_SALON'),
+  ('cocina.pruebas-auth@menyu-app.com',     'COCINA'),
+  ('varias.pruebas-auth@menyu-app.com',     'MOZO')  -- ya es OWNER de Marca Seed: así queda la cuenta mixta
+) AS v(email, rol)
+JOIN usuario u ON u.email = v.email;
+
+-- El Mozo de cada cuenta de salón. `Mozo Seed` se deja sin usuario_id: es el "mozo sin cuenta" de Personal.
+INSERT INTO mozo (id, restaurante_id, nombre, email, activo, es_jefe_salon, usuario_id)
+SELECT gen_random_uuid()::text, '22222222-2222-4222-a222-222222222222', v.nombre, v.email, true, v.jefe, u.id
+FROM (VALUES
+  ('mozo-supabase.pruebas-auth@menyu-app.com', 'Mozo Pruebas Auth',       false),
+  ('jefe-salon.pruebas-auth@menyu-app.com',    'Jefe Salon Pruebas Auth', true),
+  ('varias.pruebas-auth@menyu-app.com',        'Varias Pruebas Auth',     false)
+) AS v(email, nombre, jefe)
+JOIN usuario u ON u.email = v.email;
+```
+
+El OWNER y el GERENTE van a web-admin por su destino: para probarlos en staff se entra con `auth.menyu.local:5173/?redirect=http://staff.menyu.local:5175/...`.
+
+Una sesión de mesa hecha a mano tiene que quedar con `estado = 'activa'`: `GET /waiter-calls` solo mira las sesiones activas, así que con cualquier otro valor los llamados no aparecen.
 
 ## Cuentas de Google (desde la Fase 3b)
 
