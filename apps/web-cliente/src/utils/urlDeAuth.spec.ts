@@ -1,6 +1,8 @@
 import { urlDeAuth } from './urlDeAuth'
 
 describe('urlDeAuth', () => {
+  // Sin la variable: el `.env.local` de desarrollo la define, y acá se prueba justamente el camino en que falta.
+  beforeEach(() => vi.stubEnv('VITE_AUTH_URL', ''))
   afterEach(() => vi.unstubAllEnvs())
 
   it('usa VITE_AUTH_URL cuando está, sin barra final', () => {
