@@ -167,12 +167,15 @@ describe('POST /api/sessions/open (e2e)', () => {
       .send({ tableCode: mesa.qrToken })
 
     // Segundo cliente intenta unirse sin código
+    const clientesAntes = await prisma.cliente.count()
     const res = await request(app.getHttpServer())
       .post('/api/sessions/open')
       .send({ tableCode: mesa.qrToken })
 
     expect(res.status).toBe(403)
     expect(res.body.message).toBe('Esta mesa requiere código de sesión para unirse')
+    // El rechazo no deja un cliente invitado
+    expect(await prisma.cliente.count()).toBe(clientesAntes)
   })
 
   it('modo seguro con código incorrecto → 403', async () => {
@@ -182,11 +185,14 @@ describe('POST /api/sessions/open (e2e)', () => {
       .post('/api/sessions/open')
       .send({ tableCode: mesa.qrToken })
 
+    const clientesAntes = await prisma.cliente.count()
     const res = await request(app.getHttpServer())
       .post('/api/sessions/open')
       .send({ tableCode: mesa.qrToken, codigoSesion: '000' })
 
     expect(res.status).toBe(403)
+    // El rechazo no deja un cliente invitado
+    expect(await prisma.cliente.count()).toBe(clientesAntes)
   })
 
   it('modo seguro con código correcto → 200', async () => {

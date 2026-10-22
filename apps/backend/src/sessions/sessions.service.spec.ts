@@ -3,10 +3,11 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  HttpException,
   NotFoundException,
 } from '@nestjs/common'
 import { JwtService } from '@nestjs/jwt'
-import { SessionsService } from './sessions.service'
+import { LIMITE_CODIGO_SESION, SessionsService } from './sessions.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { UsersService } from '../users/users.service'
 import { MenyuGateway } from '../gateway/menyu.gateway'
@@ -255,6 +256,40 @@ describe('SessionsService', () => {
         expect(mockUsers.createCliente).not.toHaveBeenCalled()
         expect(mockPrisma.sesionMesa.findFirst).not.toHaveBeenCalled()
         expect(mockPrisma.sesionMesa.create).not.toHaveBeenCalled()
+      })
+    })
+
+    describe('un rechazo al unirse a una sesión no deja un cliente invitado', () => {
+      const unirseConCodigo = (codigoSesion?: string): Promise<unknown> => service.open({ tableCode: 'qr-abc', codigoSesion })
+
+      it.each<[string, number, string | undefined, () => Promise<void>]>([
+        ['sin código', 403, undefined, async () => undefined],
+        ['con código incorrecto', 403, '999', async () => undefined],
+        [
+          'con la mesa bloqueada por códigos incorrectos',
+          429,
+          '042',
+          async () => {
+            for (let i = 0; i < LIMITE_CODIGO_SESION.maxFallos; i++) {
+              await unirseConCodigo('999').catch(() => undefined)
+            }
+            mockUsers.createCliente.mockClear()
+          },
+        ],
+      ])('modo seguro %s → %i y no crea al cliente invitado', async (_caso, estado, codigoSesion, preparar) => {
+        // Arrange
+        mockPrisma.mesa.findFirst.mockResolvedValue(MESA_SEGURA)
+        mockPrisma.sesionMesa.findFirst.mockResolvedValue(SESION_ACTIVA)
+        await preparar()
+
+        // Act
+        const error = await unirseConCodigo(codigoSesion).catch((e: unknown) => e)
+
+        // Assert
+        expect(error).toBeInstanceOf(HttpException)
+        expect((error as HttpException).getStatus()).toBe(estado)
+        expect(mockUsers.createCliente).not.toHaveBeenCalled()
+        expect(mockPrisma.sesionMesaCliente.create).not.toHaveBeenCalled()
       })
     })
 
