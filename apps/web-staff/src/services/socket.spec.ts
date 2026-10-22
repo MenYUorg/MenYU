@@ -42,6 +42,14 @@ beforeEach(() => {
   reiniciarSesionDePrueba()
 })
 
+/** Dispara el `connect` que el módulo registró al crear la conexión. */
+function conectar() {
+  socketFalso.connected = true
+  for (const [evento, fn] of socketFalso.on.mock.calls) {
+    if (evento === 'connect') (fn as () => void)()
+  }
+}
+
 describe('el socket de web-staff', () => {
   it('conecta sin mandar ningún token: el gateway no autentica la conexión', () => {
     joinRestauranteComoMozo('rest-1')
@@ -71,10 +79,39 @@ describe('el socket de web-staff', () => {
     joinRestauranteComoCocina('rest-1')
 
     expect(socketFalso.emit).not.toHaveBeenCalled()
-    expect(socketFalso.once).toHaveBeenCalledWith('connect', expect.any(Function))
-    const alConectar = socketFalso.once.mock.calls[0]?.[1] as () => void
-    alConectar()
+    conectar()
     expect(socketFalso.emit).toHaveBeenCalledWith('cocina:join', { restauranteId: 'rest-1' })
+  })
+
+  it('al reconectar vuelve a entrar a la sala: el socket nuevo del servidor no está en ninguna', () => {
+    joinRestauranteComoMozo('rest-1')
+    conectar()
+    socketFalso.emit.mockClear()
+
+    // Una caída de red: socket.io reconecta solo y avisa de nuevo.
+    conectar()
+
+    expect(socketFalso.emit).toHaveBeenCalledWith('mozo:join', { restauranteId: 'rest-1' })
+  })
+
+  it('al reconectar entra con los dos roles si estaba en los dos', () => {
+    joinRestauranteComoMozo('rest-1')
+    joinRestauranteComoCocina('rest-1')
+    conectar()
+    socketFalso.emit.mockClear()
+
+    conectar()
+
+    expect(socketFalso.emit).toHaveBeenCalledWith('mozo:join', { restauranteId: 'rest-1' })
+    expect(socketFalso.emit).toHaveBeenCalledWith('cocina:join', { restauranteId: 'rest-1' })
+  })
+
+  it('sin haber entrado a ninguna sala, conectar no emite nada', () => {
+    onMozoCalled(vi.fn())
+
+    conectar()
+
+    expect(socketFalso.emit).not.toHaveBeenCalled()
   })
 
   it.each([
