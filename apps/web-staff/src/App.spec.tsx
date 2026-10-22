@@ -1,7 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import type { PerfilUsuario } from '@menyu/types'
 import {
-  logoutSimulado,
   membresiaDeMarca,
   membresiaDeRestaurante,
   perfilDeCocina,
@@ -13,6 +12,7 @@ import {
   reiniciarSesionDePrueba,
   sesionDePrueba,
 } from './test/authClient'
+import * as socketService from './services/socket'
 import { useContextoStore } from './store/contextoStore'
 import { App } from './App'
 
@@ -29,6 +29,9 @@ vi.mock('./pages/mozo/TomaPedidosPage', () => ({ TomaPedidosPage: () => 'Pantall
 vi.mock('./pages/mozo/PedidosPage', () => ({ PedidosPage: () => 'Pantalla de pedidos' }))
 vi.mock('./pages/mozo/HistorialPage', () => ({ HistorialPage: () => 'Pantalla de historial' }))
 vi.mock('./components/MozoNotifications', () => ({ MozoNotifications: () => null }))
+// El selector tiene su propio spec: acá importa si se llega a él, no qué muestra.
+vi.mock('./pages/selector/SelectorPage', () => ({ SelectorPage: () => 'Pantalla del selector' }))
+vi.mock('./services/socket', () => ({ cerrarSesion: vi.fn(), disconnect: vi.fn() }))
 
 beforeEach(() => {
   reiniciarSesionDePrueba()
@@ -67,8 +70,7 @@ describe('a dónde entra cada rol', () => {
   ])('%s ve las dos vistas, así que pasa por el selector', async (_quien, perfil) => {
     abrir('/', perfil)
 
-    expect(await screen.findByText('Panel Cocina')).toBeInTheDocument()
-    expect(screen.getByText('Panel Mozo')).toBeInTheDocument()
+    expect(await screen.findByText('Pantalla del selector')).toBeInTheDocument()
   })
 
   it('una dirección que no existe lleva a la vista del rol, no a un login (web-staff ya no tiene uno)', async () => {
@@ -132,7 +134,7 @@ describe('los guards de cada vista', () => {
 
     abrir('/mozo/mesas', perfil)
 
-    expect(await screen.findByText('Elegí el restaurante donde vas a trabajar.')).toBeInTheDocument()
+    expect(await screen.findByText('Pantalla del selector')).toBeInTheDocument()
     expect(screen.queryByText('Pantalla de mesas')).not.toBeInTheDocument()
   })
 })
@@ -147,6 +149,7 @@ describe('quien no trabaja en ningún restaurante disponible', () => {
     expect(screen.queryByText('Panel del mozo')).not.toBeInTheDocument()
 
     screen.getByRole('button', { name: 'Cerrar sesión' }).click()
-    expect(logoutSimulado).toHaveBeenCalledTimes(1)
+    // `cerrarSesion` desconecta el socket y recién después llama al logout de @menyu/auth-client.
+    expect(socketService.cerrarSesion).toHaveBeenCalledTimes(1)
   })
 })

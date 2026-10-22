@@ -95,6 +95,40 @@ describe('el socket de web-staff', () => {
     expect(socketFalso.off).toHaveBeenCalledWith(evento, oyente)
   })
 
+  describe('al cambiar de restaurante', () => {
+    it('se reconecta, porque el gateway no saca a nadie de la sala anterior', () => {
+      socketFalso.connected = true
+      joinRestauranteComoMozo('rest-1')
+
+      joinRestauranteComoMozo('rest-2')
+
+      expect(socketFalso.disconnect).toHaveBeenCalledTimes(1)
+      expect(ioFalso).toHaveBeenCalledTimes(2)
+      expect(socketFalso.emit).toHaveBeenLastCalledWith('mozo:join', { restauranteId: 'rest-2' })
+    })
+
+    it('entrar dos veces al mismo restaurante no corta nada', () => {
+      socketFalso.connected = true
+      joinRestauranteComoMozo('rest-1')
+
+      joinRestauranteComoMozo('rest-1')
+      joinRestauranteComoCocina('rest-1')
+
+      expect(socketFalso.disconnect).not.toHaveBeenCalled()
+      expect(ioFalso).toHaveBeenCalledTimes(1)
+    })
+
+    it('la vista de cocina del otro restaurante también reconecta', () => {
+      socketFalso.connected = true
+      joinRestauranteComoCocina('rest-1')
+
+      joinRestauranteComoCocina('rest-2')
+
+      expect(socketFalso.disconnect).toHaveBeenCalledTimes(1)
+      expect(socketFalso.emit).toHaveBeenLastCalledWith('cocina:join', { restauranteId: 'rest-2' })
+    })
+  })
+
   it('cerrar sesión desconecta el socket antes de irse a web-auth', async () => {
     socketFalso.connected = true
     joinRestauranteComoMozo('rest-1')

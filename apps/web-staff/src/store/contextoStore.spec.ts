@@ -1,4 +1,3 @@
-import * as socketService from '../services/socket'
 import {
   preferenciaDeLaUrl,
   puedeAtenderLlamados,
@@ -19,8 +18,6 @@ import {
   perfilDePrueba,
   perfilMixto,
 } from '../test/authClient'
-
-vi.mock('../services/socket', () => ({ disconnect: vi.fn() }))
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -175,19 +172,4 @@ describe('cargarContexto', () => {
     expect(localStorage.getItem('menyu-staff-restaurante-id')).toBe('rest-7')
   })
 
-  it('cambiar de restaurante corta el socket, que si no sigue en la sala del anterior', () => {
-    useContextoStore.getState().cargarContexto(perfilDeMozo('rest-1'))
-
-    useContextoStore.getState().setRestaurante('rest-2')
-
-    expect(socketService.disconnect).toHaveBeenCalledTimes(1)
-  })
-
-  it('elegir el mismo restaurante no corta nada', () => {
-    useContextoStore.getState().cargarContexto(perfilDeMozo('rest-1'))
-
-    useContextoStore.getState().setRestaurante('rest-1')
-
-    expect(socketService.disconnect).not.toHaveBeenCalled()
-  })
 })
