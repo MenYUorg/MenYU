@@ -4,8 +4,8 @@
  * Misma forma que `apps/backend/src/root/root.types.ts`: el backend no depende de `@menyu/types` y declara sus propios tipos
  * (como `PerfilUsuario` en `AccesoService`). Si una respuesta cambia, hay que cambiar las dos.
  *
- * A propósito NO incluyen `debeCambiarPassword` (la API todavía lo manda en dueños y cuentas ROOT): con la migración a Supabase
- * Auth (docs/auth/specs/auth.md) ROOT deja de manejar contraseñas y ese campo desaparece. Ninguna pantalla se ata a él.
+ * Desde la entrega 4.4 de auth (docs/auth/specs/auth.md) ROOT no maneja contraseñas: los dueños y las cuentas ROOT son `Usuario`
+ * de Supabase que se invitan por mail.
  */
 
 // ── Marcas y restaurantes ────────────────────────────────────────────────────
@@ -30,10 +30,14 @@ export interface RootRestaurante {
   activo: boolean
 }
 
-/** Un dueño dentro del detalle de una marca. */
+/** Un dueño dentro del detalle de una marca: un `Usuario` con la membresía OWNER de la marca. */
 export interface RootDuenoDeMarca {
+  /** El id del `Usuario`. */
   id: string
+  /** La membresía OWNER: es lo que se quita con `DELETE /root/duenos/:membresiaId`. */
+  membresiaId: string
   email: string
+  nombre: string
 }
 
 /** Donde ROOT trabaja: los datos de la marca, sus restaurantes y sus dueños. */

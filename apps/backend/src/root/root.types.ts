@@ -50,7 +50,7 @@ export interface RootMarcaResumen {
   slug: string
   activo: boolean
   restaurantes: { activos: number; total: number }
-  /** Cuántas cuentas OWNER tiene. 0 es "Sin dueño". */
+  /** Cuántas membresías OWNER tiene. 0 es "Sin dueño". */
   duenos: number
 }
 
@@ -62,11 +62,14 @@ export interface RootRestaurante {
   activo: boolean
 }
 
-/** Un dueño dentro del detalle de una marca. */
+/** Un dueño dentro del detalle de una marca: un `Usuario` con la membresía OWNER de la marca. */
 export interface RootDuenoDeMarca {
+  /** El id del `Usuario`. */
   id: string
+  /** La membresía OWNER: es lo que se quita con `DELETE /root/duenos/:membresiaId`. */
+  membresiaId: string
   email: string
-  debeCambiarPassword: boolean
+  nombre: string
 }
 
 /** Donde ROOT trabaja: los datos de la marca, sus restaurantes y sus dueños. */

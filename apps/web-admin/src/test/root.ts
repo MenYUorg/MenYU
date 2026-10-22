@@ -49,7 +49,7 @@ export function marcaDetalle(parcial: Partial<RootMarcaDetalle> = {}): RootMarca
     slug: 'la-parrilla',
     activo: true,
     restaurantes: [restaurante(), restaurante({ id: 'rest-2', nombre: 'La Parrilla Norte', direccion: null })],
-    duenos: [{ id: 'dueno-1', email: 'juan@laparrilla.com' }],
+    duenos: [{ id: 'dueno-1', membresiaId: 'membresia-1', email: 'juan@laparrilla.com', nombre: 'Juan' }],
     ...parcial,
   }
 }

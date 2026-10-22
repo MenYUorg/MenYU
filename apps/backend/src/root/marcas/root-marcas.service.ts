@@ -16,17 +16,21 @@ const SELECT_RESUMEN = {
   slug: true,
   activo: true,
   restaurantes: { select: { activo: true } },
-  admins: { where: { rol: 'OWNER' }, select: { id: true } },
+  membresias: { where: { rol: 'OWNER' }, select: { id: true } },
 } satisfies Prisma.MarcaSelect
 
-// Y en el detalle: sus restaurantes (con la dirección de solo lectura) y sus dueños.
+// Y en el detalle: sus restaurantes (con la dirección de solo lectura) y sus dueños (las membresías OWNER de la marca).
 const SELECT_DETALLE = {
   id: true,
   nombre: true,
   slug: true,
   activo: true,
   restaurantes: { select: { id: true, nombre: true, direccion: true, activo: true }, orderBy: [{ nombre: 'asc' as const }, { id: 'asc' as const }] },
-  admins: { where: { rol: 'OWNER' }, select: { id: true, email: true, debeCambiarPassword: true }, orderBy: { email: 'asc' as const } },
+  membresias: {
+    where: { rol: 'OWNER' },
+    select: { id: true, usuario: { select: { id: true, email: true, nombre: true } } },
+    orderBy: { usuario: { email: 'asc' as const } },
+  },
 } satisfies Prisma.MarcaSelect
 
 type FilaResumen = Prisma.MarcaGetPayload<{ select: typeof SELECT_RESUMEN }>
@@ -39,7 +43,7 @@ function aResumen(fila: FilaResumen): RootMarcaResumen {
     slug: fila.slug,
     activo: fila.activo,
     restaurantes: { activos: fila.restaurantes.filter((r) => r.activo).length, total: fila.restaurantes.length },
-    duenos: fila.admins.length,
+    duenos: fila.membresias.length,
   }
 }
 
@@ -50,7 +54,7 @@ function aDetalle(fila: FilaDetalle): RootMarcaDetalle {
     slug: fila.slug,
     activo: fila.activo,
     restaurantes: fila.restaurantes.map((r) => ({ id: r.id, nombre: r.nombre, direccion: r.direccion, activo: r.activo })),
-    duenos: fila.admins.map((a) => ({ id: a.id, email: a.email, debeCambiarPassword: a.debeCambiarPassword })),
+    duenos: fila.membresias.map((m) => ({ id: m.usuario.id, membresiaId: m.id, email: m.usuario.email, nombre: m.usuario.nombre })),
   }
 }
 

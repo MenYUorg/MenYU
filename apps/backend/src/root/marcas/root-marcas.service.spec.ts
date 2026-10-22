@@ -14,7 +14,7 @@ const filaResumen = (extra: Record<string, unknown> = {}) => ({
   slug: 'la-parrilla',
   activo: true,
   restaurantes: [{ activo: true }, { activo: true }, { activo: false }],
-  admins: [{ id: 'o1' }],
+  membresias: [{ id: 'membresia-1' }],
   logoUrl: 'https://logos/marca.png',
   ...extra,
 })
@@ -28,7 +28,13 @@ const filaDetalle = (extra: Record<string, unknown> = {}) => ({
     { id: 'r1', nombre: 'Centro', direccion: 'Av. Colón 1200', activo: true, logoUrl: 'x', mpAccessToken: 'secreto-mp', modoSesion: 'abierto' },
     { id: 'r2', nombre: 'Villa Allende', direccion: null, activo: false },
   ],
-  admins: [{ id: 'o1', email: 'juan@laparrilla.com', debeCambiarPassword: true, passwordHash: 'HASH-QUE-NO-DEBE-SALIR' }],
+  membresias: [
+    {
+      id: 'membresia-1',
+      rol: 'OWNER',
+      usuario: { id: 'usuario-juan', email: 'juan@laparrilla.com', nombre: 'Juan', supabaseUserId: 'SUPABASE-ID-QUE-NO-DEBE-SALIR' },
+    },
+  ],
   ...extra,
 })
 
@@ -64,7 +70,7 @@ describe('RootMarcasService', () => {
       expect(prisma.marca.findMany.mock.calls.map(([args]) => args.where)).toEqual([{ activo: true }, { activo: true }, {}])
     })
 
-    it('usa un select explícito (sin include): identidad, estado y las cantidades; los dueños son solo las cuentas OWNER', async () => {
+    it('usa un select explícito (sin include): identidad, estado y las cantidades; los dueños son solo las membresías OWNER', async () => {
       prisma.marca.findMany.mockResolvedValue([])
 
       await servicio.listar({})
@@ -77,7 +83,7 @@ describe('RootMarcasService', () => {
         slug: true,
         activo: true,
         restaurantes: { select: { activo: true } },
-        admins: { where: { rol: 'OWNER' }, select: { id: true } },
+        membresias: { where: { rol: 'OWNER' }, select: { id: true } },
       })
       expect(args.orderBy).toEqual([{ nombre: 'asc' }, { id: 'asc' }])
     })
@@ -100,7 +106,7 @@ describe('RootMarcasService', () => {
     })
 
     it('una marca sin restaurantes ni dueños figura con ceros ("Sin dueño")', async () => {
-      prisma.marca.findMany.mockResolvedValue([filaResumen({ restaurantes: [], admins: [] })])
+      prisma.marca.findMany.mockResolvedValue([filaResumen({ restaurantes: [], membresias: [] })])
 
       const [marca] = await servicio.listar({})
 
@@ -118,15 +124,15 @@ describe('RootMarcasService', () => {
       expect(Object.keys(detalle).sort()).toEqual(['activo', 'duenos', 'id', 'nombre', 'restaurantes', 'slug'])
       expect(detalle.restaurantes.map((r) => Object.keys(r).sort())).toEqual([['activo', 'direccion', 'id', 'nombre'], ['activo', 'direccion', 'id', 'nombre']])
       expect(detalle.restaurantes[1].direccion).toBeNull()
-      expect(detalle.duenos).toEqual([{ id: 'o1', email: 'juan@laparrilla.com', debeCambiarPassword: true }])
+      expect(detalle.duenos).toEqual([{ id: 'usuario-juan', membresiaId: 'membresia-1', email: 'juan@laparrilla.com', nombre: 'Juan' }])
       const texto = serializar(detalle)
-      expect(texto).not.toContain('HASH-QUE-NO-DEBE-SALIR')
+      expect(texto).not.toContain('SUPABASE-ID-QUE-NO-DEBE-SALIR')
       expect(texto).not.toContain('secreto-mp')
       expect(texto).not.toContain('modoSesion')
       expect(texto).not.toContain('logoUrl')
     })
 
-    it('el select pide solo esas columnas y solo las cuentas OWNER (nunca mozos, mesas, menú ni columnas mp_*)', async () => {
+    it('el select pide solo esas columnas y solo las membresías OWNER (nunca mozos, mesas, menú ni columnas mp_*)', async () => {
       prisma.marca.findUnique.mockResolvedValue(filaDetalle())
 
       await servicio.detalle('m-001')
@@ -135,9 +141,10 @@ describe('RootMarcasService', () => {
       expect(args.where).toEqual({ id: 'm-001' })
       expect(args).not.toHaveProperty('include')
       expect(args.select.restaurantes.select).toEqual({ id: true, nombre: true, direccion: true, activo: true })
-      expect(args.select.admins.where).toEqual({ rol: 'OWNER' })
-      expect(args.select.admins.select).toEqual({ id: true, email: true, debeCambiarPassword: true })
-      expect(Object.keys(args.select).sort()).toEqual(['activo', 'admins', 'id', 'nombre', 'restaurantes', 'slug'])
+      expect(args.select.membresias.where).toEqual({ rol: 'OWNER' })
+      expect(args.select.membresias.select).toEqual({ id: true, usuario: { select: { id: true, email: true, nombre: true } } })
+      expect(args.select.membresias.orderBy).toEqual({ usuario: { email: 'asc' } })
+      expect(Object.keys(args.select).sort()).toEqual(['activo', 'id', 'membresias', 'nombre', 'restaurantes', 'slug'])
     })
 
     it('una marca que no existe responde 404', async () => {
@@ -157,7 +164,7 @@ describe('RootMarcasService', () => {
     beforeEach(() => {
       tx.marca.findFirst.mockResolvedValue(null) // el identificador está libre
       tx.marca.create.mockResolvedValue({ id: 'marca-nueva', nombre: 'La Parrilla', slug: 'la-parrilla' })
-      tx.marca.findUnique.mockResolvedValue(filaDetalle({ id: 'marca-nueva', restaurantes: [], admins: [] }))
+      tx.marca.findUnique.mockResolvedValue(filaDetalle({ id: 'marca-nueva', restaurantes: [], membresias: [] }))
     })
 
     it('crea la marca (solo nombre e identificador) y devuelve su detalle', async () => {
