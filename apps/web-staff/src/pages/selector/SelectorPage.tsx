@@ -1,14 +1,19 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAuth } from '@menyu/auth'
+import { usePerfil } from '@menyu/auth-client'
 import { LogoMenYuOscuro } from '@menyu/ui'
-import { useMozoStore } from '../../store/mozoStore'
-import { ChefHat, CreditCard, LogOut, UtensilsCrossed } from 'lucide-react'
+import { ChefHat, LogOut, UtensilsCrossed } from 'lucide-react'
+import { cerrarSesion } from '../../services/socket'
+import {
+  puedeVerCocina,
+  puedeVerMozo,
+  useContextoStore,
+  useRolesActuales,
+} from '../../store/contextoStore'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-function getInitials(nombre?: string, email?: string): string {
-  const src = nombre ?? email ?? '?'
-  return src
+function getInitials(nombre: string): string {
+  return nombre
     .split(/[\s@.]/)
     .filter(Boolean)
     .slice(0, 2)
@@ -43,7 +48,7 @@ function PanelCard({
   const [hov, setHov] = useState(false)
 
   return (
-    <div
+    <button
       onClick={onClick}
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
@@ -55,6 +60,7 @@ function PanelCard({
         borderRadius: 16,
         padding:      '18px 20px',
         cursor:       'pointer',
+        textAlign:    'left',
         gridColumn:   fullWidth ? '1 / -1' : undefined,
         transform:    hov ? 'translateY(-3px)' : 'translateY(0)',
         boxShadow:    hov ? '0 14px 32px rgba(45,53,97,0.12)' : 'none',
@@ -133,27 +139,24 @@ function PanelCard({
           →
         </span>
       </p>
-    </div>
+    </button>
   )
 }
 
 // ── SelectorPage ──────────────────────────────────────────────────────────────
 export function SelectorPage() {
   const navigate = useNavigate()
-  const { user, logout } = useAuth()
-  const { setRestauranteId } = useMozoStore()
+  const perfil = usePerfil()
+  const restaurantes = useContextoStore((s) => s.restaurantes)
+  const restauranteId = useContextoStore((s) => s.restauranteId)
+  const setRestaurante = useContextoStore((s) => s.setRestaurante)
+  const roles = useRolesActuales()
 
-  const [rid, setRid] = useState(user?.restauranteId ?? '')
-
-  function ir(destino: '/cocina' | '/mozo' | '/gerente/pagos') {
-    if (!rid.trim()) return
-    setRestauranteId(rid.trim())
-    navigate(destino)
-  }
-
-  const isAdmin   = user?.tipo === 'admin'
-  const initials  = getInitials(user?.nombre, user?.email)
-  const nombreMostrado = user?.nombre ?? user?.email ?? 'Usuario'
+  const nombreMostrado = perfil.nombre || perfil.email
+  const initials = getInitials(nombreMostrado)
+  const verCocina = puedeVerCocina(roles)
+  const verMozo = puedeVerMozo(roles)
+  const unaSolaVista = verCocina !== verMozo
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
@@ -172,7 +175,7 @@ export function SelectorPage() {
         <LogoMenYuOscuro alto={22} />
 
         {/* Botón salir */}
-        <LogoutBtn onClick={logout} />
+        <LogoutBtn onClick={() => void cerrarSesion()} />
       </header>
 
       {/* ── Main ── */}
@@ -230,26 +233,29 @@ export function SelectorPage() {
               color:      '#6B7280',
               margin:     0,
             }}>
-              ¿A qué panel querés ingresar?
+              {restauranteId ? '¿A qué panel querés ingresar?' : 'Elegí el restaurante donde vas a trabajar.'}
             </p>
           </div>
 
-          {/* Input restauranteId — solo para ROOT */}
-          {!user?.restauranteId && (
+          {/* Restaurante — solo si trabaja en más de uno */}
+          {restaurantes.length > 1 && (
             <div style={{ marginBottom: 20 }}>
-              <label style={{
-                display:    'block',
-                fontFamily: 'Inter, sans-serif',
-                fontSize:   12,
-                color:      '#6B7280',
-                marginBottom: 6,
-              }}>
-                ID del restaurante
+              <label
+                htmlFor="restaurante"
+                style={{
+                  display:      'block',
+                  fontFamily:   'Inter, sans-serif',
+                  fontSize:     12,
+                  color:        '#6B7280',
+                  marginBottom: 6,
+                }}
+              >
+                Restaurante
               </label>
-              <input
-                value={rid}
-                onChange={(e) => setRid(e.target.value)}
-                placeholder="22222222-2222-4222-a222-..."
+              <select
+                id="restaurante"
+                value={restauranteId ?? ''}
+                onChange={(e) => setRestaurante(e.target.value)}
                 style={{
                   width:        '100%',
                   padding:      '10px 12px',
@@ -262,9 +268,14 @@ export function SelectorPage() {
                   outline:      'none',
                   boxSizing:    'border-box',
                 }}
-                onFocus={(e)  => { e.currentTarget.style.borderColor = '#E8563A' }}
-                onBlur={(e)   => { e.currentTarget.style.borderColor = '#E6E8EF' }}
-              />
+              >
+                <option value="" disabled>Elegí un restaurante…</option>
+                {restaurantes.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.marcaNombre ? `${r.nombre} · ${r.marcaNombre}` : r.nombre}
+                  </option>
+                ))}
+              </select>
             </div>
           )}
 
@@ -274,40 +285,32 @@ export function SelectorPage() {
             gridTemplateColumns: 'repeat(2, 1fr)',
             gap:                 12,
           }}>
-            <PanelCard
-              icon={<ChefHat size={26} />}
-              title="Panel Cocina"
-              description="Gestioná los pedidos en preparación en tiempo real"
-              barColor="#E8563A"
-              chipBg="#FDF0ED"
-              iconColor="#E8563A"
-              hoverBorder="#F3B6A8"
-              accentColor="#E8563A"
-              onClick={() => ir('/cocina')}
-            />
-            <PanelCard
-              icon={<UtensilsCrossed size={26} />}
-              title="Panel Mozo"
-              description="Tomá pedidos, gestioná mesas y atendé llamados"
-              barColor="#2D3561"
-              chipBg="#EEF0F8"
-              iconColor="#2D3561"
-              hoverBorder="#B9C0DD"
-              accentColor="#2D3561"
-              onClick={() => ir('/mozo')}
-            />
-            {isAdmin && (
+            {verCocina && (
               <PanelCard
-                icon={<CreditCard size={26} />}
-                title="Panel Caja / Cobros"
-                description="Registrá y gestioná los cobros de las mesas"
-                barColor="#1F9D57"
-                chipBg="#E4F6EC"
-                iconColor="#1F9D57"
-                hoverBorder="#9FD9B8"
-                accentColor="#1F9D57"
-                fullWidth
-                onClick={() => ir('/gerente/pagos')}
+                icon={<ChefHat size={26} />}
+                title="Panel Cocina"
+                description="Gestioná los pedidos en preparación en tiempo real"
+                barColor="#E8563A"
+                chipBg="#FDF0ED"
+                iconColor="#E8563A"
+                hoverBorder="#F3B6A8"
+                accentColor="#E8563A"
+                fullWidth={unaSolaVista}
+                onClick={() => navigate('/cocina')}
+              />
+            )}
+            {verMozo && (
+              <PanelCard
+                icon={<UtensilsCrossed size={26} />}
+                title="Panel Mozo"
+                description="Tomá pedidos, gestioná mesas y atendé llamados"
+                barColor="#2D3561"
+                chipBg="#EEF0F8"
+                iconColor="#2D3561"
+                hoverBorder="#B9C0DD"
+                accentColor="#2D3561"
+                fullWidth={unaSolaVista}
+                onClick={() => navigate('/mozo')}
               />
             )}
           </div>

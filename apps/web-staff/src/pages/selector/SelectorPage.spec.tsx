@@ -1,105 +1,139 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
+import type { PerfilUsuario } from '@menyu/types'
+import {
+  logoutSimulado,
+  membresiaDeMarca,
+  membresiaDeRestaurante,
+  perfilDeCocina,
+  perfilDeMozo,
+  perfilDeOwner,
+  perfilDePrueba,
+  reiniciarSesionDePrueba,
+  sesionDePrueba,
+} from '../../test/authClient'
+import { useContextoStore } from '../../store/contextoStore'
 import { SelectorPage } from './SelectorPage'
 
-const logout = vi.fn()
-const setRestauranteId = vi.fn()
-let usuario: { nombre?: string; email?: string; restauranteId?: string; tipo?: string } | null
-
-vi.mock('@menyu/auth', () => ({ useAuth: () => ({ user: usuario, logout }) }))
+vi.mock('@menyu/auth-client', async () => (await import('../../test/authClient')).moduloSimulado())
 vi.mock('@menyu/ui', () => ({ LogoMenYuOscuro: () => <span>MenYU</span> }))
-vi.mock('../../store/mozoStore', () => ({ useMozoStore: () => ({ setRestauranteId }) }))
 
 function Destino() {
   return <p>destino {useLocation().pathname}</p>
 }
 
-function abrir() {
+function abrir(perfil: PerfilUsuario, preferencia?: string) {
+  sesionDePrueba.perfil = perfil
+  useContextoStore.getState().cargarContexto(perfil, { restauranteId: preferencia ?? null })
   return render(
-    <MemoryRouter initialEntries={['/']}>
+    <MemoryRouter initialEntries={['/selector']}>
       <Routes>
-        <Route path="/" element={<SelectorPage />} />
+        <Route path="/selector" element={<SelectorPage />} />
         <Route path="*" element={<Destino />} />
       </Routes>
     </MemoryRouter>,
   )
 }
 
-const tarjeta = (titulo: string) => screen.getByText(titulo).closest('div[style*="cursor"]') as HTMLElement
+const tarjeta = (titulo: string) => screen.getByText(titulo).closest('button') as HTMLElement
 
 beforeEach(() => {
-  vi.clearAllMocks()
-  usuario = { nombre: 'Ana Pérez', email: 'ana@menyu.com', restauranteId: 'rest-1', tipo: 'mozo' }
+  reiniciarSesionDePrueba()
+  localStorage.clear()
+  useContextoStore.setState({ restaurantes: [], restauranteId: null, perfil: null })
 })
 
 describe('SelectorPage', () => {
-  it('saluda con el nombre y las iniciales; un mozo ve cocina y mozo, no la caja', () => {
-    abrir()
+  it('saluda con el nombre y las iniciales del perfil', () => {
+    abrir(perfilDeOwner())
 
-    expect(screen.getByText('Ana Pérez')).toBeInTheDocument()
-    expect(screen.getByText('AP')).toBeInTheDocument()
-    expect(screen.getByText('Panel Cocina')).toBeInTheDocument()
-    expect(screen.getByText('Panel Mozo')).toBeInTheDocument()
-    expect(screen.queryByText('Panel Caja / Cobros')).not.toBeInTheDocument()
-    expect(screen.queryByPlaceholderText(/22222222/)).not.toBeInTheDocument()
+    expect(screen.getByText('Owner de Prueba')).toBeInTheDocument()
+    expect(screen.getByText('OD')).toBeInTheDocument()
+    expect(screen.getByText('¿A qué panel querés ingresar?')).toBeInTheDocument()
   })
 
-  it('sin nombre usa el email; sin usuario dice "Usuario"', () => {
-    usuario = { email: 'juan.gomez@menyu.com', restauranteId: 'rest-1' }
-    const { unmount } = abrir()
+  it('sin nombre usa el email', () => {
+    abrir(perfilDePrueba({ nombre: '', email: 'juan.gomez@menyu.com', membresias: [membresiaDeRestaurante('MOZO', 'rest-1')] }))
+
     expect(screen.getByText('juan.gomez@menyu.com')).toBeInTheDocument()
     expect(screen.getByText('JG')).toBeInTheDocument()
-    unmount()
-
-    usuario = null
-    abrir()
-    expect(screen.getByText('Usuario')).toBeInTheDocument()
-    expect(screen.getByText('?')).toBeInTheDocument()
   })
 
-  it.each([
-    ['Panel Cocina', 'destino /cocina'],
-    ['Panel Mozo', 'destino /mozo'],
-  ])('"%s" guarda el restaurante del usuario y entra', (panel, destino) => {
-    abrir()
+  it('el OWNER ve las dos vistas y entra a la que elige', () => {
+    abrir(perfilDeOwner())
 
-    const card = tarjeta(panel)
+    const card = tarjeta('Panel Cocina')
     fireEvent.mouseEnter(card)
     fireEvent.mouseLeave(card)
     fireEvent.click(card)
 
-    expect(setRestauranteId).toHaveBeenCalledWith('rest-1')
-    expect(screen.getByText(destino)).toBeInTheDocument()
+    expect(screen.getByText('destino /cocina')).toBeInTheDocument()
   })
 
-  it('un admin sin restaurante lo escribe a mano y puede entrar a la caja', () => {
-    usuario = { nombre: 'Root', tipo: 'admin' }
-    abrir()
+  it('el MOZO solo ve su panel, y la cocina no aparece', () => {
+    abrir(perfilDeMozo())
 
-    fireEvent.click(tarjeta('Panel Caja / Cobros'))
-    expect(setRestauranteId).not.toHaveBeenCalled()
+    expect(screen.queryByText('Panel Cocina')).not.toBeInTheDocument()
+    fireEvent.click(tarjeta('Panel Mozo'))
 
-    const campo = screen.getByPlaceholderText(/22222222/)
-    fireEvent.focus(campo)
-    fireEvent.change(campo, { target: { value: '   ' } })
-    fireEvent.blur(campo)
-    fireEvent.click(tarjeta('Panel Cocina'))
-    expect(setRestauranteId).not.toHaveBeenCalled()
+    expect(screen.getByText('destino /mozo')).toBeInTheDocument()
+  })
 
-    fireEvent.change(campo, { target: { value: '  rest-9  ' } })
-    fireEvent.click(tarjeta('Panel Caja / Cobros'))
-    expect(setRestauranteId).toHaveBeenCalledWith('rest-9')
-    expect(screen.getByText('destino /gerente/pagos')).toBeInTheDocument()
+  it('COCINA solo ve la cocina', () => {
+    abrir(perfilDeCocina())
+
+    expect(screen.queryByText('Panel Mozo')).not.toBeInTheDocument()
+    expect(screen.getByText('Panel Cocina')).toBeInTheDocument()
+  })
+
+  it('con un solo restaurante no pregunta cuál', () => {
+    abrir(perfilDeMozo())
+
+    expect(screen.queryByLabelText('Restaurante')).not.toBeInTheDocument()
+  })
+
+  describe('con varios restaurantes', () => {
+    const enVarios = () =>
+      perfilDePrueba({
+        membresias: [
+          membresiaDeMarca('marca-1', [{ id: 'rest-1', nombre: 'Centro' }, { id: 'rest-2', nombre: 'Palermo' }], 'Marca Pruebas'),
+        ],
+      })
+
+    it('pide elegir uno antes de mostrar las vistas', () => {
+      abrir(enVarios())
+
+      expect(screen.getByText('Elegí el restaurante donde vas a trabajar.')).toBeInTheDocument()
+      expect(screen.queryByText('Panel Cocina')).not.toBeInTheDocument()
+      expect(screen.getByRole('option', { name: 'Centro · Marca Pruebas' })).toBeInTheDocument()
+    })
+
+    it('al elegirlo aparecen las vistas de ese restaurante', () => {
+      abrir(enVarios())
+
+      fireEvent.change(screen.getByLabelText('Restaurante'), { target: { value: 'rest-2' } })
+
+      expect(screen.getByText('Panel Cocina')).toBeInTheDocument()
+      expect(screen.getByText('Panel Mozo')).toBeInTheDocument()
+      expect(useContextoStore.getState().restauranteId).toBe('rest-2')
+    })
+
+    it('con la preferencia de web-auth ya viene elegido', () => {
+      abrir(enVarios(), 'rest-2')
+
+      expect((screen.getByLabelText('Restaurante') as HTMLSelectElement).value).toBe('rest-2')
+      expect(screen.getByText('Panel Cocina')).toBeInTheDocument()
+    })
   })
 
   it('"Salir" cierra la sesión', () => {
-    abrir()
+    abrir(perfilDeMozo())
 
     const salir = screen.getByRole('button', { name: /Salir/ })
     fireEvent.mouseEnter(salir)
     fireEvent.mouseLeave(salir)
     fireEvent.click(salir)
 
-    expect(logout).toHaveBeenCalledTimes(1)
+    expect(logoutSimulado).toHaveBeenCalledTimes(1)
   })
 })
