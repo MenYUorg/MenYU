@@ -158,13 +158,28 @@ describe('endpoints de ítems', () => {
       ['precio como texto', { precioDescuento: '1200' }],
       ['porcentaje 0', { porcentaje: 0 }],
       ['porcentaje 100', { porcentaje: 100 }],
+      ['porcentaje negativo', { porcentaje: -5 }],
       ['porcentaje con decimales', { porcentaje: 12.5 }],
       ['porcentaje como texto', { porcentaje: '20' }],
+      ['precio no numérico', { precioDescuento: 'abc' }],
+      ['porcentaje no numérico', { porcentaje: 'abc' }],
     ])('%s → 400 y no llega al servicio', async (_caso, body) => {
       const res = await api.pedir('put', '/items/item-1/descuento', { cuenta: CUENTAS.OWNER_A, body })
 
       expect(res.status).toBe(400)
       expect(items.setDescuento).not.toHaveBeenCalled()
+    })
+
+    // `@IsOptional()` deja pasar null igual que undefined: la validación no lo frena y el body llega al servicio con el
+    // null. Este test fija lo que pasa hoy en el controller (de SCRUM-27, que lo escribió sobre el spec que borró la 4.3).
+    it.each([
+      ['precio null', { precioDescuento: null }],
+      ['porcentaje null', { porcentaje: null }],
+    ])('%s pasa la validación y llega al servicio', async (_caso, body) => {
+      const res = await api.pedir('put', '/items/item-1/descuento', { cuenta: CUENTAS.OWNER_A, body })
+
+      expect(res.status).toBe(200)
+      expect(items.setDescuento).toHaveBeenCalledWith('item-1', body, expect.anything())
     })
 
     it('descarta los campos que no corresponden (no se puede cambiar el precio base por acá)', async () => {

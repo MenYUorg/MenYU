@@ -177,11 +177,13 @@ describe('ItemsService — descuentos', () => {
         ['ninguno de los dos', {}],
         ['precio null', { precioDescuento: null }],
         ['porcentaje null', { porcentaje: null }],
-      ])('%s → 400', async (_caso, dto) => {
-        await expect(
-          service.setDescuento('item-1', dto as { precioDescuento?: number; porcentaje?: number }, OWNER),
-        ).rejects.toThrow(BadRequestException)
+      ])('%s → 400 "Falta el precio con descuento o el porcentaje"', async (_caso, dto) => {
+        // Act
+        const descuento = service.setDescuento('item-1', dto as { precioDescuento?: number; porcentaje?: number }, OWNER)
 
+        // Assert
+        await expect(descuento).rejects.toThrow(BadRequestException)
+        await expect(descuento).rejects.toThrow('Falta el precio con descuento o el porcentaje')
         expect(mockPrisma.itemMenu.update).not.toHaveBeenCalled()
       })
 

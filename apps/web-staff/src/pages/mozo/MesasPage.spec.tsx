@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import type { Mesa } from '@menyu/types'
 import { io } from 'socket.io-client'
-import { api, type SesionActivaRico, type WaiterCallRico } from '../../services/api'
+import { api, ApiError, type SesionActivaRico, type WaiterCallRico } from '../../services/api'
 import { perfilDePrueba, membresiaDeRestaurante, reiniciarSesionDePrueba } from '../../test/authClient'
 import { montarContexto, reiniciarContexto } from '../../test/contexto'
 import { MesasPage } from './MesasPage'
@@ -11,7 +11,10 @@ const ANA = perfilDePrueba({ nombre: 'Ana Pérez', membresias: [membresiaDeResta
 
 vi.mock('@menyu/auth-client', async () => (await import('../../test/authClient')).moduloSimulado())
 vi.mock('@menyu/ui', () => ({ LogoMenYuOscuro: () => <span>MenYU</span> }))
-vi.mock('../../services/api', () => ({
+// `ApiError` real: los casos de error de red, 500 y 503 (SCRUM-16) distinguen por su `status`. El restaurante sale del
+// contexto desde la 4.6, así que ya no hay `mozoStore` que simular, ni `getToken`: el token lo pone el cliente de la API.
+vi.mock('../../services/api', async (importOriginal) => ({
+  ApiError: (await importOriginal<typeof import('../../services/api')>()).ApiError,
   api: {
     mesas: { getAll: vi.fn() },
     sesiones: { getActiva: vi.fn(), cerrar: vi.fn() },
@@ -143,14 +146,27 @@ describe('MesasPage (mozo)', () => {
       expect(await screen.findByText('Sin mesas asignadas a este restaurante.')).toBeInTheDocument()
     })
 
-    it('si la carga falla muestra el error', async () => {
-      mesasApi.getAll.mockRejectedValueOnce(new Error('Sin conexión')).mockRejectedValueOnce('raro')
-
-      const { unmount } = abrir()
-      expect(await screen.findByText('Sin conexión')).toBeInTheDocument()
-      unmount()
+    // Sin reintento ni timeout: la pantalla muestra el mensaje del error tal cual y se queda ahí.
+    // ApiError lleva el mensaje que arma authFetch: el `message` del cuerpo (Nest responde 500 con
+    // "Internal server error") o "Error <status>" si el cuerpo no lo trae.
+    it.each([
+      ['la red no responde', new TypeError('Failed to fetch'), 'Failed to fetch'],
+      ['el backend responde 500', new ApiError('Internal server error', 500), 'Internal server error'],
+      ['el backend responde 503', new ApiError('Error 503', 503), 'Error 503'],
+    ])('si la carga falla porque %s muestra el mensaje del error', async (_caso, error, mensaje) => {
+      mesasApi.getAll.mockRejectedValue(error)
 
       abrir()
+
+      expect(await screen.findByText(mensaje)).toBeInTheDocument()
+      expect(screen.queryByText('Cargando mesas...')).not.toBeInTheDocument()
+    })
+
+    it('si la carga falla con algo que no es un Error muestra un mensaje genérico', async () => {
+      mesasApi.getAll.mockRejectedValue('raro')
+
+      abrir()
+
       expect(await screen.findByText('Error al cargar mesas')).toBeInTheDocument()
     })
 
