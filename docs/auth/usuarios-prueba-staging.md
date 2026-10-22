@@ -1,16 +1,22 @@
 # Usuarios de prueba de staging (auth)
 
-Para probar en **staging** la migración de autenticación (dominios propios y, más adelante, las fases de `docs/auth/specs/auth.md`). Nunca usarlos contra producción.
-
-| Rol | Email | Entra a |
-|---|---|---|
-| OWNER | `owner.pruebas-auth@menyu-app.com` | web-admin (toda "Marca Pruebas Auth") |
-| GERENTE | `gerente.pruebas-auth@menyu-app.com` | web-admin ("Restaurante Pruebas Auth") |
-| Mozo | `mozo.pruebas-auth@menyu-app.com` | web-staff ("Restaurante Pruebas Auth") |
+Para probar en **staging** la migración de autenticación (dominios propios y las fases de `docs/auth/specs/auth.md`). Nunca usarlos contra producción.
 
 - Marca: "Marca Pruebas Auth" (slug `pruebas-auth`). Restaurante: "Restaurante Pruebas Auth". Mesa 1, con PIN.
 - **Las contraseñas y el PIN no están en el repo**, que es público: viven en `docs/auth/.env.usuarios-staging`, que git ignora (`.env.*`). Quien lo necesite se lo pide al equipo; no subirlo ni pegarlo en issues o PRs.
-- Se entra por `mesa.staging.menyu-app.com/auth` (o `menyu-cliente-staging.vercel.app/auth`): el login todavía es el legacy de web-cliente.
+- **Las cuentas que se usan son las de Supabase**, más abajo ("Un usuario por rol"). Se entra por `auth.staging.menyu-app.com`.
+
+## Los tres usuarios legacy: ya no sirven
+
+Estos se crearon el 2026-10-20 contra las tablas viejas (`Admin`, `AdminRestaurante`, `Mozo`) y se usaban por `mesa.staging.menyu-app.com/auth`, el login de web-cliente:
+
+| Rol | Email |
+|---|---|
+| OWNER | `owner.pruebas-auth@menyu-app.com` |
+| GERENTE | `gerente.pruebas-auth@menyu-app.com` |
+| Mozo | `mozo.pruebas-auth@menyu-app.com` |
+
+**Con el merge del PR #416 (Fase 4) dejan de abrir el panel y staff**, que ya no tienen login propio: el acceso lo da la `Membresia`, no la tabla `admin`. Si se entra con una de ellas en `/auth` de web-cliente, la pantalla avisa y manda a web-auth (entrega 4.7). Se reemplazan por las cuentas de Supabase de la sección "Un usuario por rol". Las filas quedan en la base hasta que la Fase 5 retire esas tablas.
 
 ## Cómo se crearon (2026-10-20)
 
@@ -109,6 +115,13 @@ JOIN restaurante r ON r.marca_id = m.id AND r.nombre = 'Restaurante Pruebas Auth
 ```
 
 Desde la entrega 4.5, web-admin lee la sesión de Supabase, y web-staff desde la 4.6. Ninguna tiene login propio.
+
+### Probar la 4.7 en local (2026-10-22)
+
+Lo mismo que abajo, más `apps/web-cliente/.env.local` (`VITE_API_URL=/api` y `VITE_AUTH_URL=http://auth.menyu.local:5173`) y su Vite en el 5176. Lo que agrega la entrega:
+
+- **Personal en el login del comensal:** en `mesa.menyu.local:5176/auth`, con una cuenta de personal (sirve `mozo@menyu.com` / `mozo1234` del seed, porque el login legacy sigue en pie), tiene que avisar y terminar en `auth.menyu.local:5173` **sin** `token` ni `refresh` en la URL y sin nada en el localStorage. Con `cliente1@menyu.com` / `cliente1234` entra como siempre.
+- **Mesa de un restaurante dado de baja:** abrir la mesa 100 (`/check-in?restaurantId=…&tableCode=TEST-QR-SEED-100`), hacer un pedido, dar de baja el restaurante (`UPDATE restaurante SET activo = false WHERE id = '22222222-2222-4222-a222-222222222222'`) y recargar `/menu`: solo "Pagar la cuenta" y "Ver mis pedidos". En `/pagar`, el efectivo responde "Este restaurante no está disponible" y no deja ni `pago` ni `llamado_mozo`. Reactivar al terminar.
 
 ### Probar la entrega 4.5 en local (2026-10-21)
 

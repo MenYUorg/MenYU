@@ -221,7 +221,7 @@ Entregas (ver Decisiones de la planificación de la Fase 4):
 | 4.4 | Backend: la consola de ROOT (decisión 2) | Hecha (2026-10-21): ver abajo |
 | 4.5 | web-admin: `RequireAuth`, contexto desde `/auth/me`, Personal, `useRootSession` | Hecha (2026-10-21): ver abajo |
 | 4.6 | web-staff: `RequireAuth`, selector por membresías, `mozoId` desde el backend | Hecha (2026-10-22): ver abajo |
-| 4.7 | web-cliente, variables, documentación, verificación en `*.menyu.local` y staging, revisor | |
+| 4.7 | web-cliente, variables, documentación, verificación en `*.menyu.local` y staging, revisor | Hecha (2026-10-22): ver abajo |
 
 **4.1, cómo quedó (2026-10-21).**
 - **El paquete:** `packages/auth-client` (`@menyu/auth-client`). Es solo código fuente, como `@menyu/ui`, con 100 % de cobertura. Exporta:
@@ -427,6 +427,28 @@ Decisiones de la planificación de la 4.6:
 
 - **Datos de prueba:** la base local no tenía JEFE_SALON ni COCINA, que son los roles propios de staff. Se sumaron con su `supabase_user_id` del Supabase de staging, junto con el `Mozo` de cada cuenta de salón (sin él, atender y cobrar dan 403) y una membresía MOZO para la cuenta mixta. El paso a paso está en `docs/auth/usuarios-prueba-staging.md`.
 
+**4.7, cómo quedó (2026-10-22).** La última entrega de la Fase 4, en el PR draft #416. Cierra lo que dejaron la 4.5 y la 4.6, y con ella ninguna app manda ya el JWT legacy del personal.
+
+Decisiones de la planificación de la 4.7:
+1. **`packages/auth` se borra acá**, no en la Fase 5: no tenía ningún consumidor desde la 4.6 y no hacía falta esperar.
+2. **El test inestable de web-staff se arregla acá**, porque la 4.7 es la que dispara el release que podría frenar.
+3. **`POST /payments/solicitar-efectivo` rechaza un restaurante dado de baja**, además del cambio de pantalla: si no, el pedido de efectivo se podía crear igual desde `/pagar` o `/dividir`.
+4. **Las variables de Vercel las carga el equipo a mano**, con el checklist de `docs/auth/VariablesACambiar.md`.
+
+- **web-cliente ya no le pasa tokens al personal** (`pages/auth/AuthPage.tsx`). Si el login legacy devuelve `admin` o `mozo`, no guarda los tokens en localStorage ni arma `?token=&refresh=`: avisa que el ingreso de MenYU está en otra pantalla y manda a web-auth, con un link por si la navegación no sale. Antes, como `irAlLogin()` usa la URL completa, esos tokens terminaban copiados en el `redirect` de web-auth y en el historial y los logs de los dos dominios. La URL sale de `urlDeAuth()` (`utils/urlDeAuth.ts`): `VITE_AUTH_URL` y, si falta, el dominio de la app (`mesa.<ambiente>` → `auth.<ambiente>`, y los puertos de desarrollo). `resolveAppUrl` quedó sin uso; lo borra la Fase 5.
+- **La mesa de un restaurante dado de baja solo paga con Mercado Pago.** `components/menu/MesaSinCarta.tsx` perdió "Llamar al mozo" y la mención al efectivo: con la baja el personal recibe 403 al cobrar en efectivo, cerrar la mesa y atender un llamado (4.2), así que las dos cosas eran una espera que nadie podía atender. El texto es el mismo que el de los diálogos de la consola de ROOT (`copy.ts`).
+- **El backend cierra el otro lado:** `solicitarEfectivo` responde 403 "Este restaurante no está disponible" (el mismo mensaje que `POST /sessions/open`), antes de deduplicar y de crear nada. La ruta solo usa `SessionAuthGuard`, así que sin esto el pedido de efectivo y su llamado al mozo se creaban igual desde `/pagar` o `/dividir` y quedaban pendientes para siempre. `/pagar` y `/dividir` ya muestran el mensaje del servidor: no hubo que tocarlas.
+- **El socket de `MesasPage` (web-staff) se suscribe una sola vez.** El efecto dependía de `sesionDetalle?.sesionId`, así que abrir una mesa desconectaba y volvía a conectar, y mientras tanto el handler de `sesion:cerrada` leía la sesión anterior: el detalle podía quedar mostrando una sesión ya cerrada. De ahí venía el test inestable que anotaba esta spec. La sesión del detalle pasa a leerse por ref, como `mesas` y `sesiones` en el mismo archivo.
+- **`packages/auth` borrado** (decisión 1), con las dos referencias que quedaban vivas: los `tailwind.config.js` de web-admin y web-staff, que ahora miran `packages/auth-client`. No tenía filtros en `ci.yml` ni entradas en `sonar-project.properties`.
+- **Tests:** los de `AuthPage` (admin y mozo: no guarda tokens, no los pasa por la URL, avisa y manda a web-auth), `urlDeAuth` (la variable y cada fallback), `MesaSinCarta` (sin mozo ni efectivo), `solicitarEfectivo` (restaurante, marca y los dos de baja → 403 sin crear el pago ni el llamado) y el socket de `MesasPage`. web-cliente queda en 733 tests, con `urlDeAuth.ts` y `MesaSinCarta.tsx` en 100 % de líneas y `AuthPage.tsx` en 97,2 %.
+  - Se arreglaron dos specs que fallaban solo en local: `ClienteMenuPage` esperaba el botón del mozo, y `MisPedidosPage` comparaba "p. m." con el espacio fino (U+202F) del ICU de Windows sin normalizar (la molestia que anotaba "Lo que dejó la 4.5"; en el CI de Linux pasaba).
+- **Verificada en el navegador** (playwright-cli en `*.menyu.local`, con el Supabase de staging y el backend de esta rama en local, porque la API de staging todavía corre `main`):
+  1. **Personal en el login del comensal:** con `mozo@menyu.com` del seed, termina en `http://auth.menyu.local:5173/` ("Ingresar | MenYU"), sin `token` ni `refresh` en la URL y con el localStorage vacío.
+  2. **El comensal no cambia:** con `cliente1@menyu.com` entra al home y sus tokens quedan guardados como siempre.
+  3. **Mesa sin carta:** con una mesa abierta y el restaurante dado de baja, `/menu` muestra solo "Pagar la cuenta" y "Ver mis pedidos", y el texto dice Mercado Pago y que el efectivo no está disponible.
+  4. **Efectivo rechazado:** con un pedido en la mesa y el restaurante de baja, "Pagar toda la cuenta en efectivo" muestra "Este restaurante no está disponible", y en la base no quedó ningún `pago` ni `llamado_mozo`. Al reactivar, el efectivo vuelve a funcionar ("El mozo se va a acercar a la mesa a cobrar el total").
+  5. **SSO sin regresiones:** con la cuenta de tres lugares, el login en web-auth muestra el selector y después `admin.menyu.local/admin` abre en `/admin/dashboard` con el nav de dueño y `staff.menyu.local` en su selector, las dos sin volver a iniciar sesión.
+
 - Paquete compartido en el monorepo (`@menyu/auth-client`) con:
   - Cliente Supabase con cookie de dominio desde `VITE_AUTH_COOKIE_DOMAIN`.
   - Hook `useSession`.
@@ -438,6 +460,7 @@ Decisiones de la planificación de la 4.6:
 - Integrarlo en web-admin y web-staff (con `RequireAuth`) y en web-cliente (solo `useSession`, sin `RequireAuth`: la sesión es opcional).
 - CI: sumar `@menyu/auth-client` a los filtros de test y cobertura de `ci.yml`, a la subida de cobertura y a `sonar-project.properties`, como `@menyu/ui`. Los deploys no cambian: las apps que lo importan se reconstruyen solas cuando cambia (`turbo-ignore` y `dependsOn: ["^build"]`).
 - **Terminado cuando:** login en auth → abrir admin y staff en otras pestañas sin volver a loguear; logout en una → las otras vuelven a web-auth al recuperar foco. Probado en `*.menyu.local` y en staging.
+  - En `*.menyu.local` está comprobado desde la 4.6 (y de nuevo en la 4.7). **En staging queda pendiente hasta el merge del PR #416**, que es el que lleva este backend: los casos están en "Despliegue".
 
 ### Fase 4b — Cuenta de cliente
 
@@ -491,9 +514,7 @@ Observaciones que dejaron las Fases 0 a 3b (2026-10-20 y 2026-10-21). Revisarlas
   - `/privacidad` describe lo que hace el código hoy: qué guarda cada tabla y qué proveedores reciben datos. Si eso cambia (por ejemplo, la Fase 5 retira los `password_hash`), actualizarla junto con la fecha de vigencia.
 - **Fase 3b: sin probar el "atrás" desde Google en celulares** (Safari iOS y Chrome Android).
 - **Fase 3b: Supabase no agrega una identidad `email` cuando una cuenta que solo tiene Google crea una contraseña.** `identities` sigue mostrando solo `google`, pero la contraseña sirve (comprobado el 2026-10-21). Para saber si una cuenta tiene contraseña no sirve mirar `identities`.
-- **Test inestable en web-staff (2026-10-21).**
-  - `MesasPage (mozo) › detalle › si la sesión abierta en el detalle se cierra por socket, se limpia` (`apps/web-staff/src/pages/mozo/MesasPage.spec.tsx`) falló en el CI de `main` (`b4d2dcb`) sin cambios en web-staff. Pasó al reintentar y en local pasa siempre.
-  - `deploy-production.yml` exige el CI del commit en verde, así que puede frenar un release (para v1.1.0 hubo que relanzar el job). Conviene arreglarlo.
+- ~~**Test inestable en web-staff (2026-10-21).**~~ Resuelto en la 4.7: no era el test sino el efecto del socket de `MesasPage`, que dependía de la sesión del detalle y se volvía a suscribir al abrir una mesa (ver "4.7, cómo quedó").
 - **Fase 3: lo que se probó en staging (2026-10-20).**
   - El deploy del merge y el smoke de staging, con las cuatro apps y web-auth OK.
   - En `auth.staging.menyu-app.com` desplegado, ROOT y OWNER terminan en `admin.staging…/admin`, MOZO en `staff.staging…/mozo` y COCINA en `staff.staging…/cocina`. "varias" ve el selector y `sin-acceso` va a "Tu cuenta no tiene acceso". `/auth/me` responde con el CORS de `auth.staging`.
@@ -528,17 +549,17 @@ Observaciones que dejaron las Fases 0 a 3b (2026-10-20 y 2026-10-21). Revisarlas
   - Un registro inválido del historial (un error de programación) responde 500 genérico.
 - **Lo que dejó la 4.6 (2026-10-22):**
   - **El gateway de Socket.io no saca a nadie de una sala.** Se resolvió por el lado del cliente (la conexión recuerda su sala y reconecta al cambiar de restaurante), pero los handlers del socket compartido —`MozoNotifications`, `MozoPanel`, `CocinaPage` y `PagosMozo`— no filtran por restaurante: si alguna vez una conexión queda en dos salas, se mezclan los datos de dos sucursales. `MesasPage` y `PedidosPage` abren su propia conexión y la cierran al cambiar, así que no les pasa. El arreglo de fondo es un `leave` en el gateway, junto con autenticarlo (hoy está en "Fuera de alcance").
-  - **Para la 4.7, los tokens legacy en la URL:** la deuda que dejó la 4.5 vale también para web-staff. `apps/web-cliente/src/pages/auth/AuthPage.tsx` manda a un mozo a `staff…/?token=…&refresh=…`; web-staff ya no los lee, así que `irAlLogin()` los copia al `redirect` de web-auth. Si el PR se desplegara antes de la 4.7, hay que descartar `token` y `refresh` de la query al arrancar las dos apps.
+  - ~~**Para la 4.7, los tokens legacy en la URL.**~~ Hecho en la 4.7: web-cliente no se los pasa a nadie.
   - **Un 401 que persiste después de renovar la sesión deja la pantalla vacía y sin cartel, también en staff** (`MozoPanel` dice "Sin alertas pendientes"). Es la misma deuda de interfaz que anotó la 4.5 para web-admin, y por la misma razón: mandar al login ante un 401 con sesión viva armaría un loop.
-  - **`packages/auth` quedó sin ningún consumidor** (web-cliente nunca lo importó). Se puede borrar antes de la Fase 5, con sus filtros de `ci.yml`.
+  - ~~**`packages/auth` quedó sin ningún consumidor.**~~ Borrado en la 4.7.
   - El encabezado del panel del mozo muestra el rol de más autoridad, así que un dueño que opera como mozo se ve como "DUEÑO" sobre "PANEL › MOZO". Es la decisión 2 de la 4.6; si molesta, el encabezado puede mostrar el rol con el que está operando.
-  - Sin probar en staging: queda para la 4.7, cuando el merge lleve este backend.
+  - Sin probar en staging: queda para después del merge del PR #416, que es el que lleva este backend a staging (la 4.7 dejó la lista de casos en "Despliegue").
 - **Lo que dejó la 4.5 (2026-10-21):**
-  - **Para la 4.7, la otra mitad de la decisión de las mesas abiertas:** `MesaSinCarta` de web-cliente (`src/components/menu/MesaSinCarta.tsx`) todavía le dice al comensal de un restaurante dado de baja que puede pagar en efectivo y llamar al mozo, y las dos cosas dan 403 porque el personal perdió el acceso. `POST /payments/solicitar-efectivo` solo usa `SessionAuthGuard`, así que el pedido de efectivo se puede crear y nadie puede confirmarlo. Hay que dejar solo Mercado Pago en esa pantalla (y, si se quiere cerrar del todo, rechazar el pedido de efectivo de un restaurante no disponible).
-  - **Para la 4.7, los tokens legacy en la URL:** web-admin ya no los consume (se borró el script de `index.html`), pero `apps/web-cliente/src/pages/auth/AuthPage.tsx` sigue mandando `?token=…&refresh=…`, y como `irAlLogin()` usa la URL completa, esos tokens terminan copiados en el `redirect` de web-auth (y en el historial y los logs de los dos dominios). Es inofensivo mientras el PR no se despliegue antes de la 4.7, que quita ese pasaje; **si se desplegara antes, hay que descartar `token` y `refresh` de la query al arrancar web-admin** (y web-staff: desde la 4.6 le pasa lo mismo).
+  - ~~**Para la 4.7, la otra mitad de la decisión de las mesas abiertas.**~~ Hecho en la 4.7: `MesaSinCarta` dejó solo Mercado Pago y el backend rechaza el pedido de efectivo de un restaurante no disponible.
+  - ~~**Para la 4.7, los tokens legacy en la URL.**~~ Hecho en la 4.7.
   - **Un 401 que persiste después de renovar la sesión deja la pantalla vacía, sin cartel.** Es a propósito: `irAlLogin()` solo se llama cuando no se pudo renovar (la sesión está muerta de verdad). Mandar al login ante un 401 con sesión viva armaría un loop, porque web-auth la ve válida y devuelve a web-admin — es exactamente lo que pasa si el backend verifica contra otro proyecto de Supabase (ocurrió al probar la 4.5 contra la API de staging). Queda como deuda de interfaz: un cartel de "no pudimos cargar los datos" en lugar del estado vacío. Desde la 4.6 pasa lo mismo en web-staff.
   - **La matriz de quién invita y quita (`pages/admin/mozos/personal.ts`) está duplicada a mano** de `apps/backend/src/auth/invitaciones/puede-invitar.ts`, y ningún test ata una a la otra: si cambia el backend, el frontend ofrece algo que termina en 403. Candidata a `@menyu/types` en la Fase 5.
-  - **Ajeno a la entrega, pero molesta:** `pnpm test` en la raíz no corre nada (no existe el script: hay que usar `turbo run test`), y con `turbo run test` falla `apps/web-cliente/src/pages/pedidos/MisPedidosPage.spec.tsx` ("lista los pedidos del más reciente al más viejo…"). Viene de antes de esta entrega y el CI del PR no lo detecta porque filtra por los paquetes afectados.
+  - **Ajeno a la entrega, pero molesta:** `pnpm test` en la raíz no corre nada (no existe el script: hay que usar `turbo run test`). El fallo de `MisPedidosPage.spec.tsx` que iba acá lo arregló la 4.7: comparaba "p. m." con el espacio fino del ICU de Windows sin normalizar, así que fallaba en local y pasaba en el CI de Linux.
   - `pnpm lint` de web-admin falla si quedó la carpeta `coverage/` de un `test:coverage`: eslint lintea el reporte HTML. Borrarla antes de lintear.
 - **Producción, incidente del 2026-10-20:** un cambio manual de `CORS_ORIGINS` en Railway de producción redesplegó el servicio construyendo el último commit de `main` (31 migraciones) en lugar del tag v1.0.5 (18). `prisma migrate deploy` aplicó las migraciones pendientes hasta que `20260906183320_division_pagos_campos` falló (P3009): su índice único `comensal(sesion_id, nombre_normalizado)` chocó con los comensales "Invitado" que el backfill de `20260722175451_split_pagos_comensales` crea uno por pago, como ya había pasado en QA. La base de producción ya no servía para el código de v1.0.5 (`pago.pedido_id` y `restaurante.qr_base_url` se borraron), así que se recuperó hacia adelante: se borraron esos comensales, se marcó la migración como revertida y se desplegó `main` con el tag v1.0.6 (`39522af`, con las 32 migraciones aplicadas y el smoke de producción en verde).
   - En Railway, un cambio de variables redespliega el servicio y corre las migraciones. El servicio de producción quedó desconectado de GitHub (*Settings → Source*) para que salga solo de `deploy-production.yml`: no reconectarlo.
