@@ -2,7 +2,9 @@
 # Build context: raíz del monorepo ("/").
 # Railway: Root Directory = "/", Dockerfile = "apps/backend/Dockerfile".
 
-FROM node:20-alpine AS base
+# Node 22: `@supabase/supabase-js` 2.117 construye un RealtimeClient dentro de `createClient` y necesita el WebSocket
+# nativo, que Node 20 no tiene (y que además está fuera de soporte). Con Node 20 fallan invitar personal y subir logos.
+FROM node:22-alpine AS base
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 RUN corepack enable
@@ -55,7 +57,7 @@ COPY --from=builder /app/apps/backend/prisma /standalone/prisma
 # ── 4. runner ──────────────────────────────────────────────────────────────────
 # Imagen final mínima. Solo copia el standalone del deployer.
 # No sabe nada del monorepo, Expo, patches ni devDependencies.
-FROM node:20-alpine AS runner
+FROM node:22-alpine AS runner
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=deployer /standalone ./

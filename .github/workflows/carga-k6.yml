@@ -50,7 +50,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       # La URL de la API es la VITE_API_URL de PREVIEW de web-cliente en Vercel, la misma que usa el smoke de
       # staging (deploy-staging.yml). Se lee solo esa línea, el archivo no se imprime ni se sube y se borra al terminar.

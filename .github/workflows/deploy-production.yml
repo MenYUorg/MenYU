@@ -36,7 +36,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       # Sin las URLs de los frontends el smoke no puede chequear nada: corta antes de desplegar.
       - name: Check production URL variables
@@ -104,7 +104,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: pnpm
 
       - name: Install dependencies
@@ -205,7 +205,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       # Segunda red: el mismo chequeo que en check-ci.
       - name: Check production URL variables
