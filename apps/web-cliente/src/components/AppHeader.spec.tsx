@@ -1,7 +1,11 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
+import { cuentaDePrueba, sesionDeSupabase, signOutSimulado } from '../test/authClient'
 import { crearTokenJwt } from '../test/fixtures'
+import { irA } from '../utils/navegar'
 import { AppHeader } from './AppHeader'
+
+vi.mock('../utils/navegar', () => ({ irA: vi.fn() }))
 
 const TOKEN_KEY = 'menyu_access_token'
 const REFRESH_KEY = 'menyu_refresh_token'
@@ -22,10 +26,17 @@ function renderHeader(props: React.ComponentProps<typeof AppHeader> = {}, ruta =
   )
 }
 
-const iniciarSesion = (payload: Record<string, unknown>) => localStorage.setItem(TOKEN_KEY, crearTokenJwt(payload))
+/** La cuenta del login de `/auth` de web-cliente: un token de cliente en localStorage. */
+const iniciarSesion = (payload: Record<string, unknown>) =>
+  localStorage.setItem(TOKEN_KEY, crearTokenJwt({ tipo: 'cliente', ...payload }))
 
 describe('AppHeader', () => {
-  beforeEach(() => localStorage.clear())
+  beforeEach(() => {
+    localStorage.clear()
+    vi.mocked(irA).mockClear()
+    vi.stubEnv('VITE_AUTH_URL', 'https://auth.menyu-app.com')
+  })
+  afterEach(() => vi.unstubAllEnvs())
 
   describe('sin sesión iniciada', () => {
     it('ofrece Ingresar y Registrarme, y no saluda', () => {
@@ -36,14 +47,33 @@ describe('AppHeader', () => {
       expect(screen.queryByText(/Hola,/)).not.toBeInTheDocument()
     })
 
-    it('"Ingresar" lleva al login y "Registrarme" al registro', () => {
+    it('"Ingresar" lleva al ingreso de web-auth y "Registrarme" a su registro, los dos con la vuelta a esta pantalla', () => {
+      // En jsdom la pantalla es la URL de la página (window.location), no la del MemoryRouter.
+      const vuelta = new URLSearchParams({ redirect: window.location.href }).toString()
       renderHeader()
 
       fireEvent.click(screen.getByRole('button', { name: 'Ingresar' }))
-      expect(screen.getByText('ruta: /auth')).toBeInTheDocument()
+      expect(irA).toHaveBeenLastCalledWith(`https://auth.menyu-app.com/?${vuelta}`)
 
       fireEvent.click(screen.getByRole('button', { name: 'Registrarme' }))
-      expect(screen.getByText('ruta: /auth?tab=register')).toBeInTheDocument()
+      expect(irA).toHaveBeenLastCalledWith(`https://auth.menyu-app.com/crear-cuenta?${vuelta}`)
+    })
+
+    it('el token de una cuenta del personal (del login anterior) no cuenta como sesión', () => {
+      localStorage.setItem(TOKEN_KEY, crearTokenJwt({ tipo: 'admin', nombre: 'Gerente' }))
+
+      renderHeader()
+
+      expect(screen.getByRole('button', { name: 'Ingresar' })).toBeInTheDocument()
+      expect(screen.queryByText(/Hola,/)).not.toBeInTheDocument()
+    })
+
+    it('un token vencido del login anterior no cuenta como sesión (la mesa se abriría como invitado)', () => {
+      iniciarSesion({ nombre: 'Marina', exp: Math.floor(Date.now() / 1000) - 60 })
+
+      renderHeader()
+
+      expect(screen.getByRole('button', { name: 'Ingresar' })).toBeInTheDocument()
     })
 
     it('un token roto cuenta como sin sesión', () => {
@@ -136,16 +166,83 @@ describe('AppHeader', () => {
       expect(saludo.style.overflowWrap).toBe('anywhere')
     })
 
-    it('"Cerrar sesión" borra los tokens y vuelve al inicio', () => {
+    it('"Cerrar sesión" borra los tokens y vuelve al inicio', async () => {
       iniciarSesion({ nombre: 'Marina' })
       localStorage.setItem(REFRESH_KEY, 'refresh')
 
       renderHeader()
-      fireEvent.click(screen.getByRole('button', { name: 'Cerrar sesión' }))
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Cerrar sesión' }))
+      })
 
       expect(localStorage.getItem(TOKEN_KEY)).toBeNull()
       expect(localStorage.getItem(REFRESH_KEY)).toBeNull()
       expect(screen.getByText('ruta: /')).toBeInTheDocument()
+    })
+  })
+
+  describe('con la cuenta de Supabase (web-auth, Fase 4b)', () => {
+    it('saluda con el nombre que eligió al registrarse', () => {
+      cuentaDePrueba.session = sesionDeSupabase({ nombre: 'Ana Pérez' })
+
+      renderHeader()
+
+      expect(screen.getByText('Hola, Ana Pérez')).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Ingresar' })).not.toBeInTheDocument()
+    })
+
+    it('con Google, el nombre de Google; sin ninguno, el email', () => {
+      cuentaDePrueba.session = sesionDeSupabase({ metadatos: { full_name: 'Ana María Pérez', name: 'Ana' } })
+      const { unmount } = renderHeader()
+      expect(screen.getByText('Hola, Ana María Pérez')).toBeInTheDocument()
+      unmount()
+
+      cuentaDePrueba.session = sesionDeSupabase({ email: 'ana@gmail.com', metadatos: {} })
+      renderHeader()
+      expect(screen.getByText('Hola, ana@gmail.com')).toBeInTheDocument()
+    })
+
+    it('mientras se lee la sesión no muestra "Ingresar" (no parpadea a quien ya entró) ni el saludo', () => {
+      cuentaDePrueba.cargando = true
+
+      renderHeader()
+
+      expect(screen.queryByRole('button', { name: 'Ingresar' })).not.toBeInTheDocument()
+      expect(screen.queryByText(/Hola,/)).not.toBeInTheDocument()
+    })
+
+    it('mientras se lee, la cuenta del login anterior ya se muestra', () => {
+      cuentaDePrueba.cargando = true
+      iniciarSesion({ nombre: 'Marina' })
+
+      renderHeader()
+
+      expect(screen.getByText('Hola, Marina')).toBeInTheDocument()
+    })
+
+    it('le gana a la del login anterior si están las dos', () => {
+      iniciarSesion({ nombre: 'Marina' })
+      cuentaDePrueba.session = sesionDeSupabase({ nombre: 'Ana' })
+
+      renderHeader()
+
+      expect(screen.getByText('Hola, Ana')).toBeInTheDocument()
+    })
+
+    it('"Cerrar sesión" la cierra (y la del login anterior) y la persona se queda en web-cliente, en el inicio', async () => {
+      cuentaDePrueba.session = sesionDeSupabase({ nombre: 'Ana' })
+      iniciarSesion({ nombre: 'Marina' })
+
+      renderHeader()
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Cerrar sesión' }))
+      })
+
+      expect(signOutSimulado).toHaveBeenCalledWith({ scope: 'local' })
+      expect(localStorage.getItem(TOKEN_KEY)).toBeNull()
+      expect(irA).not.toHaveBeenCalled()
+      expect(screen.getByText('ruta: /')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Ingresar' })).toBeInTheDocument()
     })
   })
 

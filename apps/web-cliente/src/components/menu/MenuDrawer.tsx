@@ -1,4 +1,6 @@
 import { useNavigate } from 'react-router-dom'
+import { urlDeIngreso } from '../../utils/cuenta'
+import { irA } from '../../utils/navegar'
 import { Icono } from '../discovery/Icono'
 import { ImagenLogo } from './ImagenLogo'
 import type { ModoMenu } from './modo'
@@ -68,7 +70,8 @@ interface MenuDrawerProps {
  * aparece, con una animación corta que se apaga si la persona pidió menos movimiento). Después, la cuenta: sin ella,
  * iniciar sesión o crear una; con ella, el saludo con su nombre (y "Cerrar sesión" si se puede). Abajo, las filas: en la
  * mesa lo del pedido (etiquetar, mis pedidos, pagar); en la carta, que no tiene sesión, entrar a una mesa del
- * restaurante o volver al inicio. Desde la carta, iniciar sesión o registrarse vuelve a la carta.
+ * restaurante o volver al inicio. Iniciar sesión o registrarse es en web-auth, que vuelve a esta misma pantalla (la
+ * carta o el menú de la mesa).
  */
 export function MenuDrawer({
   abierto, onCerrar, modo, restauranteId, nombreRestaurante, direccion, logoUrl,
@@ -77,13 +80,9 @@ export function MenuDrawer({
   const navigate = useNavigate()
   const ir = (ruta: string) => { onCerrar(); navigate(ruta) }
 
+  const irAWebAuth = (accion: 'ingresar' | 'crear') => { onCerrar(); irA(urlDeIngreso(accion)) }
+
   const rutaDelRestaurante = `/restaurante/${encodeURIComponent(restauranteId)}`
-  // Después de iniciar sesión o registrarse, la carta vuelve a la carta.
-  const volver = modo === 'carta' ? `volver=${encodeURIComponent(`${rutaDelRestaurante}/carta`)}` : ''
-  const rutaAuth = (tab?: 'register') => {
-    const params = [tab ? `tab=${tab}` : '', volver].filter(Boolean).join('&')
-    return params ? `/auth?${params}` : '/auth'
-  }
   const saludo = modo === 'mesa' && comensalNombre ? `¡Hola, ${comensalNombre}!` : '¡Hola!'
 
   return (
@@ -166,13 +165,13 @@ export function MenuDrawer({
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <button
                   style={{ background: CM.orange, color: 'white', border: 'none', borderRadius: 8, padding: '10px 16px', fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}
-                  onClick={() => ir(rutaAuth())}
+                  onClick={() => irAWebAuth('ingresar')}
                 >
                   Iniciar sesión
                 </button>
                 <button
                   style={{ background: 'rgba(255,255,255,0.1)', color: 'white', border: '1.5px solid rgba(255,255,255,0.22)', borderRadius: 8, padding: '10px 16px', fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}
-                  onClick={() => ir(rutaAuth('register'))}
+                  onClick={() => irAWebAuth('crear')}
                 >
                   Crear cuenta gratis
                 </button>

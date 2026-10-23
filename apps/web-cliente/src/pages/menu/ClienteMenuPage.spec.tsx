@@ -7,7 +7,10 @@ import { useCarritoStore } from '../../store/carritoStore'
 import { usePublicMenuStore } from '../../store/publicMenuStore'
 import { useSessionStore } from '../../store/sessionStore'
 import { crearMenu, crearPlato, crearPlatoEnDescuento, crearTokenJwt } from '../../test/fixtures'
+import { irA } from '../../utils/navegar'
 import { ClienteMenuPage } from './ClienteMenuPage'
+
+vi.mock('../../utils/navegar', () => ({ irA: vi.fn() }))
 
 vi.mock('../../services/api', () => ({
   api: {
@@ -292,21 +295,23 @@ describe('ClienteMenuPage', () => {
         expect(screen.getByText(pantalla)).toBeInTheDocument()
       })
 
-      it('sin cuenta ofrece iniciar sesión y crear una', () => {
+      it('sin cuenta ofrece iniciar sesión (en web-auth, con la vuelta al menú de la mesa) y crear una', () => {
+        vi.mocked(irA).mockClear()
         renderMenu(menuCompleto())
 
         expect(screen.getByText('Estás navegando como invitado')).toBeInTheDocument()
         fireEvent.click(screen.getByRole('button', { name: 'Iniciar sesión' }))
 
-        expect(screen.getByText('Pantalla de ingreso')).toBeInTheDocument()
+        expect(irA).toHaveBeenCalledWith(expect.stringMatching(/\/\?redirect=/))
       })
 
-      it('"Crear cuenta gratis" abre el registro', () => {
+      it('"Crear cuenta gratis" abre el registro de web-auth', () => {
+        vi.mocked(irA).mockClear()
         renderMenu(menuCompleto())
 
         fireEvent.click(screen.getByRole('button', { name: 'Crear cuenta gratis' }))
 
-        expect(screen.getByText('Pantalla de ingreso')).toBeInTheDocument()
+        expect(irA).toHaveBeenCalledWith(expect.stringMatching(/\/crear-cuenta\?redirect=/))
       })
 
       describe('con cuenta', () => {
@@ -334,7 +339,11 @@ describe('ClienteMenuPage', () => {
           renderMenu(menuCompleto())
           abrirMenu()
 
-          fireEvent.click(await screen.findByRole('button', { name: 'Cerrar sesión' }))
+          const cerrar = await screen.findByRole('button', { name: 'Cerrar sesión' })
+          // Cerrar la cuenta es asíncrono (también cierra la de Supabase): act espera a que termine.
+          await act(async () => {
+            fireEvent.click(cerrar)
+          })
 
           expect(api.orders.list).toHaveBeenCalledWith('jwt')
           expect(localStorage.getItem('menyu_access_token')).toBeNull()
