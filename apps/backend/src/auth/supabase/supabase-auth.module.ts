@@ -3,6 +3,7 @@ import { MembresiaGuard } from '../guards/membresia.guard'
 import { RootGuard } from '../guards/root.guard'
 import { SupabaseAuthGuard } from '../guards/supabase-auth.guard'
 import { AccesoService } from './acceso.service'
+import { CuentaDeClienteService } from './cuenta-de-cliente.service'
 import { SupabaseAdminService } from './supabase-admin.service'
 import { crearJwksDeSupabase, JWKS_SUPABASE, VerificadorTokenSupabase } from './verificador-token.service'
 
@@ -17,6 +18,7 @@ import { crearJwksDeSupabase, JWKS_SUPABASE, VerificadorTokenSupabase } from './
     { provide: JWKS_SUPABASE, useFactory: crearJwksDeSupabase },
     VerificadorTokenSupabase,
     AccesoService,
+    CuentaDeClienteService,
     SupabaseAdminService,
     SupabaseAuthGuard,
     MembresiaGuard,
@@ -25,6 +27,7 @@ import { crearJwksDeSupabase, JWKS_SUPABASE, VerificadorTokenSupabase } from './
   exports: [
     VerificadorTokenSupabase,
     AccesoService,
+    CuentaDeClienteService,
     SupabaseAdminService,
     SupabaseAuthGuard,
     MembresiaGuard,
