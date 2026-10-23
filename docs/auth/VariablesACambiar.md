@@ -133,20 +133,17 @@ En *Authentication → Emails → Templates* de cada proyecto, pegar como cuerpo
 | `VITE_AUTH_COOKIE_DOMAIN` | `.staging.menyu-app.com` | `.menyu-app.com` |
 | `VITE_AUTH_URL` | `https://auth.staging.menyu-app.com` | `https://auth.menyu-app.com` |
 
-**web-cliente lleva solo `VITE_AUTH_URL`**, para mandar a web-auth a quien es personal y escribe sus datos en `/auth` (entrega 4.7). No lee la sesión de Supabase: su cuenta de comensal llega en la Fase 4b. Si la variable falta, la app la deduce del dominio (`mesa.<ambiente>` → `auth.<ambiente>`), así que un olvido no la rompe; igual conviene definirla.
-
-En **web-admin** y **web-staff** van las cuatro.
+**web-cliente, desde la Fase 4b, también lleva las cuatro.** En la Fase 4 llevaba solo `VITE_AUTH_URL`, para mandar a web-auth a quien es personal y escribe sus datos en `/auth` (entrega 4.7). Con la 4b lee la sesión opcional del cliente (`useSession`), así que necesita además `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` y `VITE_AUTH_COOKIE_DOMAIN`, con los mismos valores que web-admin y web-staff. **Cargarlas antes del deploy que lleve la Fase 4b.** Sin ellas web-cliente anda igual, pero sin cuentas: el cliente que inicia sesión en web-auth vuelve sin sesión y la mesa se abre como "Invitado". Si falta `VITE_AUTH_URL`, la app la deduce del dominio (`mesa.<ambiente>` → `auth.<ambiente>`), así que un olvido no la rompe; igual conviene definirla.
 
 Checklist por proyecto:
 
 | Proyecto de Vercel | Entorno | Variables |
 |---|---|---|
-| `menyu-admin-staging`, `menyu-staff-staging` | Production (es staging) | las cuatro, con los valores de staging |
-| `menyu-cliente-staging` | Production (es staging) | `VITE_AUTH_URL` de staging |
-| `menyu-admin`, `menyu-staff` | Production | las cuatro, con los valores de producción |
-| `menyu-admin`, `menyu-staff` | Preview | las cuatro, con los valores de **staging** |
-| `menyu-cliente` | Production | `VITE_AUTH_URL` de producción |
-| `menyu-cliente` | Preview | `VITE_AUTH_URL` de staging |
+| `menyu-admin-staging`, `menyu-staff-staging`, `menyu-cliente-staging` | Production (es staging) | las cuatro, con los valores de staging |
+| `menyu-admin`, `menyu-staff`, `menyu-cliente` | Production | las cuatro, con los valores de producción |
+| `menyu-admin`, `menyu-staff`, `menyu-cliente` | Preview | las cuatro, con los valores de **staging** |
+
+En `menyu-cliente` y `menyu-cliente-staging` las tres de Supabase son de la Fase 4b; `VITE_AUTH_URL` ya estaba desde la 4.7. web-cliente también se sirve en los dominios viejos de Vercel (`menyu-cliente*.vercel.app`, por los QR impresos): ahí el navegador rechaza la cookie de `.menyu-app.com`, así que no hay cuenta, y la mesa se abre como "Invitado", igual que antes.
 
 El entorno Preview de los proyectos de producción corre en `*.vercel.app`, que está en la Public Suffix List: ahí no se puede poner la cookie de `.staging.menyu-app.com`, así que un preview no comparte sesión y rebota a `auth.staging`, que es donde se inicia. Es lo esperado (`auth.md`, Dominios): el SSO se prueba en staging y en `*.menyu.local`.
 
