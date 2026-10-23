@@ -221,7 +221,7 @@ Entregas (ver Decisiones de la planificación de la Fase 4):
 | 4.4 | Backend: la consola de ROOT (decisión 2) | Hecha (2026-10-21): ver abajo |
 | 4.5 | web-admin: `RequireAuth`, contexto desde `/auth/me`, Personal, `useRootSession` | Hecha (2026-10-21): ver abajo |
 | 4.6 | web-staff: `RequireAuth`, selector por membresías, `mozoId` desde el backend | Hecha (2026-10-22): ver abajo |
-| 4.7 | web-cliente, variables, documentación, verificación en `*.menyu.local` y staging, revisor | Hecha (2026-10-22): ver abajo |
+| 4.7 | web-cliente, variables, documentación, verificación en `*.menyu.local` y staging, revisor | Hecha (2026-10-22), verificada en staging el 2026-10-23: ver abajo |
 
 **4.1, cómo quedó (2026-10-21).**
 - **El paquete:** `packages/auth-client` (`@menyu/auth-client`). Es solo código fuente, como `@menyu/ui`, con 100 % de cobertura. Exporta:
@@ -467,7 +467,7 @@ Decisiones de la planificación de la 4.7:
 - Integrarlo en web-admin y web-staff (con `RequireAuth`). En web-cliente **no**: su sesión de mesa no es una cuenta, y la cuenta opcional del comensal (con `useSession`, sin `RequireAuth`) pasó a la Fase 4b (decisión 6). En la Fase 4 web-cliente solo dejó de pasarle tokens al personal (4.7).
 - CI: sumar `@menyu/auth-client` a los filtros de test y cobertura de `ci.yml`, a la subida de cobertura y a `sonar-project.properties`, como `@menyu/ui`. Los deploys no cambian: las apps que lo importan se reconstruyen solas cuando cambia (`turbo-ignore` y `dependsOn: ["^build"]`).
 - **Terminado cuando:** login en auth → abrir admin y staff en otras pestañas sin volver a loguear; logout en una → las otras vuelven a web-auth al recuperar foco. Probado en `*.menyu.local` y en staging.
-  - En `*.menyu.local` está comprobado desde la 4.6 (y de nuevo en la 4.7). **En staging queda pendiente hasta el merge del PR #416**, que es el que lleva este backend: los casos están abajo.
+  - **Cumplido en los dos** (2026-10-23): en `*.menyu.local` desde la 4.6, y en staging después del merge del PR #416 y del hotfix de Node 22. El detalle, abajo.
 
 **Qué verificar en staging después del merge (Fase 4).** Con los usuarios de `docs/auth/usuarios-prueba-staging.md`, nunca contra producción. Los dos requisitos previos están cumplidos desde el 2026-10-22: las variables de Vercel cargadas (`docs/auth/VariablesACambiar.md`, Fase 4) y la consulta de ítems cruzados de "Lo que dejó la 4.3" con cero filas en los dos ambientes.
 
@@ -478,6 +478,18 @@ Decisiones de la planificación de la 4.7:
 5. **Cobros y Caja** (pendiente desde la 4.5, que no tenía datos de pagos): un cobro de un mozo queda con su `usuarioId` y su `mozoId`; uno de un gerente, con `mozoId` en null. Se ven en la pantalla de Caja de web-admin.
 6. **web-cliente (4.7):** el login del comensal entra normal; con una cuenta del personal avisa y manda a `auth.staging` sin tokens en la URL.
 7. **Regresión de web-auth:** Google, invitación y recuperación de contraseña.
+
+**Cómo salió en staging (2026-10-23).** Con el merge del PR #416 y, encima, el hotfix de Node 22 (ver arriba). Verificado con playwright-cli contra los dominios `*.staging.menyu-app.com` y con la API:
+
+1. **SSO: cumplido.** El OWNER entra por `auth.staging` y aterriza en `admin.staging/admin/dashboard`; `staff.staging` abre en otra pestaña sin volver a ingresar. La cookie `sb-<ref>-auth-token` queda en `.staging.menyu-app.com`, con `secure` (acá sí, es https), `Lax` y sin `httpOnly`. "Salir" en staff la borra y la pestaña de admin vuelve a web-auth con su `redirect` al recuperar el foco.
+2. **Destino por rol y sin loop: cumplido.** ROOT termina en `/root/marcas`, COCINA en `/cocina` y MOZO en `/mozo`, los tres con su `?restauranteId=`. Un MOZO que abre `admin.staging/admin/dashboard` termina en staff; un COCINA que escribe `/mozo` vuelve a `/cocina`; ROOT que escribe `/admin/dashboard` vuelve a `/root/marcas`. Con el token de ROOT, `GET /restaurantes`, `/marcas` y `/pedidos` dan **403**, y `/root/marcas` da 200.
+3. **Personal: cumplido del lado de la API.** Invitar a un email nuevo responde 201 con `invitacionEnviada: true`, el invitado aparece en la lista con su rol y repetirlo da 409. **Falta** abrir el mail y aceptar la invitación de punta a punta: necesita la casilla real.
+4. **Consola de ROOT: cumplida.** Cargan las pantallas de marcas, dueños, cuentas ROOT (E2b) e historial. La baja efectiva se probó contra la API: el MOZO pasa de 200 a **403** en `GET /mesas` al dar de baja el restaurante, y vuelve a 200 al reactivarlo.
+5. **Cobros y Caja: cumplido para la cuenta de administración.** Se abrió una mesa por PIN, se pidió un ítem y el OWNER cobró en efectivo: la Caja muestra "Mesa 1 · $1.000 · efectivo · Owner Pruebas Auth", que es la atribución por `usuarioId`. **Falta el cobro de un mozo:** la cuenta MOZO de staging tiene membresía pero no tiene fila `Mozo`, así que `exigirMozo` la rechaza con 403 ("Tu perfil de mozo no está activo en este restaurante"). Es el mismo hueco de datos que la 4.6 arregló en la base local, no un problema de código.
+6. **web-cliente: cumplido.** En `mesa.staging/auth`, una cuenta del personal recibe el aviso, el localStorage queda vacío y termina en `auth.staging` sin `token` ni `refresh` en la URL.
+7. **Google: cumplido.** Con el perfil de pruebas, "Continuar con Google" lleva al selector de cuentas y vuelve por `/google` hasta `staff.staging/mozo`, con el panel de la cuenta como MOZO. **Faltan** la invitación y la recuperación por mail, que necesitan la casilla.
+
+Y lo que destrabó el hotfix de Node 22: **subir un logo** responde 201 con su URL y borrarlo 200 (se hizo y se deshizo sobre el restaurante de prueba).
 
 ### Fase 4b — Cuenta de cliente
 
