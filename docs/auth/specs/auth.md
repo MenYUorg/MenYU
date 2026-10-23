@@ -489,7 +489,11 @@ Decisiones de la planificación de la 4.7:
    - Al principio el cobro del MOZO daba **403** ("Tu perfil de mozo no está activo en este restaurante"): la cuenta tenía `Membresia` pero no su fila en `mozo`, porque se insertó a mano. Se corrigió con `docs/auth/mozos-faltantes-staging.sql` y pasó a 200.
    - Ese 403 → 200 es justamente lo que prueba la atribución: `registrarCobro` llama a `exigirMozo` para resolver el `Mozo` del que cobra, así que si no hay `Mozo` no cobra. El nombre por sí solo no alcanzaba para distinguir, porque el `Usuario` de esa cuenta se llama igual que su `Mozo`, y la API no expone el `mozoId`; que el `Pago` del mozo lleve `mozoId` y el del administrador lo deje en null está cubierto por los tests de `atribucion-del-cobro` y se comprobó contra la base en la 4.6.
 6. **web-cliente: cumplido.** En `mesa.staging/auth`, una cuenta del personal recibe el aviso, el localStorage queda vacío y termina en `auth.staging` sin `token` ni `refresh` en la URL.
-7. **Google: cumplido.** Con el perfil de pruebas, "Continuar con Google" lleva al selector de cuentas y vuelve por `/google` hasta `staff.staging/mozo`, con el panel de la cuenta como MOZO. **Faltan** la invitación y la recuperación por mail, que necesitan la casilla.
+7. **Regresión de web-auth: cumplida, las tres.**
+   - **Google:** con el perfil de pruebas, "Continuar con Google" lleva al selector de cuentas y vuelve por `/google` hasta `staff.staging/mozo`, con el panel de la cuenta como MOZO.
+   - **Invitación:** el caso 3.
+   - **Recuperación:** el link del mail (`/restablecer-contrasena`, `token_hash` con prefijo `pkce_`) abre la pantalla sin gastar el token y, al guardar, entra a `staff.staging/cocina`. Después, la contraseña anterior responde 400 en Supabase y la nueva 200.
+   - **De paso:** el link de invitación es de un solo uso. Al reusarlo, `/invitacion` dice "Este link ya no sirve — El link venció o ya se usó" y ofrece pedir uno nuevo desde "Olvidé mi contraseña".
 
 Y lo que destrabó el hotfix de Node 22: **subir un logo** responde 201 con su URL y borrarlo 200 (se hizo y se deshizo sobre el restaurante de prueba).
 
