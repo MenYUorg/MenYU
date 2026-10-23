@@ -32,7 +32,16 @@ function renderizar(url = '/crear-cuenta') {
   )
 }
 
-function completar({ nombre = 'Ana Pérez', email = 'ana@gmail.com', contrasena = 'secreta123', repetida = contrasena } = {}) {
+interface Datos {
+  nombre?: string
+  email?: string
+  contrasena?: string
+  repetida?: string
+}
+
+function completar(datos: Datos = {}) {
+  const { nombre = 'Ana Pérez', email = 'ana@gmail.com', contrasena = 'secreta123' } = datos
+  const repetida = datos.repetida ?? contrasena
   fireEvent.change(screen.getByLabelText('Nombre'), { target: { value: nombre } })
   fireEvent.change(screen.getByLabelText('Email'), { target: { value: email } })
   fireEvent.change(screen.getByLabelText('Contraseña'), { target: { value: contrasena } })

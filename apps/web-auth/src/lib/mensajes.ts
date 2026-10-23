@@ -30,6 +30,11 @@ const POR_CODIGO: Record<string, string> = {
 export const SIN_CONEXION = 'No pudimos conectarnos. Revisá tu conexión y probá de nuevo.'
 export const ERROR_GENERICO = 'Algo salió mal. Probá de nuevo en unos minutos.'
 
+/** El mensaje de un código de error de Supabase Auth que llega en la URL (por ejemplo, `otp_expired`), o null. */
+export function mensajePorCodigo(codigo: string | null): string | null {
+  return (codigo && POR_CODIGO[codigo]) || null
+}
+
 export function mensajeDeError(error: unknown): string {
   if (isAuthRetryableFetchError(error)) return SIN_CONEXION
   if (isAuthError(error) && error.code && POR_CODIGO[error.code]) return POR_CODIGO[error.code]

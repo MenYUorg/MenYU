@@ -1,6 +1,6 @@
 import { clienteAuth } from '@menyu/auth-client'
 import { isAuthRetryableFetchError, type EmailOtpType } from '@supabase/supabase-js'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { Aviso } from '../components/Aviso'
 import { Boton } from '../components/Boton'
@@ -10,48 +10,96 @@ import { Enlace } from '../components/Enlace'
 import { Marco } from '../components/Marco'
 import { conRedirect } from '../flujo/rutas'
 import { usePostLogin } from '../flujo/usePostLogin'
-import { ERROR_GENERICO, mensajeDeError } from '../lib/mensajes'
+import { ERROR_GENERICO, mensajeDeError, mensajePorCodigo } from '../lib/mensajes'
 
-/** El `type` del link. La plantilla manda `email`; `signup` es el nombre anterior del mismo canje. */
-function tipoDelLink(valor: string | null): EmailOtpType {
-  return valor === 'signup' ? 'signup' : 'email'
+const LINK_QUE_NO_SIRVE = 'No pudimos confirmar tu cuenta con este link.'
+
+type Link =
+  /** El de la plantilla de MenYU: se canjea con verifyOtp. `signup` es el nombre anterior del mismo canje. */
+  | { tipo: 'token'; tokenHash: string; otp: EmailOtpType }
+  /** El de la plantilla por defecto de Supabase: ya confirmó el email y vuelve con un `?code=` del flujo PKCE. */
+  | { tipo: 'codigo' }
+  /** Supabase no pudo confirmar (por ejemplo, el link venció) y vuelve con el error. */
+  | { tipo: 'error'; mensaje: string }
+  | { tipo: 'ninguno' }
+
+function leerLink(search: string, hash: string): Link {
+  const params = new URLSearchParams(search)
+  const delHash = new URLSearchParams(hash.replace(/^#/, ''))
+  const codigoDeError = params.get('error_code') ?? delHash.get('error_code')
+  if (codigoDeError || params.has('error') || delHash.has('error')) {
+    return { tipo: 'error', mensaje: mensajePorCodigo(codigoDeError) ?? LINK_QUE_NO_SIRVE }
+  }
+  const tokenHash = params.get('token_hash')
+  if (tokenHash) return { tipo: 'token', tokenHash, otp: params.get('type') === 'signup' ? 'signup' : 'email' }
+  if (params.get('code')) return { tipo: 'codigo' }
+  return { tipo: 'ninguno' }
 }
 
 /**
- * `/confirmar-email`: el link del mail que confirma una cuenta de cliente (plantilla "Confirm signup" de
- * docs/auth/VariablesACambiar.md, Fase 4b). Trae el `token_hash` y el `redirect` a web-cliente que dejó
- * CrearCuentaPage. El token se canjea con verifyOtp recién al tocar el botón, como en /invitacion: un escáner de mail
- * que abra el link no lo gasta. Con la sesión abierta, el post-login la devuelve a web-cliente.
+ * `/confirmar-email`: el link del mail que confirma una cuenta de cliente (Fase 4b). Vuelve con el `redirect` a
+ * web-cliente que dejó CrearCuentaPage y, con la sesión abierta, el post-login la devuelve ahí.
+ *
+ * - Con la plantilla "Confirm signup" de MenYU (docs/auth/VariablesACambiar.md) trae un `token_hash`, que se canjea con
+ *   verifyOtp recién al tocar el botón, como en /invitacion: un escáner de mail que abra el link no lo gasta. Sirve
+ *   desde cualquier navegador.
+ * - Con la plantilla por defecto de Supabase, el link pasa primero por Supabase, que confirma el email y vuelve con un
+ *   `?code=` que el cliente canjea al inicializarse, como /google. Solo abre la sesión en el navegador en el que se creó
+ *   la cuenta (ahí está el verificador PKCE); en otro, la cuenta igual quedó confirmada y se ingresa normal.
  */
 export function ConfirmarEmailPage() {
   const navigate = useNavigate()
-  const { search } = useLocation()
+  const { search, hash } = useLocation()
   const { estado, continuar } = usePostLogin()
-  const [inicial] = useState(() => {
-    const params = new URLSearchParams(search)
-    return { tokenHash: params.get('token_hash'), tipo: tipoDelLink(params.get('type')), search }
-  })
-  // El token se canjea una sola vez: si después el post-login no puede seguir (el backend no respondió), se reintenta
-  // solo eso, con la sesión que dejó verifyOtp.
+  const [inicial] = useState(() => ({ link: leerLink(search, hash), search }))
+  const { link } = inicial
+  // El link se canjea una sola vez: si después el post-login no puede seguir (el backend no respondió), se reintenta
+  // solo eso, con la sesión que dejó el canje.
   const [canjeado, setCanjeado] = useState(false)
-  const [linkInvalido, setLinkInvalido] = useState<string | null>(null)
+  const [confirmadaSinSesion, setConfirmadaSinSesion] = useState(false)
+  const [linkInvalido, setLinkInvalido] = useState<string | null>(link.tipo === 'error' ? link.mensaje : null)
   const [error, setError] = useState<string | null>(null)
   const [confirmando, setConfirmando] = useState(false)
 
-  // Que el token no quede en la barra ni en el historial: se guarda en el estado. El `redirect` se queda.
+  // Que el token (o el error) no quede en la barra ni en el historial. El `redirect` se queda. El `?code=` no se toca:
+  // lo lee el cliente de Supabase al inicializarse.
   useEffect(() => {
-    if (inicial.tokenHash) navigate(conRedirect('/confirmar-email', inicial.search), { replace: true })
-  }, [inicial, navigate])
+    if (link.tipo === 'token' || link.tipo === 'error') {
+      navigate(conRedirect('/confirmar-email', inicial.search), { replace: true })
+    }
+  }, [link, inicial, navigate])
+
+  const revisado = useRef(false)
+  useEffect(() => {
+    if (link.tipo !== 'codigo' || revisado.current) return
+    revisado.current = true
+
+    async function canjearElCodigo() {
+      try {
+        const { error: errorDelCanje } = await clienteAuth().auth.initialize()
+        const { data } = await clienteAuth().auth.getSession()
+        if (errorDelCanje || !data.session) {
+          setConfirmadaSinSesion(true)
+          return
+        }
+        setCanjeado(true)
+        await continuar()
+      } catch {
+        setConfirmadaSinSesion(true)
+      }
+    }
+    void canjearElCodigo()
+  }, [link, continuar])
 
   async function confirmar() {
-    if (!inicial.tokenHash) return
     setError(null)
     setConfirmando(true)
     try {
       if (!canjeado) {
+        if (link.tipo !== 'token') return
         const { data, error: errorDelCanje } = await clienteAuth().auth.verifyOtp({
-          token_hash: inicial.tokenHash,
-          type: inicial.tipo,
+          token_hash: link.tokenHash,
+          type: link.otp,
         })
         if (errorDelCanje && isAuthRetryableFetchError(errorDelCanje)) {
           setError(mensajeDeError(errorDelCanje)) // sin red: el link sigue sirviendo
@@ -85,7 +133,27 @@ export function ConfirmarEmailPage() {
     )
   }
 
-  if (!inicial.tokenHash) {
+  if (link.tipo === 'codigo' && !canjeado && !confirmadaSinSesion) {
+    return (
+      <Marco titulo="Confirmar el email">
+        <Cargando texto="Confirmando tu cuenta…" />
+      </Marco>
+    )
+  }
+
+  // El email ya quedó confirmado, pero no hay sesión: el link se abrió en otro navegador, o el backend rechazó la
+  // sesión del canje. Se ingresa normal.
+  if (confirmadaSinSesion || estado.tipo === 'sesion-vencida') {
+    return (
+      <Marco titulo="Confirmar el email">
+        <Encabezado titulo="Tu cuenta está confirmada">Ingresá con tu email y tu contraseña.</Encabezado>
+        {estado.tipo === 'sesion-vencida' && <Aviso tipo="error">{estado.mensaje}</Aviso>}
+        <p className="mt-6 text-sm">{ingresar}</p>
+      </Marco>
+    )
+  }
+
+  if (link.tipo === 'ninguno') {
     return (
       <Marco titulo="Confirmar el email">
         <Encabezado titulo="Abrí el link del mail">
@@ -112,17 +180,6 @@ export function ConfirmarEmailPage() {
             Crear la cuenta
           </Enlace>
         </div>
-      </Marco>
-    )
-  }
-
-  // La sesión del canje venció o el backend la rechazó: el email ya quedó confirmado, así que se ingresa normal.
-  if (estado.tipo === 'sesion-vencida') {
-    return (
-      <Marco titulo="Confirmar el email">
-        <Encabezado titulo="Tu cuenta está confirmada" />
-        <Aviso tipo="error">{estado.mensaje}</Aviso>
-        <p className="mt-6 text-sm">{ingresar}</p>
       </Marco>
     )
   }

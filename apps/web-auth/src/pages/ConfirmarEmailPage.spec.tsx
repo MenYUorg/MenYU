@@ -1,6 +1,6 @@
 import { obtenerPerfil } from '@menyu/auth-client'
 import { AuthApiError, AuthRetryableFetchError } from '@supabase/supabase-js'
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { irA } from '../lib/navegar'
@@ -160,6 +160,80 @@ describe('ConfirmarEmailPage', () => {
     expect(screen.getByRole('heading', { name: 'Tu cuenta está confirmada' })).toBeInTheDocument()
     expect(screen.getByRole('alert')).toHaveTextContent('Tu sesión venció. Ingresá de nuevo.')
     expect(screen.getByRole('link', { name: 'Ingresar' })).toHaveAttribute('href', `/?${REDIRECT}`)
+  })
+
+  describe('con la plantilla por defecto de Supabase (vuelve con ?code=)', () => {
+    it('canjea el código al llegar, sin botón, y la cuenta vuelve a web-cliente', async () => {
+      const auth = cliente.actual!.auth
+      auth.initialize.mockImplementation(async () => {
+        auth.getSession.mockResolvedValue({ data: { session: sesion('ana@gmail.com') } })
+        return { error: null }
+      })
+
+      renderizar(`/confirmar-email?${REDIRECT}&code=codigo-pkce`)
+
+      await waitFor(() => expect(irA).toHaveBeenCalledWith(MESA))
+      expect(auth.initialize).toHaveBeenCalledTimes(1)
+      expect(auth.verifyOtp).not.toHaveBeenCalled()
+      // El `?code=` no se saca de la barra: lo lee el cliente de Supabase.
+      expect(screen.getByTestId('url')).toHaveTextContent('code=codigo-pkce')
+    })
+
+    it('mientras canjea muestra que está confirmando', () => {
+      cliente.actual!.auth.initialize.mockReturnValue(new Promise(() => undefined))
+
+      renderizar(`/confirmar-email?${REDIRECT}&code=codigo-pkce`)
+
+      expect(screen.getByText('Confirmando tu cuenta…')).toBeInTheDocument()
+    })
+
+    it('en otro navegador (sin el verificador PKCE) no hay sesión: la cuenta igual quedó confirmada, ofrece ingresar', async () => {
+      cliente.actual!.auth.initialize.mockResolvedValue({ error: new AuthApiError('flow state', 404, 'flow_state_not_found') })
+
+      renderizar(`/confirmar-email?${REDIRECT}&code=codigo-pkce`)
+
+      expect(await screen.findByRole('heading', { name: 'Tu cuenta está confirmada' })).toBeInTheDocument()
+      // Solo el redirect: el código ya no sirve.
+      expect(screen.getByRole('link', { name: 'Ingresar' })).toHaveAttribute('href', `/?${REDIRECT}`)
+      expect(irA).not.toHaveBeenCalled()
+    })
+
+    it('si el canje lanza, también ofrece ingresar', async () => {
+      cliente.actual!.auth.initialize.mockRejectedValue(new TypeError('Failed to fetch'))
+
+      renderizar(`/confirmar-email?code=codigo-pkce`)
+
+      expect(await screen.findByRole('heading', { name: 'Tu cuenta está confirmada' })).toBeInTheDocument()
+    })
+
+    it('si el backend no responde después del canje, "Probar de nuevo" no vuelve a canjear', async () => {
+      const auth = cliente.actual!.auth
+      auth.initialize.mockImplementation(async () => {
+        auth.getSession.mockResolvedValue({ data: { session: sesion('ana@gmail.com') } })
+        return { error: null }
+      })
+      vi.mocked(obtenerPerfil).mockResolvedValueOnce({ tipo: 'error' })
+
+      renderizar(`/confirmar-email?${REDIRECT}&code=codigo-pkce`)
+      expect(await screen.findByRole('alert')).toHaveTextContent('No pudimos revisar a qué tenés acceso')
+      await confirmar('Probar de nuevo')
+
+      expect(auth.initialize).toHaveBeenCalledTimes(1)
+      expect(irA).toHaveBeenCalledWith(MESA)
+    })
+  })
+
+  it.each([
+    ['en la query', `/confirmar-email?${REDIRECT}&error=access_denied&error_code=otp_expired`, 'El link venció o ya se usó.'],
+    ['en el hash', `/confirmar-email?${REDIRECT}#error=access_denied&error_code=otp_expired`, 'El link venció o ya se usó.'],
+    ['sin un código conocido', `/confirmar-email?${REDIRECT}&error=server_error`, 'No pudimos confirmar tu cuenta con este link.'],
+  ])('si Supabase vuelve con un error %s, el link no sirve', (_donde, url, mensaje) => {
+    renderizar(url)
+
+    expect(screen.getByRole('heading', { name: 'Este link ya no sirve' })).toBeInTheDocument()
+    expect(screen.getByRole('alert')).toHaveTextContent(mensaje)
+    expect(screen.getByTestId('url')).toHaveTextContent(`/confirmar-email?${REDIRECT}`)
+    expect(screen.getByTestId('url')).not.toHaveTextContent('error')
   })
 
   it('sin token (por ejemplo, al volver atrás) pide abrir el link del mail', () => {
