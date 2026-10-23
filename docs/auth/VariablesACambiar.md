@@ -116,8 +116,11 @@ En *Authentication → Emails → Templates* de cada proyecto, pegar como cuerpo
 |---|---|---|
 | **Invite user** | `Te invitaron a MenYU` | `docs/auth/plantillas-mail/invite-user.html` |
 | **Reset password** | `Creá una contraseña nueva para MenYU` | `docs/auth/plantillas-mail/reset-password.html` |
+| **Confirm signup** (Fase 4b) | `Confirmá tu cuenta de MenYU` | `docs/auth/plantillas-mail/confirm-signup.html` |
 
 **Verificar:** invitar a un mail propio (`POST /auth/invitaciones`) y que el link del mail abra `https://auth.<ambiente>/invitacion?token_hash=...` y pida la contraseña.
+
+**Confirm signup** es el mail del registro de clientes (`/crear-cuenta`, Fase 4b). A diferencia de las otras dos, su link sale de `{{ .RedirectTo }}`, no de la Site URL: web-auth manda como `emailRedirectTo` su propia `https://auth.<ambiente>/confirmar-email?redirect=<web-cliente>`, y la plantilla le agrega `&token_hash=…&type=email`. Así la persona vuelve a la pantalla de web-cliente desde la que se registró y, en local, el link abre `auth.menyu.local` y no el web-auth desplegado. Supabase acepta ese `redirectTo` porque es el host de la Site URL (en local, por la Redirect URL `http://auth.menyu.local:5173/**` de la sección 6); si no lo aceptara, usaría la Site URL y el link quedaría roto. **Cargarla antes del deploy que lleve la Fase 4b:** sin ella, el link por defecto de Supabase confirma la cuenta en su servidor pero vuelve sin `token_hash`, así que `/confirmar-email` solo puede decirle a la persona que ingrese: no le abre la sesión ni la devuelve a web-cliente. Verificar: crear una cuenta desde `https://auth.<ambiente>/crear-cuenta` con un mail propio y que el link abra `https://auth.<ambiente>/confirmar-email?redirect=…&token_hash=…&type=email`.
 
 ### Fase 4: web-admin, web-staff y web-cliente
 

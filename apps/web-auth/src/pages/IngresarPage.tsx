@@ -135,6 +135,9 @@ export function IngresarPage() {
         <p>
           <Enlace to={conRedirect('/olvide-contrasena', search)}>Olvidé mi contraseña</Enlace>
         </p>
+        <p>
+          ¿Venís a pedir en un restaurante? <Enlace to={conRedirect('/crear-cuenta', search)}>Creá tu cuenta</Enlace>
+        </p>
         <p className="leading-relaxed text-menyu-gris">
           ¿Te invitaron a un restaurante?
           <br />
