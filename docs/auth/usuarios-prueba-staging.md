@@ -116,6 +116,12 @@ JOIN restaurante r ON r.marca_id = m.id AND r.nombre = 'Restaurante Pruebas Auth
 
 Desde la entrega 4.5, web-admin lee la sesión de Supabase, y web-staff desde la 4.6. Ninguna tiene login propio.
 
+### Las cuentas de salón necesitan su `Mozo` (2026-10-23)
+
+Las cuentas de prueba se insertaron a mano, así que tienen `Membresia` pero no tienen fila en `mozo`. El permiso lo da la membresía, pero **quien atiende un llamado, edita un pedido o cobra sale del `Mozo`** (`AccesoService.exigirMozo`): sin él, esas acciones responden 403 "Tu perfil de mozo no está activo en este restaurante". A las cuentas que llegan por invitación se lo crea `vincularMozo`, por eso solo pasa con las de prueba.
+
+El script está en `docs/auth/mozos-faltantes-staging.sql`: deduce qué falta de las membresías (no hay que pegar ningún id), es idempotente y trae una consulta para comprobar antes y después. Correrlo en el SQL Editor del Supabase de **staging**.
+
 ### Probar la 4.7 en local (2026-10-22)
 
 Lo mismo que abajo, más `apps/web-cliente/.env.local` (`VITE_API_URL=/api` y `VITE_AUTH_URL=http://auth.menyu.local:5173`) y su Vite en el 5176. Lo que agrega la entrega:
