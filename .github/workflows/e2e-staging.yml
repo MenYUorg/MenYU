@@ -3,26 +3,32 @@ name: E2E — staging (Supabase)
 # E2E del comensal y el mozo contra STAGING: QR → pedido → efectivo → el mozo confirma → cierre, verificando cada paso en
 # la base de staging con el usuario e2e_staging, y la limpieza siempre al final. Diseño: docs/calidad/e2e-supabase.md.
 # Nunca contra producción: scripts/e2e-staging/lib.mjs (erroresDeDestino) corta antes de tocar nada.
+#
+# Corre solo en cada deploy a staging, como job de deploy-staging.yml después del smoke (que ya confirmó que /health
+# muestra ese SHA), y a mano con workflow_dispatch.
 on:
+  workflow_call:
+    inputs:
+      sha:
+        description: 'El SHA desplegado: /health tiene que mostrarlo, si no es infraestructura'
+        required: false
+        type: string
+        default: ''
   workflow_dispatch:
-  # TEMPORAL, solo para la primera corrida a mano antes del merge: un workflow nuevo no se puede despachar desde una rama
-  # que no es main. Se dispara con un push a esta rama (no es la del PR). Se saca antes de mergear.
-  push:
-    branches: [e2e-staging-prueba]
 
 permissions:
   contents: read
-
-# Una corrida a la vez: cada una tiene su marcador y su mesa, pero comparten el restaurante de prueba.
-concurrency:
-  group: e2e-staging
-  cancel-in-progress: false
 
 jobs:
   e2e:
     name: E2E contra staging
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # Una corrida a la vez: cada una tiene su marcador y su mesa, pero comparten el restaurante de prueba. A nivel de job
+    # porque este workflow también se llama desde deploy-staging.yml.
+    concurrency:
+      group: e2e-staging
+      cancel-in-progress: false
 
     steps:
       - name: Checkout
@@ -67,6 +73,7 @@ jobs:
       - name: E2E
         run: node scripts/e2e-staging/main.mjs
         env:
+          EXPECTED_SHA: ${{ inputs.sha }}
           E2E_SUPABASE_URL: ${{ vars.E2E_SUPABASE_URL }}
           E2E_SUPABASE_PUBLISHABLE_KEY: ${{ vars.E2E_SUPABASE_PUBLISHABLE_KEY }}
           E2E_STAGING_DB_URL_LECTURA: ${{ secrets.E2E_STAGING_DB_URL_LECTURA }}

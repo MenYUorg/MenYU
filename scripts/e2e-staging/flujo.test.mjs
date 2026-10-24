@@ -240,6 +240,22 @@ test('/health degraded es infraestructura y no se crea nada (no hay limpieza que
   assert.ok(!s.llamadas.some((l) => l.includes('e2e_preparar')))
 })
 
+test('si /health no muestra el SHA desplegado es infraestructura, después de reintentar, y no se crea nada', async () => {
+  const s = staging()
+  const { reporte, esperas } = await correr(s, { sha: 'otro-sha' })
+  assert.equal(reporte.categoria, 'infraestructura')
+  assert.match(reporte.pasos[0].detalle, /no muestra el SHA desplegado/)
+  assert.deepEqual(esperas, [10_000, 20_000, 40_000])
+  assert.ok(!s.llamadas.some((l) => l.includes('e2e_preparar')))
+})
+
+test('sin SHA esperado (a mano) no se compara, y el reporte guarda el que muestra /health', async () => {
+  const { reporte } = await correr(staging(), { sha: null })
+  assert.equal(reporte.categoria, 'ok')
+  assert.equal(reporte.sha, 'abc')
+  assert.equal(reporte.shaEsperado, null)
+})
+
 test('el login del mozo rechazado es de configuración, y la limpieza corre igual', async () => {
   const s = staging({ 'POST https://refstaging.supabase.co/auth/v1/token': () => respuesta(400, { error_code: 'invalid_credentials' }) })
   const fetchFn = async (url, init) =>

@@ -105,6 +105,8 @@ export async function correrFlujo(c) {
         const res = await api('GET', null, { url: `${c.apiUrl.replace(/\/+$/, '').replace(/\/api$/, '')}/health` })
         if (res.status !== 200) throw new FallaE2E(categoriaDeHttp(res.status), `/health respondió ${res.status}`, { http: res.status })
         if (res.body?.status === 'degraded') throw new FallaE2E('infraestructura', '/health respondió status degraded')
+        // En cada deploy el smoke ya esperó el SHA; si acá no es ese, staging cambió en el medio: no es el producto.
+        if (c.sha && res.body?.sha !== c.sha) throw new FallaE2E('infraestructura', `/health no muestra el SHA desplegado (${c.sha})`)
         return res
       }, { dormir })
       r.reintentos += health.reintentos
