@@ -1,0 +1,93 @@
+name: E2E — staging (Supabase)
+
+# E2E del comensal y el mozo contra STAGING: QR → pedido → efectivo → el mozo confirma → cierre, verificando cada paso en
+# la base de staging con el usuario e2e_staging, y la limpieza siempre al final. Diseño: docs/calidad/e2e-supabase.md.
+# Nunca contra producción: scripts/e2e-staging/lib.mjs (erroresDeDestino) corta antes de tocar nada.
+#
+# Corre solo en cada deploy a staging, como job de deploy-staging.yml después del smoke (que ya confirmó que /health
+# muestra ese SHA), y a mano con workflow_dispatch.
+on:
+  workflow_call:
+    inputs:
+      sha:
+        description: 'El SHA desplegado: /health tiene que mostrarlo, si no es infraestructura'
+        required: false
+        type: string
+        default: ''
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    name: E2E contra staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Una corrida a la vez: cada una tiene su marcador y su mesa, pero comparten el restaurante de prueba. A nivel de job
+    # porque este workflow también se llama desde deploy-staging.yml.
+    concurrency:
+      group: e2e-staging
+      cancel-in-progress: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # La URL de la API es la VITE_API_URL de preview de web-cliente en Vercel, como el smoke (deploy-staging.yml).
+      - name: Resolve staging API URL
+        run: |
+          dir="$RUNNER_TEMP/vercel-cliente"
+          trap 'rm -rf "$dir"' EXIT
+          mkdir -p "$dir"
+          npx vercel@54.6.1 pull --yes --environment=preview --cwd "$dir" --token ${{ secrets.VERCEL_TOKEN }}
+          node scripts/smoke/leer-api-url.mjs "$dir/.vercel/.env.preview.local"
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_CLIENTE }}
+
+      # La URL y la clave pública de Supabase de staging (para el login del mozo) son variables del repo: las de Preview de
+      # web-staff en Vercel dieron 401 en la primera corrida (run 40131089925). De Vercel se lee solo la URL de producción
+      # de web-staff, para comprobar que no es el mismo proyecto. El archivo no se imprime ni se sube y se borra al terminar.
+      - name: Resolve production Supabase URL
+        run: |
+          prod="$RUNNER_TEMP/vercel-staff-production"
+          trap 'rm -rf "$prod"' EXIT
+          mkdir -p "$prod"
+          npx vercel@54.6.1 pull --yes --environment=production --cwd "$prod" --token ${{ secrets.VERCEL_TOKEN }}
+          node scripts/e2e-staging/leer-supabase.mjs "$prod/.vercel/.env.production.local"
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_STAFF }}
+
+      # pg no es dependencia de la raíz del monorepo: se instala fijado (la misma versión que el backend, pnpm-lock.yaml)
+      # solo para este job, en scripts/e2e-staging/node_modules.
+      - name: Install pg
+        run: npm install --prefix scripts/e2e-staging --no-save --no-package-lock --no-audit --no-fund pg@8.20.0
+
+      - name: E2E
+        run: node scripts/e2e-staging/main.mjs
+        env:
+          EXPECTED_SHA: ${{ inputs.sha }}
+          E2E_SUPABASE_URL: ${{ vars.E2E_SUPABASE_URL }}
+          E2E_SUPABASE_PUBLISHABLE_KEY: ${{ vars.E2E_SUPABASE_PUBLISHABLE_KEY }}
+          E2E_STAGING_DB_URL_LECTURA: ${{ secrets.E2E_STAGING_DB_URL_LECTURA }}
+          E2E_STAGING_MOZO_EMAIL: ${{ secrets.E2E_STAGING_MOZO_EMAIL }}
+          E2E_STAGING_MOZO_PASSWORD: ${{ secrets.E2E_STAGING_MOZO_PASSWORD }}
+          E2E_STAGING_RESTAURANTE_ID: ${{ vars.E2E_STAGING_RESTAURANTE_ID }}
+          E2E_STAGING_ITEM_ID: ${{ vars.E2E_STAGING_ITEM_ID }}
+          PROD_HOSTS: ${{ vars.PROD_WEB_ADMIN_URL }},${{ vars.PROD_WEB_CLIENTE_URL }},${{ vars.PROD_WEB_STAFF_URL }},${{ vars.PROD_WEB_AUTH_URL }}
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-staging-${{ github.run_id }}
+          path: resultados/e2e-staging.json
+          if-no-files-found: warn
+          retention-days: 30

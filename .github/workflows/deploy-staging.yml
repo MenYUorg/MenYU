@@ -18,6 +18,9 @@ on:
       - '.github/workflows/ci.yml'
       - '.github/workflows/carga-k6.yml'
       - 'scripts/carga/**'
+      # El E2E no cambia lo que se despliega: si solo cambia él, se corre a mano (workflow_dispatch de e2e-staging.yml).
+      - '.github/workflows/e2e-staging.yml'
+      - 'scripts/e2e-staging/**'
       - 'sonar-project.properties'
 
 jobs:
@@ -177,3 +180,15 @@ jobs:
           WEB_CLIENTE_URL: ${{ needs.deploy-staging.outputs.web_cliente_url }}
           WEB_STAFF_URL: ${{ needs.deploy-staging.outputs.web_staff_url }}
           WEB_AUTH_URL: ${{ needs.deploy-staging.outputs.web_auth_url }}
+
+  # ── E2E contra staging (escribe solo en el restaurante de prueba) ──
+  # Después del smoke, que ya confirmó que /health muestra este SHA. Si falla, el deploy queda en rojo aunque el deploy
+  # haya andado: el reporte (artifact e2e-staging-<run_id>) dice si fue infraestructura o producto.
+  # docs/calidad/e2e-supabase.md, sección 3.
+  e2e-staging:
+    name: E2E contra staging
+    needs: smoke-staging
+    uses: ./.github/workflows/e2e-staging.yml
+    with:
+      sha: ${{ github.sha }}
+    secrets: inherit
