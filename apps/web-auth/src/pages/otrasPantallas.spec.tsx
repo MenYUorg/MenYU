@@ -59,6 +59,16 @@ describe('SinAccesoPage', () => {
     expect(cliente.actual!.auth.signOut).toHaveBeenCalledWith({ scope: 'local' })
     expect(screen.getByText('pantalla de ingreso')).toBeInTheDocument()
   })
+
+  it('a una cuenta de cliente le ofrece ir a web-cliente, sin cerrar la sesión (Fase 4b)', async () => {
+    renderizar('/sin-acceso', <SinAccesoPage />)
+
+    expect(await screen.findByRole('heading', { name: '¿Venís a pedir en un restaurante?' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Ir a MenYU' }))
+
+    expect(irA).toHaveBeenCalledWith('http://localhost:5176/')
+    expect(cliente.actual!.auth.signOut).not.toHaveBeenCalled()
+  })
 })
 
 describe('OlvideContrasenaPage', () => {

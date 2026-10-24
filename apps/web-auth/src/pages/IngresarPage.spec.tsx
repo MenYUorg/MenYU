@@ -89,6 +89,34 @@ describe('IngresarPage', () => {
     expect(irA).not.toHaveBeenCalled()
   })
 
+  it('una cuenta sin acceso (403) que viene de web-cliente vuelve ahí: es una cuenta de cliente (Fase 4b)', async () => {
+    cliente.actual!.auth.getSession.mockResolvedValue({ data: { session: sesion('cliente@gmail.com') } })
+    vi.mocked(obtenerPerfil).mockResolvedValue({ tipo: 'sin-acceso' })
+
+    renderizar('/?redirect=https%3A%2F%2Fmesa.menyu-app.com%2Frestaurante%2Fr-1')
+
+    await waitFor(() => expect(irA).toHaveBeenCalledWith('https://mesa.menyu-app.com/restaurante/r-1'))
+    expect(screen.queryByText('pantalla sin acceso')).not.toBeInTheDocument()
+  })
+
+  it('un redirect a web-cliente que no es de MenYU no cuenta: sin acceso', async () => {
+    cliente.actual!.auth.getSession.mockResolvedValue({ data: { session: sesion('cliente@gmail.com') } })
+    vi.mocked(obtenerPerfil).mockResolvedValue({ tipo: 'sin-acceso' })
+
+    renderizar('/?redirect=https%3A%2F%2Fmesa.otro-sitio.com%2F')
+
+    expect(await screen.findByText('pantalla sin acceso')).toBeInTheDocument()
+    expect(irA).not.toHaveBeenCalled()
+  })
+
+  it('"Creá tu cuenta" lleva al registro y conserva el redirect', async () => {
+    renderizar('/?redirect=https%3A%2F%2Fmesa.menyu-app.com%2F')
+
+    const enlace = await screen.findByRole('link', { name: 'Creá tu cuenta' })
+
+    expect(enlace).toHaveAttribute('href', '/crear-cuenta?redirect=https%3A%2F%2Fmesa.menyu-app.com%2F')
+  })
+
   it('con Google sale a Supabase y vuelve a /google con el redirect', async () => {
     renderizar('/?redirect=https%3A%2F%2Fadmin.menyu-app.com%2Fadmin')
     await continuarConGoogle()

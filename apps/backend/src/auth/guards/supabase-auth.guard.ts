@@ -10,12 +10,12 @@ import {
 } from '@nestjs/common'
 import { errors } from 'jose'
 import { PrismaService } from '../../prisma/prisma.service'
-import { SupabaseNoConfiguradoError, VerificadorTokenSupabase } from '../supabase/verificador-token.service'
-
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
-// Errores de jose que vienen de no poder bajar el JWKS, no de un token malo.
-const FALLAS_DEL_JWKS = new Set(['ERR_JWKS_TIMEOUT', 'ERR_JWKS_INVALID', 'ERR_JOSE_GENERIC'])
+import {
+  FALLAS_DEL_JWKS,
+  SupabaseNoConfiguradoError,
+  UUID,
+  VerificadorTokenSupabase,
+} from '../supabase/verificador-token.service'
 
 /**
  * Valida el access token de Supabase y resuelve el `Usuario` de nuestra base. Tener sesión en Supabase

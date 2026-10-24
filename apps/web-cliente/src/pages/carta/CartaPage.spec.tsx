@@ -8,7 +8,11 @@ import { useComensalStore } from '../../store/comensalStore'
 import { usePublicMenuStore } from '../../store/publicMenuStore'
 import { useSessionStore } from '../../store/sessionStore'
 import { crearMenu, crearPlato, crearPlatoEnDescuento, crearTokenJwt } from '../../test/fixtures'
+import { compartirLaSesionDeWebAuth } from '../../test/authClient'
+import { irA } from '../../utils/navegar'
 import { CartaPage } from './CartaPage'
+
+vi.mock('../../utils/navegar', () => ({ irA: vi.fn() }))
 
 vi.mock('../../services/api', async (importarOriginal) => ({
   ...(await importarOriginal<typeof import('../../services/api')>()),
@@ -345,22 +349,28 @@ describe('CartaPage (la carta en modo vista)', () => {
       expect(screen.getByText('inicio: /')).toBeInTheDocument()
     })
 
-    it('"Iniciar sesión" lleva al ingreso con el aviso de volver a la carta', async () => {
+    // En web-auth, que vuelve a esta pantalla (la carta). En jsdom, la URL de la página (window.location).
+    it('"Iniciar sesión" lleva al ingreso de web-auth, con la vuelta a la carta', async () => {
+      vi.mocked(irA).mockClear()
+      compartirLaSesionDeWebAuth()
       renderCarta()
       await cargada()
 
       fireEvent.click(screen.getByRole('button', { name: 'Iniciar sesión' }))
 
-      expect(screen.getByText('auth: /auth?volver=%2Frestaurante%2Frest-1%2Fcarta')).toBeInTheDocument()
+      expect(irA).toHaveBeenCalledWith(expect.stringMatching(/\/\?redirect=/))
+      expect(new URL(vi.mocked(irA).mock.calls[0][0]).searchParams.get('redirect')).toBe(window.location.href)
     })
 
-    it('"Crear cuenta gratis" abre el registro, también con el aviso de volver a la carta', async () => {
+    it('"Crear cuenta gratis" abre el registro de web-auth, también con la vuelta a la carta', async () => {
+      vi.mocked(irA).mockClear()
+      compartirLaSesionDeWebAuth()
       renderCarta()
       await cargada()
 
       fireEvent.click(screen.getByRole('button', { name: 'Crear cuenta gratis' }))
 
-      expect(screen.getByText('auth: /auth?tab=register&volver=%2Frestaurante%2Frest-1%2Fcarta')).toBeInTheDocument()
+      expect(irA).toHaveBeenCalledWith(expect.stringMatching(/\/crear-cuenta\?redirect=/))
     })
 
     it('un invitado no es saludado por el nombre de una mesa anterior', async () => {
@@ -406,7 +416,10 @@ describe('CartaPage (la carta en modo vista)', () => {
         await cargada()
         abrirMenuLateral()
 
-        fireEvent.click(screen.getByRole('button', { name: 'Cerrar sesión' }))
+        // Cerrar la cuenta es asíncrono (también cierra la de Supabase): act espera a que termine.
+        await act(async () => {
+          fireEvent.click(screen.getByRole('button', { name: 'Cerrar sesión' }))
+        })
 
         expect(localStorage.getItem('menyu_access_token')).toBeNull()
         expect(localStorage.getItem('menyu_refresh_token')).toBeNull()

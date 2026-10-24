@@ -48,6 +48,14 @@ describe('useSession', () => {
     await waitFor(() => expect(result.current).toEqual({ tipo: 'sin-sesion' }))
   })
 
+  it('sin las variables de Supabase (un deploy sin configurar) queda sin sesión, sin romperse', async () => {
+    vi.mocked(clienteAuth).mockImplementationOnce(() => {
+      throw new Error('Faltan VITE_SUPABASE_URL y VITE_SUPABASE_PUBLISHABLE_KEY')
+    })
+    const { result } = renderHook(() => useSession())
+    await waitFor(() => expect(result.current).toEqual({ tipo: 'sin-sesion' }))
+  })
+
   it('si no se puede leer la sesión, queda sin sesión', async () => {
     auth.getSession.mockRejectedValueOnce(new Error('cookie ilegible'))
     const { result } = renderHook(() => useSession())

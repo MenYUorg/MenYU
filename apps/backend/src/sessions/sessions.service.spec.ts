@@ -13,6 +13,7 @@ import { UsersService } from '../users/users.service'
 import { MenyuGateway } from '../gateway/menyu.gateway'
 import { DivisionService } from '../comensales/division.service'
 import { AccesoService } from '../auth/supabase/acceso.service'
+import { CuentaDeClienteService } from '../auth/supabase/cuenta-de-cliente.service'
 import { accesoDeTest, CUENTAS, MOZOS, MUNDO } from '../test/acceso-de-test'
 import {
   ESTADO_PAGO_APROBADO,
@@ -65,6 +66,25 @@ const mockDivision = {
   calcularTotalSesion: jest.fn(),
 }
 
+// La cuenta de cliente de Supabase (Fase 4b): cómo resuelve el `Cliente` se prueba en cuenta-de-cliente.service.spec.
+const mockCuentas = {
+  clienteDe: jest.fn(),
+}
+
+/** Un token con el encabezado de uno de Supabase (ES256). La firma no importa: la verifica CuentaDeClienteService. */
+const TOKEN_DE_SUPABASE = [
+  Buffer.from(JSON.stringify({ alg: 'ES256', kid: 'clave-del-proyecto', typ: 'JWT' })).toString('base64url'),
+  Buffer.from(JSON.stringify({ sub: '6f1c2a40-2222-4a1b-9c3d-000000000001' })).toString('base64url'),
+  'firma',
+].join('.')
+
+/** El del login de `/auth` de web-cliente (JWT_SECRET, HS256). */
+const TOKEN_DEL_LOGIN_ANTERIOR = [
+  Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url'),
+  Buffer.from(JSON.stringify({ sub: 'cli-1', tipo: 'cliente' })).toString('base64url'),
+  'firma',
+].join('.')
+
 // Mock del cliente `tx` que recibe el callback de runSerializableTransaction.
 // Cada test de registrarCobro fija explícitamente qué devuelve cada llamada.
 function createTxMock() {
@@ -113,6 +133,7 @@ describe('SessionsService', () => {
         { provide: MenyuGateway, useValue: mockGateway },
         { provide: DivisionService, useValue: mockDivision },
         { provide: AccesoService, useValue: accesoDeTest() },
+        { provide: CuentaDeClienteService, useValue: mockCuentas },
       ],
     }).compile()
 
@@ -194,6 +215,40 @@ describe('SessionsService', () => {
 
       expect(mockUsers.createCliente).toHaveBeenCalledWith({ nombre: 'Invitado' })
       expect(id).toBe('guest-1')
+    })
+
+    describe('con la cuenta de Supabase (Fase 4b)', () => {
+      it('token de Supabase → el Cliente de esa cuenta, sin pasar por JWT_SECRET ni crear un invitado', async () => {
+        mockCuentas.clienteDe.mockResolvedValue('cli-supabase')
+
+        const id = await (service as any).resolveClienteId(`Bearer ${TOKEN_DE_SUPABASE}`)
+
+        expect(id).toBe('cli-supabase')
+        expect(mockCuentas.clienteDe).toHaveBeenCalledWith(TOKEN_DE_SUPABASE)
+        expect(mockJwt.verify).not.toHaveBeenCalled()
+        expect(mockUsers.createCliente).not.toHaveBeenCalled()
+      })
+
+      it('token de Supabase que no sirve (vencido, de otro proyecto) → invitado, sin probarlo con JWT_SECRET', async () => {
+        mockCuentas.clienteDe.mockResolvedValue(null)
+
+        const id = await (service as any).resolveClienteId(`Bearer ${TOKEN_DE_SUPABASE}`)
+
+        expect(id).toBe('guest-1')
+        expect(mockJwt.verify).not.toHaveBeenCalled()
+        expect(mockUsers.createCliente).toHaveBeenCalledWith({ nombre: 'Invitado' })
+      })
+
+      it('el token del login anterior (HS256) sigue con JWT_SECRET y no llega a Supabase', async () => {
+        mockJwt.verify.mockReturnValue({ sub: 'cli-1', tipo: 'cliente' })
+        mockUsers.findClienteById.mockResolvedValue(CLIENTE)
+
+        const id = await (service as any).resolveClienteId(`Bearer ${TOKEN_DEL_LOGIN_ANTERIOR}`)
+
+        expect(id).toBe('cli-1')
+        expect(mockJwt.verify).toHaveBeenCalledWith(TOKEN_DEL_LOGIN_ANTERIOR)
+        expect(mockCuentas.clienteDe).not.toHaveBeenCalled()
+      })
     })
   })
 
@@ -581,6 +636,37 @@ describe('SessionsService', () => {
 
       expect(mockUsers.createCliente).not.toHaveBeenCalled()
       expect(result.clienteId).toBe('cli-1')
+    })
+
+    it('con la cuenta de Supabase la mesa queda a nombre de su Cliente: anfitrión, participante y token de la sesión', async () => {
+      mockCuentas.clienteDe.mockResolvedValue('cli-supabase')
+      mockPrisma.mesa.findFirst.mockResolvedValue(MESA_ABIERTA)
+      mockPrisma.sesionMesa.findFirst.mockResolvedValue(null)
+      mockPrisma.sesionMesa.create.mockResolvedValue({ id: 'nueva-sesion', codigoSesion: '042' })
+      mockPrisma.$transaction.mockResolvedValue([
+        { id: 'nueva-sesion', codigoSesion: '042' },
+        { id: 'mesa-1', estado: 'ocupada' },
+      ])
+
+      const result = await service.open({ tableCode: 'qr-abc' }, `Bearer ${TOKEN_DE_SUPABASE}`)
+
+      expect(result.clienteId).toBe('cli-supabase')
+      expect(mockPrisma.sesionMesa.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          clienteId: 'cli-supabase',
+          participantes: { create: { clienteId: 'cli-supabase', orden: 1 } },
+        }),
+      })
+      expect(mockJwt.sign).toHaveBeenCalledWith(expect.objectContaining({ sub: 'cli-supabase', tipo: 'cliente' }))
+      expect(mockUsers.createCliente).not.toHaveBeenCalled()
+    })
+
+    it('con la cuenta de Supabase, una mesa que no existe no llega a resolver la cuenta', async () => {
+      mockPrisma.mesa.findFirst.mockResolvedValue(null)
+
+      await expect(service.open({ tableCode: 'qr-no-existe' }, `Bearer ${TOKEN_DE_SUPABASE}`)).rejects.toThrow(NotFoundException)
+
+      expect(mockCuentas.clienteDe).not.toHaveBeenCalled()
     })
   })
 

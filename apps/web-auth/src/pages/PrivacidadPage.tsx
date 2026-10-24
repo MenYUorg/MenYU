@@ -5,7 +5,7 @@ import { Marco } from '../components/Marco'
 
 // Si cambia el contenido, actualizar la fecha y avisar en docs/auth/specs/auth.md (Fase 3b). El texto describe lo que
 // hace el código hoy (qué guarda cada tabla, qué proveedores reciben datos): si eso cambia, revisarlo.
-const VIGENCIA = '21 de octubre de 2026'
+const VIGENCIA = '23 de octubre de 2026'
 const CONTACTO = 'dantelojeda05@gmail.com'
 
 function Seccion({ titulo, children }: { titulo: string; children: ReactNode }) {
@@ -55,10 +55,16 @@ export function PrivacidadPage() {
           </li>
           <li>
             <strong>Si te registrás con email y contraseña:</strong> tu email y tu contraseña, que nunca se guarda en
-            texto. Las cuentas de comensal de la app de la mesa y las del personal creadas desde el panel guardan en la
-            base de MenYU solo un hash de la contraseña, del que no se puede recuperar. Las del personal invitado por
-            mail las gestiona Supabase Auth. En el registro de comensal también pedimos tu nombre y, si querés, tu
-            teléfono.
+            texto. Las cuentas que se crean en esta página (las de cliente) y las del personal invitado por mail las
+            gestiona Supabase Auth. Las cuentas de comensal del ingreso anterior de la app de la mesa y las del personal
+            creadas desde el panel guardan en la base de MenYU solo un hash de la contraseña, del que no se puede
+            recuperar. En el registro de cliente también pedimos tu nombre (en el anterior, también el teléfono, si
+            querías).
+          </li>
+          <li>
+            <strong>Si tenés una cuenta de cliente:</strong> tu nombre, tu email y el identificador de tu cuenta, para
+            que las mesas que abrís queden a tu nombre. Si ya tenías una cuenta de comensal del ingreso anterior con el
+            mismo email, la nueva se le suma y conservás tu historial.
           </li>
           <li>
             <strong>Si trabajás en un restaurante que usa MenYU:</strong> tu nombre, tu email y, si lo cargan, tu
@@ -93,8 +99,8 @@ export function PrivacidadPage() {
             restaurantes).
           </li>
           <li>
-            <strong>Resend:</strong> el envío de los mails de invitación y de contraseña, que llegan desde
-            no-reply@menyu-app.com.
+            <strong>Resend:</strong> el envío de los mails de invitación, de confirmación de la cuenta y de
+            contraseña, que llegan desde no-reply@menyu-app.com.
           </li>
           <li>
             <strong>Railway:</strong> el servidor de MenYU.

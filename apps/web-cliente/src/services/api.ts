@@ -1,5 +1,5 @@
 import type { DiscoveryBusquedaResponse, DiscoveryResponse, DiscoveryRestauranteDetalle, MenuPublico } from '@menyu/types'
-import { leerTokenDeCuenta } from '../utils/tokenCuenta'
+import { tokenParaAbrirMesa } from '../utils/cuenta'
 
 const BASE = import.meta.env.VITE_API_URL ?? ''
 
@@ -63,9 +63,10 @@ export const api = {
   },
 
   sessions: {
-    // Con una cuenta iniciada se manda su token: el servidor registra la mesa a su nombre y no como "Invitado". Sin
-    // cuenta, o con un token que ya no sirve, no se manda y la persona entra como invitada.
-    open: (data: {
+    // Con una cuenta iniciada se manda su token (el de Supabase o, hasta la Fase 5, el del login de `/auth`): el servidor
+    // registra la mesa a su nombre y no como "Invitado". Sin cuenta, o con un token que ya no sirve, no se manda y la
+    // persona entra como invitada.
+    open: async (data: {
       qrToken?: string
       restauranteId?: string
       pin?: string
@@ -75,7 +76,7 @@ export const api = {
         'POST',
         '/sessions/open',
         { tableCode: data.qrToken, restauranteId: data.restauranteId, pin: data.pin, codigoSesion: data.codigoSesion },
-        leerTokenDeCuenta(),
+        await tokenParaAbrirMesa(),
       ),
   },
 
@@ -98,22 +99,6 @@ export const api = {
   },
 
   payments: {
-    initiate: (
-      jwt: string,
-      data: {
-        pedidoId: string
-        restauranteId: string
-        sesionId: string
-        monto: number
-        descripcion: string
-      },
-    ) =>
-      req<{ id: string; initPoint: string; externalReference: string; pagoId: string }>(
-        'POST',
-        '/payments/initiate',
-        { ...data, returnBaseUrl: window.location.origin },
-        jwt,
-      ),
     solicitarEfectivo: (jwt: string, sesionId: string) =>
       req<{ pagoId: string; sesionId: string; estado: string }>(
         'POST',

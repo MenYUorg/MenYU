@@ -116,8 +116,11 @@ En *Authentication → Emails → Templates* de cada proyecto, pegar como cuerpo
 |---|---|---|
 | **Invite user** | `Te invitaron a MenYU` | `docs/auth/plantillas-mail/invite-user.html` |
 | **Reset password** | `Creá una contraseña nueva para MenYU` | `docs/auth/plantillas-mail/reset-password.html` |
+| **Confirm signup** (Fase 4b) | `Confirmá tu cuenta de MenYU` | `docs/auth/plantillas-mail/confirm-signup.html` |
 
 **Verificar:** invitar a un mail propio (`POST /auth/invitaciones`) y que el link del mail abra `https://auth.<ambiente>/invitacion?token_hash=...` y pida la contraseña.
+
+**Confirm signup** es el mail del registro de clientes (`/crear-cuenta`, Fase 4b). A diferencia de las otras dos, su link sale de `{{ .RedirectTo }}`, no de la Site URL: web-auth manda como `emailRedirectTo` su propia `https://auth.<ambiente>/confirmar-email?redirect=<web-cliente>`, y la plantilla le agrega `&token_hash=…&type=email`. Así la persona vuelve a la pantalla de web-cliente desde la que se registró y, en local, el link abre `auth.menyu.local` y no el web-auth desplegado. Supabase acepta ese `redirectTo` porque es el host de la Site URL (en local, por la Redirect URL `http://auth.menyu.local:5173/**` de la sección 6); si no lo aceptara, usaría la Site URL y el link quedaría roto. **Cargarla antes del deploy que lleve la Fase 4b (cargada en los dos proyectos el 2026-10-23). Es un requisito de seguridad, no solo de uso** (`docs/auth/specs/auth.md`, Notas de seguridad). El link por defecto de Supabase confirma la cuenta con un GET, así que alcanza con que un escáner de mail lo abra: quien registró el email de otra persona con su contraseña se queda con una cuenta confirmada, que después se vincula al `Cliente` de esa persona o se reutiliza si la invitan como personal. Con esta plantilla se confirma recién al tocar el botón de `/confirmar-email`. Además, sin ella el link vuelve con un `?code=` que `/confirmar-email` solo puede canjear en el navegador en el que se creó la cuenta; en otro, la persona tiene que ingresar a mano. Verificar: crear una cuenta desde `https://auth.<ambiente>/crear-cuenta` con un mail propio y que el link abra `https://auth.<ambiente>/confirmar-email?redirect=…&token_hash=…&type=email`.
 
 ### Fase 4: web-admin, web-staff y web-cliente
 
@@ -130,22 +133,21 @@ En *Authentication → Emails → Templates* de cada proyecto, pegar como cuerpo
 | `VITE_AUTH_COOKIE_DOMAIN` | `.staging.menyu-app.com` | `.menyu-app.com` |
 | `VITE_AUTH_URL` | `https://auth.staging.menyu-app.com` | `https://auth.menyu-app.com` |
 
-**web-cliente lleva solo `VITE_AUTH_URL`**, para mandar a web-auth a quien es personal y escribe sus datos en `/auth` (entrega 4.7). No lee la sesión de Supabase: su cuenta de comensal llega en la Fase 4b. Si la variable falta, la app la deduce del dominio (`mesa.<ambiente>` → `auth.<ambiente>`), así que un olvido no la rompe; igual conviene definirla.
-
-En **web-admin** y **web-staff** van las cuatro.
+**web-cliente, desde la Fase 4b, también lleva las cuatro.** En la Fase 4 llevaba solo `VITE_AUTH_URL`, para mandar a web-auth a quien es personal y escribe sus datos en `/auth` (entrega 4.7). Con la 4b lee la sesión opcional del cliente (`useSession`), así que necesita además `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` y `VITE_AUTH_COOKIE_DOMAIN`, con los mismos valores que web-admin y web-staff. **Cargarlas antes del deploy que lleve la Fase 4b.** Sin ellas web-cliente anda igual, pero sin la cuenta de Supabase: "Ingresar" y "Registrarme" siguen yendo al `/auth` de la app, como antes de la 4b. Si falta `VITE_AUTH_URL`, la app la deduce del dominio (`mesa.<ambiente>` → `auth.<ambiente>`), así que un olvido no la rompe; igual conviene definirla.
 
 Checklist por proyecto:
 
 | Proyecto de Vercel | Entorno | Variables |
 |---|---|---|
-| `menyu-admin-staging`, `menyu-staff-staging` | Production (es staging) | las cuatro, con los valores de staging |
-| `menyu-cliente-staging` | Production (es staging) | `VITE_AUTH_URL` de staging |
-| `menyu-admin`, `menyu-staff` | Production | las cuatro, con los valores de producción |
-| `menyu-admin`, `menyu-staff` | Preview | las cuatro, con los valores de **staging** |
-| `menyu-cliente` | Production | `VITE_AUTH_URL` de producción |
-| `menyu-cliente` | Preview | `VITE_AUTH_URL` de staging |
+| `menyu-admin-staging`, `menyu-staff-staging`, `menyu-cliente-staging` | Production (es staging) | las cuatro, con los valores de staging |
+| `menyu-admin`, `menyu-staff`, `menyu-cliente` | Production | las cuatro, con los valores de producción |
+| `menyu-admin`, `menyu-staff`, `menyu-cliente` | Preview | las cuatro, con los valores de **staging** |
+
+En `menyu-cliente` y `menyu-cliente-staging` las tres de Supabase son de la Fase 4b; `VITE_AUTH_URL` ya estaba desde la 4.7. web-cliente también se sirve en los dominios viejos de Vercel (`menyu-cliente*.vercel.app`, por los QR impresos). Ahí el navegador rechaza la cookie de `.menyu-app.com`, así que no hay cuenta de Supabase: "Ingresar" y "Registrarme" siguen yendo al `/auth` de la app, como antes de la 4b, y sin cuenta la mesa se abre como "Invitado".
 
 El entorno Preview de los proyectos de producción corre en `*.vercel.app`, que está en la Public Suffix List: ahí no se puede poner la cookie de `.staging.menyu-app.com`, así que un preview no comparte sesión y rebota a `auth.staging`, que es donde se inicia. Es lo esperado (`auth.md`, Dominios): el SSO se prueba en staging y en `*.menyu.local`.
+
+**Estado al 2026-10-23:** `menyu-admin` y `menyu-staff` no tienen `VITE_SUPABASE_PUBLISHABLE_KEY` en Production (sí en Preview), y a `menyu-cliente` y `menyu-cliente-staging` les falta esa misma variable en todos sus entornos (las otras tres ya están). Cargarla antes del tag de producción.
 
 **Verificar después del deploy:** en `admin.staging.menyu-app.com`, que el bundle apunte al Supabase de staging y que, sin sesión, mande a `auth.staging.menyu-app.com` con su `redirect`.
 

@@ -2,10 +2,10 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Spinner } from '@menyu/ui'
 import type { MenuPublicoItem } from '@menyu/types'
+import { useCuenta } from '../../hooks/useCuenta'
 import { usePuedeCerrarSesion } from '../../hooks/usePuedeCerrarSesion'
 import { menuEsDe, usePublicMenuStore } from '../../store/publicMenuStore'
 import { useComensalStore } from '../../store/comensalStore'
-import { decodificarPayloadJwt } from '../../utils/jwt'
 import { AppHeader } from '../AppHeader'
 import { BloqueEstado } from '../discovery/BloqueEstado'
 import { VolverEnlace } from '../discovery/VolverEnlace'
@@ -36,19 +36,6 @@ function itemPasaFiltros(item: MenuPublicoItem, buscar: string, activeDiets: Set
   return true
 }
 
-/** El cliente con cuenta que inició sesión en este navegador (el token de `localStorage`), o `null`. */
-function leerUsuario(): { nombre: string; email: string } | null {
-  try {
-    const token = localStorage.getItem('menyu_access_token')
-    if (!token) return null
-    const payload = decodificarPayloadJwt(token) as { tipo?: string; nombre?: string; email?: string } | null
-    if (!payload || payload.tipo !== 'cliente') return null
-    return { nombre: payload.nombre ?? payload.email ?? 'Cliente', email: payload.email ?? '' }
-  } catch {
-    return null
-  }
-}
-
 // ── Vista ─────────────────────────────────────────────────────────────────────
 
 interface MenuViewProps {
@@ -77,9 +64,9 @@ export function MenuView({ modo, restauranteId }: MenuViewProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({})
 
-  const user = leerUsuario()
+  const { cuenta, cerrarSesion: cerrarLaCuenta } = useCuenta()
   // "Cerrar sesión" no se ofrece si la mesa en la que está ya pidió algo.
-  const puedeCerrarSesion = usePuedeCerrarSesion({ abierto: drawerOpen, conCuenta: !!user })
+  const puedeCerrarSesion = usePuedeCerrarSesion({ abierto: drawerOpen, conCuenta: !!cuenta })
 
   useEffect(() => {
     if (restauranteId && !menu) void fetchMenu(restauranteId)
@@ -192,8 +179,7 @@ export function MenuView({ modo, restauranteId }: MenuViewProps) {
   }
 
   const cerrarSesion = () => {
-    localStorage.removeItem('menyu_access_token')
-    localStorage.removeItem('menyu_refresh_token')
+    void cerrarLaCuenta()
     setDrawerOpen(false)
   }
 
@@ -265,7 +251,7 @@ export function MenuView({ modo, restauranteId }: MenuViewProps) {
         nombreRestaurante={menu.restaurante.nombre}
         direccion={menu.restaurante.direccion}
         logoUrl={menu.restaurante.logoUrl}
-        usuario={user}
+        usuario={cuenta && { nombre: cuenta.nombre, email: cuenta.email }}
         comensalNombre={comensalNombre}
         puedeCerrarSesion={puedeCerrarSesion}
         onCerrarSesion={cerrarSesion}

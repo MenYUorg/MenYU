@@ -1,14 +1,16 @@
-import { puedeIrA, type App } from '@menyu/auth-client'
+import { appDeUrl, puedeIrA, type App } from '@menyu/auth-client'
 import type { MembresiaPerfil, PerfilUsuario, Rol } from '@menyu/types'
 
-// A qué app va cada usuario después de iniciar sesión (docs/auth/specs/auth.md, Roles y Fase 3).
+// A qué app va cada usuario después de iniciar sesión (docs/auth/specs/auth.md, Roles y Fases 3 y 4b).
 
 export interface UrlsDeApps {
   admin: string
   staff: string
+  /** web-cliente (`mesa.<ambiente>`), adonde vuelven las cuentas de cliente (Fase 4b). */
+  cliente: string
 }
 
-// auth.<sufijo> → admin.<sufijo> y staff.<sufijo>, como resolveLoginUrl de packages/auth.
+// auth.<sufijo> → admin.<sufijo>, staff.<sufijo> y mesa.<sufijo>.
 const DOMINIO_PROPIO = /^auth\.((staging\.)?menyu-app\.com|menyu\.local)$/
 
 export function urlsDeApps(
@@ -16,15 +18,32 @@ export function urlsDeApps(
   protocolo: string = window.location.protocol,
 ): UrlsDeApps {
   if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    return { admin: 'http://localhost:5174', staff: 'http://localhost:5175' }
+    return { admin: 'http://localhost:5174', staff: 'http://localhost:5175', cliente: 'http://localhost:5176' }
   }
   // Cualquier otro host (por ejemplo, un preview de Vercel) manda a producción.
   const sufijo = DOMINIO_PROPIO.exec(hostname)?.[1] ?? 'menyu-app.com'
   if (sufijo === 'menyu.local') {
     // En desarrollo cada app tiene su puerto (vite.config.ts de cada una).
-    return { admin: `${protocolo}//admin.menyu.local:5174`, staff: `${protocolo}//staff.menyu.local:5175` }
+    return {
+      admin: `${protocolo}//admin.menyu.local:5174`,
+      staff: `${protocolo}//staff.menyu.local:5175`,
+      cliente: `${protocolo}//mesa.menyu.local:5176`,
+    }
   }
-  return { admin: `https://admin.${sufijo}`, staff: `https://staff.${sufijo}` }
+  return { admin: `https://admin.${sufijo}`, staff: `https://staff.${sufijo}`, cliente: `https://mesa.${sufijo}` }
+}
+
+/** Si el `redirect` (ya validado) lleva a web-cliente, que no pide cuenta: ahí puede volver cualquier sesión. */
+export function vaAWebCliente(redirect: string | null): redirect is string {
+  return redirect !== null && appDeUrl(redirect) === 'cliente'
+}
+
+/**
+ * A dónde vuelve quien crea una cuenta de cliente: al `redirect` si es de web-cliente (la pantalla desde la que vino) y,
+ * si no, al inicio de web-cliente. Una cuenta nueva no tiene `Usuario`: admin y staff la mandarían a /sin-acceso.
+ */
+export function destinoDelCliente(redirect: string | null, urls: UrlsDeApps): string {
+  return vaAWebCliente(redirect) ? redirect : `${urls.cliente}/`
 }
 
 const DESTINO_POR_ROL: Record<Rol, { app: App; ruta: string }> = {
@@ -92,14 +111,15 @@ export type Destino =
   | { tipo: 'elegir'; opciones: OpcionIngreso[] }
 
 /**
- * Sin lugares a los que entrar → sin acceso, aunque haya un redirect. Con un redirect válido a una app que le toca → ahí
- * (la app de destino decide qué ve). Un redirect a una app que no le toca (un MOZO a web-admin) se ignora: RequireAuth
- * lo devolvería y no terminaría nunca. Si no, el único lugar que tiene o el selector.
+ * Con un redirect válido a una app que le toca → ahí (la app de destino decide qué ve). web-cliente le toca a cualquiera,
+ * también a quien no tiene ningún lugar (Fase 4b). Un redirect a una app que no le toca (un MOZO a web-admin) se ignora:
+ * RequireAuth lo devolvería y no terminaría nunca. Si no, sin lugares a los que entrar → sin acceso; con uno, ese; con
+ * varios, el selector.
  */
 export function decidirDestino(perfil: PerfilUsuario, redirect: string | null, urls: UrlsDeApps): Destino {
+  if (redirect && puedeIrA(perfil, redirect)) return { tipo: 'ir', url: redirect }
   const opciones = opcionesDeIngreso(perfil)
   if (opciones.length === 0) return { tipo: 'sin-acceso' }
-  if (redirect && puedeIrA(perfil, redirect)) return { tipo: 'ir', url: redirect }
   if (opciones.length === 1) return { tipo: 'ir', url: urlDeOpcion(opciones[0], urls) }
   return { tipo: 'elegir', opciones }
 }

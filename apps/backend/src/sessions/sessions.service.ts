@@ -15,7 +15,9 @@ import { JwtPayload } from '../auth/auth.service'
 import { SessionJwtPayload } from '../auth/guards/session-auth.guard'
 import { SALON } from '../auth/roles-del-personal'
 import { AccesoService } from '../auth/supabase/acceso.service'
+import { CuentaDeClienteService } from '../auth/supabase/cuenta-de-cliente.service'
 import { UsuarioAutenticado } from '../auth/supabase/usuario-autenticado'
+import { esTokenDeSupabase } from '../auth/supabase/verificador-token.service'
 import { OpenSessionDto } from './dto/open-session.dto'
 import { RegistrarCobroDto } from './dto/registrar-cobro.dto'
 import { DivisionService } from '../comensales/division.service'
@@ -115,6 +117,7 @@ export class SessionsService {
     private readonly gateway: MenyuGateway,
     private readonly divisionService: DivisionService,
     private readonly acceso: AccesoService,
+    private readonly cuentas: CuentaDeClienteService,
   ) {}
 
   async openStaff(dto: { mesaId: string }, usuario: UsuarioAutenticado): Promise<OpenStaffSessionResult> {
@@ -748,21 +751,35 @@ export class SessionsService {
 
   // ── Helpers ────────────────────────────────────────────────────────────
 
+  /**
+   * El cliente que abre la mesa. La ruta es pública: el token solo dice a nombre de quién queda, no da permisos. Llega
+   * el de la cuenta de Supabase (Fase 4b de docs/auth/specs/auth.md) o, hasta la Fase 5, el del login de `/auth` de
+   * web-cliente. Cada uno se verifica solo con lo suyo: el de Supabase, con el JWKS del proyecto (ES256 o RS256); el
+   * otro, con `JWT_SECRET` (HS256). Sin token, o con uno que no sirve, entra como invitado.
+   */
   private async resolveClienteId(authHeader?: string): Promise<string> {
     if (authHeader?.startsWith('Bearer ')) {
       const token = authHeader.slice(7)
-      try {
-        const payload = this.jwt.verify<JwtPayload>(token)
-        if (payload.tipo === 'cliente' && payload.sub) {
-          const exists = await this.users.findClienteById(payload.sub)
-          if (exists) return payload.sub
-        }
-      } catch {
-        // token inválido o expirado — continuar como invitado
-      }
+      const clienteId = esTokenDeSupabase(token)
+        ? await this.cuentas.clienteDe(token)
+        : await this.clienteDelLoginAnterior(token)
+      if (clienteId) return clienteId
     }
     const guest = await this.users.createCliente({ nombre: 'Invitado' })
     return guest.id
+  }
+
+  private async clienteDelLoginAnterior(token: string): Promise<string | null> {
+    try {
+      const payload = this.jwt.verify<JwtPayload>(token)
+      if (payload.tipo === 'cliente' && payload.sub) {
+        const exists = await this.users.findClienteById(payload.sub)
+        if (exists) return payload.sub
+      }
+    } catch {
+      // token inválido o expirado — continuar como invitado
+    }
+    return null
   }
 
   /**

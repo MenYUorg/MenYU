@@ -1,7 +1,7 @@
 import { clienteAuth, obtenerPerfil } from '@menyu/auth-client'
 import { useCallback, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { decidirDestino, urlsDeApps } from '../lib/destinos'
+import { decidirDestino, urlsDeApps, vaAWebCliente } from '../lib/destinos'
 import { ERROR_GENERICO } from '../lib/mensajes'
 import { irA } from '../lib/navegar'
 import { redirectValido } from '../lib/redirect'
@@ -19,8 +19,8 @@ const SIN_VERIFICAR = 'No pudimos revisar a qué tenés acceso. Probá de nuevo 
 const SESION_VENCIDA = 'Tu sesión venció. Ingresá de nuevo.'
 
 /**
- * Lo que pasa después de iniciar sesión (docs/auth/specs/auth.md, Fase 3): GET /auth/me y, según la respuesta, la
- * pantalla de sin acceso, el `redirect` si es válido, la app del rol o el selector. Sin sesión vuelve a `listo` y
+ * Lo que pasa después de iniciar sesión (docs/auth/specs/auth.md, Fases 3 y 4b): GET /auth/me y, según la respuesta,
+ * la pantalla de sin acceso, el `redirect` si es válido, la app del rol o el selector. Sin sesión vuelve a `listo` y
  * `continuar()` devuelve false.
  */
 export function usePostLogin(inicial: EstadoIngreso = { tipo: 'listo' }) {
@@ -37,9 +37,14 @@ export function usePostLogin(inicial: EstadoIngreso = { tipo: 'listo' }) {
         return false
       }
 
+      const redirect = redirectValido(new URLSearchParams(search).get('redirect'))
       const resultado = await obtenerPerfil(data.session.access_token)
       if (resultado.tipo === 'sin-acceso') {
-        navigate(conRedirect('/sin-acceso', search), { replace: true })
+        // Sin `Usuario`: la cuenta de un cliente o la de alguien a quien todavía no invitaron, que para Supabase son
+        // lo mismo. Lo que las separa es de dónde vino: si el redirect es de web-cliente (o se registró como cliente,
+        // que siempre lo trae), vuelve ahí, que no pide cuenta. admin y staff siguen preguntando /auth/me.
+        if (vaAWebCliente(redirect)) irA(redirect)
+        else navigate(conRedirect('/sin-acceso', search), { replace: true })
         return true
       }
       if (resultado.tipo === 'sesion-invalida') {
@@ -52,7 +57,6 @@ export function usePostLogin(inicial: EstadoIngreso = { tipo: 'listo' }) {
         return true
       }
 
-      const redirect = redirectValido(new URLSearchParams(search).get('redirect'))
       const destino = decidirDestino(resultado.perfil, redirect, urlsDeApps())
       if (destino.tipo === 'ir') {
         irA(destino.url) // el estado queda en `verificando` hasta que el navegador cambia de página

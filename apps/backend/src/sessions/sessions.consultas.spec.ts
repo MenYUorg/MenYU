@@ -3,6 +3,7 @@ import { JwtService } from '@nestjs/jwt'
 import { SessionJwtPayload } from '../auth/guards/session-auth.guard'
 import { SALON } from '../auth/roles-del-personal'
 import { AccesoService } from '../auth/supabase/acceso.service'
+import { CuentaDeClienteService } from '../auth/supabase/cuenta-de-cliente.service'
 import { DivisionService } from '../comensales/division.service'
 import { MenyuGateway } from '../gateway/menyu.gateway'
 import { PrismaService } from '../prisma/prisma.service'
@@ -54,6 +55,7 @@ describe('SessionsService: cierre y consultas del staff', () => {
       gateway as unknown as MenyuGateway,
       {} as DivisionService,
       acceso as unknown as AccesoService,
+      {} as CuentaDeClienteService,
     )
   })
 

@@ -1,6 +1,10 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
+import { compartirLaSesionDeWebAuth } from '../../test/authClient'
+import { irA } from '../../utils/navegar'
 import { MenuDrawer } from './MenuDrawer'
+
+vi.mock('../../utils/navegar', () => ({ irA: vi.fn() }))
 
 function Ubicacion() {
   const { pathname, search } = useLocation()
@@ -182,36 +186,42 @@ describe('MenuDrawer', () => {
     })
   })
 
+  // En web-auth (Fase 4b), que vuelve a la pantalla en la que estaba: la carta o el menú de la mesa. En jsdom esa URL es
+  // la de la página (window.location), no la del MemoryRouter.
   describe('iniciar sesión y registrarse (sin cuenta)', () => {
-    it('desde la mesa no llevan "volver"', () => {
-      renderDrawer({ modo: 'mesa' })
-
-      fireEvent.click(screen.getByRole('button', { name: 'Iniciar sesión' }))
-      expect(screen.getByText('ahora: /auth')).toBeInTheDocument()
+    beforeEach(() => {
+      vi.mocked(irA).mockClear()
+      compartirLaSesionDeWebAuth()
     })
+    afterEach(() => vi.unstubAllEnvs())
+    const vuelta = () => new URLSearchParams({ redirect: window.location.href }).toString()
 
-    it('desde la mesa, "Crear cuenta gratis" abre el registro sin "volver"', () => {
-      renderDrawer({ modo: 'mesa' })
-
-      fireEvent.click(screen.getByRole('button', { name: 'Crear cuenta gratis' }))
-
-      expect(screen.getByText('ahora: /auth?tab=register')).toBeInTheDocument()
-    })
-
-    it('desde la carta vuelven a la carta', () => {
-      renderDrawer({ modo: 'carta' })
+    it.each(['mesa', 'carta'] as const)('desde la %s, "Iniciar sesión" va a web-auth y vuelve acá', (modo) => {
+      const { alCerrar } = renderDrawer({ modo })
 
       fireEvent.click(screen.getByRole('button', { name: 'Iniciar sesión' }))
 
-      expect(screen.getByText('ahora: /auth?volver=%2Frestaurante%2Frest-1%2Fcarta')).toBeInTheDocument()
+      expect(irA).toHaveBeenCalledWith(`https://auth.menyu-app.com/?${vuelta()}`)
+      expect(alCerrar).toHaveBeenCalled()
     })
 
-    it('desde la carta, el registro abre la pestaña de registrarse y vuelve a la carta', () => {
-      renderDrawer({ modo: 'carta' })
+    it.each(['mesa', 'carta'] as const)('desde la %s, "Crear cuenta gratis" va al registro de web-auth y vuelve acá', (modo) => {
+      renderDrawer({ modo })
 
       fireEvent.click(screen.getByRole('button', { name: 'Crear cuenta gratis' }))
 
-      expect(screen.getByText('ahora: /auth?tab=register&volver=%2Frestaurante%2Frest-1%2Fcarta')).toBeInTheDocument()
+      expect(irA).toHaveBeenCalledWith(`https://auth.menyu-app.com/crear-cuenta?${vuelta()}`)
+    })
+
+    it('donde la app no comparte la sesión de web-auth (un dominio viejo de Vercel), van al /auth de la app', () => {
+      vi.stubEnv('VITE_AUTH_COOKIE_DOMAIN', '.menyu-app.com')
+      const { alCerrar } = renderDrawer({ modo: 'carta' })
+
+      fireEvent.click(screen.getByRole('button', { name: 'Crear cuenta gratis' }))
+
+      expect(screen.getByText('ahora: /auth?tab=register&volver=%2F')).toBeInTheDocument()
+      expect(irA).not.toHaveBeenCalled()
+      expect(alCerrar).toHaveBeenCalled()
     })
   })
 
@@ -222,14 +232,6 @@ describe('MenuDrawer', () => {
       fireEvent.click(screen.getByText('Ingresar a una mesa'))
 
       expect(screen.getByText('ahora: /restaurante/a%2Fb%3Fc%3Dd/mesa')).toBeInTheDocument()
-    })
-
-    it('y también en el "volver" del inicio de sesión', () => {
-      renderDrawer({ modo: 'carta', restauranteId: 'a/b' })
-
-      fireEvent.click(screen.getByRole('button', { name: 'Iniciar sesión' }))
-
-      expect(screen.getByText('ahora: /auth?volver=%2Frestaurante%2Fa%252Fb%2Fcarta')).toBeInTheDocument()
     })
   })
 

@@ -7,6 +7,7 @@ export function crearSupabaseSimulado() {
     auth: {
       getSession: vi.fn(),
       signInWithPassword: vi.fn(),
+      signUp: vi.fn(),
       signOut: vi.fn().mockResolvedValue({ error: null }),
       verifyOtp: vi.fn(),
       updateUser: vi.fn(),

@@ -2,6 +2,7 @@ import { HttpException } from '@nestjs/common'
 import { JwtService } from '@nestjs/jwt'
 import { Test } from '@nestjs/testing'
 import { AccesoService } from '../auth/supabase/acceso.service'
+import { CuentaDeClienteService } from '../auth/supabase/cuenta-de-cliente.service'
 import { DivisionService } from '../comensales/division.service'
 import { MenyuGateway } from '../gateway/menyu.gateway'
 import { PrismaService } from '../prisma/prisma.service'
@@ -78,6 +79,7 @@ describe('SessionsService.open: límite de intentos fallidos', () => {
         { provide: MenyuGateway, useValue: {} },
         { provide: DivisionService, useValue: {} },
         { provide: AccesoService, useValue: {} },
+        { provide: CuentaDeClienteService, useValue: {} },
       ],
     }).compile()
     service = module.get(SessionsService)
