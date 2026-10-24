@@ -45,18 +45,16 @@ jobs:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_CLIENTE }}
 
-      # La URL y la clave pública de Supabase de staging (para el login del mozo) salen del preview de web-staff; la URL de
-      # producción, de su entorno Production, solo para comprobar que no son el mismo proyecto. Los archivos no se imprimen
-      # ni se suben y se borran al terminar el paso.
-      - name: Resolve staging Supabase
+      # La URL y la clave pública de Supabase de staging (para el login del mozo) son variables del repo: las de Preview de
+      # web-staff en Vercel dieron 401 en la primera corrida (run 40131089925). De Vercel se lee solo la URL de producción
+      # de web-staff, para comprobar que no es el mismo proyecto. El archivo no se imprime ni se sube y se borra al terminar.
+      - name: Resolve production Supabase URL
         run: |
-          prev="$RUNNER_TEMP/vercel-staff-preview"
           prod="$RUNNER_TEMP/vercel-staff-production"
-          trap 'rm -rf "$prev" "$prod"' EXIT
-          mkdir -p "$prev" "$prod"
-          npx vercel@54.6.1 pull --yes --environment=preview --cwd "$prev" --token ${{ secrets.VERCEL_TOKEN }}
+          trap 'rm -rf "$prod"' EXIT
+          mkdir -p "$prod"
           npx vercel@54.6.1 pull --yes --environment=production --cwd "$prod" --token ${{ secrets.VERCEL_TOKEN }}
-          node scripts/e2e-staging/leer-supabase.mjs "$prev/.vercel/.env.preview.local" "$prod/.vercel/.env.production.local"
+          node scripts/e2e-staging/leer-supabase.mjs "$prod/.vercel/.env.production.local"
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_STAFF }}
@@ -69,6 +67,8 @@ jobs:
       - name: E2E
         run: node scripts/e2e-staging/main.mjs
         env:
+          E2E_SUPABASE_URL: ${{ vars.E2E_SUPABASE_URL }}
+          E2E_SUPABASE_PUBLISHABLE_KEY: ${{ vars.E2E_SUPABASE_PUBLISHABLE_KEY }}
           E2E_STAGING_DB_URL_LECTURA: ${{ secrets.E2E_STAGING_DB_URL_LECTURA }}
           E2E_STAGING_MOZO_EMAIL: ${{ secrets.E2E_STAGING_MOZO_EMAIL }}
           E2E_STAGING_MOZO_PASSWORD: ${{ secrets.E2E_STAGING_MOZO_PASSWORD }}
