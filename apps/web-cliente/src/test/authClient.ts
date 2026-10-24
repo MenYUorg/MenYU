@@ -27,6 +27,17 @@ export function reiniciarCuentaDePrueba(): void {
   clienteAuthSimulado.mockReset()
 }
 
+/**
+ * Las variables con las que esta app comparte la sesión de web-auth (utils/cuenta.ts, `comparteLaSesionDeWebAuth`). En
+ * jsdom la página es `localhost`, así que ese es el dominio de la cookie. Deshacer con `vi.unstubAllEnvs()`.
+ */
+export function compartirLaSesionDeWebAuth(urlDeAuth = 'https://auth.menyu-app.com'): void {
+  vi.stubEnv('VITE_AUTH_URL', urlDeAuth)
+  vi.stubEnv('VITE_SUPABASE_URL', 'https://proyecto.supabase.co')
+  vi.stubEnv('VITE_SUPABASE_PUBLISHABLE_KEY', 'clave-publica')
+  vi.stubEnv('VITE_AUTH_COOKIE_DOMAIN', 'localhost')
+}
+
 /** Una sesión de Supabase con lo que web-cliente usa: el token, el email y `user_metadata`. */
 export function sesionDeSupabase({
   nombre,

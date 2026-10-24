@@ -76,8 +76,41 @@ export async function cerrarSesionDeLaCuenta(): Promise<void> {
 }
 
 /** web-auth, para iniciar sesión o crear una cuenta, con la vuelta a esta pantalla (web-auth valida el `redirect`). */
-export function urlDeIngreso(accion: 'ingresar' | 'crear', volverA: string = window.location.href): string {
+export function urlDeIngreso(accion: AccionDeIngreso, volverA: string = window.location.href): string {
   const url = new URL(accion === 'crear' ? '/crear-cuenta' : '/', `${urlDeAuth()}/`)
   url.searchParams.set('redirect', volverA)
   return url.toString()
+}
+
+export type AccionDeIngreso = 'ingresar' | 'crear'
+
+/**
+ * Si esta app ve la sesión de web-auth: tiene las variables de Supabase y su host está bajo el dominio de la cookie
+ * (`VITE_AUTH_COOKIE_DOMAIN`). En los dominios viejos de Vercel (`menyu-cliente*.vercel.app`, los de los QR impresos) no:
+ * el navegador rechaza esa cookie y web-auth no vuelve a `vercel.app`, así que la persona terminaría en "sin acceso".
+ */
+export function comparteLaSesionDeWebAuth(hostname: string = window.location.hostname): boolean {
+  const env = import.meta.env
+  const dominio = env.VITE_AUTH_COOKIE_DOMAIN?.replace(/^\./, '')
+  if (!env.VITE_SUPABASE_URL || !env.VITE_SUPABASE_PUBLISHABLE_KEY || !dominio) return false
+  return hostname === dominio || hostname.endsWith(`.${dominio}`)
+}
+
+export type DestinoDeIngreso = { tipo: 'web-auth'; url: string } | { tipo: 'login-anterior'; ruta: string }
+
+/**
+ * A dónde llevan "Ingresar" y "Registrarme", con la vuelta a esta pantalla: a web-auth si esta app comparte su sesión y,
+ * si no, al login de `/auth` de esta app, que sigue hasta la Fase 5.
+ */
+export function destinoDeIngreso(
+  accion: AccionDeIngreso,
+  ubicacion: Pick<Location, 'href' | 'hostname' | 'pathname' | 'search'> = window.location,
+): DestinoDeIngreso {
+  if (comparteLaSesionDeWebAuth(ubicacion.hostname)) {
+    return { tipo: 'web-auth', url: urlDeIngreso(accion, ubicacion.href) }
+  }
+  const params = new URLSearchParams()
+  if (accion === 'crear') params.set('tab', 'register')
+  params.set('volver', `${ubicacion.pathname}${ubicacion.search}`)
+  return { tipo: 'login-anterior', ruta: `/auth?${params}` }
 }

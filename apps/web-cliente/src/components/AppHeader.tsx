@@ -1,7 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { useCuenta } from '../hooks/useCuenta'
-import { urlDeIngreso } from '../utils/cuenta'
-import { irA } from '../utils/navegar'
+import { useIrAlIngreso } from '../hooks/useIrAlIngreso'
 
 const C = {
   orange: '#E8563A',
@@ -23,12 +22,14 @@ interface AppHeaderProps {
 
 /**
  * El header de las pantallas públicas. Con una cuenta (utils/cuenta.ts), el saludo con su nombre y "Cerrar sesión"; sin
- * ella, ingresar o registrarse en web-auth, que vuelve a esta pantalla (docs/auth/specs/auth.md, Fase 4b). Mientras se
- * lee la sesión no muestra ninguno de los dos, para no hacer parpadear "Ingresar" a quien ya entró.
+ * ella, ingresar o registrarse en web-auth (o en `/auth` donde esta app no comparte su sesión), con la vuelta a esta
+ * pantalla (docs/auth/specs/auth.md, Fase 4b). Mientras se lee la sesión no muestra ninguno de los dos, para no hacer
+ * parpadear "Ingresar" a quien ya entró.
  */
 export function AppHeader({ hideAuthButtons = false }: AppHeaderProps) {
   const navigate = useNavigate()
   const { cargando, cuenta, cerrarSesion } = useCuenta()
+  const irAlIngreso = useIrAlIngreso()
   const nombre = cuenta?.nombre ?? null
 
   const handleLogout = async () => {
@@ -98,7 +99,7 @@ export function AppHeader({ hideAuthButtons = false }: AppHeaderProps) {
           ) : (
             <>
               <button
-                onClick={() => irA(urlDeIngreso('ingresar'))}
+                onClick={() => irAlIngreso('ingresar')}
                 className={BOTON_CHICO}
                 style={{
                   fontFamily: 'Montserrat, sans-serif',
@@ -112,7 +113,7 @@ export function AppHeader({ hideAuthButtons = false }: AppHeaderProps) {
                 Ingresar
               </button>
               <button
-                onClick={() => irA(urlDeIngreso('crear'))}
+                onClick={() => irAlIngreso('crear')}
                 className={BOTON_CHICO}
                 style={{
                   fontFamily: 'Montserrat, sans-serif',

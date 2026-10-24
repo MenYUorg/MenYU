@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
+import { compartirLaSesionDeWebAuth } from '../../test/authClient'
 import { irA } from '../../utils/navegar'
 import { MenuDrawer } from './MenuDrawer'
 
@@ -190,7 +191,7 @@ describe('MenuDrawer', () => {
   describe('iniciar sesión y registrarse (sin cuenta)', () => {
     beforeEach(() => {
       vi.mocked(irA).mockClear()
-      vi.stubEnv('VITE_AUTH_URL', 'https://auth.menyu-app.com')
+      compartirLaSesionDeWebAuth()
     })
     afterEach(() => vi.unstubAllEnvs())
     const vuelta = () => new URLSearchParams({ redirect: window.location.href }).toString()
@@ -210,6 +211,17 @@ describe('MenuDrawer', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Crear cuenta gratis' }))
 
       expect(irA).toHaveBeenCalledWith(`https://auth.menyu-app.com/crear-cuenta?${vuelta()}`)
+    })
+
+    it('donde la app no comparte la sesión de web-auth (un dominio viejo de Vercel), van al /auth de la app', () => {
+      vi.stubEnv('VITE_AUTH_COOKIE_DOMAIN', '.menyu-app.com')
+      const { alCerrar } = renderDrawer({ modo: 'carta' })
+
+      fireEvent.click(screen.getByRole('button', { name: 'Crear cuenta gratis' }))
+
+      expect(screen.getByText('ahora: /auth?tab=register&volver=%2F')).toBeInTheDocument()
+      expect(irA).not.toHaveBeenCalled()
+      expect(alCerrar).toHaveBeenCalled()
     })
   })
 

@@ -8,6 +8,7 @@ import { useComensalStore } from '../../store/comensalStore'
 import { usePublicMenuStore } from '../../store/publicMenuStore'
 import { useSessionStore } from '../../store/sessionStore'
 import { crearMenu, crearPlato, crearPlatoEnDescuento, crearTokenJwt } from '../../test/fixtures'
+import { compartirLaSesionDeWebAuth } from '../../test/authClient'
 import { irA } from '../../utils/navegar'
 import { CartaPage } from './CartaPage'
 
@@ -351,6 +352,7 @@ describe('CartaPage (la carta en modo vista)', () => {
     // En web-auth, que vuelve a esta pantalla (la carta). En jsdom, la URL de la página (window.location).
     it('"Iniciar sesión" lleva al ingreso de web-auth, con la vuelta a la carta', async () => {
       vi.mocked(irA).mockClear()
+      compartirLaSesionDeWebAuth()
       renderCarta()
       await cargada()
 
@@ -362,6 +364,7 @@ describe('CartaPage (la carta en modo vista)', () => {
 
     it('"Crear cuenta gratis" abre el registro de web-auth, también con la vuelta a la carta', async () => {
       vi.mocked(irA).mockClear()
+      compartirLaSesionDeWebAuth()
       renderCarta()
       await cargada()
 

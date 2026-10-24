@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom'
-import { urlDeIngreso } from '../../utils/cuenta'
-import { irA } from '../../utils/navegar'
+import { useIrAlIngreso } from '../../hooks/useIrAlIngreso'
+import type { AccionDeIngreso } from '../../utils/cuenta'
 import { Icono } from '../discovery/Icono'
 import { ImagenLogo } from './ImagenLogo'
 import type { ModoMenu } from './modo'
@@ -70,8 +70,8 @@ interface MenuDrawerProps {
  * aparece, con una animación corta que se apaga si la persona pidió menos movimiento). Después, la cuenta: sin ella,
  * iniciar sesión o crear una; con ella, el saludo con su nombre (y "Cerrar sesión" si se puede). Abajo, las filas: en la
  * mesa lo del pedido (etiquetar, mis pedidos, pagar); en la carta, que no tiene sesión, entrar a una mesa del
- * restaurante o volver al inicio. Iniciar sesión o registrarse es en web-auth, que vuelve a esta misma pantalla (la
- * carta o el menú de la mesa).
+ * restaurante o volver al inicio. Iniciar sesión o registrarse es en web-auth (o, donde esta app no comparte su sesión,
+ * en el login de `/auth`), y vuelve a esta misma pantalla: la carta o el menú de la mesa.
  */
 export function MenuDrawer({
   abierto, onCerrar, modo, restauranteId, nombreRestaurante, direccion, logoUrl,
@@ -80,7 +80,8 @@ export function MenuDrawer({
   const navigate = useNavigate()
   const ir = (ruta: string) => { onCerrar(); navigate(ruta) }
 
-  const irAWebAuth = (accion: 'ingresar' | 'crear') => { onCerrar(); irA(urlDeIngreso(accion)) }
+  const irAlIngreso = useIrAlIngreso()
+  const irAWebAuth = (accion: AccionDeIngreso) => { onCerrar(); irAlIngreso(accion) }
 
   const rutaDelRestaurante = `/restaurante/${encodeURIComponent(restauranteId)}`
   const saludo = modo === 'mesa' && comensalNombre ? `¡Hola, ${comensalNombre}!` : '¡Hola!'

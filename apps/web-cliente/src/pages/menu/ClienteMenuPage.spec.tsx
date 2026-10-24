@@ -7,6 +7,7 @@ import { useCarritoStore } from '../../store/carritoStore'
 import { usePublicMenuStore } from '../../store/publicMenuStore'
 import { useSessionStore } from '../../store/sessionStore'
 import { crearMenu, crearPlato, crearPlatoEnDescuento, crearTokenJwt } from '../../test/fixtures'
+import { compartirLaSesionDeWebAuth } from '../../test/authClient'
 import { irA } from '../../utils/navegar'
 import { ClienteMenuPage } from './ClienteMenuPage'
 
@@ -297,6 +298,7 @@ describe('ClienteMenuPage', () => {
 
       it('sin cuenta ofrece iniciar sesión (en web-auth, con la vuelta al menú de la mesa) y crear una', () => {
         vi.mocked(irA).mockClear()
+        compartirLaSesionDeWebAuth()
         renderMenu(menuCompleto())
 
         expect(screen.getByText('Estás navegando como invitado')).toBeInTheDocument()
@@ -307,6 +309,7 @@ describe('ClienteMenuPage', () => {
 
       it('"Crear cuenta gratis" abre el registro de web-auth', () => {
         vi.mocked(irA).mockClear()
+        compartirLaSesionDeWebAuth()
         renderMenu(menuCompleto())
 
         fireEvent.click(screen.getByRole('button', { name: 'Crear cuenta gratis' }))

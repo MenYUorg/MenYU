@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
-import { cuentaDePrueba, sesionDeSupabase, signOutSimulado } from '../test/authClient'
+import { compartirLaSesionDeWebAuth, cuentaDePrueba, sesionDeSupabase, signOutSimulado } from '../test/authClient'
 import { crearTokenJwt } from '../test/fixtures'
 import { irA } from '../utils/navegar'
 import { AppHeader } from './AppHeader'
@@ -34,7 +34,7 @@ describe('AppHeader', () => {
   beforeEach(() => {
     localStorage.clear()
     vi.mocked(irA).mockClear()
-    vi.stubEnv('VITE_AUTH_URL', 'https://auth.menyu-app.com')
+    compartirLaSesionDeWebAuth()
   })
   afterEach(() => vi.unstubAllEnvs())
 
@@ -57,6 +57,18 @@ describe('AppHeader', () => {
 
       fireEvent.click(screen.getByRole('button', { name: 'Registrarme' }))
       expect(irA).toHaveBeenLastCalledWith(`https://auth.menyu-app.com/crear-cuenta?${vuelta}`)
+    })
+
+    it('donde la app no comparte la sesión de web-auth (un dominio viejo de Vercel, o sin las variables), van al /auth de la app', () => {
+      vi.stubEnv('VITE_SUPABASE_URL', '')
+      renderHeader()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Ingresar' }))
+      expect(screen.getByText('ruta: /auth?volver=%2F')).toBeInTheDocument()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Registrarme' }))
+      expect(screen.getByText('ruta: /auth?tab=register&volver=%2F')).toBeInTheDocument()
+      expect(irA).not.toHaveBeenCalled()
     })
 
     it('el token de una cuenta del personal (del login anterior) no cuenta como sesión', () => {
