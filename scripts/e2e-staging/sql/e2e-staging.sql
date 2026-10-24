@@ -5,7 +5,7 @@
 -- esquema de la app, es una herramienta de prueba de un solo ambiente.
 --
 -- Corre entero en una transacción: si algo falla (por ejemplo, el rol ya existe), no queda nada a medias.
--- La contraseña del rol NO está acá: se pone aparte, con el ALTER ROLE del final (sección 5).
+-- La contraseña del rol NO está acá: se pone aparte, con el ALTER ROLE del final (sección 6).
 --
 -- Qué toca, en una línea: crea un rol nuevo, un schema nuevo `e2e` con dos funciones, y le da al rol SELECT sobre 7
 -- tablas (en `cliente`, solo 3 columnas) y EXECUTE sobre esas dos funciones. No cambia ninguna tabla ni ningún dato.
@@ -228,9 +228,9 @@ $$;
 
 -- ── 5. Permisos ──────────────────────────────────────────────────────────────────────────────────────────────────
 -- Las funciones nuevas se crean ejecutables por PUBLIC (todos los roles): se lo saco a todos, y explícitamente a los
--- roles de la Data API de Supabase, antes de dárselo solo a e2e_staging.
-REVOKE ALL ON FUNCTION e2e.e2e_preparar(text, text) FROM PUBLIC, anon, authenticated;
-REVOKE ALL ON FUNCTION e2e.e2e_limpiar(text) FROM PUBLIC, anon, authenticated;
+-- roles de la API de Supabase (anon, authenticated y service_role), antes de dárselo solo a e2e_staging.
+REVOKE ALL ON FUNCTION e2e.e2e_preparar(text, text) FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION e2e.e2e_limpiar(text) FROM PUBLIC, anon, authenticated, service_role;
 
 -- Ejecución: solo las dos funciones.
 GRANT USAGE ON SCHEMA e2e TO e2e_staging;
@@ -280,12 +280,12 @@ COMMIT;
 --   SELECT column_name FROM information_schema.column_privileges
 --   WHERE grantee = 'e2e_staging' AND table_name = 'cliente' ORDER BY 1;
 --
--- 7.3 Quién puede ejecutar las funciones. Esperado: e2e_staging true; anon y authenticated false.
+-- 7.3 Quién puede ejecutar las funciones. Esperado: e2e_staging true; anon, authenticated y service_role false.
 --
 --   SELECT r.rolname,
 --          has_function_privilege(r.rolname, 'e2e.e2e_preparar(text, text)', 'EXECUTE') AS preparar,
 --          has_function_privilege(r.rolname, 'e2e.e2e_limpiar(text)', 'EXECUTE') AS limpiar
---   FROM pg_roles r WHERE r.rolname IN ('e2e_staging', 'anon', 'authenticated');
+--   FROM pg_roles r WHERE r.rolname IN ('e2e_staging', 'anon', 'authenticated', 'service_role');
 --
 -- 7.4 RLS en las 7 tablas. Esperado: false en todas (si alguna tiene RLS, e2e_staging la vería vacía).
 --
