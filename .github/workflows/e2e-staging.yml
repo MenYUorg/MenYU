@@ -1,0 +1,86 @@
+name: E2E — staging (Supabase)
+
+# E2E del comensal y el mozo contra STAGING: QR → pedido → efectivo → el mozo confirma → cierre, verificando cada paso en
+# la base de staging con el usuario e2e_staging, y la limpieza siempre al final. Diseño: docs/calidad/e2e-supabase.md.
+# Nunca contra producción: scripts/e2e-staging/lib.mjs (erroresDeDestino) corta antes de tocar nada.
+on:
+  workflow_dispatch:
+  # TEMPORAL, solo para la primera corrida a mano antes del merge: un workflow nuevo no se puede despachar desde una rama
+  # que no es main. Se dispara con un push a esta rama (no es la del PR). Se saca antes de mergear.
+  push:
+    branches: [e2e-staging-prueba]
+
+permissions:
+  contents: read
+
+# Una corrida a la vez: cada una tiene su marcador y su mesa, pero comparten el restaurante de prueba.
+concurrency:
+  group: e2e-staging
+  cancel-in-progress: false
+
+jobs:
+  e2e:
+    name: E2E contra staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # La URL de la API es la VITE_API_URL de preview de web-cliente en Vercel, como el smoke (deploy-staging.yml).
+      - name: Resolve staging API URL
+        run: |
+          dir="$RUNNER_TEMP/vercel-cliente"
+          trap 'rm -rf "$dir"' EXIT
+          mkdir -p "$dir"
+          npx vercel@54.6.1 pull --yes --environment=preview --cwd "$dir" --token ${{ secrets.VERCEL_TOKEN }}
+          node scripts/smoke/leer-api-url.mjs "$dir/.vercel/.env.preview.local"
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_CLIENTE }}
+
+      # La URL y la clave pública de Supabase de staging (para el login del mozo) salen del preview de web-staff; la URL de
+      # producción, de su entorno Production, solo para comprobar que no son el mismo proyecto. Los archivos no se imprimen
+      # ni se suben y se borran al terminar el paso.
+      - name: Resolve staging Supabase
+        run: |
+          prev="$RUNNER_TEMP/vercel-staff-preview"
+          prod="$RUNNER_TEMP/vercel-staff-production"
+          trap 'rm -rf "$prev" "$prod"' EXIT
+          mkdir -p "$prev" "$prod"
+          npx vercel@54.6.1 pull --yes --environment=preview --cwd "$prev" --token ${{ secrets.VERCEL_TOKEN }}
+          npx vercel@54.6.1 pull --yes --environment=production --cwd "$prod" --token ${{ secrets.VERCEL_TOKEN }}
+          node scripts/e2e-staging/leer-supabase.mjs "$prev/.vercel/.env.preview.local" "$prod/.vercel/.env.production.local"
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_STAFF }}
+
+      # pg no es dependencia de la raíz del monorepo: se instala fijado (la misma versión que el backend, pnpm-lock.yaml)
+      # solo para este job, en scripts/e2e-staging/node_modules.
+      - name: Install pg
+        run: npm install --prefix scripts/e2e-staging --no-save --no-package-lock --no-audit --no-fund pg@8.20.0
+
+      - name: E2E
+        run: node scripts/e2e-staging/main.mjs
+        env:
+          E2E_STAGING_DB_URL_LECTURA: ${{ secrets.E2E_STAGING_DB_URL_LECTURA }}
+          E2E_STAGING_MOZO_EMAIL: ${{ secrets.E2E_STAGING_MOZO_EMAIL }}
+          E2E_STAGING_MOZO_PASSWORD: ${{ secrets.E2E_STAGING_MOZO_PASSWORD }}
+          E2E_STAGING_RESTAURANTE_ID: ${{ vars.E2E_STAGING_RESTAURANTE_ID }}
+          E2E_STAGING_ITEM_ID: ${{ vars.E2E_STAGING_ITEM_ID }}
+          PROD_HOSTS: ${{ vars.PROD_WEB_ADMIN_URL }},${{ vars.PROD_WEB_CLIENTE_URL }},${{ vars.PROD_WEB_STAFF_URL }},${{ vars.PROD_WEB_AUTH_URL }}
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-staging-${{ github.run_id }}
+          path: resultados/e2e-staging.json
+          if-no-files-found: warn
+          retention-days: 30
