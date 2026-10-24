@@ -81,8 +81,11 @@ Para probar web-auth: cada uno tiene que terminar en su app (`docs/auth/specs/au
 | `varias.pruebas-auth@menyu-app.com` | OWNER de la marca y MOZO del restaurante | el selector de web-auth |
 | `sin-acceso.pruebas-auth@menyu-app.com` | ninguno (sección anterior) | "Tu cuenta no tiene acceso"; desde la Fase 4b, con un `redirect` a web-cliente, vuelve ahí como cliente |
 | `menyuprueba2+fase4b@gmail.com` | ninguno: es una cuenta de cliente (Fase 4b) | lo mismo que la anterior |
+| `menyuprueba2+fase4bstg@gmail.com` | ninguno: es una cuenta de cliente (Fase 4b) | lo mismo que la anterior |
 
 `menyuprueba2+fase4b@gmail.com` se creó el 2026-10-23 desde `/crear-cuenta` (Fase 4b), con el nombre "Ana Fase Cuatro B" y confirmada con el link del mail. Su contraseña está en `STAGING_AUTH_CLIENTE_F4B_PASSWORD`.
+
+`menyuprueba2+fase4bstg@gmail.com` se creó el 2026-10-24 desde `auth.staging.menyu-app.com/crear-cuenta`, ya con la plantilla "Confirm signup" de MenYU, con el nombre "Ana Staging Cuatro B". Se confirmó desde un navegador distinto al del registro. Su contraseña está en `STAGING_AUTH_CLIENTE_STG_PASSWORD`.
 
 `menyuprueba2+fase41@gmail.com` es una cuenta descartable de la entrega 4.1 de la Fase 4 (2026-10-21). Es MOZO de "Restaurante Pruebas Auth": la invitó el OWNER de prueba y se usó para probar la invitación y la recuperación con la cookie. Los mails llegan a la bandeja de `menyuprueba2@gmail.com` (alias `+`). Su contraseña de Supabase está en `STAGING_AUTH_FASE41_PASSWORD`.
 
@@ -127,11 +130,11 @@ El script está en `docs/auth/mozos-faltantes-staging.sql`: deduce qué falta de
 
 ### Probar la 4b (cuenta de cliente) en local (2026-10-23)
 
-Lo mismo que la 4.7, con `apps/web-cliente/.env.local` igual al de web-auth: además de `VITE_API_URL` y `VITE_AUTH_URL`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` y `VITE_AUTH_COOKIE_DOMAIN=.menyu.local`. El backend de la rama en local (el de staging no tiene la 4b), web-auth en el 5173 y web-cliente en el 5176. Lo que agrega:
+Lo mismo que la 4.7, con `apps/web-cliente/.env.local` igual al de web-auth: además de `VITE_API_URL` y `VITE_AUTH_URL`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` y `VITE_AUTH_COOKIE_DOMAIN=.menyu.local`. El backend en local (o el de la rama que se quiera probar), web-auth en el 5173 y web-cliente en el 5176. Lo que agrega:
 
 - **Ingreso de un cliente:** "Ingresar" en `mesa.menyu.local:5176`, con `sin-acceso.pruebas-auth@menyu-app.com`, vuelve a web-cliente con "Hola, …". Abrir una mesa libre con `/check-in?restaurantId=…&tableCode=…` y mirar en la base que `sesion_mesa.cliente_id` sea un `cliente` con su `supabase_user_id`.
 - **El vínculo:** antes de abrir la mesa, un `INSERT INTO cliente (id, nombre, email) VALUES (gen_random_uuid(), 'Cliente Login Anterior', '<el email de la cuenta, en mayúsculas>')`; la mesa tiene que quedar a nombre de ese `cliente`, ahora con la cuenta.
-- **Registro con mail real:** "Registrarme" con un alias `+` de `menyuprueba2@gmail.com`. El mail llega a esa bandeja (Gmail del Chrome aparte, sección "Probar el login con Google"). En staging la plantilla "Confirm signup" de MenYU todavía no está cargada: su link pasa por Supabase y vuelve con un `?code=` que solo se puede canjear en el navegador en el que se creó la cuenta. Por eso hay que **tomar el `href` del mail sin abrirlo** y abrirlo en el navegador del registro.
+- **Registro con mail real:** "Registrarme" con un alias `+` de `menyuprueba2@gmail.com`. El mail llega a esa bandeja (Gmail del Chrome aparte, sección "Probar el login con Google"). Desde el 2026-10-23 el Supabase de staging tiene la plantilla "Confirm signup" de MenYU: el link es la `emailRedirectTo` que mandó web-auth (en local, `auth.menyu.local:5173/confirmar-email?redirect=…`) más `&token_hash=…&type=email`, y se puede abrir en cualquier navegador. Igual conviene **tomar el `href` del mail sin abrirlo** desde el Chrome aparte, para no gastar el link en el navegador equivocado. Antes, con la plantilla por defecto, el link volvía con un `?code=` que solo servía en el navegador del registro.
 - **El Chrome aparte puede no resolver `*.menyu.local`.** Si se abrió sin `--host-resolver-rules`, en vez de reiniciarlo se puede registrar, con playwright-cli conectado por CDP, una ruta que pida esos hosts a `127.0.0.1` y le devuelva a la página la respuesta con su URL original (`context.route(...)` con `route.fetch({ url })` y `route.fulfill`). Así se llegó a la pantalla de Google desde web-cliente. Google pidió un reCAPTCHA, que tiene que resolver una persona.
 - Para volver a abrir una mesa en la base local: `UPDATE sesion_mesa SET estado = 'cerrada', cerrada_en = now() WHERE mesa_id = '<id>' AND estado = 'activa'` y `UPDATE mesa SET estado = 'libre' WHERE id = '<id>'`.
 
