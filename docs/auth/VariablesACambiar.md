@@ -16,7 +16,7 @@ Estado al 2026-10-20: los 6 dominios de Vercel responden y apuntan a sus proyect
 
 - **El servicio de producción de Railway no tiene que estar conectado a GitHub** (*Settings → Source*: desconectado desde el 2026-10-20). Si lo está, un cambio de variables construye y publica el último commit de `main`: así empezó el incidente del 2026-10-20. Desconectado, el cambio redespliega lo último que subió `deploy-production.yml`.
 - **No borrar los dominios viejos** (`*.vercel.app`, `*.up.railway.app`): los QR impresos llevan a `menyu-cliente.vercel.app`, y las preferencias de Mercado Pago ya creadas notifican a la URL vieja de la API.
-- **Las `VITE_*` se fijan en el build.** Cambiarlas en Vercel no alcanza: hay que volver a desplegar. Los proyectos `*-staging` se reconstruyen con cada merge a `main` (o con *Redeploy* en Vercel); los de producción, solo con un tag `vX.Y.Z`.
+- **Las `VITE_*` se fijan en el build.** Cambiarlas en Vercel no alcanza: hay que volver a desplegar. Los proyectos `*-staging` se reconstruyen con cada merge a `main` que toque la app o un paquete del que depende (`scripts/vercel/ignorar-build.sh`; un merge solo de `docs/` no los reconstruye), o con *Redeploy* en Vercel; los de producción, solo con un tag `vX.Y.Z`. En el *Redeploy* de un cambio de variables, destildar "Use project's Ignore Build Step" (y "Use existing Build Cache"): el commit es el mismo del deploy anterior, así que turbo-ignore no ve cambios.
 - **En Railway, cada cambio de variables redespliega el servicio**, y el contenedor corre `prisma migrate deploy` al arrancar. Juntar los cambios de cada paso y desplegar una sola vez.
 - **Producción, con el código de dominios ya desplegado**: el próximo tag (`v1.0.7`), que incluye la rama `fix/dominios-propios`. v1.0.6 (el de la recuperación) no la incluye.
 
@@ -147,7 +147,7 @@ En `menyu-cliente` y `menyu-cliente-staging` las tres de Supabase son de la Fase
 
 El entorno Preview de los proyectos de producción corre en `*.vercel.app`, que está en la Public Suffix List: ahí no se puede poner la cookie de `.staging.menyu-app.com`, así que un preview no comparte sesión y rebota a `auth.staging`, que es donde se inicia. Es lo esperado (`auth.md`, Dominios): el SSO se prueba en staging y en `*.menyu.local`.
 
-**Estado al 2026-10-23:** `menyu-admin` y `menyu-staff` no tienen `VITE_SUPABASE_PUBLISHABLE_KEY` en Production (sí en Preview), y a `menyu-cliente` y `menyu-cliente-staging` les falta esa misma variable en todos sus entornos (las otras tres ya están). Cargarla antes del tag de producción.
+**Estado al 2026-10-25:** completas. El 2026-10-23 faltaba `VITE_SUPABASE_PUBLISHABLE_KEY` en Production de `menyu-admin` y `menyu-staff` y en todos los entornos de `menyu-cliente` y `menyu-cliente-staging`; el equipo la cargó el 2026-10-25. `menyu-cliente-staging` ya se volvió a desplegar con ella; los proyectos de producción la toman con el tag.
 
 **Verificar después del deploy:** en `admin.staging.menyu-app.com`, que el bundle apunte al Supabase de staging y que, sin sesión, mande a `auth.staging.menyu-app.com` con su `redirect`.
 
