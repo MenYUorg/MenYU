@@ -200,7 +200,7 @@ BEGIN
 
   DELETE FROM public.cliente cl
   WHERE cl.id = ANY (v_clientes)
-    AND cl.email IS NULL AND cl.password_hash IS NULL AND cl.supabase_user_id IS NULL
+    AND cl.email IS NULL AND cl.supabase_user_id IS NULL
     AND NOT EXISTS (SELECT 1 FROM public.sesion_mesa s WHERE s.cliente_id = cl.id)
     AND NOT EXISTS (SELECT 1 FROM public.sesion_mesa_cliente smc WHERE smc.cliente_id = cl.id)
     AND NOT EXISTS (SELECT 1 FROM public.pedido_item pi WHERE pi.cliente_id = cl.id)
@@ -238,7 +238,7 @@ GRANT EXECUTE ON FUNCTION e2e.e2e_preparar(text, text) TO e2e_staging;
 GRANT EXECUTE ON FUNCTION e2e.e2e_limpiar(text) TO e2e_staging;
 
 -- Lectura: las 7 tablas del diseño (docs/calidad/e2e-supabase.md:138). De `cliente`, solo id, nombre y fecha: no
--- email, teléfono, password_hash ni supabase_user_id de los clientes reales.
+-- email, teléfono ni supabase_user_id de los clientes reales.
 GRANT USAGE ON SCHEMA public TO e2e_staging;
 GRANT SELECT ON
   public.mesa,
