@@ -1,18 +1,6 @@
-export type UserTipo = 'admin' | 'mozo' | 'cliente'
-export type RolAdmin = 'ROOT' | 'OWNER' | 'GERENTE'
-
-export interface JwtPayload {
-  sub: string
-  email?: string
-  nombre?: string
-  tipo: UserTipo
-  rol?: RolAdmin
-  restauranteId?: string
-  restauranteNombre?: string
-  marcaNombre?: string
-  iat: number
-  exp: number
-}
+// El JWT propio del personal (`UserTipo`, `RolAdmin`, `JwtPayload`, `TokenPair`) y la tabla `Admin` se retiraron en la
+// Fase 5 de docs/auth/specs/auth.md: el personal entra con Supabase. Lo que queda acá del JWT propio es el token de la
+// sesión de mesa, que lo firma el backend (su propia copia, en `auth/guards/session-auth.guard.ts`, es la que vale).
 
 export interface SessionJwtPayload {
   sub: string
@@ -22,18 +10,6 @@ export interface SessionJwtPayload {
   restauranteId: string
   iat: number
   exp: number
-}
-
-export interface TokenPair {
-  accessToken: string
-  refreshToken: string
-}
-
-export interface Admin {
-  id: string
-  marcaId: string | null
-  email: string
-  rol: RolAdmin
 }
 
 export interface Mozo {

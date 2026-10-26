@@ -2,26 +2,8 @@ import type { Rol } from '../auth.types'
 import type { EstadoMesa, ModoSesion } from '../session.types'
 
 // ── Auth ─────────────────────────────────────────────────────────────────────
-
-export interface LoginRequest {
-  email: string
-  password: string
-}
-
-export interface RegisterRequest {
-  nombre: string
-  email: string
-  password: string
-  telefono?: string
-}
-
-export interface GuestRequest {
-  nombre?: string
-}
-
-export interface RefreshTokenRequest {
-  refreshToken: string
-}
+// El login propio (`LoginRequest`, `RegisterRequest`, `GuestRequest`, `RefreshTokenRequest`) se retiró en la Fase 5 de
+// docs/auth/specs/auth.md: el ingreso es web-auth, con Supabase.
 
 /** `POST /auth/invitaciones`. OWNER va con `marcaId`; los demás roles, con `restauranteId`. */
 export interface CrearInvitacionRequest {
