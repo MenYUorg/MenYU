@@ -16,7 +16,7 @@ Estos se crearon el 2026-10-20 contra las tablas viejas (`Admin`, `AdminRestaura
 | GERENTE | `gerente.pruebas-auth@menyu-app.com` |
 | Mozo | `mozo.pruebas-auth@menyu-app.com` |
 
-**Con el merge del PR #416 (Fase 4) dejan de abrir el panel y staff**, que ya no tienen login propio: el acceso lo da la `Membresia`, no la tabla `admin`. Si se entra con una de ellas en `/auth` de web-cliente, la pantalla avisa y manda a web-auth (entrega 4.7). Se reemplazan por las cuentas de Supabase de la sección "Un usuario por rol". Las filas quedan en la base hasta que la Fase 5 retire esas tablas.
+**Ya no existen.** Con el merge del PR #416 (Fase 4) dejaron de abrir el panel y staff, y la Fase 5 borró las tablas `admin` y `admin_restaurante` donde vivían, junto con la pantalla `/auth` de web-cliente por la que se usaban. Las reemplazan las cuentas de Supabase de la sección "Un usuario por rol". Quedan acá solo como historia de cómo se armó el ambiente.
 
 ## Cómo se crearon (2026-10-20)
 
@@ -142,7 +142,7 @@ Lo mismo que la 4.7, con `apps/web-cliente/.env.local` igual al de web-auth: ade
 
 Lo mismo que abajo, más `apps/web-cliente/.env.local` (`VITE_API_URL=/api` y `VITE_AUTH_URL=http://auth.menyu.local:5173`) y su Vite en el 5176. Lo que agrega la entrega:
 
-- **Personal en el login del comensal:** en `mesa.menyu.local:5176/auth`, con una cuenta de personal (sirve `mozo@menyu.com` / `mozo1234` del seed, porque el login legacy sigue en pie), tiene que avisar y terminar en `auth.menyu.local:5173` **sin** `token` ni `refresh` en la URL y sin nada en el localStorage. Con `cliente1@menyu.com` / `cliente1234` entra como siempre.
+- ~~**Personal en el login del comensal:**~~ ya no aplica: la Fase 5 retiró la pantalla `/auth` de web-cliente, que ahora redirige a web-auth para cualquiera. Lo que se prueba es eso: `mesa.menyu.local:5176/auth` tiene que terminar en `auth.menyu.local:5173` con el `redirect` a web-cliente.
 - **Mesa de un restaurante dado de baja:** abrir la mesa 100 (`/check-in?restaurantId=…&tableCode=TEST-QR-SEED-100`), hacer un pedido, dar de baja el restaurante (`UPDATE restaurante SET activo = false WHERE id = '22222222-2222-4222-a222-222222222222'`) y recargar `/menu`: solo "Pagar la cuenta" y "Ver mis pedidos". En `/pagar`, el efectivo responde "Este restaurante no está disponible" y no deja ni `pago` ni `llamado_mozo`. Reactivar al terminar.
 
 ### Probar la entrega 4.5 en local (2026-10-21)
