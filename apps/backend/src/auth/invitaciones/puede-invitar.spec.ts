@@ -1,3 +1,4 @@
+import { ROLES_QUE_PUEDE_INVITAR, type RolQueInvita } from '@menyu/types'
 import { Rol } from '@prisma/client'
 import { puedeInvitar } from './puede-invitar'
 
@@ -26,5 +27,31 @@ describe('puedeInvitar: quién invita a quién (spec de auth, Fase 2 y 4.4)', ()
   ] as const)('%s invita a %s → %s', (_quien, rolInvitado, esperado, invitador) => {
     // Act + Assert
     expect(puedeInvitar(invitador, rolInvitado)).toBe(esperado)
+  })
+
+  /**
+   * web-admin ofrece los roles de `ROLES_QUE_PUEDE_INVITAR` (`@menyu/types`) y el backend decide con `puedeInvitar`.
+   * Eran dos copias a mano y nada las ataba: si una cambiaba, Personal ofrecía algo que terminaba en 403 (o escondía
+   * algo permitido). El backend no importa el paquete en producción —sus tipos salen de Prisma—, así que el vínculo es
+   * este test, que recorre la tabla entera.
+   */
+  describe('dice lo mismo que la tabla que ofrece web-admin (@menyu/types)', () => {
+    const TODOS: Rol[] = ['OWNER', 'GERENTE', 'JEFE_SALON', 'MOZO', 'COCINA']
+    const invitadorCon = (quien: RolQueInvita) =>
+      quien === 'ROOT' ? { esRoot: true, rolesEnAmbito: [] as Rol[] } : { esRoot: false, rolesEnAmbito: [quien] }
+
+    const casos = (Object.keys(ROLES_QUE_PUEDE_INVITAR) as RolQueInvita[]).flatMap((quien) =>
+      TODOS.map((rolInvitado) => [quien, rolInvitado] as const),
+    )
+
+    it.each(casos)('%s → %s', (quien, rolInvitado) => {
+      const loOfrece = ROLES_QUE_PUEDE_INVITAR[quien].includes(rolInvitado)
+
+      expect(puedeInvitar(invitadorCon(quien), rolInvitado)).toBe(loOfrece)
+    })
+
+    it('la tabla cubre todos los roles, y ROOT (si se agrega uno, hay que decidir a quién invita)', () => {
+      expect(Object.keys(ROLES_QUE_PUEDE_INVITAR).sort()).toEqual([...TODOS, 'ROOT'].sort())
+    })
   })
 })

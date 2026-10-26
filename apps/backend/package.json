@@ -43,6 +43,7 @@
     "socket.io": "^4.8.3"
   },
   "devDependencies": {
+    "@menyu/types": "workspace:*",
     "@menyu/config": "workspace:*",
     "@nestjs/cli": "^11.0.21",
     "@nestjs/testing": "^11.1.19",
