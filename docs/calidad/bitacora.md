@@ -845,7 +845,7 @@ Horas en ART (UTC − 3). Desde esta sesión se abrió y se pusheó el #441, y s
 **Respuestas de hoy** (fuera del repo, en `privado/`): 23, 24, 25 y 26. La 25 llegó después de la 26 y se hizo última.
 
 **Pendiente al retomar** (en este orden)
-1. **Demo:** `git pull` en `../MenYU` (quedó atrás del #438). Después, rama, commit del comentario de `discovery.module.ts`, PR, CI y merge en vivo.
+1. **Demo:** `../MenYU` ya está en `b9b6db2`, con el #438. Rama, commit del comentario de `discovery.module.ts`, PR, CI y merge en vivo. Si entra otro PR antes, hacer `git pull`.
 2. **Jira:** cargar el #428 con los datos de arriba, sin ciclo rojo-verde.
 3. **Esta bitácora:**
    - sumar las sesiones del 23/10 al 25/10;
