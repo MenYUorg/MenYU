@@ -67,9 +67,12 @@ jobs:
 
       # Los scripts se niegan a correr sin CONFIRMAR_STAGING=si o si el host es de producción: los de
       # scripts/carga/guardas.mjs más los de las variables PROD_* del repo.
+      # La imagen de k6 no corre como el usuario del runner: sin el chmod no puede escribir el resumen en
+      # resultados/ ("permission denied") y el artifact sale vacío (runs 39981407930, 40100656575, 40105801689).
       - name: k6 — ${{ inputs.escenario }}
         run: |
           mkdir -p resultados
+          chmod 777 resultados
           docker run --rm \
             -v "$GITHUB_WORKSPACE/scripts/carga:/carga:ro" \
             -v "$GITHUB_WORKSPACE/resultados:/resultados" \
