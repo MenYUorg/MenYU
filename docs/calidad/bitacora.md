@@ -734,3 +734,54 @@ Horas en UTC (ART = UTC − 3). Desde esta sesión se mergearon el #408 y el #41
 8. **Jira:** pasar a Jira lo de `privado/jira-bloque-2.md` y actualizar los estados en `jira-bloque.md`.
 9. **Viernes 23/10:** subir los umbrales del gate y aplicar la definición de código nuevo (pendiente desde el 20/10).
 10. Abrir el PR único de esta bitácora después del ensayo.
+
+> Esta lista quedó superada: ver "Pendiente al retomar" en la sección del 26/10.
+
+### 26/10/2026: permiso del reporte de k6 (PR #437), Sonar del 25/10 y Mercado Pago caído
+
+Horas en ART (UTC − 3). Las sesiones del 23/10 al 25/10 (corridas de k6, E2E contra staging #433, plan de pruebas v0.3 #434, v1.3.0) **no tienen entrada** en esta bitácora. Desde esta sesión solo se pusheó la rama `fix/k6-permisos-resultados` (PR #437, borrador) y se corrieron dos pruebas de carga contra staging. No se tocó `main` ni producción, y no se llamó a Mercado Pago.
+
+**k6: el reporte no se guardaba**
+- **Síntoma:** las tres corridas contra staging (humo `39981407930` del 23/10, stress `40100656575` y soak `40105801689` del 24/10) terminaron en verde **sin artifact**.
+- **Causa, en los logs de los tres runs:** k6 no pudo abrir `/resultados/<escenario>-resumen.json` ("permission denied"). La carpeta la crea el usuario del runner y la imagen de k6 corre con otro usuario. Después, `upload-artifact` avisó "No files were found" (`if-no-files-found: warn`), así que el run no falló. No se confirmó con qué usuario corre la imagen: Docker no estaba levantado en la máquina.
+- **Fix:** `chmod 777 resultados` antes del `docker run` (`.github/workflows/carga-k6.yml:75`), commit `6bd3c90`.
+- **Validación,** con `workflow_dispatch --ref fix/k6-permisos-resultados` (sin mergear):
+
+| Escenario | Run | Hora | Requests | Error | p95 | p95 `/health` | Artifact |
+|---|---|---|---|---|---|---|---|
+| Humo | `40319115538` | 08:59 | 141 | 0 % | 272,5 ms | 74,0 ms | `k6-humo-40319115538` |
+| Stress | `40319384572` | 09:01 | 17.686 | 0 % | 253,6 ms | 48,2 ms | `k6-stress-40319384572` |
+
+  Ningún umbral fallado y checks al 100 %. Los dos artifacts se bajaron y traen el JSON, sin la URL ni el host de staging. El soak no se repitió.
+- **`docs/calidad/k6.md`** (commit `a3ed5aa`): sin `[PENDIENTE]`. Tabla con las cinco corridas. El p95 de `/health` de las del 23/10 y 24/10 queda "Sin dato": no está en el texto del log y el JSON no se guardó. Los umbrales no se cambiaron.
+- **Plan de pruebas v0.4** (commit `beb7bb2`): `docs/calidad/plan-de-pruebas.md` reemplazado por el archivo que pasó Coty, sin cambios (mismo blob, `a5e9a33`).
+- **PR #437:** los tres commits. CI de `a3ed5aa` en verde (`40321194680`). Al mergearlo no se dispara `Deploy — Staging`: `docs/**` y `carga-k6.yml` están en su `paths-ignore`.
+
+**Sonar sobre `main`**
+- **Último análisis:** 25/10 22:00:59, sobre `8b98247` (HEAD de `main`).
+- **Números:** cobertura de líneas **87,3 %** (3.663 sin cubrir de 28.736), de condiciones **93,2 %** (525 de 7.763), mixta 88,5 %; duplicación **2,2 %** (1.006 líneas); gate **OK** con las 6 condiciones (`new_coverage` 97,9 %, `new_duplicated_lines_density` 0,1 %).
+- **Umbrales del gate:** ya están en 80 % y 5 % sobre código nuevo.
+- **Código nuevo:** sigue en `previous_version`, del 17/10 (`periods` de `project_status`).
+- **Tests:** Sonar no los cuenta (no recibe reportes de ejecución). Del CI de `8b98247` (`40251793396`): 4.120 unitarios (backend 2.051 más 43 salteados, web-admin 853, web-cliente 791, web-staff 211, web-auth 93, `auth-client` 80, `ui` 41), 13 e2e del backend y 78 de los scripts.
+
+**Mercado Pago caído: revisión del código para el plan de contingencia**
+- Solo lectura del código de `main` (`8b98247`) y del SDK `mercadopago@3.2.0` instalado. **Sin cambios de código** y sin pruebas contra la sandbox ni producción. El resultado quedó en la sección 8 del plan de pruebas v0.4.
+- **Preferencia que falla:** sin configuración propia, rigen los valores del SDK: 10 s de timeout y un reintento a los 2 s para timeouts, errores de red y 5xx. Si falla, el backend cancela el pago pendiente recién creado y relanza el error (`payments.service.ts:363-376`). Sin filtro global, la respuesta sería un 500 genérico (no se probó). El comensal recupera el botón.
+- **Pendiente sin webhook:** `registrarCobro` cancela los MP pendientes de más de 10 minutos sin preguntar, y los más nuevos con confirmación (409) (`sessions.service.ts:38` y `:667-681`). web-staff maneja el 409; web-admin no (`PagosPage.tsx:114-129`).
+- **Riesgos sin cubrir:**
+  - el webhook responde 200 antes de procesar (`payments.controller.ts:76-81`): si la consulta a Mercado Pago falla, el pago queda pendiente y Mercado Pago no reintenta;
+  - un pago aprobado después de cancelado solo deja un warning, "devolución manual pendiente" (`payments.service.ts:460-472`);
+  - no hay conciliación automática.
+
+**Estado local**
+- `../MenYU-k6-permisos`: worktree nuevo, en `fix/k6-permisos-resultados`.
+- `../MenYU`: sigue en `docs/plan-pruebas-v0.2` (`4812d45`, PR #432 cerrado sin mergear), con `plan-de-pruebas-v0.2.md`, `-v0.3.md` y `-v0.4.md` sin trackear. No se tocó.
+- Esta bitácora: la rama `docs/bitacora-ensayo-produccion` sigue sin push. La de `main` llega solo hasta el 17/10 (PRs #376 y #378).
+
+**Pendiente al retomar** (en este orden)
+1. **Coty:** revisar y mergear el #437.
+2. **Dejar `../MenYU` en `main` y limpia** antes de la demo: decidir qué hacer con los tres archivos sin trackear y con la rama `docs/plan-pruebas-v0.2`.
+3. **Código nuevo de Sonar:** sigue en "Previous version" (17/10).
+4. **Umbrales de k6:** decidir si se ajustan con las mediciones.
+5. **Mercado Pago:** las tres limitaciones de la sección 8 del plan quedan para la tesis.
+6. **Esta bitácora:** sumar las sesiones del 23/10 al 25/10 y abrir el PR único.
