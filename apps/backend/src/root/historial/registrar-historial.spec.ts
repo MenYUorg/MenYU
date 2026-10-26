@@ -1,6 +1,5 @@
 import { readFileSync, readdirSync } from 'fs'
 import { join } from 'path'
-import * as bcrypt from 'bcryptjs'
 import {
   AccionRoot,
   ENTIDAD_DE_ACCION,
@@ -120,7 +119,9 @@ describe('registrarEnHistorial', () => {
   // Muchos textos vienen de la base y los eligió otra persona (el nombre de la marca lo pone su dueño): rechazarlos le
   // impediría a ROOT dar de baja esa marca. Se ajustan, y un hash nunca se guarda.
   describe('lo que ajusta antes de guardar (nunca un hash; nada de más de 500 caracteres)', () => {
-    const hash = bcrypt.hashSync('Clave-Secreta-77', 4)
+    // Un hash de bcrypt con la forma real ($2a$ + coste + 53 caracteres de sal y digest), escrito a mano:
+    // desde la Fase 5 el backend ya no depende de bcryptjs.
+    const hash = '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy'
     const guardado = async (entrada: EntradaHistorial) => {
       const tx = clienteFalso()
       await registrarEnHistorial(tx as never, entrada)

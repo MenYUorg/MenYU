@@ -6,7 +6,6 @@ import { CuentaDeClienteService } from '../auth/supabase/cuenta-de-cliente.servi
 import { DivisionService } from '../comensales/division.service'
 import { MenyuGateway } from '../gateway/menyu.gateway'
 import { PrismaService } from '../prisma/prisma.service'
-import { UsersService } from '../users/users.service'
 import { SessionsService } from './sessions.service'
 
 // Límite de intentos fallidos al entrar a una mesa: el PIN (4 dígitos) se cuenta por
@@ -16,6 +15,7 @@ const mockPrisma = {
   mesa: { findFirst: jest.fn(), update: jest.fn() },
   sesionMesa: { findFirst: jest.fn(), create: jest.fn() },
   sesionMesaCliente: { count: jest.fn(), findUnique: jest.fn(), create: jest.fn() },
+  cliente: { create: jest.fn() },
   $transaction: jest.fn((operaciones: Promise<unknown>[]) => Promise.all(operaciones)),
 }
 
@@ -43,6 +43,7 @@ const MESAS: Record<string, object> = {
 const CODIGO_DE_LA_MESA: Record<string, string> = { 'mesa-A': '111', 'mesa-B': '222' }
 
 function configurarBase() {
+  mockPrisma.cliente.create.mockResolvedValue({ id: 'invitado-1' })
   mockPrisma.mesa.findFirst.mockImplementation(({ where }) =>
     Promise.resolve(MESAS[where.qrToken ? `qr:${where.qrToken}` : `pin:${where.pin}`] ?? null),
   )
@@ -74,7 +75,6 @@ describe('SessionsService.open: límite de intentos fallidos', () => {
       providers: [
         SessionsService,
         { provide: PrismaService, useValue: mockPrisma },
-        { provide: UsersService, useValue: { createCliente: jest.fn().mockResolvedValue({ id: 'invitado-1' }) } },
         { provide: JwtService, useValue: { sign: jest.fn().mockReturnValue('jwt'), verify: jest.fn() } },
         { provide: MenyuGateway, useValue: {} },
         { provide: DivisionService, useValue: {} },

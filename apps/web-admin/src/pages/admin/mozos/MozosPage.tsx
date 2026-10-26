@@ -408,8 +408,8 @@ function DetailContent({
   editNombre, setEditNombre,
   editTelefono, setEditTelefono,
   editLoading, editError,
-  onAssign, onUnassign, onGuardar, onEliminar, onCancelEdit,
-  canEdit, sinCuenta, eliminarError,
+  onAssign, onUnassign, onGuardar, onCancelEdit,
+  canEdit,
 }: {
   mozo: MozoItem
   mesasDelMozo: MesaAsignada[]
@@ -422,12 +422,9 @@ function DetailContent({
   onAssign: (mesa: MesaConMozos) => void
   onUnassign: (mesa: MesaAsignada) => void
   onGuardar: () => void
-  onEliminar: () => void
   onCancelEdit: () => void
   canEdit: boolean
   /** Un mozo sin cuenta se puede borrar; con cuenta, el acceso se quita desde Personal (el backend da 409). */
-  sinCuenta: boolean
-  eliminarError: string
 }) {
   const tileGrid: React.CSSProperties = {
     display: 'grid',
@@ -579,27 +576,9 @@ function DetailContent({
           </div>
 
           <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 16 }}>
-            {sinCuenta ? (
-              <button
-                onClick={onEliminar}
-                style={{
-                  border: `1px solid ${C.red}`, borderRadius: 8, background: 'white',
-                  color: C.red, fontFamily: 'Inter, sans-serif', fontWeight: 600,
-                  fontSize: 13, padding: '8px 16px', cursor: 'pointer',
-                }}
-              >
-                Eliminar mozo
-              </button>
-            ) : (
-              <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: C.sub, margin: 0 }}>
-                Para que deje de trabajar acá, quitale el acceso desde Personal.
-              </p>
-            )}
-            {eliminarError && (
-              <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: C.red, margin: '10px 0 0' }}>
-                {eliminarError}
-              </p>
-            )}
+            <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: C.sub, margin: 0 }}>
+              Para que deje de trabajar acá, quitale el acceso desde Personal.
+            </p>
           </div>
         </div>
       )}
@@ -650,9 +629,7 @@ export function MozosPage() {
   const [selectedMozo, setSelectedMozo] = useState<MozoItem | null>(null)
   const [mesasDelMozo, setMesasDelMozo] = useState<MesaAsignada[]>([])
   const [editExpanded, setEditExpanded] = useState(false)
-  const [confirmEliminar,   setConfirmEliminar]   = useState(false)
   const [confirmQuitarMesa, setConfirmQuitarMesa] = useState<{ mesaId: string; numero: string } | null>(null)
-  const [eliminarError,     setEliminarError]     = useState('')
 
   const [editNombre,   setEditNombre]   = useState('')
   const [editTelefono, setEditTelefono] = useState('')
@@ -798,7 +775,6 @@ export function MozosPage() {
     setEditNombre(mozo.nombre)
     setEditTelefono(mozo.telefono ?? '')
     setEditError('')
-    setEliminarError('')
   }
 
   /* ── mesa assign / unassign ──────────────────────────────────────────────── */
@@ -854,31 +830,12 @@ export function MozosPage() {
     }
   }
 
-  async function ejecutarEliminar() {
-    if (!selectedMozo) return
-    setConfirmEliminar(false)
-    setEliminarError('')
-    try {
-      await api.mozos.delete(selectedMozo.id)
-      setMozos((prev) => prev.filter((m) => m.id !== selectedMozo.id))
-      setSelectedMozo(null)
-      if (selectedRestauranteId) await loadPersonal(selectedRestauranteId)
-    } catch (e) {
-      setEliminarError(e instanceof ApiError ? e.message : 'Error al eliminar mozo')
-    }
-  }
-
   /* ── memos ───────────────────────────────────────────────────────────────── */
 
   const mesasDisponibles = useMemo(() => {
     const ids = new Set(mesasDelMozo.map((m) => m.id))
     return todasLasMesas.filter((m) => !ids.has(m.id))
   }, [mesasDelMozo, todasLasMesas])
-
-  const mozosSinCuenta = useMemo(
-    () => new Set((personal?.sinCuenta ?? []).map((m) => m.mozoId)),
-    [personal],
-  )
 
   /* ── render ──────────────────────────────────────────────────────────────── */
 
@@ -1122,7 +1079,6 @@ export function MozosPage() {
             onAssign={handleAssignMesa}
             onUnassign={handleUnassignMesa}
             onGuardar={handleGuardar}
-            onEliminar={() => { setEliminarError(''); setConfirmEliminar(true) }}
             onCancelEdit={() => {
               setEditExpanded(false)
               setEditNombre(selectedMozo.nombre)
@@ -1130,8 +1086,6 @@ export function MozosPage() {
               setEditError('')
             }}
             canEdit={isOwner}
-            sinCuenta={mozosSinCuenta.has(selectedMozo.id)}
-            eliminarError={eliminarError}
           />
         )}
       </div>
@@ -1145,17 +1099,6 @@ export function MozosPage() {
         colorConfirmar={C.red}
         onConfirmar={() => { void ejecutarQuitarAcceso() }}
         onCancelar={() => setPorQuitar(null)}
-      />
-
-      {/* ── Modal: Confirmar eliminar mozo (solo sin cuenta) ── */}
-      <ModalConfirmar
-        open={confirmEliminar}
-        titulo="¿Eliminar mozo?"
-        mensaje="Esta acción no se puede deshacer. Se borra su perfil de mozo, que no tiene cuenta."
-        labelConfirmar="Sí, eliminar"
-        colorConfirmar={C.red}
-        onConfirmar={() => { void ejecutarEliminar() }}
-        onCancelar={() => setConfirmEliminar(false)}
       />
 
       {/* ── Modal: Confirmar quitar mesa ── */}

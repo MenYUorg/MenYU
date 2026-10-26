@@ -1,35 +1,24 @@
 import { Controller, Get, SetMetadata, UseGuards } from '@nestjs/common'
 import { AppModule } from '../app.module'
-import { Roles, ROLES_KEY } from '../common/decorators/roles.decorator'
-import { RolesGuard } from '../common/guards/roles.guard'
 import { guardsDe, metadatoDe, RutaDeLaApp, rutasDe, rutasDeLaApp } from '../test/rutas'
 import { RequiereRol, RequiereRolEn } from './decorators/requiere-rol.decorator'
 import { RequiereRoot } from './decorators/requiere-root.decorator'
-import { RequiresTipo, TIPOS_KEY } from './decorators/requires-tipo.decorator'
-import { JwtAuthGuard } from './guards/jwt-auth.guard'
 import { MembresiaGuard, ORIGEN_RESTAURANTE_KEY, OrigenDelRestaurante, ROLES_MEMBRESIA_KEY } from './guards/membresia.guard'
 import { RootGuard } from './guards/root.guard'
 import { SessionAuthGuard } from './guards/session-auth.guard'
 import { SupabaseAuthGuard } from './guards/supabase-auth.guard'
-import { TipoGuard } from './guards/tipo.guard'
 
 /**
  * Recorre el enrutador de TODA la aplicación (entrega 4.2 de docs/auth/specs/auth.md). Cada ruta es pública (con la lista de
  * abajo), de la sesión de mesa (SessionAuthGuard) o del personal con el token de Supabase (SupabaseAuthGuard), y ninguna mezcla
  * dos sistemas: es la garantía de "no mezclar los dos sistemas en un mismo endpoint" (CLAUDE.md).
  *
- * Desde la entrega 4.4 ninguna ruta del personal usa el JWT legacy (JwtAuthGuard, RolesGuard, TipoGuard, `@Roles` ni
- * `@RequiresTipo`), que siguen existiendo hasta la Fase 5: no se puede sumar una ruta nueva con ellos.
+ * La Fase 5 borró el JWT legacy del personal (JwtAuthGuard, RolesGuard, TipoGuard, `@Roles` y `@RequiresTipo`): ya no hay
+ * con qué declarar una ruta así.
  */
 
 /** Sin autenticación, a propósito. */
 const PUBLICAS = [
-  // Login legacy (JWT propio): se quita en la Fase 5.
-  'POST /auth/login',
-  'POST /auth/register',
-  'POST /auth/guest',
-  'POST /auth/refresh',
-  'POST /auth/logout',
   // Discovery, la carta y la apertura de la sesión de mesa (QR o PIN).
   'GET /discovery',
   'GET /discovery/buscar',
@@ -95,7 +84,6 @@ const CON_PERMISO_EN_EL_SERVICE = [
   'PATCH /mesas/:id/pin',
   'GET /mozos/:id',
   'PATCH /mozos/:id',
-  'DELETE /mozos/:id',
   'POST /mozos/:mozoId/mesas',
   'DELETE /mozos/:mozoId/mesas/:mesaId',
   'GET /mozos/:mozoId/mesas',
@@ -117,11 +105,9 @@ const texto = (r: RutaDeLaApp) => `${r.metodo} ${r.ruta}`
 const ordenadas = (lista: string[]) => [...lista].sort((a, b) => a.localeCompare(b))
 const tiene = (r: RutaDeLaApp, guard: unknown) => guardsDe(r).includes(guard)
 
-/** Los sistemas de autenticación que usa una ruta. `@Roles` o `@RequiresTipo` sin su guard también cuentan como legacy. */
+/** Los sistemas de autenticación que usa una ruta. */
 function sistemasDe(r: RutaDeLaApp): string[] {
   const sistemas: string[] = []
-  const legacy = [JwtAuthGuard, RolesGuard, TipoGuard].some((g) => tiene(r, g))
-  if (legacy || [ROLES_KEY, TIPOS_KEY].some((clave) => metadatoDe(r, clave) !== undefined)) sistemas.push('JWT legacy')
   if (tiene(r, SessionAuthGuard)) sistemas.push('sesión de mesa')
   if (tiene(r, SupabaseAuthGuard)) sistemas.push('Supabase')
   return sistemas
@@ -161,7 +147,8 @@ describe('el enrutador: un solo sistema de autenticación por ruta', () => {
   const textos = rutas.map(texto)
 
   it('recorre los controllers de toda la aplicación (si no, los demás tests de acá no prueban nada)', () => {
-    expect(rutas.length).toBeGreaterThan(120)
+    // Hoy son 121. El número exacto no importa: el tope es para que un recorrido vacío o cortado no pase inadvertido.
+    expect(rutas.length).toBeGreaterThan(110)
     expect(textos).toEqual(expect.arrayContaining(['GET /auth/me', 'POST /sessions/close', 'GET /discovery', 'GET /root/historial']))
   })
 
@@ -173,11 +160,7 @@ describe('el enrutador: un solo sistema de autenticación por ruta', () => {
   })
 
   it('cada ruta es pública, de la sesión de mesa o del personal con Supabase', () => {
-    const sinClasificar = rutas.filter((r) => {
-      const sistemas = sistemasDe(r)
-      if (sistemas.length === 0) return !PUBLICAS.includes(texto(r))
-      return sistemas.includes('JWT legacy')
-    })
+    const sinClasificar = rutas.filter((r) => sistemasDe(r).length === 0 && !PUBLICAS.includes(texto(r)))
 
     expect(sinClasificar.map(texto)).toEqual([])
   })
@@ -188,13 +171,7 @@ describe('el enrutador: un solo sistema de autenticación por ruta', () => {
     expect(conGuards.map(texto)).toEqual([])
   })
 
-  it('ninguna ruta usa el JWT legacy (JwtAuthGuard, RolesGuard, TipoGuard, @Roles ni @RequiresTipo)', () => {
-    const conLegacy = rutas.filter((r) => sistemasDe(r).includes('JWT legacy'))
-
-    expect(conLegacy.map(texto)).toEqual([])
-  })
-
-  it('ninguna ruta mezcla dos sistemas (JWT legacy, sesión de mesa, Supabase)', () => {
+  it('ninguna ruta mezcla dos sistemas (sesión de mesa, Supabase)', () => {
     const mezcladas = rutas.filter((r) => sistemasDe(r).length > 1)
 
     expect(mezcladas.map((r) => `${texto(r)}: ${sistemasDe(r).join(' + ')}`)).toEqual([])
@@ -223,11 +200,7 @@ describe('el enrutador: un solo sistema de autenticación por ruta', () => {
   describe('las comprobaciones detectan una ruta mal declarada si alguien la agregara', () => {
     @Controller('mal')
     class MalDeclarado {
-      @Get('legacy') @UseGuards(JwtAuthGuard) legacy() {}
-      @Get('roles-sin-guard') @Roles('OWNER') rolesSinGuard() {}
-      @Get('tipo-sin-guard') @RequiresTipo('mozo') tipoSinGuard() {}
       @Get('mezcla') @UseGuards(SessionAuthGuard, SupabaseAuthGuard) mezcla() {}
-      @Get('legacy-y-supabase/:restauranteId') @UseGuards(RolesGuard) @RequiereRol('OWNER') legacyYSupabase() {}
       @Get('orden/:restauranteId')
       @SetMetadata(ROLES_MEMBRESIA_KEY, ['OWNER'])
       @SetMetadata(ORIGEN_RESTAURANTE_KEY, { param: 'restauranteId' })
@@ -239,6 +212,7 @@ describe('el enrutador: un solo sistema de autenticación por ruta', () => {
       @Get('root-fuera') @RequiereRoot() rootFuera() {}
       @Get('bien/:restauranteId') @RequiereRol('OWNER') bien() {}
       @Get('bien-query') @RequiereRolEn({ query: 'restauranteId' }, 'GERENTE') bienPorQuery() {}
+      @Get('sin-guards') sinGuards() {}
     }
 
     @Controller('root/prueba')
@@ -252,15 +226,12 @@ describe('el enrutador: un solo sistema de autenticación por ruta', () => {
     const consola = rutasDe(ConsolaMalDeclarada)
     const ruta = (lista: RutaDeLaApp[], t: string) => lista.find((r) => texto(r) === t) as RutaDeLaApp
 
-    it('el JWT legacy, también con @Roles o @RequiresTipo sueltos', () => {
-      expect(sistemasDe(ruta(malas, 'GET /mal/legacy'))).toEqual(['JWT legacy'])
-      expect(sistemasDe(ruta(malas, 'GET /mal/roles-sin-guard'))).toEqual(['JWT legacy'])
-      expect(sistemasDe(ruta(malas, 'GET /mal/tipo-sin-guard'))).toEqual(['JWT legacy'])
-    })
-
     it('dos sistemas en la misma ruta', () => {
       expect(sistemasDe(ruta(malas, 'GET /mal/mezcla'))).toEqual(['sesión de mesa', 'Supabase'])
-      expect(sistemasDe(ruta(malas, 'GET /mal/legacy-y-supabase/:restauranteId'))).toEqual(['JWT legacy', 'Supabase'])
+    })
+
+    it('una ruta sin ningún guard no se clasifica (y tiene que estar en PUBLICAS)', () => {
+      expect(sistemasDe(ruta(malas, 'GET /mal/sin-guards'))).toEqual([])
     })
 
     it('MembresiaGuard antes de SupabaseAuthGuard, y RootGuard sin él', () => {

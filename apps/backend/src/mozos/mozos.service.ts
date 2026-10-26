@@ -61,14 +61,6 @@ export class MozosService {
    * Da de baja a un mozo del login propio (sin cuenta de Supabase). Solo el OWNER. A uno con cuenta se le quita
    * el acceso desde Personal, que también borra su membresía.
    */
-  async remove(id: string, usuario: UsuarioAutenticado) {
-    const mozo = await this.getConPermiso(id, usuario, ['OWNER'])
-    if (mozo.usuarioId) {
-      throw new ConflictException('Este mozo tiene cuenta: quitale el acceso desde Personal')
-    }
-    await this.prisma.mozo.update({ where: { id }, data: { activo: false } })
-  }
-
   async assignMesa(mozoId: string, mesaId: string, usuario: UsuarioAutenticado) {
     const mozo = await this.getConPermiso(mozoId, usuario)
 

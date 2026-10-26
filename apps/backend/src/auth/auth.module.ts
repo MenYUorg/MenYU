@@ -1,26 +1,9 @@
 import { Module } from '@nestjs/common'
-import { JwtModule } from '@nestjs/jwt'
-import { PassportModule } from '@nestjs/passport'
-import { AuthService } from './auth.service'
 import { AuthController } from './auth.controller'
-import { JwtStrategy } from './strategies/jwt.strategy'
-import { JwtAuthGuard } from './guards/jwt-auth.guard'
-import { TipoGuard } from './guards/tipo.guard'
-import { UsersModule } from '../users/users.module'
 
+// Solo GET /auth/me. El guard y el AccesoService vienen de SupabaseAuthModule, que es @Global.
+// El login propio (Admin, Mozo y Cliente con passwordHash) se retiró en la Fase 5 de docs/auth/specs/auth.md.
 @Module({
-  imports: [
-    UsersModule,
-    PassportModule,
-    JwtModule.registerAsync({
-      useFactory: () => ({
-        secret: process.env.JWT_SECRET!,
-        signOptions: { expiresIn: '8h' },
-      }),
-    }),
-  ],
-  providers: [AuthService, JwtStrategy, JwtAuthGuard, TipoGuard],
   controllers: [AuthController],
-  exports: [JwtAuthGuard, TipoGuard],
 })
 export class AuthModule {}

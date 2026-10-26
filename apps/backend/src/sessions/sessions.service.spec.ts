@@ -9,7 +9,6 @@ import {
 import { JwtService } from '@nestjs/jwt'
 import { LIMITE_CODIGO_SESION, SessionsService } from './sessions.service'
 import { PrismaService } from '../prisma/prisma.service'
-import { UsersService } from '../users/users.service'
 import { MenyuGateway } from '../gateway/menyu.gateway'
 import { DivisionService } from '../comensales/division.service'
 import { AccesoService } from '../auth/supabase/acceso.service'
@@ -44,12 +43,10 @@ const mockPrisma = {
   mozo: {
     findUnique: jest.fn(),
   },
+  cliente: {
+    create: jest.fn(),
+  },
   $transaction: jest.fn(),
-}
-
-const mockUsers = {
-  findClienteById: jest.fn(),
-  createCliente: jest.fn(),
 }
 
 const mockJwt = {
@@ -75,13 +72,6 @@ const mockCuentas = {
 const TOKEN_DE_SUPABASE = [
   Buffer.from(JSON.stringify({ alg: 'ES256', kid: 'clave-del-proyecto', typ: 'JWT' })).toString('base64url'),
   Buffer.from(JSON.stringify({ sub: '6f1c2a40-2222-4a1b-9c3d-000000000001' })).toString('base64url'),
-  'firma',
-].join('.')
-
-/** El del login de `/auth` de web-cliente (JWT_SECRET, HS256). */
-const TOKEN_DEL_LOGIN_ANTERIOR = [
-  Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url'),
-  Buffer.from(JSON.stringify({ sub: 'cli-1', tipo: 'cliente' })).toString('base64url'),
   'firma',
 ].join('.')
 
@@ -117,7 +107,6 @@ const SESION_ACTIVA = {
   estado: 'activa',
 }
 
-const CLIENTE = { id: 'cli-1', nombre: 'Cliente Test' }
 const INVITADO = { id: 'guest-1', nombre: 'Invitado' }
 
 describe('SessionsService', () => {
@@ -128,7 +117,6 @@ describe('SessionsService', () => {
       providers: [
         SessionsService,
         { provide: PrismaService, useValue: mockPrisma },
-        { provide: UsersService, useValue: mockUsers },
         { provide: JwtService,   useValue: mockJwt     },
         { provide: MenyuGateway, useValue: mockGateway },
         { provide: DivisionService, useValue: mockDivision },
@@ -140,7 +128,7 @@ describe('SessionsService', () => {
     service = module.get(SessionsService)
     jest.clearAllMocks()
     mockJwt.sign.mockReturnValue('mock.session.jwt')
-    mockUsers.createCliente.mockResolvedValue(INVITADO)
+    mockPrisma.cliente.create.mockResolvedValue(INVITADO)
   })
 
   // ── generateCodigoSesion ──────────────────────────────────────────────
@@ -172,83 +160,59 @@ describe('SessionsService', () => {
   // ── resolveClienteId ─────────────────────────────────────────────────
 
   describe('resolveClienteId', () => {
-    it('JWT válido y cliente en BD → devuelve el clienteId del JWT', async () => {
-      mockJwt.verify.mockReturnValue({ sub: 'cli-1', tipo: 'cliente' })
-      mockUsers.findClienteById.mockResolvedValue(CLIENTE)
+    const INVITADO_NUEVO = { data: { nombre: 'Invitado' } }
 
-      const id = await (service as any).resolveClienteId('Bearer valid.jwt.token')
+    it('token de la cuenta de Supabase → el Cliente de esa cuenta, sin crear un invitado', async () => {
+      mockCuentas.clienteDe.mockResolvedValue('cli-supabase')
 
-      expect(id).toBe('cli-1')
-      expect(mockUsers.createCliente).not.toHaveBeenCalled()
+      const id = await (service as any).resolveClienteId(`Bearer ${TOKEN_DE_SUPABASE}`)
+
+      expect(id).toBe('cli-supabase')
+      expect(mockCuentas.clienteDe).toHaveBeenCalledWith(TOKEN_DE_SUPABASE)
+      expect(mockPrisma.cliente.create).not.toHaveBeenCalled()
     })
 
-    it('JWT válido pero cliente no existe en BD → crea invitado', async () => {
-      mockJwt.verify.mockReturnValue({ sub: 'cli-inexistente', tipo: 'cliente' })
-      mockUsers.findClienteById.mockResolvedValue(null)
+    it('token de Supabase que no sirve (vencido, de otro proyecto) → invitado', async () => {
+      mockCuentas.clienteDe.mockResolvedValue(null)
 
-      const id = await (service as any).resolveClienteId('Bearer valid.jwt.token')
+      const id = await (service as any).resolveClienteId(`Bearer ${TOKEN_DE_SUPABASE}`)
 
-      expect(mockUsers.createCliente).toHaveBeenCalledWith({ nombre: 'Invitado' })
       expect(id).toBe('guest-1')
+      expect(mockPrisma.cliente.create).toHaveBeenCalledWith(INVITADO_NUEVO)
     })
 
-    it('JWT expirado → crea invitado', async () => {
-      mockJwt.verify.mockImplementation(() => { throw new Error('jwt expired') })
+    // El login de `/auth` de web-cliente se retiró en la Fase 5: su token (HS256, firmado con JWT_SECRET) ya no
+    // identifica a nadie. CuentaDeClienteService lo rechaza porque solo acepta ES256 y RS256.
+    it('un token del login anterior (HS256) entra como invitado', async () => {
+      const tokenHs256 = [
+        Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url'),
+        Buffer.from(JSON.stringify({ sub: 'cli-1', tipo: 'cliente' })).toString('base64url'),
+        'firma',
+      ].join('.')
+      mockCuentas.clienteDe.mockResolvedValue(null)
 
-      const id = await (service as any).resolveClienteId('Bearer expired.token')
+      const id = await (service as any).resolveClienteId(`Bearer ${tokenHs256}`)
 
-      expect(mockUsers.createCliente).toHaveBeenCalledWith({ nombre: 'Invitado' })
       expect(id).toBe('guest-1')
+      expect(mockJwt.verify).not.toHaveBeenCalled()
+      expect(mockPrisma.cliente.create).toHaveBeenCalledWith(INVITADO_NUEVO)
     })
 
-    it('JWT malformado → crea invitado', async () => {
-      mockJwt.verify.mockImplementation(() => { throw new Error('invalid token') })
+    it('token malformado → invitado', async () => {
+      mockCuentas.clienteDe.mockResolvedValue(null)
 
       const id = await (service as any).resolveClienteId('Bearer not-a-jwt')
 
-      expect(mockUsers.createCliente).toHaveBeenCalledWith({ nombre: 'Invitado' })
       expect(id).toBe('guest-1')
+      expect(mockPrisma.cliente.create).toHaveBeenCalledWith(INVITADO_NUEVO)
     })
 
-    it('sin header → crea invitado', async () => {
+    it('sin header → invitado, sin preguntarle a Supabase', async () => {
       const id = await (service as any).resolveClienteId(undefined)
 
-      expect(mockUsers.createCliente).toHaveBeenCalledWith({ nombre: 'Invitado' })
       expect(id).toBe('guest-1')
-    })
-
-    describe('con la cuenta de Supabase (Fase 4b)', () => {
-      it('token de Supabase → el Cliente de esa cuenta, sin pasar por JWT_SECRET ni crear un invitado', async () => {
-        mockCuentas.clienteDe.mockResolvedValue('cli-supabase')
-
-        const id = await (service as any).resolveClienteId(`Bearer ${TOKEN_DE_SUPABASE}`)
-
-        expect(id).toBe('cli-supabase')
-        expect(mockCuentas.clienteDe).toHaveBeenCalledWith(TOKEN_DE_SUPABASE)
-        expect(mockJwt.verify).not.toHaveBeenCalled()
-        expect(mockUsers.createCliente).not.toHaveBeenCalled()
-      })
-
-      it('token de Supabase que no sirve (vencido, de otro proyecto) → invitado, sin probarlo con JWT_SECRET', async () => {
-        mockCuentas.clienteDe.mockResolvedValue(null)
-
-        const id = await (service as any).resolveClienteId(`Bearer ${TOKEN_DE_SUPABASE}`)
-
-        expect(id).toBe('guest-1')
-        expect(mockJwt.verify).not.toHaveBeenCalled()
-        expect(mockUsers.createCliente).toHaveBeenCalledWith({ nombre: 'Invitado' })
-      })
-
-      it('el token del login anterior (HS256) sigue con JWT_SECRET y no llega a Supabase', async () => {
-        mockJwt.verify.mockReturnValue({ sub: 'cli-1', tipo: 'cliente' })
-        mockUsers.findClienteById.mockResolvedValue(CLIENTE)
-
-        const id = await (service as any).resolveClienteId(`Bearer ${TOKEN_DEL_LOGIN_ANTERIOR}`)
-
-        expect(id).toBe('cli-1')
-        expect(mockJwt.verify).toHaveBeenCalledWith(TOKEN_DEL_LOGIN_ANTERIOR)
-        expect(mockCuentas.clienteDe).not.toHaveBeenCalled()
-      })
+      expect(mockCuentas.clienteDe).not.toHaveBeenCalled()
+      expect(mockPrisma.cliente.create).toHaveBeenCalledWith(INVITADO_NUEVO)
     })
   })
 
@@ -279,7 +243,7 @@ describe('SessionsService', () => {
 
         await expect(service.open({ tableCode: 'qr-no-existe' })).rejects.toThrow(NotFoundException)
 
-        expect(mockUsers.createCliente).not.toHaveBeenCalled()
+        expect(mockPrisma.cliente.create).not.toHaveBeenCalled()
       })
 
       it('pin inexistente → no se crea ningún cliente invitado', async () => {
@@ -287,16 +251,15 @@ describe('SessionsService', () => {
 
         await expect(service.open({ restauranteId: 'rest-1', pin: '9999' })).rejects.toThrow(NotFoundException)
 
-        expect(mockUsers.createCliente).not.toHaveBeenCalled()
+        expect(mockPrisma.cliente.create).not.toHaveBeenCalled()
       })
 
       it('con un JWT, una mesa inexistente tampoco consulta al cliente', async () => {
         mockPrisma.mesa.findFirst.mockResolvedValue(null)
 
-        await expect(service.open({ tableCode: 'qr-no-existe' }, 'Bearer valid.jwt.token')).rejects.toThrow(NotFoundException)
+        await expect(service.open({ tableCode: 'qr-no-existe' }, `Bearer ${TOKEN_DE_SUPABASE}`)).rejects.toThrow(NotFoundException)
 
-        expect(mockJwt.verify).not.toHaveBeenCalled()
-        expect(mockUsers.findClienteById).not.toHaveBeenCalled()
+        expect(mockCuentas.clienteDe).not.toHaveBeenCalled()
       })
 
       it('QR de otro restaurante → no se crea ningún cliente invitado ni se mira la sesión', async () => {
@@ -304,7 +267,7 @@ describe('SessionsService', () => {
 
         await expect(service.open({ tableCode: 'qr-abc', restauranteId: 'otro-rest' })).rejects.toThrow(ConflictException)
 
-        expect(mockUsers.createCliente).not.toHaveBeenCalled()
+        expect(mockPrisma.cliente.create).not.toHaveBeenCalled()
         expect(mockPrisma.sesionMesa.findFirst).not.toHaveBeenCalled()
         expect(mockPrisma.sesionMesa.create).not.toHaveBeenCalled()
       })
@@ -324,7 +287,7 @@ describe('SessionsService', () => {
             for (let i = 0; i < LIMITE_CODIGO_SESION.maxFallos; i++) {
               await unirseConCodigo('999').catch(() => undefined)
             }
-            mockUsers.createCliente.mockClear()
+            mockPrisma.cliente.create.mockClear()
           },
         ],
       ])('modo seguro %s → %i y no crea al cliente invitado', async (_caso, estado, codigoSesion, preparar) => {
@@ -339,7 +302,7 @@ describe('SessionsService', () => {
         // Assert
         expect(error).toBeInstanceOf(HttpException)
         expect((error as HttpException).getStatus()).toBe(estado)
-        expect(mockUsers.createCliente).not.toHaveBeenCalled()
+        expect(mockPrisma.cliente.create).not.toHaveBeenCalled()
         expect(mockPrisma.sesionMesaCliente.create).not.toHaveBeenCalled()
       })
     })
@@ -457,7 +420,7 @@ describe('SessionsService', () => {
 
         await expect(service.open({ restauranteId: 'otro-rest', pin: '1234' })).rejects.toThrow('Mesa no encontrada')
 
-        expect(mockUsers.createCliente).not.toHaveBeenCalled()
+        expect(mockPrisma.cliente.create).not.toHaveBeenCalled()
       })
     })
 
@@ -483,7 +446,7 @@ describe('SessionsService', () => {
           new ForbiddenException('Este restaurante no está disponible'),
         )
 
-        expect(mockUsers.createCliente).not.toHaveBeenCalled()
+        expect(mockPrisma.cliente.create).not.toHaveBeenCalled()
         expect(mockPrisma.sesionMesa.create).not.toHaveBeenCalled()
         expect(mockPrisma.$transaction).not.toHaveBeenCalled()
         expect(mockPrisma.mesa.update).not.toHaveBeenCalled()
@@ -621,9 +584,8 @@ describe('SessionsService', () => {
       expect(mockPrisma.sesionMesaCliente.create).not.toHaveBeenCalled()
     })
 
-    it('JWT válido en header → reutiliza clienteId existente, no crea invitado', async () => {
-      mockJwt.verify.mockReturnValue({ sub: 'cli-1', tipo: 'cliente' })
-      mockUsers.findClienteById.mockResolvedValue(CLIENTE)
+    it('token de la cuenta en el header → reutiliza su clienteId, no crea invitado', async () => {
+      mockCuentas.clienteDe.mockResolvedValue('cli-1')
       mockPrisma.mesa.findFirst.mockResolvedValue(MESA_ABIERTA)
       mockPrisma.sesionMesa.findFirst.mockResolvedValue(null)
       mockPrisma.sesionMesa.create.mockResolvedValue({ id: 'nueva-sesion', codigoSesion: '042' })
@@ -632,9 +594,9 @@ describe('SessionsService', () => {
         { id: 'mesa-1', estado: 'ocupada' },
       ])
 
-      const result = await service.open({ tableCode: 'qr-abc' }, 'Bearer valid.jwt.token')
+      const result = await service.open({ tableCode: 'qr-abc' }, `Bearer ${TOKEN_DE_SUPABASE}`)
 
-      expect(mockUsers.createCliente).not.toHaveBeenCalled()
+      expect(mockPrisma.cliente.create).not.toHaveBeenCalled()
       expect(result.clienteId).toBe('cli-1')
     })
 
@@ -658,7 +620,7 @@ describe('SessionsService', () => {
         }),
       })
       expect(mockJwt.sign).toHaveBeenCalledWith(expect.objectContaining({ sub: 'cli-supabase', tipo: 'cliente' }))
-      expect(mockUsers.createCliente).not.toHaveBeenCalled()
+      expect(mockPrisma.cliente.create).not.toHaveBeenCalled()
     })
 
     it('con la cuenta de Supabase, una mesa que no existe no llega a resolver la cuenta', async () => {

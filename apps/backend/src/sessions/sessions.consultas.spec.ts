@@ -7,7 +7,6 @@ import { CuentaDeClienteService } from '../auth/supabase/cuenta-de-cliente.servi
 import { DivisionService } from '../comensales/division.service'
 import { MenyuGateway } from '../gateway/menyu.gateway'
 import { PrismaService } from '../prisma/prisma.service'
-import { UsersService } from '../users/users.service'
 import { SessionsService } from './sessions.service'
 
 import { CUENTAS } from '../test/acceso-de-test'
@@ -50,7 +49,6 @@ describe('SessionsService: cierre y consultas del staff', () => {
     prisma.mesa.update.mockResolvedValue({})
     service = new SessionsService(
       prisma as unknown as PrismaService,
-      {} as UsersService,
       {} as JwtService,
       gateway as unknown as MenyuGateway,
       {} as DivisionService,

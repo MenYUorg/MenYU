@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common'
 import { JwtModule } from '@nestjs/jwt'
 import { PrismaModule } from '../prisma/prisma.module'
-import { UsersModule } from '../users/users.module'
 import { GatewayModule } from '../gateway/gateway.module'
 import { ComensalesModule } from '../comensales/comensales.module'
 import { SessionsService } from './sessions.service'
@@ -10,7 +9,6 @@ import { SessionsController } from './sessions.controller'
 @Module({
   imports: [
     PrismaModule,
-    UsersModule,
     GatewayModule,
     ComensalesModule,
     JwtModule.registerAsync({

@@ -123,40 +123,6 @@ describe('MozosService', () => {
     })
   })
 
-  describe('remove (solo el OWNER y solo un mozo sin cuenta)', () => {
-    it('da de baja (activo: false) a un mozo del login propio', async () => {
-      // Arrange
-      prisma.mozo.findUnique.mockResolvedValue(MOZO)
-
-      // Act
-      await service.remove('mozo-1', OWNER)
-
-      // Assert
-      expect(prisma.mozo.update).toHaveBeenCalledWith({ where: { id: 'mozo-1' }, data: { activo: false } })
-      expect(prisma.mozo.delete).not.toHaveBeenCalled()
-    })
-
-    it('un mozo con cuenta de Supabase responde 409: el acceso se quita desde Personal', async () => {
-      // Arrange
-      prisma.mozo.findUnique.mockResolvedValue({ ...MOZO, usuarioId: 'usuario-mozo' })
-
-      // Act + Assert
-      await expect(service.remove('mozo-1', OWNER)).rejects.toThrow(
-        new ConflictException('Este mozo tiene cuenta: quitale el acceso desde Personal'),
-      )
-      expect(prisma.mozo.update).not.toHaveBeenCalled()
-    })
-
-    it('el GERENTE recibe 403', async () => {
-      // Arrange
-      prisma.mozo.findUnique.mockResolvedValue(MOZO)
-
-      // Act + Assert
-      await expect(service.remove('mozo-1', GERENTE)).rejects.toThrow(ForbiddenException)
-      expect(prisma.mozo.update).not.toHaveBeenCalled()
-    })
-  })
-
   describe('asignación de mesas', () => {
     beforeEach(() => {
       prisma.mozo.findUnique.mockResolvedValue(MOZO)

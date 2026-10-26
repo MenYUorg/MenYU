@@ -42,16 +42,6 @@ export class MozosController {
     return this.mozos.update(id, dto, usuario)
   }
 
-  @Delete(':id')
-  @Personal()
-  @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Dar de baja a un mozo sin cuenta (solo el OWNER); a uno con cuenta, desde Personal' })
-  @ApiResponse({ status: 204 })
-  @ApiResponse({ status: 409, description: 'El mozo tiene cuenta' })
-  async remove(@Param('id') id: string, @UsuarioActual() usuario: UsuarioAutenticado) {
-    await this.mozos.remove(id, usuario)
-  }
-
   @Post(':mozoId/mesas')
   @Personal()
   @HttpCode(HttpStatus.CREATED)

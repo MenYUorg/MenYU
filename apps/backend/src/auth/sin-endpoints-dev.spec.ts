@@ -5,7 +5,6 @@ import { INestApplication } from '@nestjs/common'
 import { PATH_METADATA } from '@nestjs/common/constants'
 import { Test } from '@nestjs/testing'
 import { AuthController } from './auth.controller'
-import { AuthService } from './auth.service'
 import { SupabaseAuthGuard } from './guards/supabase-auth.guard'
 import { AccesoService } from './supabase/acceso.service'
 
@@ -15,16 +14,13 @@ import { AccesoService } from './supabase/acceso.service'
 describe('no hay endpoints de desarrollo', () => {
   describe('AuthController', () => {
     let app: INestApplication
-    const mockAuth = { login: jest.fn() }
+    const mockAcceso = { perfil: jest.fn() }
     const permitir = { canActivate: () => true }
 
     beforeAll(async () => {
       const moduleRef = await Test.createTestingModule({
         controllers: [AuthController],
-        providers: [
-          { provide: AuthService, useValue: mockAuth },
-          { provide: AccesoService, useValue: {} },
-        ],
+        providers: [{ provide: AccesoService, useValue: mockAcceso }],
       })
         .overrideGuard(SupabaseAuthGuard).useValue(permitir)
         .compile()
@@ -39,7 +35,7 @@ describe('no hay endpoints de desarrollo', () => {
 
     beforeEach(() => {
       jest.clearAllMocks()
-      mockAuth.login.mockResolvedValue({ accessToken: 'a', refreshToken: 'r' })
+      mockAcceso.perfil.mockResolvedValue({ email: 'a@b.com', esRoot: false, membresias: [] })
     })
 
     it.each(['seed', 'admin', 'mozo', 'root'])('POST /auth/dev/%s no existe', async (nombre) => {
@@ -55,11 +51,11 @@ describe('no hay endpoints de desarrollo', () => {
       expect(res.status).toBe(404)
     })
 
-    it('el 404 no es porque la prueba esté mal armada: una ruta de verdad (login) sí responde', async () => {
-      const res = await request(app.getHttpServer()).post('/auth/login').send({ email: 'a@b.com', password: 'x' })
+    it('el 404 no es porque la prueba esté mal armada: una ruta de verdad (/auth/me) sí responde', async () => {
+      const res = await request(app.getHttpServer()).get('/auth/me')
 
       expect(res.status).toBe(200)
-      expect(mockAuth.login).toHaveBeenCalledTimes(1)
+      expect(mockAcceso.perfil).toHaveBeenCalledTimes(1)
     })
 
     it('ninguna ruta del controller tiene "dev" en el camino', () => {
@@ -71,8 +67,8 @@ describe('no hay endpoints de desarrollo', () => {
       expect(rutas.filter((ruta) => /(^|\/)dev(\/|$)/i.test(ruta))).toEqual([])
     })
 
-    it('el service ya no tiene los métodos dev*', () => {
-      const metodos = Object.getOwnPropertyNames(AuthService.prototype).filter((nombre) => /^dev[A-Z]/.test(nombre))
+    it('el controller ya no tiene los métodos dev*', () => {
+      const metodos = Object.getOwnPropertyNames(AuthController.prototype).filter((nombre) => /^dev[A-Z]/.test(nombre))
 
       expect(metodos).toEqual([])
     })

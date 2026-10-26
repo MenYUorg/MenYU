@@ -12,7 +12,6 @@ describe('endpoints de mozos', () => {
     findAll: jest.fn(),
     findOne: jest.fn(),
     update: jest.fn(),
-    remove: jest.fn(),
     assignMesa: jest.fn(),
     unassignMesa: jest.fn(),
     getMesas: jest.fn(),
@@ -114,29 +113,15 @@ describe('endpoints de mozos', () => {
       expect(mozos.update).not.toHaveBeenCalled()
     })
 
-    it('DELETE /mozos/:id responde 204 sin cuerpo', async () => {
-      // Arrange
-      mozos.remove.mockResolvedValue(undefined)
-
-      // Act
-      const res = await api.pedir('delete', '/mozos/mozo-1', { cuenta: CUENTAS.OWNER_A })
-
-      // Assert
-      expect(res.status).toBe(204)
-      expect(res.text).toBe('')
-      expect(mozos.remove).toHaveBeenCalledWith('mozo-1', CUENTAS.OWNER_A)
-    })
-
     it('sin token 401 y sin Usuario 403', async () => {
       // Act
       const anonimo = await api.pedir('get', '/mozos/mozo-1')
-      const sinUsuario = await api.pedir('delete', '/mozos/mozo-1', { cuenta: SIN_USUARIO })
+      const sinUsuario = await api.pedir('get', '/mozos/mozo-1', { cuenta: SIN_USUARIO })
 
       // Assert
       expect(anonimo.status).toBe(401)
       expect(sinUsuario.status).toBe(403)
       expect(mozos.findOne).not.toHaveBeenCalled()
-      expect(mozos.remove).not.toHaveBeenCalled()
     })
   })
 

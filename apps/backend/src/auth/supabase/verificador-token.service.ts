@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common'
-import { createRemoteJWKSet, decodeProtectedHeader, JWTPayload, jwtVerify, JWTVerifyGetKey } from 'jose'
+import { createRemoteJWKSet, JWTPayload, jwtVerify, JWTVerifyGetKey } from 'jose'
 
 /** Claves públicas del proyecto de Supabase (JWKS). Los tests lo reemplazan por un JWKS local. */
 export const JWKS_SUPABASE = Symbol('JWKS_SUPABASE')
@@ -10,20 +10,11 @@ export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{1
 // Errores de jose que vienen de no poder bajar el JWKS, no de un token malo.
 export const FALLAS_DEL_JWKS = new Set(['ERR_JWKS_TIMEOUT', 'ERR_JWKS_INVALID', 'ERR_JOSE_GENERIC'])
 
-/** Las JWT Signing Keys asimétricas del proyecto. El JWT propio (`JWT_SECRET`) es HS256. */
-const ALGORITMOS_DE_SUPABASE = ['ES256', 'RS256']
-
 /**
- * Si el encabezado del token dice que lo firmó Supabase. No verifica nada: solo elige con qué verificarlo donde
- * conviven los dos tokens del comensal (`POST /sessions/open`, hasta la Fase 5).
+ * Las JWT Signing Keys asimétricas del proyecto. `claims` acepta solo estos algoritmos, así que un token firmado
+ * con otra cosa (por ejemplo el HS256 del token de sesión de mesa) no verifica.
  */
-export function esTokenDeSupabase(token: string): boolean {
-  try {
-    return ALGORITMOS_DE_SUPABASE.includes(decodeProtectedHeader(token).alg ?? '')
-  } catch {
-    return false
-  }
-}
+const ALGORITMOS_DE_SUPABASE = ['ES256', 'RS256']
 
 /** Falta `SUPABASE_URL`: no se puede verificar ningún token. */
 export class SupabaseNoConfiguradoError extends Error {
