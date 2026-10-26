@@ -773,15 +773,21 @@ Horas en ART (UTC − 3). Las sesiones del 23/10 al 25/10 (corridas de k6, E2E c
   - un pago aprobado después de cancelado solo deja un warning, "devolución manual pendiente" (`payments.service.ts:460-472`);
   - no hay conciliación automática.
 
-**Estado local**
-- `../MenYU-k6-permisos`: worktree nuevo, en `fix/k6-permisos-resultados`.
-- `../MenYU`: sigue en `docs/plan-pruebas-v0.2` (`4812d45`, PR #432 cerrado sin mergear), con `plan-de-pruebas-v0.2.md`, `-v0.3.md` y `-v0.4.md` sin trackear. No se tocó.
-- Esta bitácora: la rama `docs/bitacora-ensayo-produccion` sigue sin push. La de `main` llega solo hasta el 17/10 (PRs #376 y #378).
+**Después del merge del #437** (10:14, merge `2c77111`)
+- **El plan v0.4 entró sin corregir:** la corrección de la sección 8 y de la cita a un archivo que no está en el repo va en un PR aparte.
+- **`../MenYU` en `main`:** al día con `origin/main` (`2c77111`). Los tres `plan-de-pruebas-v0.X.md` sin trackear se movieron, sin borrarlos, a `C:UsersCOTYSDesktopMenYU-planes-sueltos-2026-10-26`, después de comprobar que eran copias exactas de blobs que ya están en git.
+  - La rama `docs/plan-pruebas-v0.2` sigue existiendo, en local y en el remoto.
+- **Cambio para la demo:** un comentario en `apps/backend/src/discovery/discovery.module.ts:6`, sin commitear en `../MenYU`.
+  - `main` no acepta push directo: el ruleset 16770555 exige PR y los dos checks, con la rama al día. El commit de la demo tiene que ir por rama y PR.
+  - Al mergearlo se dispara `Deploy — Staging`, porque `apps/backend/src/**` no está en el `paths-ignore`.
+- **Esta bitácora:** se pusheó y se abrió su PR. Las sesiones del 23/10 al 25/10 siguen sin entrada.
 
 **Pendiente al retomar** (en este orden)
-1. **Coty:** revisar y mergear el #437.
-2. **Dejar `../MenYU` en `main` y limpia** antes de la demo: decidir qué hacer con los tres archivos sin trackear y con la rama `docs/plan-pruebas-v0.2`.
+1. **Demo:** commit del comentario de `discovery.module.ts` en una rama, PR y merge en vivo.
+2. **Plan de pruebas:** revisar y mergear el PR de la corrección de la sección 8.
 3. **Código nuevo de Sonar:** sigue en "Previous version" (17/10).
 4. **Umbrales de k6:** decidir si se ajustan con las mediciones.
-5. **Mercado Pago:** las tres limitaciones de la sección 8 del plan quedan para la tesis.
-6. **Esta bitácora:** sumar las sesiones del 23/10 al 25/10 y abrir el PR único.
+5. **Mercado Pago:** las limitaciones de la sección 8 del plan quedan para la tesis.
+6. **Esta bitácora:**
+   - sumar las sesiones del 23/10 al 25/10;
+   - actualizar la tabla "Estado actual", que sigue con datos del 22/10.
