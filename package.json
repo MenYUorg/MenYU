@@ -6,7 +6,14 @@
     "dev": "turbo run dev",
     "lint": "turbo run lint",
     "sonar": "sonar-scanner-npm",
-    "typecheck": "turbo run typecheck"
+    "typecheck": "turbo run typecheck",
+    "test:unitarias": "turbo run test --filter=@menyu/api --filter=@menyu/web-admin --filter=@menyu/web-cliente --filter=@menyu/web-staff --filter=@menyu/web-auth --filter=@menyu/ui --filter=@menyu/auth-client && node --test scripts/smoke/lib.test.mjs scripts/carga/guardas.test.mjs \"scripts/e2e-staging/*.test.mjs\"",
+    "test:integracion": "pnpm --filter @menyu/api test:e2e:local",
+    "test:smoke": "node --env-file-if-exists=.env.smoke scripts/smoke/smoke.mjs",
+    "test:todo": "pnpm test:unitarias && pnpm test:integracion && pnpm test:smoke",
+    "carga:humo": "gh workflow run carga-k6.yml -f escenario=humo",
+    "carga:stress": "gh workflow run carga-k6.yml -f escenario=stress",
+    "carga:soak": "gh workflow run carga-k6.yml -f escenario=soak"
   },
   "devDependencies": {
     "react": "19.0.0",
