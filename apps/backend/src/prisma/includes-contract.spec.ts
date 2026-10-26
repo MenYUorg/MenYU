@@ -54,7 +54,11 @@ function erroresDeSelect(modelo: string, select: Record<string, unknown>): strin
   return erroresDeArgs(modelo, { select }, modelo)
 }
 
-/** Los tokens de Mercado Pago (`mp*`) y las contraseñas. */
+/**
+ * Los tokens de Mercado Pago (`mp*`) y cualquier hash de contraseña. La Fase 5 de auth retiró los `passwordHash`,
+ * así que hoy ningún modelo tiene uno: queda en el patrón para que, si alguna vez vuelve una columna así, ningún
+ * select la devuelva sin que este contrato lo marque.
+ */
 const SENSIBLE = /^mp[A-Z]|^passwordHash$/
 
 /** Las columnas sensibles de un modelo: las que trae una relación seleccionada entera. */
@@ -151,6 +155,8 @@ describe('contrato include ↔ schema de Prisma', () => {
     })
 
     it('el buscador de campos sensibles los encuentra nombrados en cualquier nivel', () => {
+      // `passwordHash` ya no existe en el schema (Fase 5 de auth): se nombra igual para comprobar que el patrón
+      // sigue atajando una columna así en un nivel anidado.
       const select = { id: true, mpAccessToken: true, mozos: { select: { nombre: true, passwordHash: true } } }
 
       expect(camposSensibles('Restaurante', select)).toEqual(['mpAccessToken', 'mozos.passwordHash'])
@@ -159,8 +165,8 @@ describe('contrato include ↔ schema de Prisma', () => {
     it('y en una relación seleccionada entera (con true o con un where sin select)', () => {
       const select = { id: true, mozos: true, marca: { select: { restaurantes: { where: { activo: true } } } } }
 
+      // `mozos` entero ya no trae nada sensible: era su `passwordHash`.
       expect(camposSensibles('Restaurante', select)).toEqual([
-        'mozos.passwordHash',
         'marca.restaurantes.mpAccessToken',
         'marca.restaurantes.mpRefreshToken',
         'marca.restaurantes.mpUserId',
@@ -176,7 +182,6 @@ describe('contrato include ↔ schema de Prisma', () => {
         'marca.restaurantes.mpRefreshToken',
         'marca.restaurantes.mpUserId',
         'marca.restaurantes.mpTokenExpiresAt',
-        'marca.restaurantes.mozos.passwordHash',
       ])
     })
   })

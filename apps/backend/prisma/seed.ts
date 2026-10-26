@@ -1,12 +1,7 @@
 import 'dotenv/config'
 import { PrismaClient } from '@prisma/client'
-import * as bcrypt from 'bcryptjs'
 
 const prisma = new PrismaClient()
-
-// Mismo factor de costo que auth.service.ts (BCRYPT_ROUNDS, no exportada).
-// Si cambia allá, cambiarlo acá.
-const BCRYPT_ROUNDS = 10
 
 // IDs UUID v4 válidos (version=4, variant=a)
 const MARCA_ID  = '11111111-1111-4111-a111-111111111111'
@@ -43,14 +38,11 @@ const MARCA2_ID = 'eeeeeeee-0001-4001-a001-000000000001'
 const REST2_ID  = 'eeeeeeee-0002-4002-a002-000000000002'
 const MESA4_ID  = 'eeeeeeee-0003-4003-a003-000000000003'
 
-// Usuarios
-const ADMIN_ROOT_ID    = 'dddddddd-0001-4001-a001-000000000001'
-const ADMIN_OWNER_ID   = 'dddddddd-0002-4002-a002-000000000002'
-const MOZO_ID          = 'dddddddd-0003-4003-a003-000000000003'
-const CLIENTE1_ID      = 'dddddddd-0004-4004-a004-000000000004'
-const CLIENTE2_ID      = 'dddddddd-0005-4005-a005-000000000005'
-const ADMIN_GERENTE_ID = 'dddddddd-0006-4006-a006-000000000006'
-const ADMIN_OWNER2_ID  = 'dddddddd-0007-4007-a007-000000000007'
+// Usuarios. Las cuentas con contraseña propia (`admin`, y los `password_hash` de `mozo` y `cliente`) se
+// retiraron en la Fase 5 de docs/auth/specs/auth.md: el personal entra por Supabase y el cliente, si quiere.
+const MOZO_ID     = 'dddddddd-0003-4003-a003-000000000003'
+const CLIENTE1_ID = 'dddddddd-0004-4004-a004-000000000004'
+const CLIENTE2_ID = 'dddddddd-0005-4005-a005-000000000005'
 
 // Usuarios de Supabase Auth (docs/auth/specs/auth.md). En local no hay Supabase Auth: el supabaseUserId
 // es un UUID fijo que no existe en ningún proyecto. Para iniciar sesión hay que reemplazarlo por el
@@ -58,14 +50,13 @@ const ADMIN_OWNER2_ID  = 'dddddddd-0007-4007-a007-000000000007'
 const USUARIO_OWNER_ID       = 'ffffffff-0001-4001-a001-000000000001'
 const OWNER_SUPABASE_USER_ID = 'ffffffff-0002-4002-a002-000000000002'
 
-// Credenciales del seed (entorno local — nunca usar en QA ni producción)
-const CRED_ROOT     = { email: 'root@menyu.com',     password: 'root1234'    }
-const CRED_OWNER    = { email: 'owner@menyu.com',    password: 'owner1234'   }
-const CRED_GERENTE  = { email: 'gerente@menyu.com',  password: 'gerente1234' }
-const CRED_OWNER2   = { email: 'owner2@menyu.com',   password: 'owner21234'  }
-const CRED_MOZO     = { email: 'mozo@menyu.com',     password: 'mozo1234'    }
-const CRED_CLIENTE1 = { email: 'cliente1@menyu.com', password: 'cliente1234' }
-const CRED_CLIENTE2 = { email: 'cliente2@menyu.com', password: 'cliente1234' }
+// Emails del seed (entorno local). Ya no hay contraseñas: la sesión la da Supabase.
+// Los de `mozo` y `cliente` siguen sirviendo para probar los vínculos por email: invitar a `mozo@menyu.com`
+// como MOZO engancha ese perfil, y registrar `cliente1@menyu.com` en web-auth recupera su historial de mesas.
+const EMAIL_OWNER    = 'owner@menyu.com'
+const EMAIL_MOZO     = 'mozo@menyu.com'
+const EMAIL_CLIENTE1 = 'cliente1@menyu.com'
+const EMAIL_CLIENTE2 = 'cliente2@menyu.com'
 
 async function main() {
   await prisma.marca.upsert({
@@ -295,63 +286,9 @@ async function main() {
   }
 
   // ── Usuarios ─────────────────────────────────────────────────
-  // Admin y Cliente tienen email @unique → se upsertean por email.
+  // Cliente tiene email @unique → se upsertea por email.
   // Mozo.email es String? sin @unique → se upsertea por id.
-  // update vacío: bcrypt genera un salt distinto por corrida, así que
-  // re-seedear no debe reescribir hashes ya persistidos.
-
-  await prisma.admin.upsert({
-    where: { email: CRED_ROOT.email },
-    update: {},
-    create: {
-      id: ADMIN_ROOT_ID,
-      email: CRED_ROOT.email,
-      passwordHash: await bcrypt.hash(CRED_ROOT.password, BCRYPT_ROUNDS),
-      rol: 'ROOT',
-    },
-  })
-
-  await prisma.admin.upsert({
-    where: { email: CRED_OWNER.email },
-    update: {},
-    create: {
-      id: ADMIN_OWNER_ID,
-      marcaId: MARCA_ID,
-      email: CRED_OWNER.email,
-      passwordHash: await bcrypt.hash(CRED_OWNER.password, BCRYPT_ROUNDS),
-      rol: 'OWNER',
-    },
-  })
-
-  const gerente = await prisma.admin.upsert({
-    where: { email: CRED_GERENTE.email },
-    update: {},
-    create: {
-      id: ADMIN_GERENTE_ID,
-      marcaId: MARCA_ID,
-      email: CRED_GERENTE.email,
-      passwordHash: await bcrypt.hash(CRED_GERENTE.password, BCRYPT_ROUNDS),
-      rol: 'GERENTE',
-    },
-  })
-
-  await prisma.adminRestaurante.upsert({
-    where: { adminId_restauranteId: { adminId: gerente.id, restauranteId: REST_ID } },
-    update: {},
-    create: { adminId: gerente.id, restauranteId: REST_ID },
-  })
-
-  await prisma.admin.upsert({
-    where: { email: CRED_OWNER2.email },
-    update: {},
-    create: {
-      id: ADMIN_OWNER2_ID,
-      marcaId: MARCA2_ID,
-      email: CRED_OWNER2.email,
-      passwordHash: await bcrypt.hash(CRED_OWNER2.password, BCRYPT_ROUNDS),
-      rol: 'OWNER',
-    },
-  })
+  // `update: {}` en todos: re-seedear no pisa lo que ya haya en la base.
 
   await prisma.mozo.upsert({
     where: { id: MOZO_ID },
@@ -360,43 +297,32 @@ async function main() {
       id: MOZO_ID,
       restauranteId: REST_ID,
       nombre: 'Mozo Seed',
-      email: CRED_MOZO.email,
-      passwordHash: await bcrypt.hash(CRED_MOZO.password, BCRYPT_ROUNDS),
+      email: EMAIL_MOZO,
       activo: true,
     },
   })
 
   await prisma.cliente.upsert({
-    where: { email: CRED_CLIENTE1.email },
+    where: { email: EMAIL_CLIENTE1 },
     update: {},
-    create: {
-      id: CLIENTE1_ID,
-      nombre: 'Cliente Uno',
-      email: CRED_CLIENTE1.email,
-      passwordHash: await bcrypt.hash(CRED_CLIENTE1.password, BCRYPT_ROUNDS),
-    },
+    create: { id: CLIENTE1_ID, nombre: 'Cliente Uno', email: EMAIL_CLIENTE1 },
   })
 
   await prisma.cliente.upsert({
-    where: { email: CRED_CLIENTE2.email },
+    where: { email: EMAIL_CLIENTE2 },
     update: {},
-    create: {
-      id: CLIENTE2_ID,
-      nombre: 'Cliente Dos',
-      email: CRED_CLIENTE2.email,
-      passwordHash: await bcrypt.hash(CRED_CLIENTE2.password, BCRYPT_ROUNDS),
-    },
+    create: { id: CLIENTE2_ID, nombre: 'Cliente Dos', email: EMAIL_CLIENTE2 },
   })
 
   // ── Usuarios de Supabase Auth y membresías ───────────────────
   // OWNER de Marca Seed, la marca de Restaurante Seed. La membresía de OWNER va por marca.
   const usuarioOwner = await prisma.usuario.upsert({
-    where: { email: CRED_OWNER.email },
+    where: { email: EMAIL_OWNER },
     update: {},
     create: {
       id: USUARIO_OWNER_ID,
       supabaseUserId: OWNER_SUPABASE_USER_ID,
-      email: CRED_OWNER.email,
+      email: EMAIL_OWNER,
       nombre: 'Owner Seed',
     },
   })
@@ -423,17 +349,13 @@ async function main() {
   }
   console.log(`Mesa ${mesa4.numero.padEnd(4)} qrToken: ${mesa4.qrToken.padEnd(18)} pin: ${mesa4.pin}  (Restaurante Seed 2)`)
 
-  console.log('\n--- Usuarios (solo entorno local) ---')
-  console.log(`Admin ROOT   : ${CRED_ROOT.email}     / ${CRED_ROOT.password}`)
-  console.log(`Admin OWNER  : ${CRED_OWNER.email}    / ${CRED_OWNER.password}`)
-  console.log(`Admin GERENTE: ${CRED_GERENTE.email}  / ${CRED_GERENTE.password}  (Restaurante Seed)`)
-  console.log(`Admin OWNER 2: ${CRED_OWNER2.email}   / ${CRED_OWNER2.password}  (Marca Seed 2)`)
-  console.log(`Mozo         : ${CRED_MOZO.email}     / ${CRED_MOZO.password}`)
-  console.log(`Cliente 1    : ${CRED_CLIENTE1.email} / ${CRED_CLIENTE1.password}`)
-  console.log(`Cliente 2    : ${CRED_CLIENTE2.email} / ${CRED_CLIENTE2.password}`)
+  console.log('\n--- Perfiles sin cuenta (el login propio se retiró en la Fase 5 de auth) ---')
+  console.log(`Mozo      : ${EMAIL_MOZO}      (invitarlo como MOZO engancha este perfil)`)
+  console.log(`Cliente 1 : ${EMAIL_CLIENTE1}  (registrarlo en web-auth recupera su historial)`)
+  console.log(`Cliente 2 : ${EMAIL_CLIENTE2}`)
 
   console.log('\n--- Usuarios Supabase (supabaseUserId ficticio: reemplazar para iniciar sesión) ---')
-  console.log(`OWNER        : ${usuarioOwner.email}  (Marca Seed → Restaurante Seed)`)
+  console.log(`OWNER     : ${usuarioOwner.email}  (Marca Seed → Restaurante Seed)`)
 
   console.log('\n--- Menú por categoría ---')
   console.log('Entradas    : Empanada de Carne 800 | Provoleta 2300 | Rabas 3100')

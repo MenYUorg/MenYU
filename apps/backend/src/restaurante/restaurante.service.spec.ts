@@ -55,9 +55,6 @@ describe('RestauranteService', () => {
       expect(Object.keys(select).filter((campo) => campo.startsWith('mp'))).toEqual([])
     })
 
-    it('los mozos del detalle no traen la contraseña', () => {
-      expect(RESTAURANTE_DETALLE_SELECT.mozos.select).not.toHaveProperty('passwordHash')
-    })
   })
 
   // ── findAll ───────────────────────────────────────────────────────────

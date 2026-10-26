@@ -389,11 +389,11 @@ describe('RootMarcasService', () => {
 
       expect(tx.restaurante.update).not.toHaveBeenCalled()
       expect(tx.restaurante.updateMany).not.toHaveBeenCalled()
-      expect(tx.admin.update).not.toHaveBeenCalled()
-      expect(tx.admin.updateMany).not.toHaveBeenCalled()
-      expect(tx.admin.delete).not.toHaveBeenCalled()
+      expect(tx.usuario.update).not.toHaveBeenCalled()
+      expect(tx.usuario.updateMany).not.toHaveBeenCalled()
+      expect(tx.membresia.updateMany).not.toHaveBeenCalled()
+      expect(tx.membresia.deleteMany).not.toHaveBeenCalled()
       expect(tx.mozo.updateMany).not.toHaveBeenCalled()
-      expect(tx.refreshToken.updateMany).not.toHaveBeenCalled()
     })
 
     it('devuelve el detalle de la marca', async () => {

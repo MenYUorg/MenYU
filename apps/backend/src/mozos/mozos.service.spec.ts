@@ -18,10 +18,6 @@ describe('MozosService', () => {
     service = new MozosService(comoPrisma(prisma), accesoDeTest())
   })
 
-  it('ninguna respuesta trae la contraseña del login propio', () => {
-    expect(MOZO_SELECT).not.toHaveProperty('passwordHash')
-  })
-
   describe('permisos de las rutas de un mozo (el rol en el restaurante del mozo)', () => {
     const RUTAS: Array<[string, (u: UsuarioAutenticado) => Promise<unknown>]> = [
       ['findOne', (u) => service.findOne('mozo-1', u)],
@@ -77,7 +73,9 @@ describe('MozosService', () => {
       const consulta = prisma.mozo.findMany.mock.calls[0][0]
       expect(consulta.where).toEqual({ restauranteId: REST, activo: true })
       expect(consulta.orderBy).toEqual({ nombre: 'asc' })
-      expect(consulta.select).not.toHaveProperty('passwordHash')
+      expect(consulta.select).toEqual({
+        id: true, nombre: true, email: true, telefono: true, activo: true, esJefeSalon: true, createdAt: true,
+      })
     })
   })
 

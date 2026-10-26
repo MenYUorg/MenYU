@@ -55,7 +55,6 @@ describe('PersonalService', () => {
 
       // Assert
       expect(prisma.membresia.findMany.mock.calls[0][0].select.usuario).toEqual({ select: { id: true, nombre: true, email: true } })
-      expect(prisma.mozo.findMany.mock.calls[0][0].select).not.toHaveProperty('passwordHash')
     })
 
     it('con un restaurante que no existe: 404', async () => {
