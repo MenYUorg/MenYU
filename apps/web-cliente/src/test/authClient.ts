@@ -1,5 +1,4 @@
 import type { Session } from '@supabase/supabase-js'
-import { useEffect, useState } from 'react'
 import { vi } from 'vitest'
 
 /**
@@ -9,8 +8,8 @@ import { vi } from 'vitest'
  *
  * Los `vi.fn` se crean con su comportamiento, para que un `vi.resetAllMocks()` de un spec vuelva a él y no a undefined.
  *
- * El `useSession` simulado avisa de los cambios, como el de verdad (que se suscribe a `onAuthStateChange`): asignarle
- * una sesión a `cuentaDePrueba` o cerrarla vuelve a pintar lo que esté montado.
+ * `onAuthStateChange` cuelga de los mismos suscriptores que el setter de `cuentaDePrueba.session`, así que asignarle
+ * una sesión o cerrarla llega a `useSesionDiferida` igual que un evento de Supabase, y vuelve a pintar lo montado.
  */
 const suscriptores = new Set<() => void>()
 
@@ -118,23 +117,34 @@ export function sesionDeSupabase({
   } as unknown as Session
 }
 
-export async function moduloSimulado(): Promise<typeof import('@menyu/auth-client')> {
-  const real = await vi.importActual<typeof import('@menyu/auth-client')>('@menyu/auth-client')
+/**
+ * Igual que `alVolverALaPestana` del paquete: lo usa `useSesionDiferida` para releer la sesión cuando la pestaña
+ * vuelve. Se reimplementa en vez de traer el real porque el módulo simulado no importa el paquete (ver abajo); que el
+ * de verdad funcione lo prueban los tests de `packages/auth-client`.
+ */
+function alVolverALaPestanaSimulado(revisar: () => void): () => void {
+  const siEstaVisible = () => {
+    if (document.visibilityState === 'visible') revisar()
+  }
+  window.addEventListener('focus', siEstaVisible)
+  document.addEventListener('visibilitychange', siEstaVisible)
+  return () => {
+    window.removeEventListener('focus', siEstaVisible)
+    document.removeEventListener('visibilitychange', siEstaVisible)
+  }
+}
+
+/**
+ * El módulo que ve esta app en lugar de `@menyu/auth-client`. Trae **solo** lo que web-cliente usa, y a propósito no
+ * llama a `vi.importActual`: eso cargaría el paquete de verdad, o sea supabase-js, y desde que la carga es diferida
+ * (`utils/authClientDiferido.ts`) ese costo se paga dentro del primer test que lee la sesión. Medido en 408 ms en una
+ * máquina de desarrollo, suficiente para que un `findBy` (1 s) se agote en el CI, que es más lento: así fallaban dos
+ * tests de ClienteMenuPage que pasaban en local.
+ */
+export async function moduloSimulado(): Promise<Partial<typeof import('@menyu/auth-client')>> {
   return {
-    ...real,
-    useSession: () => {
-      const [, repintar] = useState(0)
-      useEffect(() => {
-        const suscriptor = () => repintar((n) => n + 1)
-        suscriptores.add(suscriptor)
-        return () => {
-          suscriptores.delete(suscriptor)
-        }
-      }, [])
-      if (estado.cargando) return { tipo: 'cargando' }
-      return estado.session ? { tipo: 'con-sesion', session: estado.session } : { tipo: 'sin-sesion' }
-    },
     tokenDeAcceso: tokenDeAccesoSimulado,
-    clienteAuth: clienteAuthSimulado as unknown as typeof real.clienteAuth,
+    clienteAuth: clienteAuthSimulado as unknown as typeof import('@menyu/auth-client')['clienteAuth'],
+    alVolverALaPestana: alVolverALaPestanaSimulado,
   }
 }
