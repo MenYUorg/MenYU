@@ -46,9 +46,12 @@ export function cuentaDeSesion(session: Session): Cuenta {
 /**
  * El token que va en `POST /sessions/open` para que la mesa quede a nombre de la cuenta. Sin cuenta, undefined: entra
  * como invitado.
+ *
+ * Sin cookie de sesión no carga supabase-js: abrir la mesa por QR o PIN es lo primero que hace quien se sienta, y no
+ * tiene que esperar un chunk que no le sirve.
  */
 export async function tokenParaAbrirMesa(): Promise<string | undefined> {
-  if (!comparteLaSesionDeWebAuth()) return undefined
+  if (!puedeHaberSesion()) return undefined
   try {
     const { tokenDeAcceso } = await cargarAuthClient()
     return (await tokenDeAcceso()) ?? undefined
@@ -102,4 +105,12 @@ export function comparteLaSesionDeWebAuth(hostname: string = window.location.hos
  */
 export function hayCookieDeSesion(cookies: string = document.cookie): boolean {
   return /(?:^|;\s*)sb-[^=;]*auth-token/.test(cookies)
+}
+
+/**
+ * Si vale la pena cargar supabase-js: esta app comparte la sesión de web-auth y hay una cookie que leer. Lo usan los
+ * dos lugares que lo cargan (`tokenParaAbrirMesa` y `useSesionDiferida`), para que no puedan diferir.
+ */
+export function puedeHaberSesion(): boolean {
+  return comparteLaSesionDeWebAuth() && hayCookieDeSesion()
 }

@@ -9,8 +9,8 @@ import { MozosService } from './mozos.service'
 import { UpdateMozoDto } from './dto/update-mozo.dto'
 import { AsignarMesaDto } from './dto/asignar-mesa.dto'
 
-// OWNER y GERENTE del restaurante (editar y dar de baja, solo OWNER). En las rutas de un mozo, el service pide el
-// rol. Los mozos se suman invitándolos (POST /auth/invitaciones).
+// OWNER y GERENTE del restaurante (editar, solo OWNER). En las rutas de un mozo, el service pide el rol. Los mozos se
+// suman invitándolos (POST /auth/invitaciones) y se les quita el acceso desde Personal: un perfil de mozo no se borra.
 @ApiTags('mozos')
 @Controller('mozos')
 export class MozosController {

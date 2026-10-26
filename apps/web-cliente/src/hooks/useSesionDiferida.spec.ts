@@ -1,5 +1,5 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
-import { clienteAuthSimulado, cuentaDePrueba, sesionDeSupabase } from '../test/authClient'
+import { clienteAuthSimulado, cookieDeSesionRancia, cuentaDePrueba, sesionDeSupabase } from '../test/authClient'
 import { useSesionDiferida } from './useSesionDiferida'
 
 // supabase-js pesa unos 64 kB con gzip y se carga con un `import()`, así que acá se comprueba lo que decide si se
@@ -29,6 +29,18 @@ describe('useSesionDiferida', () => {
 
     expect(result.current.tipo).toBe('sin-sesion')
     expect(clienteAuthSimulado).not.toHaveBeenCalled()
+  })
+
+  // El token venció, o es de otro proyecto: la cookie está pero no hay sesión. Es el único caso en que se paga el
+  // chunk para nada, y tiene que terminar en `sin-sesion`, no quedarse cargando.
+  it('con una cookie que ya no sirve carga el paquete y queda sin sesión', async () => {
+    cookieDeSesionRancia()
+
+    const { result } = renderHook(() => useSesionDiferida())
+
+    expect(result.current.tipo).toBe('cargando')
+    await waitFor(() => expect(result.current.tipo).toBe('sin-sesion'))
+    expect(clienteAuthSimulado).toHaveBeenCalled()
   })
 
   it('si no se puede abrir el cliente de Supabase, queda sin sesión y la app sigue andando', async () => {

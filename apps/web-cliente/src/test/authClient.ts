@@ -52,6 +52,14 @@ export const cuentaDePrueba = {
   },
 }
 
+/**
+ * Una cookie de sesión sin sesión detrás: lo que queda en el navegador cuando el token venció o es de otro proyecto.
+ * Es el caso en que la app sí carga supabase-js y después se queda sin cuenta.
+ */
+export function cookieDeSesionRancia(): void {
+  escribirCookieDeSesion(true)
+}
+
 export const signOutSimulado = vi.fn(async () => {
   cuentaDePrueba.session = null
   return { error: null }

@@ -10,6 +10,7 @@ import {
   comparteLaSesionDeWebAuth,
   cuentaDeSesion,
   hayCookieDeSesion,
+  puedeHaberSesion,
   nombreParaSaludo,
   olvidarElLoginAnterior,
   tokenParaAbrirMesa,
@@ -72,6 +73,22 @@ describe('tokenParaAbrirMesa', () => {
 
   it('sin cuenta, undefined: entra como invitado', async () => {
     await expect(tokenParaAbrirMesa()).resolves.toBeUndefined()
+  })
+
+  // Abrir la mesa por QR o PIN es lo primero que hace quien se sienta: sin cookie no se baja supabase-js (unos 64 kB
+  // con gzip) para preguntar algo que ya se sabe.
+  it('sin cookie de sesión no le pregunta al paquete: no lo carga', async () => {
+    await expect(tokenParaAbrirMesa()).resolves.toBeUndefined()
+
+    expect(tokenDeAccesoSimulado).not.toHaveBeenCalled()
+  })
+
+  it('donde la app no comparte la sesión de web-auth tampoco, aunque haya cookie', async () => {
+    cuentaDePrueba.session = sesionDeSupabase({ token: 'token-de-supabase' })
+    vi.stubEnv('VITE_SUPABASE_URL', '')
+
+    await expect(tokenParaAbrirMesa()).resolves.toBeUndefined()
+    expect(tokenDeAccesoSimulado).not.toHaveBeenCalled()
   })
 
   // El token del login de `/auth` quedó en el navegador de quien lo usó antes de la Fase 5. Ya no identifica a nadie
@@ -208,5 +225,24 @@ describe('hayCookieDeSesion', () => {
     ['nombrada dentro del valor de otra', 'otra=sb-abc-auth-token'],
   ])('%s: no', (_caso, cookies) => {
     expect(hayCookieDeSesion(cookies)).toBe(false)
+  })
+})
+
+describe('puedeHaberSesion', () => {
+  it('con las variables y una cookie: sí', () => {
+    cuentaDePrueba.session = sesionDeSupabase()
+
+    expect(puedeHaberSesion()).toBe(true)
+  })
+
+  it('sin cookie: no', () => {
+    expect(puedeHaberSesion()).toBe(false)
+  })
+
+  it('con cookie pero sin las variables de Supabase: no', () => {
+    cuentaDePrueba.session = sesionDeSupabase()
+    vi.stubEnv('VITE_SUPABASE_PUBLISHABLE_KEY', '')
+
+    expect(puedeHaberSesion()).toBe(false)
   })
 })

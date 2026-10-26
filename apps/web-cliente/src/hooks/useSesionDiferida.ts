@@ -2,7 +2,7 @@ import type { EstadoSesion } from '@menyu/auth-client'
 import type { Session, SupabaseClient } from '@supabase/supabase-js'
 import { useEffect, useState } from 'react'
 import { cargarAuthClient } from '../utils/authClientDiferido'
-import { comparteLaSesionDeWebAuth, hayCookieDeSesion } from '../utils/cuenta'
+import { puedeHaberSesion } from '../utils/cuenta'
 
 /**
  * Como el `useSession` de `@menyu/auth-client`, pero sin traer supabase-js en la carga inicial: el paquete se importa
@@ -69,9 +69,4 @@ export function useSesionDiferida(): EstadoSesion {
   }, [])
 
   return estado
-}
-
-/** Vale la pena cargar supabase-js: esta app comparte la sesión de web-auth y hay una cookie que leer. */
-function puedeHaberSesion(): boolean {
-  return comparteLaSesionDeWebAuth() && hayCookieDeSesion()
 }

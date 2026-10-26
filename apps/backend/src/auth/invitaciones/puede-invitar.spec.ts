@@ -36,7 +36,8 @@ describe('puedeInvitar: quién invita a quién (spec de auth, Fase 2 y 4.4)', ()
    * este test, que recorre la tabla entera.
    */
   describe('dice lo mismo que la tabla que ofrece web-admin (@menyu/types)', () => {
-    const TODOS: Rol[] = ['OWNER', 'GERENTE', 'JEFE_SALON', 'MOZO', 'COCINA']
+    // Del enum de Prisma, no escritos a mano: un rol nuevo en la base rompe este test hasta que se decida a quién invita.
+    const TODOS = Object.values(Rol)
     const invitadorCon = (quien: RolQueInvita) =>
       quien === 'ROOT' ? { esRoot: true, rolesEnAmbito: [] as Rol[] } : { esRoot: false, rolesEnAmbito: [quien] }
 
