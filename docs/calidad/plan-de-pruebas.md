@@ -11,7 +11,7 @@
 
 Este plan cubre el Trabajo Práctico Integrador de Calidad de Software aplicado a MenYU: una aplicación de pedidos y pagos por QR, multi-tenant (varios restaurantes y marcas), con backend en NestJS/Prisma/Postgres (Supabase), cuatro frontends (web-cliente, web-admin, web-staff, web-auth) y la integración de cobro con MercadoPago. Se declara **Nivel 3 (prototipo avanzado)**.
 
-Queda fuera de este plan — y así consta en Jira como riesgo residual, no como pendiente oculto — el contrato de MercadoPago con payloads reales de `merchant_order` y `payment` (SCRUM-39), que pasa a la tesis. El stress y el soak de k6 contra staging sí se ejecutaron el 24/10/2026 (sección 7; detalle en `Resultado-stress-k6-24-10.md`), y el E2E contra Supabase de staging, diseñado en `docs/calidad/e2e-supabase.md`, se implementó el mismo día (PR #433, SCRUM-38).
+Queda fuera de este plan — y así consta en Jira como riesgo residual, no como pendiente oculto — el contrato de MercadoPago con payloads reales de `merchant_order` y `payment` (SCRUM-39), que pasa a la tesis. El stress y el soak de k6 contra staging sí se ejecutaron el 24/10/2026 (sección 7; runs `40100656575` y `40105801689` de `carga-k6.yml`, del 24/10/2026), y el E2E contra Supabase de staging, diseñado en `docs/calidad/e2e-supabase.md`, se implementó el mismo día (PR #433, SCRUM-38).
 
 ## 2. Estrategia
 
@@ -69,13 +69,15 @@ Revisado el 26/10/2026 contra el código real de `main` (commit `8b98247`). No s
 
 **Si falla la llamada para crear la preferencia de pago** (el comensal elige pagar con Mercado Pago): el backend reintenta una vez (10 segundos de timeout por intento, 2 segundos de espera entre reintentos — comportamiento por defecto del SDK, sin configuración propia). Si los dos intentos fallan, cancela el pago pendiente que acababa de crear (para no dejarlo "fantasma") y devuelve un error genérico (500, sin un mensaje que explique que el problema es de Mercado Pago). El comensal ve el error sin que el botón quede colgado esperando, y puede reintentar o pedir pagar en efectivo.
 
-**Si un pago de Mercado Pago queda "pendiente" porque el webhook nunca llega** (por ejemplo, porque Mercado Pago está caído): pasados 10 minutos, el personal puede cobrar igual, por cualquier método, y el sistema cancela el pago pendiente de Mercado Pago solo. Antes de los 10 minutos también se puede cobrar, pero pidiendo una confirmación extra al personal — esto funciona desde el panel de mozo (web-staff); desde el panel de administración (web-admin) todavía no, es una limitación conocida.
+**Si un pago de Mercado Pago queda "pendiente" porque el webhook nunca llega** (por ejemplo, porque Mercado Pago está caído): el personal puede cobrar igual, por cualquier método. No hay un proceso en segundo plano que cancele el pago pendiente: se cancela recién cuando el personal registra el cobro (`registrarCobro`). Si el pago pendiente tiene más de 10 minutos, el cobro lo cancela sin preguntar; si tiene menos, también se puede cobrar, pero pidiendo una confirmación extra al personal — esto funciona desde el panel de mozo (web-staff); desde el panel de administración (web-admin) todavía no, es una limitación conocida.
 
 **Si Mercado Pago confirma un pago después de que el personal ya cobró y lo canceló:** el sistema no lo detecta ni lo corrige solo, deja un aviso en los logs del servidor y la devolución hay que hacerla a mano desde Mercado Pago. No existe ningún proceso automático de conciliación.
 
-**En cualquier caso, el comensal siempre tiene una salida que no depende de que Mercado Pago esté arriba:** puede pedir pagar en efectivo, aunque tenga un pago de Mercado Pago pendiente.
+**Si el webhook llega justo cuando Mercado Pago no responde:** el backend le contesta 200 a Mercado Pago antes de procesar la notificación (`payments.controller.ts:76-81`) y recién después le consulta el pago. Si esa consulta falla, el error solo queda en los logs y Mercado Pago no vuelve a avisar, porque ya recibió el 200. El pago queda pendiente hasta que el personal cobre la mesa.
 
-**Limitaciones conocidas, declaradas y no corregidas en este TP** (quedan para la tesis, el mismo criterio que se usó con el escenario de la base caída en la sección de Pruebas de resiliencia del informe): el mensaje de error que ve el comensal no distingue una falla de Mercado Pago de cualquier otro error del servidor; el panel de administración no maneja el caso del pago reciente pendiente (solo el panel de mozo); y no hay aviso ni conciliación automática para un pago aprobado por Mercado Pago después de haber sido cancelado por el personal.
+**El comensal tiene una salida que no depende de que Mercado Pago esté arriba:** puede pedir pagar en efectivo, aunque tenga un pago de Mercado Pago pendiente. La excepción es un restaurante (o su marca) dado de baja: ahí pedir efectivo (`solicitarEfectivo`) responde 403, y a esa mesa solo le queda Mercado Pago.
+
+**Limitaciones conocidas, declaradas y no corregidas en este TP** (quedan para la tesis, el mismo criterio que se usó con el escenario de la base caída en la sección de Pruebas de resiliencia del informe): el mensaje de error que ve el comensal no distingue una falla de Mercado Pago de cualquier otro error del servidor; el panel de administración no maneja el caso del pago reciente pendiente (solo el panel de mozo); no hay aviso ni conciliación automática para un pago aprobado por Mercado Pago después de haber sido cancelado por el personal; y un webhook cuya consulta a Mercado Pago falla deja el pago pendiente sin reintento.
 
 ## 9. Referencias
 
@@ -83,4 +85,4 @@ Revisado el 26/10/2026 contra el código real de `main` (commit `8b98247`). No s
 - Jira, proyecto SCRUM: SCRUM-18 (defectos), SCRUM-37 (E2E del backend con Postgres efímero), SCRUM-38 (E2E contra Supabase de staging), SCRUM-43 (carga), SCRUM-47 (duplicación); épicas SCRUM-5 a 13.
 - `docs/calidad/bitacora.md` y `docs/calidad/plan-rollback.md`, en el repo.
 - E2E contra Supabase: diseño y estado implementado en `docs/calidad/e2e-supabase.md`; implementación en el PR #433.
-- Pruebas de carga del 24/10 (stress y soak): `Resultado-stress-k6-24-10.md`. Corridas de validación del fix de permisos del reporte (26/10): PR #437.
+- Pruebas de carga del 24/10/2026: stress, run `40100656575`, y soak, run `40105801689`, de `carga-k6.yml`; números en `docs/calidad/k6.md`, sección 5.2. Corridas de validación del fix de permisos del reporte (26/10): PR #437.
