@@ -209,7 +209,7 @@ Los pendientes están en "Para tener en cuenta".
   - Cancelar en Google → `/google` con el mensaje, y se puede reintentar.
 - **Terminado cuando:** los casos se comportan como se describe. Email + contraseña sigue funcionando como respaldo.
 
-### Fase 4 — SSO en las apps
+### Fase 4 — SSO en las apps ✅, en producción desde v1.3.0 (2026-10-25)
 
 Entregas (ver Decisiones de la planificación de la Fase 4):
 
@@ -497,7 +497,7 @@ Decisiones de la planificación de la 4.7:
 
 Y lo que destrabó el hotfix de Node 22: **subir un logo** responde 201 con su URL y borrarlo 200 (se hizo y se deshizo sobre el restaurante de prueba).
 
-### Fase 4b — Cuenta de cliente ✅ (2026-10-23), en `main` (PR #430) y verificada en staging (2026-10-25)
+### Fase 4b — Cuenta de cliente ✅ (2026-10-23), verificada en staging y en producción desde v1.3.0 (2026-10-25)
 
 - Registro (email + contraseña, con confirmación de email) e inicio de sesión de clientes en web-auth, también con Google. Vuelven a web-cliente con `redirect`.
 - Backend: resolver o crear el `Cliente` por `supabaseUserId` a partir del token de Supabase. Sin `Usuario` ni `Membresia`: una cuenta de cliente no da acceso al personal.
@@ -599,7 +599,12 @@ Observaciones que dejaron las Fases 0 a 3b (2026-10-20 y 2026-10-21). Revisarlas
   - El smoke de producción, con web-auth incluida, pasó.
   - `https://auth.menyu-app.com` y `/privacidad` responden. El bundle usa el Supabase de producción y `api.menyu-app.com`.
   - La API acepta el origen `https://auth.menyu-app.com` (`CORS_ORIGINS`).
-  - Falta un ingreso real en `auth.menyu-app.com`, con email y contraseña y con Google. Hace falta un `Usuario` en la base de producción: el primer ROOT se crea a mano, como en staging (`docs/auth/usuarios-prueba-staging.md`).
+  - ~~Falta un ingreso real en `auth.menyu-app.com`~~. **Hecho (2026-10-25)** con email y contraseña, con el primer ROOT (ver "Fases 4 y 4b en producción"). Con Google sigue sin probarse en producción.
+- **Fases 4 y 4b en producción (v1.3.0, 2026-10-25),** sobre `6ce5680`:
+  - **Antes del tag**, la base de producción no tenía ningún `usuario` ni membresía: el acceso todavía era el del login viejo, con 17 cuentas en `admin` (9 OWNER) y 9 `mozo` activos. Todas eran de prueba, así que no hubo a quién avisar. El tag las deja sin acceso a web-admin y web-staff; quien haga falta se invita desde la consola de ROOT (a los OWNER) y desde Personal (al resto). La invitación de un MOZO o un JEFE_SALON engancha el `Mozo` viejo del restaurante con el mismo email.
+  - **El primer ROOT** se creó el mismo día, antes del tag, en los dos ambientes: *Add user* en Supabase y el `INSERT` en `usuario` con `es_root` (`docs/auth/usuarios-prueba-staging.md`, "Primer ROOT"). En producción es el único; en staging se sumó a los dos que ya había.
+  - **La única migración pendiente** era `20261021141707_fase4_autoria_usuario` (columnas que admiten null y el trigger del último ROOT). Ninguna estaba trabada.
+  - **Después del deploy:** el deploy y el smoke de producción pasaron; `api.menyu-app.com/health` responde con el SHA del tag. Los bundles de `admin`, `staff`, `mesa` y `auth.menyu-app.com` traen el Supabase de producción, el dominio `.menyu-app.com` y una clave que el Supabase de producción acepta y el de staging rechaza: la de Production de `menyu-admin` y `menyu-staff` es la correcta. Con la cuenta ROOT se entró a producción por `auth.menyu-app.com`.
 - **Fase 3b: pantalla de consentimiento de Google publicada (2026-10-21).** *Branding* es uno solo para los dos ambientes:
   - Página principal: `https://mesa.menyu-app.com` (Discovery). La raíz `menyu-app.com` no tiene sitio.
   - Política de privacidad: `https://auth.menyu-app.com/privacidad`. Google visita estas URLs: no cambiar la ruta ni dejarla caer.
@@ -638,7 +643,7 @@ Observaciones que dejaron las Fases 0 a 3b (2026-10-20 y 2026-10-21). Revisarlas
   - Hecho en la 4.5: `useRootSession` usa `usePerfil()` (`esRoot` y el email) y `logout()`. Las pantallas de dueños y cuentas ROOT (E2b, de la consola) se sumaron sobre las rutas de la tabla de la 4.4 y los tipos de `@menyu/types`, y se mergearon a esta rama con el PR #427 (2026-10-22): `docs/plan-consola-root.md`, 8.2.
   - Para cambiar de dueño se invita al nuevo y después se quita al anterior: al último dueño de una marca activa no se lo puede quitar (409).
   - Sigue sin haber forma de reenviar una invitación que no se aceptó (ver "Para la Fase 4"), tampoco la de una cuenta ROOT.
-  - Producción: el primer ROOT se crea a mano (un `INSERT` en `usuario` con `es_root`, como en staging) y los demás se invitan desde la consola o se promueven con el script. Las cuentas ROOT de la tabla `admin` (`root@menyu.com` y las que creó el script viejo) dejan de servir para la consola.
+  - Producción: el primer ROOT se crea a mano (un `INSERT` en `usuario` con `es_root`, como en staging; hecho el 2026-10-25) y los demás se invitan desde la consola o se promueven con el script. Las cuentas ROOT de la tabla `admin` (`root@menyu.com` y las que creó el script viejo) dejan de servir para la consola.
   - **Decidido en la 4.5: las mesas abiertas de un restaurante dado de baja solo pagan con Mercado Pago desde el celular.** No se cambiaron los permisos: el personal de un restaurante dado de baja sigue recibiendo 403 al cobrar en efectivo, cerrar la mesa, atender un llamado o en la cocina. La alternativa —una excepción en `AccesoService` para las sesiones ya abiertas— se descartó: abriría un agujero en la baja efectiva por un caso de borde. La 4.5 ajustó los textos de los diálogos de la consola de ROOT (`copy.ts`, con su test), y **la pantalla del comensal recién lo cumplió en la 4.7**, que además cerró el pedido de efectivo y el llamado al mozo en el backend.
   - El filtro "Quién" del historial sale de `GET /root/roots`, que ahora lista solo `Usuario`: las acciones viejas de las cuentas ROOT de `admin` ya no se pueden filtrar por quién desde la pantalla (siguen en la lista sin filtrar). Para la 4.5 o E2b.
   - Un registro inválido del historial (un error de programación) responde 500 genérico.
@@ -647,7 +652,7 @@ Observaciones que dejaron las Fases 0 a 3b (2026-10-20 y 2026-10-21). Revisarlas
   - **Antes del deploy que la lleve (staging con el merge, producción con el tag, que es el mismo de la Fase 4), a mano:**
     - **Hecho (2026-10-23):** la plantilla **"Confirm signup"** en los dos proyectos de Supabase (`docs/auth/VariablesACambiar.md`, Plantillas de mail). **Es de seguridad:** con la plantilla por defecto, un escáner de mail confirma una cuenta registrada con un email ajeno, y esa cuenta después se vincula al `Cliente` de esa persona o se reutiliza al invitarla como personal (Notas de seguridad). Además, sin ella el registro solo abre la sesión si el link se abre en el mismo navegador en el que se creó la cuenta. Con ella anda desde cualquier navegador, y un escáner que abra el link no confirma nada.
     - Las variables `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` y `VITE_AUTH_COOKIE_DOMAIN` en `menyu-cliente` y `menyu-cliente-staging` (`docs/auth/VariablesACambiar.md`, Fase 4). Sin ellas web-cliente no ve la sesión de web-auth, y "Ingresar" y "Registrarme" siguen yendo al `/auth` de la app, como antes de la 4b. **Hecho:** `VITE_SUPABASE_URL` y `VITE_AUTH_COOKIE_DOMAIN` el 2026-10-23 y `VITE_SUPABASE_PUBLISHABLE_KEY` el 2026-10-25, en los tres lugares (Production y Preview de `menyu-cliente`, Production de `menyu-cliente-staging`). Como son de build, `menyu-cliente-staging` se volvió a desplegar el 2026-10-25: su bundle trae la URL del Supabase de staging y una clave que ese proyecto acepta y el de producción rechaza. `menyu-cliente` de producción las toma con el tag.
-    - **Para el tag (es de la Fase 4), hecho el 2026-10-25:** `menyu-admin` y `menyu-staff` no tenían `VITE_SUPABASE_PUBLISHABLE_KEY` en Production, solo en Preview (revisado el 2026-10-23); el equipo la cargó. Vercel pide un código por mail para mostrar el valor, así que que sea la del proyecto de producción se comprueba con el primer deploy del tag (que web-admin y web-staff de producción abran la sesión). Sin ella, web-admin y web-staff de producción no abren la sesión ("Faltan VITE_SUPABASE_URL y VITE_SUPABASE_PUBLISHABLE_KEY"). Staging no lo mostró porque los proyectos `*-staging` sí la tienen.
+    - **Para el tag (es de la Fase 4), hecho el 2026-10-25:** `menyu-admin` y `menyu-staff` no tenían `VITE_SUPABASE_PUBLISHABLE_KEY` en Production, solo en Preview (revisado el 2026-10-23); el equipo la cargó. Vercel pide un código por mail para mostrar el valor, así que que sea la del proyecto de producción se comprobó con el deploy de v1.3.0: el Supabase de producción acepta la clave de los bundles y el de staging la rechaza. Sin ella, web-admin y web-staff de producción no abren la sesión ("Faltan VITE_SUPABASE_URL y VITE_SUPABASE_PUBLISHABLE_KEY"). Staging no lo mostró porque los proyectos `*-staging` sí la tienen.
   - **Qué verificar en staging después del merge:**
     - **Hecho (2026-10-24):** el registro con la plantilla de MenYU, con `menyuprueba2+fase4bstg@gmail.com` (`docs/auth/usuarios-prueba-staging.md`). El mail llegó con el asunto "Confirmá tu cuenta de MenYU" y el link `auth.staging.menyu-app.com/confirmar-email?redirect=https://mesa.staging.menyu-app.com/&token_hash=pkce_…&type=email`. Abrirlo, desde un navegador distinto al del registro, no llamó a `/auth/v1/verify` y le sacó el token a la URL; el botón lo canjeó con un `POST` y volvió a `mesa.staging` con la cookie `sb-<ref>-auth-token` de `.staging.menyu-app.com`. `mesa.staging` mostró "Ingresar", como se esperaba: su build todavía no tiene la publishable key, así que no lee la sesión.
     - **Hecho (2026-10-25), la vuelta logueada y la mesa a su nombre**, con la publishable key cargada y `menyu-cliente-staging` desplegado de nuevo. Con playwright-cli contra `*.staging.menyu-app.com`:
