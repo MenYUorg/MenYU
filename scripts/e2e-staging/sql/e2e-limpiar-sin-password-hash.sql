@@ -5,6 +5,10 @@
 -- SOLO EN EL SQL EDITOR DEL SUPABASE DE STAGING. El archivo completo (e2e-staging.sql) no se puede volver a correr:
 -- crea el rol `e2e_staging`, que ya existe. Esto reemplaza nada más que la función.
 --
+-- Aplicado en staging el 2026-10-26. El SQL Editor avisa "Potential issue detected… destructive operations" porque el
+-- cuerpo tiene DELETE: un CREATE OR REPLACE no borra datos, y tampoco pierde los grants (`e2e_staging` sigue con el
+-- EXECUTE). Queda acá para la próxima base donde haya que instalar el E2E.
+--
 -- Lo único que cambia es la condición del DELETE sobre `cliente`: antes exigía que `password_hash` fuera null, y esa
 -- columna ya no existe. `email IS NULL AND supabase_user_id IS NULL` sigue garantizando que solo se borren los
 -- invitados que creó la corrida, nunca un cliente con cuenta.
