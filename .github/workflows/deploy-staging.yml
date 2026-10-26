@@ -3,6 +3,25 @@ name: Deploy — Staging
 on:
   push:
     branches: [main]
+    # Si el push solo trae estos archivos no se despliega: no cambian lo que se construye y
+    # cada deploy gasta 3 de los 100 deployments diarios de Vercel Hobby. Con un solo archivo
+    # fuera de la lista, el deploy corre igual.
+    paths-ignore:
+      - 'docs/**'
+      - 'Documentacion/**'
+      - '**/*.md'
+      - '**/*.spec.ts'
+      - '**/*.spec.tsx'
+      - '**/*.test.ts'
+      - '**/*.test.tsx'
+      - 'apps/backend/test/**'
+      - '.github/workflows/ci.yml'
+      - '.github/workflows/carga-k6.yml'
+      - 'scripts/carga/**'
+      # El E2E no cambia lo que se despliega: si solo cambia él, se corre a mano (workflow_dispatch de e2e-staging.yml).
+      - '.github/workflows/e2e-staging.yml'
+      - 'scripts/e2e-staging/**'
+      - 'sonar-project.properties'
 
 jobs:
   deploy-staging:
@@ -12,8 +31,16 @@ jobs:
       web_admin_url: ${{ steps.vercel-admin.outputs.url }}
       web_cliente_url: ${{ steps.vercel-cliente.outputs.url }}
       web_staff_url: ${{ steps.vercel-staff.outputs.url }}
+      web_auth_url: ${{ steps.vercel-auth.outputs.url }}
 
     steps:
+      # El deploy de web-auth es el último: sin su proyecto de Vercel fallaría con el backend y las otras apps ya
+      # desplegados. Corta antes.
+      - name: Check web-auth Vercel project
+        run: test -n "$VERCEL_PROJECT_ID_AUTH" || { echo "::error::Falta el secret VERCEL_PROJECT_ID_AUTH (Documentacion/WORKFLOW.md)"; exit 1; }
+        env:
+          VERCEL_PROJECT_ID_AUTH: ${{ secrets.VERCEL_PROJECT_ID_AUTH }}
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -23,20 +50,20 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: pnpm
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Build
-        run: pnpm turbo build --filter=@menyu/api --filter=@menyu/web-admin --filter=@menyu/web-cliente --filter=@menyu/web-staff
+        run: pnpm turbo build --filter=@menyu/api --filter=@menyu/web-admin --filter=@menyu/web-cliente --filter=@menyu/web-staff --filter=@menyu/web-auth
 
       # ── Railway staging ──────────────────────────────────────
       # El SHA que muestra /health. RAILWAY_GIT_COMMIT_SHA solo llega en deploys disparados
       # desde GitHub, no con `railway up`. --skip-deploys: el deploy lo hace el paso siguiente.
       - name: Set APP_COMMIT_SHA on Railway staging
-        run: npx @railway/cli@latest variable set "APP_COMMIT_SHA=$GIT_SHA" --service ${{ secrets.RAILWAY_SERVICE_ID_STAGING }} --skip-deploys
+        run: npx @railway/cli@5.70.0 variable set "APP_COMMIT_SHA=$GIT_SHA" --service ${{ secrets.RAILWAY_SERVICE_ID_STAGING }} --skip-deploys
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN_STAGING }}
           GIT_SHA: ${{ github.sha }}
@@ -47,7 +74,7 @@ jobs:
           timeout_minutes: 10
           max_attempts: 3
           retry_wait_seconds: 30
-          command: npx @railway/cli@latest up --service ${{ secrets.RAILWAY_SERVICE_ID_STAGING }} --detach
+          command: npx @railway/cli@5.70.0 up --service ${{ secrets.RAILWAY_SERVICE_ID_STAGING }} --detach
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN_STAGING }}
 
@@ -97,6 +124,21 @@ jobs:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_STAFF }}
 
+      - name: Deploy web-auth to Vercel staging
+        id: vercel-auth
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: |
+            npx vercel@54.6.1 pull --yes --environment=preview --token ${{ secrets.VERCEL_TOKEN }}
+            npx vercel@54.6.1 build --token ${{ secrets.VERCEL_TOKEN }}
+            url=$(npx vercel@54.6.1 deploy --prebuilt --token ${{ secrets.VERCEL_TOKEN }}) && echo "url=$url" >> "$GITHUB_OUTPUT"
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_AUTH }}
+
   # ── Smoke post-deploy (solo lectura) ─────────────────────────
   smoke-staging:
     name: Smoke de staging
@@ -111,7 +153,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       # La URL del backend es la VITE_API_URL de preview de web-cliente en Vercel: se lee solo esa
       # línea, el archivo no se imprime ni se sube y se borra al terminar el paso.
@@ -137,3 +179,16 @@ jobs:
           WEB_ADMIN_URL: ${{ needs.deploy-staging.outputs.web_admin_url }}
           WEB_CLIENTE_URL: ${{ needs.deploy-staging.outputs.web_cliente_url }}
           WEB_STAFF_URL: ${{ needs.deploy-staging.outputs.web_staff_url }}
+          WEB_AUTH_URL: ${{ needs.deploy-staging.outputs.web_auth_url }}
+
+  # ── E2E contra staging (escribe solo en el restaurante de prueba) ──
+  # Después del smoke, que ya confirmó que /health muestra este SHA. Si falla, el deploy queda en rojo aunque el deploy
+  # haya andado: el reporte (artifact e2e-staging-<run_id>) dice si fue infraestructura o producto.
+  # docs/calidad/e2e-supabase.md, sección 3.
+  e2e-staging:
+    name: E2E contra staging
+    needs: smoke-staging
+    uses: ./.github/workflows/e2e-staging.yml
+    with:
+      sha: ${{ github.sha }}
+    secrets: inherit

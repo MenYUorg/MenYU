@@ -2,16 +2,17 @@ import { fireEvent, render, screen, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { api } from '../../services/api'
 import type { MenuIngrediente, MenuItem, MenuResponse } from '../../services/api'
+import { perfilDePrueba, membresiaDeRestaurante, reiniciarSesionDePrueba } from '../../test/authClient'
+import { montarContexto, reiniciarContexto } from '../../test/contexto'
 import { TomaPedidosPage } from './TomaPedidosPage'
 
-vi.mock('@menyu/auth', () => ({
-  useAuth: () => ({ user: { nombre: 'Marta Mozo', email: 'marta@menyu.com' } }),
-}))
-
-vi.mock('../../store/mozoStore', () => {
-  const estado = { restauranteId: 'rest-1' }
-  return { useMozoStore: () => estado }
+const MARTA = perfilDePrueba({
+  nombre: 'Marta Mozo',
+  email: 'marta@menyu.com',
+  membresias: [membresiaDeRestaurante('MOZO', 'rest-1')],
 })
+
+vi.mock('@menyu/auth-client', async () => (await import('../../test/authClient')).moduloSimulado())
 
 vi.mock('../../services/api', () => ({
   api: {
@@ -63,6 +64,13 @@ const MENU: MenuResponse = {
 }
 
 // ── Ayudas ───────────────────────────────────────────────────────────────────
+
+beforeEach(() => {
+  reiniciarSesionDePrueba()
+  reiniciarContexto()
+  montarContexto(MARTA)
+})
+
 
 /** Abre la mesa 5 (por la URL, como hace el botón "Tomar pedido" de Mesas) y espera a que cargue el menú. */
 async function abrirMenuDeLaMesa(menu: MenuResponse = MENU) {

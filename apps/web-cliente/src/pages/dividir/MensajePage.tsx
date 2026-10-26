@@ -5,6 +5,8 @@ import { useSessionStore } from '../../store/sessionStore'
 import { useEtiquetado } from '../../hooks/useEtiquetado'
 import { api } from '../../services/api'
 import { C } from '../../theme'
+import { EncabezadoPantalla, MarcoPantalla } from '../../components/PantallaComensal'
+import { estadoCargando, estadoError, estadoVacio } from '../../components/estadosPantalla'
 
 type Rama = 'partes_iguales' | 'por_consumo' | 'invalido'
 
@@ -204,87 +206,24 @@ export function MensajePage() {
     mensaje = lineas.join('\n').trim()
   }
 
-  const header = (
-    <header style={{
-      background: C.navy, display: 'flex', alignItems: 'center',
-      padding: '14px 16px', gap: 12, flexShrink: 0,
-    }}>
-      <button
-        onClick={() => navigate('/pagar')}
-        style={{
-          background: 'none', border: 'none', cursor: 'pointer',
-          color: 'white', fontSize: 22, lineHeight: 1,
-          padding: '2px 8px 2px 0', display: 'flex', alignItems: 'center',
-        }}
-        aria-label="Volver"
-      >
-        ←
-      </button>
-      <span style={{
-        flex: 1, fontFamily: 'Montserrat, sans-serif',
-        fontWeight: 700, fontSize: 17, color: 'white', textAlign: 'center',
-      }}>
-        Armar mensaje
-      </span>
-      <div style={{ width: 38 }} />
-    </header>
-  )
+  const header = <EncabezadoPantalla titulo="Armar mensaje" onVolver={() => navigate('/pagar')} etiquetaVolver="Volver" />
 
   const wrapper = (children: React.ReactNode) => (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: C.bg }}>
-      <div style={{
-        maxWidth: 520, width: '100%', margin: '0 auto',
-        background: 'white', minHeight: '100vh',
-        display: 'flex', flexDirection: 'column',
-      }}>
-        {header}
-        {children}
-      </div>
-    </div>
+    <MarcoPantalla ancho={520} encabezado={header}>
+      {children}
+    </MarcoPantalla>
   )
 
   const loadingTotal = loading || (rama === 'por_consumo' && etiquetadoLoading)
   const errorTotal = error ?? (rama === 'por_consumo' ? etiquetadoError : null)
 
-  if (rama === 'invalido') return wrapper(
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, padding: 24, textAlign: 'center' }}>
-      <p style={{ fontFamily: 'Montserrat, sans-serif', fontWeight: 700, fontSize: 15, color: C.text, margin: 0 }}>
-        No se pudo determinar cómo armar el mensaje
-      </p>
-      <button
-        onClick={() => navigate('/pagar')}
-        style={{
-          background: C.orange, color: 'white', border: 'none',
-          borderRadius: 12, padding: '12px 24px',
-          fontFamily: 'Montserrat, sans-serif', fontWeight: 700, fontSize: 14, cursor: 'pointer',
-        }}
-      >
-        Volver
-      </button>
-    </div>,
-  )
+  if (rama === 'invalido') {
+    return wrapper(estadoVacio({ texto: 'No se pudo determinar cómo armar el mensaje', accion: { texto: 'Volver', onClick: () => navigate('/pagar') } }))
+  }
 
-  if (loadingTotal) return wrapper(
-    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <Spinner size="md" />
-    </div>,
-  )
+  if (loadingTotal) return wrapper(estadoCargando())
 
-  if (errorTotal) return wrapper(
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, padding: 24, textAlign: 'center' }}>
-      <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#DC2626', margin: 0 }}>{errorTotal}</p>
-      <button
-        onClick={cargar}
-        style={{
-          background: C.orange, color: 'white', border: 'none',
-          borderRadius: 10, padding: '10px 20px',
-          fontFamily: 'Montserrat, sans-serif', fontWeight: 700, fontSize: 13, cursor: 'pointer',
-        }}
-      >
-        Reintentar
-      </button>
-    </div>,
-  )
+  if (errorTotal) return wrapper(estadoError(errorTotal, cargar))
 
   return wrapper(
     <div style={{ flex: 1, overflowY: 'auto', padding: '16px 16px 32px', display: 'flex', flexDirection: 'column', gap: 16 }}>

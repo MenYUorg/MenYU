@@ -3,12 +3,10 @@ import userEvent from '@testing-library/user-event'
 import type { Marca, Restaurante } from '@menyu/types'
 import { api } from '../../../services/api'
 import { useContextStore } from '../../../store/contextStore'
+import { perfilDeOwner, reiniciarSesionDePrueba, sesionDePrueba } from '../../../test/authClient'
 import { MarcaPage } from './MarcaPage'
 
-vi.mock('@menyu/auth', () => ({
-  TOKEN_KEY: 'menyu_access_token',
-  REFRESH_KEY: 'menyu_refresh_token',
-}))
+vi.mock('@menyu/auth-client', async () => (await import('../../../test/authClient')).moduloSimulado())
 
 vi.mock('../../../services/api', () => ({
   api: {
@@ -70,12 +68,15 @@ describe('MarcaPage', () => {
   beforeEach(() => {
     vi.resetAllMocks()
     localStorage.clear()
+    reiniciarSesionDePrueba()
     useContextStore.setState({
       marcas: [],
       restaurantes: [],
       selectedMarcaId: null,
       selectedRestauranteId: null,
+      perfil: null,
     })
+    sesionDePrueba.perfil = perfilDeOwner()
     servidor = { marcas: [{ ...MARCA }], restaurantes: [{ ...CENTRO }, { ...NORTE }] }
 
     vi.mocked(api.marcas.list).mockImplementation(async () => servidor.marcas)

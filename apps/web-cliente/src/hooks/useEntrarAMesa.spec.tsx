@@ -205,6 +205,20 @@ describe('useEntrarAMesa', () => {
       expect(screen.queryByText(/^menú/)).not.toBeInTheDocument()
     })
 
+    it('con demasiados códigos incorrectos (429) muestra el mensaje del servidor y sigue en la pantalla del código', async () => {
+      abrir.mockRejectedValueOnce(exigeCodigo())
+      abrir.mockRejectedValueOnce(new ApiError('Demasiados intentos fallidos. Probá de nuevo en 15 minutos.', 429))
+      renderArnes(QR)
+
+      tocarEntrar()
+      await screen.findByText('Mesa en modo seguro')
+      fireEvent.change(screen.getByPlaceholderText('000'), { target: { value: '999' } })
+      fireEvent.click(screen.getByRole('button', { name: 'Unirme a la mesa' }))
+
+      expect(await screen.findByText('Demasiados intentos fallidos. Probá de nuevo en 15 minutos.')).toBeInTheDocument()
+      expect(screen.getByText('Mesa en modo seguro')).toBeInTheDocument()
+    })
+
     it('"Volver" cierra la pantalla del código y avisa a la página', async () => {
       abrir.mockRejectedValueOnce(exigeCodigo())
       const alVolver = vi.fn()
@@ -238,7 +252,7 @@ describe('useEntrarAMesa', () => {
       expect(alFallar).toHaveBeenCalledTimes(1)
     })
 
-    it('sin conexión también avisa a la página, y sin código HTTP', async () => {
+    it('sin conexión también avisa a la página, sin código HTTP ni mensaje', async () => {
       abrir.mockRejectedValueOnce(new TypeError('Failed to fetch'))
       const alFallar = vi.fn()
       renderArnes(PIN, { alFallar })
@@ -246,14 +260,15 @@ describe('useEntrarAMesa', () => {
       tocarEntrar()
 
       await waitFor(() => expect(alFallar).toHaveBeenCalledTimes(1))
-      expect(alFallar).toHaveBeenCalledWith({ status: null })
+      expect(alFallar).toHaveBeenCalledWith({ status: null, mensaje: null })
     })
 
     it.each([
       ['la mesa es de otro restaurante', 409],
       ['la mesa no existe', 404],
       ['el servidor falla', 500],
-    ])('cuando %s, la página recibe el código HTTP (%i)', async (_, status) => {
+      ['hubo demasiados intentos', 429],
+    ])('cuando %s, la página recibe el código HTTP (%i) y el mensaje del servidor', async (_, status) => {
       abrir.mockRejectedValueOnce(new ApiError('no se pudo', status))
       const alFallar = vi.fn()
       renderArnes(QR, { alFallar })
@@ -261,7 +276,7 @@ describe('useEntrarAMesa', () => {
       tocarEntrar()
 
       await waitFor(() => expect(alFallar).toHaveBeenCalledTimes(1))
-      expect(alFallar).toHaveBeenCalledWith({ status })
+      expect(alFallar).toHaveBeenCalledWith({ status, mensaje: 'no se pudo' })
     })
 
     it('el código es el del último intento: después de un 409, una caída de red llega como sin código', async () => {
@@ -275,8 +290,8 @@ describe('useEntrarAMesa', () => {
       tocarEntrar()
       await waitFor(() => expect(alFallar).toHaveBeenCalledTimes(2))
 
-      expect(alFallar).toHaveBeenNthCalledWith(1, { status: 409 })
-      expect(alFallar).toHaveBeenNthCalledWith(2, { status: null })
+      expect(alFallar).toHaveBeenNthCalledWith(1, { status: 409, mensaje: 'Ese QR no es de este restaurante' })
+      expect(alFallar).toHaveBeenNthCalledWith(2, { status: null, mensaje: null })
     })
   })
 

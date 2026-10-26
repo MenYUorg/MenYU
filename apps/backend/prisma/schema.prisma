@@ -22,6 +22,7 @@ model Marca {
 
   restaurantes Restaurante[]
   admins       Admin[]
+  membresias   Membresia[]
 
   @@map("marca")
 }
@@ -46,6 +47,7 @@ model Restaurante {
   ingredientes  Ingrediente[]
   items         ItemMenu[]
   admins        AdminRestaurante[]
+  membresias    Membresia[]
 
   mpAccessToken     String?   @map("mp_access_token")
   mpRefreshToken    String?   @map("mp_refresh_token")
@@ -73,12 +75,43 @@ model Admin {
   email        String    @unique
   passwordHash String    @map("password_hash")
   rol          RolAdmin
+  // La contraseña la puso otra persona (ROOT): hay que cambiarla en el primer ingreso. Sin efecto en las cuentas que ya existen.
+  debeCambiarPassword Boolean @default(false) @map("debe_cambiar_password")
 
   marca        Marca?             @relation(fields: [marcaId], references: [id])
   restaurantes AdminRestaurante[]
   ediciones    PedidoEdicion[]
 
   @@map("admin")
+}
+
+// Historial de acciones de ROOT (docs/plan-consola-root.md, 7.2). Solo se agregan filas: la base bloquea UPDATE, DELETE y
+// TRUNCATE con disparadores (migración 20261020150000). A propósito NO tiene claves foráneas: guarda copias (email, nombre) de
+// quién y sobre qué, así que retirar una cuenta o una marca no toca el historial. Nunca guarda una contraseña ni un hash.
+model HistorialRoot {
+  id            Int      @id @default(autoincrement())
+  // La hora la pone la base: un disparador BEFORE INSERT pisa lo que mande el cliente con now().
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  // ROOT: lo hizo una cuenta ROOT desde la consola. SCRIPT: lo hizo una persona con scripts/cuentas-root.ts.
+  actorTipo     String   @map("actor_tipo")
+  actorId       String?  @map("actor_id")
+  // Email del ROOT en ese momento; si fue el script, el usuario del sistema operativo de quien lo corrió.
+  actorNombre   String   @map("actor_nombre")
+  accion        String
+  // MARCA | RESTAURANTE | OWNER | ROOT
+  entidadTipo   String   @map("entidad_tipo")
+  entidadId     String   @map("entidad_id")
+  // Nombre (marca, restaurante) o email (cuentas) en ese momento.
+  entidadNombre String   @map("entidad_nombre")
+  // La marca de contexto (para un restaurante o un dueño).
+  marcaId       String?  @map("marca_id")
+  marcaNombre   String?  @map("marca_nombre")
+  // Lista de { campo, antes, despues }.
+  detalle       Json     @default("[]")
+
+  @@index([createdAt])
+  @@index([entidadTipo, entidadId])
+  @@map("historial_root")
 }
 
 model AdminRestaurante {
@@ -98,19 +131,24 @@ model Mozo {
   restauranteId String   @map("restaurante_id")
   nombre        String
   email         String?
-  passwordHash  String   @map("password_hash")
+  // Null en los mozos invitados por Supabase: inician sesión ahí, no con el login propio.
+  passwordHash  String?  @map("password_hash")
   telefono      String?
   activo        Boolean  @default(true)
   esJefeSalon   Boolean  @default(false) @map("es_jefe_salon")
   createdAt     DateTime @default(now()) @map("created_at")
+  // Usuario de Supabase dueño de este perfil. Null en los mozos creados con el login propio.
+  usuarioId     String?  @map("usuario_id")
 
   restaurante   Restaurante      @relation(fields: [restauranteId], references: [id])
+  usuario       Usuario?         @relation(fields: [usuarioId], references: [id])
   asignaciones  AsignacionMesa[]
   llamados      LlamadoMozo[]
   mozoMesas     MozoMesa[]
   ediciones     PedidoEdicion[]
   pagos         Pago[]
 
+  @@unique([usuarioId, restauranteId])
   @@map("mozo")
 }
 
@@ -157,6 +195,8 @@ model Cliente {
   passwordHash String?  @map("password_hash")
   telefono     String?
   createdAt    DateTime @default(now()) @map("created_at")
+  // Cuenta opcional del cliente en Supabase Auth.
+  supabaseUserId String? @unique @map("supabase_user_id") @db.Uuid
 
   sesiones       SesionMesa[]
   sesionClientes SesionMesaCliente[]
@@ -439,6 +479,8 @@ model PedidoEdicion {
   pedidoId      String   @map("pedido_id")
   adminId       String?  @map("admin_id")
   mozoId        String?  @map("mozo_id")
+  // Quien editó con su cuenta de Supabase (Fase 4 de auth). Reemplaza a adminId, que se va en la Fase 5.
+  usuarioId     String?  @map("usuario_id")
   justificacion String
   creadoEn      DateTime @default(now()) @map("creado_en")
 
@@ -446,6 +488,7 @@ model PedidoEdicion {
   pedido          Pedido  @relation(fields: [pedidoId], references: [id])
   admin           Admin?  @relation(fields: [adminId], references: [id])
   mozo            Mozo?   @relation(fields: [mozoId], references: [id])
+  usuario         Usuario? @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
 
   @@map("pedido_edicion")
 }
@@ -472,12 +515,15 @@ model Pago {
   estado            String    @default("pendiente")
   referenciaExterna String?   @map("referencia_externa")
   mozoId            String?   @map("mozo_id")
+  // La cuenta de Supabase de quien registró el cobro (Fase 4 de auth).
+  usuarioId         String?   @map("usuario_id")
   cobradoPorNombre  String?   @map("cobrado_por_nombre")
   fechaCobro        DateTime? @map("fecha_cobro") @db.Timestamptz
   createdAt         DateTime  @default(now()) @map("created_at")
 
   sesion   SesionMesa @relation(fields: [sesionId], references: [id])
   mozo     Mozo?      @relation(fields: [mozoId], references: [id])
+  usuario  Usuario?   @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
 
   @@map("pago")
 }
@@ -531,4 +577,58 @@ model RefreshToken {
   createdAt DateTime  @default(now()) @map("created_at")
 
   @@map("refresh_token")
+}
+
+// ─────────────────────────────────────────────
+// AUTENTICACIÓN (SUPABASE) Y PERMISOS — docs/auth/specs/auth.md
+// ─────────────────────────────────────────────
+
+enum Rol {
+  OWNER
+  GERENTE
+  JEFE_SALON
+  MOZO
+  COCINA
+
+  @@map("rol")
+}
+
+// Supabase Auth dice quién es; Usuario y Membresia dicen qué puede hacer. ROOT no es una
+// membresía: es esRoot.
+model Usuario {
+  id             String   @id @default(uuid())
+  supabaseUserId String   @unique @map("supabase_user_id") @db.Uuid
+  email          String   @unique
+  nombre         String
+  activo         Boolean  @default(true)
+  esRoot         Boolean  @default(false) @map("es_root")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  membresias Membresia[]
+  mozos      Mozo[]
+  ediciones  PedidoEdicion[]
+  cobros     Pago[]
+
+  @@map("usuario")
+}
+
+// OWNER se asocia a una marca; GERENTE, JEFE_SALON, MOZO y COCINA, a un restaurante. El CHECK
+// que lo garantiza vive en la migración, porque Prisma no lo puede expresar.
+model Membresia {
+  id            String   @id @default(uuid())
+  usuarioId     String   @map("usuario_id")
+  rol           Rol
+  marcaId       String?  @map("marca_id")
+  restauranteId String?  @map("restaurante_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  usuario     Usuario      @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  marca       Marca?       @relation(fields: [marcaId], references: [id], onDelete: Cascade)
+  restaurante Restaurante? @relation(fields: [restauranteId], references: [id], onDelete: Cascade)
+
+  @@unique([usuarioId, restauranteId])
+  @@unique([usuarioId, marcaId])
+  @@index([restauranteId])
+  @@index([marcaId])
+  @@map("membresia")
 }

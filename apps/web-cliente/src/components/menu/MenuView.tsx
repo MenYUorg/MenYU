@@ -2,10 +2,10 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Spinner } from '@menyu/ui'
 import type { MenuPublicoItem } from '@menyu/types'
+import { useCuenta } from '../../hooks/useCuenta'
 import { usePuedeCerrarSesion } from '../../hooks/usePuedeCerrarSesion'
 import { menuEsDe, usePublicMenuStore } from '../../store/publicMenuStore'
 import { useComensalStore } from '../../store/comensalStore'
-import { decodificarPayloadJwt } from '../../utils/jwt'
 import { AppHeader } from '../AppHeader'
 import { BloqueEstado } from '../discovery/BloqueEstado'
 import { VolverEnlace } from '../discovery/VolverEnlace'
@@ -14,6 +14,7 @@ import { BotonCarrito } from './BotonCarrito'
 import { ChipsSecciones } from './ChipsSecciones'
 import { MenuDrawer } from './MenuDrawer'
 import { MenuHeader } from './MenuHeader'
+import { MesaSinCarta } from './MesaSinCarta'
 import type { ModoMenu } from './modo'
 import { CM } from './paleta'
 import { SeccionesMenu } from './SeccionesMenu'
@@ -33,19 +34,6 @@ function itemPasaFiltros(item: MenuPublicoItem, buscar: string, activeDiets: Set
     for (const d of activeDiets) if (!ids.has(d)) return false
   }
   return true
-}
-
-/** El cliente con cuenta que inició sesión en este navegador (el token de `localStorage`), o `null`. */
-function leerUsuario(): { nombre: string; email: string } | null {
-  try {
-    const token = localStorage.getItem('menyu_access_token')
-    if (!token) return null
-    const payload = decodificarPayloadJwt(token) as { tipo?: string; nombre?: string; email?: string } | null
-    if (!payload || payload.tipo !== 'cliente') return null
-    return { nombre: payload.nombre ?? payload.email ?? 'Cliente', email: payload.email ?? '' }
-  } catch {
-    return null
-  }
 }
 
 // ── Vista ─────────────────────────────────────────────────────────────────────
@@ -76,9 +64,9 @@ export function MenuView({ modo, restauranteId }: MenuViewProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({})
 
-  const user = leerUsuario()
+  const { cuenta, cerrarSesion: cerrarLaCuenta } = useCuenta()
   // "Cerrar sesión" no se ofrece si la mesa en la que está ya pidió algo.
-  const puedeCerrarSesion = usePuedeCerrarSesion({ abierto: drawerOpen, conCuenta: !!user })
+  const puedeCerrarSesion = usePuedeCerrarSesion({ abierto: drawerOpen, conCuenta: !!cuenta })
 
   useEffect(() => {
     if (restauranteId && !menu) void fetchMenu(restauranteId)
@@ -191,8 +179,7 @@ export function MenuView({ modo, restauranteId }: MenuViewProps) {
   }
 
   const cerrarSesion = () => {
-    localStorage.removeItem('menyu_access_token')
-    localStorage.removeItem('menyu_refresh_token')
+    void cerrarLaCuenta()
     setDrawerOpen(false)
   }
 
@@ -219,6 +206,10 @@ export function MenuView({ modo, restauranteId }: MenuViewProps) {
       </div>
     )
   }
+
+  // El menú de una mesa ya abierta responde 404: el restaurante (o su marca) se dio de baja con la mesa en marcha. La mesa se
+  // deja terminar, así que se explica qué pasó y se ofrece pedir la cuenta, en vez de un error sin salida.
+  if (modo === 'mesa' && !loading && error && errorStatus === 404) return <MesaSinCarta />
 
   // Mientras llega (o todavía no se pidió el de este restaurante).
   if (loading || (!menu && !error)) return (
@@ -260,7 +251,7 @@ export function MenuView({ modo, restauranteId }: MenuViewProps) {
         nombreRestaurante={menu.restaurante.nombre}
         direccion={menu.restaurante.direccion}
         logoUrl={menu.restaurante.logoUrl}
-        usuario={user}
+        usuario={cuenta && { nombre: cuenta.nombre, email: cuenta.email }}
         comensalNombre={comensalNombre}
         puedeCerrarSesion={puedeCerrarSesion}
         onCerrarSesion={cerrarSesion}

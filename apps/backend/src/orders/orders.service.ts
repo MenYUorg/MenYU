@@ -2,21 +2,13 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
-  UnauthorizedException,
 } from '@nestjs/common'
 import { JwtService } from '@nestjs/jwt'
+import { verificarSesionDeMesa } from '../auth/guards/session-auth.guard'
 import { PrismaService } from '../prisma/prisma.service'
 import { MenyuGateway } from '../gateway/menyu.gateway'
 import { CreateOrderDto } from './dto/create-order.dto'
 import { precioVigente } from '../items/descuento.util'
-
-interface SessionJwt {
-  sub: string
-  tipo: string
-  sesionId: string
-  mesaId: string
-  restauranteId: string
-}
 
 @Injectable()
 export class OrdersService {
@@ -27,20 +19,7 @@ export class OrdersService {
   ) {}
 
   async create(authHeader: string | undefined, dto: CreateOrderDto) {
-    if (!authHeader?.startsWith('Bearer ')) {
-      throw new UnauthorizedException('Session JWT requerido')
-    }
-
-    let payload: SessionJwt
-    try {
-      payload = this.jwt.verify<SessionJwt>(authHeader.slice(7))
-    } catch {
-      throw new UnauthorizedException('Session JWT inválido o expirado')
-    }
-
-    if (payload.tipo !== 'cliente') {
-      throw new UnauthorizedException('Solo clientes pueden crear pedidos')
-    }
+    const payload = verificarSesionDeMesa(this.jwt, authHeader, 'Solo clientes pueden crear pedidos')
 
     const { sesionId, mesaId, restauranteId, sub: clienteId } = payload
 
@@ -123,20 +102,7 @@ export class OrdersService {
   }
 
   async findBySesion(authHeader: string | undefined) {
-    if (!authHeader?.startsWith('Bearer ')) {
-      throw new UnauthorizedException('Session JWT requerido')
-    }
-
-    let payload: SessionJwt
-    try {
-      payload = this.jwt.verify<SessionJwt>(authHeader.slice(7))
-    } catch {
-      throw new UnauthorizedException('Session JWT inválido o expirado')
-    }
-
-    if (payload.tipo !== 'cliente') {
-      throw new UnauthorizedException('Solo clientes pueden consultar sus pedidos')
-    }
+    const payload = verificarSesionDeMesa(this.jwt, authHeader, 'Solo clientes pueden consultar sus pedidos')
 
     return this.prisma.pedido.findMany({
       where: { sesionId: payload.sesionId },

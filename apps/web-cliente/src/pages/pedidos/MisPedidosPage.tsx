@@ -1,5 +1,7 @@
+import type { ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Spinner } from '@menyu/ui'
+import { EncabezadoPantalla, MarcoPantalla } from '../../components/PantallaComensal'
+import { estadoCargando, estadoError, estadoVacio } from '../../components/estadosPantalla'
 import { usePedidosCliente } from '../../hooks/usePedidosCliente'
 import type { PedidoCliente } from '../../hooks/usePedidosCliente'
 
@@ -134,140 +136,41 @@ export function MisPedidosPage() {
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   )
 
-  const header = (
-    <header style={{
-      background:  C.navy,
-      display:     'flex',
-      alignItems:  'center',
-      padding:     '14px 16px',
-      gap:         12,
-      flexShrink:  0,
-    }}>
-      <button
-        onClick={() => navigate('/menu')}
-        style={{
-          background: 'none',
-          border:     'none',
-          cursor:     'pointer',
-          color:      'white',
-          fontSize:   22,
-          lineHeight: 1,
-          padding:    '2px 8px 2px 0',
-          display:    'flex',
-          alignItems: 'center',
-        }}
-        aria-label="Volver al menú"
-      >
-        ←
-      </button>
-      <span style={{
-        flex:       1,
-        fontFamily: 'Montserrat, sans-serif',
-        fontWeight: 700,
-        fontSize:   17,
-        color:      'white',
-        textAlign:  'center',
-      }}>
-        Mis pedidos
-      </span>
-      {/* spacer para centrar el título */}
-      <div style={{ width: 38 }} />
-    </header>
+  const marco = (contenido: ReactNode) => (
+    <MarcoPantalla
+      ancho={480}
+      encabezado={<EncabezadoPantalla titulo="Mis pedidos" onVolver={() => navigate('/menu')} etiquetaVolver="Volver al menú" />}
+    >
+      {contenido}
+    </MarcoPantalla>
   )
 
-  /* ── loading ── */
-  if (loading) {
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: C.bg }}>
-        <div style={{ maxWidth: 480, width: '100%', margin: '0 auto', background: 'white', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-          {header}
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Spinner size="md" />
-          </div>
-        </div>
-      </div>
-    )
-  }
+  if (loading) return marco(estadoCargando())
 
-  /* ── error ── */
-  if (error) {
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: C.bg }}>
-        <div style={{ maxWidth: 480, width: '100%', margin: '0 auto', background: 'white', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-          {header}
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, padding: 24, textAlign: 'center' }}>
-            <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#DC2626', margin: 0 }}>{error}</p>
-            <button
-              onClick={() => window.location.reload()}
-              style={{
-                background: C.orange, color: 'white', border: 'none',
-                borderRadius: 10, padding: '10px 20px',
-                fontFamily: 'Montserrat, sans-serif', fontWeight: 700, fontSize: 13,
-                cursor: 'pointer',
-              }}
-            >
-              Reintentar
-            </button>
-          </div>
-        </div>
-      </div>
-    )
-  }
+  if (error) return marco(estadoError(error, () => window.location.reload()))
 
-  /* ── sin pedidos ── */
   if (ordenados.length === 0) {
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: C.bg }}>
-        <div style={{ maxWidth: 480, width: '100%', margin: '0 auto', background: 'white', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-          {header}
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, padding: 24, textAlign: 'center' }}>
-            <p style={{ fontSize: 52, margin: 0 }}>📋</p>
-            <p style={{ fontFamily: 'Montserrat, sans-serif', fontWeight: 700, fontSize: 15, color: C.text, margin: 0 }}>
-              Todavía no hiciste ningún pedido
-            </p>
-            <button
-              onClick={() => navigate('/menu')}
-              style={{
-                background: C.orange, color: 'white', border: 'none',
-                borderRadius: 12, padding: '12px 24px',
-                fontFamily: 'Montserrat, sans-serif', fontWeight: 700, fontSize: 14,
-                cursor: 'pointer', marginTop: 8,
-              }}
-            >
-              Ver el menú
-            </button>
-          </div>
-        </div>
-      </div>
-    )
+    return marco(estadoVacio({
+      emoji:         '📋',
+      texto:         'Todavía no hiciste ningún pedido',
+      accion:        { texto: 'Ver el menú', onClick: () => navigate('/menu') },
+      separarAccion: true,
+    }))
   }
 
   /* ── lista ── */
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: C.bg }}>
-      <div style={{
-        maxWidth:      480,
-        width:         '100%',
-        margin:        '0 auto',
-        background:    'white',
-        minHeight:     '100vh',
-        display:       'flex',
-        flexDirection: 'column',
-      }}>
-        {header}
-        <div style={{
-          flex:      1,
-          overflowY: 'auto',
-          padding:   '12px 16px 24px',
-          display:   'flex',
-          flexDirection: 'column',
-          gap:       10,
-        }}>
-          {ordenados.map((pedido) => (
-            <PedidoCard key={pedido.id} pedido={pedido} />
-          ))}
-        </div>
-      </div>
-    </div>
+  return marco(
+    <div style={{
+      flex:      1,
+      overflowY: 'auto',
+      padding:   '12px 16px 24px',
+      display:   'flex',
+      flexDirection: 'column',
+      gap:       10,
+    }}>
+      {ordenados.map((pedido) => (
+        <PedidoCard key={pedido.id} pedido={pedido} />
+      ))}
+    </div>,
   )
 }

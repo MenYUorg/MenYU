@@ -242,6 +242,31 @@ describe('IngresoMesaPage', () => {
       expect(screen.queryByText(/Ese QR no es de/)).not.toBeInTheDocument()
     })
 
+    it('con el restaurante dado de baja (403) lo dice y no culpa al PIN', async () => {
+      abrir.mockRejectedValue(new ApiError('Este restaurante no está disponible', 403))
+      renderPagina()
+
+      await cargada()
+      ingresarPin('4821')
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'Por ahora no se pueden abrir mesas en La Parrilla del Puerto: no está disponible.',
+      )
+      expect(screen.queryByText(/PIN incorrecto/)).not.toBeInTheDocument()
+      expect(screen.queryByText('pantalla del menú')).not.toBeInTheDocument()
+    })
+
+    it('si el servidor corta por demasiados intentos (429), muestra su mensaje y no dice que el PIN está mal', async () => {
+      abrir.mockRejectedValue(new ApiError('Demasiados intentos fallidos. Probá de nuevo en 15 minutos.', 429))
+      renderPagina()
+
+      await cargada()
+      ingresarPin('0000')
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('Demasiados intentos fallidos. Probá de nuevo en 15 minutos.')
+      expect(screen.queryByText(/PIN incorrecto/)).not.toBeInTheDocument()
+    })
+
     it('sin conexión no dice que el PIN está mal', async () => {
       abrir.mockRejectedValue(new TypeError('Failed to fetch'))
       renderPagina()
@@ -294,6 +319,20 @@ describe('IngresoMesaPage', () => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     })
 
+    it('con el restaurante dado de baja (403) lo dice y no culpa al QR', async () => {
+      abrir.mockRejectedValue(new ApiError('Este restaurante no está disponible', 403))
+      renderPagina()
+
+      await cargada()
+      escanear()
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'Por ahora no se pueden abrir mesas en La Parrilla del Puerto: no está disponible.',
+      )
+      expect(screen.queryByText(/No pudimos abrir tu mesa con ese QR/)).not.toBeInTheDocument()
+      expect(screen.queryByText(/Ese QR no es de/)).not.toBeInTheDocument()
+    })
+
     it('un QR de otro restaurante (409) lo dice con el nombre de este y no abre la mesa', async () => {
       abrir.mockRejectedValue(new ApiError('Ese QR no es de este restaurante', 409))
       renderPagina()
@@ -316,6 +355,16 @@ describe('IngresoMesaPage', () => {
       escanear()
 
       expect(await screen.findByRole('alert')).toHaveTextContent('No pudimos abrir tu mesa con ese QR. Probá de nuevo o ingresá el PIN de tu mesa.')
+    })
+
+    it('con un QR, un 429 también muestra el mensaje del servidor', async () => {
+      abrir.mockRejectedValue(new ApiError('Demasiados intentos fallidos. Probá de nuevo en 1 minuto.', 429))
+      renderPagina()
+
+      await cargada()
+      escanear()
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('Demasiados intentos fallidos. Probá de nuevo en 1 minuto.')
     })
 
     it('sin conexión no culpa al QR', async () => {

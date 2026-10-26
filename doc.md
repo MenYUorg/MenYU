@@ -20,6 +20,8 @@ Authorization: Bearer <accessToken>
 
 Tokens are obtained from any `/api/auth` endpoint that returns a `TokenPair`.
 
+**Supabase access token (migration in progress, `docs/auth/specs/auth.md`).** `GET /api/auth/me` and `POST /api/auth/invitaciones` take the Supabase access token instead (`Authorization: Bearer <supabase access token>`, Swagger scheme `supabase`). The backend verifies it against the project's JWKS and then looks up the `Usuario` in our database: a Supabase account without an active `Usuario` gets 403. Every other endpoint keeps the legacy JWT until Phase 4.
+
 ### Token pair shape
 
 ```json
@@ -203,22 +205,225 @@ Revoke a refresh token (sign out).
 
 ### `GET /api/auth/me`
 
-Return the JWT payload of the authenticated user.
+Return the user authenticated with Supabase and their memberships (`PerfilUsuario` in `@menyu/types`). An OWNER membership comes with its brand's active restaurants, since it covers all of them.
 
-**Auth required:** `Bearer <accessToken>`
+**Auth required:** `Bearer <Supabase access token>`
+
+**Response 200**
+
+```json
+{
+  "id": "uuid",
+  "email": "ana@menyu.com",
+  "nombre": "Ana",
+  "esRoot": false,
+  "membresias": [
+    { "id": "uuid", "rol": "OWNER", "marca": { "id": "uuid", "nombre": "Marca", "restaurantes": [{ "id": "uuid", "nombre": "Sucursal" }] }, "restaurante": null },
+    { "id": "uuid", "rol": "MOZO", "marca": null, "restaurante": { "id": "uuid", "nombre": "Sucursal", "marcaId": "uuid" } }
+  ]
+}
+```
 
 **Responses**
 
 | Status | Description |
 |---|---|
-| 200 | Returns JWT payload object |
-| 401 | Token invalid or expired |
+| 200 | User and memberships (empty list if none) |
+| 401 | No token, or invalid, expired or from another Supabase project |
+| 403 | The Supabase account has no active `Usuario` in MenYU |
+| 503 | The Supabase JWKS could not be fetched |
+
+---
+
+### `POST /api/auth/invitaciones`
+
+Invite a staff member by email (Supabase invite). Creates the `Usuario`, its `Membresia` and, for `MOZO` and `JEFE_SALON`, the restaurant's `Mozo` (or links the existing one with the same email).
+
+**Auth required:** `Bearer <Supabase access token>`
+
+**Body**
+
+```json
+{ "email": "carlos@restaurante.com", "nombre": "Carlos", "rol": "MOZO", "restauranteId": "uuid" }
+```
+
+`OWNER` goes with `marcaId` (and no `restauranteId`); every other role with `restauranteId` (and no `marcaId`).
+
+Who can invite whom: ROOT → `OWNER` and `GERENTE`; OWNER → any role in their brand; GERENTE → `JEFE_SALON`, `MOZO` and `COCINA` in their restaurants.
+
+If the email already belongs to a `Usuario`, or to a confirmed Supabase account (a registered customer, for example), no email is sent: the membership is added (`invitacionEnviada: false`). An unconfirmed Supabase account with that email is deleted and invited again, because whoever created it may not own the email.
+
+**Response 201:** `{ "usuarioId": "uuid", "membresiaId": "uuid", "invitacionEnviada": true }`
+
+| Status | Description |
+|---|---|
+| 201 | Invitation created |
+| 400 | Invalid body, or `marcaId`/`restauranteId` that doesn't match the role |
+| 401 | No token, or invalid or expired |
+| 403 | No access to MenYU, or not allowed to invite that role there |
+| 404 | Brand or restaurant not found |
+| 409 | The user already has a role there, or is deactivated |
+| 502 | Supabase rejected the invitation |
 
 ---
 
 ### No development endpoints
 
-There are no `/api/auth/dev/*` endpoints (they used to create users, even a ROOT, without authentication, and were removed). To get users and data in a local database run the seed (`pnpm --filter @menyu/api seed`); the credentials are in `Documentacion/datos-de-prueba-local.md`. The seed is never run in staging or production: there, accounts are created with the authenticated endpoints.
+There are no `/api/auth/dev/*` endpoints (they used to create users, even a ROOT, without authentication, and were removed). To get users and data in a local database run the seed (`pnpm --filter @menyu/api seed`); the credentials are in `Documentacion/datos-de-prueba-local.md`. The seed is never run in staging or production: there, accounts are created with the authenticated endpoints. The **first** ROOT account of an environment is created by hand (a Supabase user plus an `INSERT` into `usuario` with `es_root`, see `docs/auth/usuarios-prueba-staging.md`); the other ones are invited with `POST /api/root/roots`, or an existing `Usuario` is promoted with the team script `apps/backend/scripts/cuentas-root.ts`.
+
+---
+
+## ROOT console — `/api/root`
+
+Plan and decisions: `docs/plan-consola-root.md`. Since delivery 4.4 of `docs/auth/specs/auth.md` the console uses Supabase Auth: owners and ROOT accounts are Supabase users (`Usuario`, `Membresia`) invited by email, with no passwords in our database. The screens for owners and ROOT accounts (stage E2b) are still to come.
+
+- **Auth:** the Supabase access token of a ROOT account (`Usuario.esRoot`), checked at controller level with `@RequiereRoot()`. Any staff role, an account without memberships and a Supabase account without a `Usuario` get **403**; no token, **401**. The routes that change something also read the account inside the transaction: if it stopped being ROOT or was deactivated meanwhile they answer **401** and change nothing.
+- **IDs in the path are not required to be UUIDs** (`m-001` works). An id with an impossible shape (`a.b`, spaces…) answers 404.
+- **Every change is recorded in the ROOT history, inside the same database transaction as the change**: if the record cannot be written, the change is not made. The record keeps who (a copy of the ROOT's email), what, on what and when. Texts longer than 500 characters are cut and anything that looks like a password hash is replaced by "(no se registra)" (a brand name chosen by its owner cannot block a ROOT action). The table is append-only: the database blocks `UPDATE`, `DELETE` and `TRUNCATE` on it, and there is no route that edits it.
+- **Invitations** go through `InvitacionesService`: the call to Supabase comes first, outside the transaction (it sends the email, or reuses an account that is already confirmed), and the `Usuario`, the `Membresia` and the history record are saved together.
+- **There is no route to delete a ROOT account or to take ROOT away from it** (not even for ROOT). A test walks the whole router and fails if one appears; the database also refuses to leave no active ROOT account.
+
+### Endpoint summary
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/root/duenos?q=` | List owners (OWNER memberships) with their account and brand (`q`: email or brand name, up to 100 chars, literal) |
+| `POST` | `/api/root/marcas/:id/duenos` | Invite an owner to a brand |
+| `DELETE` | `/api/root/duenos/:membresiaId` | Remove an owner from a brand (the account stays) |
+| `GET` | `/api/root/roots` | List ROOT accounts |
+| `POST` | `/api/root/roots` | Invite a new person as a ROOT account |
+| `GET` | `/api/root/marcas?bajas=` | List brands with how many restaurants and owners they have (`bajas=true` also lists deactivated ones) |
+| `POST` | `/api/root/marcas` | Create a brand (`nombre`, `slug`) |
+| `GET` | `/api/root/marcas/:id` | A brand's detail: data, restaurants (address read-only) and owners |
+| `PATCH` | `/api/root/marcas/:id` | Change a brand's `nombre` and/or `slug` |
+| `POST` | `/api/root/marcas/:id/baja` · `/reactivar` | Deactivate / reactivate a brand (reversible, nothing is deleted) |
+| `POST` | `/api/root/marcas/:id/restaurantes` | Create a restaurant in a brand (`nombre`, `direccion`) |
+| `PATCH` | `/api/root/restaurantes/:id` | Change a restaurant's `nombre` (only that) |
+| `POST` | `/api/root/restaurantes/:id/baja` · `/reactivar` | Deactivate / reactivate a restaurant |
+| `GET` | `/api/root/historial` | The ROOT history, newest first, 50 at a time, with filters |
+
+There are no routes to change an owner's or a ROOT account's email or password: they belong to the person, who manages them from web-auth ("Olvidé mi contraseña").
+
+### Owner object
+
+```json
+{
+  "membresiaId": "4d0e…",
+  "usuarioId": "9b1c…",
+  "email": "juan@laparrilla.com",
+  "nombre": "Juan Pérez",
+  "activo": true,
+  "marca": { "id": "m-001", "nombre": "La Parrilla", "activo": true }
+}
+```
+
+No other field is ever returned (no Supabase id, no role). A person can own more than one brand: one object per membership.
+
+### `POST /api/root/marcas/:id/duenos`
+
+```json
+{ "email": "Juan@LaParrilla.com", "nombre": "Juan Pérez" }
+```
+
+| Field | Type | Required |
+|---|---|---|
+| `email` | string, valid email, up to 254 chars (trimmed and lowercased) | yes |
+| `nombre` | string, up to 100 chars (trimmed); kept as it was if the email already has an account | yes |
+
+**201** — `{ "usuarioId": "9b1c…", "membresiaId": "4d0e…", "invitacionEnviada": true }`. `invitacionEnviada` is `false` when the email already had an account (another brand's owner, staff, a registered client): the membership is added and no email is sent.
+
+**Errors:** 400 invalid body · 403 the email is the caller's own · 404 the brand does not exist · 409 the brand is deactivated, the person already owns it, or the account is deactivated · 502 Supabase rejected the invitation. History: `DUENO_INVITAR`.
+
+### `DELETE /api/root/duenos/:membresiaId`
+
+Deletes the OWNER membership; the `Usuario` stays (it can have other memberships). Every request checks the memberships, so the access is cut at once. **Responses:** 204 · 404 not an OWNER membership · **409 if it is the only owner of an active brand** (invite another owner first, or deactivate the brand). Runs in a serializable transaction. History: `DUENO_QUITAR`.
+
+### `GET /api/root/roots`
+
+```json
+[{ "id": "3f2a…", "email": "ana@ejemplo.com", "nombre": "Ana", "activo": true, "esPropia": true }]
+```
+
+`esPropia` is `true` for the caller's own account. **Responses:** 200.
+
+### `POST /api/root/roots`
+
+`{ "email": "carla@ejemplo.com", "nombre": "Carla" }`, same rules as inviting an owner. **201** — `{ "usuarioId": "…", "email": "carla@ejemplo.com", "invitacionEnviada": true }`. **Errors:** 400 · **409 if the email already belongs to a `Usuario`** (also the caller's own): making an existing account ROOT is done with `cuentas-root.ts promover` · 502 Supabase. History: `ROOT_INVITAR`.
+
+### Brands and restaurants: what ROOT sees and edits
+
+ROOT sees only identity and state. **Never** logos, address edits, menu, prices, discounts, tables, orders, waiters, session mode or Mercado Pago data: every query has an explicit `select` and a test compares each response's keys against an exact list. ROOT edits a brand's `nombre` and `slug`, and a restaurant's `nombre`; the address is loaded by ROOT **once**, when creating the restaurant, and from then on only the OWNER changes it.
+
+- **A body with any other field is rejected with 400** (it is not silently ignored): for example `{ "nombre": "X", "direccion": "Y" }` on `PATCH /api/root/restaurantes/:id`. The message says which fields were sent and that the rest is the owner's decision. (The global pipe would drop unknown fields without a word and ROOT would think it saved them.) This applies to the four bodies of this section; the owner and ROOT-account invitations above ignore extra fields.
+- **A "delete" is a reversible deactivation** (`activo = false`): no brand or restaurant row is ever deleted, and there is no `DELETE` route for them. A deactivated brand or restaurant disappears from Discovery, its menu and its tables stop opening, and its staff loses access (their memberships stop counting); the sessions already open can be paid with Mercado Pago from the table. Each restaurant keeps its own state: reactivating a brand brings everything back as it was.
+- `POST …/baja` and `…/reactivar` are idempotent: if it is already in that state the answer is 200 and nothing is recorded.
+- `slug` is a lowercase identifier (`la-parrilla-de-juan`: letters a–z, numbers and single hyphens, up to 80 chars). It is unique **even among deactivated brands**: to reuse it, change the old brand's `slug` (ROOT can edit a deactivated brand).
+
+### Brand objects
+
+```json
+// GET /api/root/marcas → [ … ]
+{ "id": "m-001", "nombre": "La Parrilla", "slug": "la-parrilla", "activo": true,
+  "restaurantes": { "activos": 2, "total": 3 }, "duenos": 1 }
+
+// GET /api/root/marcas/:id (also the answer of POST, PATCH, baja and reactivar)
+{ "id": "m-001", "nombre": "La Parrilla", "slug": "la-parrilla", "activo": true,
+  "restaurantes": [ { "id": "r-001", "nombre": "Centro", "direccion": "Av. Colón 1200", "activo": true } ],
+  "duenos": [ { "id": "9b1c…", "membresiaId": "4d0e…", "email": "juan@laparrilla.com", "nombre": "Juan Pérez" } ] }
+```
+
+`duenos` is only the OWNER memberships (never the GERENTE ones); `0` means "no owner yet". In the detail, `id` is the `Usuario` and `membresiaId` is what `DELETE /api/root/duenos/:membresiaId` removes.
+
+### `POST /api/root/marcas`
+
+`{ "nombre": "La Parrilla", "slug": "la-parrilla" }` (`nombre` up to 120 chars, trimmed; `slug` is lowercased). **201** the detail of the new, active brand. **Errors:** 400 invalid or extra field · 409 `slug` in use (also by a deactivated brand). History: `MARCA_CREAR`.
+
+### `PATCH /api/root/marcas/:id`
+
+`{ "nombre"?: string, "slug"?: string }`, at least one. Works on deactivated brands too. What arrives equal to what is stored is neither written nor recorded. **Errors:** 400 (nothing to change, invalid, or extra field such as `logoUrl` or `activo`) · 404 · 409 `slug` in use by another brand. History: `MARCA_EDITAR` with the before and after of each changed field.
+
+### `POST /api/root/marcas/:id/baja` and `/reactivar`
+
+No body. **200** the detail. **404** if the brand does not exist. History: `MARCA_BAJA` (`Activa → De baja`) and `MARCA_REACTIVAR`.
+
+### `POST /api/root/marcas/:id/restaurantes`
+
+`{ "nombre": "La Parrilla Centro", "direccion": "Av. Colón 1200, Córdoba" }` (`direccion` up to 200 chars, mandatory). **201** `{ id, nombre, direccion, activo: true }`. **Errors:** 400 · 404 the brand does not exist · 409 the brand is deactivated. History: `RESTAURANTE_CREAR`.
+
+### `PATCH /api/root/restaurantes/:id`
+
+`{ "nombre": string }`. **200** `{ id, nombre, direccion, activo }`. **400 for any other field** (`direccion`, `logoUrl`, `modoSesion`, `nombreSeccionRecomendados`, `activo`, `marcaId`, `mp_*`…) and for an empty body. **404** if it does not exist. History: `RESTAURANTE_EDITAR`.
+
+### `POST /api/root/restaurantes/:id/baja` and `/reactivar`
+
+No body, idempotent, **200** `{ id, nombre, direccion, activo }`, **404**. Reactivating a restaurant of a deactivated brand is allowed. History: `RESTAURANTE_BAJA` (`Activo → De baja`) and `RESTAURANTE_REACTIVAR`.
+
+### `GET /api/root/historial`
+
+Read-only: **there is no route that edits or deletes the history**, not even for ROOT (a test walks the whole router), and the database blocks it too. Only ROOT can read it (the rest get 403).
+
+| Query | Meaning |
+|---|---|
+| `actor` | Who did it: the email of a ROOT account (case-insensitive) or `script` for the actions of the ROOT-accounts script |
+| `entidad` | On what: `MARCA`, `RESTAURANTE`, `OWNER` or `ROOT` |
+| `desde`, `hasta` | `YYYY-MM-DD`, whole days in **Buenos Aires time** (UTC-3), both included. A date that does not exist, or `desde` after `hasta`, is a 400 |
+| `cursor` | The `siguiente` of the previous answer, to get the next 50 |
+
+Blank values (`?actor=&desde=`) mean "no filter".
+
+```json
+{
+  "items": [
+    { "id": 142, "cuando": "2026-10-20T14:20:11.512Z", "actorTipo": "ROOT", "actorNombre": "ana@ejemplo.com",
+      "accion": "RESTAURANTE_EDITAR", "entidadTipo": "RESTAURANTE", "entidadId": "r-001", "entidadNombre": "La Parrilla Alta Córdoba",
+      "marcaId": "m-001", "marcaNombre": "La Parrilla",
+      "cambios": [ { "campo": "Nombre", "antes": "La Parrilla Centro", "despues": "La Parrilla Alta Córdoba" } ] }
+  ],
+  "siguiente": 93
+}
+```
+
+Newest first (by `id`, which only grows, so a new action never shifts the pages). `siguiente` is `null` on the last page. `actorTipo` is `SCRIPT` for the script, and then `actorNombre` is the operating-system user of whoever ran it. `antes` / `despues` are `null` when there was nothing ("—" on screen). The `id` of the ROOT account that acted is not exposed. A password is never in a record: it shows as "no se registra".
 
 ---
 

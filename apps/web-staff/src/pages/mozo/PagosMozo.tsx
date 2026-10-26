@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAuth } from '@menyu/auth'
+import { usePerfil } from '@menyu/auth-client'
 import { Bell, CreditCard, RefreshCw } from 'lucide-react'
 import { api } from '../../services/api'
 import type { SesionActivaItem } from '../../services/api'
-import { useMozoStore } from '../../store/mozoStore'
+import { useNombreDelRol, useRestauranteId } from '../../store/contextoStore'
 import * as socketService from '../../services/socket'
 import { PageHeader } from '../../components/PageHeader'
 import { CobroModal } from '../../components/CobroModal'
@@ -118,10 +118,10 @@ function SesionActivaCard({
 // ── PagosMozo ─────────────────────────────────────────────────────────────────
 export function PagosMozo() {
   const navigate = useNavigate()
-  const { user }           = useAuth()
-  const restauranteIdStore = useMozoStore((s) => s.restauranteId)
-  const restauranteId      = user?.restauranteId ?? restauranteIdStore
-  const nombreUsuario      = user?.nombre ?? user?.email ?? 'Mozo'
+  const perfil             = usePerfil()
+  const restauranteId      = useRestauranteId()
+  const nombreUsuario      = perfil.nombre || perfil.email
+  const rolMostrado        = useNombreDelRol()
 
   const [sesionesActivas, setSesionesActivas] = useState<SesionActivaItem[]>([])
   const [loadingActivas, setLoadingActivas]   = useState(false)
@@ -185,7 +185,7 @@ export function PagosMozo() {
         icon={<CreditCard size={18} />}
         onBack={() => navigate('/mozo')}
         userName={nombreUsuario}
-        userRole="Mozo"
+        userRole={rolMostrado}
         userInitials={getInitials(nombreUsuario)}
       />
 
@@ -232,7 +232,6 @@ export function PagosMozo() {
       {modalSesion && (
         <CobroModal
           sesion={modalSesion}
-          cobradoPor={{ modo: 'mozo-actual', mozoId: user?.sub ?? '' }}
           onClose={() => setModalSesion(null)}
           onDone={handleCobroDone}
         />

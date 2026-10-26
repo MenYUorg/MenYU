@@ -1,27 +1,16 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-  UnauthorizedException,
-} from '@nestjs/common'
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
 import { JwtService } from '@nestjs/jwt'
+import { exigirSuSesion, verificarSesionDeMesa } from '../auth/guards/session-auth.guard'
+import { ADMINISTRACION, SALON, TODO_EL_PERSONAL } from '../auth/roles-del-personal'
+import { AccesoService } from '../auth/supabase/acceso.service'
+import { UsuarioAutenticado } from '../auth/supabase/usuario-autenticado'
 import { PrismaService } from '../prisma/prisma.service'
 import { MenyuGateway } from '../gateway/menyu.gateway'
-import { Request } from 'express'
-import { JwtPayload } from '../auth/auth.service'
 import { CreatePedidoDto } from './dto/create-pedido.dto'
 import { UpdateEstadoPedidoDto } from './dto/update-estado-pedido.dto'
 import { EditPedidoDto } from './dto/edit-pedido.dto'
 import { precioVigente } from '../items/descuento.util'
-
-interface SessionJwt {
-  sub: string
-  tipo: string
-  sesionId: string
-  mesaId: string
-  restauranteId: string
-}
+import { EDITOR_INCLUDE, EdicionConEditor, editorDe } from './editor-de-la-edicion'
 
 @Injectable()
 export class PedidosService {
@@ -29,22 +18,14 @@ export class PedidosService {
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
     private readonly gateway: MenyuGateway,
+    private readonly acceso: AccesoService,
   ) {}
 
   async confirmar(authHeader: string | undefined, dto: CreatePedidoDto) {
-    if (!authHeader?.startsWith('Bearer ')) {
-      throw new UnauthorizedException('Session JWT requerido')
-    }
-
-    let payload: SessionJwt
-    try {
-      payload = this.jwt.verify<SessionJwt>(authHeader.slice(7))
-    } catch {
-      throw new UnauthorizedException('Session JWT inválido o expirado')
-    }
-
-    if (payload.tipo !== 'cliente') {
-      throw new UnauthorizedException('Solo clientes pueden crear pedidos')
+    const payload = verificarSesionDeMesa(this.jwt, authHeader, 'Solo clientes pueden crear pedidos')
+    exigirSuSesion(payload, dto.sesionId)
+    if (dto.mesaId !== payload.mesaId) {
+      throw new ForbiddenException('Esa mesa no es la de tu sesión')
     }
 
     const { restauranteId, sub: clienteId } = payload
@@ -166,15 +147,16 @@ export class PedidosService {
     return pedido
   }
 
-  async crearStaff(dto: CreatePedidoDto, user: JwtPayload) {
-    const sesion = await this.prisma.sesionMesa.findUnique({ where: { id: dto.sesionId } })
-    if (!sesion) throw new NotFoundException('Sesión no encontrada')
-    if (sesion.estado !== 'activa') throw new BadRequestException('La sesión no está activa')
-
+  async crearStaff(dto: CreatePedidoDto, usuario: UsuarioAutenticado) {
     const mesa = await this.prisma.mesa.findUnique({ where: { id: dto.mesaId } })
     if (!mesa) throw new NotFoundException('Mesa no encontrada')
 
-    await this.assertStaffAccess(mesa.restauranteId, user)
+    await this.acceso.exigirRol(usuario.id, mesa.restauranteId, SALON)
+
+    const sesion = await this.prisma.sesionMesa.findUnique({ where: { id: dto.sesionId } })
+    if (!sesion) throw new NotFoundException('Sesión no encontrada')
+    if (sesion.mesaId !== mesa.id) throw new BadRequestException('La sesión no es de esa mesa')
+    if (sesion.estado !== 'activa') throw new BadRequestException('La sesión no está activa')
 
     const { restauranteId } = mesa
 
@@ -263,32 +245,7 @@ export class PedidosService {
     return pedido
   }
 
-  private async assertStaffAccess(restauranteId: string, user: JwtPayload): Promise<void> {
-    if (user.tipo === 'mozo') {
-      if (user.restauranteId !== restauranteId) {
-        throw new ForbiddenException('No tenés acceso a este restaurante')
-      }
-      return
-    }
-    if (user.rol === 'ROOT') return
-    if (user.rol === 'OWNER') {
-      const admin = await this.prisma.admin.findUnique({ where: { id: user.sub } })
-      const restaurante = await this.prisma.restaurante.findUnique({ where: { id: restauranteId } })
-      if (!admin || !restaurante || admin.marcaId !== restaurante.marcaId) {
-        throw new ForbiddenException('No tenés acceso a este restaurante')
-      }
-      return
-    }
-    if (user.rol === 'GERENTE') {
-      const asignacion = await this.prisma.adminRestaurante.findUnique({
-        where: { adminId_restauranteId: { adminId: user.sub, restauranteId } },
-      })
-      if (!asignacion) throw new ForbiddenException('No tenés acceso a este restaurante')
-      return
-    }
-    throw new ForbiddenException('No tenés acceso a este restaurante')
-  }
-
+  /** El rol en el restaurante lo exige la ruta (`@RequiereRolEn`). */
   async listarPorEstado(restauranteId: string, estado: string) {
     const pedidos = await this.prisma.pedido.findMany({
       where: { mesa: { restauranteId }, estado },
@@ -319,23 +276,14 @@ export class PedidosService {
     }))
   }
 
-  async actualizarEstado(
-    id: string,
-    dto: UpdateEstadoPedidoDto,
-    req: Request,
-  ) {
-    // JwtAuthGuard ya verificó el token — req.user tiene el payload
-    const user = req.user as { tipo: string } | undefined
-    if (user?.tipo === 'cliente') {
-      throw new UnauthorizedException('Solo staff puede actualizar el estado de un pedido')
-    }
-
+  async actualizarEstado(id: string, dto: UpdateEstadoPedidoDto, usuario: UsuarioAutenticado) {
     // a. Buscar pedido con mesa para obtener restauranteId
     const pedido = await this.prisma.pedido.findUnique({
       where: { id },
       include: { mesa: true },
     })
     if (!pedido) throw new NotFoundException('Pedido no encontrado')
+    await this.acceso.exigirRol(usuario.id, pedido.mesa.restauranteId, TODO_EL_PERSONAL)
 
     // b. Validar transición
     const TRANSICIONES: Record<string, string> = {
@@ -376,14 +324,11 @@ export class PedidosService {
     return actualizado
   }
 
-  async editarPedido(id: string, dto: EditPedidoDto, req: Request) {
-    const user = req.user as { sub: string; tipo: string; rol?: string }
-
-    if (user.tipo === 'cliente') throw new UnauthorizedException('Sin permiso para editar pedidos')
-    if (user.tipo === 'admin' && !['GERENTE', 'ROOT'].includes(user.rol ?? '')) {
-      throw new ForbiddenException('Rol insuficiente — se requiere GERENTE o ROOT')
-    }
-
+  /**
+   * La edita el GERENTE, el JEFE_SALON o el MOZO del restaurante (el OWNER no, como antes). La edición queda a nombre
+   * de su cuenta (`usuarioId`) y, si la hizo como mozo, también de su `Mozo`, que sale de su cuenta y nunca del body.
+   */
+  async editarPedido(id: string, dto: EditPedidoDto, usuario: UsuarioAutenticado) {
     // 1. Buscar pedido
     const pedido = await this.prisma.pedido.findUnique({
       where: { id },
@@ -394,6 +339,7 @@ export class PedidosService {
       },
     })
     if (!pedido) throw new NotFoundException('Pedido no encontrado')
+    const mozoId = await this.mozoQueEdita(usuario, pedido.mesa.restauranteId)
     if (pedido.estado === 'anulado') {
       throw new BadRequestException('No se puede editar un pedido anulado')
     }
@@ -451,8 +397,8 @@ export class PedidosService {
       await tx.pedidoEdicion.create({
         data: {
           pedidoId: id,
-          adminId: user.tipo === 'admin' ? user.sub : null,
-          mozoId: user.tipo === 'mozo' ? user.sub : null,
+          usuarioId: usuario.id,
+          mozoId,
           justificacion: trimmed,
           itemsEliminados: {
             create: dto.ediciones.map((ed) => {
@@ -475,6 +421,7 @@ export class PedidosService {
     return resultado
   }
 
+  /** Solo el OWNER, lo exige la ruta (`@RequiereRolEn`). */
   async auditoriaEdiciones(restauranteId: string, desde?: string, hasta?: string) {
     if (!restauranteId) throw new BadRequestException('restauranteId es requerido')
 
@@ -505,8 +452,7 @@ export class PedidosService {
         creadoEn: { gte: desdeDate, lte: hastaDate },
       },
       include: {
-        admin: { select: { email: true } },
-        mozo: { select: { nombre: true } },
+        ...EDITOR_INCLUDE,
         pedido: {
           include: {
             mesa: { select: { numero: true } },
@@ -530,22 +476,18 @@ export class PedidosService {
     })
   }
 
-  async getEdiciones(id: string, req: Request) {
-    const user = req.user as { tipo: string }
-    if (user.tipo !== 'admin') {
-      throw new ForbiddenException('Solo administradores pueden ver el historial de ediciones')
-    }
-
-    const pedido = await this.prisma.pedido.findUnique({ where: { id } })
+  /** El historial de ediciones de un pedido: lo ven el OWNER y el GERENTE de su restaurante. */
+  async getEdiciones(id: string, usuario: UsuarioAutenticado) {
+    const pedido = await this.prisma.pedido.findUnique({
+      where: { id },
+      select: { mesa: { select: { restauranteId: true } } },
+    })
     if (!pedido) throw new NotFoundException('Pedido no encontrado')
+    await this.acceso.exigirRol(usuario.id, pedido.mesa.restauranteId, ADMINISTRACION)
 
     const ediciones = await this.prisma.pedidoEdicion.findMany({
       where: { pedidoId: id },
-      include: {
-        admin: { select: { email: true } },
-        mozo: { select: { nombre: true } },
-        itemsEliminados: true,
-      },
+      include: { ...EDITOR_INCLUDE, itemsEliminados: true },
       orderBy: { creadoEn: 'desc' },
     })
 
@@ -570,11 +512,7 @@ export class PedidosService {
           },
         },
         ediciones: {
-          include: {
-            admin: { select: { email: true } },
-            mozo: { select: { nombre: true } },
-            itemsEliminados: true,
-          },
+          include: { ...EDITOR_INCLUDE, itemsEliminados: true },
           orderBy: { creadoEn: 'desc' },
         },
       },
@@ -587,31 +525,36 @@ export class PedidosService {
     }
   }
 
-  private formatEdicion(e: {
-    id: string
-    justificacion: string
-    creadoEn: Date
-    adminId: string | null
-    mozoId: string | null
-    admin: { email: string } | null
-    mozo: { nombre: string } | null
-    itemsEliminados: {
+  /**
+   * El `Mozo` con el que edita un JEFE_SALON o un MOZO del restaurante (403 si su perfil no está activo), o null si
+   * edita como GERENTE. 403 a cualquier otro rol, también al OWNER.
+   */
+  private async mozoQueEdita(usuario: UsuarioAutenticado, restauranteId: string): Promise<string | null> {
+    const roles = await this.acceso.exigirRol(usuario.id, restauranteId, ['GERENTE', 'JEFE_SALON', 'MOZO'])
+    if (roles.includes('GERENTE')) return null
+    return (await this.acceso.exigirMozo(usuario.id, restauranteId)).id
+  }
+
+  private formatEdicion(
+    e: EdicionConEditor & {
       id: string
-      pedidoItemId: string
-      itemNombre: string
-      cantidadAntes: number
-      cantidadDespues: number
-      precioUnitario: unknown
-    }[]
-  }) {
+      justificacion: string
+      creadoEn: Date
+      itemsEliminados: {
+        id: string
+        pedidoItemId: string
+        itemNombre: string
+        cantidadAntes: number
+        cantidadDespues: number
+        precioUnitario: unknown
+      }[]
+    },
+  ) {
     return {
       id: e.id,
       justificacion: e.justificacion,
       creadoEn: e.creadoEn,
-      editor: {
-        nombre: e.admin?.email ?? e.mozo?.nombre ?? 'Desconocido',
-        tipo: e.adminId ? ('gerente' as const) : ('mozo' as const),
-      },
+      editor: editorDe(e),
       itemsEliminados: e.itemsEliminados.map((ei) => ({
         id: ei.id,
         itemNombre: ei.itemNombre,

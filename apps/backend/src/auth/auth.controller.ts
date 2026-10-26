@@ -1,23 +1,24 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Post, Req, UseGuards } from '@nestjs/common'
-import { Request } from 'express'
+import { Body, Controller, Get, HttpCode, HttpStatus, Post, UseGuards } from '@nestjs/common'
 import { ApiBearerAuth, ApiBody, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger'
-import { AuthService, JwtPayload } from './auth.service'
-import { JwtAuthGuard } from './guards/jwt-auth.guard'
+import { AuthService } from './auth.service'
+import { UsuarioActual } from './decorators/usuario-actual.decorator'
+import { SupabaseAuthGuard } from './guards/supabase-auth.guard'
 import { GuestDto } from './dto/guest.dto'
 import { LoginDto } from './dto/login.dto'
 import { RefreshTokenDto } from './dto/refresh-token.dto'
 import { RegisterDto } from './dto/register.dto'
+import { AccesoService } from './supabase/acceso.service'
+import { UsuarioAutenticado } from './supabase/usuario-autenticado'
 
 // TODO: proteger logout con JwtAuthGuard cuando se terminen las pruebas
-
-interface RequestWithUser extends Request {
-  user: JwtPayload
-}
 
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly auth: AuthService) {}
+  constructor(
+    private readonly auth: AuthService,
+    private readonly acceso: AccesoService,
+  ) {}
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
@@ -67,12 +68,13 @@ export class AuthController {
   }
 
   @Get('me')
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Obtener datos del usuario autenticado' })
-  @ApiResponse({ status: 200, description: 'Payload del JWT del usuario' })
-  @ApiResponse({ status: 401, description: 'Token inválido o expirado' })
-  me(@Req() req: RequestWithUser) {
-    return req.user
+  @UseGuards(SupabaseAuthGuard)
+  @ApiBearerAuth('supabase')
+  @ApiOperation({ summary: 'Usuario autenticado con Supabase y sus membresías' })
+  @ApiResponse({ status: 200, description: 'Usuario y membresías (la de OWNER trae los restaurantes activos de su marca)' })
+  @ApiResponse({ status: 401, description: 'Sin token de Supabase, o token inválido o vencido' })
+  @ApiResponse({ status: 403, description: 'La cuenta de Supabase no tiene acceso a MenYU' })
+  me(@UsuarioActual() usuario: UsuarioAutenticado) {
+    return this.acceso.perfil(usuario)
   }
 }

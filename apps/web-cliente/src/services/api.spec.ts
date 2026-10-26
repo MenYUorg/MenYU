@@ -1,3 +1,4 @@
+import { cuentaDePrueba, sesionDeSupabase } from '../test/authClient'
 import { crearTokenJwt } from '../test/fixtures'
 import { api, ApiError } from './api'
 
@@ -107,6 +108,25 @@ describe('api', () => {
 
         expect(encabezadosEnviados()['Authorization']).toBe(`Bearer ${token}`)
         expect(cuerpoEnviado()).toEqual({ tableCode: 'qr-1', restauranteId: 'rest-1' })
+      })
+
+      it('con la cuenta de Supabase (web-auth, Fase 4b) manda ese token', async () => {
+        cuentaDePrueba.session = sesionDeSupabase({ token: 'token-de-supabase' })
+        fetchFalso.mockResolvedValue(respuesta(200, { sesionId: 's' }))
+
+        await api.sessions.open({ qrToken: 'qr-1', restauranteId: 'rest-1' })
+
+        expect(encabezadosEnviados()['Authorization']).toBe('Bearer token-de-supabase')
+      })
+
+      it('si están las dos cuentas, manda la de Supabase', async () => {
+        guardar(crearTokenJwt({ sub: 'cli-1', tipo: 'cliente', exp: enUnaHora() }))
+        cuentaDePrueba.session = sesionDeSupabase({ token: 'token-de-supabase' })
+        fetchFalso.mockResolvedValue(respuesta(200, { sesionId: 's' }))
+
+        await api.sessions.open({ pin: '4821', restauranteId: 'rest-1' })
+
+        expect(encabezadosEnviados()['Authorization']).toBe('Bearer token-de-supabase')
       })
 
       it('también lo manda al entrar con el PIN', async () => {

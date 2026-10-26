@@ -1,4 +1,4 @@
-import { TOKEN_KEY, REFRESH_KEY, resolveLoginUrl } from '@menyu/auth'
+import { irAlLogin, renovarSesion, tokenDeAcceso, urlDeLaApi } from '@menyu/auth-client'
 import type {
   Marca,
   Restaurante,
@@ -7,8 +7,24 @@ import type {
   Ingrediente,
   ClasificacionDieta,
   LogoResponse,
-  TokenPair,
+  PersonalDelRestaurante,
+  CrearInvitacionRequest,
+  CrearInvitacionResponse,
   UpdateItemDescuentoRequest,
+  SesionHistorial,
+  RootMarcaResumen,
+  RootMarcaDetalle,
+  RootRestaurante,
+  RootCrearMarcaRequest,
+  RootEditarMarcaRequest,
+  RootCrearRestauranteRequest,
+  RootEditarRestauranteRequest,
+  RootHistorialFiltros,
+  RootHistorialPagina,
+  RootCuentaResumen,
+  RootCuentaInvitada,
+  RootDueno,
+  RootInvitarCuentaRequest,
 } from '@menyu/types'
 
 export class ApiError extends Error {
@@ -21,93 +37,61 @@ export class ApiError extends Error {
   }
 }
 
-const BASE = import.meta.env.VITE_API_URL ?? ''
-
-let isRefreshing = false
-let refreshQueue: Array<(token: string | null) => void> = []
-
-async function tryRefresh(): Promise<string | null> {
-  const refreshToken = localStorage.getItem(REFRESH_KEY)
-  if (!refreshToken) return null
-  try {
-    const res = await fetch(`${BASE}/auth/refresh`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refreshToken }),
-    })
-    if (!res.ok) return null
-    const data = (await res.json()) as TokenPair
-    localStorage.setItem(TOKEN_KEY, data.accessToken)
-    localStorage.setItem(REFRESH_KEY, data.refreshToken)
-    return data.accessToken
-  } catch {
-    return null
-  }
+/**
+ * Una llamada a la API con el access token de Supabase (docs/auth/specs/auth.md, API). Ante un 401 pide un token nuevo
+ * con el refresh token y reintenta una sola vez; si no se pudo, vuelve a web-auth. No usa localStorage: el token sale
+ * de la cookie de dominio compartido en cada llamada, así que un logout hecho en otra app se nota acá.
+ */
+async function enviar(path: string, opciones: RequestInit, token: string | null): Promise<Response> {
+  const headers: Record<string, string> = { ...(opciones.headers as Record<string, string> | undefined) }
+  if (token) headers['Authorization'] = `Bearer ${token}`
+  return fetch(`${urlDeLaApi()}${path}`, { ...opciones, headers })
 }
 
-async function req<T>(method: string, path: string, body?: unknown, isRetry = false): Promise<T> {
-  const token = localStorage.getItem(TOKEN_KEY)
-  const headers: Record<string, string> = {}
-  if (token) headers['Authorization'] = `Bearer ${token}`
-  if (body !== undefined) headers['Content-Type'] = 'application/json'
+async function pedir(path: string, opciones: RequestInit): Promise<Response> {
+  const res = await enviar(path, opciones, await tokenDeAcceso())
+  if (res.status !== 401) return res
 
-  const res = await fetch(`${BASE}${path}`, {
-    method,
-    headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  })
-
-  if (res.status === 401 && !isRetry) {
-    if (!isRefreshing) {
-      isRefreshing = true
-      const newToken = await tryRefresh()
-      isRefreshing = false
-      refreshQueue.forEach((cb) => cb(newToken))
-      refreshQueue = []
-      if (!newToken) {
-        localStorage.removeItem(TOKEN_KEY)
-        localStorage.removeItem(REFRESH_KEY)
-        window.location.replace(resolveLoginUrl())
-        throw new ApiError(401, 'Sesión expirada')
-      }
-      return req<T>(method, path, body, true)
-    }
-    return new Promise<T>((resolve, reject) => {
-      refreshQueue.push((newToken) => {
-        if (!newToken) reject(new ApiError(401, 'Sesión expirada'))
-        else req<T>(method, path, body, true).then(resolve).catch(reject)
-      })
-    })
+  // supabase-js serializa las renovaciones simultáneas con un lock del browser: dos pedidos en paralelo no piden dos.
+  const nuevo = await renovarSesion()
+  if (!nuevo) {
+    irAlLogin()
+    throw new ApiError(401, 'Sesión expirada')
   }
+  return enviar(path, opciones, nuevo)
+}
 
-  if (!res.ok) {
-    const err = (await res.json().catch(() => ({}))) as Record<string, unknown>
-    throw new ApiError(
-      res.status,
-      typeof err['message'] === 'string' ? err['message'] : `Error ${res.status}`,
-    )
-  }
+async function leerError(res: Response): Promise<never> {
+  const err = (await res.json().catch(() => ({}))) as Record<string, unknown>
+  throw new ApiError(
+    res.status,
+    typeof err['message'] === 'string' ? err['message'] : `Error ${res.status}`,
+  )
+}
 
+/** Para las pantallas que arman su propio pedido (PagosPage). Mismo token, mismo 401 y el mismo `ApiError`. */
+export async function pedirJson<T>(path: string, opciones: RequestInit = {}): Promise<T> {
+  const headers: Record<string, string> = { ...(opciones.headers as Record<string, string> | undefined) }
+  if (opciones.body !== undefined && !headers['Content-Type']) headers['Content-Type'] = 'application/json'
+
+  const res = await pedir(path, { ...opciones, headers })
+  if (!res.ok) return leerError(res)
   if (res.status === 204) return undefined as T
   return res.json() as Promise<T>
 }
 
+async function req<T>(method: string, path: string, body?: unknown): Promise<T> {
+  return pedirJson<T>(path, {
+    method,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  })
+}
+
 async function upload<T>(path: string, fieldName: string, file: File): Promise<T> {
-  const token = localStorage.getItem(TOKEN_KEY)
   const fd = new FormData()
   fd.append(fieldName, file)
-  const res = await fetch(`${BASE}${path}`, {
-    method: 'POST',
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-    body: fd,
-  })
-  if (!res.ok) {
-    const err = (await res.json().catch(() => ({}))) as Record<string, unknown>
-    throw new ApiError(
-      res.status,
-      typeof err['message'] === 'string' ? err['message'] : `Error ${res.status}`,
-    )
-  }
+  const res = await pedir(path, { method: 'POST', body: fd })
+  if (!res.ok) return leerError(res)
   return res.json() as Promise<T>
 }
 
@@ -206,7 +190,8 @@ export interface PedidoAdmin {
   createdAt: string
   updatedAt: string
   mesa: { numero: string }
-  pago?: { estado: string } | null
+  // La sesión del pedido ya tiene un cobro aprobado (GET /api/pedidos)
+  pagado?: boolean
   items: ItemPedidoAdmin[]
 }
 
@@ -230,45 +215,7 @@ export interface SesionActiva {
   }[]
 }
 
-export interface SesionHistorial {
-  sesionId: string
-  mesaNumero: string
-  iniciadaEn: string
-  cerradaEn: string
-  cantidadPedidos: number
-  totalSesion: number
-  pedidos: {
-    id: string
-    estado: string
-    createdAt: string
-    totalPedido: number
-    tieneEdiciones: boolean
-    items: {
-      id: string
-      cantidad: number
-      cantidadEditada: number | null
-      precioUnitario: number
-      itemNombre: string
-      mods: {
-        accion: string
-        ingredienteNombre: string
-      }[]
-    }[]
-    ediciones: {
-      id: string
-      justificacion: string
-      creadoEn: string
-      editor: { nombre: string; tipo: 'gerente' | 'mozo' }
-      itemsEliminados: {
-        itemNombre: string
-        cantidadAntes: number
-        cantidadDespues: number
-        precioUnitario: number
-        esAnulacion: boolean
-      }[]
-    }[]
-  }[]
-}
+export type { SesionHistorial } from '@menyu/types'
 
 export const api = {
   marcas: {
@@ -366,8 +313,6 @@ export const api = {
     pagos: {
       listSesiones: (restauranteId: string) =>
         req<SesionResumen[]>('GET', `/payments/sesiones?restauranteId=${encodeURIComponent(restauranteId)}`),
-      confirmarEfectivo: (sesionId: string) =>
-        req<{ sesionId: string; estado: string }>('POST', '/payments/confirmar-efectivo', { sesionId }),
     },
 
     sessions: {
@@ -414,14 +359,12 @@ export const api = {
       req<{ id: string; nombre: string; email: string | null; telefono: string | null; activo: boolean; esJefeSalon: boolean; createdAt: string }[]>(
         'GET', `/mozos?restauranteId=${encodeURIComponent(restauranteId)}`,
       ),
-    create: (data: { restauranteId: string; nombre: string; email: string; password: string; esJefeSalon?: boolean }) =>
-      req<{ id: string; nombre: string; email: string | null; telefono: string | null; activo: boolean; esJefeSalon: boolean; createdAt: string }>(
-        'POST', '/mozos', data,
-      ),
-    update: (id: string, data: { nombre?: string; email?: string; password?: string; esJefeSalon?: boolean; activo?: boolean }) =>
+    /** El email y la contraseña son de la cuenta de Supabase; si es jefe de salón, lo dice su membresía. */
+    update: (id: string, data: { nombre?: string; telefono?: string }) =>
       req<{ id: string; nombre: string; email: string | null; telefono: string | null; activo: boolean; esJefeSalon: boolean; createdAt: string }>(
         'PATCH', `/mozos/${id}`, data,
       ),
+    /** Solo para un mozo sin cuenta: con cuenta, el backend responde 409 y el acceso se quita desde Personal. */
     delete: (id: string) => req<void>('DELETE', `/mozos/${id}`),
     getMesas: (mozoId: string) =>
       req<{ id: string; numero: string; estado: string }[]>('GET', `/mozos/${mozoId}/mesas`),
@@ -433,25 +376,21 @@ export const api = {
       req<{ total: number }>('GET', `/mozos/${mozoId}/llamados-hoy`),
   },
 
-  admins: {
-    create: (data: { nombre: string; email: string; password: string; restauranteId: string }) =>
-      req<{ id: string; email: string; rol: string }>('POST', '/admins', data),
-    list: () =>
-      req<{ id: string; email: string; rol: string; marcaId: string | null }[]>('GET', '/admins'),
-    update: (id: string, data: { email?: string; password?: string }) =>
-      req<{ id: string; email: string; rol: string; marcaId: string | null }>('PATCH', `/admins/${id}`, data),
-    delete: (id: string) => req<void>('DELETE', `/admins/${id}`),
+  /** Quién tiene acceso al restaurante y cómo quitárselo. El alta es la invitación (`api.invitaciones.crear`). */
+  personal: {
+    listar: (restauranteId: string) =>
+      req<PersonalDelRestaurante>('GET', `/restaurantes/${encodeURIComponent(restauranteId)}/personal`),
+    quitarAcceso: (restauranteId: string, membresiaId: string) =>
+      req<void>(
+        'DELETE',
+        `/restaurantes/${encodeURIComponent(restauranteId)}/personal/${encodeURIComponent(membresiaId)}`,
+      ),
   },
 
-  adminRestaurante: {
-    asignar: (adminId: string, restauranteId: string) =>
-      req<{ id: string }>('POST', '/admin-restaurante', { adminId, restauranteId }),
-    desasignar: (adminId: string, restauranteId: string) =>
-      req<void>('DELETE', `/admin-restaurante/${adminId}/${restauranteId}`),
-    porAdmin: (adminId: string) =>
-      req<{ restauranteId: string; restaurante: { id: string; nombre: string } }[]>(
-        'GET', `/admin-restaurante/${adminId}`,
-      ),
+  /** El alta de personal: Supabase le manda el mail para que elija su contraseña. */
+  invitaciones: {
+    crear: (data: CrearInvitacionRequest) =>
+      req<CrearInvitacionResponse>('POST', '/auth/invitaciones', data),
   },
 
   pedidos: {
@@ -489,5 +428,60 @@ export const api = {
       req<ItemMenu>('POST', `/clasificaciones/items/${itemId}`, { clasificacionId }),
     removeFromItem: (itemId: string, clasificacionId: string) =>
       req<void>('DELETE', `/clasificaciones/items/${itemId}/${clasificacionId}`),
+  },
+
+  /**
+   * Consola de ROOT (`/api/root/*`, solo para ROOT). Ver docs/plan-consola-root.md. Las marcas y los restaurantes no se borran:
+   * "dar de baja" es reversible. Dueños y cuentas ROOT todavía no están acá: esperan a la migración de autenticación.
+   */
+  root: {
+    marcas: {
+      /** Por defecto solo las activas; con `bajas` también las dadas de baja. */
+      listar: (opciones: { bajas?: boolean } = {}) =>
+        req<RootMarcaResumen[]>('GET', `/root/marcas${opciones.bajas ? '?bajas=true' : ''}`),
+      detalle: (id: string) => req<RootMarcaDetalle>('GET', `/root/marcas/${encodeURIComponent(id)}`),
+      crear: (data: RootCrearMarcaRequest) => req<RootMarcaDetalle>('POST', '/root/marcas', data),
+      editar: (id: string, data: RootEditarMarcaRequest) =>
+        req<RootMarcaDetalle>('PATCH', `/root/marcas/${encodeURIComponent(id)}`, data),
+      baja: (id: string) => req<RootMarcaDetalle>('POST', `/root/marcas/${encodeURIComponent(id)}/baja`),
+      reactivar: (id: string) => req<RootMarcaDetalle>('POST', `/root/marcas/${encodeURIComponent(id)}/reactivar`),
+      crearRestaurante: (marcaId: string, data: RootCrearRestauranteRequest) =>
+        req<RootRestaurante>('POST', `/root/marcas/${encodeURIComponent(marcaId)}/restaurantes`, data),
+    },
+    restaurantes: {
+      editar: (id: string, data: RootEditarRestauranteRequest) =>
+        req<RootRestaurante>('PATCH', `/root/restaurantes/${encodeURIComponent(id)}`, data),
+      baja: (id: string) => req<RootRestaurante>('POST', `/root/restaurantes/${encodeURIComponent(id)}/baja`),
+      reactivar: (id: string) => req<RootRestaurante>('POST', `/root/restaurantes/${encodeURIComponent(id)}/reactivar`),
+    },
+    historial: {
+      /** De a 50, de lo más nuevo a lo más viejo. Los filtros vacíos no se mandan. */
+      listar: (filtros: RootHistorialFiltros = {}) => {
+        const consulta = new URLSearchParams()
+        if (filtros.actor) consulta.set('actor', filtros.actor)
+        if (filtros.entidad) consulta.set('entidad', filtros.entidad)
+        if (filtros.desde) consulta.set('desde', filtros.desde)
+        if (filtros.hasta) consulta.set('hasta', filtros.hasta)
+        if (filtros.cursor) consulta.set('cursor', String(filtros.cursor))
+        const texto = consulta.toString()
+        return req<RootHistorialPagina>('GET', `/root/historial${texto ? `?${texto}` : ''}`)
+      },
+    },
+    /** Los dueños (membresías OWNER) se invitan por mail y se les quita el acceso: la cuenta de la persona no se toca. */
+    duenos: {
+      /** Todos, ordenados por email y marca. La búsqueda se hace en pantalla (sin acentos). */
+      listar: () => req<RootDueno[]>('GET', '/root/duenos'),
+      /** `invitacionEnviada: false` es que la persona ya tenía una cuenta: se le suma la marca sin mandarle mail. */
+      invitar: (marcaId: string, data: RootInvitarCuentaRequest) =>
+        req<CrearInvitacionResponse>('POST', `/root/marcas/${encodeURIComponent(marcaId)}/duenos`, data),
+      /** Se manda el id de la membresía. 409 si es el último dueño de una marca activa. */
+      quitar: (membresiaId: string) => req<void>('DELETE', `/root/duenos/${encodeURIComponent(membresiaId)}`),
+    },
+    /** Las cuentas ROOT: el filtro "Quién" del historial y la pantalla de Cuentas ROOT. No hay forma de quitarlas desde la API. */
+    cuentas: {
+      listar: () => req<RootCuentaResumen[]>('GET', '/root/roots'),
+      /** 409 si el email ya tiene una cuenta de MenYU: hacerla ROOT es del script de cuentas ROOT. */
+      invitar: (data: RootInvitarCuentaRequest) => req<RootCuentaInvitada>('POST', '/root/roots', data),
+    },
   },
 }

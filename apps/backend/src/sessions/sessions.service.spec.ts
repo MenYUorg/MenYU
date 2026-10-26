@@ -3,15 +3,18 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  HttpException,
   NotFoundException,
 } from '@nestjs/common'
 import { JwtService } from '@nestjs/jwt'
-import { SessionsService } from './sessions.service'
+import { LIMITE_CODIGO_SESION, SessionsService } from './sessions.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { UsersService } from '../users/users.service'
 import { MenyuGateway } from '../gateway/menyu.gateway'
 import { DivisionService } from '../comensales/division.service'
-import { JwtPayload } from '../auth/auth.service'
+import { AccesoService } from '../auth/supabase/acceso.service'
+import { CuentaDeClienteService } from '../auth/supabase/cuenta-de-cliente.service'
+import { accesoDeTest, CUENTAS, MOZOS, MUNDO } from '../test/acceso-de-test'
 import {
   ESTADO_PAGO_APROBADO,
   ESTADO_PAGO_PENDIENTE,
@@ -38,13 +41,7 @@ const mockPrisma = {
   pedidoItem: {
     findMany: jest.fn(),
   },
-  admin: {
-    findUnique: jest.fn(),
-  },
-  restaurante: {
-    findUnique: jest.fn(),
-  },
-  adminRestaurante: {
+  mozo: {
     findUnique: jest.fn(),
   },
   $transaction: jest.fn(),
@@ -69,6 +66,25 @@ const mockDivision = {
   calcularTotalSesion: jest.fn(),
 }
 
+// La cuenta de cliente de Supabase (Fase 4b): cómo resuelve el `Cliente` se prueba en cuenta-de-cliente.service.spec.
+const mockCuentas = {
+  clienteDe: jest.fn(),
+}
+
+/** Un token con el encabezado de uno de Supabase (ES256). La firma no importa: la verifica CuentaDeClienteService. */
+const TOKEN_DE_SUPABASE = [
+  Buffer.from(JSON.stringify({ alg: 'ES256', kid: 'clave-del-proyecto', typ: 'JWT' })).toString('base64url'),
+  Buffer.from(JSON.stringify({ sub: '6f1c2a40-2222-4a1b-9c3d-000000000001' })).toString('base64url'),
+  'firma',
+].join('.')
+
+/** El del login de `/auth` de web-cliente (JWT_SECRET, HS256). */
+const TOKEN_DEL_LOGIN_ANTERIOR = [
+  Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url'),
+  Buffer.from(JSON.stringify({ sub: 'cli-1', tipo: 'cliente' })).toString('base64url'),
+  'firma',
+].join('.')
+
 // Mock del cliente `tx` que recibe el callback de runSerializableTransaction.
 // Cada test de registrarCobro fija explícitamente qué devuelve cada llamada.
 function createTxMock() {
@@ -85,13 +101,14 @@ function createTxMock() {
   }
 }
 
+// El restaurante y su marca vienen activos: la baja de uno de los dos se prueba aparte, en "restaurante dado de baja".
 const MESA_ABIERTA = {
   id: 'mesa-1',
   restauranteId: 'rest-1',
-  restaurante: { modoSesion: 'abierto' },
+  restaurante: { modoSesion: 'abierto', activo: true, marca: { activo: true } },
 }
 
-const MESA_SEGURA = { ...MESA_ABIERTA, restaurante: { modoSesion: 'seguro' } }
+const MESA_SEGURA = { ...MESA_ABIERTA, restaurante: { ...MESA_ABIERTA.restaurante, modoSesion: 'seguro' } }
 
 const SESION_ACTIVA = {
   id: 'sesion-1',
@@ -115,6 +132,8 @@ describe('SessionsService', () => {
         { provide: JwtService,   useValue: mockJwt     },
         { provide: MenyuGateway, useValue: mockGateway },
         { provide: DivisionService, useValue: mockDivision },
+        { provide: AccesoService, useValue: accesoDeTest() },
+        { provide: CuentaDeClienteService, useValue: mockCuentas },
       ],
     }).compile()
 
@@ -197,6 +216,40 @@ describe('SessionsService', () => {
       expect(mockUsers.createCliente).toHaveBeenCalledWith({ nombre: 'Invitado' })
       expect(id).toBe('guest-1')
     })
+
+    describe('con la cuenta de Supabase (Fase 4b)', () => {
+      it('token de Supabase → el Cliente de esa cuenta, sin pasar por JWT_SECRET ni crear un invitado', async () => {
+        mockCuentas.clienteDe.mockResolvedValue('cli-supabase')
+
+        const id = await (service as any).resolveClienteId(`Bearer ${TOKEN_DE_SUPABASE}`)
+
+        expect(id).toBe('cli-supabase')
+        expect(mockCuentas.clienteDe).toHaveBeenCalledWith(TOKEN_DE_SUPABASE)
+        expect(mockJwt.verify).not.toHaveBeenCalled()
+        expect(mockUsers.createCliente).not.toHaveBeenCalled()
+      })
+
+      it('token de Supabase que no sirve (vencido, de otro proyecto) → invitado, sin probarlo con JWT_SECRET', async () => {
+        mockCuentas.clienteDe.mockResolvedValue(null)
+
+        const id = await (service as any).resolveClienteId(`Bearer ${TOKEN_DE_SUPABASE}`)
+
+        expect(id).toBe('guest-1')
+        expect(mockJwt.verify).not.toHaveBeenCalled()
+        expect(mockUsers.createCliente).toHaveBeenCalledWith({ nombre: 'Invitado' })
+      })
+
+      it('el token del login anterior (HS256) sigue con JWT_SECRET y no llega a Supabase', async () => {
+        mockJwt.verify.mockReturnValue({ sub: 'cli-1', tipo: 'cliente' })
+        mockUsers.findClienteById.mockResolvedValue(CLIENTE)
+
+        const id = await (service as any).resolveClienteId(`Bearer ${TOKEN_DEL_LOGIN_ANTERIOR}`)
+
+        expect(id).toBe('cli-1')
+        expect(mockJwt.verify).toHaveBeenCalledWith(TOKEN_DEL_LOGIN_ANTERIOR)
+        expect(mockCuentas.clienteDe).not.toHaveBeenCalled()
+      })
+    })
   })
 
   // ── open ──────────────────────────────────────────────────────────────
@@ -257,6 +310,97 @@ describe('SessionsService', () => {
       })
     })
 
+    describe('un rechazo al unirse a una sesión no deja un cliente invitado', () => {
+      const unirseConCodigo = (codigoSesion?: string): Promise<unknown> => service.open({ tableCode: 'qr-abc', codigoSesion })
+
+      it.each<[string, number, string | undefined, () => Promise<void>]>([
+        ['sin código', 403, undefined, async () => undefined],
+        ['con código incorrecto', 403, '999', async () => undefined],
+        [
+          'con la mesa bloqueada por códigos incorrectos',
+          429,
+          '042',
+          async () => {
+            for (let i = 0; i < LIMITE_CODIGO_SESION.maxFallos; i++) {
+              await unirseConCodigo('999').catch(() => undefined)
+            }
+            mockUsers.createCliente.mockClear()
+          },
+        ],
+      ])('modo seguro %s → %i y no crea al cliente invitado', async (_caso, estado, codigoSesion, preparar) => {
+        // Arrange
+        mockPrisma.mesa.findFirst.mockResolvedValue(MESA_SEGURA)
+        mockPrisma.sesionMesa.findFirst.mockResolvedValue(SESION_ACTIVA)
+        await preparar()
+
+        // Act
+        const error = await unirseConCodigo(codigoSesion).catch((e: unknown) => e)
+
+        // Assert
+        expect(error).toBeInstanceOf(HttpException)
+        expect((error as HttpException).getStatus()).toBe(estado)
+        expect(mockUsers.createCliente).not.toHaveBeenCalled()
+        expect(mockPrisma.sesionMesaCliente.create).not.toHaveBeenCalled()
+      })
+    })
+
+    // Caracterización: el primer cliente de una sesión que abrió el staff (clienteId null, sin participantes) entra
+    // sin código y queda como anfitrión, aun en modo seguro. Lo deciden sesionActiva.clienteId y la cantidad de
+    // participantes de la sesión, no el cliente que entra.
+    describe('sesión abierta por el staff (modo seguro)', () => {
+      const SESION_DEL_STAFF = { id: 'sesion-staff', mesaId: 'mesa-1', codigoSesion: '042', clienteId: null, estado: 'activa' }
+
+      function sesionDelStaffCon(participantes: number) {
+        mockPrisma.mesa.findFirst.mockResolvedValue(MESA_SEGURA)
+        mockPrisma.sesionMesa.findFirst.mockResolvedValue(SESION_DEL_STAFF)
+        mockPrisma.sesionMesaCliente.count.mockResolvedValue(participantes)
+        mockPrisma.sesionMesaCliente.findUnique.mockResolvedValue(null)
+        mockPrisma.sesionMesaCliente.create.mockResolvedValue({})
+      }
+
+      it('el primer cliente entra sin código, como anfitrión, y queda como participante 1', async () => {
+        // Arrange
+        sesionDelStaffCon(0)
+
+        // Act
+        const result = await service.open({ tableCode: 'qr-abc' })
+
+        // Assert
+        expect(result).toMatchObject({ sesionId: 'sesion-staff', esAnfitrion: true, clienteId: INVITADO.id, codigoSesion: '042' })
+        expect(mockPrisma.sesionMesaCliente.create).toHaveBeenCalledWith({
+          data: { sesionId: 'sesion-staff', clienteId: INVITADO.id, orden: 1 },
+        })
+        expect(mockPrisma.sesionMesa.create).not.toHaveBeenCalled()
+      })
+
+      it('con un participante ya adentro, el siguiente cliente sin código recibe 403', async () => {
+        // Arrange
+        sesionDelStaffCon(1)
+
+        // Act
+        const unirse = service.open({ tableCode: 'qr-abc' })
+
+        // Assert
+        await expect(unirse).rejects.toThrow(ForbiddenException)
+        await expect(unirse).rejects.toThrow('Esta mesa requiere código de sesión para unirse')
+        expect(mockPrisma.sesionMesaCliente.create).not.toHaveBeenCalled()
+      })
+
+      it('con un participante ya adentro, el siguiente cliente con el código correcto entra sin ser anfitrión', async () => {
+        // Arrange
+        sesionDelStaffCon(1)
+
+        // Act
+        const result = await service.open({ tableCode: 'qr-abc', codigoSesion: '042' })
+
+        // Assert
+        expect(result).toMatchObject({ sesionId: 'sesion-staff', esAnfitrion: false })
+        expect(mockPrisma.sesionMesaCliente.create).toHaveBeenCalledWith({
+          data: { sesionId: 'sesion-staff', clienteId: INVITADO.id, orden: 2 },
+        })
+      })
+    })
+
     describe('restauranteId junto con tableCode (D11)', () => {
       it('QR de una mesa de otro restaurante → 409 con un mensaje claro', async () => {
         mockPrisma.mesa.findFirst.mockResolvedValue(MESA_ABIERTA)
@@ -314,6 +458,91 @@ describe('SessionsService', () => {
         await expect(service.open({ restauranteId: 'otro-rest', pin: '1234' })).rejects.toThrow('Mesa no encontrada')
 
         expect(mockUsers.createCliente).not.toHaveBeenCalled()
+      })
+    })
+
+    describe('restaurante dado de baja (docs/plan-consola-root.md, sección 6)', () => {
+      const conRestaurante = (cambios: { activo?: boolean; marcaActiva?: boolean }) => ({
+        ...MESA_ABIERTA,
+        restaurante: {
+          ...MESA_ABIERTA.restaurante,
+          activo: cambios.activo ?? true,
+          marca: { activo: cambios.marcaActiva ?? true },
+        },
+      })
+
+      it.each([
+        ['el restaurante', { activo: false }],
+        ['su marca', { marcaActiva: false }],
+        ['los dos', { activo: false, marcaActiva: false }],
+      ])('mesa libre y dado de baja %s → 403 "Este restaurante no está disponible", sin crear nada', async (_quien, cambios) => {
+        mockPrisma.mesa.findFirst.mockResolvedValue(conRestaurante(cambios))
+        mockPrisma.sesionMesa.findFirst.mockResolvedValue(null)
+
+        await expect(service.open({ tableCode: 'qr-abc' })).rejects.toThrow(
+          new ForbiddenException('Este restaurante no está disponible'),
+        )
+
+        expect(mockUsers.createCliente).not.toHaveBeenCalled()
+        expect(mockPrisma.sesionMesa.create).not.toHaveBeenCalled()
+        expect(mockPrisma.$transaction).not.toHaveBeenCalled()
+        expect(mockPrisma.mesa.update).not.toHaveBeenCalled()
+      })
+
+      it('lo mismo por PIN, y no cuenta como un PIN equivocado (el PIN estaba bien)', async () => {
+        mockPrisma.mesa.findFirst.mockResolvedValue(conRestaurante({ activo: false }))
+        mockPrisma.sesionMesa.findFirst.mockResolvedValue(null)
+
+        for (let i = 0; i < 20; i++) {
+          await expect(service.open({ restauranteId: 'rest-1', pin: '1234' })).rejects.toThrow('Este restaurante no está disponible')
+        }
+      })
+
+      it('con una sesión ya abierta se deja terminar: quien se suma o vuelve a escanear su QR entra igual', async () => {
+        mockPrisma.mesa.findFirst.mockResolvedValue(conRestaurante({ marcaActiva: false }))
+        mockPrisma.sesionMesa.findFirst.mockResolvedValue(SESION_ACTIVA)
+        mockPrisma.sesionMesaCliente.findUnique.mockResolvedValue(null)
+        mockPrisma.sesionMesaCliente.count.mockResolvedValue(1)
+        mockPrisma.sesionMesaCliente.create.mockResolvedValue({})
+
+        const result = await service.open({ tableCode: 'qr-abc' })
+
+        expect(result.sesionId).toBe('sesion-1')
+        expect(mockPrisma.sesionMesa.create).not.toHaveBeenCalled()
+      })
+
+      it('quien ya participaba de la sesión vuelve a entrar sin sumarse de nuevo', async () => {
+        mockPrisma.mesa.findFirst.mockResolvedValue(conRestaurante({ activo: false }))
+        mockPrisma.sesionMesa.findFirst.mockResolvedValue(SESION_ACTIVA)
+        mockPrisma.sesionMesaCliente.findUnique.mockResolvedValue({ sesionId: 'sesion-1', clienteId: INVITADO.id })
+        mockPrisma.sesionMesaCliente.count.mockResolvedValue(1)
+
+        const result = await service.open({ tableCode: 'qr-abc' })
+
+        expect(result.sesionId).toBe('sesion-1')
+        expect(mockPrisma.sesionMesaCliente.create).not.toHaveBeenCalled()
+      })
+
+      it('reactivado (restaurante y marca activos) abre la mesa como siempre', async () => {
+        mockPrisma.mesa.findFirst.mockResolvedValue(conRestaurante({}))
+        mockPrisma.sesionMesa.findFirst.mockResolvedValue(null)
+        mockPrisma.$transaction.mockResolvedValue([{ id: 'nueva-sesion', codigoSesion: '007' }, { id: 'mesa-1' }])
+
+        const result = await service.open({ tableCode: 'qr-abc' })
+
+        expect(result.sesionId).toBe('nueva-sesion')
+      })
+
+      it('la mesa se pide junto con la disponibilidad del restaurante y de su marca', async () => {
+        mockPrisma.mesa.findFirst.mockResolvedValue(null)
+
+        await expect(service.open({ tableCode: 'qr-abc' })).rejects.toThrow(NotFoundException)
+
+        expect(mockPrisma.mesa.findFirst).toHaveBeenCalledWith(
+          expect.objectContaining({
+            include: { restaurante: { select: { modoSesion: true, activo: true, marca: { select: { activo: true } } } } },
+          }),
+        )
       })
     })
 
@@ -408,6 +637,37 @@ describe('SessionsService', () => {
       expect(mockUsers.createCliente).not.toHaveBeenCalled()
       expect(result.clienteId).toBe('cli-1')
     })
+
+    it('con la cuenta de Supabase la mesa queda a nombre de su Cliente: anfitrión, participante y token de la sesión', async () => {
+      mockCuentas.clienteDe.mockResolvedValue('cli-supabase')
+      mockPrisma.mesa.findFirst.mockResolvedValue(MESA_ABIERTA)
+      mockPrisma.sesionMesa.findFirst.mockResolvedValue(null)
+      mockPrisma.sesionMesa.create.mockResolvedValue({ id: 'nueva-sesion', codigoSesion: '042' })
+      mockPrisma.$transaction.mockResolvedValue([
+        { id: 'nueva-sesion', codigoSesion: '042' },
+        { id: 'mesa-1', estado: 'ocupada' },
+      ])
+
+      const result = await service.open({ tableCode: 'qr-abc' }, `Bearer ${TOKEN_DE_SUPABASE}`)
+
+      expect(result.clienteId).toBe('cli-supabase')
+      expect(mockPrisma.sesionMesa.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          clienteId: 'cli-supabase',
+          participantes: { create: { clienteId: 'cli-supabase', orden: 1 } },
+        }),
+      })
+      expect(mockJwt.sign).toHaveBeenCalledWith(expect.objectContaining({ sub: 'cli-supabase', tipo: 'cliente' }))
+      expect(mockUsers.createCliente).not.toHaveBeenCalled()
+    })
+
+    it('con la cuenta de Supabase, una mesa que no existe no llega a resolver la cuenta', async () => {
+      mockPrisma.mesa.findFirst.mockResolvedValue(null)
+
+      await expect(service.open({ tableCode: 'qr-no-existe' }, `Bearer ${TOKEN_DE_SUPABASE}`)).rejects.toThrow(NotFoundException)
+
+      expect(mockCuentas.clienteDe).not.toHaveBeenCalled()
+    })
   })
 
   // ── registrarCobro ───────────────────────────────────────────────────
@@ -417,10 +677,10 @@ describe('SessionsService', () => {
       id: 'sesion-1',
       cerradaEn: null,
       mesaId: 'mesa-1',
-      mesa: { id: 'mesa-1', numero: '5', restauranteId: 'rest-1' },
+      mesa: { id: 'mesa-1', numero: '5', restauranteId: MUNDO.REST_1 },
     }
 
-    const USER_MOZO: JwtPayload = { sub: 'mozo-1', tipo: 'mozo', restauranteId: 'rest-1' }
+    const USER_MOZO = CUENTAS.MOZO
 
     const DTO_BASE = { metodoPago: 'efectivo' as const }
 
@@ -589,22 +849,60 @@ describe('SessionsService', () => {
       expect(tx.pago.updateMany).not.toHaveBeenCalled()
     })
 
-    it('MP pendiente viejo (11 min) sin flag → se cancela sin aviso y el cobro se registra', async () => {
+    it('varios MP pendientes recientes en cualquier orden → el 409 toma como "más reciente" al de menos minutos', async () => {
+      // Arrange: el más reciente (1 min) viene primero en la lista y el más viejo (8 min) en el medio.
       mockDivision.calcularTotalSesion.mockResolvedValue(1000)
       tx.pago.findMany
         .mockResolvedValueOnce([]) // aprobados previos
-        .mockResolvedValueOnce([pagoMp('pago-mp1', 300, hace(11))])
-        .mockResolvedValueOnce([{ id: 'pago-nuevo', monto: 1000 }])
+        .mockResolvedValueOnce([
+          pagoMp('pago-mp1', 100, hace(1)),
+          pagoMp('pago-mp2', 150, hace(8)),
+          pagoMp('pago-mp3', 250, hace(4)),
+        ])
+
+      // Act
+      let error: unknown
+      try {
+        await service.registrarCobro('sesion-1', DTO_BASE, USER_MOZO)
+      } catch (e) {
+        error = e
+      }
+
+      // Assert
+      expect(error).toBeInstanceOf(ConflictException)
+      expect((error as Error).message).toBe(
+        'Hay 3 pagos por MercadoPago sin terminar por un total de $500.00 (el más reciente hace 1 minuto). Si cobrás la mesa, se cancelan.',
+      )
+      expect(tx.pago.updateMany).not.toHaveBeenCalled()
+    })
+
+    // Ventana de VENTANA_MP_PENDIENTE_MS (10 min) con comparación estricta: ahora - createdAt < 10 min es reciente.
+    // A los 10:00 exactos el pago ya es viejo: se cancela sin aviso y se cobra.
+    it.each([
+      ['9:59', 9 * 60 + 59, '409', []],
+      ['10:00', 10 * 60, 'cobra', [['pago-mp1']]],
+      ['10:01', 10 * 60 + 1, 'cobra', [['pago-mp1']]],
+      ['11:00', 11 * 60, 'cobra', [['pago-mp1']]],
+    ])('MP pendiente de hace %s (%i s) sin flag → %s', async (_antiguedad, segundos, esperado, cancelados) => {
+      // Arrange
+      mockDivision.calcularTotalSesion.mockResolvedValue(1000)
+      tx.pago.findMany
+        .mockResolvedValueOnce([]) // aprobados previos
+        .mockResolvedValueOnce([pagoMp('pago-mp1', 300, new Date(AHORA.getTime() - segundos * 1000))])
+        .mockResolvedValueOnce([{ id: 'pago-nuevo', monto: 1000 }]) // aprobados post-insert
       tx.pago.updateMany.mockResolvedValue({ count: 1 })
       tx.pago.create.mockResolvedValue({ id: 'pago-nuevo' })
 
-      const result = await service.registrarCobro('sesion-1', DTO_BASE, USER_MOZO)
+      // Act
+      const resultado = await service.registrarCobro('sesion-1', DTO_BASE, USER_MOZO).then(
+        () => 'cobra',
+        (e: unknown) => (e instanceof ConflictException ? '409' : e),
+      )
 
-      expect(tx.pago.updateMany).toHaveBeenCalledWith({
-        where: { id: { in: ['pago-mp1'] } },
-        data: { estado: ESTADO_PAGO_CANCELADO },
-      })
-      expect(result).toEqual({ ok: true })
+      // Assert
+      expect(resultado).toBe(esperado)
+      expect(tx.pago.updateMany.mock.calls.map(([args]) => args.where.id.in)).toEqual(cancelados)
+      expect(tx.pago.create).toHaveBeenCalledTimes(esperado === 'cobra' ? 1 : 0)
     })
 
     it('MP pendiente reciente + MP pendiente viejo + flag → se cancelan ambos', async () => {
@@ -624,33 +922,6 @@ describe('SessionsService', () => {
 
       expect(tx.pago.updateMany).toHaveBeenCalledWith({
         where: { id: { in: ['pago-mp1', 'pago-mp2'] } },
-        data: { estado: ESTADO_PAGO_CANCELADO },
-      })
-    })
-
-    it('frontera de la ventana: a 9 min 59 s el MP es reciente → 409, nada se cancela', async () => {
-      mockDivision.calcularTotalSesion.mockResolvedValue(1000)
-      tx.pago.findMany
-        .mockResolvedValueOnce([]) // aprobados previos
-        .mockResolvedValueOnce([pagoMp('pago-mp1', 300, new Date(AHORA.getTime() - (10 * 60_000 - 1000)))])
-
-      await expect(service.registrarCobro('sesion-1', DTO_BASE, USER_MOZO)).rejects.toThrow(ConflictException)
-      expect(tx.pago.updateMany).not.toHaveBeenCalled()
-    })
-
-    it('frontera de la ventana: a 10 min 0 s el MP es viejo → se cancela sin aviso', async () => {
-      mockDivision.calcularTotalSesion.mockResolvedValue(1000)
-      tx.pago.findMany
-        .mockResolvedValueOnce([]) // aprobados previos
-        .mockResolvedValueOnce([pagoMp('pago-mp1', 300, new Date(AHORA.getTime() - 10 * 60_000))])
-        .mockResolvedValueOnce([{ id: 'pago-nuevo', monto: 1000 }])
-      tx.pago.updateMany.mockResolvedValue({ count: 1 })
-      tx.pago.create.mockResolvedValue({ id: 'pago-nuevo' })
-
-      await service.registrarCobro('sesion-1', DTO_BASE, USER_MOZO)
-
-      expect(tx.pago.updateMany).toHaveBeenCalledWith({
-        where: { id: { in: ['pago-mp1'] } },
         data: { estado: ESTADO_PAGO_CANCELADO },
       })
     })
@@ -719,6 +990,125 @@ describe('SessionsService', () => {
         ...tx.pago.create.mock.calls,
       ]
       expect(JSON.stringify(consultas)).not.toContain('comensalId')
+    })
+
+    describe('a nombre de quién queda el cobro (#356)', () => {
+      const cobroQueCierra = () => {
+        mockDivision.calcularTotalSesion.mockResolvedValue(1000)
+        tx.pago.findMany
+          .mockResolvedValueOnce([]) // aprobados previos
+          .mockResolvedValueOnce([]) // sin MP pendientes
+          .mockResolvedValueOnce([{ id: 'pago-nuevo', monto: 1000 }])
+        tx.pago.create.mockResolvedValue({ id: 'pago-nuevo' })
+      }
+
+      it('un MOZO cobra con su propio Mozo aunque mande el de otro, y su cuenta queda en usuarioId', async () => {
+        cobroQueCierra()
+
+        await service.registrarCobro('sesion-1', { ...DTO_BASE, mozoId: 'mozo-ajeno' }, CUENTAS.MOZO)
+
+        expect(tx.pago.create).toHaveBeenCalledWith({
+          data: expect.objectContaining({ mozoId: MOZOS.DEL_MOZO.id, usuarioId: CUENTAS.MOZO.id }),
+        })
+        expect(mockPrisma.mozo.findUnique).not.toHaveBeenCalled()
+      })
+
+      it('un GERENTE cobra a su nombre y le atribuye el cobro a un mozo del restaurante', async () => {
+        cobroQueCierra()
+        mockPrisma.mozo.findUnique.mockResolvedValue({ restauranteId: MUNDO.REST_1, activo: true })
+
+        await service.registrarCobro('sesion-1', { ...DTO_BASE, mozoId: 'mozo-7' }, CUENTAS.GERENTE)
+
+        expect(tx.pago.create).toHaveBeenCalledWith({
+          data: expect.objectContaining({ mozoId: 'mozo-7', usuarioId: CUENTAS.GERENTE.id }),
+        })
+      })
+
+      it('el efectivo que pidió un comensal se reutiliza con la misma atribución', async () => {
+        mockDivision.calcularTotalSesion.mockResolvedValue(1000)
+        tx.pago.findMany
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([{ id: 'pago-ef', monto: 1000 }])
+        tx.pago.findFirst.mockResolvedValue({ id: 'pago-ef', metodo: 'efectivo', estado: ESTADO_PAGO_PENDIENTE })
+
+        await service.registrarCobro('sesion-1', DTO_BASE, CUENTAS.JEFE_SALON)
+
+        expect(tx.pago.update).toHaveBeenCalledWith({
+          where: { id: 'pago-ef' },
+          data: expect.objectContaining({ mozoId: MOZOS.DEL_JEFE_SALON.id, usuarioId: CUENTAS.JEFE_SALON.id }),
+        })
+      })
+
+      it.each([
+        ['ROOT (no es un bypass)', CUENTAS.ROOT],
+        ['la COCINA', CUENTAS.COCINA],
+        ['el OWNER de otra marca', CUENTAS.OWNER_B],
+      ])('%s no cobra (403) y no se abre la transacción', async (_caso, cuenta) => {
+        await expect(service.registrarCobro('sesion-1', DTO_BASE, cuenta)).rejects.toThrow(ForbiddenException)
+
+        expect(mockPrisma.$transaction).not.toHaveBeenCalled()
+      })
+
+      it('un mozo inválido indicado por el GERENTE falla antes de abrir la transacción', async () => {
+        mockPrisma.mozo.findUnique.mockResolvedValue(null)
+
+        await expect(service.registrarCobro('sesion-1', { ...DTO_BASE, mozoId: 'no-existe' }, CUENTAS.GERENTE)).rejects.toThrow(
+          BadRequestException,
+        )
+        expect(mockPrisma.$transaction).not.toHaveBeenCalled()
+      })
+
+      it('una sesión ya cerrada: 400, y el permiso se pide antes', async () => {
+        mockPrisma.sesionMesa.findUnique.mockResolvedValue({ ...SESION_PARA_COBRO, cerradaEn: new Date() })
+
+        await expect(service.registrarCobro('sesion-1', DTO_BASE, CUENTAS.ROOT)).rejects.toThrow(ForbiddenException)
+        await expect(service.registrarCobro('sesion-1', DTO_BASE, CUENTAS.MOZO)).rejects.toThrow(
+          new BadRequestException('La sesión ya fue cerrada'),
+        )
+      })
+
+      it('una sesión que no existe: 404', async () => {
+        mockPrisma.sesionMesa.findUnique.mockResolvedValue(null)
+
+        await expect(service.registrarCobro('no-existe', DTO_BASE, CUENTAS.MOZO)).rejects.toThrow(NotFoundException)
+      })
+    })
+
+    // De SCRUM-27 (main). Los dos casos que lo acompañaban —sesión inexistente y sesión ya cerrada— ya están arriba,
+    // con las cuentas de `acceso-de-test` en lugar del `USER_MOZO` del JWT legacy, que la Fase 4 retiró.
+    it('los pagos rechazados no se tocan: no cuentan como cobrados, no se cancelan ni se reutilizan', async () => {
+      // Arrange: la tabla de pagos de la sesión tiene un MP rechazado, un efectivo rechazado y un MP pendiente viejo.
+      // findMany y findFirst filtran esa tabla con el `where` que recibe, como lo haría la base.
+      const pagos = [
+        { id: 'mp-rechazado', monto: 400, metodo: 'mercadopago', estado: 'rechazado', createdAt: hace(20) },
+        { id: 'ef-rechazado', monto: 500, metodo: 'efectivo', estado: 'rechazado', createdAt: hace(15) },
+        { id: 'mp-viejo', monto: 300, metodo: 'mercadopago', estado: ESTADO_PAGO_PENDIENTE, createdAt: hace(11) },
+      ]
+      const coincide = (where: Record<string, unknown>) => (p: Record<string, unknown>) =>
+        Object.entries(where).every(([campo, valor]) => campo === 'sesionId' || p[campo] === valor)
+      mockDivision.calcularTotalSesion.mockResolvedValue(1000)
+      tx.pago.findMany.mockImplementation(({ where }) => Promise.resolve(pagos.filter(coincide(where))))
+      tx.pago.findFirst.mockImplementation(({ where }) => Promise.resolve(pagos.find(coincide(where)) ?? null))
+      tx.pago.updateMany.mockResolvedValue({ count: 1 })
+      tx.pago.create.mockImplementation(({ data }) => {
+        pagos.push({ id: 'pago-nuevo', ...data })
+        return Promise.resolve({ id: 'pago-nuevo' })
+      })
+
+      // Act
+      const result = await service.registrarCobro('sesion-1', DTO_BASE, CUENTAS.MOZO)
+
+      // Assert
+      expect(tx.pago.updateMany).toHaveBeenCalledWith({
+        where: { id: { in: ['mp-viejo'] } },
+        data: { estado: ESTADO_PAGO_CANCELADO },
+      })
+      expect(tx.pago.update).not.toHaveBeenCalled()
+      expect(tx.pago.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ monto: 1000, estado: ESTADO_PAGO_APROBADO }) }),
+      )
+      expect(result).toEqual({ ok: true })
     })
   })
 })

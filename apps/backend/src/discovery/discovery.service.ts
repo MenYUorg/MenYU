@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client'
 import { PrismaService } from '../prisma/prisma.service'
 import { derivarDescuento } from '../items/descuento.util'
 import { MIN_CARACTERES_BUSQUEDA } from './dto/buscar-discovery.dto'
+import { RESTAURANTE_DISPONIBLE } from '../common/restaurante-disponible'
 
 // Límites duros: el listado y la búsqueda no se paginan, así que la respuesta siempre tiene tope.
 export const MAX_RESTAURANTES = 50
@@ -11,8 +12,8 @@ export const MAX_OFERTAS = 30
 // Un plato está en oferta si está disponible y tiene un precio con descuento.
 const ITEM_EN_OFERTA = { disponible: true, precioDescuento: { not: null } } satisfies Prisma.ItemMenuWhereInput
 
-// Solo se muestran restaurantes activos que pertenecen a marcas activas.
-const RESTAURANTE_VISIBLE = { activo: true, marca: { activo: true } } satisfies Prisma.RestauranteWhereInput
+// Solo se muestran restaurantes activos que pertenecen a marcas activas (la misma regla que el menú y la apertura de mesas).
+const RESTAURANTE_VISIBLE = RESTAURANTE_DISPONIBLE
 
 // Es un endpoint público: el `select` es explícito y nunca se devuelve una fila completa (el restaurante tiene los
 // tokens de Mercado Pago, el modo de sesión, etc.).

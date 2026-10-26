@@ -13,8 +13,10 @@
     "test:coverage": "vitest run --coverage --passWithNoTests"
   },
   "dependencies": {
+    "@menyu/auth-client": "workspace:*",
     "@menyu/types": "workspace:*",
     "@menyu/ui": "workspace:*",
+    "@supabase/supabase-js": "2.117.0",
     "jsqr": "^1.4.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

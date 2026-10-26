@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Bell, CheckCircle, RefreshCw, X } from 'lucide-react'
-import { TOKEN_KEY } from '@menyu/auth'
-import { useAuth } from '@menyu/auth'
+import { urlDelSocket } from '@menyu/ui/socket'
 import { io, type Socket } from 'socket.io-client'
-import { useContextStore } from '../../../store/contextStore'
-import { api } from '../../../services/api'
+import { useContextStore, useRolActual } from '../../../store/contextStore'
+import { api, pedirJson } from '../../../services/api'
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 const C = {
@@ -24,12 +23,8 @@ const C = {
 } as const
 
 // ── Config ────────────────────────────────────────────────────────────────────
-const BASE: string =
-  (import.meta.env.VITE_API_URL as string | undefined) ?? ''
-
 const WS_URL: string =
-  (import.meta.env.VITE_WS_URL as string | undefined) ??
-  (import.meta.env.VITE_API_URL as string | undefined)?.replace('/api', '') ??
+  urlDelSocket(import.meta.env.VITE_WS_URL as string | undefined, import.meta.env.VITE_API_URL as string | undefined) ??
   ''
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -80,23 +75,8 @@ function fmtHora(iso: string | null): string {
   return new Date(iso).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
 }
 
-async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const token = localStorage.getItem(TOKEN_KEY)
-  const headers: Record<string, string> = {
-    ...(options.headers as Record<string, string> | undefined),
-  }
-  if (token) headers['Authorization'] = `Bearer ${token}`
-  if (options.body !== undefined && !headers['Content-Type']) {
-    headers['Content-Type'] = 'application/json'
-  }
-  const res = await fetch(`${BASE}${path}`, { ...options, headers })
-  if (!res.ok) {
-    const err = (await res.json().catch(() => ({}))) as Record<string, unknown>
-    throw new Error(typeof err['message'] === 'string' ? err['message'] : `Error ${res.status}`)
-  }
-  if (res.status === 204) return undefined as T
-  return res.json() as Promise<T>
-}
+// El token de Supabase y el manejo del 401 salen de services/api (pedirJson).
+const apiFetch = pedirJson
 
 // ── CobroModal (solo GERENTE) ─────────────────────────────────────────────────
 const METODOS: { key: MetodoPago; label: string }[] = [
@@ -402,9 +382,8 @@ function SesionPagadaCard({ sesion }: { sesion: SesionPagada }) {
 
 // ── PagosPage ─────────────────────────────────────────────────────────────────
 export function PagosPage() {
-  const { user }                   = useAuth()
   const { selectedRestauranteId }  = useContextStore()
-  const esGerente                  = user?.rol === 'GERENTE'
+  const esGerente                  = useRolActual() === 'GERENTE'
 
   const [activas,        setActivas]        = useState<SesionActiva[]>([])
   const [pagadas,        setPagadas]        = useState<SesionPagada[]>([])
@@ -423,6 +402,8 @@ export function PagosPage() {
   const restauranteRef = useRef(selectedRestauranteId)
   useEffect(() => { tabRef.current = tab },                        [tab])
   useEffect(() => { esGerenteRef.current = esGerente },           [esGerente])
+  // Al salir de la pantalla se cancela el timer que oculta el aviso de cobro
+  useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current) }, [])
   useEffect(() => { restauranteRef.current = selectedRestauranteId }, [selectedRestauranteId])
 
   // ── Fetch activas ──────────────────────────────────────────────────────────
@@ -474,8 +455,8 @@ export function PagosPage() {
   useEffect(() => {
     if (!selectedRestauranteId) return
 
+    // El gateway no autentica la conexión (docs/auth/specs/auth.md, Fuera de alcance): no se le manda ningún token.
     const socket: Socket = io(`${WS_URL}/ws`, {
-      auth:       { token: localStorage.getItem(TOKEN_KEY) },
       transports: ['websocket'],
     })
     socketRef.current = socket

@@ -1,8 +1,6 @@
 import { useNavigate } from 'react-router-dom'
-import { decodificarPayloadJwt } from '../utils/jwt'
-
-const TOKEN_KEY = 'menyu_access_token'
-const REFRESH_KEY = 'menyu_refresh_token'
+import { useCuenta } from '../hooks/useCuenta'
+import { useIrAlIngreso } from '../hooks/useIrAlIngreso'
 
 const C = {
   orange: '#E8563A',
@@ -18,29 +16,24 @@ const BOTON = 'relative whitespace-nowrap after:absolute after:content-[\'\'] af
 const BOTON_CHICO = `${BOTON} rounded-lg px-[14px] py-[6px] text-[13px] max-sm:rounded-[7px] max-sm:px-[10px] max-sm:py-[5px] max-sm:text-[12px] max-[339px]:px-2 max-[339px]:text-[11.5px]`
 const BOTON_CERRAR = 'relative flex-none whitespace-nowrap rounded-lg px-3 py-[6px] text-[13px] after:absolute after:content-[\'\'] after:inset-x-[-2px] after:inset-y-[-8px] max-sm:rounded-md max-sm:px-[9px] max-sm:py-[3px] max-sm:text-[11px] max-sm:after:inset-x-[-4px] max-sm:after:inset-y-[-12px]'
 
-/**
- * El nombre del saludo: el campo `nombre` del token tal cual. Hoy el cliente se guarda con un único campo (por ejemplo,
- * "Marina González"), así que se muestra entero: no se adivina dónde termina el nombre y empieza el apellido. Si algún
- * día el apellido viniera en otro campo, no se muestra. Solo se emprolijan los espacios.
- */
-function nombreParaSaludo(payload: Record<string, unknown> | null): string | null {
-  const nombre = payload?.['nombre']
-  if (typeof nombre !== 'string') return null
-  return nombre.trim().replace(/\s+/g, ' ') || null
-}
-
 interface AppHeaderProps {
   hideAuthButtons?: boolean
 }
 
+/**
+ * El header de las pantallas públicas. Con una cuenta (utils/cuenta.ts), el saludo con su nombre y "Cerrar sesión"; sin
+ * ella, ingresar o registrarse en web-auth (o en `/auth` donde esta app no comparte su sesión), con la vuelta a esta
+ * pantalla (docs/auth/specs/auth.md, Fase 4b). Mientras se lee la sesión no muestra ninguno de los dos, para no hacer
+ * parpadear "Ingresar" a quien ya entró.
+ */
 export function AppHeader({ hideAuthButtons = false }: AppHeaderProps) {
   const navigate = useNavigate()
-  const token = localStorage.getItem(TOKEN_KEY)
-  const nombre = nombreParaSaludo(token ? decodificarPayloadJwt(token) : null)
+  const { cargando, cuenta, cerrarSesion } = useCuenta()
+  const irAlIngreso = useIrAlIngreso()
+  const nombre = cuenta?.nombre ?? null
 
-  const handleLogout = () => {
-    localStorage.removeItem(TOKEN_KEY)
-    localStorage.removeItem(REFRESH_KEY)
+  const handleLogout = async () => {
+    await cerrarSesion()
     navigate('/')
   }
 
@@ -76,7 +69,7 @@ export function AppHeader({ hideAuthButtons = false }: AppHeaderProps) {
         />
       </button>
 
-      {!hideAuthButtons && (
+      {!hideAuthButtons && !cargando && (
         // Siempre queda un espacio de 16 px o más entre el logo y los botones (12 px en los más angostos).
         <div className="ml-3 flex min-w-0 items-center gap-2 max-sm:ml-4 max-sm:gap-1.5 max-[339px]:ml-3 max-[339px]:gap-[5px]">
           {nombre ? (
@@ -89,7 +82,7 @@ export function AppHeader({ hideAuthButtons = false }: AppHeaderProps) {
                 Hola, {nombre}
               </span>
               <button
-                onClick={handleLogout}
+                onClick={() => void handleLogout()}
                 className={BOTON_CERRAR}
                 style={{
                   fontFamily: 'Montserrat, sans-serif',
@@ -106,7 +99,7 @@ export function AppHeader({ hideAuthButtons = false }: AppHeaderProps) {
           ) : (
             <>
               <button
-                onClick={() => navigate('/auth')}
+                onClick={() => irAlIngreso('ingresar')}
                 className={BOTON_CHICO}
                 style={{
                   fontFamily: 'Montserrat, sans-serif',
@@ -120,7 +113,7 @@ export function AppHeader({ hideAuthButtons = false }: AppHeaderProps) {
                 Ingresar
               </button>
               <button
-                onClick={() => navigate('/auth?tab=register')}
+                onClick={() => irAlIngreso('crear')}
                 className={BOTON_CHICO}
                 style={{
                   fontFamily: 'Montserrat, sans-serif',

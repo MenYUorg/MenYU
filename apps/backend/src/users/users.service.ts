@@ -27,8 +27,10 @@ export class UsersService {
 
   // ── Mozo ───────────────────────────────────────────────
 
+  // Solo los mozos con contraseña: los invitados por Supabase no tienen y no tienen que tapar al
+  // mozo legacy (o al cliente) con el mismo email en el login propio.
   findMozoByEmail(email: string) {
-    return this.prisma.mozo.findFirst({ where: { email } })
+    return this.prisma.mozo.findFirst({ where: { email, passwordHash: { not: null } } })
   }
 
   findMozoById(id: string) {
@@ -38,7 +40,7 @@ export class UsersService {
   createMozo(data: {
     nombre: string
     email?: string
-    passwordHash: string
+    passwordHash?: string
     telefono?: string
     esJefeSalon?: boolean
     restauranteId: string

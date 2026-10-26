@@ -3,22 +3,26 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { AdminLayout } from './AdminLayout'
 import { restaurarPantalla, simularPantalla } from '../../test/pantalla'
+import { perfilDeOwner, reiniciarSesionDePrueba, sesionDePrueba } from '../../test/authClient'
 
-let rolActual = 'OWNER'
+let rolActual: 'OWNER' | 'GERENTE' | null = 'OWNER'
 
-vi.mock('@menyu/auth', () => ({
-  useAuth: () => ({ user: { rol: rolActual, email: 'usuario@menyu.com' }, logout: vi.fn() }),
-}))
+vi.mock('@menyu/auth-client', async () => (await import('../../test/authClient')).moduloSimulado())
 
-vi.mock('../../store/contextStore', () => ({
+// `preferenciaDeLaUrl` queda el real: así se comprueba que el layout le pasa a `loadContext` lo que manda web-auth.
+const cargarContexto = vi.hoisted(() => vi.fn())
+
+vi.mock('../../store/contextStore', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../store/contextStore')>()),
   useContextStore: () => ({
     marcas: [{ id: 'marca-1', nombre: 'Marca Seed' }],
     selectedMarcaId: 'marca-1',
     restaurantes: [{ id: 'rest-1', nombre: 'Restaurante Seed' }],
     selectedRestauranteId: 'rest-1',
     setRestaurante: vi.fn(),
-    loadContext: vi.fn(),
+    loadContext: cargarContexto,
   }),
+  useRolActual: () => rolActual,
 }))
 
 const CELULAR = 360
@@ -45,6 +49,10 @@ describe('AdminLayout', () => {
   beforeEach(() => {
     localStorage.clear()
     rolActual = 'OWNER'
+    reiniciarSesionDePrueba()
+    sesionDePrueba.perfil = perfilDeOwner()
+    cargarContexto.mockReset()
+    cargarContexto.mockResolvedValue(undefined)
   })
 
   afterEach(restaurarPantalla)
@@ -209,13 +217,34 @@ describe('AdminLayout', () => {
       expect(screen.getByText('Contenido de marca')).toBeInTheDocument()
     })
 
-    it.each(['GERENTE', 'ROOT'])('el %s no ve el acceso', (rol) => {
+    // Una cuenta ROOT no llega acá: no tiene rol en ningún restaurante y /admin/* la devuelve a su consola.
+    it.each(['GERENTE', null] as const)('el rol %s no ve el acceso', (rol) => {
       rolActual = rol
       simularPantalla(ESCRITORIO)
 
       renderLayout()
 
       expect(screen.queryByRole('link', { name: 'Marca y sucursales' })).not.toBeInTheDocument()
+    })
+  })
+  describe('la carga del contexto', () => {
+    it('le pasa el perfil y la preferencia que web-auth dejó en la URL', () => {
+      simularPantalla(ESCRITORIO)
+
+      renderLayout('/admin/menu?marcaId=marca-7&restauranteId=rest-9')
+
+      expect(cargarContexto).toHaveBeenCalledWith(
+        expect.objectContaining({ email: 'owner@menyu.com' }),
+        { marcaId: 'marca-7', restauranteId: 'rest-9' },
+      )
+    })
+
+    it('sin preferencia en la URL, la carga va sin ids', () => {
+      simularPantalla(ESCRITORIO)
+
+      renderLayout('/admin/menu')
+
+      expect(cargarContexto).toHaveBeenCalledWith(expect.anything(), { marcaId: null, restauranteId: null })
     })
   })
 })

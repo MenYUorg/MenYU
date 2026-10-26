@@ -1,0 +1,286 @@
+import { BadRequestException, ForbiddenException, NotFoundException, UnauthorizedException } from '@nestjs/common'
+import { JwtService } from '@nestjs/jwt'
+import { AccesoService } from '../auth/supabase/acceso.service'
+import { MenyuGateway } from '../gateway/menyu.gateway'
+import { accesoDeTest, CUENTAS, MOZOS, MUNDO } from '../test/acceso-de-test'
+import { PrismaMock, comoPrisma, crearPrismaMock } from '../test/prisma-mock'
+import { WaiterCallsService } from './waiter-calls.service'
+
+// JwtService real con un secreto de test: los tokens de la sesión de mesa se firman y verifican de verdad.
+const jwt = new JwtService({ secret: 'secreto-de-test' })
+const bearer = (payload: object) => `Bearer ${jwt.sign(payload)}`
+
+const SESION_CLIENTE = { sub: 'cliente-1', tipo: 'cliente', sesionId: 'sesion-1', mesaId: 'mesa-1', restauranteId: 'rest-1' }
+const MOZO_LEGACY = { sub: 'mozo-1', tipo: 'mozo' }
+
+/** La mesa como la trae `llamar`, con la disponibilidad del restaurante y su marca. */
+const mesaDe = (restaurante: { activo?: boolean; marca?: { activo: boolean } } = {}) => ({
+  numero: '7',
+  restaurante: { activo: true, marca: { activo: true }, ...restaurante },
+})
+
+describe('WaiterCallsService', () => {
+  let prisma: PrismaMock
+  let gateway: { emitMozoCalled: jest.Mock }
+  let acceso: AccesoService
+  let service: WaiterCallsService
+
+  beforeEach(() => {
+    prisma = crearPrismaMock()
+    gateway = { emitMozoCalled: jest.fn() }
+    acceso = accesoDeTest()
+    service = new WaiterCallsService(comoPrisma(prisma), jwt, gateway as unknown as MenyuGateway, acceso)
+  })
+
+  describe('findByRestaurante', () => {
+    it('devuelve los llamados pendientes de las sesiones activas con el número de mesa', async () => {
+      // Arrange
+      prisma.mesa.findMany.mockResolvedValue([{ id: 'mesa-1' }, { id: 'mesa-2' }])
+      prisma.sesionMesa.findMany.mockResolvedValue([{ id: 'sesion-1', mesa: { numero: '7' } }])
+      prisma.llamadoMozo.findMany.mockResolvedValue([{ id: 'llamado-1', sesionId: 'sesion-1', motivo: 'cuenta' }])
+
+      // Act
+      const llamados = await service.findByRestaurante('rest-1')
+
+      // Assert
+      expect(llamados).toEqual([
+        { id: 'llamado-1', sesionId: 'sesion-1', motivo: 'cuenta', sesion: { mesa: { numero: '7' } } },
+      ])
+      expect(prisma.sesionMesa.findMany.mock.calls[0][0].where).toEqual({ mesaId: { in: ['mesa-1', 'mesa-2'] }, estado: 'activa' })
+      expect(prisma.llamadoMozo.findMany).toHaveBeenCalledWith({
+        where: { sesionId: { in: ['sesion-1'] }, estado: 'pendiente' },
+        orderBy: { createdAt: 'asc' },
+      })
+    })
+
+    it('sin mesas devuelve una lista vacía sin consultar sesiones', async () => {
+      // Arrange
+      prisma.mesa.findMany.mockResolvedValue([])
+
+      // Act
+      const llamados = await service.findByRestaurante('rest-1')
+
+      // Assert
+      expect(llamados).toEqual([])
+      expect(prisma.sesionMesa.findMany).not.toHaveBeenCalled()
+    })
+
+    it('sin sesiones activas devuelve una lista vacía sin consultar llamados', async () => {
+      // Arrange
+      prisma.mesa.findMany.mockResolvedValue([{ id: 'mesa-1' }])
+      prisma.sesionMesa.findMany.mockResolvedValue([])
+
+      // Act
+      const llamados = await service.findByRestaurante('rest-1')
+
+      // Assert
+      expect(llamados).toEqual([])
+      expect(prisma.llamadoMozo.findMany).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('llamar', () => {
+    it('guarda el llamado y avisa a los mozos del restaurante por socket', async () => {
+      // Arrange
+      prisma.sesionMesa.findUnique.mockResolvedValue({ id: 'sesion-1', estado: 'activa', mesa: mesaDe() })
+      prisma.llamadoMozo.create.mockResolvedValue({ id: 'llamado-1', motivo: 'cuenta' })
+
+      // Act
+      const resultado = await service.llamar({ sesionId: 'sesion-1', motivo: 'cuenta' }, bearer(SESION_CLIENTE))
+
+      // Assert
+      expect(resultado).toEqual({ ok: true })
+      expect(prisma.llamadoMozo.create).toHaveBeenCalledWith({ data: { sesionId: 'sesion-1', motivo: 'cuenta' } })
+      expect(gateway.emitMozoCalled).toHaveBeenCalledWith('rest-1', {
+        llamadoId: 'llamado-1',
+        sesionId: 'sesion-1',
+        mesaNumero: '7',
+        motivo: 'cuenta',
+      })
+    })
+
+    it('sin motivo lo guarda como "general"', async () => {
+      // Arrange
+      prisma.sesionMesa.findUnique.mockResolvedValue({ id: 'sesion-1', estado: 'activa', mesa: mesaDe() })
+      prisma.llamadoMozo.create.mockResolvedValue({ id: 'llamado-1', motivo: null })
+
+      // Act
+      await service.llamar({ sesionId: 'sesion-1' }, bearer(SESION_CLIENTE))
+
+      // Assert
+      expect(prisma.llamadoMozo.create).toHaveBeenCalledWith({ data: { sesionId: 'sesion-1', motivo: 'general' } })
+      expect(gateway.emitMozoCalled.mock.calls[0][1].motivo).toBe('general')
+    })
+
+    it.each([
+      ['sin header', undefined, 'Session JWT requerido'],
+      ['con un header que no es Bearer', 'Basic abc', 'Session JWT requerido'],
+      ['con un token inválido', 'Bearer no-es-un-jwt', 'Session JWT inválido o expirado'],
+    ])('%s responde 401', async (_caso, header, mensaje) => {
+      // Act
+      const llamado = service.llamar({ sesionId: 'sesion-1' }, header)
+
+      // Assert
+      await expect(llamado).rejects.toThrow(new UnauthorizedException(mensaje))
+      expect(prisma.llamadoMozo.create).not.toHaveBeenCalled()
+    })
+
+    it('un token que no es de cliente responde 401', async () => {
+      // Act
+      const llamado = service.llamar({ sesionId: 'sesion-1' }, bearer(MOZO_LEGACY))
+
+      // Assert
+      await expect(llamado).rejects.toThrow(new UnauthorizedException('Solo clientes pueden llamar al mozo'))
+    })
+
+    it('un token de invitado (tipo cliente, sin sesión de mesa) responde 401', async () => {
+      // Act
+      const llamado = service.llamar({ sesionId: 'sesion-1' }, bearer({ sub: 'cliente-invitado', tipo: 'cliente', nombre: 'Invitado' }))
+
+      // Assert
+      await expect(llamado).rejects.toThrow(new UnauthorizedException('Este recurso requiere una sesión de mesa'))
+      expect(prisma.llamadoMozo.create).not.toHaveBeenCalled()
+    })
+
+    it('con el token de una mesa no se puede llamar al mozo desde otra sesión: 403 y no avisa a nadie', async () => {
+      // Act
+      const llamado = service.llamar({ sesionId: 'sesion-de-otra-mesa' }, bearer(SESION_CLIENTE))
+
+      // Assert
+      await expect(llamado).rejects.toThrow(new ForbiddenException('Esa sesión de mesa no es la tuya'))
+      expect(prisma.sesionMesa.findUnique).not.toHaveBeenCalled()
+      expect(gateway.emitMozoCalled).not.toHaveBeenCalled()
+    })
+
+    it('una sesión que no existe responde 404 y no avisa a nadie', async () => {
+      // Arrange
+      prisma.sesionMesa.findUnique.mockResolvedValue(null)
+
+      // Act
+      const llamado = service.llamar({ sesionId: 'sesion-1' }, bearer(SESION_CLIENTE))
+
+      // Assert
+      await expect(llamado).rejects.toThrow(new NotFoundException('Sesión no encontrada'))
+      expect(gateway.emitMozoCalled).not.toHaveBeenCalled()
+    })
+
+    it('una sesión cerrada responde 400 y no guarda el llamado', async () => {
+      // Arrange
+      prisma.sesionMesa.findUnique.mockResolvedValue({ id: 'sesion-1', estado: 'cerrada', mesa: mesaDe() })
+
+      // Act
+      const llamado = service.llamar({ sesionId: 'sesion-1' }, bearer(SESION_CLIENTE))
+
+      // Assert
+      await expect(llamado).rejects.toThrow(new BadRequestException('La sesión no está activa'))
+      expect(prisma.llamadoMozo.create).not.toHaveBeenCalled()
+    })
+
+    // Con la baja, el personal recibe 403 al atender: el llamado quedaría pendiente para siempre (entrega 4.7).
+    it.each([
+      ['el restaurante', { activo: false }],
+      ['su marca', { marca: { activo: false } }],
+    ])('con %s dado de baja responde 403 y no guarda el llamado', async (_quien, cambios) => {
+      // Arrange
+      prisma.sesionMesa.findUnique.mockResolvedValue({ id: 'sesion-1', estado: 'activa', mesa: mesaDe(cambios) })
+
+      // Act
+      const llamado = service.llamar({ sesionId: 'sesion-1' }, bearer(SESION_CLIENTE))
+
+      // Assert
+      await expect(llamado).rejects.toThrow(new ForbiddenException('Este restaurante no está disponible'))
+      expect(prisma.llamadoMozo.create).not.toHaveBeenCalled()
+      expect(gateway.emitMozoCalled).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('atender (JEFE_SALON o MOZO del restaurante del llamado, con su Mozo activo)', () => {
+    const llamadoEn = (restauranteId: string, estado = 'pendiente') => ({ estado, sesion: { mesa: { restauranteId } } })
+
+    it.each([
+      ['el MOZO', CUENTAS.MOZO, MOZOS.DEL_MOZO.id],
+      ['el JEFE_SALON', CUENTAS.JEFE_SALON, MOZOS.DEL_JEFE_SALON.id],
+    ])('%s lo marca como atendido a nombre de su propio Mozo', async (_caso, cuenta, mozoId) => {
+      // Arrange
+      prisma.llamadoMozo.findUnique.mockResolvedValue(llamadoEn(MUNDO.REST_1))
+      prisma.llamadoMozo.updateMany.mockResolvedValue({ count: 1 })
+
+      // Act
+      const llamado = await service.atender('llamado-1', cuenta)
+
+      // Assert
+      expect(llamado).toEqual({ id: 'llamado-1', estado: 'atendido', mozoId })
+      expect(prisma.llamadoMozo.updateMany).toHaveBeenCalledWith({
+        where: { id: 'llamado-1', estado: 'pendiente' },
+        data: { estado: 'atendido', mozoId },
+      })
+    })
+
+    it('si otro mozo lo atendió entre la lectura y la escritura: 400, queda a nombre del primero', async () => {
+      // Arrange
+      prisma.llamadoMozo.findUnique.mockResolvedValue(llamadoEn(MUNDO.REST_1))
+      prisma.llamadoMozo.updateMany.mockResolvedValue({ count: 0 })
+
+      // Act + Assert
+      await expect(service.atender('llamado-1', CUENTAS.MOZO)).rejects.toThrow(new BadRequestException('Este llamado ya fue atendido'))
+    })
+
+    it.each([
+      ['el GERENTE (no tiene perfil de mozo)', CUENTAS.GERENTE],
+      ['el OWNER', CUENTAS.OWNER_A],
+      ['la COCINA', CUENTAS.COCINA],
+      ['ROOT', CUENTAS.ROOT],
+    ])('%s recibe 403 y el llamado no se toca', async (_caso, cuenta) => {
+      // Arrange
+      prisma.llamadoMozo.findUnique.mockResolvedValue(llamadoEn(MUNDO.REST_1))
+
+      // Act + Assert
+      await expect(service.atender('llamado-1', cuenta)).rejects.toThrow(ForbiddenException)
+      expect(prisma.llamadoMozo.updateMany).not.toHaveBeenCalled()
+    })
+
+    it('un MOZO no atiende los llamados de otro restaurante (antes podía cualquiera): 403', async () => {
+      // Arrange
+      prisma.llamadoMozo.findUnique.mockResolvedValue(llamadoEn(MUNDO.REST_2))
+
+      // Act + Assert
+      await expect(service.atender('llamado-1', CUENTAS.MOZO)).rejects.toThrow(ForbiddenException)
+      expect(prisma.llamadoMozo.updateMany).not.toHaveBeenCalled()
+    })
+
+    it('un MOZO con su perfil de mozo dado de baja: 403', async () => {
+      // Arrange
+      prisma.llamadoMozo.findUnique.mockResolvedValue(llamadoEn(MUNDO.REST_1))
+      jest.spyOn(acceso, 'mozoDe').mockResolvedValue(null)
+
+      // Act + Assert
+      await expect(service.atender('llamado-1', CUENTAS.MOZO)).rejects.toThrow(
+        new ForbiddenException('Tu perfil de mozo no está activo en este restaurante'),
+      )
+      expect(prisma.llamadoMozo.updateMany).not.toHaveBeenCalled()
+    })
+
+    it('un llamado que no existe responde 404', async () => {
+      // Arrange
+      prisma.llamadoMozo.findUnique.mockResolvedValue(null)
+
+      // Act
+      const atencion = service.atender('no-existe', CUENTAS.MOZO)
+
+      // Assert
+      await expect(atencion).rejects.toThrow(new NotFoundException('Llamado no encontrado'))
+    })
+
+    it('un llamado ya atendido responde 400 y no se vuelve a actualizar', async () => {
+      // Arrange
+      prisma.llamadoMozo.findUnique.mockResolvedValue(llamadoEn(MUNDO.REST_1, 'atendido'))
+
+      // Act
+      const atencion = service.atender('llamado-1', CUENTAS.MOZO)
+
+      // Assert
+      await expect(atencion).rejects.toThrow(new BadRequestException('Este llamado ya fue atendido'))
+      expect(prisma.llamadoMozo.updateMany).not.toHaveBeenCalled()
+    })
+  })
+})

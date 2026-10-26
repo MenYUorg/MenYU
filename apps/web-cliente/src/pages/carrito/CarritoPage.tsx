@@ -5,6 +5,7 @@ import { useSessionStore } from '../../store/sessionStore'
 import { usePublicMenuStore } from '../../store/publicMenuStore'
 import { api } from '../../services/api'
 import { MenuItemImage } from '@menyu/ui'
+import { EncabezadoPantalla, InsigniaMesa } from '../../components/PantallaComensal'
 
 interface PedidoConfirmado {
   id: string
@@ -75,54 +76,12 @@ export function CarritoPage() {
   }
 
   const header = (
-    <header style={{
-      background:    C.navy,
-      display:       'flex',
-      alignItems:    'center',
-      padding:       '14px 16px',
-      gap:           12,
-      flexShrink:    0,
-    }}>
-      <button
-        onClick={() => navigate('/menu')}
-        style={{
-          background: 'none',
-          border:     'none',
-          cursor:     'pointer',
-          color:      'white',
-          fontSize:   22,
-          lineHeight: 1,
-          padding:    '2px 8px 2px 0',
-          display:    'flex',
-          alignItems: 'center',
-        }}
-        aria-label="Volver al menú"
-      >
-        ←
-      </button>
-      <span style={{
-        flex:       1,
-        fontFamily: 'Montserrat, sans-serif',
-        fontWeight: 700,
-        fontSize:   17,
-        color:      'white',
-        textAlign:  'center',
-      }}>
-        Carrito
-      </span>
-      <span style={{
-        background:   C.orange,
-        color:        'white',
-        fontFamily:   'Inter, sans-serif',
-        fontWeight:   600,
-        fontSize:     12,
-        padding:      '4px 10px',
-        borderRadius: 20,
-        whiteSpace:   'nowrap',
-      }}>
-        Mesa {numeroMesa ?? ''}
-      </span>
-    </header>
+    <EncabezadoPantalla
+      titulo="Carrito"
+      onVolver={() => navigate('/menu')}
+      etiquetaVolver="Volver al menú"
+      derecha={<InsigniaMesa numero={numeroMesa} />}
+    />
   )
 
   /* ── éxito ── */

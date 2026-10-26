@@ -6,7 +6,8 @@ import { PATH_METADATA } from '@nestjs/common/constants'
 import { Test } from '@nestjs/testing'
 import { AuthController } from './auth.controller'
 import { AuthService } from './auth.service'
-import { JwtAuthGuard } from './guards/jwt-auth.guard'
+import { SupabaseAuthGuard } from './guards/supabase-auth.guard'
+import { AccesoService } from './supabase/acceso.service'
 
 // Hubo cuatro endpoints `/auth/dev/*` sin ningún guard: creaban usuarios (incluso un ROOT con contraseña conocida y sus
 // tokens) para quien los llamara. Se sacaron. Estas pruebas cuidan que no vuelvan, ni en el controller de auth ni en
@@ -20,9 +21,12 @@ describe('no hay endpoints de desarrollo', () => {
     beforeAll(async () => {
       const moduleRef = await Test.createTestingModule({
         controllers: [AuthController],
-        providers: [{ provide: AuthService, useValue: mockAuth }],
+        providers: [
+          { provide: AuthService, useValue: mockAuth },
+          { provide: AccesoService, useValue: {} },
+        ],
       })
-        .overrideGuard(JwtAuthGuard).useValue(permitir)
+        .overrideGuard(SupabaseAuthGuard).useValue(permitir)
         .compile()
 
       app = moduleRef.createNestApplication()

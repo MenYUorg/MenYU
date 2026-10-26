@@ -13,11 +13,19 @@ import { UsersService } from '../users/users.service'
 import { MenyuGateway } from '../gateway/menyu.gateway'
 import { JwtPayload } from '../auth/auth.service'
 import { SessionJwtPayload } from '../auth/guards/session-auth.guard'
+import { SALON } from '../auth/roles-del-personal'
+import { AccesoService } from '../auth/supabase/acceso.service'
+import { CuentaDeClienteService } from '../auth/supabase/cuenta-de-cliente.service'
+import { UsuarioAutenticado } from '../auth/supabase/usuario-autenticado'
+import { esTokenDeSupabase } from '../auth/supabase/verificador-token.service'
 import { OpenSessionDto } from './dto/open-session.dto'
 import { RegistrarCobroDto } from './dto/registrar-cobro.dto'
 import { DivisionService } from '../comensales/division.service'
 import { runSerializableTransaction } from '../common/run-serializable-transaction'
-import { assertStaffAccess } from '../common/assert-staff-access'
+import { atribucionDelCobro } from '../common/atribucion-del-cobro'
+import { LimiteIntentos } from '../common/limite-intentos'
+import { EDITOR_INCLUDE, editorDe } from '../pedidos/editor-de-la-edicion'
+import { restauranteDisponible, SELECT_DISPONIBILIDAD } from '../common/restaurante-disponible'
 import {
   ESTADO_PAGO_APROBADO,
   ESTADO_PAGO_PENDIENTE,
@@ -29,6 +37,14 @@ import {
 // Más viejo que esto se considera abandonado y se cancela sin aviso.
 const VENTANA_MP_PENDIENTE_MS = 10 * 60 * 1000
 
+// Límite de intentos fallidos al entrar a una mesa (fuerza bruta). Se cuentan fallos, no requests
+// por IP: el proxy de Railway y el wifi compartido de un local harían bloquear a todos.
+// El PIN (4 dígitos) se cuenta por restaurante y el código de sesión (3 dígitos) por mesa.
+// El ingreso por QR (un UUID) no se limita. Ver las limitaciones en LimiteIntentos.
+const MINUTO_MS = 60_000
+export const LIMITE_PIN = { maxFallos: 10, ventanaMs: 10 * MINUTO_MS, bloqueoMs: 15 * MINUTO_MS }
+export const LIMITE_CODIGO_SESION = { maxFallos: 5, ventanaMs: 10 * MINUTO_MS, bloqueoMs: 15 * MINUTO_MS }
+
 function haceMinutos(createdAt: Date, ahora: number): string {
   const min = Math.floor((ahora - createdAt.getTime()) / 60_000)
   if (min < 1) return 'hace menos de 1 minuto'
@@ -36,8 +52,11 @@ function haceMinutos(createdAt: Date, ahora: number): string {
 }
 
 function mensajePagosMpRecientes(pagos: Pick<Pago, 'monto' | 'createdAt'>[], ahora: number): string {
+  // Precondición: se llama solo con al menos un pago (registrarCobro lo garantiza).
+  const [primero, ...resto] = pagos
+  if (!primero) throw new Error('mensajePagosMpRecientes necesita al menos un pago')
   const total = pagos.reduce((acc, p) => acc + Number(p.monto), 0).toFixed(2)
-  const masReciente = pagos.reduce((a, b) => (b.createdAt > a.createdAt ? b : a))
+  const masReciente = resto.reduce((a, b) => (b.createdAt > a.createdAt ? b : a), primero)
   if (pagos.length === 1) {
     return `Un comensal inició un pago por MercadoPago de $${total} ${haceMinutos(masReciente.createdAt, ahora)}. Si cobrás la mesa, ese pago se cancela.`
   }
@@ -88,6 +107,8 @@ export interface SessionActivaResult {
 @Injectable()
 export class SessionsService {
   private readonly logger = new Logger(SessionsService.name)
+  private readonly intentosPin = new LimiteIntentos(LIMITE_PIN)
+  private readonly intentosCodigoSesion = new LimiteIntentos(LIMITE_CODIGO_SESION)
 
   constructor(
     private readonly prisma: PrismaService,
@@ -95,16 +116,18 @@ export class SessionsService {
     private readonly jwt: JwtService,
     private readonly gateway: MenyuGateway,
     private readonly divisionService: DivisionService,
+    private readonly acceso: AccesoService,
+    private readonly cuentas: CuentaDeClienteService,
   ) {}
 
-  async openStaff(dto: { mesaId: string }, user: JwtPayload): Promise<OpenStaffSessionResult> {
+  async openStaff(dto: { mesaId: string }, usuario: UsuarioAutenticado): Promise<OpenStaffSessionResult> {
     const mesa = await this.prisma.mesa.findUnique({
       where: { id: dto.mesaId },
       select: { id: true, numero: true, restauranteId: true, activo: true },
     })
     if (!mesa || !mesa.activo) throw new NotFoundException('Mesa no encontrada')
 
-    await assertStaffAccess(this.prisma, mesa.restauranteId, user)
+    await this.acceso.exigirRol(usuario.id, mesa.restauranteId, SALON)
 
     const sesionActiva = await this.prisma.sesionMesa.findFirst({
       where: { mesaId: mesa.id, estado: 'activa' },
@@ -148,12 +171,44 @@ export class SessionsService {
     }
 
     // Primero la mesa: si no existe (o es de otro restaurante) no se crea un cliente "Invitado" de más.
-    const mesa = await this.resolveMesa(dto)
-    const clienteId = await this.resolveClienteId(authHeader)
+    const mesa = await this.resolveMesaContandoFallosDePin(dto)
 
     const sesionActiva = await this.prisma.sesionMesa.findFirst({
       where: { mesaId: mesa.id, estado: 'activa' },
     })
+
+    // Con el restaurante (o su marca) dado de baja no se abren mesas nuevas. Una sesión que ya está abierta se deja terminar
+    // (docs/plan-consola-root.md, sección 6): quien vuelve a escanear el QR de su mesa, o se suma a ella, entra igual, porque
+    // si no no podría pedir la cuenta ni pagar.
+    if (!sesionActiva && !restauranteDisponible(mesa.restaurante)) {
+      throw new ForbiddenException('Este restaurante no está disponible')
+    }
+
+    // Unirse a una sesión abierta en modo seguro pide el código (salvo el primer cliente de una sesión que abrió el staff).
+    let esAnfitrionDeStaff = false
+    if (sesionActiva) {
+      // Si la sesión fue abierta por staff (clienteId = null),
+      // el primer cliente real se convierte en anfitrión sin PIN.
+      const esSesionStaff = sesionActiva.clienteId === null
+      const yaHayParticipantes = await this.prisma.sesionMesaCliente.count({
+        where: { sesionId: sesionActiva.id },
+      }) > 0
+      esAnfitrionDeStaff = esSesionStaff && !yaHayParticipantes
+
+      if (!esAnfitrionDeStaff && mesa.restaurante.modoSesion === 'seguro') {
+        if (!dto.codigoSesion) {
+          throw new ForbiddenException('Esta mesa requiere código de sesión para unirse')
+        }
+        this.intentosCodigoSesion.verificar(mesa.id)
+        if (dto.codigoSesion !== sesionActiva.codigoSesion) {
+          this.intentosCodigoSesion.registrarFallo(mesa.id)
+          throw new ForbiddenException('Código de sesión incorrecto')
+        }
+      }
+    }
+
+    // Todas las validaciones que rechazan van antes: un rechazo no crea al cliente "Invitado".
+    const clienteId = await this.resolveClienteId(authHeader)
 
     let sesionId: string
     let codigoSesion: string
@@ -180,25 +235,7 @@ export class SessionsService {
     } else {
       sesionId     = sesionActiva.id
       codigoSesion = sesionActiva.codigoSesion
-
-      // Si la sesión fue abierta por staff (clienteId = null),
-      // el primer cliente real se convierte en anfitrión sin PIN.
-      const esSesionStaff = sesionActiva.clienteId === null
-      const yaHayParticipantes = await this.prisma.sesionMesaCliente.count({
-        where: { sesionId: sesionActiva.id },
-      }) > 0
-
-      const esAnfitrionDeStaff = esSesionStaff && !yaHayParticipantes
-      esAnfitrion = esAnfitrionDeStaff
-
-      if (!esAnfitrionDeStaff && mesa.restaurante.modoSesion === 'seguro') {
-        if (!dto.codigoSesion) {
-          throw new ForbiddenException('Esta mesa requiere código de sesión para unirse')
-        }
-        if (dto.codigoSesion !== codigoSesion) {
-          throw new ForbiddenException('Código de sesión incorrecto')
-        }
-      }
+      esAnfitrion  = esAnfitrionDeStaff
 
       const yaParticipa = await this.prisma.sesionMesaCliente.findUnique({
         where: { sesionId_clienteId: { sesionId, clienteId } },
@@ -254,10 +291,10 @@ export class SessionsService {
     return { ok: true }
   }
 
-  async cerrarMesaAdmin(mesaId: string, user: JwtPayload): Promise<{ ok: boolean }> {
+  async cerrarMesaAdmin(mesaId: string, usuario: UsuarioAutenticado): Promise<{ ok: boolean }> {
     const mesa = await this.prisma.mesa.findUnique({ where: { id: mesaId } })
     if (!mesa) throw new NotFoundException('Mesa no encontrada')
-    await assertStaffAccess(this.prisma, mesa.restauranteId, user)
+    await this.acceso.exigirRol(usuario.id, mesa.restauranteId, SALON)
 
     const sesion = await this.prisma.sesionMesa.findFirst({
       where: { mesaId, estado: 'activa' },
@@ -280,10 +317,10 @@ export class SessionsService {
     return { ok: true }
   }
 
-  async getSessionActiva(mesaId: string, user: JwtPayload): Promise<SessionActivaResult | null> {
+  async getSessionActiva(mesaId: string, usuario: UsuarioAutenticado): Promise<SessionActivaResult | null> {
     const mesa = await this.prisma.mesa.findUnique({ where: { id: mesaId } })
     if (!mesa) throw new NotFoundException('Mesa no encontrada')
-    await assertStaffAccess(this.prisma, mesa.restauranteId, user)
+    await this.acceso.exigirRol(usuario.id, mesa.restauranteId, SALON)
 
     const sesion = await this.prisma.sesionMesa.findFirst({
       where: { mesaId, estado: 'activa' },
@@ -351,9 +388,8 @@ export class SessionsService {
     }
   }
 
-  async getSessionesActivas(restauranteId: string, user: JwtPayload) {
-    await assertStaffAccess(this.prisma, restauranteId, user)
-
+  /** El rol en el restaurante lo exige la ruta (`@RequiereRolEn`). */
+  async getSessionesActivas(restauranteId: string) {
     const sesiones = await this.prisma.sesionMesa.findMany({
       where: { mesa: { restauranteId }, estado: 'activa' },
       include: {
@@ -396,9 +432,8 @@ export class SessionsService {
     })
   }
 
-  async getSessionesPagadas(restauranteId: string, fecha: string | undefined, user: JwtPayload) {
-    await assertStaffAccess(this.prisma, restauranteId, user)
-
+  /** El rol en el restaurante lo exige la ruta (`@RequiereRolEn`). */
+  async getSessionesPagadas(restauranteId: string, fecha: string | undefined) {
     let fechaFilter: { gte: Date; lte: Date } | undefined
     if (fecha === 'hoy') {
       const inicio = new Date(); inicio.setHours(0, 0, 0, 0)
@@ -424,7 +459,7 @@ export class SessionsService {
             items: { select: { cantidad: true, cantidadEditada: true, precioUnitario: true } },
           },
         },
-        pagos: { include: { mozo: { select: { nombre: true } } } },
+        pagos: { include: { mozo: { select: { nombre: true } }, usuario: { select: { nombre: true } } } },
       },
       orderBy: { cerradaEn: 'desc' },
     })
@@ -448,7 +483,7 @@ export class SessionsService {
       if (pagosAprobados.length === 1) {
         const pago = pagosAprobados[0]
         metodoPago = pago.metodo
-        cobradoPorNombre = pago.cobradoPorNombre ?? pago.mozo?.nombre ?? null
+        cobradoPorNombre = pago.cobradoPorNombre ?? pago.mozo?.nombre ?? pago.usuario?.nombre ?? null
         referenciaExterna = pago.referenciaExterna ?? null
         fechaCobro = pago.fechaCobro?.toISOString() ?? s.cerradaEn?.toISOString() ?? ''
       } else if (pagosAprobados.length > 1) {
@@ -488,14 +523,12 @@ export class SessionsService {
     })
   }
 
+  /** El rol en el restaurante lo exige la ruta (`@RequiereRolEn`). */
   async getHistorialSesiones(
     restauranteId: string,
     desde: string | undefined,
     hasta: string | undefined,
-    user: JwtPayload,
   ) {
-    await assertStaffAccess(this.prisma, restauranteId, user)
-
     const hoy = new Date().toISOString().slice(0, 10)
     const desdeStr = desde ?? hoy
     const hastaStr = hasta ?? hoy
@@ -526,11 +559,7 @@ export class SessionsService {
               },
             },
             ediciones: {
-              include: {
-                admin: { select: { email: true } },
-                mozo: { select: { nombre: true } },
-                itemsEliminados: true,
-              },
+              include: { ...EDITOR_INCLUDE, itemsEliminados: true },
             },
           },
           orderBy: { createdAt: 'asc' },
@@ -583,9 +612,7 @@ export class SessionsService {
               id: e.id,
               justificacion: e.justificacion,
               creadoEn: e.creadoEn.toISOString(),
-              editor: e.admin
-                ? { nombre: e.admin.email, tipo: 'gerente' as const }
-                : { nombre: e.mozo?.nombre ?? 'desconocido', tipo: 'mozo' as const },
+              editor: editorDe(e),
               itemsEliminados: e.itemsEliminados.map((item) => ({
                 itemNombre: item.itemNombre,
                 cantidadAntes: item.cantidadAntes,
@@ -600,10 +627,14 @@ export class SessionsService {
     })
   }
 
+  /**
+   * Cobra el saldo de la sesión. Lo registra el salón del restaurante de la mesa, y queda a nombre de quien cobra
+   * (`atribucionDelCobro`): un mozo, con su propio `Mozo`; un OWNER o GERENTE, con su cuenta y, si lo indica, un mozo.
+   */
   async registrarCobro(
     sesionId: string,
     dto: RegistrarCobroDto,
-    user: JwtPayload,
+    usuario: UsuarioAutenticado,
   ) {
     const sesion = await this.prisma.sesionMesa.findUnique({
       where: { id: sesionId },
@@ -612,9 +643,9 @@ export class SessionsService {
       },
     })
     if (!sesion) throw new NotFoundException('Sesión no encontrada')
-    if (sesion.cerradaEn !== null) throw new BadRequestException('La sesión ya fue cerrada')
 
-    await assertStaffAccess(this.prisma, sesion.mesa.restauranteId, user)
+    const { usuarioId, mozoId } = await atribucionDelCobro(this.prisma, this.acceso, usuario, sesion.mesa.restauranteId, dto.mozoId)
+    if (sesion.cerradaEn !== null) throw new BadRequestException('La sesión ya fue cerrada')
 
     const fechaCobro = new Date()
     const ahora = fechaCobro.getTime()
@@ -661,7 +692,8 @@ export class SessionsService {
             estado: ESTADO_PAGO_APROBADO,
             monto: saldoPendiente,
             metodo: dto.metodoPago,
-            mozoId: dto.mozoId || null,
+            mozoId,
+            usuarioId,
             cobradoPorNombre: dto.cobradoPorNombre,
             referenciaExterna: dto.referenciaExterna,
             fechaCobro,
@@ -674,7 +706,8 @@ export class SessionsService {
             monto: saldoPendiente,
             metodo: dto.metodoPago,
             estado: ESTADO_PAGO_APROBADO,
-            mozoId: dto.mozoId || null,
+            mozoId,
+            usuarioId,
             cobradoPorNombre: dto.cobradoPorNombre,
             referenciaExterna: dto.referenciaExterna,
             fechaCobro,
@@ -718,21 +751,52 @@ export class SessionsService {
 
   // ── Helpers ────────────────────────────────────────────────────────────
 
+  /**
+   * El cliente que abre la mesa. La ruta es pública: el token solo dice a nombre de quién queda, no da permisos. Llega
+   * el de la cuenta de Supabase (Fase 4b de docs/auth/specs/auth.md) o, hasta la Fase 5, el del login de `/auth` de
+   * web-cliente. Cada uno se verifica solo con lo suyo: el de Supabase, con el JWKS del proyecto (ES256 o RS256); el
+   * otro, con `JWT_SECRET` (HS256). Sin token, o con uno que no sirve, entra como invitado.
+   */
   private async resolveClienteId(authHeader?: string): Promise<string> {
     if (authHeader?.startsWith('Bearer ')) {
       const token = authHeader.slice(7)
-      try {
-        const payload = this.jwt.verify<JwtPayload>(token)
-        if (payload.tipo === 'cliente' && payload.sub) {
-          const exists = await this.users.findClienteById(payload.sub)
-          if (exists) return payload.sub
-        }
-      } catch {
-        // token inválido o expirado — continuar como invitado
-      }
+      const clienteId = esTokenDeSupabase(token)
+        ? await this.cuentas.clienteDe(token)
+        : await this.clienteDelLoginAnterior(token)
+      if (clienteId) return clienteId
     }
     const guest = await this.users.createCliente({ nombre: 'Invitado' })
     return guest.id
+  }
+
+  private async clienteDelLoginAnterior(token: string): Promise<string | null> {
+    try {
+      const payload = this.jwt.verify<JwtPayload>(token)
+      if (payload.tipo === 'cliente' && payload.sub) {
+        const exists = await this.users.findClienteById(payload.sub)
+        if (exists) return payload.sub
+      }
+    } catch {
+      // token inválido o expirado — continuar como invitado
+    }
+    return null
+  }
+
+  /**
+   * resolveMesa, con el límite de intentos del PIN: si el restaurante está bloqueado responde 429 sin
+   * buscar la mesa, y un PIN que no existe cuenta como fallo. El ingreso por QR no pasa por el límite.
+   */
+  private async resolveMesaContandoFallosDePin(dto: OpenSessionDto) {
+    if (dto.tableCode) return this.resolveMesa(dto)
+
+    const restauranteId = dto.restauranteId!
+    this.intentosPin.verificar(restauranteId)
+    try {
+      return await this.resolveMesa(dto)
+    } catch (e) {
+      if (e instanceof NotFoundException) this.intentosPin.registrarFallo(restauranteId)
+      throw e
+    }
   }
 
   /**
@@ -747,7 +811,7 @@ export class SessionsService {
 
     const mesa = await this.prisma.mesa.findFirst({
       where,
-      include: { restaurante: { select: { modoSesion: true } } },
+      include: { restaurante: { select: { modoSesion: true, ...SELECT_DISPONIBILIDAD } } },
     })
 
     if (!mesa) throw new NotFoundException('Mesa no encontrada')

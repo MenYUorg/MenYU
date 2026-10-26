@@ -1,21 +1,12 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-  UnauthorizedException,
-} from '@nestjs/common'
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
 import { JwtService } from '@nestjs/jwt'
+import { exigirSuSesion, verificarSesionDeMesa } from '../auth/guards/session-auth.guard'
+import { AccesoService } from '../auth/supabase/acceso.service'
+import { UsuarioAutenticado } from '../auth/supabase/usuario-autenticado'
+import { SELECT_DISPONIBILIDAD, restauranteDisponible } from '../common/restaurante-disponible'
 import { PrismaService } from '../prisma/prisma.service'
 import { MenyuGateway } from '../gateway/menyu.gateway'
 import { CreateWaiterCallDto } from './dto/create-waiter-call.dto'
-
-interface SessionJwt {
-  sub: string
-  tipo: string
-  sesionId: string
-  mesaId: string
-  restauranteId: string
-}
 
 @Injectable()
 export class WaiterCallsService {
@@ -23,8 +14,10 @@ export class WaiterCallsService {
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
     private readonly gateway: MenyuGateway,
+    private readonly acceso: AccesoService,
   ) {}
 
+  /** El rol en el restaurante lo exige la ruta (`@RequiereRolEn`). */
   async findByRestaurante(restauranteId: string) {
     // Paso 1: mesas del restaurante
     const mesas = await this.prisma.mesa.findMany({
@@ -56,31 +49,24 @@ export class WaiterCallsService {
   }
 
   async llamar(dto: CreateWaiterCallDto, authHeader: string | undefined) {
-    if (!authHeader?.startsWith('Bearer ')) {
-      throw new UnauthorizedException('Session JWT requerido')
-    }
-
-    let payload: SessionJwt
-    try {
-      payload = this.jwt.verify<SessionJwt>(authHeader.slice(7))
-    } catch {
-      throw new UnauthorizedException('Session JWT inválido o expirado')
-    }
-
-    if (payload.tipo !== 'cliente') {
-      throw new UnauthorizedException('Solo clientes pueden llamar al mozo')
-    }
+    const payload = verificarSesionDeMesa(this.jwt, authHeader, 'Solo clientes pueden llamar al mozo')
+    exigirSuSesion(payload, dto.sesionId)
 
     const { restauranteId } = payload
 
     // a. Verificar sesión activa con mesa
     const sesion = await this.prisma.sesionMesa.findUnique({
       where: { id: dto.sesionId },
-      include: { mesa: { select: { numero: true } } },
+      include: { mesa: { select: { numero: true, restaurante: { select: SELECT_DISPONIBILIDAD } } } },
     })
     if (!sesion) throw new NotFoundException('Sesión no encontrada')
     if (sesion.estado !== 'activa') {
       throw new BadRequestException('La sesión no está activa')
+    }
+    // Con el restaurante (o su marca) dado de baja, el personal perdió el acceso y recibe 403 al atender: el llamado
+    // quedaría pendiente para siempre (entrega 4.7 de docs/auth/specs/auth.md).
+    if (!restauranteDisponible(sesion.mesa.restaurante)) {
+      throw new ForbiddenException('Este restaurante no está disponible')
     }
 
     // b. Persistir llamado (se acumulan todos)
@@ -99,29 +85,29 @@ export class WaiterCallsService {
     return { ok: true }
   }
 
-  async atender(id: string, authHeader: string | undefined) {
-    if (!authHeader?.startsWith('Bearer ')) {
-      throw new UnauthorizedException('JWT de mozo requerido')
-    }
-
-    let payload: { sub: string; tipo: string }
-    try {
-      payload = this.jwt.verify<{ sub: string; tipo: string }>(authHeader.slice(7))
-    } catch {
-      throw new UnauthorizedException('JWT inválido o expirado')
-    }
-
-    if (payload.tipo !== 'mozo') {
-      throw new UnauthorizedException('Solo mozos pueden atender llamados')
-    }
-
-    const llamado = await this.prisma.llamadoMozo.findUnique({ where: { id } })
-    if (!llamado) throw new NotFoundException('Llamado no encontrado')
-    if (llamado.estado !== 'pendiente') throw new BadRequestException('Este llamado ya fue atendido')
-
-    return this.prisma.llamadoMozo.update({
+  /**
+   * Lo atiende un JEFE_SALON o un MOZO del restaurante del llamado, con su `Mozo` activo: el llamado queda a su nombre
+   * (`mozoId` sale de su cuenta, nunca del body).
+   */
+  async atender(id: string, usuario: UsuarioAutenticado) {
+    const llamado = await this.prisma.llamadoMozo.findUnique({
       where: { id },
-      data: { estado: 'atendido', mozoId: payload.sub },
+      select: { estado: true, sesion: { select: { mesa: { select: { restauranteId: true } } } } },
     })
+    if (!llamado) throw new NotFoundException('Llamado no encontrado')
+
+    const { restauranteId } = llamado.sesion.mesa
+    await this.acceso.exigirRol(usuario.id, restauranteId, ['JEFE_SALON', 'MOZO'])
+    const mozo = await this.acceso.exigirMozo(usuario.id, restauranteId)
+    const yaAtendido = new BadRequestException('Este llamado ya fue atendido')
+    if (llamado.estado !== 'pendiente') throw yaAtendido
+
+    // Si dos mozos lo atienden a la vez, queda a nombre del primero: la escritura vuelve a mirar el estado.
+    const { count } = await this.prisma.llamadoMozo.updateMany({
+      where: { id, estado: 'pendiente' },
+      data: { estado: 'atendido', mozoId: mozo.id },
+    })
+    if (count === 0) throw yaAtendido
+    return { id, estado: 'atendido', mozoId: mozo.id }
   }
 }

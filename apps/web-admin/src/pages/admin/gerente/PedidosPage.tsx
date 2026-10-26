@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { io, Socket } from 'socket.io-client'
-import { TOKEN_KEY } from '@menyu/auth'
 import { api, PedidoAdmin } from '../../../services/api'
 import { useContextStore } from '../../../store/contextStore'
-import { ClipboardList, Clock, ChevronRight, RefreshCw, AlertTriangle, X } from 'lucide-react'
+import { ClipboardList, Clock, ChevronRight, RefreshCw, AlertTriangle } from 'lucide-react'
+import { APARIENCIA_PEDIDOS, EditarPedidoModal, type ItemEditable } from '@menyu/ui/editar-pedido'
+import { urlDelSocket } from '@menyu/ui/socket'
 
 const C = {
   navy:      '#2D3561',
@@ -23,8 +24,7 @@ const C = {
 }
 
 const WS_URL: string =
-  (import.meta.env.VITE_WS_URL as string | undefined) ??
-  (import.meta.env.VITE_API_URL as string | undefined)?.replace('/api', '') ?? ''
+  urlDelSocket(import.meta.env.VITE_WS_URL as string | undefined, import.meta.env.VITE_API_URL as string | undefined) ?? ''
 
 type EstadoPedido = 'pendiente' | 'en_preparacion' | 'listo'
 
@@ -61,299 +61,12 @@ function cantActual(item: PedidoAdmin['items'][number]): number {
   return item.cantidadEditada ?? item.cantidad
 }
 
-function countWords(text: string): number {
-  return text.trim() === '' ? 0 : text.trim().split(/\s+/).length
+function itemsEditables(pedido: PedidoAdmin): ItemEditable[] {
+  return pedido.items.map((i) => ({ id: i.id, nombre: i.item.nombre, cantidadActual: cantActual(i), precioUnitario: Number(i.precioUnitario) }))
 }
 
 function shortId(id: string): string {
   return '#' + id.slice(0, 8).toUpperCase()
-}
-
-/* ── StepBtn ──────────────────────────────────────────────────────────────── */
-function StepBtn({
-  label,
-  onClick,
-  disabled,
-}: {
-  label: string
-  onClick: () => void
-  disabled: boolean
-}) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      style={{
-        width:          28,
-        height:         28,
-        borderRadius:   6,
-        border:         '1px solid #D1D5DB',
-        background:     disabled ? '#F9FAFB' : 'white',
-        color:          disabled ? '#D1D5DB' : '#374151',
-        fontFamily:     'Montserrat, sans-serif',
-        fontWeight:     700,
-        fontSize:       16,
-        lineHeight:     1,
-        cursor:         disabled ? 'not-allowed' : 'pointer',
-        display:        'flex',
-        alignItems:     'center',
-        justifyContent: 'center',
-        flexShrink:     0,
-      }}
-    >
-      {label}
-    </button>
-  )
-}
-
-/* ── EditModal ────────────────────────────────────────────────────────────── */
-function EditModal({
-  pedido,
-  onClose,
-  onDone,
-}: {
-  pedido: PedidoAdmin
-  onClose: () => void
-  onDone: (updated: PedidoAdmin) => void
-}) {
-  const isPagado = pedido.pago?.estado === 'aprobado'
-
-  const [quantities, setQuantities] = useState<Record<string, number>>(() =>
-    Object.fromEntries(pedido.items.map((i) => [i.id, cantActual(i)])),
-  )
-  const [justificacion, setJustificacion] = useState('')
-  const [submitting,    setSubmitting]    = useState(false)
-  const [error,         setError]         = useState<string | null>(null)
-
-  const words = countWords(justificacion)
-
-  const ediciones = pedido.items
-    .filter((item) => quantities[item.id] !== cantActual(item))
-    .map((item) => ({ pedidoItemId: item.id, cantidadNueva: quantities[item.id] }))
-
-  const hasChanges            = ediciones.length > 0
-  const todosAnuladosTrasEdit = pedido.items.every((item) => quantities[item.id] === 0)
-  const canSubmit             = hasChanges && justificacion.trim().length > 0 && words <= 50 && !submitting && !isPagado
-
-  function setQty(id: string, val: number) {
-    setQuantities((prev) => ({ ...prev, [id]: val }))
-  }
-
-  async function handleSubmit() {
-    if (!canSubmit) return
-    setSubmitting(true)
-    setError(null)
-    try {
-      const updated = await api.pedidos.editar(pedido.id, {
-        justificacion: justificacion.trim(),
-        ediciones,
-      })
-      onDone(updated)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Error al editar pedido')
-      setSubmitting(false)
-    }
-  }
-
-  return (
-    <div
-      style={{
-        position:       'fixed',
-        inset:          0,
-        zIndex:         1000,
-        background:     'rgba(0,0,0,0.5)',
-        display:        'flex',
-        alignItems:     'center',
-        justifyContent: 'center',
-        padding:        20,
-      }}
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div
-        style={{
-          background:   'white',
-          borderRadius: 12,
-          width:        '100%',
-          maxWidth:     500,
-          padding:      24,
-          boxShadow:    '0 20px 60px rgba(0,0,0,0.2)',
-          maxHeight:    '90vh',
-          overflowY:    'auto',
-        }}
-      >
-        {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-          <h3 style={{ fontFamily: 'Montserrat, sans-serif', fontWeight: 700, fontSize: 16, color: '#2D3561', margin: 0 }}>
-            Editar pedido {shortId(pedido.id)}
-          </h3>
-          <button
-            onClick={onClose}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', padding: 4, display: 'flex' }}
-          >
-            <X size={18} />
-          </button>
-        </div>
-
-        {isPagado ? (
-          <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#DC2626', margin: 0 }}>
-            Este pedido ya fue pagado y no puede editarse.
-          </p>
-        ) : (
-          <>
-            <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, color: '#6B7280', margin: '0 0 16px' }}>
-              Ajustá la cantidad de cada ítem. Solo se registran los ítems que cambian.
-            </p>
-
-            {/* Stepper por ítem */}
-            <div style={{ marginBottom: 16 }}>
-              {pedido.items.map((item) => {
-                const actual  = cantActual(item)
-                const current = quantities[item.id]
-                const changed = current !== actual
-                const anulado = current === 0
-                return (
-                  <div
-                    key={item.id}
-                    style={{
-                      display:      'flex',
-                      alignItems:   'center',
-                      gap:          12,
-                      padding:      '8px 10px',
-                      borderRadius: 8,
-                      background:   changed ? (anulado ? '#FEF2F0' : '#FFF7ED') : 'transparent',
-                      marginBottom: 4,
-                      transition:   'background 0.15s',
-                    }}
-                  >
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#374151' }}>
-                        {item.item.nombre}
-                      </span>
-                      {anulado && (
-                        <div>
-                          <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 11, fontWeight: 600, color: '#DC2626' }}>
-                            Ítem anulado
-                          </span>
-                        </div>
-                      )}
-                    </div>
-
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <StepBtn label="−" onClick={() => setQty(item.id, Math.max(0, current - 1))} disabled={current === 0} />
-                      <span
-                        style={{
-                          fontFamily: 'Montserrat, sans-serif',
-                          fontWeight: 700,
-                          fontSize:   14,
-                          color:      anulado ? '#DC2626' : '#2D3561',
-                          minWidth:   20,
-                          textAlign:  'center',
-                        }}
-                      >
-                        {current}
-                      </span>
-                      <StepBtn label="+" onClick={() => setQty(item.id, Math.min(actual, current + 1))} disabled={current === actual} />
-                    </div>
-
-                    <span
-                      style={{
-                        fontFamily: 'Inter, sans-serif',
-                        fontSize:   12,
-                        color:      '#6B7280',
-                        minWidth:   56,
-                        textAlign:  'right',
-                        flexShrink: 0,
-                      }}
-                    >
-                      ${(current * Number(item.precioUnitario)).toFixed(2)}
-                    </span>
-                  </div>
-                )
-              })}
-            </div>
-
-            {/* Justificación */}
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, fontWeight: 600, color: '#374151' }}>
-                  Justificación
-                </label>
-                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 11, color: words > 50 ? '#E8563A' : '#9CA3AF' }}>
-                  {words}/50 palabras
-                </span>
-              </div>
-              <textarea
-                value={justificacion}
-                onChange={(e) => setJustificacion(e.target.value)}
-                rows={3}
-                placeholder="Describí el motivo de la edición…"
-                style={{
-                  width:        '100%',
-                  padding:      '10px 12px',
-                  borderRadius: 8,
-                  border:       `1px solid ${words > 50 ? '#E8563A' : '#D1D5DB'}`,
-                  fontFamily:   'Inter, sans-serif',
-                  fontSize:     13,
-                  color:        '#374151',
-                  resize:       'vertical',
-                  outline:      'none',
-                  boxSizing:    'border-box',
-                }}
-              />
-            </div>
-
-            {hasChanges && todosAnuladosTrasEdit && (
-              <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, color: '#92400E', background: '#FEF3C7', border: '1px solid #FCD34D', borderRadius: 6, padding: '8px 12px', margin: '0 0 12px' }}>
-                Esto anulará el pedido completo.
-              </p>
-            )}
-
-            {error && (
-              <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, color: '#E8563A', margin: '0 0 12px' }}>
-                {error}
-              </p>
-            )}
-
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-              <button
-                onClick={onClose}
-                style={{
-                  padding:      '8px 16px',
-                  borderRadius: 8,
-                  border:       '1px solid #D1D5DB',
-                  background:   'white',
-                  fontFamily:   'Inter, sans-serif',
-                  fontSize:     13,
-                  color:        '#374151',
-                  cursor:       'pointer',
-                }}
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleSubmit}
-                disabled={!canSubmit}
-                style={{
-                  padding:      '8px 16px',
-                  borderRadius: 8,
-                  border:       'none',
-                  background:   canSubmit ? '#E8563A' : '#D1D5DB',
-                  fontFamily:   'Inter, sans-serif',
-                  fontSize:     13,
-                  fontWeight:   600,
-                  color:        canSubmit ? 'white' : '#9CA3AF',
-                  cursor:       canSubmit ? 'pointer' : 'not-allowed',
-                  transition:   'background 0.15s',
-                }}
-              >
-                {submitting ? 'Guardando…' : 'Guardar edición'}
-              </button>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  )
 }
 
 /* ── PedidoCard ───────────────────────────────────────────────────────────── */
@@ -601,8 +314,8 @@ export function PedidosPage() {
 
   useEffect(() => {
     if (!selectedRestauranteId) return
+    // El gateway no autentica la conexión (docs/auth/specs/auth.md, Fuera de alcance): no se le manda ningún token.
     const socket: Socket = io(`${WS_URL}/ws`, {
-      auth:       { token: localStorage.getItem(TOKEN_KEY) },
       transports: ['websocket'],
     })
     socketRef.current = socket
@@ -810,10 +523,13 @@ export function PedidosPage() {
 
       {/* Edit modal */}
       {editingPedido && (
-        <EditModal
-          pedido={editingPedido}
+        <EditarPedidoModal
+          codigo={shortId(editingPedido.id)}
+          items={itemsEditables(editingPedido)}
+          pagado={editingPedido.pagado === true}
+          apariencia={APARIENCIA_PEDIDOS}
+          onGuardar={async (edicion) => handleEditDone(await api.pedidos.editar(editingPedido.id, edicion))}
           onClose={() => setEditingPedido(null)}
-          onDone={handleEditDone}
         />
       )}
 

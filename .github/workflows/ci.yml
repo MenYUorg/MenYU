@@ -23,7 +23,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: pnpm
 
       - name: Install dependencies
@@ -36,19 +36,19 @@ jobs:
           DIRECT_URL: "postgresql://x:x@x:5432/x"
 
       - name: Typecheck
-        run: pnpm turbo typecheck --filter=@menyu/api --filter=@menyu/web-admin --filter=@menyu/web-cliente --filter=@menyu/web-staff
+        run: pnpm turbo typecheck --filter=@menyu/api --filter=@menyu/web-admin --filter=@menyu/web-cliente --filter=@menyu/web-staff --filter=@menyu/web-auth --filter=@menyu/auth-client
 
       - name: Lint
-        run: pnpm turbo lint --filter=@menyu/api --filter=@menyu/web-admin --filter=@menyu/web-cliente --filter=@menyu/web-staff
+        run: pnpm turbo lint --filter=@menyu/api --filter=@menyu/web-admin --filter=@menyu/web-cliente --filter=@menyu/web-staff --filter=@menyu/web-auth
 
       - name: Test
-        run: pnpm turbo test --filter=@menyu/api --filter=@menyu/web-admin --filter=@menyu/web-cliente --filter=@menyu/web-staff
+        run: pnpm turbo test --filter=@menyu/api --filter=@menyu/web-admin --filter=@menyu/web-cliente --filter=@menyu/web-staff --filter=@menyu/web-auth --filter=@menyu/ui --filter=@menyu/auth-client
 
       - name: Test — smoke scripts
-        run: node --test scripts/smoke/lib.test.mjs
+        run: node --test scripts/smoke/lib.test.mjs scripts/carga/guardas.test.mjs 'scripts/e2e-staging/*.test.mjs'
 
       - name: Coverage
-        run: pnpm turbo test:coverage --filter=@menyu/api --filter=@menyu/web-admin --filter=@menyu/web-cliente --filter=@menyu/web-staff
+        run: pnpm turbo test:coverage --filter=@menyu/api --filter=@menyu/web-admin --filter=@menyu/web-cliente --filter=@menyu/web-staff --filter=@menyu/web-auth --filter=@menyu/ui --filter=@menyu/auth-client
 
       - name: Upload coverage — backend
         uses: actions/upload-artifact@v4
@@ -86,6 +86,33 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+      - name: Upload coverage — web-auth
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-web-auth
+          path: apps/web-auth/coverage/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload coverage — ui
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-ui
+          path: packages/ui/coverage/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload coverage — auth-client
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-auth-client
+          path: packages/auth-client/coverage/
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: SonarCloud
         uses: SonarSource/sonarqube-scan-action@d209202bc7d53ff1cc128f7f907dac145c9d6ae9 # v8.3.0
         env:
@@ -95,4 +122,65 @@ jobs:
           args: -Dsonar.qualitygate.wait=true -Dsonar.qualitygate.timeout=300
 
       - name: Build
-        run: pnpm turbo build --filter=@menyu/api --filter=@menyu/web-admin --filter=@menyu/web-cliente --filter=@menyu/web-staff
+        run: pnpm turbo build --filter=@menyu/api --filter=@menyu/web-admin --filter=@menyu/web-cliente --filter=@menyu/web-staff --filter=@menyu/web-auth
+
+  # e2e del backend contra un Postgres efímero (SCRUM-37). Corre en paralelo al job anterior.
+  # Sin secretos: la base vive solo durante el job y las claves son de test.
+  e2e-backend:
+    name: E2E — backend (Postgres efímero)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        # A confirmar con Supabase (Settings → Infrastructure): tiene que ser su misma versión mayor.
+        # 17.6 es la del docker-compose.yml del backend; las migraciones se probaron también con 15.
+        image: postgres:17.6
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: menyu_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test -d menyu_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: "postgresql://test:test@localhost:5432/menyu_test"
+      DIRECT_URL: "postgresql://test:test@localhost:5432/menyu_test"
+      JWT_SECRET: e2e-test-jwt-secret-no-usar-fuera-del-ci
+      MP_ENCRYPTION_KEY: e2e-test-mp-key-no-usar-fuera-del-ci
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      # Solo el backend y sus dependencias del workspace
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --filter "@menyu/api..."
+
+      - name: Generate Prisma Client
+        run: pnpm --filter @menyu/api exec prisma generate
+
+      # Todas las migraciones desde cero, como en una base nueva
+      - name: Apply migrations
+        run: pnpm --filter @menyu/api exec prisma migrate deploy
+
+      # Falla si la base que dejan las migraciones no coincide con schema.prisma
+      - name: Check drift
+        run: pnpm --filter @menyu/api exec prisma migrate diff --from-url "$DATABASE_URL" --to-schema-datamodel prisma/schema.prisma --exit-code
+
+      - name: Test — e2e
+        run: pnpm --filter @menyu/api test:e2e

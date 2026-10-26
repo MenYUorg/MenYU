@@ -16,7 +16,8 @@ Equipo: De Marcos, Ojeda, Strumia Carrara (ODS390-2026). Stack sin experiencia p
 | Panel web admin | React + Vite + TailwindCSS · apps/web-admin |
 | Panel web staff | React + Vite + TailwindCSS · apps/web-staff (cocina + mozo web) |
 | App web cliente | React + Vite + TailwindCSS · apps/web-cliente |
-| Infra frontend | Vercel (3 proyectos separados) |
+| Login central | React + Vite + TailwindCSS · apps/web-auth (Supabase Auth) |
+| Infra frontend | Vercel (un proyecto por app, más uno de staging por app) |
 | Estado global | Zustand |
 | Monorepo | Turborepo + pnpm workspaces |
 | Tipos compartidos | `@menyu/types` |
@@ -34,10 +35,12 @@ MenYu/
 │   ├── backend/          → @menyu/api          (NestJS + Prisma)
 │   ├── web-cliente/      → @menyu/web-cliente  (React + Vite · menú del comensal)
 │   ├── web-staff/        → @menyu/web-staff    (React + Vite · cocina + mozo web)
-│   └── web-admin/        → @menyu/web-admin    (React + Vite · panel administrador)
+│   ├── web-admin/        → @menyu/web-admin    (React + Vite · panel administrador)
+│   └── web-auth/         → @menyu/web-auth     (React + Vite · login central con Supabase)
 ├── packages/
 │   ├── types/            → @menyu/types    (tipos TS compartidos)
-│   ├── ui/               → @menyu/ui       (componentes React compartidos)
+│   ├── ui/               → @menyu/ui       (componentes React compartidos y tokens de marca: @menyu/ui/tailwind-preset)
+│   ├── auth-client/      → @menyu/auth-client (sesión de Supabase en cookie de dominio compartido, RequireAuth, logout)
 │   └── config/           → @menyu/config   (ESLint + TS configs base)
 ├── turbo.json
 ├── package.json
@@ -62,6 +65,7 @@ apps/backend/
     ├── sessions/         (module, controller, service, gateway.ts)
     ├── menu/             (module, controller, service)
     ├── discovery/        (module, controller, service, dto/ — público, sin guards)
+    ├── root/             (consola de ROOT: marcas/, restaurantes/, duenos/, roots/, historial/ — solo ROOT; el historial es de solo agregar)
     ├── orders/           (module, controller, service, gateway.ts)
     ├── waiter-calls/     (module, controller, service, gateway.ts)
     ├── payments/
@@ -90,59 +94,98 @@ packages/types/src/
 ### Roles de administración (enum `RolAdmin` en DB)
 | Rol | Descripción |
 |---|---|
-| `ROOT` | Administración general del sistema MenYu: crea y elimina marcas, restaurantes y usuarios OWNER y GERENTE. **No** decide sobre marcas ni restaurantes y **no** accede a sus datos privados. No es un bypass |
-| `OWNER` | Dueño de una marca — acceso a toda su marca y sus restaurantes |
-| `GERENTE` | Gerente de restaurantes específicos, asignados via tabla `AdminRestaurante` |
+| `ROOT` | Administración general del sistema MenYu: crea, edita y da de baja marcas y restaurantes, invita por mail a los OWNER (a su marca) y a otras cuentas ROOT, y les quita la membresía a los OWNER. Es `Usuario.esRoot`, no una membresía. Las cuentas ROOT no se borran desde la app: la primera de cada entorno se crea a mano (`docs/auth/usuarios-prueba-staging.md`) y `apps/backend/scripts/cuentas-root.ts` hace ROOT a un `Usuario` que ya existe. Todo lo que hace queda en un historial que nadie puede editar ni borrar y que ven todos los ROOT. **No** crea GERENTE (los crea el OWNER), **no** decide sobre marcas ni restaurantes (menú, precios, descuentos, mesas, pedidos, logo, dirección…) y **no** accede a sus datos privados. No es un bypass. Su consola (`/root` en web-admin) está en `docs/plan-consola-root.md` |
+| `OWNER` | Dueño de una marca — acceso a toda su marca y sus restaurantes. Lo invita ROOT (una `Membresia` OWNER por marca) |
+| `GERENTE` | Gerente de restaurantes específicos (una `Membresia` por restaurante; antes, la tabla `AdminRestaurante`, que se retira en la Fase 5). Lo invita el OWNER desde Personal |
 
 ### Tipos de usuario adicionales (tablas separadas, NO son RolAdmin)
 | Tipo | Tabla | App |
 |---|---|---|
 | Mozo | `mozo` | apps/web-staff |
-| Cocina | `cocina` | apps/web-staff |
+| Cocina | — (no hay tabla ni login propio; con Supabase es el rol `COCINA` de `Membresia`) | apps/web-staff |
 | Cliente/Comensal | `cliente` | apps/web-cliente |
 
 ### Guards NestJS
-- `@Roles(RolAdmin.ROOT)` — solo ROOT
-- `@Roles(RolAdmin.OWNER, RolAdmin.GERENTE)` — panel admin
-- ROOT no es un bypass: el código nuevo no lo incluye en `@Roles(...)` ni en los chequeos de pertenencia (OWNER de la marca, GERENTE asignado). Varios services existentes todavía tienen `if (user.rol === 'ROOT') return`: ver el Apéndice A de `docs/plan-discovery-descuentos.md`
-- Mozos y cocina usan sus propios guards separados del enum RolAdmin
-- El comensal no usa guards de admin — se autentica por sesión de mesa
+- Las rutas del personal usan el token de Supabase (ver "Autenticación con Supabase"): `@RequiereRol`/`@RequiereRolEn` o `@Personal()` más `AccesoService` en el service. Los grupos de roles de la matriz por ruta están en `apps/backend/src/auth/roles-del-personal.ts`.
+- La consola de ROOT (`/root/*`) usa `@RequiereRoot()` a nivel de controller (desde la entrega 4.4). Donde también va `@UseGuards(CamposPermitidosGuard)`, `@RequiereRoot()` va debajo, para que los permisos corran antes que la validación de los campos
+- ROOT no es un bypass: no figura en ningún rol ni chequeo de pertenencia y recibe 403 en las rutas de datos (`AccesoService` ignora `esRoot`). Sus rutas van en `/root/*`, con un `select` explícito en cada consulta
+- El comensal no usa guards del personal — se autentica por sesión de mesa (`SessionAuthGuard`)
+
+### Autenticación con Supabase (migración en curso)
+Spec, decisiones y fases: `docs/auth/specs/auth.md` (una fase por sesión; al cerrar cada una, el subagente `revisor`). Hechas: Fase 1 (modelo de datos), Fase 2 (backend), Fase 3 (web-auth) y Fase 3b (Google y `/privacidad`), en staging y en producción desde v1.1.0, con la pantalla de consentimiento de Google publicada. La **Fase 4** (SSO en las apps) está completa: la 4.1 (`@menyu/auth-client` y web-auth sobre la cookie de dominio compartido), la 4.2 (base de permisos del backend), la 4.3 (los controllers del personal sobre Supabase, sin ROOT, los cobros de #356 y Personal), la 4.4 (el backend de la consola de ROOT sobre Supabase: dueños y cuentas ROOT por invitación, con su historial), la 4.5 (web-admin entero sobre la sesión de Supabase, con Personal y la consola de ROOT), la 4.6 (web-staff entero, con el selector por membresías y los cobros sin `mozoId`) y la 4.7 (web-cliente sin tokens para el personal, las mesas de un restaurante dado de baja solo con Mercado Pago, las variables de Vercel y la documentación). Está en `main` (PR #416, más el hotfix de Node 22 #428 y la documentación #429), verificada en staging el 2026-10-23 y en producción desde v1.3.0 (2026-10-25). La **Fase 4b** (cuenta de cliente: registro en web-auth, vuelta a web-cliente y la mesa a su nombre) está en `main` (PR #430), verificada en staging el 2026-10-25 y en producción desde v1.3.0. Sigue la Fase 5 (limpieza).
+- Modelos nuevos: `Usuario` (`supabaseUserId`, `esRoot` para ROOT) y `Membresia` con el enum `Rol`: `OWNER` por marca; `GERENTE`, `JEFE_SALON`, `MOZO` y `COCINA` por restaurante (CHECK `membresia_ambito_check` en la migración). Además `Mozo.usuarioId` (los mozos invitados no tienen `passwordHash`) y `Cliente.supabaseUserId`. `usuario` y `membresia` tienen RLS sin políticas.
+- Backend (en `apps/backend/src/auth/`):
+  - `SupabaseAuthGuard` verifica el access token de Supabase contra el JWKS de `SUPABASE_URL` y deja el `Usuario` en `request.usuario` (lo lee `@UsuarioActual()`).
+  - `@RequiereRol(...)` suma `MembresiaGuard` y exige el rol en el restaurante de `:restauranteId` (la membresía OWNER de la marca cubre sus sucursales). `@RequiereRolEn({ param | query | body }, ...)` lo toma de otro lugar.
+  - `@Personal()` solo autentica: en las rutas de un recurso (`/items/:id`) el service llama a `AccesoService.exigirRol` o `exigirOwnerDeMarca`. `@RequiereRoot()` suma `RootGuard` (`esRoot`), solo para `/root/*`.
+  - Los permisos los decide `AccesoService`, que ignora `esRoot` y no cuenta las membresías de un restaurante o una marca dados de baja. `exigirMozo` da el `Mozo` activo de la cuenta (quien atiende, edita o cobra sale de ahí, nunca del body), y `exigirAlgunRol` es para lo que no es de un restaurante.
+  - Desde la 4.4 los usan todas las rutas del personal y de la consola de ROOT; la matriz por ruta está en `docs/auth/specs/auth.md`. Ninguna ruta usa el JWT legacy del personal: `src/auth/rutas-por-autenticacion.spec.ts` falla si aparece una, y las que solo autentican (`@Personal()`) tienen que estar en su lista.
+  - Las invitaciones de ROOT (`POST /root/marcas/:id/duenos`, también `POST /auth/invitaciones` con una cuenta ROOT) quedan en el historial en la misma transacción que el `Usuario` y la `Membresia`; la llamada a Supabase va antes (decisión 22 de `docs/plan-consola-root.md`). `InvitacionesModule` exporta `InvitacionesService` (con `cuentaDeSupabase`) y el historial está en `HistorialRootModule`.
+  - Ninguna respuesta del personal devuelve las columnas `mp_*` ni `passwordHash`: `select` explícito (`RESTAURANTE_SELECT` y compañía), con un test de contrato en `prisma/includes-contract.spec.ts`.
+  - Personal (`GET` y `DELETE /restaurantes/:restauranteId/personal`, en `src/personal/`) lista y quita el acceso; el alta es `POST /auth/invitaciones`. `/admins`, `/admin-restaurante` y `POST /mozos` ya no existen.
+  - Los cobros guardan la cuenta en `Pago.usuarioId` (`common/atribucion-del-cobro.ts`): un mozo cobra a su nombre, un OWNER o GERENTE puede atribuírselo a un mozo.
+  - La cuenta de cliente (Fase 4b): `POST /sessions/open` sigue público y, si recibe un token de Supabase, `CuentaDeClienteService` (`auth/supabase/`) resuelve el `Cliente` por `supabaseUserId`, vincula uno del login anterior con el mismo email (sin distinguir mayúsculas) o crea uno. Nunca crea `Usuario` ni `Membresia`. `resolveClienteId` elige con qué verificar por el encabezado del token (`esTokenDeSupabase`: ES256 o RS256; si no, `JWT_SECRET`), y cada camino acepta solo sus algoritmos; un token que no sirve entra como "Invitado".
+  - Tests: `src/test/acceso-de-test.ts` tiene las cuentas (`CUENTAS`), el `MUNDO` y un `AccesoService` sin base que usan los specs de endpoints (`cuenta:` en `crearAppDeEndpoints`) y los de los services.
+- web-auth (`apps/web-auth`, `auth.<ambiente>`, puerto 5173): login con email y contraseña o con Google, olvidé mi contraseña, aceptar invitación, selector y "sin acceso", y desde la Fase 4b el registro de clientes (`/crear-cuenta` y `/confirmar-email`).
+  - "Continuar con Google" está en `/`, en `/invitacion` y en `/crear-cuenta`, y vuelve a `/google`, que muestra el error o sigue a `/`.
+  - Una cuenta de Google sin invitación no da acceso: `/auth/me` responde 403. Lo mismo una cuenta de cliente: para Supabase son iguales. `/auth/me` no cambia; lo que las separa es el `redirect`: con uno a web-cliente (el registro siempre lo manda), el post-login vuelve ahí; sin él, `/sin-acceso`, que ofrece "Ir a MenYU".
+  - `/crear-cuenta` hace `signUp` con el nombre en `user_metadata.nombre` y `emailRedirectTo` en `/confirmar-email?redirect=<web-cliente>`. La plantilla "Confirm signup" arma el link con `{{ .RedirectTo }}` y un `token_hash`; con la plantilla por defecto de Supabase, `/confirmar-email` canjea el `?code=` (solo en el mismo navegador).
+  - `/privacidad` es la política de privacidad pública que figura en Google Cloud. No usa la sesión: no le pongas post-login ni la cambies de ruta.
+  - Después del login llama a `GET /auth/me` y manda al `redirect` (solo `https://*.menyu-app.com`, o `*.menyu.local` en local) o a la app del rol.
+  - Los links del mail traen un `token_hash` que se canjea con `verifyOtp` (plantillas: `docs/auth/VariablesACambiar.md`).
+  - La sesión vive en la cookie de dominio compartido de `@menyu/auth-client` (`VITE_AUTH_COOKIE_DOMAIN`). web-admin la lee desde la 4.5 y web-staff desde la 4.6.
+  - Probar en local contra staging: `docs/auth/VariablesACambiar.md`, Desarrollo local.
+- **web-admin** (`apps/web-admin`, `admin.<ambiente>`, puerto 5174) corre sobre la sesión de Supabase desde la entrega 4.5: toda la app va dentro de `RequireAuth` de `@menyu/auth-client`, ya no tiene login propio y el token de cada pedido sale de `tokenDeAcceso()` (ante un 401 renueva y reintenta una vez). El rol sale del perfil de `GET /auth/me` con `useRolActual()` (`store/contextStore.ts`): es el rol en el restaurante elegido, así que una persona puede ser OWNER de una marca y GERENTE de un restaurante de otra. ROOT no entra a las pantallas de datos (`/admin/*` lo devuelve a `/root`). El alta de personal es la pantalla Personal (`/admin/mozos`): invitar (`POST /auth/invitaciones`) y quitar acceso (`DELETE /restaurantes/:id/personal/:membresiaId`), con la matriz de `puede-invitar.ts`.
+- **web-staff** (`apps/web-staff`, `staff.<ambiente>`, puerto 5175) corre sobre la sesión de Supabase desde la entrega 4.6: toda la app va dentro de un `RequireAuth` que pide cualquier membresía, ya no tiene login propio y el cliente de la API se maneja como en web-admin. El contexto (`store/contextoStore.ts`, que reemplazó a `mozoStore`) sale del perfil sin pedirle nada a la API, y `rolesEnElRestaurante` da **todos** los roles en el restaurante elegido: de ahí salen qué vista le toca (COCINA a `/cocina`; MOZO y JEFE_SALON a `/mozo`; OWNER y GERENTE, las dos, con el selector) y qué puede hacer (atender un llamado es de MOZO y JEFE_SALON, que tienen un `Mozo`; editar un pedido no es del OWNER). `CobroModal` no manda `mozoId` ni `cobradoPorNombre`: quién cobró lo deduce el backend de la cuenta.
+- **web-cliente** (`apps/web-cliente`, `mesa.<ambiente>`, puerto 5176) lee desde la Fase 4b la sesión opcional del cliente con `useSession` de `@menyu/auth-client`, sin `RequireAuth`. "Ingresar" y "Registrarme" (header y menú lateral) van a web-auth (`/` y `/crear-cuenta`) con el `redirect` a la pantalla actual. `utils/cuenta.ts` y `hooks/useCuenta.ts` juntan las dos cuentas mientras convivan: la de Supabase y la del login de `/auth` (JWT propio con `JWT_SECRET`, que sigue andando por URL hasta la Fase 5); si están las dos, vale la de Supabase, y su token es el que va en `POST /sessions/open`. "Cerrar sesión" cierra las dos y la persona se queda en web-cliente. Sin las variables de Supabase, o en un host fuera del dominio de la cookie (los viejos de Vercel), la app anda igual, sin cuentas de Supabase: "Ingresar" y "Registrarme" van a `/auth` (`comparteLaSesionDeWebAuth`). No mezclar los dos sistemas en un mismo endpoint, salvo `POST /sessions/open`: es público y el token solo dice a nombre de qué `Cliente` queda la mesa, no da permisos (cada token se verifica solo con lo suyo). Desde la 4.7, si en `/auth` entra una cuenta del personal no se le guardan ni se le pasan los tokens: avisa y la manda a web-auth (`VITE_AUTH_URL`, con el dominio de la app como respaldo: `utils/urlDeAuth.ts`).
+- En el seed, el `Usuario` OWNER de Marca Seed (`owner@menyu.com`) tiene un `supabaseUserId` ficticio que no existe en ningún proyecto de Supabase. Para iniciar sesión con él (desde la Fase 2) hay que reemplazarlo por el id de un usuario real del Supabase de staging; el seed no lo pisa.
 
 ---
 
 ## Arquitectura de frontends web
 
-### Tres apps web independientes (Vercel)
+### Cuatro apps web independientes (Vercel)
 ```
-apps/web-cliente/   → menu.menyu.com     (comensal)
-apps/web-staff/     → staff.menyu.com    (cocina + mozo web)
-apps/web-admin/     → admin.menyu.com    (dueño/administrador)
+apps/web-cliente/   → mesa.menyu-app.com     (comensal)
+apps/web-staff/     → staff.menyu-app.com    (cocina + mozo web)
+apps/web-admin/     → admin.menyu-app.com    (dueño/administrador)
+apps/web-auth/      → auth.menyu-app.com     (login central, Supabase Auth)
 ```
+La API (Railway) está en `api.menyu-app.com`. Staging: `<app>.staging.menyu-app.com`. Local: `<app>.menyu.local` (ver la sección Dominios de `docs/auth/specs/auth.md`). Durante la migración siguen activos los dominios viejos (`menyu-*.vercel.app`, `menyu-backend-*.up.railway.app`): no darlos de baja (QR impresos, webhooks de Mercado Pago). Las variables por plataforma: `docs/auth/VariablesACambiar.md`.
 
 Cada una es un proyecto Vite independiente con su propio deploy en Vercel.
 Un cambio en web-admin no afecta ni rebuilda web-cliente.
 
 ### Autenticación
 
-**Flujo normal (usuario + contraseña):**
-- Login compartido entre web-admin y web-staff vía `packages/auth`
-- Al recibir el JWT redirige según `user.tipo`:
-  admin → web-admin, mozo/cocina → web-staff
-- Cada app valida que el rol del JWT coincida con su dominio.
-  Si no coincide, redirige al login.
+**Flujo normal (usuario + contraseña, o Google):**
+- El login es web-auth, la única pantalla de ingreso de MenYU. web-admin (4.5) y
+  web-staff (4.6) no tienen login propio: leen la sesión de Supabase de la cookie
+  de dominio compartido con `RequireAuth` de `packages/auth-client`.
+- Después del login, web-auth manda a la app del rol (ROOT, OWNER y GERENTE a
+  web-admin; JEFE_SALON, MOZO y COCINA a web-staff) y, con varios lugares,
+  muestra el selector.
+- Cada app exige lo suyo: web-admin, `esRoot` o una membresía OWNER o GERENTE;
+  web-staff, cualquier membresía. A quien no le toca, la manda a web-auth, que la
+  deriva a su app (sin loop).
+- `packages/auth` (el login legacy) se borró en la 4.7: no tenía ningún
+  consumidor desde la 4.6 y web-cliente nunca lo importó.
+- La cuenta del cliente (Fase 4b) también se crea e inicia en web-auth, que la
+  devuelve a web-cliente con el `redirect`. No da acceso al personal: no tiene
+  `Usuario` ni membresías, y web-admin y web-staff la rechazan.
 
 **Flujo alternativo QR/PIN (solo web-cliente):**
 - Exclusivo de apps/web-cliente — nunca en web-admin ni web-staff
 - No usa usuario ni contraseña — autentica una mesa, no un usuario
 - Redirige directamente a la vista de menú de esa mesa
-- El comensal nunca pasa por el login común
+- No pide cuenta: sin ella entra como "Invitado"; con la cuenta del cliente
+  iniciada, la mesa queda a su nombre
 
 ### Código compartido entre apps web
 
 Vive en packages/:
-- `packages/auth`  → LoginForm, useAuth, authService
-                     compartido entre web-admin y web-staff
-                     NO usar en web-cliente
+- `packages/auth-client` → cliente de Supabase con la cookie de dominio compartido, `useSession`,
+                     `RequireAuth`, `logout` y qué app le toca a cada perfil (Fase 4 de auth)
 - `packages/ui`    → componentes visuales idénticos entre apps
                      Button, Input, Modal, Avatar, hooks compartidos
 - `packages/types` → tipos TypeScript (sin cambios)
@@ -262,8 +305,8 @@ Detalle, decisiones (D1 a D31) y checklists: `docs/plan-discovery-descuentos.md`
 | `GET /discovery` | público | Hasta 50 restaurantes activos de marcas activas (por nombre; `logoUrl` = el del restaurante, si no el de su marca, si no `null`) y hasta 30 platos en oferta (por porcentaje de descuento mayor) |
 | `GET /discovery/buscar?q=` | público | `q` de 2 a 60 caracteres. Ignora mayúsculas y acentos (extensión de PostgreSQL `unaccent`). Devuelve `{ ofertas, restaurantes, restaurantesConPlatos }` |
 | `GET /discovery/restaurantes/:id` | público | Un restaurante y sus ofertas. 404 si no existe, no está activo o su marca no lo está |
-| `GET /menu/:restauranteId` | público | Suma `restaurante.direccion`, `restaurante.logoUrl` (resuelto igual que en Discovery) y `descuentos[]` |
-| `POST /sessions/open` | público | Con `tableCode` y `restauranteId` valida que la mesa sea de ese restaurante (409 si no); también acepta `restauranteId` + `pin` |
+| `GET /menu/:restauranteId` | público | Suma `restaurante.direccion`, `restaurante.logoUrl` (resuelto igual que en Discovery) y `descuentos[]`. 404 si el restaurante o su marca están dados de baja |
+| `POST /sessions/open` | público | Con `tableCode` y `restauranteId` valida que la mesa sea de ese restaurante (409 si no); también acepta `restauranteId` + `pin`. 403 "Este restaurante no está disponible" si el restaurante o su marca están dados de baja y la mesa no tiene una sesión abierta (una sesión ya abierta se deja terminar) |
 | `POST` y `DELETE /marcas/:id/logo` y `/restaurantes/:id/logo` | OWNER de la marca | Sube o quita el logo (PNG, JPEG o WebP de hasta 2 MB, en Supabase Storage) |
 | `PATCH /restaurantes/:id` con `direccion` | OWNER de la marca | GERENTE y ROOT reciben 403 si envían `direccion` |
 | `PUT` y `DELETE /items/:id/descuento` | OWNER o GERENTE asignado | `precioDescuento` (precio entero) o `porcentaje` (1 a 99), uno solo. ROOT recibe 403 |
@@ -276,7 +319,7 @@ Un descuento se guarda como `precio_descuento` (entero, con un CHECK en la base:
 - `/check-in?restaurantId=…&tableCode=…` es lo que codifica el QR impreso de cada mesa: abre la sesión y sigue al menú; si falla, ofrece el PIN.
 - `/auth` acepta `?volver=` (solo rutas internas de la app).
 
-**web-admin**: `/admin/marca` ("Marca y sucursales", solo OWNER) con el logo de la marca, el de cada sucursal y su dirección. El botón "Descuento" de la lista del menú lo ven OWNER y GERENTE.
+**web-admin**: `/admin/marca` ("Marca y sucursales", solo OWNER) con el logo de la marca, el de cada sucursal y su dirección. El botón "Descuento" de la lista del menú lo ven OWNER y GERENTE. La consola de ROOT vive en `/root/*` (marcas, restaurantes con baja y reactivar, dueños y cuentas ROOT por invitación, e historial; solo ROOT, con carga aparte vía `React.lazy`): ver `docs/plan-consola-root.md` y, para probarla en local, `docs/probar-consola-root.md`.
 
 **Fuera de alcance:** combos, fidelización, vigencia o programación de descuentos.
 
@@ -316,8 +359,8 @@ pnpm typecheck
 - El patrón de pagos es `PaymentProvider` — nunca llamar Mercado Pago directamente desde el controller.
 - El QR es un identificador interno de la app, **no** una URL directa a una ruta web.
 - Cada feature nueva de frontend va en la app correspondiente a su rol: web-cliente, web-staff o web-admin.
-- El login QR/PIN del comensal es independiente del login común — nunca mezclarlos ni importar packages/auth en web-cliente.
-- Componentes compartidos entre apps van en packages/ui o packages/auth. Nunca duplicar lógica idéntica en cada app.
+- El login QR/PIN del comensal es independiente del login común — nunca mezclarlos. web-cliente no monta `RequireAuth`: su sesión de mesa no es una cuenta, y la cuenta del cliente (Fase 4b) es opcional, solo con `useSession`.
+- Componentes compartidos entre apps van en packages/ui o packages/auth-client. Nunca duplicar lógica idéntica en cada app.
 - Nunca agregar lógica de un rol en la app de otro rol. El comensal no debe tener acceso al código del admin ni siquiera en el bundle compilado.
 
 ---

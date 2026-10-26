@@ -1,5 +1,5 @@
 import { crearTokenJwt } from '../test/fixtures'
-import { leerTokenDeCuenta } from './tokenCuenta'
+import { borrarTokensDeCuenta, leerTokenDeCuenta } from './tokenCuenta'
 
 const AHORA = Date.UTC(2026, 9, 15, 12, 0, 0)
 const segundos = (ms: number) => Math.floor(ms / 1000)
@@ -88,5 +88,32 @@ describe('leerTokenDeCuenta', () => {
 
     vi.setSystemTime(AHORA + 61_000)
     expect(leerTokenDeCuenta()).toBeUndefined()
+  })
+})
+
+describe('borrarTokensDeCuenta', () => {
+  afterEach(() => {
+    localStorage.clear()
+    vi.restoreAllMocks()
+  })
+
+  it('cierra la sesión de la cuenta: borra el token y el de renovación', () => {
+    guardar(crearTokenJwt({ sub: 'cli-1', tipo: 'cliente' }))
+    localStorage.setItem('menyu_refresh_token', 'refresh')
+    localStorage.setItem('menyu_sesion_otra_cosa', 'queda')
+
+    borrarTokensDeCuenta()
+
+    expect(localStorage.getItem('menyu_access_token')).toBeNull()
+    expect(localStorage.getItem('menyu_refresh_token')).toBeNull()
+    expect(localStorage.getItem('menyu_sesion_otra_cosa')).toBe('queda')
+  })
+
+  it('sin almacenamiento del navegador no se rompe', () => {
+    vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(() => {
+      throw new Error('bloqueado')
+    })
+
+    expect(() => borrarTokensDeCuenta()).not.toThrow()
   })
 })

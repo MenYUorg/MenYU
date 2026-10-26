@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AlertTriangle, Check, Clock, DollarSign, QrCode, Settings, Users, X } from 'lucide-react'
 import type { Restaurante } from '@menyu/types'
-import { useAuth } from '@menyu/auth'
-import { useContextStore } from '../../../store/contextStore'
+import { useContextStore, useRolActual } from '../../../store/contextStore'
 import { api } from '../../../services/api'
 import type { MesaConQr, SesionActiva } from '../../../services/api'
 
@@ -660,8 +659,7 @@ function ModalConfig({
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 export function TablesPage() {
-  const { user } = useAuth()
-  const isOwner = user?.rol === 'OWNER' || user?.rol === 'ROOT'
+  const isOwner = useRolActual() === 'OWNER'
   const { restaurantes, selectedRestauranteId } = useContextStore()
 
   const [showConfig,  setShowConfig]  = useState(false)

@@ -3,7 +3,8 @@ name: Deploy — Production
 on:
   push:
     tags:
-      - 'v*.*.*'
+      # Solo vX.Y.Z con números: v1.0.6-rc.1 o v1.2.3.4 no despliegan (el filtro se compara contra el tag entero).
+      - 'v[0-9]+.[0-9]+.[0-9]+'
   # Solo la verificación del CI y el smoke contra producción, sin desplegar. En "Use workflow from"
   # elegir el tag desplegado: el smoke espera que /health muestre el SHA de ese ref.
   workflow_dispatch:
@@ -19,49 +20,73 @@ jobs:
       checks: read
 
     steps:
+      # Respaldo del filtro de tags: si algo distinto de vX.Y.Z llega hasta acá, no se despliega.
+      # Con workflow_dispatch (sobre una rama o un tag) no aplica: ese modo no despliega.
+      - name: Check tag format
+        if: github.event_name == 'push'
+        run: |
+          if [[ ! "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::El tag $GITHUB_REF_NAME no es vX.Y.Z. No se despliega."
+            exit 1
+          fi
+
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       # Sin las URLs de los frontends el smoke no puede chequear nada: corta antes de desplegar.
       - name: Check production URL variables
-        run: node scripts/smoke/verificar-urls.mjs PROD_WEB_ADMIN_URL PROD_WEB_CLIENTE_URL PROD_WEB_STAFF_URL
+        run: node scripts/smoke/verificar-urls.mjs PROD_WEB_ADMIN_URL PROD_WEB_CLIENTE_URL PROD_WEB_STAFF_URL PROD_WEB_AUTH_URL
         env:
           PROD_WEB_ADMIN_URL: ${{ vars.PROD_WEB_ADMIN_URL }}
           PROD_WEB_CLIENTE_URL: ${{ vars.PROD_WEB_CLIENTE_URL }}
           PROD_WEB_STAFF_URL: ${{ vars.PROD_WEB_STAFF_URL }}
+          PROD_WEB_AUTH_URL: ${{ vars.PROD_WEB_AUTH_URL }}
 
-      # Si el CI del commit está en cola o en curso, espera (cada 20 s, hasta 15 min).
-      # Falla enseguida si terminó con otro resultado que success o si no hay run.
+      # Ídem con el proyecto de Vercel de web-auth, que se despliega último.
+      - name: Check web-auth Vercel project
+        run: test -n "$VERCEL_PROJECT_ID_AUTH" || { echo "::error::Falta el secret VERCEL_PROJECT_ID_AUTH (Documentacion/WORKFLOW.md)"; exit 1; }
+        env:
+          VERCEL_PROJECT_ID_AUTH: ${{ secrets.VERCEL_PROJECT_ID_AUTH }}
+
+      # Exige en verde los dos jobs del CI del commit: el ci y los e2e del backend.
+      # Si alguno está en cola o en curso, espera (cada 20 s, hasta 15 min en total).
+      # Falla enseguida si alguno terminó con otro resultado que success o si no tiene run.
       - name: Check CI result for this commit
         run: |
           fin=$((SECONDS + 900))
           while :; do
-            resultado=$(gh api -X GET "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/check-runs" \
-              -f check_name="$CHECK" \
-              --jq '[.check_runs[] | select(.app.slug == "github-actions")] | sort_by(.started_at) | last | if . == null then "sin run" else "\(.status)/\(.conclusion)" end')
-            echo "\"$CHECK\" en $GITHUB_SHA: $resultado"
-            case "$resultado" in
-              completed/success) exit 0 ;;
-              queued/* | in_progress/* | waiting/* | requested/* | pending/*) ;;
-              *)
-                echo "::error::El CI de $GITHUB_SHA no está en verde ($resultado). No se despliega ni se corre el smoke."
-                exit 1
-                ;;
-            esac
+            en_verde=0
+            pendiente=""
+            for check in "$CHECK_CI" "$CHECK_E2E"; do
+              resultado=$(gh api -X GET "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/check-runs" \
+                -f check_name="$check" \
+                --jq '[.check_runs[] | select(.app.slug == "github-actions")] | sort_by(.started_at) | last | if . == null then "sin run" else "\(.status)/\(.conclusion)" end')
+              echo "\"$check\" en $GITHUB_SHA: $resultado"
+              case "$resultado" in
+                completed/success) en_verde=$((en_verde + 1)) ;;
+                queued/* | in_progress/* | waiting/* | requested/* | pending/*) pendiente="\"$check\" ($resultado)" ;;
+                *)
+                  echo "::error::\"$check\" de $GITHUB_SHA no está en verde ($resultado). No se despliega ni se corre el smoke."
+                  exit 1
+                  ;;
+              esac
+            done
+            [ "$en_verde" -eq 2 ] && exit 0
             if [ "$SECONDS" -ge "$fin" ]; then
-              echo "::error::El CI de $GITHUB_SHA sigue sin terminar después de 15 min ($resultado). No se despliega ni se corre el smoke."
+              echo "::error::El CI de $GITHUB_SHA sigue sin terminar después de 15 min: $pendiente. No se despliega ni se corre el smoke."
               exit 1
             fi
             sleep 20
           done
         env:
           GH_TOKEN: ${{ github.token }}
-          CHECK: CI — typecheck, lint, test, build
+          CHECK_CI: CI — typecheck, lint, test, build
+          CHECK_E2E: E2E — backend (Postgres efímero)
 
   deploy-production:
     name: Deploy to production
@@ -79,20 +104,20 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: pnpm
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Build
-        run: pnpm turbo build --filter=@menyu/api --filter=@menyu/web-admin --filter=@menyu/web-cliente --filter=@menyu/web-staff
+        run: pnpm turbo build --filter=@menyu/api --filter=@menyu/web-admin --filter=@menyu/web-cliente --filter=@menyu/web-staff --filter=@menyu/web-auth
 
       # ── Railway production ────────────────────────────────────
       # El SHA que muestra /health. RAILWAY_GIT_COMMIT_SHA solo llega en deploys disparados
       # desde GitHub, no con `railway up`. --skip-deploys: el deploy lo hace el paso siguiente.
       - name: Set APP_COMMIT_SHA on Railway production
-        run: npx @railway/cli@latest variable set "APP_COMMIT_SHA=$GIT_SHA" --service ${{ secrets.RAILWAY_SERVICE_ID_PROD }} --skip-deploys
+        run: npx @railway/cli@5.70.0 variable set "APP_COMMIT_SHA=$GIT_SHA" --service ${{ secrets.RAILWAY_SERVICE_ID_PROD }} --skip-deploys
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN_PROD }}
           GIT_SHA: ${{ github.sha }}
@@ -103,7 +128,7 @@ jobs:
           timeout_minutes: 10
           max_attempts: 3
           retry_wait_seconds: 30
-          command: npx @railway/cli@latest up --service ${{ secrets.RAILWAY_SERVICE_ID_PROD }} --detach
+          command: npx @railway/cli@5.70.0 up --service ${{ secrets.RAILWAY_SERVICE_ID_PROD }} --detach
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN_PROD }}
 
@@ -150,6 +175,20 @@ jobs:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_STAFF }}
 
+      - name: Deploy web-auth to Vercel production
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: |
+            npx vercel@54.6.1 pull --yes --environment=production --token ${{ secrets.VERCEL_TOKEN }}
+            npx vercel@54.6.1 build --prod --token ${{ secrets.VERCEL_TOKEN }}
+            npx vercel@54.6.1 deploy --prebuilt --prod --token ${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_AUTH }}
+
   # ── Smoke post-deploy (solo lectura) ─────────────────────────
   smoke-production:
     name: Smoke de producción
@@ -166,15 +205,16 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       # Segunda red: el mismo chequeo que en check-ci.
       - name: Check production URL variables
-        run: node scripts/smoke/verificar-urls.mjs PROD_WEB_ADMIN_URL PROD_WEB_CLIENTE_URL PROD_WEB_STAFF_URL
+        run: node scripts/smoke/verificar-urls.mjs PROD_WEB_ADMIN_URL PROD_WEB_CLIENTE_URL PROD_WEB_STAFF_URL PROD_WEB_AUTH_URL
         env:
           PROD_WEB_ADMIN_URL: ${{ vars.PROD_WEB_ADMIN_URL }}
           PROD_WEB_CLIENTE_URL: ${{ vars.PROD_WEB_CLIENTE_URL }}
           PROD_WEB_STAFF_URL: ${{ vars.PROD_WEB_STAFF_URL }}
+          PROD_WEB_AUTH_URL: ${{ vars.PROD_WEB_AUTH_URL }}
 
       # La URL del backend es la VITE_API_URL de production de web-cliente en Vercel: se lee solo esa
       # línea, el archivo no se imprime ni se sube y se borra al terminar el paso.
@@ -201,3 +241,4 @@ jobs:
           WEB_ADMIN_URL: ${{ vars.PROD_WEB_ADMIN_URL }}
           WEB_CLIENTE_URL: ${{ vars.PROD_WEB_CLIENTE_URL }}
           WEB_STAFF_URL: ${{ vars.PROD_WEB_STAFF_URL }}
+          WEB_AUTH_URL: ${{ vars.PROD_WEB_AUTH_URL }}

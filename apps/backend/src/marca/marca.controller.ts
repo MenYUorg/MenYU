@@ -1,74 +1,38 @@
-import {
-  Body,
-  Controller,
-  Delete,
-  Get,
-  HttpCode,
-  HttpStatus,
-  Param,
-  Patch,
-  Post,
-  UploadedFile,
-  UseGuards,
-  UseInterceptors,
-} from '@nestjs/common'
-import { ApiBearerAuth, ApiBody, ApiConsumes } from '@nestjs/swagger'
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'
-import { RolesGuard } from '../common/guards/roles.guard'
-import { Roles } from '../common/decorators/roles.decorator'
-import { CurrentUser } from '../common/decorators/current-user.decorator'
-import { JwtPayload } from '../auth/auth.service'
+import { Body, Controller, Delete, Get, Param, Patch, Post, UploadedFile, UseInterceptors } from '@nestjs/common'
+import { ApiBody, ApiConsumes } from '@nestjs/swagger'
+import { Personal } from '../auth/decorators/personal.decorator'
+import { UsuarioActual } from '../auth/decorators/usuario-actual.decorator'
+import { UsuarioAutenticado } from '../auth/supabase/usuario-autenticado'
 import { logoFilePipe, logoInterceptor } from '../storage/logo-upload'
 import { MarcaService } from './marca.service'
-import { CreateMarcaDto } from './dto/create-marca.dto'
 import { UpdateMarcaDto } from './dto/update-marca.dto'
 
-@ApiBearerAuth()
+// Solo el OWNER de la marca: lo exige el service (ni GERENTE ni ROOT). Crear y dar de baja marcas es de la consola
+// de ROOT (/root/marcas).
 @Controller('marcas')
-@UseGuards(JwtAuthGuard, RolesGuard)
 export class MarcaController {
   constructor(private readonly marcas: MarcaService) {}
 
-  @Post()
-  @Roles('ROOT')
-  @HttpCode(HttpStatus.CREATED)
-  create(@Body() dto: CreateMarcaDto) {
-    return this.marcas.create(dto)
-  }
-
   @Get()
-  @Roles('ROOT', 'OWNER')
-  findAll(@CurrentUser() user: JwtPayload) {
-    return this.marcas.findAll(user)
+  @Personal()
+  findAll(@UsuarioActual() usuario: UsuarioAutenticado) {
+    return this.marcas.findAll(usuario)
   }
 
   @Get(':id')
-  @Roles('ROOT', 'OWNER')
-  findOne(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
-    return this.marcas.findOne(id, user)
+  @Personal()
+  findOne(@Param('id') id: string, @UsuarioActual() usuario: UsuarioAutenticado) {
+    return this.marcas.findOne(id, usuario)
   }
 
   @Patch(':id')
-  @Roles('ROOT', 'OWNER')
-  update(
-    @Param('id') id: string,
-    @Body() dto: UpdateMarcaDto,
-    @CurrentUser() user: JwtPayload,
-  ) {
-    return this.marcas.update(id, dto, user)
+  @Personal()
+  update(@Param('id') id: string, @Body() dto: UpdateMarcaDto, @UsuarioActual() usuario: UsuarioAutenticado) {
+    return this.marcas.update(id, dto, usuario)
   }
-
-  @Delete(':id')
-  @Roles('ROOT')
-  @HttpCode(HttpStatus.NO_CONTENT)
-  async remove(@Param('id') id: string) {
-    await this.marcas.remove(id)
-  }
-
-  // ── Logo: solo el OWNER de la marca (ni ROOT ni GERENTE) ─────────────────
 
   @Post(':id/logo')
-  @Roles('OWNER')
+  @Personal()
   @UseInterceptors(logoInterceptor())
   @ApiConsumes('multipart/form-data')
   @ApiBody({
@@ -77,14 +41,14 @@ export class MarcaController {
   uploadLogo(
     @Param('id') id: string,
     @UploadedFile(logoFilePipe()) file: Express.Multer.File,
-    @CurrentUser() user: JwtPayload,
+    @UsuarioActual() usuario: UsuarioAutenticado,
   ) {
-    return this.marcas.uploadLogo(id, file, user)
+    return this.marcas.uploadLogo(id, file, usuario)
   }
 
   @Delete(':id/logo')
-  @Roles('OWNER')
-  removeLogo(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
-    return this.marcas.removeLogo(id, user)
+  @Personal()
+  removeLogo(@Param('id') id: string, @UsuarioActual() usuario: UsuarioAutenticado) {
+    return this.marcas.removeLogo(id, usuario)
   }
 }
