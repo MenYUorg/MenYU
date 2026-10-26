@@ -5,6 +5,7 @@
 | 0.1 | 16/10/2026 | Primera versión: metas de Nivel 3, punto de partida, decisiones técnicas, riesgos (R1–R7), cronograma. |
 | 0.2 | 24/10/2026 | Agrega criterios de entrada y salida por nivel de prueba, referencias a la matriz ISO/IEC 25010 y a la trazabilidad, y el estado final de los riesgos (R1–R9). |
 | 0.3 | 24/10/2026 | Cierra R4: el E2E contra Supabase de staging quedó implementado y corre en cada deploy (PR #433). Corrige el alcance: el soak de k6 sí se ejecutó contra staging, además del stress. |
+| 0.4 | 26/10/2026 | Agrega el plan de contingencia de Mercado Pago (qué pasa si está caído), revisado contra el código real de `main` (commit `8b98247`), sin pruebas en vivo contra la sandbox ni producción. |
 
 ## 1. Alcance
 
@@ -50,7 +51,7 @@ Probabilidad (P) e impacto (I) de 1 a 5; exposición = P × I (alta desde 15, me
 
 | ID | Riesgo | P | I | Exposición | Estado final |
 |---|---|---|---|---|---|
-| R1 | Cobro y webhook de MercadoPago casi sin cobertura | 4 | 5 | 20, alta | Cerrado: cobertura de payments/proveedor/webhook en 98,9–100 %; el contrato con payloads reales pasa a la tesis |
+| R1 | Cobro y webhook de MercadoPago casi sin cobertura | 4 | 5 | 20, alta | Cerrado: cobertura de payments/proveedor/webhook en 98,9–100 %; el contrato con payloads reales pasa a la tesis. El plan de contingencia (sección 8) documenta además qué pasa si MercadoPago está caído |
 | R2 | No llegar al 80 % de cobertura | 4 | 4 | 16, alta | Cerrado: 86,9 % en main (22/10), gate de código nuevo en 80 % desde el 23/10 |
 | R3 | Deploy a producción sin CI verde | 3 | 5 | 15, alta | Cerrado: mitigado en el workflow, ejercitado en 4 tags; v1.2.0 (23/10) ya pasó con el check E2E exigido |
 | R4 | El E2E de staging deja datos o toca datos reales | 3 | 4 | 12, media | **Cerrado (24/10):** implementado contra Supabase de staging (PR #433, SCRUM-38), con un usuario de base `e2e_staging` de solo lectura y ejecución (sin `INSERT`/`UPDATE`/`DELETE` directo), dos funciones `SECURITY DEFINER` que crean y limpian solo lo de su propia corrida (marcador `e2e-<run_id>-`), y guardas contra producción antes de conectarse. Corre en cada deploy a staging, después del smoke; la primera corrida automática (deploy `0932a26`, run `40133816059`) dio los 7 pasos en ok y no dejó ninguna fila |
@@ -62,10 +63,24 @@ Probabilidad (P) e impacto (I) de 1 a 5; exposición = P × I (alta desde 15, me
 
 Queda como único riesgo residual aceptado, por decisión de alcance tomada y documentada: el contrato de MercadoPago con payloads reales (R1, parcial), que pasa a la tesis.
 
-## 8. Referencias
+## 8. Plan de contingencia: si Mercado Pago está caído
+
+Revisado el 26/10/2026 contra el código real de `main` (commit `8b98247`). No se probó nada en vivo contra la sandbox de Mercado Pago ni contra producción: lo que sigue sale de leer el código, no de una prueba ejecutada.
+
+**Si falla la llamada para crear la preferencia de pago** (el comensal elige pagar con Mercado Pago): el backend reintenta una vez (10 segundos de timeout por intento, 2 segundos de espera entre reintentos — comportamiento por defecto del SDK, sin configuración propia). Si los dos intentos fallan, cancela el pago pendiente que acababa de crear (para no dejarlo "fantasma") y devuelve un error genérico (500, sin un mensaje que explique que el problema es de Mercado Pago). El comensal ve el error sin que el botón quede colgado esperando, y puede reintentar o pedir pagar en efectivo.
+
+**Si un pago de Mercado Pago queda "pendiente" porque el webhook nunca llega** (por ejemplo, porque Mercado Pago está caído): pasados 10 minutos, el personal puede cobrar igual, por cualquier método, y el sistema cancela el pago pendiente de Mercado Pago solo. Antes de los 10 minutos también se puede cobrar, pero pidiendo una confirmación extra al personal — esto funciona desde el panel de mozo (web-staff); desde el panel de administración (web-admin) todavía no, es una limitación conocida.
+
+**Si Mercado Pago confirma un pago después de que el personal ya cobró y lo canceló:** el sistema no lo detecta ni lo corrige solo, deja un aviso en los logs del servidor y la devolución hay que hacerla a mano desde Mercado Pago. No existe ningún proceso automático de conciliación.
+
+**En cualquier caso, el comensal siempre tiene una salida que no depende de que Mercado Pago esté arriba:** puede pedir pagar en efectivo, aunque tenga un pago de Mercado Pago pendiente.
+
+**Limitaciones conocidas, declaradas y no corregidas en este TP** (quedan para la tesis, el mismo criterio que se usó con el escenario de la base caída en la sección de Pruebas de resiliencia del informe): el mensaje de error que ve el comensal no distingue una falla de Mercado Pago de cualquier otro error del servidor; el panel de administración no maneja el caso del pago reciente pendiente (solo el panel de mozo); y no hay aviso ni conciliación automática para un pago aprobado por Mercado Pago después de haber sido cancelado por el personal.
+
+## 9. Referencias
 
 - Informe de calidad completo: doc "Informe de calidad de software: MenYU" en Claude Docs.
 - Jira, proyecto SCRUM: SCRUM-18 (defectos), SCRUM-37 (E2E del backend con Postgres efímero), SCRUM-38 (E2E contra Supabase de staging), SCRUM-43 (carga), SCRUM-47 (duplicación); épicas SCRUM-5 a 13.
 - `docs/calidad/bitacora.md` y `docs/calidad/plan-rollback.md`, en el repo.
 - E2E contra Supabase: diseño y estado implementado en `docs/calidad/e2e-supabase.md`; implementación en el PR #433.
-- Pruebas de carga del 24/10 (stress y soak): `Resultado-stress-k6-24-10.md`.
+- Pruebas de carga del 24/10 (stress y soak): `Resultado-stress-k6-24-10.md`. Corridas de validación del fix de permisos del reporte (26/10): PR #437.
