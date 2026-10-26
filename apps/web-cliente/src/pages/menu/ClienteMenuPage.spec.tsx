@@ -6,8 +6,8 @@ import { api } from '../../services/api'
 import { useCarritoStore } from '../../store/carritoStore'
 import { usePublicMenuStore } from '../../store/publicMenuStore'
 import { useSessionStore } from '../../store/sessionStore'
-import { crearMenu, crearPlato, crearPlatoEnDescuento, crearTokenJwt } from '../../test/fixtures'
-import { compartirLaSesionDeWebAuth } from '../../test/authClient'
+import { crearMenu, crearPlato, crearPlatoEnDescuento } from '../../test/fixtures'
+import { compartirLaSesionDeWebAuth, cuentaDePrueba, sesionDeSupabase } from '../../test/authClient'
 import { irA } from '../../utils/navegar'
 import { ClienteMenuPage } from './ClienteMenuPage'
 
@@ -54,7 +54,6 @@ function renderMenu(menu: MenuPublico) {
         <Route path="/etiquetar" element={<p>Pantalla de etiquetar</p>} />
         <Route path="/pedidos" element={<p>Pantalla de pedidos</p>} />
         <Route path="/pagar" element={<p>Pantalla de pagar</p>} />
-        <Route path="/auth" element={<p>Pantalla de ingreso</p>} />
       </Routes>
     </MemoryRouter>,
   )
@@ -319,8 +318,7 @@ describe('ClienteMenuPage', () => {
 
       describe('con cuenta', () => {
         beforeEach(() => {
-          localStorage.setItem('menyu_access_token', crearTokenJwt({ tipo: 'cliente', nombre: 'Ana Gómez', email: 'ana@mail.com' }))
-          localStorage.setItem('menyu_refresh_token', 'refresh')
+          cuentaDePrueba.session = sesionDeSupabase({ nombre: 'Ana Gómez', email: 'ana@mail.com' })
         })
 
         // Se abre desde el botón del header (el logo del restaurante), como en la app.
@@ -458,7 +456,7 @@ describe('ClienteMenuPage', () => {
     afterEach(() => localStorage.clear())
 
     it('saluda por el nombre completo del cliente con sesión, con los acentos y la Ñ bien', () => {
-      localStorage.setItem('menyu_access_token', crearTokenJwt({ tipo: 'cliente', nombre: 'Ñandú Gómez' }))
+      cuentaDePrueba.session = sesionDeSupabase({ nombre: 'Ñandú Gómez' })
 
       renderMenu(menuCompleto())
 

@@ -63,9 +63,8 @@ export const api = {
   },
 
   sessions: {
-    // Con una cuenta iniciada se manda su token (el de Supabase o, hasta la Fase 5, el del login de `/auth`): el servidor
-    // registra la mesa a su nombre y no como "Invitado". Sin cuenta, o con un token que ya no sirve, no se manda y la
-    // persona entra como invitada.
+    // Con una cuenta iniciada se manda su token de Supabase: el servidor registra la mesa a su nombre y no como
+    // "Invitado". Sin cuenta, o con un token que ya no sirve, la persona entra como invitada.
     open: async (data: {
       qrToken?: string
       restauranteId?: string
@@ -194,17 +193,6 @@ export const api = {
         `/sesiones/${sesionId}/saldo`,
         undefined,
         jwt,
-      ),
-  },
-
-  auth: {
-    login: (email: string, password: string) =>
-      req<{ accessToken: string; refreshToken: string }>('POST', '/auth/login', { email, password }),
-    register: (nombre: string, email: string, password: string, telefono?: string) =>
-      req<{ accessToken: string; refreshToken: string }>(
-        'POST',
-        '/auth/register',
-        { nombre, email, password, ...(telefono ? { telefono } : {}) },
       ),
   },
 

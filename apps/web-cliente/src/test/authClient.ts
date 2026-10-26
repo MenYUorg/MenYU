@@ -1,4 +1,5 @@
 import type { Session } from '@supabase/supabase-js'
+import { useEffect, useState } from 'react'
 import { vi } from 'vitest'
 
 /**
@@ -7,8 +8,34 @@ import { vi } from 'vitest'
  * `cuentaDePrueba.session = sesionDeSupabase({ nombre: 'Ana' })`, y cerrar sesión la borra.
  *
  * Los `vi.fn` se crean con su comportamiento, para que un `vi.resetAllMocks()` de un spec vuelva a él y no a undefined.
+ *
+ * El `useSession` simulado avisa de los cambios, como el de verdad (que se suscribe a `onAuthStateChange`): asignarle
+ * una sesión a `cuentaDePrueba` o cerrarla vuelve a pintar lo que esté montado.
  */
-export const cuentaDePrueba: { session: Session | null; cargando: boolean } = { session: null, cargando: false }
+const suscriptores = new Set<() => void>()
+
+function avisar(): void {
+  for (const suscriptor of [...suscriptores]) suscriptor()
+}
+
+const estado: { session: Session | null; cargando: boolean } = { session: null, cargando: false }
+
+export const cuentaDePrueba = {
+  get session() {
+    return estado.session
+  },
+  set session(valor: Session | null) {
+    estado.session = valor
+    avisar()
+  },
+  get cargando() {
+    return estado.cargando
+  },
+  set cargando(valor: boolean) {
+    estado.cargando = valor
+    avisar()
+  },
+}
 
 export const signOutSimulado = vi.fn(async () => {
   cuentaDePrueba.session = null
@@ -20,8 +47,9 @@ export const tokenDeAccesoSimulado = vi.fn(async (): Promise<string | null> => c
 export const clienteAuthSimulado = vi.fn(() => ({ auth: { signOut: signOutSimulado } }))
 
 export function reiniciarCuentaDePrueba(): void {
-  cuentaDePrueba.session = null
-  cuentaDePrueba.cargando = false
+  estado.session = null
+  estado.cargando = false
+  suscriptores.clear()
   signOutSimulado.mockReset()
   tokenDeAccesoSimulado.mockReset()
   clienteAuthSimulado.mockReset()
@@ -56,8 +84,16 @@ export async function moduloSimulado(): Promise<typeof import('@menyu/auth-clien
   return {
     ...real,
     useSession: () => {
-      if (cuentaDePrueba.cargando) return { tipo: 'cargando' }
-      return cuentaDePrueba.session ? { tipo: 'con-sesion', session: cuentaDePrueba.session } : { tipo: 'sin-sesion' }
+      const [, repintar] = useState(0)
+      useEffect(() => {
+        const suscriptor = () => repintar((n) => n + 1)
+        suscriptores.add(suscriptor)
+        return () => {
+          suscriptores.delete(suscriptor)
+        }
+      }, [])
+      if (estado.cargando) return { tipo: 'cargando' }
+      return estado.session ? { tipo: 'con-sesion', session: estado.session } : { tipo: 'sin-sesion' }
     },
     tokenDeAcceso: tokenDeAccesoSimulado,
     clienteAuth: clienteAuthSimulado as unknown as typeof real.clienteAuth,

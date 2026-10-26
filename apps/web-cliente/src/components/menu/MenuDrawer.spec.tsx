@@ -213,14 +213,14 @@ describe('MenuDrawer', () => {
       expect(irA).toHaveBeenCalledWith(`https://auth.menyu-app.com/crear-cuenta?${vuelta()}`)
     })
 
-    it('donde la app no comparte la sesión de web-auth (un dominio viejo de Vercel), van al /auth de la app', () => {
+    // La Fase 5 retiró el login de `/auth`: van a web-auth también donde la cookie de la sesión no llega.
+    it('van a web-auth también donde la app no comparte su sesión (un dominio viejo de Vercel)', () => {
       vi.stubEnv('VITE_AUTH_COOKIE_DOMAIN', '.menyu-app.com')
       const { alCerrar } = renderDrawer({ modo: 'carta' })
 
       fireEvent.click(screen.getByRole('button', { name: 'Crear cuenta gratis' }))
 
-      expect(screen.getByText('ahora: /auth?tab=register&volver=%2F')).toBeInTheDocument()
-      expect(irA).not.toHaveBeenCalled()
+      expect(irA).toHaveBeenCalledWith(expect.stringMatching(/\/crear-cuenta\?redirect=/))
       expect(alCerrar).toHaveBeenCalled()
     })
   })

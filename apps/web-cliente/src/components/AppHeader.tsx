@@ -16,17 +16,12 @@ const BOTON = 'relative whitespace-nowrap after:absolute after:content-[\'\'] af
 const BOTON_CHICO = `${BOTON} rounded-lg px-[14px] py-[6px] text-[13px] max-sm:rounded-[7px] max-sm:px-[10px] max-sm:py-[5px] max-sm:text-[12px] max-[339px]:px-2 max-[339px]:text-[11.5px]`
 const BOTON_CERRAR = 'relative flex-none whitespace-nowrap rounded-lg px-3 py-[6px] text-[13px] after:absolute after:content-[\'\'] after:inset-x-[-2px] after:inset-y-[-8px] max-sm:rounded-md max-sm:px-[9px] max-sm:py-[3px] max-sm:text-[11px] max-sm:after:inset-x-[-4px] max-sm:after:inset-y-[-12px]'
 
-interface AppHeaderProps {
-  hideAuthButtons?: boolean
-}
-
 /**
  * El header de las pantallas públicas. Con una cuenta (utils/cuenta.ts), el saludo con su nombre y "Cerrar sesión"; sin
- * ella, ingresar o registrarse en web-auth (o en `/auth` donde esta app no comparte su sesión), con la vuelta a esta
- * pantalla (docs/auth/specs/auth.md, Fase 4b). Mientras se lee la sesión no muestra ninguno de los dos, para no hacer
- * parpadear "Ingresar" a quien ya entró.
+ * ella, ingresar o registrarse en web-auth, con la vuelta a esta pantalla (docs/auth/specs/auth.md, Fase 4b). Mientras
+ * se lee la sesión no muestra ninguno de los dos, para no hacer parpadear "Ingresar" a quien ya entró.
  */
-export function AppHeader({ hideAuthButtons = false }: AppHeaderProps) {
+export function AppHeader() {
   const navigate = useNavigate()
   const { cargando, cuenta, cerrarSesion } = useCuenta()
   const irAlIngreso = useIrAlIngreso()
@@ -69,7 +64,7 @@ export function AppHeader({ hideAuthButtons = false }: AppHeaderProps) {
         />
       </button>
 
-      {!hideAuthButtons && !cargando && (
+      {!cargando && (
         // Siempre queda un espacio de 16 px o más entre el logo y los botones (12 px en los más angostos).
         <div className="ml-3 flex min-w-0 items-center gap-2 max-sm:ml-4 max-sm:gap-1.5 max-[339px]:ml-3 max-[339px]:gap-[5px]">
           {nombre ? (
