@@ -775,7 +775,7 @@ Horas en ART (UTC − 3). Las sesiones del 23/10 al 25/10 (corridas de k6, E2E c
 
 **Después del merge del #437** (10:14, merge `2c77111`)
 - **El plan v0.4 entró sin corregir:** la corrección de la sección 8 y de la cita a un archivo que no está en el repo va en un PR aparte.
-- **`../MenYU` en `main`:** al día con `origin/main` (`2c77111`). Los tres `plan-de-pruebas-v0.X.md` sin trackear se movieron, sin borrarlos, a `C:UsersCOTYSDesktopMenYU-planes-sueltos-2026-10-26`, después de comprobar que eran copias exactas de blobs que ya están en git.
+- **`../MenYU` en `main`:** al día con `origin/main` (`2c77111`). Los tres `plan-de-pruebas-v0.X.md` sin trackear se movieron, sin borrarlos, a `C:\Users\COTYS\Desktop\MenYU-planes-sueltos-2026-10-26`, después de comprobar que eran copias exactas de blobs que ya están en git.
   - La rama `docs/plan-pruebas-v0.2` sigue existiendo, en local y en el remoto.
 - **Cambio para la demo:** un comentario en `apps/backend/src/discovery/discovery.module.ts:6`, sin commitear en `../MenYU`.
   - `main` no acepta push directo: el ruleset 16770555 exige PR y los dos checks, con la rama al día. El commit de la demo tiene que ir por rama y PR.
@@ -791,3 +791,68 @@ Horas en ART (UTC − 3). Las sesiones del 23/10 al 25/10 (corridas de k6, E2E c
 6. **Esta bitácora:**
    - sumar las sesiones del 23/10 al 25/10;
    - actualizar la tabla "Estado actual", que sigue con datos del 22/10.
+
+> Esta lista quedó superada: ver "Pendiente al retomar" en la sección del 26/10 (mediodía).
+
+### 26/10/2026 (mediodía): merges del #440 y el #441 (SCRUM-44), datos del defecto #428 y la carpeta principal lista para la demo
+
+Horas en ART (UTC − 3). Desde esta sesión se abrió y se pusheó el #441, y se actualizaron las ramas del #440 y del #441 con `main`. Los merges del #440 y del #441 los hizo Coty. No se corrió nada contra producción ni contra Mercado Pago, y no se cambió código: solo documentación y `.env.example`.
+
+**#440: la sección 8 del plan de pruebas según el código**
+- **Commit:** `58a4e06` (10:18:20), en `docs/plan-v04-contingencia`.
+  - Saca la cita a `Resultado-stress-k6-24-10.md`, que no está en el repo, y deja los runs `40100656575` y `40105801689`.
+  - El MP pendiente se cancela al registrar el cobro, no con un timer.
+  - Agrega la excepción del 403 de `solicitarEfectivo` con el restaurante dado de baja.
+  - Agrega el webhook que responde 200 antes de consultar (`payments.controller.ts:76-81`).
+- **CI:** `40329463170` en verde. Después del merge del #439 la rama quedó atrás: `gh pr update-branch` (`3668735`) y `40330685802` en verde.
+- **Merge:** 10:45:58, `569b4c4`. CI de `main`: `40333476441`, success. Sin deploy (`docs/**`).
+
+**#441 (SCRUM-44): `MercadoPago.md` y `.env.example`**
+- **Rama y commit:** `docs/mercadopago-contingencia`, commit `dbbb108` (10:48:23). Después del merge del #440, `update-branch` (`283030c`) y CI `40334324677` en verde.
+- **`Documentacion/MercadoPago.md`** (no está en `docs/`; antes de hoy, `35bc855`, del 06/06):
+  - **Aviso arriba:** las secciones 1 a 12 son de junio, con endpoints y variables viejos. No se reescribieron.
+  - **Sección 7:** las seis variables que usa el código, con su archivo y línea.
+  - **Sección 13 nueva, "Si Mercado Pago está caído":**
+    - timeout de 10 s y un reintento a los 2 s del SDK `mercadopago@3.2.0`;
+    - qué ve el comensal;
+    - el pendiente sin webhook;
+    - el 403;
+    - el webhook que responde 200 antes de consultar;
+    - el doble cobro;
+    - las tres limitaciones del plan.
+- **`.env.example`:**
+  - **`apps/backend/.env.example`:** ya tenía las seis variables (`MP_ENCRYPTION_KEY`, `MP_CLIENT_ID`, `MP_CLIENT_SECRET`, `BASE_URL`, `FRONTEND_URL` y `FRONTEND_ADMIN_URL`, `:47-80`). No se tocó.
+  - **Frontends:** no usan variables de Mercado Pago.
+  - **`.env.example` de la raíz:** era de `e0cd9b1` (09/07). Tenía `MP_CLIENT_ID` y `MP_CLIENT_SECRET` comentadas bajo "TODO: reimplementar", decía que `CryptoService` estaba "huérfano" y listaba siete variables que el código ya no usa. Ahora tiene las tres `MP_*` activas.
+- **Merge:** 11:04:55, `f3094af`. Disparó `Deploy — Staging` (`40336311218`, success, de 11:04:58 a 11:08:49), porque el `.env.example` de la raíz no está en el `paths-ignore`. Pasaron deploy, smoke y E2E contra staging. CI de `main`: `40336311143`, success (11:16:07).
+
+**Defecto #428 (Node 22), datos para Jira**
+- **Qué pasaba:** con el backend en Node 20, invitar personal y subir un logo respondían 500.
+- **Causa:** `@supabase/supabase-js` 2.117 (subido en la 4.1, `ef98793`) arma un `RealtimeClient` en `createClient` y exige el WebSocket nativo, que `node:20-alpine` no tiene.
+  - **Dónde:** `apps/backend/Dockerfile:5` y `:58` en `1fe0f80^`.
+  - **Dónde explota:** `supabase-admin.service.ts:17` y `storage.service.ts:10`.
+- **Fix:** Node 22 en el Dockerfile, en los cuatro workflows y en `engines`.
+- **Test de regresión:** `apps/backend/src/auth/supabase/cliente-de-supabase.spec.ts`, con 3 `it` que usan la librería real.
+- **Commit y CI:** `1fe0f80` (22/10 18:36:14), CI `39858662666` en verde.
+- **PR #428:** merge el 23/10 a las 19:04:10, `2020028`. Después del merge, CI `40031173974` y deploy a staging `40031173932`, los dos en success.
+- **No hay ciclo rojo-verde en el CI:** el test entró en el mismo commit que el fix y la rama tuvo un solo run. El fallo se vio en staging, después del merge del #416 (`f15240a`, deploy `39852761756` en success, porque el 500 es en tiempo de ejecución). No hay logs de Railway guardados.
+
+**Carpeta principal y demo**
+- **`../MenYU`:** pull después de cada merge (`569b4c4`, `f3094af`). Sigue en `main` con un solo cambio sin commitear: el comentario de `apps/backend/src/discovery/discovery.module.ts:6`. El diff está en `privado/respuesta-prompt-26.md`.
+- **El #438 de `lautiod` (Fase 5)** entró a `main` a las 11:40:30 (`b9b6db2`). Cambia 104 archivos, ninguno en `apps/backend/src/discovery/`, así que no choca con el cambio de la demo.
+- **Para la demo:** `main` no acepta push directo. El ruleset 16770555 exige PR, los dos checks y la rama al día. El CI de `main` tardó hoy entre 5 y 12 minutos, y el deploy a staging, unos 4.
+
+**Respuestas de hoy** (fuera del repo, en `privado/`): 23, 24, 25 y 26. La 25 llegó después de la 26 y se hizo última.
+
+**Pendiente al retomar** (en este orden)
+1. **Demo:** `../MenYU` ya está en `b9b6db2`, con el #438. Rama, commit del comentario de `discovery.module.ts`, PR, CI y merge en vivo. Si entra otro PR antes, hacer `git pull`.
+2. **Jira:** cargar el #428 con los datos de arriba, sin ciclo rojo-verde.
+3. **Esta bitácora:**
+   - sumar las sesiones del 23/10 al 25/10;
+   - actualizar la tabla "Estado actual", que sigue con datos del 22/10.
+4. **Código nuevo de Sonar:** sigue en "Previous version" (17/10).
+5. **Umbrales de k6:** decidir si se ajustan.
+6. **Mercado Pago:** las limitaciones de la sección 8 del plan y de la sección 13 de `MercadoPago.md` quedan para la tesis.
+7. **Limpieza:**
+   - la rama `docs/plan-pruebas-v0.2` (local y remota), del PR #432, que se cerró;
+   - los worktrees de este bloque.
