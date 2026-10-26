@@ -1,6 +1,6 @@
 import { EdicionConEditor, editorDe } from './editor-de-la-edicion'
 
-const NADIE: EdicionConEditor = { adminId: null, mozoId: null, usuarioId: null, admin: null, mozo: null, usuario: null }
+const NADIE: EdicionConEditor = { mozoId: null, usuarioId: null, mozo: null, usuario: null }
 
 describe('editorDe: quién editó un pedido', () => {
   it.each([
@@ -14,9 +14,10 @@ describe('editorDe: quién editó un pedido', () => {
       { ...NADIE, usuarioId: 'u-2', usuario: { nombre: 'Ana López' }, mozoId: 'm-1', mozo: { nombre: 'Ana' } },
       { nombre: 'Ana', tipo: 'mozo' },
     ],
-    ['un admin del login propio (anterior a la Fase 4)', { ...NADIE, adminId: 'a-1', admin: { email: 'g@test' } }, { nombre: 'g@test', tipo: 'gerente' }],
-    ['un mozo del login propio', { ...NADIE, mozoId: 'm-2', mozo: { nombre: 'Juan' } }, { nombre: 'Juan', tipo: 'mozo' }],
-    ['sin nadie (la cuenta se borró)', NADIE, { nombre: 'Desconocido', tipo: 'mozo' }],
+    ['un mozo del login anterior, sin cuenta', { ...NADIE, mozoId: 'm-2', mozo: { nombre: 'Juan' } }, { nombre: 'Juan', tipo: 'mozo' }],
+    // Las ediciones de un `Admin` del login propio que nunca tuvo cuenta: la Fase 5 borró la columna sin a quién
+    // apuntar, así que quedan igual que las de un mozo que ya no está.
+    ['sin nadie (la cuenta se borró, o era un admin del login anterior)', NADIE, { nombre: 'Desconocido', tipo: 'mozo' }],
   ])('%s', (_caso, edicion, esperado) => {
     expect(editorDe(edicion)).toEqual(esperado)
   })

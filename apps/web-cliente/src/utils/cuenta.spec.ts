@@ -5,28 +5,20 @@ import {
   signOutSimulado,
   tokenDeAccesoSimulado,
 } from '../test/authClient'
-import { crearTokenJwt } from '../test/fixtures'
 import {
   cerrarSesionDeLaCuenta,
   comparteLaSesionDeWebAuth,
-  cuentaDelLoginAnterior,
   cuentaDeSesion,
-  destinoDeIngreso,
+  hayCookieDeSesion,
+  puedeHaberSesion,
   nombreParaSaludo,
+  olvidarElLoginAnterior,
   tokenParaAbrirMesa,
   urlDeIngreso,
 } from './cuenta'
 
-// La cuenta opcional del cliente (Fase 4b): la de Supabase, simulada por src/test/authClient.ts, y la del login de
-// `/auth`, con su token en localStorage.
-
-const TOKEN_KEY = 'menyu_access_token'
-const enUnaHora = () => Math.floor(Date.now() / 1000) + 3600
-const iniciarSesionAnterior = (payload: Record<string, unknown>) => {
-  const token = crearTokenJwt({ sub: 'cli-1', tipo: 'cliente', exp: enUnaHora(), ...payload })
-  localStorage.setItem(TOKEN_KEY, token)
-  return token
-}
+// La cuenta opcional del cliente (Fase 4b), simulada por src/test/authClient.ts. Desde la Fase 5 es la única: el login
+// de `/auth`, con su token en localStorage, se retiró.
 
 beforeEach(() => localStorage.clear())
 afterEach(() => {
@@ -49,7 +41,6 @@ describe('cuentaDeSesion (Supabase)', () => {
     expect(cuentaDeSesion(sesionDeSupabase({ nombre: 'Ana Pérez', email: 'ana@gmail.com' }))).toEqual({
       nombre: 'Ana Pérez',
       email: 'ana@gmail.com',
-      origen: 'supabase',
     })
   })
 
@@ -63,82 +54,93 @@ describe('cuentaDeSesion (Supabase)', () => {
 
     const sinNada = sesionDeSupabase({ metadatos: {} })
     sinNada.user.email = undefined
-    expect(cuentaDeSesion(sinNada)).toEqual({ nombre: 'Cliente', email: '', origen: 'supabase' })
-  })
-})
-
-describe('cuentaDelLoginAnterior', () => {
-  it('un token de cliente con nombre', () => {
-    iniciarSesionAnterior({ nombre: 'Marina', email: 'marina@mail.com' })
-
-    expect(cuentaDelLoginAnterior()).toEqual({ nombre: 'Marina', email: 'marina@mail.com', origen: 'anterior' })
-  })
-
-  it('sin email, queda vacío', () => {
-    iniciarSesionAnterior({ nombre: 'Marina' })
-
-    expect(cuentaDelLoginAnterior()?.email).toBe('')
-  })
-
-  it.each([
-    ['sin token', () => undefined],
-    ['sin nombre', () => iniciarSesionAnterior({})],
-    ['de una cuenta del personal', () => iniciarSesionAnterior({ tipo: 'mozo', nombre: 'Mozo' })],
-    ['vencido', () => iniciarSesionAnterior({ nombre: 'Marina', exp: Math.floor(Date.now() / 1000) - 60 })],
-  ])('%s: no hay cuenta', (_caso, preparar) => {
-    preparar()
-
-    expect(cuentaDelLoginAnterior()).toBeNull()
+    expect(cuentaDeSesion(sinNada)).toEqual({ nombre: 'Cliente', email: '' })
   })
 })
 
 describe('tokenParaAbrirMesa', () => {
-  it('con sesión de Supabase, su token (aunque también haya uno del login anterior)', async () => {
-    iniciarSesionAnterior({ nombre: 'Marina' })
+  it('con sesión de Supabase, su token', async () => {
     cuentaDePrueba.session = sesionDeSupabase({ token: 'token-de-supabase' })
 
     await expect(tokenParaAbrirMesa()).resolves.toBe('token-de-supabase')
   })
 
-  it('sin sesión de Supabase, el del login anterior', async () => {
-    const token = iniciarSesionAnterior({ nombre: 'Marina' })
-
-    await expect(tokenParaAbrirMesa()).resolves.toBe(token)
-  })
-
-  it('si no se puede leer la sesión de Supabase (un deploy sin sus variables), sigue con el del login anterior', async () => {
-    const token = iniciarSesionAnterior({ nombre: 'Marina' })
+  it('si no se puede leer la sesión (un deploy sin sus variables), undefined', async () => {
     tokenDeAccesoSimulado.mockRejectedValueOnce(new Error('Faltan VITE_SUPABASE_URL y VITE_SUPABASE_PUBLISHABLE_KEY'))
 
-    await expect(tokenParaAbrirMesa()).resolves.toBe(token)
+    await expect(tokenParaAbrirMesa()).resolves.toBeUndefined()
   })
 
-  it('sin ninguna cuenta, undefined: entra como invitado', async () => {
+  it('sin cuenta, undefined: entra como invitado', async () => {
+    await expect(tokenParaAbrirMesa()).resolves.toBeUndefined()
+  })
+
+  // Abrir la mesa por QR o PIN es lo primero que hace quien se sienta: sin cookie no se baja supabase-js (unos 64 kB
+  // con gzip) para preguntar algo que ya se sabe.
+  it('sin cookie de sesión no le pregunta al paquete: no lo carga', async () => {
+    await expect(tokenParaAbrirMesa()).resolves.toBeUndefined()
+
+    expect(tokenDeAccesoSimulado).not.toHaveBeenCalled()
+  })
+
+  it('donde la app no comparte la sesión de web-auth tampoco, aunque haya cookie', async () => {
+    cuentaDePrueba.session = sesionDeSupabase({ token: 'token-de-supabase' })
+    vi.stubEnv('VITE_SUPABASE_URL', '')
+
+    await expect(tokenParaAbrirMesa()).resolves.toBeUndefined()
+    expect(tokenDeAccesoSimulado).not.toHaveBeenCalled()
+  })
+
+  // El token del login de `/auth` quedó en el navegador de quien lo usó antes de la Fase 5. Ya no identifica a nadie
+  // (el backend solo verifica los de Supabase), así que no se manda.
+  it('un token del login anterior que quedó en el localStorage no se manda', async () => {
+    localStorage.setItem('menyu_access_token', 'token.del.login.anterior')
+
     await expect(tokenParaAbrirMesa()).resolves.toBeUndefined()
   })
 })
 
+describe('olvidarElLoginAnterior', () => {
+  it('borra los tokens que dejó el login de /auth', () => {
+    localStorage.setItem('menyu_access_token', 'a')
+    localStorage.setItem('menyu_refresh_token', 'r')
+    localStorage.setItem('otra_clave', 'se queda')
+
+    olvidarElLoginAnterior()
+
+    expect(localStorage.getItem('menyu_access_token')).toBeNull()
+    expect(localStorage.getItem('menyu_refresh_token')).toBeNull()
+    expect(localStorage.getItem('otra_clave')).toBe('se queda')
+  })
+
+  it('sin localStorage (modo privado) no tira error', () => {
+    const original = Object.getOwnPropertyDescriptor(window, 'localStorage')
+    Object.defineProperty(window, 'localStorage', {
+      configurable: true,
+      get() { throw new Error('acceso denegado') },
+    })
+
+    expect(() => olvidarElLoginAnterior()).not.toThrow()
+
+    if (original) Object.defineProperty(window, 'localStorage', original)
+  })
+})
+
 describe('cerrarSesionDeLaCuenta', () => {
-  it('cierra las dos: la de Supabase (solo esta sesión) y la del login anterior', async () => {
-    iniciarSesionAnterior({ nombre: 'Marina' })
-    localStorage.setItem('menyu_refresh_token', 'refresh')
+  it('cierra la sesión de Supabase, solo en este navegador', async () => {
     cuentaDePrueba.session = sesionDeSupabase()
 
     await cerrarSesionDeLaCuenta()
 
     expect(signOutSimulado).toHaveBeenCalledWith({ scope: 'local' })
-    expect(localStorage.getItem(TOKEN_KEY)).toBeNull()
-    expect(localStorage.getItem('menyu_refresh_token')).toBeNull()
   })
 
-  it('sin Supabase configurado (o si falla la llamada) igual cierra la del login anterior, sin error', async () => {
-    iniciarSesionAnterior({ nombre: 'Marina' })
+  it('sin Supabase configurado (o si falla la llamada) no tira error', async () => {
     clienteAuthSimulado.mockImplementationOnce(() => {
       throw new Error('Faltan VITE_SUPABASE_URL y VITE_SUPABASE_PUBLISHABLE_KEY')
     })
 
     await expect(cerrarSesionDeLaCuenta()).resolves.toBeUndefined()
-    expect(localStorage.getItem(TOKEN_KEY)).toBeNull()
   })
 })
 
@@ -206,42 +208,41 @@ describe('comparteLaSesionDeWebAuth', () => {
   })
 })
 
-describe('destinoDeIngreso', () => {
-  const ubicacion = (hostname: string) => ({
-    hostname,
-    pathname: '/restaurante/r-1/carta',
-    search: '?q=1',
-    href: `https://${hostname}/restaurante/r-1/carta?q=1`,
+describe('hayCookieDeSesion', () => {
+  it.each([
+    ['la cookie de @supabase/ssr', 'sb-proyecto-test-auth-token=eyJ...'],
+    ['partida en varias, como cuando es grande', 'sb-proyecto-test-auth-token.0=eyJ...; sb-proyecto-test-auth-token.1=abc'],
+    ['con otras cookies antes', 'otra=1; sb-abc-auth-token=eyJ...'],
+    ['con espacios de más', 'otra=1;   sb-abc-auth-token=eyJ...'],
+  ])('%s: sí', (_caso, cookies) => {
+    expect(hayCookieDeSesion(cookies)).toBe(true)
   })
 
-  beforeEach(() => {
-    vi.stubEnv('VITE_AUTH_URL', 'https://auth.menyu-app.com')
-    vi.stubEnv('VITE_SUPABASE_URL', 'https://proyecto.supabase.co')
-    vi.stubEnv('VITE_SUPABASE_PUBLISHABLE_KEY', 'clave-publica')
-    vi.stubEnv('VITE_AUTH_COOKIE_DOMAIN', '.menyu-app.com')
+  it.each([
+    ['sin cookies', ''],
+    ['otras cookies', 'preferencia=oscuro; _ga=GA1.1.123'],
+    // Que no sea el principio de un nombre de cookie: así no se confunde con el valor de otra.
+    ['nombrada dentro del valor de otra', 'otra=sb-abc-auth-token'],
+  ])('%s: no', (_caso, cookies) => {
+    expect(hayCookieDeSesion(cookies)).toBe(false)
+  })
+})
+
+describe('puedeHaberSesion', () => {
+  it('con las variables y una cookie: sí', () => {
+    cuentaDePrueba.session = sesionDeSupabase()
+
+    expect(puedeHaberSesion()).toBe(true)
   })
 
-  it('con la sesión compartida, web-auth con la vuelta a esta pantalla', () => {
-    expect(destinoDeIngreso('crear', ubicacion('mesa.menyu-app.com'))).toEqual({
-      tipo: 'web-auth',
-      url: `https://auth.menyu-app.com/crear-cuenta?redirect=${encodeURIComponent('https://mesa.menyu-app.com/restaurante/r-1/carta?q=1')}`,
-    })
+  it('sin cookie: no', () => {
+    expect(puedeHaberSesion()).toBe(false)
   })
 
-  it('en un dominio viejo de Vercel, el login de /auth de esta app, también con la vuelta', () => {
-    expect(destinoDeIngreso('ingresar', ubicacion('menyu-cliente.vercel.app'))).toEqual({
-      tipo: 'login-anterior',
-      ruta: `/auth?volver=${encodeURIComponent('/restaurante/r-1/carta?q=1')}`,
-    })
-    expect(destinoDeIngreso('crear', ubicacion('menyu-cliente.vercel.app'))).toEqual({
-      tipo: 'login-anterior',
-      ruta: `/auth?tab=register&volver=${encodeURIComponent('/restaurante/r-1/carta?q=1')}`,
-    })
-  })
+  it('con cookie pero sin las variables de Supabase: no', () => {
+    cuentaDePrueba.session = sesionDeSupabase()
+    vi.stubEnv('VITE_SUPABASE_PUBLISHABLE_KEY', '')
 
-  it('sin decirle dónde está, usa la pantalla actual', () => {
-    vi.stubEnv('VITE_AUTH_COOKIE_DOMAIN', window.location.hostname)
-
-    expect(destinoDeIngreso('ingresar')).toEqual({ tipo: 'web-auth', url: urlDeIngreso('ingresar', window.location.href) })
+    expect(puedeHaberSesion()).toBe(false)
   })
 })

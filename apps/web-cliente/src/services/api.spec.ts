@@ -1,5 +1,4 @@
 import { cuentaDePrueba, sesionDeSupabase } from '../test/authClient'
-import { crearTokenJwt } from '../test/fixtures'
 import { api, ApiError } from './api'
 
 const fetchFalso = vi.fn()
@@ -93,50 +92,27 @@ describe('api', () => {
 
     describe('con o sin una cuenta iniciada', () => {
       const encabezadosEnviados = () => fetchFalso.mock.calls[0]?.[1]?.headers as Record<string, string>
-      const enUnaHora = () => Math.floor(Date.now() / 1000) + 3600
-      const guardar = (token: string) => localStorage.setItem('menyu_access_token', token)
 
       beforeEach(() => localStorage.clear())
       afterEach(() => localStorage.clear())
 
       it('con la cuenta iniciada manda su token, así la mesa queda a su nombre', async () => {
-        const token = crearTokenJwt({ sub: 'cli-1', tipo: 'cliente', nombre: 'Ana', exp: enUnaHora() })
-        guardar(token)
+        cuentaDePrueba.session = sesionDeSupabase({ token: 'token-de-supabase' })
         fetchFalso.mockResolvedValue(respuesta(200, { sesionId: 's' }))
 
         await api.sessions.open({ qrToken: 'qr-1', restauranteId: 'rest-1' })
 
-        expect(encabezadosEnviados()['Authorization']).toBe(`Bearer ${token}`)
+        expect(encabezadosEnviados()['Authorization']).toBe('Bearer token-de-supabase')
         expect(cuerpoEnviado()).toEqual({ tableCode: 'qr-1', restauranteId: 'rest-1' })
       })
 
-      it('con la cuenta de Supabase (web-auth, Fase 4b) manda ese token', async () => {
-        cuentaDePrueba.session = sesionDeSupabase({ token: 'token-de-supabase' })
-        fetchFalso.mockResolvedValue(respuesta(200, { sesionId: 's' }))
-
-        await api.sessions.open({ qrToken: 'qr-1', restauranteId: 'rest-1' })
-
-        expect(encabezadosEnviados()['Authorization']).toBe('Bearer token-de-supabase')
-      })
-
-      it('si están las dos cuentas, manda la de Supabase', async () => {
-        guardar(crearTokenJwt({ sub: 'cli-1', tipo: 'cliente', exp: enUnaHora() }))
-        cuentaDePrueba.session = sesionDeSupabase({ token: 'token-de-supabase' })
-        fetchFalso.mockResolvedValue(respuesta(200, { sesionId: 's' }))
-
-        await api.sessions.open({ pin: '4821', restauranteId: 'rest-1' })
-
-        expect(encabezadosEnviados()['Authorization']).toBe('Bearer token-de-supabase')
-      })
-
       it('también lo manda al entrar con el PIN', async () => {
-        const token = crearTokenJwt({ sub: 'cli-1', tipo: 'cliente', exp: enUnaHora() })
-        guardar(token)
+        cuentaDePrueba.session = sesionDeSupabase({ token: 'token-de-supabase' })
         fetchFalso.mockResolvedValue(respuesta(200, { sesionId: 's' }))
 
         await api.sessions.open({ pin: '4821', restauranteId: 'rest-1' })
 
-        expect(encabezadosEnviados()['Authorization']).toBe(`Bearer ${token}`)
+        expect(encabezadosEnviados()['Authorization']).toBe('Bearer token-de-supabase')
       })
 
       it('sin cuenta no manda ningún token: se entra como invitado', async () => {
@@ -147,8 +123,9 @@ describe('api', () => {
         expect(encabezadosEnviados()).not.toHaveProperty('Authorization')
       })
 
-      it('con el token vencido no lo manda y entra igual, sin error', async () => {
-        guardar(crearTokenJwt({ sub: 'cli-1', tipo: 'cliente', exp: Math.floor(Date.now() / 1000) - 60 }))
+      // El login de `/auth` se retiró en la Fase 5: su token ya no identifica a nadie, así que no se manda.
+      it('un token del login anterior que quedó en el localStorage no se manda', async () => {
+        localStorage.setItem('menyu_access_token', 'token.del.login.anterior')
         fetchFalso.mockResolvedValue(respuesta(200, { sesionId: 's' }))
 
         const resultado = await api.sessions.open({ qrToken: 'qr-1' })
@@ -157,17 +134,8 @@ describe('api', () => {
         expect(resultado).toEqual({ sesionId: 's' })
       })
 
-      it('con algo que no es un token guardado, tampoco lo manda y entra igual', async () => {
-        guardar('esto-no-es-un-token')
-        fetchFalso.mockResolvedValue(respuesta(200, { sesionId: 's' }))
-
-        await expect(api.sessions.open({ qrToken: 'qr-1' })).resolves.toEqual({ sesionId: 's' })
-
-        expect(encabezadosEnviados()).not.toHaveProperty('Authorization')
-      })
-
       it('un error del servidor con la cuenta iniciada llega igual que sin ella', async () => {
-        guardar(crearTokenJwt({ sub: 'cli-1', tipo: 'cliente', exp: enUnaHora() }))
+        cuentaDePrueba.session = sesionDeSupabase()
         fetchFalso.mockResolvedValue(respuesta(404, { message: 'Mesa no encontrada' }))
 
         await expect(api.sessions.open({ qrToken: 'qr-malo' })).rejects.toMatchObject({ status: 404, message: 'Mesa no encontrada' })

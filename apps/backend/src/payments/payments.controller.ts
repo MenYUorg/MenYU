@@ -24,14 +24,6 @@ export class PaymentsController {
     return this.payments.solicitarEfectivo(body.sesionId)
   }
 
-  @Post('avisar-mozo-cuenta')
-  @HttpCode(HttpStatus.CREATED)
-  @UseGuards(SessionAuthGuard)
-  @ApiOperation({ summary: 'Avisar al mozo que la mesa pidió la cuenta, sin generar un pago individual' })
-  avisarMozoCuenta(@Body() body: { sesionId: string }) {
-    return this.payments.avisarMozoPedidoDeCuenta(body.sesionId)
-  }
-
   @Get('sesiones')
   @RequiereRolEn({ query: 'restauranteId' }, ...SALON)
   @ApiOperation({ summary: 'Listar sesiones de mesa de un restaurante (para caja)' })

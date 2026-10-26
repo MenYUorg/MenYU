@@ -365,7 +365,6 @@ export const api = {
         'PATCH', `/mozos/${id}`, data,
       ),
     /** Solo para un mozo sin cuenta: con cuenta, el backend responde 409 y el acceso se quita desde Personal. */
-    delete: (id: string) => req<void>('DELETE', `/mozos/${id}`),
     getMesas: (mozoId: string) =>
       req<{ id: string; numero: string; estado: string }[]>('GET', `/mozos/${mozoId}/mesas`),
     assignMesa: (mozoId: string, mesaId: string) =>

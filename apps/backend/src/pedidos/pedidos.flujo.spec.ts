@@ -345,10 +345,8 @@ describe('PedidosService: validaciones, estado y ediciones', () => {
             id: 'ed-1',
             justificacion: 'El cliente cambió de idea',
             creadoEn: new Date('2026-10-18T20:00:00Z'),
-            adminId: null,
             mozoId: MOZOS.DEL_MOZO.id,
             usuarioId: MOZO.id,
-            admin: null,
             mozo: { nombre: 'Ana' },
             usuario: { nombre: 'Ana López' },
             itemsEliminados: [{ id: 'ie-1', pedidoItemId: 'pi-1', itemNombre: 'Milanesa', cantidadAntes: 2, cantidadDespues: 1, precioUnitario: '1000.00' }],
@@ -446,7 +444,7 @@ describe('PedidosService: validaciones, estado y ediciones', () => {
       // Arrange
       prisma.mesa.findMany.mockResolvedValue([{ id: 'mesa-1' }])
       prisma.pedido.findMany.mockResolvedValue([{ id: 'ped-1' }])
-      const base = { justificacion: 'x', creadoEn: new Date('2026-10-10T12:00:00Z'), adminId: 'ger-1', mozoId: null, usuarioId: null, admin: { email: 'g@test' }, mozo: null, usuario: null }
+      const base = { justificacion: 'x', creadoEn: new Date('2026-10-10T12:00:00Z'), mozoId: null, usuarioId: 'u-ger', mozo: null, usuario: { nombre: 'Gabi' } }
       prisma.pedidoEdicion.findMany.mockResolvedValue([
         {
           ...base,
@@ -480,7 +478,7 @@ describe('PedidosService: validaciones, estado y ediciones', () => {
         ['ed-2', '4', 'pendiente', false],
         ['ed-3', '4', 'pendiente', false],
       ])
-      expect(ediciones[0].editor).toEqual({ nombre: 'g@test', tipo: 'gerente' })
+      expect(ediciones[0].editor).toEqual({ nombre: 'Gabi', tipo: 'gerente' })
     })
 
     it('sin fechas usa el día de hoy (UTC)', async () => {
@@ -521,7 +519,7 @@ describe('PedidosService: validaciones, estado y ediciones', () => {
     it('devuelve las ediciones del pedido; sin admin ni mozo, el editor es "Desconocido"', async () => {
       prisma.pedido.findUnique.mockResolvedValue({ mesa: { restauranteId: REST } })
       prisma.pedidoEdicion.findMany.mockResolvedValue([
-        { id: 'ed-1', justificacion: 'x', creadoEn: new Date('2026-10-18T20:00:00Z'), adminId: null, mozoId: null, usuarioId: null, admin: null, mozo: null, usuario: null, itemsEliminados: [] },
+        { id: 'ed-1', justificacion: 'x', creadoEn: new Date('2026-10-18T20:00:00Z'), mozoId: null, usuarioId: null, mozo: null, usuario: null, itemsEliminados: [] },
       ])
 
       const ediciones = await service.getEdiciones('ped-1', CUENTAS.OWNER_A)

@@ -274,32 +274,19 @@ describe('POST /api/sessions/open (e2e)', () => {
     expect(await prisma.sesionMesaCliente.count({ where: { sesionId: sesion.id } })).toBe(2)
   })
 
-  // ── Idempotencia ──────────────────────────────────────────────────────
+  // ── El token del login anterior ya no identifica a nadie (Fase 5) ─────
 
-  it('mismo cliente llama open dos veces → no duplica SesionMesaCliente', async () => {
+  it('dos aperturas sin cuenta de la misma mesa → dos comensales (nadie tiene identidad)', async () => {
     const { mesa } = await seedMesa(prisma)
-    const cliente = await prisma.cliente.create({
-      data: { nombre: 'E2E Cliente', email: `${E2E_MARCADOR}idem@test.com` },
-    })
-    const token = testJwt.sign({ sub: cliente.id, tipo: 'cliente' })
 
-    await request(app.getHttpServer())
-      .post('/api/sessions/open')
-      .set('Authorization', `Bearer ${token}`)
-      .send({ tableCode: mesa.qrToken })
-
-    await request(app.getHttpServer())
-      .post('/api/sessions/open')
-      .set('Authorization', `Bearer ${token}`)
-      .send({ tableCode: mesa.qrToken })
+    await request(app.getHttpServer()).post('/api/sessions/open').send({ tableCode: mesa.qrToken })
+    await request(app.getHttpServer()).post('/api/sessions/open').send({ tableCode: mesa.qrToken })
 
     const count = await prisma.sesionMesaCliente.count({ where: { sesion: SESION_DE_LA_CORRIDA } })
-    expect(count).toBe(1)
+    expect(count).toBe(2)
   })
 
-  // ── JWT reutiliza clienteId ───────────────────────────────────────────
-
-  it('JWT válido en header → reutiliza clienteId, no crea invitado', async () => {
+  it('un token del login anterior (HS256 con JWT_SECRET) entra como invitado, no como su Cliente', async () => {
     const { mesa } = await seedMesa(prisma)
     const cliente = await prisma.cliente.create({
       data: { nombre: 'E2E Cliente JWT', email: `${E2E_MARCADOR}jwt@test.com` },
@@ -312,19 +299,11 @@ describe('POST /api/sessions/open (e2e)', () => {
       .send({ tableCode: mesa.qrToken })
 
     expect(res.status).toBe(200)
-    expect(res.body.clienteId).toBe(cliente.id)
+    expect(res.body.clienteId).not.toBe(cliente.id)
 
-    // Solo el cliente que creamos — ningún invitado nuevo en las sesiones de esta corrida
-    const totalClientes = await prisma.cliente.count({
-      where: {
-        OR: [
-          { email: { startsWith: E2E_MARCADOR } },
-          { sesiones: { some: SESION_DE_LA_CORRIDA } },
-          { sesionClientes: { some: { sesion: SESION_DE_LA_CORRIDA } } },
-        ],
-      },
-    })
-    expect(totalClientes).toBe(1)
+    // El invitado que se creó, y el Cliente de arriba que quedó sin usar.
+    const invitado = await prisma.cliente.findUnique({ where: { id: res.body.clienteId } })
+    expect(invitado).toMatchObject({ nombre: 'Invitado', email: null, supabaseUserId: null })
   })
 
   // ── Limpieza ──────────────────────────────────────────────────────────

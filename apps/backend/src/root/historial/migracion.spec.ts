@@ -110,8 +110,11 @@ describe('migración de la consola de ROOT (etapa 1a)', () => {
       expect(modelo).not.toMatch(/@relation/)
     })
 
-    it('Admin tiene debeCambiarPassword con default false', () => {
-      expect(schema).toMatch(/debeCambiarPassword Boolean @default\(false\) @map\("debe_cambiar_password"\)/)
+    // `admin` y su `debe_cambiar_password` los borró la Fase 5 de auth (migración 20261025120000): el modelo ya no
+    // está en el schema. Las cuentas ROOT viven en `usuario.es_root`.
+    it('el modelo Admin ya no está en el schema', () => {
+      expect(schema).not.toMatch(/model Admin \{/)
+      expect(schema).not.toMatch(/debe_cambiar_password/)
     })
   })
 })

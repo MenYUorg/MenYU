@@ -3,7 +3,7 @@ import { Prisma } from '@prisma/client'
 import { createLocalJWKSet, errors, exportJWK, generateKeyPair, JWTVerifyGetKey, KeyLike, SignJWT } from 'jose'
 import { comoPrisma, crearPrismaMock, PrismaMock } from '../../test/prisma-mock'
 import { CuentaDeClienteService, LARGO_MAXIMO_DEL_NOMBRE, NOMBRE_POR_DEFECTO } from './cuenta-de-cliente.service'
-import { esTokenDeSupabase, VerificadorTokenSupabase } from './verificador-token.service'
+import { VerificadorTokenSupabase } from './verificador-token.service'
 
 // La cuenta de cliente de la Fase 4b (docs/auth/specs/auth.md): de un token de Supabase al `Cliente`. Los tokens se
 // firman con un par de claves propio, cuya clave pública es el JWKS del "proyecto", como en supabase-auth.spec.
@@ -249,6 +249,26 @@ describe('CuentaDeClienteService', () => {
       expect(await service.clienteDe(await token({ issuer: 'https://otro.supabase.co/auth/v1' }))).toBeNull()
     })
 
+    // Desde la Fase 5 `POST /sessions/open` le pasa cualquier token: el del login de `/auth` (HS256 con JWT_SECRET) ya
+    // no se verifica aparte. `claims` solo acepta ES256 y RS256, así que entra como invitado y sin anotar nada.
+    it('firmado con HS256, como el del login anterior', async () => {
+      const hs256 = await new SignJWT({ role: 'authenticated', email: 'ana@ejemplo.com' })
+        .setProtectedHeader({ alg: 'HS256' })
+        .setSubject(SUPABASE_USER_ID)
+        .setIssuer(`${SUPABASE_URL}/auth/v1`)
+        .setAudience('authenticated')
+        .setExpirationTime(Math.floor(Date.now() / 1000) + 3600)
+        .sign(new TextEncoder().encode('un-jwt-secret-cualquiera-de-32-bytes'))
+
+      expect(await service.clienteDe(hs256)).toBeNull()
+      expect(advertencia).not.toHaveBeenCalled()
+    })
+
+    it('un texto que no es un JWT', async () => {
+      expect(await service.clienteDe('no-es-un-jwt')).toBeNull()
+      expect(advertencia).not.toHaveBeenCalled()
+    })
+
     it('con un sub que no es un UUID (la columna es uuid)', async () => {
       expect(await service.clienteDe(await token({ sub: 'no-es-un-uuid' }))).toBeNull()
     })
@@ -270,24 +290,4 @@ describe('CuentaDeClienteService', () => {
       expect(advertencia).toHaveBeenCalledTimes(1)
     })
   })
-})
-
-describe('esTokenDeSupabase', () => {
-  const conEncabezado = (encabezado: object) =>
-    `${Buffer.from(JSON.stringify(encabezado)).toString('base64url')}.e30.firma`
-
-  it.each(['ES256', 'RS256'])('%s: los de las JWT Signing Keys de Supabase', (alg) => {
-    expect(esTokenDeSupabase(conEncabezado({ alg }))).toBe(true)
-  })
-
-  it('HS256 (el JWT propio del login anterior): no', () => {
-    expect(esTokenDeSupabase(conEncabezado({ alg: 'HS256' }))).toBe(false)
-  })
-
-  it.each([['sin alg', conEncabezado({})], ['un texto cualquiera', 'no-es-un-jwt'], ['vacío', '']])(
-    '%s: no',
-    (_caso, token) => {
-      expect(esTokenDeSupabase(token)).toBe(false)
-    },
-  )
 })

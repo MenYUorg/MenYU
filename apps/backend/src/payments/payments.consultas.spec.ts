@@ -96,55 +96,6 @@ describe('PaymentsService: caja, cuenta, back_urls y webhooks sin cambios', () =
     })
   })
 
-  describe('avisarMozoPedidoDeCuenta', () => {
-    it('reemplaza el llamado pendiente por uno de "pedir_cuenta" y avisa al mozo con el total', async () => {
-      // Arrange
-      prisma.sesionMesa.findUnique.mockResolvedValue({
-        id: 'ses-1',
-        mesa: { id: 'mesa-1', numero: '4', restauranteId: 'rest-1', restaurante: { activo: true, marca: { activo: true } } },
-        pedidos: [{ items: [{ cantidad: 2, precioUnitario: '1000.00' }] }, { items: [{ cantidad: 1, precioUnitario: '500.00' }] }],
-      })
-      prisma.llamadoMozo.create.mockResolvedValue({ id: 'll-1' })
-
-      // Act
-      const resultado = await service.avisarMozoPedidoDeCuenta('ses-1')
-
-      // Assert
-      expect(resultado).toEqual({ sesionId: 'ses-1', estado: 'mozo_llamado' })
-      expect(prisma.llamadoMozo.deleteMany).toHaveBeenCalledWith({ where: { sesionId: 'ses-1', estado: 'pendiente' } })
-      expect(prisma.llamadoMozo.create).toHaveBeenCalledWith({ data: { sesionId: 'ses-1', motivo: 'pedir_cuenta' } })
-      expect(gateway.emitMozoCalled).toHaveBeenCalledWith('rest-1', { llamadoId: 'll-1', sesionId: 'ses-1', mesaNumero: '4', motivo: 'pedir_cuenta' })
-      expect(gateway.emitQuierePagar).toHaveBeenCalledWith('rest-1', { sesionId: 'ses-1', mesaId: 'mesa-1', mesaNumero: '4', totalAcumulado: 2500 })
-    })
-
-    it('si la sesión no existe responde 404 y no toca los llamados', async () => {
-      prisma.sesionMesa.findUnique.mockResolvedValue(null)
-
-      await expect(service.avisarMozoPedidoDeCuenta('ses-x')).rejects.toThrow(new NotFoundException('Sesión no encontrada'))
-      expect(prisma.llamadoMozo.deleteMany).not.toHaveBeenCalled()
-      expect(gateway.emitMozoCalled).not.toHaveBeenCalled()
-    })
-
-    // Igual que `solicitarEfectivo`: con la baja nadie puede atender el llamado (entrega 4.7).
-    it.each([
-      ['el restaurante', { activo: false }],
-      ['su marca', { marca: { activo: false } }],
-    ])('con %s dado de baja responde 403 y no toca los llamados', async (_quien, cambios) => {
-      prisma.sesionMesa.findUnique.mockResolvedValue({
-        id: 'ses-1',
-        mesa: { id: 'mesa-1', numero: '4', restauranteId: 'rest-1', restaurante: { activo: true, marca: { activo: true }, ...cambios } },
-        pedidos: [],
-      })
-
-      await expect(service.avisarMozoPedidoDeCuenta('ses-1')).rejects.toThrow(
-        new ForbiddenException('Este restaurante no está disponible'),
-      )
-      expect(prisma.llamadoMozo.deleteMany).not.toHaveBeenCalled()
-      expect(prisma.llamadoMozo.create).not.toHaveBeenCalled()
-      expect(gateway.emitMozoCalled).not.toHaveBeenCalled()
-    })
-  })
-
   describe('crearPreferenciaMercadoPago: back_urls según el Origin', () => {
     beforeEach(() => {
       process.env = { ...entorno, CORS_ORIGINS: 'https://menyu-cliente.vercel.app', CORS_ORIGIN_PATTERNS: '' }

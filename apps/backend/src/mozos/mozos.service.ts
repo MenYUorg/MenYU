@@ -6,7 +6,7 @@ import { AccesoService } from '../auth/supabase/acceso.service'
 import { UsuarioAutenticado } from '../auth/supabase/usuario-autenticado'
 import { UpdateMozoDto } from './dto/update-mozo.dto'
 
-/** Lo que se ve de un mozo. Nunca la contraseña del login propio (`passwordHash`). */
+/** Lo que se ve de un mozo. `includes-contract.spec.ts` comprueba que ningún select devuelva columnas sensibles. */
 export const MOZO_SELECT = {
   id: true,
   restauranteId: true,
@@ -55,18 +55,6 @@ export class MozosService {
   async update(id: string, dto: UpdateMozoDto, usuario: UsuarioAutenticado) {
     await this.getConPermiso(id, usuario, ['OWNER'])
     return this.prisma.mozo.update({ where: { id }, data: dto, select: MOZO_SELECT })
-  }
-
-  /**
-   * Da de baja a un mozo del login propio (sin cuenta de Supabase). Solo el OWNER. A uno con cuenta se le quita
-   * el acceso desde Personal, que también borra su membresía.
-   */
-  async remove(id: string, usuario: UsuarioAutenticado) {
-    const mozo = await this.getConPermiso(id, usuario, ['OWNER'])
-    if (mozo.usuarioId) {
-      throw new ConflictException('Este mozo tiene cuenta: quitale el acceso desde Personal')
-    }
-    await this.prisma.mozo.update({ where: { id }, data: { activo: false } })
   }
 
   async assignMesa(mozoId: string, mesaId: string, usuario: UsuarioAutenticado) {

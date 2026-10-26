@@ -21,7 +21,6 @@ model Marca {
   createdAt  DateTime     @default(now()) @map("created_at")
 
   restaurantes Restaurante[]
-  admins       Admin[]
   membresias   Membresia[]
 
   @@map("marca")
@@ -46,7 +45,6 @@ model Restaurante {
   mesas         Mesa[]
   ingredientes  Ingrediente[]
   items         ItemMenu[]
-  admins        AdminRestaurante[]
   membresias    Membresia[]
 
   mpAccessToken     String?   @map("mp_access_token")
@@ -57,33 +55,9 @@ model Restaurante {
   @@map("restaurante")
 }
 
-enum RolAdmin {
-  ROOT
-  OWNER
-  GERENTE
-
-  @@map("rol_admin")
-}
-
 // ─────────────────────────────────────────────
 // USUARIOS DEL SISTEMA
 // ─────────────────────────────────────────────
-
-model Admin {
-  id           String    @id @default(uuid())
-  marcaId      String?   @map("marca_id")
-  email        String    @unique
-  passwordHash String    @map("password_hash")
-  rol          RolAdmin
-  // La contraseña la puso otra persona (ROOT): hay que cambiarla en el primer ingreso. Sin efecto en las cuentas que ya existen.
-  debeCambiarPassword Boolean @default(false) @map("debe_cambiar_password")
-
-  marca        Marca?             @relation(fields: [marcaId], references: [id])
-  restaurantes AdminRestaurante[]
-  ediciones    PedidoEdicion[]
-
-  @@map("admin")
-}
 
 // Historial de acciones de ROOT (docs/plan-consola-root.md, 7.2). Solo se agregan filas: la base bloquea UPDATE, DELETE y
 // TRUNCATE con disparadores (migración 20261020150000). A propósito NO tiene claves foráneas: guarda copias (email, nombre) de
@@ -114,30 +88,16 @@ model HistorialRoot {
   @@map("historial_root")
 }
 
-model AdminRestaurante {
-  id            String @id @default(uuid())
-  adminId       String @map("admin_id")
-  restauranteId String @map("restaurante_id")
-
-  admin       Admin       @relation(fields: [adminId], references: [id])
-  restaurante Restaurante @relation(fields: [restauranteId], references: [id])
-
-  @@unique([adminId, restauranteId])
-  @@map("admin_restaurante")
-}
-
 model Mozo {
   id            String   @id @default(uuid())
   restauranteId String   @map("restaurante_id")
   nombre        String
   email         String?
-  // Null en los mozos invitados por Supabase: inician sesión ahí, no con el login propio.
-  passwordHash  String?  @map("password_hash")
   telefono      String?
   activo        Boolean  @default(true)
   esJefeSalon   Boolean  @default(false) @map("es_jefe_salon")
   createdAt     DateTime @default(now()) @map("created_at")
-  // Usuario de Supabase dueño de este perfil. Null en los mozos creados con el login propio.
+  // Usuario de Supabase dueño de este perfil. Null en los que quedaron del login anterior, que se retiró en la Fase 5.
   usuarioId     String?  @map("usuario_id")
 
   restaurante   Restaurante      @relation(fields: [restauranteId], references: [id])
@@ -192,7 +152,6 @@ model Cliente {
   id           String   @id @default(uuid())
   nombre       String
   email        String?  @unique
-  passwordHash String?  @map("password_hash")
   telefono     String?
   createdAt    DateTime @default(now()) @map("created_at")
   // Cuenta opcional del cliente en Supabase Auth.
@@ -477,16 +436,15 @@ model PedidoItemMod {
 model PedidoEdicion {
   id            String   @id @default(uuid())
   pedidoId      String   @map("pedido_id")
-  adminId       String?  @map("admin_id")
   mozoId        String?  @map("mozo_id")
-  // Quien editó con su cuenta de Supabase (Fase 4 de auth). Reemplaza a adminId, que se va en la Fase 5.
+  // Quien editó, con su cuenta de Supabase. Null en las ediciones anteriores a la Fase 4 cuyo admin no llegó a tener
+  // cuenta: la Fase 5 pasó a usuarioId las que sí (mismo email) y borró la columna admin_id.
   usuarioId     String?  @map("usuario_id")
   justificacion String
   creadoEn      DateTime @default(now()) @map("creado_en")
 
   itemsEliminados PedidoEdicionItem[]
   pedido          Pedido  @relation(fields: [pedidoId], references: [id])
-  admin           Admin?  @relation(fields: [adminId], references: [id])
   mozo            Mozo?   @relation(fields: [mozoId], references: [id])
   usuario         Usuario? @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
 
@@ -561,22 +519,6 @@ model ItemComensal {
 
   @@unique([pedidoItemId, comensalId])
   @@map("item_comensal")
-}
-
-// ─────────────────────────────────────────────
-// AUTENTICACIÓN
-// ─────────────────────────────────────────────
-
-model RefreshToken {
-  id        String    @id @default(uuid())
-  tokenHash String    @unique @map("token_hash")
-  userId    String    @map("user_id")
-  userTipo  String    @map("user_tipo")
-  expiresAt DateTime  @map("expires_at")
-  revokedAt DateTime? @map("revoked_at")
-  createdAt DateTime  @default(now()) @map("created_at")
-
-  @@map("refresh_token")
 }
 
 // ─────────────────────────────────────────────

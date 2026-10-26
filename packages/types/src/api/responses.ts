@@ -1,7 +1,5 @@
-import type { TokenPair, PerfilUsuario, Rol } from '../auth.types'
+import type { PerfilUsuario, Rol } from '../auth.types'
 import type { OpenSessionResult } from '../session.types'
-
-export type AuthResponse = TokenPair
 
 export type OpenSessionResponse = OpenSessionResult
 

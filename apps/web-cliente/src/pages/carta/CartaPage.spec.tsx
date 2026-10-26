@@ -7,8 +7,8 @@ import { useCarritoStore } from '../../store/carritoStore'
 import { useComensalStore } from '../../store/comensalStore'
 import { usePublicMenuStore } from '../../store/publicMenuStore'
 import { useSessionStore } from '../../store/sessionStore'
-import { crearMenu, crearPlato, crearPlatoEnDescuento, crearTokenJwt } from '../../test/fixtures'
-import { compartirLaSesionDeWebAuth } from '../../test/authClient'
+import { crearMenu, crearPlato, crearPlatoEnDescuento } from '../../test/fixtures'
+import { compartirLaSesionDeWebAuth, cuentaDePrueba, sesionDeSupabase, signOutSimulado } from '../../test/authClient'
 import { irA } from '../../utils/navegar'
 import { CartaPage } from './CartaPage'
 
@@ -74,7 +74,6 @@ function renderCarta(id = 'rest-1') {
         <Route path="/restaurante/:restauranteId/carta" element={<CartaPage />} />
         <Route path="/menu/:itemId" element={<Destino nombre="detalle" />} />
         <Route path="/carrito" element={<Destino nombre="carrito" />} />
-        <Route path="/auth" element={<Destino nombre="auth" />} />
       </Routes>
     </MemoryRouter>,
   )
@@ -387,7 +386,7 @@ describe('CartaPage (la carta en modo vista)', () => {
 
     describe('con cuenta', () => {
       beforeEach(() => {
-        localStorage.setItem('menyu_access_token', crearTokenJwt({ tipo: 'cliente', nombre: 'Ana Gómez', email: 'ana@mail.com' }))
+        cuentaDePrueba.session = sesionDeSupabase({ nombre: 'Ana Gómez', email: 'ana@mail.com' })
         vi.mocked(api.orders.list).mockReset().mockResolvedValue([])
       })
 
@@ -395,7 +394,7 @@ describe('CartaPage (la carta en modo vista)', () => {
         renderCarta()
         await cargada()
 
-        expect(screen.getByText('¡Hola, Ana Gómez!')).toBeInTheDocument()
+        expect(await screen.findByText('¡Hola, Ana Gómez!')).toBeInTheDocument()
         expect(screen.queryByRole('button', { name: 'Iniciar sesión' })).not.toBeInTheDocument()
         expect(screen.queryByRole('button', { name: 'Crear cuenta gratis' })).not.toBeInTheDocument()
         expect(screen.queryByText('Mis puntos')).not.toBeInTheDocument()
@@ -406,23 +405,22 @@ describe('CartaPage (la carta en modo vista)', () => {
         await cargada()
         abrirMenuLateral()
 
-        expect(screen.getByRole('button', { name: 'Cerrar sesión' })).toBeInTheDocument()
+        expect(await screen.findByRole('button', { name: 'Cerrar sesión' })).toBeInTheDocument()
         expect(api.orders.list).not.toHaveBeenCalled()
       })
 
-      it('"Cerrar sesión" borra la sesión de cliente y vuelve a ofrecer iniciar sesión', async () => {
-        localStorage.setItem('menyu_refresh_token', 'refresh')
+      it('"Cerrar sesión" cierra la cuenta y vuelve a ofrecer iniciar sesión', async () => {
         renderCarta()
         await cargada()
         abrirMenuLateral()
 
-        // Cerrar la cuenta es asíncrono (también cierra la de Supabase): act espera a que termine.
+        const cerrar = await screen.findByRole('button', { name: 'Cerrar sesión' })
+        // Cerrar la cuenta es asíncrono (habla con Supabase): act espera a que termine.
         await act(async () => {
-          fireEvent.click(screen.getByRole('button', { name: 'Cerrar sesión' }))
+          fireEvent.click(cerrar)
         })
 
-        expect(localStorage.getItem('menyu_access_token')).toBeNull()
-        expect(localStorage.getItem('menyu_refresh_token')).toBeNull()
+        expect(signOutSimulado).toHaveBeenCalledWith({ scope: 'local' })
         expect(screen.getByRole('button', { name: 'Iniciar sesión' })).toBeInTheDocument()
       })
 
@@ -437,7 +435,7 @@ describe('CartaPage (la carta en modo vista)', () => {
         await esperar()
 
         expect(screen.queryByRole('button', { name: 'Cerrar sesión' })).not.toBeInTheDocument()
-        expect(screen.getByText('¡Hola, Ana Gómez!')).toBeInTheDocument()
+        expect(await screen.findByText('¡Hola, Ana Gómez!')).toBeInTheDocument()
       })
     })
 

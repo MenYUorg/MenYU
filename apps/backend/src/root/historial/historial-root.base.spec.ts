@@ -123,74 +123,6 @@ describeConBase('historial de ROOT y cuentas ROOT: disparadores de la base', () 
     })
   })
 
-  describe('la última cuenta ROOT', () => {
-    const cuenta = (id: string, rol: string) =>
-      `INSERT INTO admin (id, email, password_hash, rol) VALUES ('${id}', '${id}@prueba.test', 'x', '${rol}'::rol_admin)`
-
-    /** Deja la transacción sin ninguna cuenta ROOT (con los disparadores apagados, como las limpiezas de pruebas) y los vuelve a encender. */
-    async function sinRoots() {
-      await db.query(`SET LOCAL session_replication_role = replica`)
-      await db.query(`DELETE FROM admin WHERE rol = 'ROOT'`)
-      await db.query(`SET LOCAL session_replication_role = origin`)
-    }
-
-    it('no se puede borrar a la única cuenta ROOT', async () => {
-      await sinRoots()
-      await db.query(cuenta('prueba-r1', 'ROOT'))
-
-      expect(await falla(`DELETE FROM admin WHERE id = 'prueba-r1'`)).toMatch(/última cuenta ROOT/)
-    })
-
-    it('con dos se puede borrar una, y a la que queda ya no', async () => {
-      await sinRoots()
-      await db.query(cuenta('prueba-r1', 'ROOT'))
-      await db.query(cuenta('prueba-r2', 'ROOT'))
-
-      await db.query(`DELETE FROM admin WHERE id = 'prueba-r1'`)
-
-      expect(await falla(`DELETE FROM admin WHERE id = 'prueba-r2'`)).toMatch(/última cuenta ROOT/)
-    })
-
-    it('tampoco se le puede cambiar el rol a la única cuenta ROOT', async () => {
-      await sinRoots()
-      await db.query(cuenta('prueba-r1', 'ROOT'))
-
-      expect(await falla(`UPDATE admin SET rol = 'GERENTE' WHERE id = 'prueba-r1'`)).toMatch(/última cuenta ROOT/)
-    })
-
-    it('cambiarle otras cosas a la única cuenta ROOT (email, contraseña) sí se puede', async () => {
-      await sinRoots()
-      await db.query(cuenta('prueba-r1', 'ROOT'))
-
-      await db.query(`UPDATE admin SET email = 'otro@prueba.test', debe_cambiar_password = true WHERE id = 'prueba-r1'`)
-
-      const { rows } = await db.query(`SELECT email, debe_cambiar_password FROM admin WHERE id = 'prueba-r1'`)
-      expect(rows[0]).toEqual({ email: 'otro@prueba.test', debe_cambiar_password: true })
-    })
-
-    it('los dueños y gerentes se borran como siempre, haya o no cuentas ROOT', async () => {
-      await sinRoots()
-      await db.query(cuenta('prueba-o1', 'OWNER'))
-      await db.query(cuenta('prueba-g1', 'GERENTE'))
-
-      await db.query(`DELETE FROM admin WHERE id IN ('prueba-o1', 'prueba-g1')`)
-
-      const { rows } = await db.query(`SELECT count(*)::int AS n FROM admin WHERE id IN ('prueba-o1', 'prueba-g1')`)
-      expect(rows[0].n).toBe(0)
-    })
-
-    it('las limpiezas con session_replication_role = replica siguen pudiendo borrar cuentas ROOT', async () => {
-      await sinRoots()
-      await db.query(cuenta('prueba-r1', 'ROOT'))
-      await db.query(`SET LOCAL session_replication_role = replica`)
-
-      await db.query(`DELETE FROM admin WHERE id = 'prueba-r1'`)
-
-      const { rows } = await db.query(`SELECT count(*)::int AS n FROM admin WHERE rol = 'ROOT'`)
-      expect(rows[0].n).toBe(0)
-    })
-  })
-
   // Prisma ejecuta `equals` + `mode: 'insensitive'` como ILIKE. Con el escape de comoTextoLiteral, _ y % se comparan como texto.
   describe('comparar emails sin distinguir mayúsculas (ILIKE) con comoTextoLiteral', () => {
     const coincide = async (guardado: string, buscado: string) => {
@@ -219,16 +151,6 @@ describeConBase('historial de ROOT y cuentas ROOT: disparadores de la base', () 
       const { rows } = await db.query(`SELECT 'axb@ejemplo.com'::text ILIKE 'a_b@ejemplo.com'::text AS coincide`)
 
       expect(rows[0].coincide).toBe(true)
-    })
-  })
-
-  describe('debe_cambiar_password', () => {
-    it('las cuentas existentes y las nuevas quedan en false por defecto', async () => {
-      await db.query(`INSERT INTO admin (id, email, password_hash, rol) VALUES ('prueba-o9', 'prueba-o9@prueba.test', 'x', 'OWNER')`)
-
-      const { rows } = await db.query(`SELECT debe_cambiar_password FROM admin WHERE id = 'prueba-o9'`)
-
-      expect(rows[0].debe_cambiar_password).toBe(false)
     })
   })
 })

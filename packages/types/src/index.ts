@@ -1,4 +1,5 @@
 export * from './auth.types'
+export * from './permisos'
 export * from './cart.types'
 export * from './session.types'
 export * from './menu.types'

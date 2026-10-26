@@ -9,8 +9,8 @@ import { MozosService } from './mozos.service'
 import { UpdateMozoDto } from './dto/update-mozo.dto'
 import { AsignarMesaDto } from './dto/asignar-mesa.dto'
 
-// OWNER y GERENTE del restaurante (editar y dar de baja, solo OWNER). En las rutas de un mozo, el service pide el
-// rol. Los mozos se suman invitándolos (POST /auth/invitaciones).
+// OWNER y GERENTE del restaurante (editar, solo OWNER). En las rutas de un mozo, el service pide el rol. Los mozos se
+// suman invitándolos (POST /auth/invitaciones) y se les quita el acceso desde Personal: un perfil de mozo no se borra.
 @ApiTags('mozos')
 @Controller('mozos')
 export class MozosController {
@@ -40,16 +40,6 @@ export class MozosController {
   @ApiResponse({ status: 404 })
   update(@Param('id') id: string, @Body() dto: UpdateMozoDto, @UsuarioActual() usuario: UsuarioAutenticado) {
     return this.mozos.update(id, dto, usuario)
-  }
-
-  @Delete(':id')
-  @Personal()
-  @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Dar de baja a un mozo sin cuenta (solo el OWNER); a uno con cuenta, desde Personal' })
-  @ApiResponse({ status: 204 })
-  @ApiResponse({ status: 409, description: 'El mozo tiene cuenta' })
-  async remove(@Param('id') id: string, @UsuarioActual() usuario: UsuarioAutenticado) {
-    await this.mozos.remove(id, usuario)
   }
 
   @Post(':mozoId/mesas')

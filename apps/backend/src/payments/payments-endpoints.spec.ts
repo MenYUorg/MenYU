@@ -6,7 +6,6 @@ describe('endpoints de pagos', () => {
   let api: AppDeEndpoints
   const payments = {
     solicitarEfectivo: jest.fn(),
-    avisarMozoPedidoDeCuenta: jest.fn(),
     getSesiones: jest.fn(),
     confirmarEfectivo: jest.fn(),
     crearPreferenciaMercadoPago: jest.fn(),
@@ -35,18 +34,6 @@ describe('endpoints de pagos', () => {
       expect(payments.solicitarEfectivo).toHaveBeenCalledWith(SESION_CLIENTE.sesionId)
     })
 
-    it('POST /payments/avisar-mozo-cuenta delega con la sesión (201)', async () => {
-      // Arrange
-      payments.avisarMozoPedidoDeCuenta.mockResolvedValue({ ok: true })
-
-      // Act
-      const res = await api.pedir('post', '/payments/avisar-mozo-cuenta', { sesion: SESION_CLIENTE, body: DE_LA_SESION })
-
-      // Assert
-      expect(res.status).toBe(201)
-      expect(payments.avisarMozoPedidoDeCuenta).toHaveBeenCalledWith(SESION_CLIENTE.sesionId)
-    })
-
     it('POST /payments/mercadopago/crear-preferencia pasa el Origin del navegador', async () => {
       // Arrange
       payments.crearPreferenciaMercadoPago.mockResolvedValue({ initPoint: 'https://mp.test/checkout' })
@@ -71,7 +58,7 @@ describe('endpoints de pagos', () => {
       expect(payments.solicitarEfectivo).not.toHaveBeenCalled()
     })
 
-    it.each(['/payments/solicitar-efectivo', '/payments/avisar-mozo-cuenta', '/payments/mercadopago/crear-preferencia'])(
+    it.each(['/payments/solicitar-efectivo', '/payments/mercadopago/crear-preferencia'])(
       'POST %s con la sesión de otra mesa en el body responde 403',
       async (ruta) => {
         // Act
@@ -80,7 +67,6 @@ describe('endpoints de pagos', () => {
         // Assert
         expect(res.status).toBe(403)
         expect(payments.solicitarEfectivo).not.toHaveBeenCalled()
-        expect(payments.avisarMozoPedidoDeCuenta).not.toHaveBeenCalled()
         expect(payments.crearPreferenciaMercadoPago).not.toHaveBeenCalled()
       },
     )

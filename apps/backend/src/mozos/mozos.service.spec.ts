@@ -18,10 +18,6 @@ describe('MozosService', () => {
     service = new MozosService(comoPrisma(prisma), accesoDeTest())
   })
 
-  it('ninguna respuesta trae la contraseña del login propio', () => {
-    expect(MOZO_SELECT).not.toHaveProperty('passwordHash')
-  })
-
   describe('permisos de las rutas de un mozo (el rol en el restaurante del mozo)', () => {
     const RUTAS: Array<[string, (u: UsuarioAutenticado) => Promise<unknown>]> = [
       ['findOne', (u) => service.findOne('mozo-1', u)],
@@ -77,7 +73,9 @@ describe('MozosService', () => {
       const consulta = prisma.mozo.findMany.mock.calls[0][0]
       expect(consulta.where).toEqual({ restauranteId: REST, activo: true })
       expect(consulta.orderBy).toEqual({ nombre: 'asc' })
-      expect(consulta.select).not.toHaveProperty('passwordHash')
+      expect(consulta.select).toEqual({
+        id: true, nombre: true, email: true, telefono: true, activo: true, esJefeSalon: true, createdAt: true,
+      })
     })
   })
 
@@ -119,40 +117,6 @@ describe('MozosService', () => {
     ])('%s recibe 403 y no se toca nada', async (_caso, cuenta) => {
       // Act + Assert
       await expect(service.update('mozo-1', { nombre: 'Otro' }, cuenta)).rejects.toThrow(ForbiddenException)
-      expect(prisma.mozo.update).not.toHaveBeenCalled()
-    })
-  })
-
-  describe('remove (solo el OWNER y solo un mozo sin cuenta)', () => {
-    it('da de baja (activo: false) a un mozo del login propio', async () => {
-      // Arrange
-      prisma.mozo.findUnique.mockResolvedValue(MOZO)
-
-      // Act
-      await service.remove('mozo-1', OWNER)
-
-      // Assert
-      expect(prisma.mozo.update).toHaveBeenCalledWith({ where: { id: 'mozo-1' }, data: { activo: false } })
-      expect(prisma.mozo.delete).not.toHaveBeenCalled()
-    })
-
-    it('un mozo con cuenta de Supabase responde 409: el acceso se quita desde Personal', async () => {
-      // Arrange
-      prisma.mozo.findUnique.mockResolvedValue({ ...MOZO, usuarioId: 'usuario-mozo' })
-
-      // Act + Assert
-      await expect(service.remove('mozo-1', OWNER)).rejects.toThrow(
-        new ConflictException('Este mozo tiene cuenta: quitale el acceso desde Personal'),
-      )
-      expect(prisma.mozo.update).not.toHaveBeenCalled()
-    })
-
-    it('el GERENTE recibe 403', async () => {
-      // Arrange
-      prisma.mozo.findUnique.mockResolvedValue(MOZO)
-
-      // Act + Assert
-      await expect(service.remove('mozo-1', GERENTE)).rejects.toThrow(ForbiddenException)
       expect(prisma.mozo.update).not.toHaveBeenCalled()
     })
   })

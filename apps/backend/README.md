@@ -31,25 +31,24 @@ pnpm prisma db seed           # carga los datos de prueba
 Usar `migrate deploy`, no `migrate dev`: `dev` genera migraciones nuevas a
 partir del schema, que no es lo que se busca al inicializar un entorno.
 
-### Credenciales del seed
+### Qué cuentas deja el seed
 
-Solo para el entorno local.
+La Fase 5 de `docs/auth/specs/auth.md` retiró el login propio: **el seed ya no crea
+contraseñas**. La sesión la da Supabase, así que para entrar a web-admin o web-staff
+en local hay que usar una cuenta del Supabase de staging.
 
-| Rol | Email | Password |
+Crea el `Usuario` OWNER de Marca Seed (`owner@menyu.com`) con un `supabaseUserId`
+ficticio que no existe en ningún proyecto de Supabase. Para iniciar sesión con él
+hay que reemplazarlo por el id de un usuario real del Supabase de staging; el seed
+no lo pisa al re-correr.
+
+Deja además dos perfiles sin cuenta, que sirven para probar los vínculos por email:
+
+| Perfil | Email | Para qué |
 |---|---|---|
-| Admin ROOT | root@menyu.com | root1234 |
-| Admin OWNER | owner@menyu.com | owner1234 |
-| Admin GERENTE (Restaurante Seed) | gerente@menyu.com | gerente1234 |
-| Admin OWNER (Marca Seed 2) | owner2@menyu.com | owner21234 |
-| Mozo | mozo@menyu.com | mozo1234 |
-| Cliente 1 | cliente1@menyu.com | cliente1234 |
-| Cliente 2 | cliente2@menyu.com | cliente1234 |
-
-Además crea el `Usuario` OWNER de Marca Seed (`owner@menyu.com`) del modelo de
-Supabase Auth, con un `supabaseUserId` ficticio que no existe en ningún proyecto
-de Supabase. Para iniciar sesión con él (desde la Fase 2 de `docs/auth/specs/auth.md`)
-hay que reemplazarlo por el id de un usuario real del Supabase de staging; el
-seed no lo pisa al re-correr.
+| Mozo Seed | mozo@menyu.com | Invitarlo como MOZO engancha este perfil en vez de crear otro |
+| Cliente Uno | cliente1@menyu.com | Registrarlo en web-auth le devuelve su historial de mesas (Fase 4b) |
+| Cliente Dos | cliente2@menyu.com | — |
 
 Mesas: número 99 (pin 9998), 100 (pin 9997), 101 (pin 9996), y la mesa 1 de
 Restaurante Seed 2 (pin 9995), la segunda marca del seed.
@@ -161,11 +160,10 @@ Plan: `docs/plan-consola-root.md`. La API está en `doc.md` (sección "ROOT cons
 
 ### La migración de la etapa 1a
 
-`20261020150000_consola_root_historial` agrega `admin.debe_cambiar_password`, la tabla `historial_root` con sus disparadores
-y el disparador que impide quitar a la última cuenta ROOT. **Después de traer esta rama hay que aplicarla a la base local
-(`npx prisma migrate deploy`) y regenerar el cliente (`npx prisma generate`)**: el cliente nuevo pide la columna
-`debe_cambiar_password` en cada consulta a `admin`, así que con la base sin migrar el login da 500. En staging y producción la
-aplica sola el arranque del backend (`prisma migrate deploy && node dist/main`).
+`20261020150000_consola_root_historial` agregó la tabla `historial_root` con sus disparadores y el que impedía quitar a la
+última cuenta ROOT (sobre `admin`, que la Fase 5 de auth borró junto con su función). En staging y producción las migraciones
+las aplica solo el arranque del backend (`prisma migrate deploy && node dist/main`); en local, `npx prisma migrate deploy` y
+`npx prisma generate` después de traer una rama que cambie el schema.
 
 ### El historial no se puede borrar, tampoco en local
 
@@ -174,8 +172,9 @@ La base bloquea `UPDATE`, `DELETE` y `TRUNCATE` sobre `historial_root` para cual
 filas que no se pueden limpiar con un `DELETE`: para empezar de cero se usa una base descartable
 (`create database ...` / `drop database ... with (force)`) o `docker compose down -v`. No hay forma de saltearlo desde la app.
 
-La última cuenta ROOT tampoco se puede borrar ni degradar (ni por SQL). Las limpiezas de pruebas que borran cuentas de admin
-tienen que usar `set local session_replication_role = replica` dentro de una transacción; ese atajo **no** salta al historial.
+Las limpiezas de pruebas que borran cuentas tienen que usar `set local session_replication_role = replica` dentro de una
+transacción; ese atajo **no** salta al historial. Que no se pueda quedar sin ninguna cuenta ROOT lo cuida hoy el disparador
+de `usuario` (migración `20261021141707_fase4_autoria_usuario`).
 
 ### Cuentas ROOT con el script
 

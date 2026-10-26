@@ -68,8 +68,9 @@ export function cambioDeInvitacion(invitacionEnviada: boolean): CambioHistorial 
   return { campo: 'Invitación', antes: null, despues: invitacionEnviada ? 'mail enviado' : 'ya tenía cuenta: no se le mandó mail' }
 }
 
-// Un hash de bcrypt ($2a$10$… de 60 caracteres), esté solo o dentro de un texto. Red de seguridad: ningún detalle lo lleva
-// (mientras existan las tablas con `password_hash`, hasta la Fase 5 de auth).
+// Un hash de bcrypt ($2a$10$… de 60 caracteres), esté solo o dentro de un texto. Red de seguridad: ningún detalle lo lleva.
+// La Fase 5 de auth retiró las columnas `password_hash`, así que hoy no hay de dónde salga uno; se queda porque el historial
+// no se puede editar ni borrar: lo que entre, queda para siempre.
 const HASH_BCRYPT = /\$2[abxy]?\$\d{2}\$[./A-Za-z0-9]{40,}/g
 
 export const LARGO_MAXIMO_TEXTO = 500

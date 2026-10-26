@@ -495,7 +495,9 @@ describe('MozosPage (Personal)', () => {
         expect(await screen.findByText('Solo el dueño puede editarlo')).toBeInTheDocument()
       })
 
-      it('un mozo con cuenta no se elimina: manda a quitarle el acceso desde Personal', async () => {
+      // La Fase 5 de auth retiró DELETE /mozos/:id: no hay forma de borrar un perfil de mozo desde la app, ni para
+      // los que todavía no tienen cuenta. El acceso se quita desde Personal.
+      it('ningún mozo se elimina desde acá: manda a quitarle el acceso desde Personal', async () => {
         await abrirAna()
 
         fireEvent.click(boton('⚙ Editar datos del mozo'))
@@ -504,36 +506,15 @@ describe('MozosPage (Personal)', () => {
         expect(screen.queryByRole('button', { name: 'Eliminar mozo' })).not.toBeInTheDocument()
       })
 
-      it('un mozo sin cuenta se puede eliminar, con confirmación', async () => {
-        mozosApi.delete.mockResolvedValue(undefined as never)
+      it('tampoco uno sin cuenta, que antes sí se podía', async () => {
         await abrirMozos()
         fireEvent.click(screen.getByText('Luis'))
         await screen.findByText('Mesas asignadas')
 
         fireEvent.click(boton('⚙ Editar datos del mozo'))
-        fireEvent.click(boton('Eliminar mozo'))
-        expect(screen.getByText('¿Eliminar mozo?')).toBeInTheDocument()
-        fireEvent.click(boton('Sí, eliminar'))
 
-        await vi.waitFor(() => expect(mozosApi.delete).toHaveBeenCalledWith('mozo-luis'))
-        // Vuelve a la lista (el texto de los llamados solo está ahí) y Luis ya no figura.
-        expect(await screen.findByText('3 llamados hoy')).toBeInTheDocument()
-        expect(screen.queryByText('Mesas asignadas')).not.toBeInTheDocument()
-        expect(screen.queryByText('Luis')).not.toBeInTheDocument()
-      })
-
-      it('si eliminar falla muestra el error y sigue en el detalle', async () => {
-        mozosApi.delete.mockRejectedValue(new ApiError(409, 'Ese mozo tiene una cuenta'))
-        await abrirMozos()
-        fireEvent.click(screen.getByText('Luis'))
-        await screen.findByText('Mesas asignadas')
-
-        fireEvent.click(boton('⚙ Editar datos del mozo'))
-        fireEvent.click(boton('Eliminar mozo'))
-        fireEvent.click(boton('Sí, eliminar'))
-
-        expect(await screen.findByText('Ese mozo tiene una cuenta')).toBeInTheDocument()
-        expect(screen.getByText('Mesas asignadas')).toBeInTheDocument()
+        expect(screen.queryByRole('button', { name: 'Eliminar mozo' })).not.toBeInTheDocument()
+        expect(screen.getByText('Para que deje de trabajar acá, quitale el acceso desde Personal.')).toBeInTheDocument()
       })
 
       it('un GERENTE ve el detalle pero no edita los datos del mozo', async () => {

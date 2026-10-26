@@ -1,18 +1,25 @@
-import { clienteAuth, tokenDeAcceso } from '@menyu/auth-client'
 import type { Session } from '@supabase/supabase-js'
-import { decodificarPayloadJwt } from './jwt'
-import { borrarTokensDeCuenta, leerTokenDeCuenta } from './tokenCuenta'
+import { cargarAuthClient } from './authClientDiferido'
 import { urlDeAuth } from './urlDeAuth'
 
-// La cuenta opcional del cliente (docs/auth/specs/auth.md, Fase 4b). Hasta la Fase 5 conviven dos: la de Supabase, que
-// se abre en web-auth y vive en la cookie de dominio compartido, y la del login de `/auth` de esta app (su token en
-// localStorage). Si hay las dos, vale la de Supabase. Ninguna es obligatoria: sin cuenta, el QR y el PIN entran como
-// invitado. Esta app no monta RequireAuth: su sesión de mesa no es una cuenta.
+// La cuenta opcional del cliente (docs/auth/specs/auth.md, Fase 4b): se abre en web-auth y vive en la cookie de dominio
+// compartido. No es obligatoria: sin cuenta, el QR y el PIN entran como invitado. Esta app no monta RequireAuth, porque
+// su sesión de mesa no es una cuenta. La Fase 5 retiró el login propio de `/auth`, que convivía con esta.
+
+/** Claves del token del login de `/auth`, que ya no existe. Se borran una vez para no dejar basura en el navegador. */
+const CLAVES_DEL_LOGIN_ANTERIOR = ['menyu_access_token', 'menyu_refresh_token']
+
+export function olvidarElLoginAnterior(): void {
+  try {
+    for (const clave of CLAVES_DEL_LOGIN_ANTERIOR) localStorage.removeItem(clave)
+  } catch {
+    // Sin localStorage (modo privado, cookies bloqueadas) no hay nada que limpiar.
+  }
+}
 
 export interface Cuenta {
   nombre: string
   email: string
-  origen: 'supabase' | 'anterior'
 }
 
 /**
@@ -33,42 +40,34 @@ export function cuentaDeSesion(session: Session): Cuenta {
     nombreParaSaludo(metadatos['full_name']) ??
     nombreParaSaludo(metadatos['name']) ??
     (email || 'Cliente')
-  return { nombre, email, origen: 'supabase' }
-}
-
-/** La del login de `/auth`: un token de cliente, sin vencer y con nombre. Si no, null. */
-export function cuentaDelLoginAnterior(): Cuenta | null {
-  const token = leerTokenDeCuenta()
-  if (!token) return null
-  const payload = decodificarPayloadJwt(token)
-  const nombre = nombreParaSaludo(payload?.['nombre'])
-  if (!nombre) return null
-  const email = payload?.['email']
-  return { nombre, email: typeof email === 'string' ? email : '', origen: 'anterior' }
+  return { nombre, email }
 }
 
 /**
- * El token que va en `POST /sessions/open` para que la mesa quede a nombre de la cuenta: el de Supabase si hay sesión (el
- * backend reconoce cada uno por cómo está firmado) y, si no, el del login anterior. Sin cuenta, undefined: entra como
- * invitado.
+ * El token que va en `POST /sessions/open` para que la mesa quede a nombre de la cuenta. Sin cuenta, undefined: entra
+ * como invitado.
+ *
+ * Sin cookie de sesión no carga supabase-js: abrir la mesa por QR o PIN es lo primero que hace quien se sienta, y no
+ * tiene que esperar un chunk que no le sirve.
  */
 export async function tokenParaAbrirMesa(): Promise<string | undefined> {
+  if (!puedeHaberSesion()) return undefined
   try {
-    const token = await tokenDeAcceso()
-    if (token) return token
+    const { tokenDeAcceso } = await cargarAuthClient()
+    return (await tokenDeAcceso()) ?? undefined
   } catch {
-    // Un deploy sin las variables de Supabase, o una cookie ilegible: no hay cuenta de Supabase.
+    // Un deploy sin las variables de Supabase, o una cookie ilegible: no hay cuenta.
+    return undefined
   }
-  return leerTokenDeCuenta()
 }
 
 /**
- * Cierra las dos cuentas y la persona se queda en esta app (a diferencia de `logout()` del paquete, que va a web-auth).
- * La de Supabase se cierra en todas las apps de MenYU: la cookie es de dominio compartido.
+ * Cierra la cuenta y la persona se queda en esta app (a diferencia de `logout()` del paquete, que va a web-auth).
+ * Se cierra en todas las apps de MenYU: la cookie es de dominio compartido.
  */
 export async function cerrarSesionDeLaCuenta(): Promise<void> {
-  borrarTokensDeCuenta()
   try {
+    const { clienteAuth } = await cargarAuthClient()
     await clienteAuth().auth.signOut({ scope: 'local' })
   } catch {
     // supabase-js borra la sesión local aunque falle la llamada, y sin las variables de Supabase no había sesión.
@@ -86,8 +85,8 @@ export type AccionDeIngreso = 'ingresar' | 'crear'
 
 /**
  * Si esta app ve la sesión de web-auth: tiene las variables de Supabase y su host está bajo el dominio de la cookie
- * (`VITE_AUTH_COOKIE_DOMAIN`). En los dominios viejos de Vercel (`menyu-cliente*.vercel.app`, los de los QR impresos) no:
- * el navegador rechaza esa cookie y web-auth no vuelve a `vercel.app`, así que la persona terminaría en "sin acceso".
+ * (`VITE_AUTH_COOKIE_DOMAIN`). En los dominios viejos de Vercel (`menyu-cliente*.vercel.app`) no: el navegador rechaza
+ * esa cookie, así que ahí la cuenta no es posible y el QR y el PIN entran como invitado.
  */
 export function comparteLaSesionDeWebAuth(hostname: string = window.location.hostname): boolean {
   const env = import.meta.env
@@ -96,21 +95,22 @@ export function comparteLaSesionDeWebAuth(hostname: string = window.location.hos
   return hostname === dominio || hostname.endsWith(`.${dominio}`)
 }
 
-export type DestinoDeIngreso = { tipo: 'web-auth'; url: string } | { tipo: 'login-anterior'; ruta: string }
+/**
+ * Si el navegador tiene la cookie de sesión de Supabase. Sirve para no cargar supabase-js cuando no hay nada que leer,
+ * que es el caso de casi todo el que abre Discovery: sin cuenta, la pantalla no espera ningún chunk.
+ *
+ * `@supabase/ssr` la guarda como `sb-<ref>-auth-token`, y si es grande la parte en `…auth-token.0`, `.1`… El patrón es
+ * a propósito ancho: de más solo cuesta cargar el paquete y preguntarle (que es lo correcto); de menos se perdería una
+ * sesión de verdad. La cookie no es httpOnly (la setea el navegador), así que se puede leer desde acá.
+ */
+export function hayCookieDeSesion(cookies: string = document.cookie): boolean {
+  return /(?:^|;\s*)sb-[^=;]*auth-token/.test(cookies)
+}
 
 /**
- * A dónde llevan "Ingresar" y "Registrarme", con la vuelta a esta pantalla: a web-auth si esta app comparte su sesión y,
- * si no, al login de `/auth` de esta app, que sigue hasta la Fase 5.
+ * Si vale la pena cargar supabase-js: esta app comparte la sesión de web-auth y hay una cookie que leer. Lo usan los
+ * dos lugares que lo cargan (`tokenParaAbrirMesa` y `useSesionDiferida`), para que no puedan diferir.
  */
-export function destinoDeIngreso(
-  accion: AccionDeIngreso,
-  ubicacion: Pick<Location, 'href' | 'hostname' | 'pathname' | 'search'> = window.location,
-): DestinoDeIngreso {
-  if (comparteLaSesionDeWebAuth(ubicacion.hostname)) {
-    return { tipo: 'web-auth', url: urlDeIngreso(accion, ubicacion.href) }
-  }
-  const params = new URLSearchParams()
-  if (accion === 'crear') params.set('tab', 'register')
-  params.set('volver', `${ubicacion.pathname}${ubicacion.search}`)
-  return { tipo: 'login-anterior', ruta: `/auth?${params}` }
+export function puedeHaberSesion(): boolean {
+  return comparteLaSesionDeWebAuth() && hayCookieDeSesion()
 }
