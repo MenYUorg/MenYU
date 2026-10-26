@@ -9,6 +9,7 @@ import {
   cerrarSesionDeLaCuenta,
   comparteLaSesionDeWebAuth,
   cuentaDeSesion,
+  hayCookieDeSesion,
   nombreParaSaludo,
   olvidarElLoginAnterior,
   tokenParaAbrirMesa,
@@ -187,5 +188,25 @@ describe('comparteLaSesionDeWebAuth', () => {
     vi.stubEnv(variable, '')
 
     expect(comparteLaSesionDeWebAuth('mesa.menyu-app.com')).toBe(false)
+  })
+})
+
+describe('hayCookieDeSesion', () => {
+  it.each([
+    ['la cookie de @supabase/ssr', 'sb-proyecto-test-auth-token=eyJ...'],
+    ['partida en varias, como cuando es grande', 'sb-proyecto-test-auth-token.0=eyJ...; sb-proyecto-test-auth-token.1=abc'],
+    ['con otras cookies antes', 'otra=1; sb-abc-auth-token=eyJ...'],
+    ['con espacios de más', 'otra=1;   sb-abc-auth-token=eyJ...'],
+  ])('%s: sí', (_caso, cookies) => {
+    expect(hayCookieDeSesion(cookies)).toBe(true)
+  })
+
+  it.each([
+    ['sin cookies', ''],
+    ['otras cookies', 'preferencia=oscuro; _ga=GA1.1.123'],
+    // Que no sea el principio de un nombre de cookie: así no se confunde con el valor de otra.
+    ['nombrada dentro del valor de otra', 'otra=sb-abc-auth-token'],
+  ])('%s: no', (_caso, cookies) => {
+    expect(hayCookieDeSesion(cookies)).toBe(false)
   })
 })

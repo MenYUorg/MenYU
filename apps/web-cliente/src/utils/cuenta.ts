@@ -1,5 +1,5 @@
-import { clienteAuth, tokenDeAcceso } from '@menyu/auth-client'
 import type { Session } from '@supabase/supabase-js'
+import { cargarAuthClient } from './authClientDiferido'
 import { urlDeAuth } from './urlDeAuth'
 
 // La cuenta opcional del cliente (docs/auth/specs/auth.md, Fase 4b): se abre en web-auth y vive en la cookie de dominio
@@ -48,7 +48,9 @@ export function cuentaDeSesion(session: Session): Cuenta {
  * como invitado.
  */
 export async function tokenParaAbrirMesa(): Promise<string | undefined> {
+  if (!comparteLaSesionDeWebAuth()) return undefined
   try {
+    const { tokenDeAcceso } = await cargarAuthClient()
     return (await tokenDeAcceso()) ?? undefined
   } catch {
     // Un deploy sin las variables de Supabase, o una cookie ilegible: no hay cuenta.
@@ -62,6 +64,7 @@ export async function tokenParaAbrirMesa(): Promise<string | undefined> {
  */
 export async function cerrarSesionDeLaCuenta(): Promise<void> {
   try {
+    const { clienteAuth } = await cargarAuthClient()
     await clienteAuth().auth.signOut({ scope: 'local' })
   } catch {
     // supabase-js borra la sesión local aunque falle la llamada, y sin las variables de Supabase no había sesión.
@@ -87,4 +90,16 @@ export function comparteLaSesionDeWebAuth(hostname: string = window.location.hos
   const dominio = env.VITE_AUTH_COOKIE_DOMAIN?.replace(/^\./, '')
   if (!env.VITE_SUPABASE_URL || !env.VITE_SUPABASE_PUBLISHABLE_KEY || !dominio) return false
   return hostname === dominio || hostname.endsWith(`.${dominio}`)
+}
+
+/**
+ * Si el navegador tiene la cookie de sesión de Supabase. Sirve para no cargar supabase-js cuando no hay nada que leer,
+ * que es el caso de casi todo el que abre Discovery: sin cuenta, la pantalla no espera ningún chunk.
+ *
+ * `@supabase/ssr` la guarda como `sb-<ref>-auth-token`, y si es grande la parte en `…auth-token.0`, `.1`… El patrón es
+ * a propósito ancho: de más solo cuesta cargar el paquete y preguntarle (que es lo correcto); de menos se perdería una
+ * sesión de verdad. La cookie no es httpOnly (la setea el navegador), así que se puede leer desde acá.
+ */
+export function hayCookieDeSesion(cookies: string = document.cookie): boolean {
+  return /(?:^|;\s*)sb-[^=;]*auth-token/.test(cookies)
 }

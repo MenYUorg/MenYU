@@ -394,7 +394,7 @@ describe('CartaPage (la carta en modo vista)', () => {
         renderCarta()
         await cargada()
 
-        expect(screen.getByText('¡Hola, Ana Gómez!')).toBeInTheDocument()
+        expect(await screen.findByText('¡Hola, Ana Gómez!')).toBeInTheDocument()
         expect(screen.queryByRole('button', { name: 'Iniciar sesión' })).not.toBeInTheDocument()
         expect(screen.queryByRole('button', { name: 'Crear cuenta gratis' })).not.toBeInTheDocument()
         expect(screen.queryByText('Mis puntos')).not.toBeInTheDocument()
@@ -405,7 +405,7 @@ describe('CartaPage (la carta en modo vista)', () => {
         await cargada()
         abrirMenuLateral()
 
-        expect(screen.getByRole('button', { name: 'Cerrar sesión' })).toBeInTheDocument()
+        expect(await screen.findByRole('button', { name: 'Cerrar sesión' })).toBeInTheDocument()
         expect(api.orders.list).not.toHaveBeenCalled()
       })
 
@@ -414,9 +414,10 @@ describe('CartaPage (la carta en modo vista)', () => {
         await cargada()
         abrirMenuLateral()
 
+        const cerrar = await screen.findByRole('button', { name: 'Cerrar sesión' })
         // Cerrar la cuenta es asíncrono (habla con Supabase): act espera a que termine.
         await act(async () => {
-          fireEvent.click(screen.getByRole('button', { name: 'Cerrar sesión' }))
+          fireEvent.click(cerrar)
         })
 
         expect(signOutSimulado).toHaveBeenCalledWith({ scope: 'local' })
@@ -434,7 +435,7 @@ describe('CartaPage (la carta en modo vista)', () => {
         await esperar()
 
         expect(screen.queryByRole('button', { name: 'Cerrar sesión' })).not.toBeInTheDocument()
-        expect(screen.getByText('¡Hola, Ana Gómez!')).toBeInTheDocument()
+        expect(await screen.findByText('¡Hola, Ana Gómez!')).toBeInTheDocument()
       })
     })
 

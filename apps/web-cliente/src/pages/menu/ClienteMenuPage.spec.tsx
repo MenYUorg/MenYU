@@ -7,7 +7,7 @@ import { useCarritoStore } from '../../store/carritoStore'
 import { usePublicMenuStore } from '../../store/publicMenuStore'
 import { useSessionStore } from '../../store/sessionStore'
 import { crearMenu, crearPlato, crearPlatoEnDescuento } from '../../test/fixtures'
-import { compartirLaSesionDeWebAuth, cuentaDePrueba, sesionDeSupabase } from '../../test/authClient'
+import { compartirLaSesionDeWebAuth, cuentaDePrueba, sesionDeSupabase, signOutSimulado } from '../../test/authClient'
 import { irA } from '../../utils/navegar'
 import { ClienteMenuPage } from './ClienteMenuPage'
 
@@ -326,10 +326,10 @@ describe('ClienteMenuPage', () => {
         const cerrarSesion = () => screen.queryByRole('button', { name: 'Cerrar sesión' })
         const esperar = () => act(async () => { await new Promise((r) => setTimeout(r, 20)) })
 
-        it('muestra el saludo con el nombre completo y el email, en lugar de iniciar sesión o crear una cuenta', () => {
+        it('muestra el saludo con el nombre completo y el email, en lugar de iniciar sesión o crear una cuenta', async () => {
           renderMenu(menuCompleto())
 
-          expect(screen.getByText('¡Hola, Ana Gómez!')).toBeInTheDocument()
+          expect(await screen.findByText('¡Hola, Ana Gómez!')).toBeInTheDocument()
           expect(screen.getByText('ana@mail.com')).toBeInTheDocument()
           expect(screen.getByText('Mis puntos')).toBeInTheDocument()
           expect(screen.queryByRole('button', { name: 'Iniciar sesión' })).not.toBeInTheDocument()
@@ -338,6 +338,7 @@ describe('ClienteMenuPage', () => {
 
         it('si la mesa todavía no pidió nada ofrece "Cerrar sesión", que borra la sesión de cliente', async () => {
           renderMenu(menuCompleto())
+          await screen.findByText('¡Hola, Ana Gómez!')
           abrirMenu()
 
           const cerrar = await screen.findByRole('button', { name: 'Cerrar sesión' })
@@ -347,14 +348,14 @@ describe('ClienteMenuPage', () => {
           })
 
           expect(api.orders.list).toHaveBeenCalledWith('jwt')
-          expect(localStorage.getItem('menyu_access_token')).toBeNull()
-          expect(localStorage.getItem('menyu_refresh_token')).toBeNull()
+          expect(signOutSimulado).toHaveBeenCalledWith({ scope: 'local' })
           expect(screen.getByRole('button', { name: 'Iniciar sesión' })).toBeInTheDocument()
         })
 
         it('si la mesa ya pidió algo no ofrece "Cerrar sesión" (y el saludo sigue)', async () => {
           vi.mocked(api.orders.list).mockResolvedValue([{ id: 'p1', estado: 'en_preparacion' }])
           renderMenu(menuCompleto())
+          await screen.findByText('¡Hola, Ana Gómez!')
           abrirMenu()
           await esperar()
 
@@ -366,6 +367,7 @@ describe('ClienteMenuPage', () => {
         it('si lo único que pidió la mesa fue anulado, sí ofrece "Cerrar sesión"', async () => {
           vi.mocked(api.orders.list).mockResolvedValue([{ id: 'p1', estado: 'anulado' }])
           renderMenu(menuCompleto())
+          await screen.findByText('¡Hola, Ana Gómez!')
           abrirMenu()
 
           expect(await screen.findByRole('button', { name: 'Cerrar sesión' })).toBeInTheDocument()
@@ -374,6 +376,7 @@ describe('ClienteMenuPage', () => {
         it('si no se puede saber si la mesa pidió algo, no lo ofrece', async () => {
           vi.mocked(api.orders.list).mockRejectedValue(new Error('sin conexión'))
           renderMenu(menuCompleto())
+          await screen.findByText('¡Hola, Ana Gómez!')
           abrirMenu()
           await esperar()
 
@@ -383,6 +386,7 @@ describe('ClienteMenuPage', () => {
         it('mientras se averigua tampoco se ofrece (para que no aparezca y desaparezca)', async () => {
           vi.mocked(api.orders.list).mockReturnValue(new Promise(() => {}))
           renderMenu(menuCompleto())
+          await screen.findByText('¡Hola, Ana Gómez!')
           abrirMenu()
           await esperar()
 
@@ -455,12 +459,12 @@ describe('ClienteMenuPage', () => {
   describe('saludo del menú lateral', () => {
     afterEach(() => localStorage.clear())
 
-    it('saluda por el nombre completo del cliente con sesión, con los acentos y la Ñ bien', () => {
+    it('saluda por el nombre completo del cliente con sesión, con los acentos y la Ñ bien', async () => {
       cuentaDePrueba.session = sesionDeSupabase({ nombre: 'Ñandú Gómez' })
 
       renderMenu(menuCompleto())
 
-      expect(screen.getByText('¡Hola, Ñandú Gómez!')).toBeInTheDocument()
+      expect(await screen.findByText('¡Hola, Ñandú Gómez!')).toBeInTheDocument()
     })
 
     it('sin sesión de cliente no hay saludo', () => {

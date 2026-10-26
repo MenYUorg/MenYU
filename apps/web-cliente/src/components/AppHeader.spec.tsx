@@ -79,70 +79,70 @@ describe('AppHeader', () => {
   })
 
   describe('con sesión iniciada', () => {
-    it('saluda por el nombre y ofrece cerrar sesión en lugar de Ingresar y Registrarme', () => {
+    it('saluda por el nombre y ofrece cerrar sesión en lugar de Ingresar y Registrarme', async () => {
       iniciarSesion('Marina')
 
       renderHeader()
 
-      expect(screen.getByText('Hola, Marina')).toBeInTheDocument()
+      expect(await screen.findByText('Hola, Marina')).toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'Cerrar sesión' })).toBeInTheDocument()
       expect(screen.queryByRole('button', { name: 'Ingresar' })).not.toBeInTheDocument()
       expect(screen.queryByRole('button', { name: 'Registrarme' })).not.toBeInTheDocument()
     })
 
-    it('un nombre con apellido en el mismo campo se muestra entero: no se adivina cuál es el apellido', () => {
+    it('un nombre con apellido en el mismo campo se muestra entero: no se adivina cuál es el apellido', async () => {
       iniciarSesion('Marina González')
 
       renderHeader()
 
-      expect(screen.getByText('Hola, Marina González')).toBeInTheDocument()
+      expect(await screen.findByText('Hola, Marina González')).toBeInTheDocument()
     })
 
-    it('un nombre largo se muestra entero', () => {
+    it('un nombre largo se muestra entero', async () => {
       iniciarSesion('Marina González de la Fuente')
 
       renderHeader()
 
-      expect(screen.getByText('Hola, Marina González de la Fuente')).toBeInTheDocument()
+      expect(await screen.findByText('Hola, Marina González de la Fuente')).toBeInTheDocument()
     })
 
-    it('los acentos y la Ñ salen bien', () => {
+    it('los acentos y la Ñ salen bien', async () => {
       iniciarSesion('Ñandú Gómez')
 
       renderHeader()
 
-      expect(screen.getByText('Hola, Ñandú Gómez')).toBeInTheDocument()
+      expect(await screen.findByText('Hola, Ñandú Gómez')).toBeInTheDocument()
     })
 
-    it('se emprolijan los espacios de más', () => {
+    it('se emprolijan los espacios de más', async () => {
       iniciarSesion('  Marina    González ')
 
       renderHeader()
 
       // Testing Library ya ignora los espacios de más al buscar texto: se compara el texto tal cual.
-      expect(screen.getByText(/^Hola, /).textContent).toBe('Hola, Marina González')
+      expect((await screen.findByText(/^Hola, /)).textContent).toBe('Hola, Marina González')
     })
 
-    it('el nombre nunca se corta con "..." (se parte en líneas)', () => {
+    it('el nombre nunca se corta con "..." (se parte en líneas)', async () => {
       iniciarSesion('Superlargonombredeusuariosinespaciosparaprobarelcorte')
 
       renderHeader()
 
-      const saludo = screen.getByText(/^Hola, Superlargo/)
+      const saludo = await screen.findByText(/^Hola, Superlargo/)
       expect(saludo.style.textOverflow).toBe('')
       expect(saludo.style.whiteSpace).toBe('')
       expect(saludo.style.overflowWrap).toBe('anywhere')
     })
 
-    it('con Google, el nombre de Google; sin ninguno, el email', () => {
+    it('con Google, el nombre de Google; sin ninguno, el email', async () => {
       cuentaDePrueba.session = sesionDeSupabase({ metadatos: { full_name: 'Ana María Pérez', name: 'Ana' } })
       const { unmount } = renderHeader()
-      expect(screen.getByText('Hola, Ana María Pérez')).toBeInTheDocument()
+      expect(await screen.findByText('Hola, Ana María Pérez')).toBeInTheDocument()
       unmount()
 
       cuentaDePrueba.session = sesionDeSupabase({ email: 'ana@gmail.com', metadatos: {} })
       renderHeader()
-      expect(screen.getByText('Hola, ana@gmail.com')).toBeInTheDocument()
+      expect(await screen.findByText('Hola, ana@gmail.com')).toBeInTheDocument()
     })
 
     it('mientras se lee la sesión no muestra "Ingresar" (no parpadea a quien ya entró) ni el saludo', () => {
@@ -158,8 +158,9 @@ describe('AppHeader', () => {
       iniciarSesion('Ana')
 
       renderHeader()
+      const cerrar = await screen.findByRole('button', { name: 'Cerrar sesión' })
       await act(async () => {
-        fireEvent.click(screen.getByRole('button', { name: 'Cerrar sesión' }))
+        fireEvent.click(cerrar)
       })
 
       expect(signOutSimulado).toHaveBeenCalledWith({ scope: 'local' })

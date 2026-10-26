@@ -20,12 +20,25 @@ function avisar(): void {
 
 const estado: { session: Session | null; cargando: boolean } = { session: null, cargando: false }
 
+/**
+ * La cookie que `@supabase/ssr` deja en el navegador. `useSesionDiferida` la mira para no cargar supabase-js cuando no
+ * hay nada que leer, así que simular una sesión tiene que dejarla puesta, como en la app de verdad.
+ */
+const COOKIE_DE_SESION = 'sb-proyecto-test-auth-token'
+
+function escribirCookieDeSesion(hay: boolean): void {
+  document.cookie = hay
+    ? `${COOKIE_DE_SESION}=simulada; path=/`
+    : `${COOKIE_DE_SESION}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`
+}
+
 export const cuentaDePrueba = {
   get session() {
     return estado.session
   },
   set session(valor: Session | null) {
     estado.session = valor
+    escribirCookieDeSesion(valor !== null)
     avisar()
   },
   get cargando() {
@@ -33,6 +46,8 @@ export const cuentaDePrueba = {
   },
   set cargando(valor: boolean) {
     estado.cargando = valor
+    // Mientras "se lee la sesión" hay cookie: si no, la app no cargaría el paquete y nunca estaría cargando.
+    if (valor) escribirCookieDeSesion(true)
     avisar()
   },
 }
@@ -44,11 +59,27 @@ export const signOutSimulado = vi.fn(async () => {
 
 export const tokenDeAccesoSimulado = vi.fn(async (): Promise<string | null> => cuentaDePrueba.session?.access_token ?? null)
 
-export const clienteAuthSimulado = vi.fn(() => ({ auth: { signOut: signOutSimulado } }))
+/**
+ * El `auth` del cliente de Supabase, con lo que usa `useSesionDiferida`: leer la sesión, escuchar los cambios y
+ * cerrarla. `onAuthStateChange` se engancha a los mismos suscriptores, así que asignarle una sesión a
+ * `cuentaDePrueba` llega al hook igual que un evento de Supabase.
+ */
+export const clienteAuthSimulado = vi.fn(() => ({
+  auth: {
+    getSession: async () => ({ data: { session: estado.session }, error: null }),
+    onAuthStateChange: (alCambiar: (evento: string, session: Session | null) => void) => {
+      const suscriptor = () => alCambiar('TOKEN_REFRESHED', estado.session)
+      suscriptores.add(suscriptor)
+      return { data: { subscription: { unsubscribe: () => suscriptores.delete(suscriptor) } } }
+    },
+    signOut: signOutSimulado,
+  },
+}))
 
 export function reiniciarCuentaDePrueba(): void {
   estado.session = null
   estado.cargando = false
+  escribirCookieDeSesion(false)
   suscriptores.clear()
   signOutSimulado.mockReset()
   tokenDeAccesoSimulado.mockReset()

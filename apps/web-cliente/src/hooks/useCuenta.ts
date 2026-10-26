@@ -1,6 +1,6 @@
-import { useSession } from '@menyu/auth-client'
 import { useCallback } from 'react'
 import { cerrarSesionDeLaCuenta, cuentaDeSesion, type Cuenta } from '../utils/cuenta'
+import { useSesionDiferida } from './useSesionDiferida'
 
 export interface EstadoCuenta {
   /** Todavía no se sabe si hay sesión de Supabase. */
@@ -12,10 +12,11 @@ export interface EstadoCuenta {
 
 /**
  * La cuenta del cliente que inició sesión en este navegador, si hay (utils/cuenta.ts). La sesión se actualiza sola,
- * también con lo que pasa en otra app de MenYU al volver a la pestaña: de eso se encarga `useSession`.
+ * también con lo que pasa en otra app de MenYU al volver a la pestaña: de eso se encarga `useSesionDiferida`, que trae
+ * supabase-js recién cuando hace falta.
  */
 export function useCuenta(): EstadoCuenta {
-  const sesion = useSession()
+  const sesion = useSesionDiferida()
   const cuenta = sesion.tipo === 'con-sesion' ? cuentaDeSesion(sesion.session) : null
 
   const cerrarSesion = useCallback(() => cerrarSesionDeLaCuenta(), [])
