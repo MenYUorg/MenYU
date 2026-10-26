@@ -1,5 +1,11 @@
 # Integración Mercado Pago — MenYu
 
+> **Aviso (26/10/2026):** las secciones 1 a 12 son de junio de 2026 (`35bc855`) y varias ya no coinciden con el código. Por ejemplo:
+> - los endpoints actuales son `POST /api/payments/mercadopago/crear-preferencia`, `POST /api/payments/webhook/mercadopago/restaurante/:restauranteId/pago/:pagoId` y `GET /api/payments/mercadopago/oauth/conectar` y `/callback`, no `/initiate`, `/webhook`, `/connect` ni `/callback`;
+> - el webhook ya no busca el pago por `referenciaExterna`: usa el `pagoId` de la ruta.
+>
+> Las variables de entorno (sección 7) y el caso de Mercado Pago caído (sección 13) están al día con `main` (`3a8300b`).
+
 ## Índice
 
 1. [Arquitectura general](#arquitectura-general)
@@ -14,6 +20,7 @@
 10. [Configuración Sandbox](#configuración-sandbox)
 11. [Estados de pago](#estados-de-pago)
 12. [Bugs conocidos y diagnóstico](#bugs-conocidos-y-diagnóstico)
+13. [Si Mercado Pago está caído](#si-mercado-pago-está-caído)
 
 ---
 
@@ -272,29 +279,18 @@ Base path: `/api/payments`
 
 ## Variables de entorno
 
-```env
-# Credenciales de la app plataforma (MenYu)
-MP_CLIENT_ID=...
-MP_CLIENT_SECRET=...
-MP_ACCESS_TOKEN=...          # token de plataforma (no del seller)
+Todas son del backend. Los frontends no tienen variables de Mercado Pago. Detalle y valores por entorno: `apps/backend/.env.example:47-80`.
 
-# OAuth callback
-MP_REDIRECT_URI=https://api.menyu.com/api/payments/callback
+| Variable | Para qué | Dónde se usa |
+|---|---|---|
+| `MP_ENCRYPTION_KEY` | Clave AES-256-GCM para cifrar los tokens OAuth de cada restaurante | `apps/backend/src/common/crypto.service.ts:14` |
+| `MP_CLIENT_ID` | Credencial de la app de Mercado Pago (OAuth) | `apps/backend/src/payments/mercado-pago-oauth.service.ts:30` y `:46` |
+| `MP_CLIENT_SECRET` | Credencial de la app de Mercado Pago (OAuth) | `mercado-pago-oauth.service.ts:47` |
+| `BASE_URL` | URL pública del backend con `/api`: arma el `redirect_uri` del OAuth y el `notification_url` del webhook | `mercado-pago-oauth.service.ts:33` y `:50`; `apps/backend/src/payments/providers/mercado-pago.provider.ts:22` |
+| `FRONTEND_URL` | Web-cliente: `back_urls` de respaldo cuando el `Origin` falta o no está en la lista de CORS | `mercado-pago.provider.ts:25-27` |
+| `FRONTEND_ADMIN_URL` | Panel admin: a dónde vuelve después de conectar Mercado Pago | `apps/backend/src/payments/mercado-pago-oauth.controller.ts:30` |
 
-# Entorno
-MP_ENV=sandbox               # 'sandbox' | 'production'
-
-# URLs de retorno (fallback cuando returnBaseUrl no viene del frontend)
-MP_SUCCESS_URL=https://menyu-cliente.vercel.app/pago/exitoso
-MP_FAILURE_URL=https://menyu-cliente.vercel.app/pago/fallido
-MP_PENDING_URL=https://menyu-cliente.vercel.app/pago/pendiente
-
-# Webhook
-MP_WEBHOOK_URL=https://api.menyu.com/api/payments/webhook
-
-# Diagnóstico
-MP_MINIMAL_PREFERENCE=true   # 'true' omite back_urls/auto_return/notification_url
-```
+**Ya no existen en el código:** `MP_ACCESS_TOKEN`, `MP_WEBHOOK_SECRET`, `MP_WEBHOOK_URL`, `MP_SUCCESS_URL`, `MP_FAILURE_URL`, `MP_PENDING_URL`, `MP_REDIRECT_URI`, `MP_ENV` y `MP_MINIMAL_PREFERENCE` (`git grep` sobre `apps/*/src`, `packages`, `scripts` y `.github`, sin resultados). Lo que las secciones 2, 3, 5 y 10 dicen de ellas es histórico.
 
 ---
 
@@ -415,3 +411,52 @@ Vercel genera dos formatos de URL de preview:
 - Deployment: `menyu-cliente-<hash>-men-yu-s-projects.vercel.app`
 
 Ambos formatos están cubiertos por el regex actual. Si aparece un nuevo formato, agregar un regex a `ALLOWED_ORIGINS` en `payments.service.ts`.
+
+---
+
+## Si Mercado Pago está caído
+
+Revisado el 26/10/2026 contra el código de `main` (`8b98247`; los archivos citados no cambiaron hasta `3a8300b`). Es una lectura del código: **no se probó** contra la sandbox ni contra producción. Lo mismo, en versión resumida, está en `docs/calidad/plan-de-pruebas.md`, sección 8.
+
+### Si falla la creación de la preferencia
+
+- **Sin timeout ni reintentos propios:** `new MercadoPagoConfig({ accessToken })` va sin `options` (`apps/backend/src/payments/providers/mercado-pago.provider.ts:13-15`). Rigen los valores del SDK `mercadopago@3.2.0` (`pnpm-lock.yaml:3963`):
+  - **timeout:** 10.000 ms por intento (`dist/utils/config/index.js:53`);
+  - **intentos:** 2 en total, con 2 s de espera entre los dos (`dist/utils/config/index.js:55` y `dist/utils/restClient/index.js:65-80`);
+  - **cuándo reintenta:** con timeout, error de red o 5xx. Un 4xx no se reintenta;
+  - **peor caso calculado, no medido:** unos 22 s.
+- **El backend no deja un pago "fantasma":** si los dos intentos fallan, cancela el `Pago` pendiente que acababa de crear y relanza el error (`apps/backend/src/payments/payments.service.ts:363-376`).
+- **Qué ve el comensal:** no hay filtro de excepciones global, así que la respuesta sería un 500 `"Internal server error"` (deducido del comportamiento de Nest, no probado).
+  - El botón queda en "cargando" mientras el backend reintenta. Después muestra ese mensaje y se vuelve a habilitar (`apps/web-cliente/src/pages/pago/PagarPage.tsx:104-106`, `apps/web-cliente/src/pages/dividir/MensajePage.tsx:148-151`).
+  - Puede reintentar (cada intento cancela el pendiente anterior, `payments.service.ts:331-334`) o pedir efectivo.
+
+### Si un pago queda pendiente porque el webhook no llega
+
+- **No hay un proceso en segundo plano** que lo cancele: no hay `@Cron`, `@Interval` ni `ScheduleModule` en `apps/backend/src`.
+- **Se cancela cuando el personal registra el cobro** (`registrarCobro`, `apps/backend/src/sessions/sessions.service.ts:667-681`):
+  - **pendiente de más de 10 minutos** (`VENTANA_MP_PENDIENTE_MS`, `sessions.service.ts:38`): lo cancela sin preguntar;
+  - **más nuevo:** responde 409 y lo cancela si se repite con `confirmarCancelacionPagosPendientes: true`.
+    - web-staff lo maneja (`apps/web-staff/src/components/CobroModal.tsx:51-68`);
+    - web-admin no (`apps/web-admin/src/pages/admin/pagos/PagosPage.tsx:114-129`).
+- **Métodos de cobro del personal:** efectivo, débito, crédito, transferencia o Mercado Pago (`apps/backend/src/sessions/dto/registrar-cobro.dto.ts:3`).
+- **Otra salida, del lado del comensal:** puede pedir efectivo aunque tenga un MP pendiente (`payments.service.ts:124-199`). Cuando el mozo lo confirma y la mesa queda cubierta, se cancelan los pendientes (`payments.service.ts:291-297`).
+  - **Excepción:** con el restaurante o su marca dados de baja, pedir efectivo responde 403 (`payments.service.ts:149-151`) y solo queda Mercado Pago.
+
+### Si el webhook llega pero Mercado Pago no responde
+
+- El endpoint responde `200 OK` **antes** de procesar (`apps/backend/src/payments/payments.controller.ts:76`) y después consulta el pago a Mercado Pago (`payments.service.ts:419-420`).
+- Si esa consulta falla, el error solo va a `console.error` (`payments.controller.ts:77-81`). Mercado Pago no vuelve a avisar, porque ya recibió el 200.
+- El pago queda pendiente hasta que el personal cobre la mesa.
+
+### Riesgo de doble cobro
+
+- Si el personal cobra (y eso cancela el MP) y después Mercado Pago aprueba ese pago, el webhook no cambia nada. Solo deja un warning: "MP informó aprobado para un pago cancelado; devolución manual pendiente" (`payments.service.ts:460-472`).
+- No hay aviso en ninguna pantalla: la devolución se hace a mano desde Mercado Pago.
+
+### Limitaciones conocidas (quedan para la tesis)
+
+1. **El mensaje que ve el comensal** no distingue una falla de Mercado Pago de cualquier otro error del servidor.
+2. **El panel de administración (web-admin)** no maneja el 409 del pago reciente pendiente: solo lo hace el panel de mozo (web-staff).
+3. **No hay aviso ni conciliación automática** para un pago aprobado por Mercado Pago después de haber sido cancelado por el personal.
+
+Además, como dice la sección 8 del plan de pruebas (corregida en el PR #440), un webhook cuya consulta a Mercado Pago falla deja el pago pendiente sin reintento.
