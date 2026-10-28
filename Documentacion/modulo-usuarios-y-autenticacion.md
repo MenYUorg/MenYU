@@ -4,6 +4,8 @@
 **Equipo:** De Marcos · Ojeda · Strumia Carrara  
 **Fecha:** Abril 2026
 
+> **Documento histórico (abril de 2026): describe el login propio de MenYU, que ya no existe.** Los endpoints `/auth/login`, `/register`, `/guest`, `/refresh` y `/logout`, las contraseñas con bcrypt, los refresh tokens propios, la tabla `Admin` y los guards de tipo y de rol de este documento los reemplazó la migración a Supabase Auth, y su Fase 5 los borró (2026-10-26). Las pantallas de `apps/cliente/` tampoco existen: el comensal usa web-cliente. Se lee como el registro de ese sprint, no como referencia. **Cómo funciona hoy:** la sección "Autenticación con Supabase" de `CLAUDE.md` y [`docs/auth/specs/auth.md`](../docs/auth/specs/auth.md); la API, en [`doc.md`](../doc.md).
+
 ---
 
 ## Índice
@@ -172,7 +174,7 @@ createCliente(data)
 
 *Pendiente de proteger antes de producción.
 
-`/auth/me` y `/auth/invitaciones` ya usan Supabase Auth (Fase 2 de `docs/auth/specs/auth.md`): `SupabaseAuthGuard`, `@RequiereRol` y `MembresiaGuard`, en `src/auth/guards/` y `src/auth/supabase/`. El resto de esta sección describe el login legacy, que sigue activo hasta la Fase 5.
+`/auth/me` y `/auth/invitaciones` ya usan Supabase Auth (Fase 2 de `docs/auth/specs/auth.md`): `SupabaseAuthGuard`, `@RequiereRol` y `MembresiaGuard`, en `src/auth/guards/` y `src/auth/supabase/`. El resto de esta sección describe el login legacy, que la Fase 5 borró (2026-10-26).
 
 **Endpoints de desarrollo:** no hay. Los `/api/auth/dev/*` (seed, admin, mozo y root) se eliminaron porque creaban usuarios, incluido un ROOT con contraseña conocida, sin autenticación. Para tener datos y usuarios en local se usa el seed (`pnpm --filter @menyu/api seed`).
 

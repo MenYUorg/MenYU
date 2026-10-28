@@ -4,7 +4,6 @@
       "Bash(pnpm --filter @menyu/web-cliente dev)",
       "Bash(curl -s http://localhost:5176)",
       "Bash(curl -s http://localhost:3000/api/tables?restauranteId=f3c59e02-af6b-467e-aa97-29b82b20f07d -H 'Authorization: Bearer dummy')",
-      "Bash(node verify-carrito.mjs)",
       "Bash(npx playwright *)",
       "Bash(ls node_modules/playwright)",
       "Bash(ls node_modules/@playwright)",

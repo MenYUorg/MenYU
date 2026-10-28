@@ -6,6 +6,8 @@
 **Equipo:** De Marcos · Ojeda · Strumia Carrara  
 **Última actualización:** Sprint 1 — 2026
 
+> **Documento histórico: el diseño del schema del Sprint 1 (v1.0).** Después solo se le sumaron los logos (Discovery, 2026-10-15); no sigue al schema real, que es `apps/backend/prisma/schema.prisma`. En particular, **la tabla `admin` (sección 3.2) y las contraseñas ya no existen**: la Fase 5 de [`docs/auth/specs/auth.md`](../docs/auth/specs/auth.md) (2026-10-26) borró las tablas del login propio (`admin`, la que lo asignaba a restaurantes y la de los refresh tokens) y las contraseñas de `mozo` y `cliente`. Las personas del sistema son `usuario` (con su cuenta en Supabase Auth) y `membresia` (el rol en una marca o un restaurante), y `cliente` se vincula a su cuenta por `supabase_user_id`.
+
 ---
 
 ## Índice
@@ -91,6 +93,8 @@ Representa cada sucursal física de una marca. Es el punto de partida de toda co
 ---
 
 ### 3.2 Usuarios del sistema
+
+> Histórico (Sprint 1): `admin` ya no existe. Hoy son `usuario` y `membresia` (ver el encabezado del documento).
 
 #### `admin`
 

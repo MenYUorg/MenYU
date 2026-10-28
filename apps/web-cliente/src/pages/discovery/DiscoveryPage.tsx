@@ -12,7 +12,7 @@ import { TarjetaRestaurante } from '../../components/discovery/TarjetaRestaurant
 import { useEntrarAMesa } from '../../hooks/useEntrarAMesa'
 import { cantidadDeCaracteres, MIN_CARACTERES_BUSQUEDA, useDiscoveryStore } from '../../store/discoveryStore'
 import { C } from '../../theme'
-import { extractQrToken } from '../../utils/qr'
+import { leerQrDeMesa } from '../../utils/qr'
 
 // Lo que se espera después de la última letra antes de buscar.
 const ESPERA_BUSQUEDA_MS = 300
@@ -73,7 +73,8 @@ export function DiscoveryPage() {
 
   const alLeerElQr = (leido: string) => {
     setEscaneando(false)
-    void entrar({ qrToken: extractQrToken(leido) })
+    // El QR de la mesa es el link del check-in: con su restaurante, el servidor comprueba que la mesa sea de ese restaurante.
+    void entrar(leerQrDeMesa(leido))
   }
 
   // Sin restaurante elegido el PIN no sirve todavía: se vuelve a la lista para elegirlo.

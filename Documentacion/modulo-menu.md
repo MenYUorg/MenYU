@@ -4,6 +4,8 @@
 **Equipo:** De Marcos · Ojeda · Strumia Carrara  
 **Fecha:** Mayo 2026
 
+> **Documento histórico (mayo de 2026).** Registra lo que se construyó en esos sprints. Lo que dice de la autenticación ya no vale: el panel `apps/admin/` con su login (`POST /auth/login`, el JWT en `localStorage`), `RolesGuard` con `@Roles('ROOT', 'OWNER')` y el acceso libre de ROOT. Hoy el panel es `apps/web-admin`, sin login propio (lee la sesión de Supabase que deja web-auth), los permisos de la carta son de OWNER y GERENTE con `AccesoService` y ROOT recibe 403: ver la sección "Autenticación con Supabase" de `CLAUDE.md` y [`doc.md`](../doc.md).
+
 ---
 
 ## Índice

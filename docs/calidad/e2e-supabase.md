@@ -70,7 +70,7 @@ En PL/pgSQL, en un schema propio, `e2e`, y no en `public`: Supabase da `EXECUTE`
   - `pago`, `llamado_mozo` y `asignacion_mesa`;
   - `comensal`, `sesion_mesa_cliente` y `sesion_mesa`;
   - `mozo_mesa`;
-  - los clientes invitados de esas sesiones (sin email, contraseña ni cuenta de Supabase) que ya no aparecen en nada más;
+  - los clientes invitados de esas sesiones (sin email ni cuenta de Supabase) que ya no aparecen en nada más;
   - la mesa.
 
   Devuelve cuántas filas borró de cada tabla. Si al final queda algo de la corrida, falla y no borra nada. Si no encuentra la mesa, no borra nada. Un cliente con cuenta que haya entrado a la mesa no se borra.
@@ -146,7 +146,7 @@ La URL y la clave de Supabase son variables del repo y no se leen de Vercel: en 
 | `LOGIN`, nada más (`NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS`), `CONNECTION LIMIT 3`, `statement_timeout = 15s` | El rol |
 | `USAGE` | Los schemas `public` y `e2e` |
 | `SELECT` (tabla completa) | `mesa`, `sesion_mesa`, `sesion_mesa_cliente`, `pedido`, `pedido_item` y `pago` |
-| `SELECT` (solo columnas) | `cliente`: `id`, `nombre` y `created_at`. No el email, el teléfono, el `password_hash` ni el `supabase_user_id` de los clientes reales |
+| `SELECT` (solo columnas) | `cliente`: `id`, `nombre` y `created_at`. No el email, el teléfono ni el `supabase_user_id` de los clientes reales |
 | `EXECUTE` | `e2e.e2e_preparar(text, text)` y `e2e.e2e_limpiar(text)` |
 | **Ninguno** | `INSERT`, `UPDATE` o `DELETE` en cualquier tabla; cualquier otra tabla (`usuario`, `membresia`, `restaurante`, `mozo`…); `CREATE` en cualquier schema |
 

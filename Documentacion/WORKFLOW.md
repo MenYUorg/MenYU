@@ -44,8 +44,8 @@ El repositorio tiene una única rama protegida: `main`.
    git push origin feat/nombre-corto
 
 3. Abrir Pull Request → main en GitHub
-   → Vercel genera una Preview URL automática para revisar el cambio visualmente
    → ci.yml se dispara automáticamente
+   → Vercel no construye la rama: no hay Preview URL por PR (ver "Ambientes")
 
 4. CI pasa en verde → mergear el PR
    → deploy-staging.yml se dispara
@@ -64,7 +64,7 @@ El repositorio tiene una única rama protegida: `main`.
 
 ## 3. Pipelines de GitHub Actions
 
-El repositorio tiene 3 workflows en `.github/workflows/`:
+El repositorio tiene 5 workflows en `.github/workflows/`: `ci.yml`, `deploy-staging.yml`, `deploy-production.yml`, `e2e-staging.yml` y `carga-k6.yml`.
 
 ### `ci.yml` — Integración continua
 **Trigger:** Pull Request hacia `main`
@@ -89,8 +89,9 @@ Si cualquier paso falla, el merge queda bloqueado.
 
 1. Corre los mismos checks que CI
 2. Despliega el backend a **Railway staging**
-3. Hace un deploy *preview* con la CLI en los proyectos de Vercel originales (`menyu-cliente`, `menyu-admin` y `menyu-staff`): no toca producción y es el que usa el smoke
+3. Hace un deploy *preview* con la CLI en los proyectos de Vercel originales (`menyu-cliente`, `menyu-admin`, `menyu-staff` y `menyu-auth`): no toca producción y es el que usa el smoke
 4. Smoke de solo lectura contra staging
+5. E2E contra staging (`e2e-staging.yml`, abajo), cuando el smoke confirmó que `/health` muestra ese commit
 
 Los frontends de staging con dominio fijo (`menyu-*-staging`) no los despliega este workflow: los construye Vercel desde Git en cada merge a `main` (ver "Frontends en Vercel", más abajo).
 
@@ -102,6 +103,20 @@ Los frontends de staging con dominio fijo (`menyu-*-staging`) no los despliega e
 1. Corre los mismos checks que CI
 2. Despliega el backend a **Railway producción**
 3. Despliega los frontends a **Vercel** (ambiente production, flag `--prod`)
+
+---
+
+### `e2e-staging.yml` — E2E contra staging
+**Trigger:** como job de `deploy-staging.yml`, después del smoke, y a mano (*workflow_dispatch*)
+
+Recorre el flujo del comensal y del mozo contra **staging** (QR → pedido → efectivo → el mozo confirma → cierre) y comprueba cada paso en la base de staging con el usuario de base `e2e_staging`; la limpieza corre siempre al final. Nunca corre contra producción. Diseño, variables y riesgos: `docs/calidad/e2e-supabase.md`.
+
+---
+
+### `carga-k6.yml` — Pruebas de carga
+**Trigger:** solo a mano (*workflow_dispatch*), nunca en push, PR ni con horario
+
+Corre k6 contra **staging** (nunca producción) con el escenario elegido (`humo`, `stress` o `soak`), y pide escribir `si` para confirmar. Desde la raíz: `pnpm carga:humo -f confirmar=si` (o `carga:stress` y `carga:soak`, con el mismo `-f confirmar=si`); sin él no carga staging, porque `confirmar` es obligatorio y el primer paso del workflow corta. Proceso, umbrales y cómo leer el resultado: `docs/calidad/k6.md`.
 
 ---
 
@@ -128,7 +143,7 @@ Los dominios propios (`menyu-app.com`) se registran en Cloudflare sin proxy y se
 
 **Crear un proyecto de staging nuevo (a mano en Vercel):**
 
-1. *Add New → Project*, importar `MenYUorg/MenYU` con el nombre exacto `menyu-<app>-staging`. De ese nombre sale el dominio `menyu-<app>-staging.vercel.app`, y el login entre apps (`resolveAppUrl` y `resolveLoginUrl`) depende de él. Sumar además el dominio propio `<app>.staging.menyu-app.com` en *Settings → Domains*.
+1. *Add New → Project*, importar `MenYUorg/MenYU` con el nombre exacto `menyu-<app>-staging`. De ese nombre sale el dominio `menyu-<app>-staging.vercel.app`, y `scripts/vercel/ignorar-build.sh` construye desde Git solo los proyectos de staging que tiene en su lista: un proyecto nuevo hay que sumarlo ahí. El login entre apps no depende del nombre: sale de `VITE_AUTH_URL` y de la cookie de `VITE_AUTH_COOKIE_DOMAIN`, que solo se comparte bajo el dominio propio. Sumar además el dominio propio `<app>.staging.menyu-app.com` en *Settings → Domains*.
 2. *Settings → General:* Root Directory `apps/web-<app>`, "Include source files outside of the Root Directory" activado, y el resto (framework, comandos, Node) igual que `menyu-cliente-staging`.
 3. *Settings → Git:* rama de producción `main`.
 4. *Settings → Environment Variables*, en el entorno Production: `VITE_API_URL=https://api.staging.menyu-app.com/api` y `VITE_WS_URL=https://api.staging.menyu-app.com` (si no está, la app la deduce de `VITE_API_URL`). web-auth no usa `VITE_WS_URL` y lleva las de Supabase: sección Fase 3 de `docs/auth/VariablesACambiar.md`.
@@ -166,7 +181,7 @@ git push origin v1.0.0
 ## 6. Correr el proyecto localmente
 
 **Requisitos:**
-- Node.js >= 20
+- Node.js >= 22
 - pnpm >= 10
 - Archivo `.env` en `apps/backend/` con las variables del `.env.example`
 
@@ -193,6 +208,11 @@ Cada app corre en su propio puerto:
 | web-admin | `5174` |
 | web-staff | `5175` |
 | web-cliente | `5176` |
+
+### Trampas de desarrollo
+
+- **`pnpm build` no regenera el cliente de Prisma si turbo saca el build del backend de la caché.** El `build` de `@menyu/api` es `prisma generate && nest build`, pero con un *cache hit* turbo restaura `dist/` sin correr nada, y el cliente generado en `node_modules` queda como estaba. Después de traer un cambio de `prisma/schema.prisma`, correr `pnpm --filter @menyu/api exec prisma generate`: con el cliente viejo fallan los tests que comparan contra el schema (`includes-contract.spec.ts`, por ejemplo) y el repo parece roto sin estarlo. El CI no lo sufre porque corre ese `prisma generate` como paso propio.
+- **`turbo run test` cancela las tareas pendientes al primer fallo**, así que una corrida roja parece culpa del primer paquete que falló y los demás quedan sin correr. Para auditar el estado de todo, `pnpm exec turbo run test --continue`: corre todas las tareas aunque alguna falle y al final lista las que fallaron.
 
 ---
 

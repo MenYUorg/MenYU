@@ -987,3 +987,61 @@ incumplimientos.
 7. **Validar el `redirect` al entrar, no solo al salir** (`web-auth/src/flujo/rutas.ts:2-5`): hoy el valor
    crudo se propaga entre pantallas y dentro del `redirectTo` de OAuth, y queda visible en la barra de
    `auth.<ambiente>`. No es un open redirect, porque la validación está en el único punto donde se navega.
+
+---
+
+## Cierre (2026-10-28)
+
+Rama `chore/cierre-auth`, en cinco etapas (`plan-cierre-auth.md`; el detalle, en `cierre-auth-bitacora.md`).
+
+**Release (B1).** Tag **v1.4.0** sobre `main` en `94fe19f` (`94fe19f85de311d525ca2bec7fd73da8fd70dbb2`). Run
+`40737755116` de "Deploy — Production" con los tres jobs en verde. El smoke se volvió a correr: su espera de 8 min
+venció porque un incidente de Railway demoró el build unos 15 min. El procedimiento y su checklist están en
+`release-fase5.md`. La Fase 5 tiene su ✅ en la spec y `CLAUDE.md` ya no dice "(migración en curso)".
+
+- **Antes del tag** (SQL Editor, solo lectura): en producción, la última migración era
+  `20261021141707_fase4_autoria_usuario`, sin fallidas. Vistas, funciones y políticas (1.2) y dependencias (1.3) dieron
+  0 filas, y el proyecto no tiene pg_cron (1.4). En staging, de control, también 0 filas. Railway producción quedó sin
+  source y `JWT_SECRET` se rotó en los dos ambientes (§3.3.4, I11).
+- **Después del deploy:**
+  - `/health` con `"sha":"94fe19f…"` y `"db":"ok"`.
+  - Los cinco endpoints del login en 404 y `GET /api/auth/me` sin token en 401.
+  - `/docs-json` solo con `/api/auth/invitaciones` y `/api/auth/me`.
+  - El smoke local, 6 de 6.
+  - En la base, `20261025120000_fase5_login_legacy` aplicada, sin `admin`, `admin_restaurante`, `refresh_token`,
+    `rol_admin` ni `admin_proteger_ultimo_root()`, y con 0 de las tres columnas.
+
+**Desviaciones del checklist** (decisiones del usuario):
+
+- **Respaldo omitido:** los datos del login anterior en producción eran de prueba.
+- **SonarCloud salteado:** la referencia de "código nuevo" no se movió, porque la cuenta del usuario no es
+  administradora de la organización. El gate pasó en el CI de `94fe19f`, pero contra *Previous version* del 17/10, así
+  que **B2 queda abierto**: el ✅ de la Fase 5 se puso sin que la fase se midiera sola.
+- **La cuenta `menyuprueba2+rev2710@gmail.com` se borró** del Supabase de staging, en lugar de sumarse a
+  `.env.usuarios-staging`.
+- Además, un `POST /api/auth/guest` corrido antes de que se sirviera el SHA nuevo creó en producción un `Cliente`
+  "Invitado" de más, sin sesión.
+
+**Lo que cerró la rama:**
+
+- C1, salvo el gate y el respaldo (omitido).
+- C2 entero.
+- C6: M24 entero y M25 en parte. Una sesión nueva hereda el comensal y el carrito de la anterior.
+- C3, los puntos 1, 5 y 8 (I5, I6, M14 y M19).
+- C5, el 8: los `verify-carrito.*` se borraron y `JWT_SECRET` se rotó.
+- M26, en la Etapa 3: la cookie partida en `…auth-token.0` y `.1` está en `CLAUDE.md:157` y `auth.md:19`.
+- M8, también en la Etapa 3: `auth.md:577` documenta el tercer lugar que carga `cargarAuthClient()`
+  (`cerrarSesionDeLaCuenta`) como intencional, porque solo se alcanza con una sesión abierta. No queda nada por hacer.
+
+**Para la sesión de limpieza:**
+
+- B2: medir la Fase 5 sola en SonarCloud.
+- C3, los puntos 2, 3, 4, 6 y 7 (I8, I4 con M20, M13 e I12).
+- C4 entero (I7, M4, M5 y M10).
+- C5, los puntos 1 a 7.
+- La sección 7.
+- Los M de §4.3 que no entraron en ninguna propuesta: M6, M16 a M18, M23, M27 y M28.
+- Los casilleros de §5 que este cierre no tocó. Entre ellos, la mitad de Mercado Pago del de la rotación (GitHub): si
+  las credenciales de Mercado Pago que quedaron en `.claude/settings.local.json` necesitan rotarse, nadie lo evaluó.
+- Lo acumulado en "Para la sesión de limpieza" de `cierre-auth-bitacora.md`: el resto de M25, el "Invitado" de más y
+  lo que anotó cada etapa.

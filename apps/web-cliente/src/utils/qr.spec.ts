@@ -1,4 +1,4 @@
-import { extractQrToken } from './qr'
+import { extractQrToken, leerQrDeMesa } from './qr'
 
 describe('extractQrToken', () => {
   it('del link del QR de una mesa saca el código de la mesa', () => {
@@ -19,5 +19,19 @@ describe('extractQrToken', () => {
 
   it('un código suelto (que no es un link) se devuelve tal cual', () => {
     expect(extractQrToken('abc123')).toBe('abc123')
+  })
+})
+
+describe('leerQrDeMesa', () => {
+  it('del link del QR de una mesa saca el código y el restaurante', () => {
+    expect(leerQrDeMesa('https://mesa.menyu-app.com/check-in?restaurantId=rest-1&tableCode=abc123')).toStrictEqual({
+      qrToken: 'abc123',
+      restauranteId: 'rest-1',
+    })
+  })
+
+  it('un código suelto, o un link sin restaurante, va sin restaurante (el servidor no tiene con qué cruzarlo)', () => {
+    expect(leerQrDeMesa('abc123')).toStrictEqual({ qrToken: 'abc123' })
+    expect(leerQrDeMesa('https://mesa.menyu-app.com/check-in?tableCode=abc123&restaurantId=')).toStrictEqual({ qrToken: 'abc123' })
   })
 })

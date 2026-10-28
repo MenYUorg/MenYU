@@ -3,6 +3,8 @@
 Fecha: 2026-05-16  
 Rama de trabajo: `fix/casos-uso-login`
 
+> **Documento histórico (2026-05-16).** Nota de una sesión de trabajo. Lo que dice del login (`POST /api/auth/login` para obtener un token de admin) ya no vale: la Fase 5 de [`docs/auth/specs/auth.md`](../docs/auth/specs/auth.md) lo borró (2026-10-26). Hoy el token del personal es el access token de Supabase que da web-auth (ver `doc.md`, "Authentication").
+
 ---
 
 ## 1. Resolución de conflictos de merge

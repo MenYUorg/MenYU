@@ -1,4 +1,4 @@
-# Datos de prueba y credenciales — entorno local (seed)
+# Datos de prueba — entorno local (seed)
 
 **Fuente de verdad:** `apps/backend/prisma/seed.ts`. Todo lo de este documento sale de ahí — si algo no coincide, el seed manda. Para regenerar los datos (o crearlos si la base está vacía):
 
@@ -10,22 +10,18 @@ pnpm --filter @menyu/api seed
 
 ## Usuarios
 
-### Clientes (login email + password en web-cliente)
+**El seed no crea contraseñas.** Desde la Fase 5 de auth (`docs/auth/specs/auth.md`, 2026-10-26) MenYU no tiene login propio: toda cuenta, del personal o de un cliente, es de Supabase Auth y se inicia en web-auth. En local no hay Supabase Auth, así que para entrar hace falta una cuenta del Supabase de staging (abajo).
 
-| Rol | Email | Password | App / URL |
-|---|---|---|---|
-| Cliente 1 (cuenta registrada) | `cliente1@menyu.com` | `cliente1234` | web-cliente (login, no PIN) |
-| Cliente 2 (cuenta registrada) | `cliente2@menyu.com` | `cliente1234` | web-cliente (login, no PIN) |
-
-### Personal: **estas cuentas del seed ya no abren nada**
-
-Desde la Fase 4 de auth (`docs/auth/specs/auth.md`), web-admin y web-staff no tienen login propio: leen la sesión de Supabase que deja web-auth. El seed sigue creando `root@menyu.com` / `root1234`, `owner@menyu.com` / `owner1234`, `gerente@menyu.com` / `gerente1234`, `owner2@menyu.com` / `owner21234` y `mozo@menyu.com` / `mozo1234`, pero son filas de las tablas viejas (`admin`, `mozo`), que la Fase 5 retira: **no sirven para entrar al panel ni a staff**.
+| Qué crea el seed | Email | Para qué sirve |
+|---|---|---|
+| `Usuario` OWNER de Marca Seed (con su `Membresia`) | `owner@menyu.com` | El dueño de Restaurante Seed. Su `supabaseUserId` es ficticio: para entrar con él hay que reemplazarlo por el id de una cuenta real de staging (el seed no lo pisa) |
+| `Mozo` "Mozo Seed" de Restaurante Seed, sin cuenta | `mozo@menyu.com` | Invitarlo desde Personal como MOZO engancha este perfil en lugar de crear otro |
+| `Cliente` "Cliente Uno", sin cuenta | `cliente1@menyu.com` | Registrarse en web-auth con ese email vincula este `Cliente` (Fase 4b) y se queda con su historial de mesas |
+| `Cliente` "Cliente Dos", sin cuenta | `cliente2@menyu.com` | Igual que el anterior |
 
 Para probar el personal en local hace falta una cuenta del Supabase de staging con su `Usuario` y su `Membresia` en tu base. El paso a paso (los `.env.local` de cada app, el backend con `SUPABASE_URL`, y el SQL para insertar las seis cuentas de prueba con su `supabase_user_id`) está en **"Probar la entrega 4.5 en local"** y **"Probar la entrega 4.6 (web-staff) en local"** de [`docs/auth/usuarios-prueba-staging.md`](../docs/auth/usuarios-prueba-staging.md).
 
-El `Usuario` OWNER que crea el seed (`owner@menyu.com`) tiene un `supabaseUserId` ficticio: para entrar con él hay que reemplazarlo por el id de una cuenta real de staging. El seed no lo pisa.
-
-Si entrás con una de estas cuentas en el login del comensal (`/auth` de web-cliente), desde la entrega 4.7 te avisa que el ingreso del personal es otro y te manda a web-auth, sin guardar ningún token.
+El comensal no necesita cuenta: por QR o PIN entra como "Invitado". "Ingresar" y "Registrarme" de web-cliente van a web-auth, y su `/auth` es solo un redirect a web-auth (conserva el `?volver=`).
 
 ## Mesas (PIN de ingreso del comensal)
 

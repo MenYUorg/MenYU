@@ -4,7 +4,9 @@
 **Mockups:** [`docs/mockups/consola-root/`](mockups/consola-root/README.md) (abrir `index.html`; 66 pantallas y estados)
 **Viene de:** la sección 11.2 y el Apéndice A de [`plan-discovery-descuentos.md`](plan-discovery-descuentos.md). Este plan **reemplaza** a 11.2 y cambia la regla de ROOT (sección 2.1 y D16 de ese plan, y `CLAUDE.md`).
 
-Este documento es la referencia de la consola de ROOT: qué hace ROOT, cómo está hoy el código, qué decidimos y qué hay que confirmar, la API, las pantallas, las etapas con su estimación y los riesgos. Si una decisión cambia, se actualiza acá.
+> **Planificación histórica en todo lo que toca a cuentas y contraseñas (al 2026-10-27).** Este plan se escribió sobre el login propio de MenYU: cuentas en la tabla `admin`, contraseñas con bcrypt, refresh tokens propios y `debeCambiarPassword`. La entrega 4.4 de [`auth.md`](auth/specs/auth.md) pasó la consola a Supabase (2026-10-21) y la Fase 5 borró ese login (2026-10-26). Lo que este documento cuenta de contraseñas, de `admin`, de los refresh tokens o de las rutas que los usaban —las secciones 3, 5 (las contraseñas que genera el sistema), 7 (con 7.1 y 7.2), 8.1, 9, 10, 11, 12 y 13— es cómo se planificó y se construyó, no cómo funciona hoy. **Lo vigente:** la API de la consola, en [`doc.md`](../doc.md) ("ROOT console") y en "4.4, cómo quedó" de la spec; las cuentas de los dueños y de ROOT son de Supabase, se invitan por mail y la contraseña la maneja cada persona desde web-auth.
+
+Este documento es el plan de la consola de ROOT: qué hace ROOT, cómo estaba el código, qué se decidió, la API, las pantallas, las etapas con su estimación y los riesgos. Lo que no toca cuentas ni contraseñas (la regla de ROOT, qué edita, la baja y el historial) sigue valiendo; la referencia vigente de la API es "4.4, cómo quedó" de [`auth.md`](auth/specs/auth.md) y [`doc.md`](../doc.md) ("ROOT console").
 
 ## Índice
 
@@ -49,7 +51,7 @@ En la interfaz a los OWNER se los llama **dueños**; en el código y la API sigu
 
 ## 3. Cómo está hoy el código
 
-Relevado el 2026-10-15 leyendo `main`. Son hechos, no suposiciones. **Describe el login propio (`Admin`, contraseñas, JWT propio), que la migración a Supabase Auth va a retirar: ver la sección 13.**
+Relevado el 2026-10-15 leyendo `main`. Son hechos, no suposiciones. **Describe el login propio (`Admin`, contraseñas, JWT propio), que la migración a Supabase Auth retiró (Fase 5, 2026-10-26): ver la sección 13.**
 
 | Tema | Hoy |
 |---|---|
@@ -145,7 +147,7 @@ La reactivación no puede fallar por "restaurantes dados de baja a mano": cada r
 
 ## 7. API: `/root/*`, cuentas ROOT e historial
 
-> **Desde la entrega 4.4 de auth (2026-10-21)** la consola usa el token de Supabase (`@RequiereRoot()`) y los dueños y las cuentas ROOT son `Usuario` y `Membresia` que se invitan por mail: sin contraseñas, sin `debeCambiarPassword` y sin "cambiar el email" ni "restablecer". Las rutas de dueños y cuentas ROOT de la tabla de abajo quedaron así: `GET /root/duenos`, `POST /root/marcas/:id/duenos` `{ email, nombre }`, `DELETE /root/duenos/:membresiaId`, `GET /root/roots` y `POST /root/roots` `{ email, nombre }`. El detalle, en "4.4, cómo quedó" de [`docs/auth/specs/auth.md`](auth/specs/auth.md). La tabla queda como el diseño de las etapas 1a y 1b.
+> **Planificación histórica: la tabla y el párrafo que la presenta son el diseño de las etapas 1a y 1b, sobre el login propio, y no la API vigente** (la vigente está en [`doc.md`](../doc.md), "ROOT console"). **Desde la entrega 4.4 de auth (2026-10-21)** la consola usa el token de Supabase (`@RequiereRoot()`) y los dueños y las cuentas ROOT son `Usuario` y `Membresia` que se invitan por mail: sin contraseñas, sin `debeCambiarPassword` y sin "cambiar el email" ni "restablecer". Las rutas de dueños y cuentas ROOT de la tabla de abajo quedaron así: `GET /root/duenos`, `POST /root/marcas/:id/duenos` `{ email, nombre }`, `DELETE /root/duenos/:membresiaId`, `GET /root/roots` y `POST /root/roots` `{ email, nombre }`. El detalle, en "4.4, cómo quedó" de [`docs/auth/specs/auth.md`](auth/specs/auth.md). La tabla queda como el diseño de las etapas 1a y 1b.
 
 Módulo nuevo `root/` con `@Roles('ROOT')` a nivel de controller (desde la 4.4 de auth, `@RequiereRoot()`). Cada consulta con `select` explícito: nunca `include` sin `select`. Ningún DTO exige UUID: los ids de la ruta se validan solo por su forma. Las contraseñas se guardan con bcrypt y las generadas salen de `crypto.randomInt` (12 caracteres, sin los que se confunden: 0/O, 1/l/I). **Cada ruta que cambia algo registra la acción en el historial dentro de la misma transacción** (sección 7.2).
 

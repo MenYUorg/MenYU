@@ -362,7 +362,7 @@ describe('DiscoveryPage', () => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     })
 
-    it('al leer el QR abre la sesión con el código de la mesa y va al menú', async () => {
+    it('al leer el QR abre la sesión con el código de la mesa y el restaurante del link, y va al menú', async () => {
       abrirSesion.mockResolvedValue(crearSesionAbierta())
       await esperar()
       escanear()
@@ -370,8 +370,20 @@ describe('DiscoveryPage', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Leer QR de prueba' }))
       await esperar()
 
-      expect(abrirSesion).toHaveBeenCalledWith({ qrToken: 'qr-9' })
+      expect(abrirSesion).toHaveBeenCalledWith({ qrToken: 'qr-9', restauranteId: 'rest-1' })
       expect(screen.getByText('pantalla del menú')).toBeInTheDocument()
+    })
+
+    it('si el servidor responde que la mesa es de otro restaurante (409), avisa y no va al menú', async () => {
+      abrirSesion.mockRejectedValue(Object.assign(new Error('Ese QR no es de este restaurante'), { status: 409 }))
+      await esperar()
+      escanear()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Leer QR de prueba' }))
+      await esperar()
+
+      expect(screen.getByRole('alert')).toHaveTextContent('No pudimos abrir tu mesa con ese QR')
+      expect(screen.queryByText('pantalla del menú')).not.toBeInTheDocument()
     })
 
     it('mientras abre la mesa lo dice y no se puede volver a tocar', async () => {

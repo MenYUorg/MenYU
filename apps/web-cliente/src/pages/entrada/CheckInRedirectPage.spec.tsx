@@ -42,14 +42,24 @@ describe('CheckInRedirectPage', () => {
     useSessionStore.setState({ loading: false, error: null })
   })
 
-  it('abre la mesa con el código del link y va al menú sin dejar el link en el historial', async () => {
+  it('abre la mesa con el código y el restaurante del link y va al menú sin dejar el link en el historial', async () => {
     abrir.mockResolvedValue(crearSesionAbierta())
 
     renderCheckIn()
 
     expect(await screen.findByText('menú (REPLACE)')).toBeInTheDocument()
     expect(abrir).toHaveBeenCalledTimes(1)
-    expect(abrir).toHaveBeenCalledWith({ qrToken: 'qr-1' })
+    // Con el restaurante, el servidor comprueba que la mesa sea de ese restaurante (409 si no).
+    expect(abrir).toHaveBeenCalledWith({ qrToken: 'qr-1', restauranteId: 'rest-1' })
+  })
+
+  it('un link sin restaurante abre la mesa solo con el código', async () => {
+    abrir.mockResolvedValue(crearSesionAbierta())
+
+    renderCheckIn('/check-in?tableCode=qr-1')
+
+    expect(await screen.findByText('menú (REPLACE)')).toBeInTheDocument()
+    expect(abrir.mock.calls[0]?.[0]).toStrictEqual({ qrToken: 'qr-1' })
   })
 
   it('un link sin código de mesa lo dice sin llamar al servidor (ni mostrar "Abriendo tu mesa…")', () => {
@@ -60,13 +70,31 @@ describe('CheckInRedirectPage', () => {
     expect(abrir).not.toHaveBeenCalled()
   })
 
-  it('si ya hay una sesión abierta va directo al menú sin abrir otra', async () => {
-    useSessionStore.setState({ sesionId: 'ses-0', restauranteId: 'rest-1' })
+  describe('con una sesión guardada y el código de la mesa en el link', () => {
+    beforeEach(() => {
+      // Puede ser una sesión que ya se cerró: el id guardado no lo dice.
+      useSessionStore.setState({ sesionId: 'ses-0', restauranteId: 'rest-1', codigoSesion: '999', modoSesion: 'seguro' })
+    })
 
-    renderCheckIn()
+    it('igual abre la mesa (si la sesión ya se cerró, el servidor abre otra), sin el código de sesión guardado', async () => {
+      abrir.mockResolvedValue(crearSesionAbierta({ sesionId: 'ses-1' }))
 
-    expect(await screen.findByText('menú (REPLACE)')).toBeInTheDocument()
-    expect(abrir).not.toHaveBeenCalled()
+      renderCheckIn()
+
+      expect(await screen.findByText('menú (REPLACE)')).toBeInTheDocument()
+      expect(abrir).toHaveBeenCalledTimes(1)
+      expect(abrir.mock.calls[0]?.[0]).toStrictEqual({ qrToken: 'qr-1', restauranteId: 'rest-1' })
+      expect(useSessionStore.getState().sesionId).toBe('ses-1')
+    })
+
+    it('si no se puede abrir, dice por qué en lugar de mandar al menú de la sesión guardada', async () => {
+      abrir.mockRejectedValue(new ApiError('Mesa no encontrada', 404))
+
+      renderCheckIn()
+
+      expect(await screen.findByRole('heading', { name: 'No pudimos abrir tu mesa' })).toBeInTheDocument()
+      expect(screen.queryByText(/^menú/)).not.toBeInTheDocument()
+    })
   })
 
   it('con una sesión ya abierta y un link sin código de mesa también va al menú (sin mostrar el error)', async () => {
@@ -279,7 +307,7 @@ describe('CheckInRedirectPage', () => {
       expect(screen.getByText('Abriendo tu mesa…')).toBeInTheDocument()
       expect(screen.queryByRole('button', { name: 'Reintentar' })).not.toBeInTheDocument()
       expect(abrir).toHaveBeenCalledTimes(2)
-      expect(abrir).toHaveBeenLastCalledWith({ qrToken: 'qr-1' })
+      expect(abrir).toHaveBeenLastCalledWith({ qrToken: 'qr-1', restauranteId: 'rest-1' })
 
       terminar(crearSesionAbierta())
 
@@ -363,7 +391,7 @@ describe('CheckInRedirectPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Unirme a la mesa' }))
 
     expect(await screen.findByText('menú (REPLACE)')).toBeInTheDocument()
-    expect(abrir).toHaveBeenLastCalledWith({ qrToken: 'qr-1', codigoSesion: '042' })
+    expect(abrir).toHaveBeenLastCalledWith({ qrToken: 'qr-1', restauranteId: 'rest-1', codigoSesion: '042' })
   })
 
   it('"Volver" en la pantalla del código lleva al inicio', async () => {
