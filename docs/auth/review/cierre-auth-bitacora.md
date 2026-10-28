@@ -260,7 +260,102 @@ Rama `chore/cierre-auth`, sobre `2afe8db` (Etapa 2). Solo documentación: ningú
 
 ## Etapa 4 — Release Fase 5 (preparación)
 
-(pendiente)
+Rama `chore/cierre-auth`, sobre `16b350f` (Etapa 3). Un solo archivo nuevo, `docs/auth/review/release-fase5.md`, y
+esta entrada. Ningún comando contra staging ni producción: ni SQL, ni `curl`, ni `gh`, ni Railway, Supabase o Sonar.
+
+**Hecho** (los cuatro puntos de la etapa, en `release-fase5.md`)
+
+1. Las consultas (sección 1), para el SQL Editor del Supabase de producción, cada una con su resultado esperado:
+   - 1.1, el estado de `_prisma_migrations`: la última es `20261021141707_fase4_autoria_usuario` y no hay ninguna
+     fallida (con una, P3009 antes de llegar a la nueva).
+   - 1.2, el texto de `pg_views`, `pg_matviews`, `pg_proc` (con `pg_get_functiondef`) y `pg_policies`.
+   - 1.3, `pg_depend`: lo que haría fallar los `DROP` sin `CASCADE`.
+   - 1.4, `cron.job`.
+   - Al final, cómo leer una fila y los falsos positivos.
+   - El SQL de la migración es la tabla de arriba del documento, línea por línea (`migration.sql:11-35`).
+2. El respaldo (sección 2), con los conteos de 2.1 y dos opciones:
+   - A, el SQL Editor y una descarga CSV por consulta.
+   - B, `pg_dump --table` de las tres tablas y `psql \copy` de las columnas.
+   - Dónde guardarlo: fuera del repo y de OneDrive, cifrado o borrado. Advierte que trae hashes y emails.
+3. El checklist (sección 3), con los 8 casilleros en el orden del plan, cada uno con el cómo.
+4. La verificación posterior (sección 4):
+   - `/health` con el SHA, con `esperar-sha.mjs` y con `curl`.
+   - Los cinco `POST` esperando 404 y `GET /api/auth/me` esperando 401, con su cuerpo exacto
+     (`supabase-auth.guard.ts:43-45`).
+   - Swagger.
+   - El smoke tal como lo corre el workflow (`deploy-production.yml:232-244`), su re-ejecución por `workflow_dispatch`
+     y el equivalente local.
+   - El SQL de 4.6, que corre el usuario.
+   - Al final, "Si algo falla".
+
+**Decisiones**
+
+- **Dos tipos de consulta, texto y `pg_depend`.** El texto encuentra las funciones `plpgsql`, que no dejan dependencia y
+  se rompen después, como `e2e.e2e_limpiar`. `pg_depend` encuentra lo que haría fallar la migración en el momento:
+  vistas, políticas, FK de otras tablas (`pg_constraint`), tipos, y el `WHEN` o el `UPDATE OF` de un disparador. Así
+  cubre `pg_constraint` y los disparadores sin una consulta aparte para cada uno.
+- **Lo que sumé a lo pedido:**
+  - `_prisma_migrations`: una migración fallida frena el deploy, como el 2026-10-20.
+  - `pg_matviews`: `pg_views` no trae las vistas materializadas.
+  - `pg_get_functiondef` en lugar de `prosrc`: también trae las funciones `BEGIN ATOMIC`.
+  - `cron.job`: su SQL es texto que ningún catálogo relaciona con las tablas.
+- **Lo que no sumé:** `information_schema`, que filtra por privilegios y para las vistas no agrega nada a `pg_depend`.
+- **Patrones de palabra entera (`\m…\M`).** Así `admin` no encuentra `admin_restaurante`, `supabase_admin` ni
+  `mp_refresh_token`. Sumé `admin_id` y `rol_admin`, que la migración también borra (líneas 18 y 27), y
+  `debeCambiarPassword` va como `debe_?cambiar_?password`: en la base es `admin.debe_cambiar_password`
+  (`20261020150000_consola_root_historial/migration.sql:6`).
+- **Las consultas descuentan lo que borra la propia migración**, para que "esperado: 0 filas" sea literal:
+  `admin_proteger_ultimo_root()` (que nombra a `admin`), los disparadores y las FK de las tres tablas y la FK de
+  `pedido_edicion` a `admin`.
+- **El respaldo suma `pedido_edicion.admin_id`.** No está en la lista del plan, pero la migración lo borra (línea 18) y
+  sin él el respaldo de `admin` no dice quién editó cada pedido.
+- **Opción A primero:** no hay que instalar nada. En esta máquina no hay `pg_dump` ni `psql`. La B usa `cygpath -m`,
+  porque los clientes de Windows no entienden `/c/Users/…`.
+- **`/health` va sin `/api`.** La consigna decía `/api/health`, pero `main.ts:18` excluye `health` del prefijo, y así
+  lo usa el smoke (`scripts/smoke/lib.mjs:41-43,69`).
+- **v1.4.0.**
+  - MAJOR no: la API no tiene consumidores fuera de MenYU, cada fase de auth fue MINOR y "v2.0" es el alcance del
+    producto en `CLAUDE.md`.
+  - PATCH tampoco: el release cambia comportamiento.
+- **El tag va sobre `main`, no sobre esta rama.** `main` es lo que se verificó en staging el 2026-10-27, y la Etapa 1
+  cambia web-cliente probada solo con tests.
+- **Orden de la verificación: primero el SHA.** Con v1.3.0 todavía atendiendo, `POST /api/auth/guest` con `{}` crea un
+  cliente invitado en producción (su `GuestDto` es todo opcional en v1.3.0). Por la misma razón, el chequeo después de
+  rotar `JWT_SECRET` usa `/auth/login`, que con `{}` da 400 en v1.3.0: si diera 404, Railway habría construido `main`.
+- **`tableCode`:** el casillero dice lo del plan. Debajo, una recomendación: `usuarios-prueba-staging.md:6` deja el PIN
+  fuera del repo público y el `tableCode` abre la misma mesa, así que el valor iría en `.env.usuarios-staging` como
+  `STAGING_MESA_TABLE_CODE` y el doc nombraría la variable. Decide el usuario.
+
+**No aplica / no hecho**
+
+- **Las consultas no se corrieron en Supabase.** Las validó el revisor el 2026-10-28 en un PostgreSQL local (PGlite
+  18.3) con las migraciones de v1.3.0 y objetos señuelo; de esa revisión salieron las correcciones del `--amend`:
+  - los tipos array y el `DISTINCT` en 1.3;
+  - el filtro de las políticas de las tres tablas en 1.2;
+  - la excepción de los `CHECK` y las `RULE`;
+  - volver a correr 1.1 después de rotar `JWT_SECRET`;
+  - los access tokens del login anterior;
+  - qué funciones dejan dependencia;
+  - `PGCLIENTENCODING`.
+
+  La corrida previa en staging que pide el documento solo prueba que parsean en Supabase. El respaldo se omitió por
+  decisión del usuario, porque los datos son de prueba. Railway producción quedó sin source el 2026-10-28.
+- El estado de producción, sin la migración aplicada, sale de la spec y del informe; no lo verifiqué. Lo confirma 1.1.
+- Ningún punto quedó como "no aplica": el release sigue pendiente y la migración, el workflow y el smoke son los
+  que describe el plan.
+- **Queda para el usuario:** los 8 casilleros de la sección 3 y el SQL de 4.6. **Queda para el orquestador**, cuando el
+  usuario confirme el tag: 4.1 a 4.5.
+
+**Para la sesión de limpieza:** son las entradas "(Etapa 4)" del bloque general, al final.
+
+**Verificaciones** (antes del commit)
+
+- `pnpm typecheck`: exit 0, `Tasks: 10 successful, 10 total` (`Cached: 10 cached`: ningún paquete cambió).
+- `pnpm lint`: exit 0, `Tasks: 9 successful, 9 total` (`Cached: 9 cached`).
+- Suites y `prisma generate`: no aplican, no se tocó código.
+- Las referencias `archivo:línea` del documento, contra el árbol de `16b350f` (y de `v1.3.0` para
+  `apps/web-cliente/src/services/api.ts:202,206`). `git ls-tree`: 35 migraciones en `v1.3.0` y 36 en `main`; la única
+  nueva es la de la Fase 5.
 
 ## Etapa 5 — Cierre
 
@@ -326,3 +421,13 @@ Rama `chore/cierre-auth`, sobre `2afe8db` (Etapa 2). Solo documentación: ningú
 - (Etapa 3) **`docs/plan-consola-root.md` quedó como historia en lo de cuentas.** Si se quiere que vuelva a ser la
   referencia de la consola que `CLAUDE.md` dice que es, hay que reescribir las secciones 3, 7, 10, 11 y 13 sobre
   Supabase.
+- (Etapa 4) **`/health` siempre dice `"version": "0.0.1"`.** La toma de `apps/backend/package.json:3`, que nadie sube,
+  así que no dice qué release corre: solo sirve el `sha`. O se sube la versión con cada tag, o se saca el campo.
+- (Etapa 4) **`Documentacion/WORKFLOW.md:101,129,137` dicen que el tag es `v*.*.*`.** El filtro real
+  (`deploy-production.yml:7`) es `v[0-9]+.[0-9]+.[0-9]+`: un `v1.4.0-rc.1` no despliega.
+- (Etapa 4) **No está escrito qué hace Railway si el backend nuevo no levanta.** La migración corre al arrancar
+  (`apps/backend/Dockerfile:70`) y `railway.toml` no define `healthcheckPath`, así que no sé si el deploy anterior sigue
+  atendiendo mientras el nuevo falla. Ya figura como opcional en `docs/calidad/bitacora.md:33`; con una migración
+  destructiva, conviene confirmarlo.
+- (Etapa 4) **`migration.sql:4-5` de la Fase 5 atribuye el respaldo a la "decisión 3"**, pero es la 4
+  (`auth.md:573`). No se corrige: cambiar una migración aplicada cambia su checksum.
