@@ -20,6 +20,10 @@ const estadoDelFallo = (status: number | null): Estado => (estaDadoDeBaja(status
 /**
  * Es la dirección que codifican los QR impresos de las mesas (`/check-in?restaurantId=…&tableCode=…`). Abre la mesa y
  * sigue al menú; mientras abre muestra "Abriendo tu mesa…" y, si no se puede, dice por qué y ofrece el PIN.
+ *
+ * Con el código de la mesa siempre se abre, aunque haya una sesión guardada: el servidor devuelve la misma si sigue
+ * abierta y abre una nueva si ya se cerró (el id guardado no dice cuál de las dos es). No se manda el código de sesión
+ * guardado: con una sesión nueva en modo seguro sería incorrecto, y si la mesa lo pide aparece su pantalla.
  */
 export default function CheckInRedirectPage() {
   const navigate = useNavigate()
@@ -37,23 +41,26 @@ export default function CheckInRedirectPage() {
     alFallar: ({ status }) => setEstado(estadoDelFallo(status)),
     alVolver: volverAlInicio,
   })
+  // Con el restaurante del link, el servidor comprueba que la mesa sea de ese restaurante (409 si no).
+  const abrirLaMesa = (qrToken: string) => entrar(restauranteId ? { qrToken, restauranteId } : { qrToken })
 
   useEffect(() => {
     // En desarrollo StrictMode corre el efecto dos veces: la sesión se abre una sola vez.
     if (iniciado.current) return
     iniciado.current = true
 
-    if (sesionId) {
+    if (tableCode) {
+      void abrirLaMesa(tableCode)
+    } else if (sesionId) {
+      // Sin el código de la mesa no hay qué abrir: con una sesión guardada se sigue en ella.
       navigate('/menu', { replace: true })
-      return
     }
-    if (tableCode) void entrar({ qrToken: tableCode })
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const reintentar = () => {
     if (!tableCode) return
     setEstado('abriendo')
-    void entrar({ qrToken: tableCode })
+    void abrirLaMesa(tableCode)
   }
 
   // Las pantallas del modo seguro (anfitrión, código de la mesa) van en lugar de las de este flujo.
