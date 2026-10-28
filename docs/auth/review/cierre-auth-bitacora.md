@@ -81,7 +81,79 @@ Rama `chore/cierre-auth`, sobre `main` en `94fe19f`. Solo web-cliente; backend, 
 
 ## Etapa 2 — Carga diferida + JWT fuera del repo
 
-(pendiente)
+Rama `chore/cierre-auth`, sobre `897bab7` (Etapa 1). Solo configuración de ESLint de las tres apps, un spec en
+web-cliente, los dos `verify-carrito.*` y una línea de `.claude/settings.json`.
+
+**Hecho**
+
+1. La regla de la carga diferida, en `apps/web-cliente/eslint.config.js`:
+   - `:36` `@typescript-eslint/no-restricted-imports` con `allowTypeImports: true` sobre `@menyu/auth-client` y
+     `@supabase/supabase-js` (`:9`): prohíbe el import de valor (y el `export … from`) en **todos** los archivos,
+     también en `authClientDiferido.ts`. Los `import type` pasan.
+   - `:43` `no-restricted-syntax` con el selector `ImportExpression[source.value='…']` para los mismos dos
+     paquetes: ataja el `import()` dinámico, que la regla de arriba no mira.
+   - `:53-56` la excepción declarada: un bloque con `files: ['src/utils/authClientDiferido.ts']` apaga solo
+     `no-restricted-syntax`. Es el único archivo que puede hacer el `import()` (`authClientDiferido.ts:16`).
+   - Antes de escribirla, grep en `apps/web-cliente`: el único import de valor era ese `import()`; el resto es
+     `import type` (`utils/cuenta.ts:1`, `hooks/useSesionDiferida.ts:1-2`, `test/authClient.ts:1`), tipos
+     `typeof import(…)` (`useSesionDiferida.ts:32`, `test/authClient.ts:144,147`, que son `TSImportType` y la
+     regla no toca) y el string de `vi.mock` (`test/setup.ts:6`). Nada de eso cambió.
+   - Prueba a mano (revertida antes del commit): un `src/utils/pruebaCarga.ts` con imports de valor de los dos
+     paquetes, dos `import type` y dos `import()`, más un import de valor agregado en `authClientDiferido.ts`.
+     `eslint` dio 5 errores (los tres estáticos, uno de ellos en `authClientDiferido.ts:2`, y los dos `import()`);
+     los `import type` y el `import()` del cargador, ninguno.
+   - Test: `apps/web-cliente/src/utils/authClientDiferido.spec.ts` corre `ESLint.lintText` con la config de la
+     app. `:19` deja pasar los `import type` y el `import()` del cargador; `:31` ataja los dos imports de valor (en
+     una página y en `authClientDiferido.ts`) y el `import()` en otro archivo. Con la config de `897bab7` el
+     segundo test falla (`expected [] to deeply equal [ …(2) ]`).
+     Reforzado tras la revisión: el `import()` de `@supabase/supabase-js` también, y en `src/utils/cuenta.ts`, para
+     que pongan el spec en rojo sacar ese selector o ampliar la excepción a `src/utils/**` (probadas las dos a mano).
+2. `git rm` de `verify-carrito.js` y `verify-carrito.mjs` (raíz) y borrada la entrada
+   `"Bash(node verify-carrito.mjs)"` de `.claude/settings.json` (era la `:7`; el resto del archivo, igual, y
+   sigue siendo JSON válido). `git grep verify-carrito` después: solo menciones históricas en
+   `docs/auth/review/auth-review-2026-10-27.md` (`:321,427,655,934`), `docs/calidad/bitacora.md` (`:35,72`),
+   esta bitácora (primera entrada de limpieza) y el plan; ninguna funcional.
+3. `'coverage'` en el `ignores` de `apps/web-admin/eslint.config.js:8`, `apps/web-staff/eslint.config.js:8` y
+   `apps/web-cliente/eslint.config.js:17`. Con una copia del `coverage/` real de web-auth en cada app, antes del
+   cambio `eslint . --max-warnings 0` daba exit 1 en las tres ("3 problems (0 errors, 3 warnings)", los "Unused
+   eslint-disable directive" de `lcov-report/*.js`); después, exit 0 en las tres. Las copias se borraron.
+
+**Decisiones**
+
+- **La regla estática no exceptúa a `authClientDiferido.ts`; la excepción es la del `import()`.** Apagar
+  `no-restricted-imports` en ese archivo sería una excepción de nombre (la regla no mira `import()`) que dejaría
+  sin control el archivo donde un import estático es más tentador. Así la excepción está declarada y cubre justo
+  lo que tiene que cubrir, y "único punto de carga" lo chequea el lint, no solo la costumbre.
+- **Un spec que corre ESLint**, aunque el plan pedía solo correr el lint: la regla es la protección, y si alguien
+  la sacara de la config nada se pondría en rojo. El `cwd` es la raíz de la app, con `dirname` y `resolve` sobre
+  `import.meta.url`, así no depende de desde dónde se corra. No uso `new URL('../..', import.meta.url)`: Vite lo
+  reescribe como la URL de un asset y deja de ser `file:`.
+- `paths` con los dos nombres exactos, sin `patterns`: `@menyu/auth-client` exporta solo `"."` y web-cliente no
+  usa subrutas de supabase-js. `@supabase/ssr` no va: no es dependencia de web-cliente.
+
+**No aplica / no hecho**
+
+- Ningún punto quedó como "no aplica": los tres diagnósticos seguían vigentes sobre `897bab7`.
+- **El JWT sigue en la historia de git** (repo público): sacarlo pide reescribir la historia y un `--force`,
+  fuera de las reglas. Según `docs/calidad/bitacora.md:35` es de desarrollo, apunta a `localhost`, sin datos
+  personales, y venció el 26/05/2026.
+- La regla mira los archivos de web-cliente, no los paquetes que importa: si `@menyu/ui` (u otro del workspace)
+  importara `@menyu/auth-client` de forma estática, el lint no lo vería. Hoy ninguno lo hace (grep en
+  `packages/ui` y `packages/types`: vacío). Ver limpieza.
+- Sin `vite build` ni prueba en el navegador: no cambió código de la app, solo config de lint y un spec.
+
+**Para la sesión de limpieza:** son las dos entradas "(Etapa 2)" del bloque general, al final.
+
+**Verificaciones** (antes del commit, con el spec ya escrito)
+
+- `pnpm typecheck`: exit 0, `Tasks: 10 successful, 10 total` (`@menyu/web-cliente:typecheck: cache miss`).
+- `pnpm lint`: exit 0, `Tasks: 9 successful, 9 total`. Con la config nueva, las tres apps corrieron sin cache
+  (`@menyu/web-admin:lint`, `@menyu/web-staff:lint` y `@menyu/web-cliente:lint: cache miss, executing`); en la
+  segunda corrida, con el spec, web-cliente volvió a correr y web-admin y web-staff repitieron ese mismo hash.
+  `@menyu/api` sigue con "lint pendiente", como en la Etapa 1.
+- `pnpm --filter @menyu/web-cliente test`: exit 0, `Test Files 42 passed (42)`, `Tests 759 passed (759)` (41 y
+  757 en la Etapa 1, más el spec nuevo con 2 tests).
+- `pnpm prisma generate`: no hizo falta, no se tocó el backend.
 
 ## Etapa 3 — Documentación
 
@@ -132,3 +204,10 @@ Rama `chore/cierre-auth`, sobre `main` en `94fe19f`. Solo web-cliente; backend, 
 
   Pasa en todos los ingresos, no solo en `/check-in`. Por esto C6 (M25) queda resuelto solo en parte (ver
   "No aplica / no hecho" de la Etapa 1). No lo probé de punta a punta.
+- (Etapa 2) **La regla de la carga diferida no ve los paquetes del workspace.** Mira los archivos de
+  web-cliente; un import estático de `@menyu/auth-client` dentro de `@menyu/ui` (o de otro paquete que importe
+  la app) devolvería supabase-js al bundle principal sin que el lint diga nada. Hoy no pasa. Lo cubriría la otra
+  opción del informe (I5): un test que lea el bundle construido y falle si el chunk de entrada trae supabase-js.
+- (Etapa 2) **web-cliente declara `@supabase/supabase-js` como dependencia directa** (`package.json:19`) y solo
+  lo usa en `import type`. Ver si alcanza con los tipos que llegan por `@menyu/auth-client`, o pasarlo a
+  `devDependencies`.
