@@ -4,6 +4,7 @@ Para probar en **staging** la migración de autenticación (dominios propios y l
 
 - Marca: "Marca Pruebas Auth" (slug `pruebas-auth`). Restaurante: "Restaurante Pruebas Auth". Mesa 1, con PIN.
 - **Las contraseñas y el PIN no están en el repo**, que es público: viven en `docs/auth/.env.usuarios-staging`, que git ignora (`.env.*`). Quien lo necesite se lo pide al equipo; no subirlo ni pegarlo en issues o PRs.
+- **El `tableCode` de la mesa 1 tampoco**, porque abre la mesa igual que el PIN: es `STAGING_MESA_TABLE_CODE` en ese mismo archivo, junto a `STAGING_MESA_PIN` y `STAGING_RESTAURANTE_ID`. El link que codifica el QR de la mesa es `https://mesa.staging.menyu-app.com/check-in?restaurantId=$STAGING_RESTAURANTE_ID&tableCode=$STAGING_MESA_TABLE_CODE`.
 - **Las cuentas que se usan son las de Supabase**, más abajo ("Un usuario por rol"). Se entra por `auth.staging.menyu-app.com`.
 
 ## Los tres usuarios legacy: ya no sirven

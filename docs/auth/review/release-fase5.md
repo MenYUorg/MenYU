@@ -23,7 +23,7 @@ v1.3.0. La aplica el propio backend al arrancar: el contenedor corre `prisma mig
 
 - **Ningún `DROP` lleva `CASCADE`.** Si una vista, una política, una FK o una función con cuerpo SQL estándar dependen
   de algo de lo que se borra, el `DROP` falla, la migración queda fallida (P3009, como en el incidente del 2026-10-20,
-  `docs/auth/specs/auth.md:743`) y el backend nuevo no arranca. Solo dejan dependencia los cuerpos SQL estándar
+  `docs/auth/specs/auth.md:747`) y el backend nuevo no arranca. Solo dejan dependencia los cuerpos SQL estándar
   (`BEGIN ATOMIC` o `RETURN …`): una función `plpgsql`, una `LANGUAGE sql` con el cuerpo entre `$$` o un procedure con
   el cuerpo como texto no la dejan. Con esas, el `DROP` pasa y la función se rompe la próxima vez que alguien la llama,
   como `e2e.e2e_limpiar` en staging (`auth.md:614`). Por eso las consultas de la sección 1 son dos: lo que dice el
@@ -315,14 +315,20 @@ conectado a GitHub, el cambio construiría `main` y aplicaría los `DROP` (`auth
 - [x] ~~**Respaldo hecho y guardado fuera del repo.**~~ **Omitido: datos de prueba, decisión del usuario del
   2026-10-28.** Los datos del login anterior en producción son de prueba (`auth.md:570`), así que no se exportan. La
   sección 2 queda como referencia.
-- [ ] **Las consultas de arriba no devuelven nada (o se resolvió lo que devolvieran antes de seguir).**
+- [x] **Las consultas de arriba no devuelven nada (o se resolvió lo que devolvieran antes de seguir).** Hecho el
+  2026-10-28 en el SQL Editor. Producción: 1.1 con `20261021141707_fase4_autoria_usuario` arriba, sin la Fase 5 y sin
+  fallidas; 1.2 y 1.3 en 0 filas; 1.4 sin pg_cron (el error esperado). Staging, de control: 1.1 con la Fase 5 aplicada
+  y sin fallidas, 1.2 y 1.3 en 0 filas, 1.4 sin pg_cron. No hubo nada que resolver.
   - 1.1 como se espera, y 1.2, 1.3 y 1.4 en 0 filas. Lo que se haya resuelto, con su definición guardada fuera del
     repo.
 - [x] **Railway producción sigue desconectado de GitHub.** Hecho el 2026-10-28: el auto-deploy ya estaba deshabilitado
   y ahora el servicio quedó sin source.
   - Railway → el servicio de producción → *Settings → Source*: sin repositorio (`docs/auth/VariablesACambiar.md:17`).
     Si alguien lo vuelve a conectar, desconectarlo antes de seguir.
-- [ ] **En SonarCloud, la referencia de "código nuevo" movida para que mida la Fase 5, y el quality gate en verde.**
+- [x] ~~**En SonarCloud, la referencia de "código nuevo" movida para que mida la Fase 5, y el quality gate en verde.**~~
+  **Salteado: decisión del usuario del 2026-10-28**, porque su cuenta no es administradora de la organización
+  `MenYUorg` en SonarCloud. El gate siguió midiendo contra *Previous version* del 17/10 y pasó en el CI de `94fe19f`
+  (el `check-ci` lo exige), pero la Fase 5 no se midió sola. Queda para la sesión de limpieza.
   - Hoy es *Previous version*, desde el 17/10 (`docs/calidad/bitacora.md:16,27`): el gate mide junto todo lo que entró
     desde entonces, y la Fase 5 nunca se midió sola (informe, C1 punto 3).
   - SonarCloud → `MenYUorg_MenYU` → *Administration → New Code*, rama `main`: *Number of days*, con los días que van
@@ -337,7 +343,10 @@ conectado a GitHub, el cambio construiría `main` y aplicaría los `DROP` (`auth
     último run de CI del commit y corta. Hay que arreglarlo antes.
   - Después del release, decidir si *Number of days* queda o se pasa a otra definición (pendiente 1 de
     `docs/calidad/bitacora.md`).
-- [ ] **`JWT_SECRET` rotado en Railway staging y producción.**
+- [x] **`JWT_SECRET` rotado en Railway staging y producción.** Hecho el 2026-10-28 en los dos, con el reinicio
+  verificado en cada uno y, en producción, `POST /api/auth/login` con `{}` en 400 (v1.3.0 seguía atendiendo). La
+  rotación fue unos 30 min antes de las consultas de la sección 1, así que la 1.1 de producción, que dio limpio, ya es
+  la que pide el último punto de este casillero (confirmado por el orquestador).
   - Por qué: el JWT de sesión de mesa de `verify-carrito.*` estuvo en el repo público. La Etapa 2 borró los archivos,
     pero sigue en la historia de git, y con un token firmado se puede probar el secreto por fuerza bruta sin tocar el
     servidor (informe §3.3, punto 4). Además, el incidente de seguridad de Railway del 21/10 afectó variables de los
@@ -366,8 +375,9 @@ conectado a GitHub, el cambio construiría `main` y aplicaría los `DROP` (`auth
     seguiría respondiendo 400, y `/health` seguiría mostrando el SHA viejo, porque `APP_COMMIT_SHA` tiene prioridad
     (`health.service.ts:40`). Por eso, después de rotar en producción, volver a correr 1.1:
     `20261025120000_fase5_login_legacy` no tiene que aparecer, y `fallida` tiene que seguir en `false`.
-- [ ] **Decidido qué hacer con la cuenta de cliente de prueba de staging (`menyuprueba2+rev2710@gmail.com`): sumarla a
-  `docs/auth/.env.usuarios-staging` o borrarla del Supabase de staging.**
+- [x] **Decidido qué hacer con la cuenta de cliente de prueba de staging (`menyuprueba2+rev2710@gmail.com`): sumarla a
+  `docs/auth/.env.usuarios-staging` o borrarla del Supabase de staging.** **Borrada** del Supabase de staging el
+  2026-10-28 (decisión del usuario). El archivo del scratchpad con su contraseña seguía ahí al cerrar la Etapa 5.
   - Es "Revisor Fase Cinco", confirmada, `Cliente` `404ef2c3-d60b-449e-ad88-2fb76d185e4f`
     (`auth-review-2026-10-27.md:778`). Su contraseña quedó en un archivo temporal del scratchpad de la revisión; la
     ruta está en esa misma entrada del informe.
@@ -378,7 +388,9 @@ conectado a GitHub, el cambio construiría `main` y aplicaría los `DROP` (`auth
     historia de la mesa; si alguien se registra después con ese email, el `Cliente` nuevo queda sin email y no falla
     nada (`apps/backend/src/auth/supabase/cuenta-de-cliente.service.ts:99-103`).
   - En los dos casos, borrar después el archivo del scratchpad.
-- [ ] **`tableCode` de la mesa 1 sumado a `docs/auth/usuarios-prueba-staging.md`.**
+- [x] **`tableCode` de la mesa 1 sumado a `docs/auth/usuarios-prueba-staging.md`.** Hecho el 2026-10-28 como
+  recomienda este casillero: el usuario guardó el valor en `.env.usuarios-staging` como `STAGING_MESA_TABLE_CODE`, y el
+  doc nombra la variable y el link armado, sin el valor (Etapa 5).
   - Es `mesa.qr_token`: el QR codifica `/check-in?restaurantId=…&tableCode=<qr_token>`
     (`apps/backend/src/mesas/mesas.service.ts:114`). En el SQL Editor de staging:
     `SELECT m.qr_token FROM mesa m JOIN restaurante r ON r.id = m.restaurante_id WHERE r.nombre = 'Restaurante Pruebas Auth' AND m.numero = '1';`
@@ -388,7 +400,10 @@ conectado a GitHub, el cambio construiría `main` y aplicaría los `DROP` (`auth
     `https://mesa.staging.menyu-app.com/check-in?restaurantId=$STAGING_RESTAURANTE_ID&tableCode=$STAGING_MESA_TABLE_CODE`.
     Si se decide publicarlo igual, que el doc lo diga.
   - Es documentación: puede ir en `chore/cierre-auth`, no hace falta que esté en el tag.
-- [ ] **Tag creado y deploy terminado.**
+- [x] **Tag creado y deploy terminado.** Hecho el 2026-10-28: `v1.4.0` sobre `94fe19f`
+  (`94fe19f85de311d525ca2bec7fd73da8fd70dbb2`), run `40737755116` de "Deploy — Production" con los tres jobs en verde.
+  El smoke se volvió a correr: su espera de 8 min venció porque un incidente de Railway ("deployments stuck in
+  initializing") demoró el build unos 15 min. La verificación de la sección 4 dio lo esperado en todos los puntos.
   - Versión: **v1.4.0** (el porqué, abajo).
   - Va sobre `main`, no sobre `chore/cierre-auth`: `main` (`94fe19f`, si no entró nada después) es lo que corre
     staging y lo que se verificó el 2026-10-27 (informe §3.7). La rama del cierre trae un cambio de comportamiento en
@@ -531,7 +546,7 @@ omitió (decisión del 2026-10-28).
   otro tag (`v1.4.1`).
 - **`/health` no muestra el SHA en 8 minutos, o el log de Railway dice `P3009` o `cannot drop … because other objects
   depend on it`:** la migración falló. No crear otro tag ni redesplegar a ciegas. Con 4.6 se ve qué quedó aplicado. Se
-  resuelve la causa (lo que habría mostrado 1.3) y se sigue hacia adelante, como el 2026-10-20 (`auth.md:743`): la
+  resuelve la causa (lo que habría mostrado 1.3) y se sigue hacia adelante, como el 2026-10-20 (`auth.md:747`): la
   migración se marca como revertida (`prisma migrate resolve --rolled-back 20261025120000_fase5_login_legacy`) solo si
   sus cambios no quedaron aplicados, y se vuelve a correr el deploy. No hay respaldo de esos datos (se omitió, sección
   2): eran de prueba.

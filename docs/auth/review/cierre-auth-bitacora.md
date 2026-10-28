@@ -359,7 +359,154 @@ esta entrada. Ningún comando contra staging ni producción: ni SQL, ni `curl`, 
 
 ## Etapa 5 — Cierre
 
-(pendiente)
+Rama `chore/cierre-auth`, sobre `b0ba087` (Etapa 4). Solo documentación: `auth.md`, `CLAUDE.md`, el informe,
+`release-fase5.md`, `usuarios-prueba-staging.md` y esta bitácora. Tras la revisión final se sumaron también el plan y
+los dos archivos de `.claude/agents/`, que estaban sin versionar (punto 6). Son los puntos 1 a 3 del plan; el 4 (el
+`revisor`) y el 5 (el PR) son del orquestador.
+
+**El release**
+
+Lo hizo el usuario el 2026-10-28. Los datos son los que verificaron él y el orquestador; no los volví a correr. Lo que sí
+comprobé: `git rev-parse 'v1.4.0^{commit}'` y `git ls-remote origin 'refs/tags/v1.4.0*'` dan
+`94fe19f85de311d525ca2bec7fd73da8fd70dbb2` (es un tag liviano).
+
+- **Tag y deploy:** `v1.4.0` sobre `main` en `94fe19f`.
+  - Run `40737755116` de "Deploy — Production", con los tres jobs en verde.
+  - El smoke se volvió a correr: su espera de 8 min venció porque un incidente de Railway ("deployments stuck in
+    initializing") demoró el build unos 15 min, y se resolvió solo.
+- **Consultas previas** (sección 1, SQL Editor, 2026-10-28):
+  - Staging, de control: 1.1 con la Fase 5 aplicada y 0 fallidas; 1.2 y 1.3 en 0 filas; 1.4 sin pg_cron (el error
+    esperado).
+  - Producción: 1.1 con `20261021141707_fase4_autoria_usuario` arriba, sin la Fase 5 y 0 fallidas; 1.2 en 0 filas; 1.3
+    en 0 filas; 1.4 sin pg_cron.
+- **Verificación posterior** (sección 4), toda en verde:
+  - 4.1: `/health` con `"sha":"94fe19f…"` y `db: ok`.
+  - 4.2: los cinco endpoints del login en 404.
+  - 4.3: `GET /api/auth/me` sin token en 401.
+  - 4.4: `/docs-json` solo con `/api/auth/invitaciones` y `/api/auth/me`.
+  - 4.5: el smoke local, 6/6 OK.
+  - 4.6: `migracion_ok=1`; `admin`, `admin_restaurante`, `refresh_token`, `rol_admin` y
+    `admin_proteger_ultimo_root()` en NULL; `columnas=0`.
+- **Lo demás del checklist:**
+  - Railway producción, sin source desde el 2026-10-28.
+  - `JWT_SECRET`, rotado en staging y en producción el 2026-10-28: el reinicio se verificó en los dos y el chequeo
+    previo al deploy dio 400 en `/auth/login`. La rotación fue unos 30 min antes de las consultas de la sección 1, así
+    que la 1.1 de producción, que dio limpio, se corrió después de rotar, como pedía el casillero. Esto lo confirmó el
+    orquestador tras la revisión.
+
+**Hecho**
+
+1. `docs/auth/specs/auth.md`:
+   - `:560`: el ✅ de la Fase 5 con su fecha, "verificada en staging y en producción desde v1.4.0 (2026-10-28)".
+   - `:658-661`: el bloque "Fase 5 en producción" en "Para tener en cuenta", como el de las Fases 4 y 4b (`:653`): antes
+     del tag, después del deploy y el gate de SonarCloud.
+2. `CLAUDE.md`:
+   - `:135`: "(migración en curso)" pasa a "(migración terminada)".
+   - `:136`: la Fase 5 "está en `main` (PR #438), verificada en staging el 2026-10-27 y en producción desde v1.4.0
+     (2026-10-28)".
+   - `:176` (punto 6).
+
+   Nada más del archivo cambió.
+3. `docs/auth/review/auth-review-2026-10-27.md:991-1047`: la sección "Cierre (2026-10-28)", con:
+   - el tag con su SHA;
+   - el antes y el después del deploy;
+   - las tres desviaciones y el "Invitado" de más;
+   - lo que cerró la rama y lo que queda para limpieza.
+4. `docs/auth/review/release-fase5.md`, tildados con la fecha y el resultado:
+   - `:318`, las consultas;
+   - `:328`, SonarCloud, tachado como salteado con el motivo;
+   - `:346`, `JWT_SECRET`;
+   - `:378`, la cuenta, borrada;
+   - `:391`, el `tableCode`;
+   - `:403`, el tag y el deploy.
+
+   Del resto del texto solo cambiaron las dos referencias del punto 6.
+5. `docs/auth/usuarios-prueba-staging.md:7`: el `tableCode` de la mesa 1 está en `STAGING_MESA_TABLE_CODE`, al lado
+   de `STAGING_MESA_PIN` y `STAGING_RESTAURANTE_ID`. Va también el link del `/check-in`, armado con las dos variables y
+   sin ningún valor. El doc no nombra `menyuprueba2+rev2710` (grep: 0) y no le sumé nada de esa cuenta.
+6. **Correcciones de la revisión final.** El `revisor` aprobó la rama sin bloqueantes y confirmó que no hay cambios de
+   comportamiento fuera de la Etapa 1. Las observaciones van en el mismo commit, con `--amend`:
+   - `auth.md:584`: una salvedad en el criterio 5. Quedó cumplido en parte: el gate pasó contra *Previous version* del
+     17/10, B2 sigue abierto y el ✅ es decisión del usuario del 2026-10-28.
+   - El "Cierre" del informe:
+     - "C1, salvo el gate y el respaldo (omitido)";
+     - M26 y M8 entre lo que cerró la Etapa 3 (M8, por `auth.md:577`, que documenta el tercer punto de carga como
+       intencional);
+     - en §5, la mitad de Mercado Pago del casillero de la rotación (las credenciales de `.claude/settings.local.json`),
+       que nadie evaluó.
+   - `CLAUDE.md:176`: sin "Durante la migración". Los dominios viejos siguen activos y no se dan de baja.
+   - `release-fase5.md:346-349`: la 1.1 de producción se corrió después de rotar `JWT_SECRET`.
+   - `release-fase5.md:26` y `:549`: `auth.md:743` pasa a `auth.md:747`. El bloque de producción que sumó esta etapa
+     (`auth.md:658-661`) corrió cuatro líneas el incidente del 2026-10-20.
+   - `docs/auth/review/plan-cierre-auth.md` entra al repo, sin el formato pegado de texto enriquecido, con el contenido
+     igual:
+     - los links `[x](http://x)` y el `mailto:` vuelven a su texto (25);
+     - `\*`, `\[` y `\]` pierden la barra (48, 8 y 8).
+   - `.claude/agents/revisor.md` (`model: inherit` pasa a `model: Opus`, un cambio que ya estaba en el árbol) y
+     `.claude/agents/trabajador.md` entran al repo sin cambios míos, por indicación del orquestador: los decidió el
+     usuario.
+
+**Decisiones**
+
+- **Del usuario** (las anoto como las recibí):
+  - El respaldo, omitido: los datos de producción eran de prueba.
+  - SonarCloud, salteado: su cuenta no es administradora de `MenYUorg` en SonarCloud. El gate sigue midiendo contra
+    *Previous version* del 17/10 y la Fase 5 no se midió sola.
+  - La cuenta `menyuprueba2+rev2710@gmail.com`, borrada del Supabase de staging. De las dos opciones del casillero
+    eligió borrarla, no sumarla al `.env`.
+  - El `tableCode`, en `.env.usuarios-staging` como `STAGING_MESA_TABLE_CODE`, que era la recomendación de la Etapa 4.
+- **La fecha del ✅ es 2026-10-26**, la de "5, cómo quedó" y la aprobación del `revisor`; la verificación en staging y
+  la producción van después, con el formato de la 4b (`auth.md:500`). La de staging es §3.7 del informe (2026-10-27).
+- **El bloque de producción en la spec** sigue lo que hicieron las fases anteriores (`:648` y `:653`). Dice que el gate
+  pasó contra *Previous version*, pero en "Para tener en cuenta" (`:658-661`), no junto al ✅.
+  - En el primer commit escribí que eso estaba "junto al ✅", y no era así.
+  - La salvedad junto al criterio 5 (`:584`) se sumó tras la revisión final, para que nadie lea el ✅ como B2 cerrado.
+  - El informe (B2) decía que sin el gate la fase no se podía marcar. El ✅ va por el plan y por la decisión del
+    usuario, y ahora lo dicen el criterio, el bloque y el cierre.
+- **La salvedad va en la misma línea del criterio 5**, no en una nueva. Una línea más correría `auth.md:611` y `:614`,
+  que cita `release-fase5.md`. Las referencias que el bloque de `:658-661` corrió en documentos que narran el pasado no
+  se tocaron: la `auth.md:742` de la entrada de limpieza de la Etapa 3 hoy es la `:746`, y la `:739` del informe es de
+  `63c512e`.
+- **`CLAUDE.md` dice "(migración terminada)", sin versión.** Las fases llegaron a producción en tres releases (v1.1.0,
+  v1.3.0 y v1.4.0), y el párrafo ya da la de cada una.
+- **El gate "pasó en el CI de `94fe19f`"** lo deduzco así: el `check-ci` del run exige en verde el job "CI — typecheck,
+  lint, test, build" del commit (`deploy-production.yml:59-89`), y ese job tiene el paso de SonarCloud sin condición y
+  con `sonar.qualitygate.wait=true` (`ci.yml:116-122`).
+
+**No aplica / no hecho**
+
+- Ningún punto quedó como "no aplica". Los diagnósticos seguían vigentes sobre `b0ba087`:
+  - `CLAUDE.md:135` decía "(migración en curso)";
+  - la Fase 5 de `auth.md:560` no tenía ✅;
+  - el informe no tenía cierre;
+  - en `release-fase5.md` quedaban seis casilleros sin tildar.
+- No corrí nada contra staging ni producción. Lo único remoto fue el `git ls-remote` a GitHub.
+- En el primer commit anoté que no me constaba que la 1.1 se hubiera vuelto a correr después de rotar `JWT_SECRET`.
+  Tras la revisión el orquestador lo confirmó (ver "El release").
+- Del plan saqué solo los links y los escapes. Las líneas en blanco dobles del pegado quedaron como estaban: la consigna
+  nombraba esos dos arreglos.
+- No tildé los casilleros de §5 del informe: el cierre dice cuáles cubrió el release. Tampoco toqué las secciones 1 y 4
+  de `release-fase5.md`, que no tienen casilleros.
+- **El archivo del scratchpad con la contraseña de la cuenta borrada sigue ahí**: `cuenta-nueva.txt`, en la ruta que da
+  `auth-review-2026-10-27.md:782`. Comprobé que existe, sin abrirlo. El casillero pide borrarlo, pero está fuera del
+  repo y lo hace el usuario: queda en limpieza. La cuenta ya no existe, así que la contraseña no abre nada.
+- `auth.md:612` ("el quality gate de SonarCloud sigue pendiente") no cambió, porque sigue siendo cierto.
+
+**Para la sesión de limpieza:** son las entradas "(Etapa 5)" del bloque general, al final.
+
+**Verificaciones** (antes del commit)
+
+- `pnpm typecheck`: exit 0, `Tasks: 10 successful, 10 total` (`Cached: 10 cached`: ningún paquete cambió).
+- `pnpm lint`: exit 0, `Tasks: 9 successful, 9 total` (`Cached: 9 cached`). `@menyu/api` sigue con "lint pendiente".
+- Suites y `prisma generate`: no aplican, no se tocó código.
+- Que el valor de `STAGING_MESA_TABLE_CODE` no esté en el repo: lo leí del `.env` a una variable de shell sin imprimirlo
+  (36 caracteres). `git grep -l -F` dio exit 1, sin archivos, y lo mismo `grep -l -F` sobre los nueve archivos del
+  commit, ya con las correcciones de la revisión. `git check-ignore` confirma que `.gitignore:7` (`.env.*`) ignora `docs/auth/.env.usuarios-staging`, y las tres
+  variables que nombra el doc están en ese archivo, una vez cada una (`grep -c`).
+- `grep "migración en curso"` en todo el repo: queda solo en el plan, el informe y esta bitácora, que narran el pasado.
+  "Durante la migración" ya no está en `CLAUDE.md` (grep: exit 1).
+- Después de las correcciones de la revisión, otra vez: `pnpm typecheck` exit 0 (10/10, cached) y `pnpm lint` exit 0
+  (9/9, cached).
 
 ## Para la sesión de limpieza
 
@@ -431,3 +578,16 @@ esta entrada. Ningún comando contra staging ni producción: ni SQL, ni `curl`, 
   destructiva, conviene confirmarlo.
 - (Etapa 4) **`migration.sql:4-5` de la Fase 5 atribuye el respaldo a la "decisión 3"**, pero es la 4
   (`auth.md:573`). No se corrige: cambiar una migración aplicada cambia su checksum.
+- (Etapa 5) **Un `Cliente` "Invitado" de más en producción.** En la verificación del release, se corrió un
+  `POST /api/auth/guest` con `{}` antes de que el SHA nuevo estuviera servido, con v1.3.0 todavía atendiendo, y creó un
+  `Cliente` "Invitado". No tiene sesión asociada, así que es inocuo. Es lo que advertía la sección 4.1 de
+  `release-fase5.md`; si molesta, se borra con SQL.
+- (Etapa 5) **SonarCloud no midió la Fase 5 sola (B2 del informe).** Mover la referencia de "código nuevo" pide una
+  cuenta administradora de `MenYUorg` en SonarCloud. El procedimiento está en `release-fase5.md:328-345`. Después,
+  decidir qué definición queda (pendiente 1 de `docs/calidad/bitacora.md`).
+- (Etapa 5) **El encabezado de "Para tener en cuenta" de la spec** (`auth.md:646`) dice "Observaciones que dejaron las
+  Fases 0 a 3b (2026-10-20 y 2026-10-21)", pero la sección ya tiene también las de la 4, la 4b y la 5.
+- (Etapa 5) **Pendiente del usuario: borrar `cuenta-nueva.txt`**, el archivo del scratchpad de la revisión con la
+  contraseña de `menyuprueba2+rev2710@gmail.com`. La ruta está en `auth-review-2026-10-27.md:782`. La cuenta ya se borró
+  del Supabase de staging, pero el casillero de `release-fase5.md:378` pide borrar el archivo también, y el 2026-10-28
+  seguía ahí.
