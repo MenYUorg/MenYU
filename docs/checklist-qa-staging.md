@@ -4,6 +4,8 @@ Se corre **después de mergear `feat/discovery` a `main`**: el deploy de staging
 
 **Qué ya se probó y qué falta.** Con el backend y la base locales, en Edge de escritorio, ya pasaron la API, las pantallas y el escáner con una cámara falsa (ver el estado de la Fase 8 del plan). Esta lista es lo que **solo se puede probar en staging y en celulares reales**: la extensión `unaccent` en Supabase, el Storage de logos, el escáner con cámara de verdad, Safari en iPhone, el teclado abierto y el responsive en pantallas reales. No hace falta repetir todo lo demás: si algo falla, es un hallazgo nuevo.
 
+**Auth va aparte.** La lista de verificación del login, el SSO entre apps y la cuenta de cliente es [`docs/auth/checklist-staging.md`](auth/checklist-staging.md).
+
 **Cómo se usa.** Tildar cada ítem y anotar el dispositivo y el navegador. Un ítem que falla se anota con qué se vio y qué se esperaba.
 
 | | Dispositivo | Navegador |
@@ -16,7 +18,7 @@ Se corre **después de mergear `feat/discovery` a `main`**: el deploy de staging
 
 ## 0. Preparación
 
-- [ ] El deploy terminó (backend en Railway y los tres frontends en Vercel) y las migraciones están aplicadas.
+- [ ] El deploy terminó (backend en Railway y los cuatro frontends en Vercel) y las migraciones están aplicadas.
 - [ ] `GET <API>/api/discovery/buscar?q=cafe` responde 200 (no 500). Si falla, la extensión `unaccent` no está o no resuelve en Supabase (suele vivir en el esquema `extensions`; ver riesgos en el plan).
 - [ ] El bucket `logos` existe en el Storage de staging y es público (límite de 2 MB, PNG, JPEG y WebP).
 - [ ] **No se corre el seed en staging.** Datos que tienen que existir, cargados desde web-admin con el OWNER de staging:

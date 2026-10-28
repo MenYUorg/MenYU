@@ -12,47 +12,29 @@ The global prefix `/api` is applied to every route **except** `GET /health`.
 
 ### Authentication
 
-All protected endpoints require a JWT in the `Authorization` header:
+MenYU has no login of its own: there are no email-and-password endpoints, no refresh tokens and no passwords in our database (Phase 5 of `docs/auth/specs/auth.md` removed them). Accounts live in Supabase Auth, and people sign in at web-auth (`auth.menyu-app.com`). Every route is exactly one of three kinds; `src/auth/rutas-por-autenticacion.spec.ts` walks the router and fails if a route is unclassified or mixes two of them.
 
-```
-Authorization: Bearer <accessToken>
-```
+| Kind | Header | Who |
+|---|---|---|
+| Staff and ROOT console | `Authorization: Bearer <Supabase access token>` (Swagger scheme `supabase`) | Accounts with a `Usuario` in MenYU: ROOT, OWNER, GERENTE, JEFE_SALON, MOZO and COCINA |
+| Table session | `Authorization: Bearer <jwt>`, the `jwt` returned by `POST /api/sessions/open` | The diner at a table |
+| Public | none | Health, Discovery (and `GET /api/marca/publicas` and `/api/marca/:id/restaurantes`), the public menu, `GET /api/clasificaciones`, `POST /api/sessions/open` and Mercado Pago's webhook and OAuth callback |
 
-Tokens are obtained from any `/api/auth` endpoint that returns a `TokenPair`.
+**Supabase access token.** The backend verifies it against the project's JWKS (issuer `<SUPABASE_URL>/auth/v1`, audience `authenticated`) and loads the `Usuario` by its `supabaseUserId`. No token, or an invalid or expired one, or one from another Supabase project: **401**. A Supabase account without an active `Usuario` (a customer account, for example) or without the role the route asks for: **403**. If the JWKS cannot be fetched: **503**.
 
-**Supabase access token (migration in progress, `docs/auth/specs/auth.md`).** `GET /api/auth/me` and `POST /api/auth/invitaciones` take the Supabase access token instead (`Authorization: Bearer <supabase access token>`, Swagger scheme `supabase`). The backend verifies it against the project's JWKS and then looks up the `Usuario` in our database: a Supabase account without an active `Usuario` gets 403. Every other endpoint keeps the legacy JWT until Phase 4.
-
-### Token pair shape
-
-```json
-{
-  "accessToken": "eyJhbGci...",
-  "refreshToken": "a3f9c2b1..."
-}
-```
-
-`accessToken` is a signed JWT. `refreshToken` is a 40-char hex string, stored hashed in the database and valid for 30 days.
-
-### JWT payload (`req.user`)
-
-```json
-{
-  "sub": "uuid",
-  "email": "user@example.com",
-  "nombre": "Juan",
-  "tipo": "admin | mozo | cliente",
-  "rol": "ROOT | OWNER | ADMIN",
-  "restauranteId": "uuid"
-}
-```
+**Table-session token.** `POST /api/sessions/open` signs it with `JWT_SECRET` and ties it to one session, table and restaurant (`sub` is the `Cliente`). The diner's routes only act on that session: another session's id answers **403**. It is not an account and grants nothing outside the table. A customer account (Supabase) only decides whose name the table is under, when it is sent to `POST /api/sessions/open`.
 
 ### Roles
 
-| Role | Who |
+Staff permissions come from `Membresia`: `OWNER` belongs to a brand and covers all of its restaurants; `GERENTE`, `JEFE_SALON`, `MOZO` and `COCINA` belong to one restaurant. Memberships of a deactivated brand or restaurant do not count. ROOT is `Usuario.esRoot`, not a membership: it only works under `/api/root/*` and gets **403** on every data route (ROOT is not a bypass).
+
+The role each route asks for is the matrix of delivery 4.3 in `docs/auth/specs/auth.md`; the restaurant is taken from the path, the query or the body (`restauranteId`) or, for a single resource (`/api/items/:id`), from the resource itself. The groups used below are the ones in `apps/backend/src/auth/roles-del-personal.ts`:
+
+| Group | Roles |
 |---|---|
-| `ROOT` | Super-admin of the whole platform |
-| `OWNER` | Admin of a specific brand (`marcaId` in JWT) |
-| `ADMIN` | Operator-level admin (not yet used in guards) |
+| Administration | `OWNER`, `GERENTE` |
+| Floor | `OWNER`, `GERENTE`, `JEFE_SALON`, `MOZO` |
+| All staff | `OWNER`, `GERENTE`, `JEFE_SALON`, `MOZO`, `COCINA` |
 
 ### Validation
 
@@ -80,128 +62,7 @@ No authentication. No `/api` prefix.
 
 ## Auth — `/api/auth`
 
-### `POST /api/auth/login`
-
-Sign in with email and password (for `Cliente` accounts).
-
-**Request body**
-
-```json
-{
-  "email": "juan@example.com",
-  "password": "MiPassword123!"
-}
-```
-
-| Field | Type | Required |
-|---|---|---|
-| `email` | string (email) | yes |
-| `password` | string | yes |
-
-**Responses**
-
-| Status | Description |
-|---|---|
-| 200 | Login successful — returns `TokenPair` |
-| 401 | Invalid credentials |
-
----
-
-### `POST /api/auth/register`
-
-Register a new `Cliente` account.
-
-**Request body**
-
-```json
-{
-  "nombre": "Juan Pérez",
-  "email": "juan@example.com",
-  "password": "MiPassword123!",
-  "telefono": "+5491112345678"
-}
-```
-
-| Field | Type | Required |
-|---|---|---|
-| `nombre` | string | yes |
-| `email` | string (email) | yes |
-| `password` | string (min 8 chars) | yes |
-| `telefono` | string | no |
-
-**Responses**
-
-| Status | Description |
-|---|---|
-| 201 | Client created — returns `TokenPair` |
-| 409 | Email already registered |
-
----
-
-### `POST /api/auth/guest`
-
-Create a guest session (no credentials required).
-
-**Request body**
-
-```json
-{
-  "nombre": "Invitado"
-}
-```
-
-| Field | Type | Required |
-|---|---|---|
-| `nombre` | string | no |
-
-**Responses**
-
-| Status | Description |
-|---|---|
-| 200 | Guest session created — returns `TokenPair` |
-
----
-
-### `POST /api/auth/refresh`
-
-Rotate tokens using a valid refresh token.
-
-**Request body**
-
-```json
-{
-  "refreshToken": "abc123def456..."
-}
-```
-
-**Responses**
-
-| Status | Description |
-|---|---|
-| 200 | Tokens rotated — returns new `TokenPair` |
-| 401 | Refresh token invalid or expired |
-
----
-
-### `POST /api/auth/logout`
-
-Revoke a refresh token (sign out).
-
-**Request body**
-
-```json
-{
-  "refreshToken": "abc123def456..."
-}
-```
-
-**Responses**
-
-| Status | Description |
-|---|---|
-| 204 | Session closed |
-
----
+Only these two routes. The old login (`POST /api/auth/login`, `/register`, `/guest`, `/refresh` and `/logout`) was removed in Phase 5 and answers 404: signing up, signing in and recovering a password happen in web-auth, against Supabase.
 
 ### `GET /api/auth/me`
 
@@ -269,7 +130,7 @@ If the email already belongs to a `Usuario`, or to a confirmed Supabase account 
 
 ### No development endpoints
 
-There are no `/api/auth/dev/*` endpoints (they used to create users, even a ROOT, without authentication, and were removed). To get users and data in a local database run the seed (`pnpm --filter @menyu/api seed`); the credentials are in `Documentacion/datos-de-prueba-local.md`. The seed is never run in staging or production: there, accounts are created with the authenticated endpoints. The **first** ROOT account of an environment is created by hand (a Supabase user plus an `INSERT` into `usuario` with `es_root`, see `docs/auth/usuarios-prueba-staging.md`); the other ones are invited with `POST /api/root/roots`, or an existing `Usuario` is promoted with the team script `apps/backend/scripts/cuentas-root.ts`.
+There are no `/api/auth/dev/*` endpoints (they used to create users, even a ROOT, without authentication, and were removed). To get data in a local database run the seed (`pnpm --filter @menyu/api seed`); what it creates is in `Documentacion/datos-de-prueba-local.md` (no passwords: a local account needs a real Supabase user from staging). The seed is never run in staging or production: there, accounts are created with the authenticated endpoints. The **first** ROOT account of an environment is created by hand (a Supabase user plus an `INSERT` into `usuario` with `es_root`, see `docs/auth/usuarios-prueba-staging.md`); the other ones are invited with `POST /api/root/roots`, or an existing `Usuario` is promoted with the team script `apps/backend/scripts/cuentas-root.ts`.
 
 ---
 
@@ -429,45 +290,23 @@ Newest first (by `id`, which only grows, so a new action never shifts the pages)
 
 ## Marcas — `/api/marcas`
 
-Auth required on all endpoints: `Bearer` + role `ROOT`.
+Auth required on all endpoints: the Supabase access token of the brand's `OWNER`. ROOT gets 403: creating, editing and deactivating brands is done in the ROOT console (`/api/root/marcas`).
 
 ### Endpoint summary
 
 | Method | Path | Description |
 |---|---|---|
-| `POST` | `/api/marcas` | Create brand |
-| `GET` | `/api/marcas` | List brands |
+| `GET` | `/api/marcas` | List the caller's brands |
 | `GET` | `/api/marcas/:id` | Get brand by ID |
 | `PATCH` | `/api/marcas/:id` | Update brand |
-| `DELETE` | `/api/marcas/:id` | Delete brand |
-| `POST` | `/api/marcas/:id/logo` | Upload or replace the brand logo (OWNER of that brand only) |
-| `DELETE` | `/api/marcas/:id/logo` | Remove the brand logo (OWNER of that brand only) |
-
----
-
-### `POST /api/marcas`
-
-**Request body**
-
-```json
-{
-  "nombre": "Grupo Gastronómico SRL",
-  "slug": "grupo-gastronomico"
-}
-```
-
-| Field | Type | Required |
-|---|---|---|
-| `nombre` | string | yes |
-| `slug` | string (unique) | yes |
-
-**Responses:** 201 created · 401 unauthenticated · 403 forbidden
+| `POST` | `/api/marcas/:id/logo` | Upload or replace the brand logo |
+| `DELETE` | `/api/marcas/:id/logo` | Remove the brand logo |
 
 ---
 
 ### `GET /api/marcas`
 
-Returns all brands the current user can see (ROOT sees all).
+Returns the active brands of the caller's `OWNER` memberships (403 without any).
 
 **Responses:** 200
 
@@ -491,12 +330,6 @@ Returns all brands the current user can see (ROOT sees all).
 ```
 
 **Responses:** 200 · 404
-
----
-
-### `DELETE /api/marcas/:id`
-
-**Responses:** 204 · 404
 
 ---
 
@@ -535,41 +368,17 @@ Remove the brand logo and delete the stored file. Only the `OWNER` of that brand
 
 ## Restaurantes — `/api/restaurantes`
 
-Auth required: `Bearer` + role `ROOT` or `OWNER`. OWNER only sees their own brand's restaurants.
+Auth required: the Supabase access token, with the roles of the table below. ROOT gets 403: creating and deactivating restaurants is done in the ROOT console (`POST /api/root/marcas/:id/restaurantes` and `POST /api/root/restaurantes/:id/baja`).
 
 ### Endpoint summary
 
 | Method | Path | Role | Description |
 |---|---|---|---|
-| `POST` | `/api/restaurantes` | ROOT | Create restaurant |
-| `GET` | `/api/restaurantes` | ROOT, OWNER | List restaurants |
-| `GET` | `/api/restaurantes/:id` | ROOT, OWNER | Get restaurant |
-| `PATCH` | `/api/restaurantes/:id` | ROOT, OWNER | Update restaurant |
-| `DELETE` | `/api/restaurantes/:id` | ROOT | Delete restaurant |
+| `GET` | `/api/restaurantes` | OWNER, GERENTE | List the restaurants of the caller's memberships |
+| `GET` | `/api/restaurantes/:id` | OWNER, GERENTE | Get restaurant |
+| `PATCH` | `/api/restaurantes/:id` | OWNER, GERENTE | Update restaurant (`direccion`: OWNER only) |
 | `POST` | `/api/restaurantes/:id/logo` | OWNER | Upload or replace the restaurant logo |
 | `DELETE` | `/api/restaurantes/:id/logo` | OWNER | Remove the restaurant logo |
-
----
-
-### `POST /api/restaurantes`
-
-**Request body**
-
-```json
-{
-  "marcaId": "uuid",
-  "nombre": "Sucursal Centro",
-  "direccion": "Av. Corrientes 1234"
-}
-```
-
-| Field | Type | Required |
-|---|---|---|
-| `marcaId` | UUID | yes |
-| `nombre` | string | yes |
-| `direccion` | string (trimmed, not empty, max 200 characters) | yes |
-
-**Responses:** 201 · 401 · 403
 
 ---
 
@@ -607,12 +416,6 @@ Auth required: `Bearer` + role `ROOT` or `OWNER`. OWNER only sees their own bran
 
 ---
 
-### `DELETE /api/restaurantes/:id`
-
-**Responses:** 204 · 404
-
----
-
 ### `POST /api/restaurantes/:id/logo`
 
 Upload (or replace) the logo of one restaurant. Same rules as the brand logo: `multipart/form-data`, field `logo`, PNG, JPEG or WebP up to 2 MB, only the `OWNER` of the restaurant's brand (`ROOT`, `GERENTE` and the `OWNER` of another brand get 403). When a restaurant has no logo of its own, the brand logo is the one shown to diners.
@@ -642,7 +445,7 @@ Remove the restaurant's own logo and delete the stored file (it goes back to usi
 
 ## Mesas — `/api/mesas`
 
-Auth required: `Bearer` + role `ROOT` or `OWNER`.
+Auth required: the Supabase access token. Administration (`OWNER`, `GERENTE`) of the table's restaurant; listing (`GET /api/mesas`) is for the whole floor (`JEFE_SALON` and `MOZO` too), and deleting a table only for the `OWNER`.
 
 ### Endpoint summary
 
@@ -757,7 +560,7 @@ Open or join a table session. The client either:
 
 If the restaurant is in `seguro` mode and a session already exists, `codigoSesion` is required to join it.
 
-**Auth:** Optional JWT in `Authorization: Bearer <token>`. With a valid client token the session is registered under that account: the response `clienteId` is the account id, and the same account joining again (for example from a second device) is still one participant. Without a token, or with an expired or invalid one (it is ignored, no error), a guest client ("Invitado") is created. The web client sends the token whenever a customer is logged in.
+**Auth:** Public. It optionally takes the Supabase access token of a customer account in `Authorization: Bearer <token>`, verified against the JWKS (ES256 or RS256). With a valid one the session is registered under that account's `Cliente`: the response `clienteId` is its id, and the same account joining again (for example from a second device) is still one participant. Without a token, or with any other one (expired, invalid or from the old login; it is ignored, no error), a guest client ("Invitado") is created. The token only decides whose name the table is under: it grants no permissions. The web client sends it whenever a customer is signed in. The response's `jwt` is the table-session token (see Authentication).
 
 **Request body**
 
@@ -792,7 +595,7 @@ If the restaurant is in `seguro` mode and a session already exists, `codigoSesio
 
 Close the active session for the authenticated client.
 
-**Auth required:** `Bearer <accessToken>`
+**Auth required:** the table-session token (`Bearer <jwt>` from `POST /api/sessions/open`)
 
 **Responses**
 
@@ -800,7 +603,7 @@ Close the active session for the authenticated client.
 |---|---|
 | 200 | Session closed — returns `{ ok: true }` |
 | 400 | Session already closed |
-| 401 | Missing or invalid JWT |
+| 401 | Missing or invalid table-session token |
 
 ---
 
@@ -991,7 +794,7 @@ One restaurant and its offers. It is what the restaurant screen of `web-cliente`
 
 ## Categorías — `/api/categorias`
 
-Auth required: `Bearer` + role `ROOT` or `OWNER`.
+Auth required: the Supabase access token, Administration (`OWNER`, `GERENTE`) of the restaurant. `DELETE /api/categorias/:id`: `OWNER` only.
 
 ### Endpoint summary
 
@@ -1126,7 +929,7 @@ Auth required: `Bearer` + role `ROOT` or `OWNER`.
 
 ## Items — `/api/items`
 
-Auth required: `Bearer` + role `ROOT` or `OWNER`.
+Auth required: the Supabase access token, Administration (`OWNER`, `GERENTE`) of the item's restaurant. `DELETE /api/items/:id`: `OWNER` only.
 
 ### Endpoint summary
 
@@ -1351,7 +1154,7 @@ Remove the ingredient from the item.
 
 ## Ingredientes — `/api/ingredientes`
 
-Auth required: `Bearer` + role `ROOT` or `OWNER`.
+Auth required: the Supabase access token, Administration (`OWNER`, `GERENTE`) of the restaurant.
 
 ### Endpoint summary
 
@@ -1428,18 +1231,18 @@ Auth required: `Bearer` + role `ROOT` or `OWNER`.
 
 ## Clasificaciones — `/api/clasificaciones`
 
-Diet classifications (e.g. Vegano, Sin TACC). `GET /` is public; all write operations require `Bearer` + role `ROOT` or `OWNER`.
+Diet classifications (e.g. Vegano, Sin TACC). `GET /` is public; the write operations take the Supabase access token. The catalogue is global: creating, editing or deleting a classification needs `OWNER` or `GERENTE` in some restaurant; assigning one to an item, in the item's restaurant.
 
 ### Endpoint summary
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
 | `GET` | `/api/clasificaciones?restauranteId=` | None | List classifications |
-| `POST` | `/api/clasificaciones` | JWT + ROOT/OWNER | Create classification |
-| `PATCH` | `/api/clasificaciones/:id` | JWT + ROOT/OWNER | Update classification |
-| `DELETE` | `/api/clasificaciones/:id` | JWT + ROOT/OWNER | Delete classification |
-| `POST` | `/api/clasificaciones/items/:itemId` | JWT + ROOT/OWNER | Assign to item |
-| `DELETE` | `/api/clasificaciones/items/:itemId/:clasificacionId` | JWT + ROOT/OWNER | Remove from item |
+| `POST` | `/api/clasificaciones` | OWNER or GERENTE of some restaurant | Create classification |
+| `PATCH` | `/api/clasificaciones/:id` | OWNER or GERENTE of some restaurant | Update classification |
+| `DELETE` | `/api/clasificaciones/:id` | OWNER or GERENTE of some restaurant | Delete classification |
+| `POST` | `/api/clasificaciones/items/:itemId` | OWNER or GERENTE of the item's restaurant | Assign to item |
+| `DELETE` | `/api/clasificaciones/items/:itemId/:clasificacionId` | OWNER or GERENTE of the item's restaurant | Remove from item |
 
 ---
 
@@ -1515,45 +1318,17 @@ Remove a classification from an item.
 
 ## Mozos — `/api/mozos`
 
-Auth required: `Bearer` + role `ROOT` or `OWNER`.
+The waiter's operational profile (`Mozo`). Auth required: the Supabase access token, Administration (`OWNER`, `GERENTE`) of the restaurant; `PATCH /api/mozos/:id`: `OWNER` only.
+
+A waiter is not created here: a person is invited from Personal with `POST /api/auth/invitaciones` (role `MOZO` or `JEFE_SALON`), which creates the restaurant's `Mozo` or links the one with the same email. Their access is removed from Personal (`DELETE /api/restaurantes/:restauranteId/personal/:membresiaId`); a waiter profile is not deleted from the app. The email and the password belong to the person's Supabase account.
 
 ### Endpoint summary
 
 | Method | Path | Description |
 |---|---|---|
-| `POST` | `/api/mozos` | Create waiter |
 | `GET` | `/api/mozos?restauranteId=` | List waiters |
 | `GET` | `/api/mozos/:id` | Get waiter |
-| `PATCH` | `/api/mozos/:id` | Update waiter |
-| `DELETE` | `/api/mozos/:id` | Deactivate waiter (soft delete) |
-
----
-
-### `POST /api/mozos`
-
-**Request body**
-
-```json
-{
-  "restauranteId": "uuid",
-  "nombre": "Carlos Gómez",
-  "email": "carlos@menyu.app",
-  "password": "password123",
-  "telefono": "+54911111111",
-  "esJefeSalon": false
-}
-```
-
-| Field | Type | Required |
-|---|---|---|
-| `restauranteId` | UUID | yes |
-| `nombre` | string | yes |
-| `email` | string (email) | no |
-| `password` | string (min 8 chars) | yes |
-| `telefono` | string | no |
-| `esJefeSalon` | boolean | no |
-
-**Responses:** 201
+| `PATCH` | `/api/mozos/:id` | Update the waiter's name and phone |
 
 ---
 
@@ -1582,23 +1357,13 @@ Auth required: `Bearer` + role `ROOT` or `OWNER`.
 ```json
 {
   "nombre": "Carlos G.",
-  "email": "nuevo@menyu.app",
-  "telefono": "+54911000000",
-  "activo": true,
-  "esJefeSalon": true,
-  "password": "nuevaPassword123"
+  "telefono": "+54911000000"
 }
 ```
 
-**Responses:** 200 · 404
+Any other field is stripped: whether the person is a floor manager comes from their membership, and access is removed from Personal.
 
----
-
-### `DELETE /api/mozos/:id`
-
-Sets `activo = false` (soft delete). The waiter record is not removed from the database.
-
-**Responses:** 204 · 404
+**Responses:** 200 · 403 · 404
 
 ---
 

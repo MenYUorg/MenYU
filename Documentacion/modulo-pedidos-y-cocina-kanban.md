@@ -4,6 +4,8 @@
 **Equipo:** De Marcos · Ojeda · Strumia Carrara  
 **Fecha:** Mayo 2026
 
+> **Documento histórico (mayo de 2026).** Registra lo que se construyó en ese sprint. Lo que dice del login (`POST /api/auth/login` y el JWT propio con `tipo` y `restauranteId`) ya no vale: la Fase 5 de [`docs/auth/specs/auth.md`](../docs/auth/specs/auth.md) lo borró (2026-10-26). Hoy web-staff no tiene login propio: lee la sesión de Supabase que deja web-auth (ver la sección "Autenticación con Supabase" de `CLAUDE.md`).
+
 ---
 
 ## Índice

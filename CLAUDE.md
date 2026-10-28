@@ -56,24 +56,38 @@ apps/backend/
 │   ├── schema.prisma
 │   ├── migrations/
 │   └── seed.ts
+├── scripts/              (cuentas-root.ts, e2e-local.mjs, fix-removibles.ts)
 └── src/
     ├── main.ts
     ├── app.module.ts
-    ├── auth/             (module, controller, service, guards/)
-    ├── restaurant/       (module, controller, service)
-    ├── tables/           (module, controller, service)
-    ├── sessions/         (module, controller, service, gateway.ts)
-    ├── menu/             (module, controller, service)
-    ├── discovery/        (module, controller, service, dto/ — público, sin guards)
+    ├── auth/             (GET /auth/me; guards/, decorators/, supabase/ con AccesoService, invitaciones/, roles-del-personal.ts)
+    ├── personal/         (Personal: GET y DELETE /restaurantes/:restauranteId/personal)
     ├── root/             (consola de ROOT: marcas/, restaurantes/, duenos/, roots/, historial/ — solo ROOT; el historial es de solo agregar)
-    ├── orders/           (module, controller, service, gateway.ts)
-    ├── waiter-calls/     (module, controller, service, gateway.ts)
+    ├── marca/            (module, controller, service; marca.public.controller.ts es público)
+    ├── restaurante/      (module, controller, service)
+    ├── mesas/            (module, controller, service)
+    ├── mozos/            (module, controller, service — el perfil operativo)
+    ├── menu/             (module, controller, service — la carta pública)
+    ├── categorias/, items/, ingredientes/, clasificaciones/   (la carta en el panel: module, controller, service)
+    ├── discovery/        (module, controller, service, dto/ — público, sin guards)
+    ├── sessions/         (module, controller, service)
+    ├── comensales/       (module, controllers, service, division.service.ts)
+    ├── orders/           (module, controller, service — los pedidos del comensal)
+    ├── pedidos/          (module, controller, service — estado, edición y auditoría del personal)
+    ├── waiter-calls/     (module, controller, service)
     ├── payments/
     │   ├── payments.module.ts
     │   ├── payments.controller.ts
     │   ├── payments.service.ts
-    │   └── providers/    (payment-provider.interface.ts, mercadopago.provider.ts)
-    └── common/           (filters/, interceptors/, decorators/, pipes/)
+    │   ├── mercado-pago-oauth.controller.ts, mercado-pago-oauth.service.ts
+    │   └── providers/    (payment-provider.interface.ts, mercado-pago.provider.ts)
+    ├── reportes/         (module, controller, service)
+    ├── gateway/          (menyu.gateway.ts — el Socket.io de todos los módulos)
+    ├── storage/          (Supabase Storage: logos e imágenes)
+    ├── health/           (GET /health, sin prefijo /api)
+    ├── prisma/           (PrismaModule, PrismaService)
+    ├── common/           (atribucion-del-cobro.ts, restaurante-disponible.ts y otras utilidades)
+    └── test/             (helpers de los specs: acceso-de-test.ts, app-endpoints.ts…)
 ```
 
 ### Interior de `packages/types/`
@@ -82,11 +96,16 @@ apps/backend/
 packages/types/src/
 ├── index.ts
 ├── auth.types.ts
+├── permisos.ts           (ROLES_QUE_PUEDE_INVITAR; también como @menyu/types/permisos)
 ├── session.types.ts
 ├── menu.types.ts
+├── cart.types.ts
 ├── order.types.ts
 ├── payment.types.ts
 ├── waiter.types.ts
+├── discovery.types.ts
+├── root.types.ts
+├── historial.types.ts
 ├── socket/               (events.ts — eventos Socket.io tipados)
 └── api/                  (requests.ts, responses.ts — DTOs compartidos)
 ```
@@ -103,7 +122,7 @@ Quién invita a quién y quién le quita el acceso a quién está en una sola ta
 ### Tipos de usuario adicionales (tablas separadas, NO son roles de `Membresia`)
 | Tipo | Tabla | App |
 |---|---|---|
-| Mozo | `mozo` (perfil operativo del restaurante, sin login propio: la sesión la da su `Usuario` de Supabase) | apps/web-staff |
+| Mozo y jefe de salón | `mozo` (perfil operativo del restaurante de quien tiene la membresía `MOZO` o `JEFE_SALON`, sin login propio: la sesión la da su `Usuario` de Supabase) | apps/web-staff |
 | Cocina | — (no hay tabla; es el rol `COCINA` de `Membresia`) | apps/web-staff |
 | Cliente/Comensal | `cliente` (con `supabaseUserId` si tiene cuenta, que es opcional) | apps/web-cliente |
 
@@ -135,7 +154,7 @@ Spec, decisiones y fases: `docs/auth/specs/auth.md` (una fase por sesión; al ce
   - `/privacidad` es la política de privacidad pública que figura en Google Cloud. No usa la sesión: no le pongas post-login ni la cambies de ruta.
   - Después del login llama a `GET /auth/me` y manda al `redirect` (solo `https://*.menyu-app.com`, o `*.menyu.local` en local) o a la app del rol.
   - Los links del mail traen un `token_hash` que se canjea con `verifyOtp` (plantillas: `docs/auth/VariablesACambiar.md`).
-  - La sesión vive en la cookie de dominio compartido de `@menyu/auth-client` (`VITE_AUTH_COOKIE_DOMAIN`). web-admin la lee desde la 4.5 y web-staff desde la 4.6.
+  - La sesión vive en la cookie de dominio compartido de `@menyu/auth-client` (`VITE_AUTH_COOKIE_DOMAIN`). web-admin la lee desde la 4.5 y web-staff desde la 4.6. La cookie es `sb-<ref>-auth-token`, pero si el token no entra en una (las cuentas de cliente y las de Google, que traen el nombre en `user_metadata`), `@supabase/ssr` la parte en `…auth-token.0`, `.1`: lo que la busque por nombre tiene que usar el prefijo, como `hayCookieDeSesion` de web-cliente.
   - Probar en local contra staging: `docs/auth/VariablesACambiar.md`, Desarrollo local.
 - **web-admin** (`apps/web-admin`, `admin.<ambiente>`, puerto 5174) corre sobre la sesión de Supabase desde la entrega 4.5: toda la app va dentro de `RequireAuth` de `@menyu/auth-client`, ya no tiene login propio y el token de cada pedido sale de `tokenDeAcceso()` (ante un 401 renueva y reintenta una vez). El rol sale del perfil de `GET /auth/me` con `useRolActual()` (`store/contextStore.ts`): es el rol en el restaurante elegido, así que una persona puede ser OWNER de una marca y GERENTE de un restaurante de otra. ROOT no entra a las pantallas de datos (`/admin/*` lo devuelve a `/root`). El alta de personal es la pantalla Personal (`/admin/mozos`): invitar (`POST /auth/invitaciones`) y quitar acceso (`DELETE /restaurantes/:id/personal/:membresiaId`), con la matriz de `@menyu/types/permisos`.
 - **web-staff** (`apps/web-staff`, `staff.<ambiente>`, puerto 5175) corre sobre la sesión de Supabase desde la entrega 4.6: toda la app va dentro de un `RequireAuth` que pide cualquier membresía, ya no tiene login propio y el cliente de la API se maneja como en web-admin. El contexto (`store/contextoStore.ts`, que reemplazó a `mozoStore`) sale del perfil sin pedirle nada a la API, y `rolesEnElRestaurante` da **todos** los roles en el restaurante elegido: de ahí salen qué vista le toca (COCINA a `/cocina`; MOZO y JEFE_SALON a `/mozo`; OWNER y GERENTE, las dos, con el selector) y qué puede hacer (atender un llamado es de MOZO y JEFE_SALON, que tienen un `Mozo`; editar un pedido no es del OWNER). `CobroModal` no manda `mozoId` ni `cobradoPorNombre`: quién cobró lo deduce el backend de la cuenta.
@@ -203,7 +222,7 @@ Si tiene lógica condicional por rol, vive en cada app por separado.
 ### Seguridad por separación de bundles
 El código del admin no existe en el bundle del comensal.
 Aunque el comensal no pueda acceder al panel admin, en la arquitectura anterior
-el código JS era inspeccionable. Con las 3 apps separadas eso no es posible.
+el código JS era inspeccionable. Con las cuatro apps separadas eso no es posible.
 
 ---
 

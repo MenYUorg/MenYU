@@ -157,7 +157,106 @@ web-cliente, los dos `verify-carrito.*` y una línea de `.claude/settings.json`.
 
 ## Etapa 3 — Documentación
 
-(pendiente)
+Rama `chore/cierre-auth`, sobre `2afe8db` (Etapa 2). Solo documentación: ningún archivo de `apps/`, `packages/`,
+`scripts/`, configuración ni `package.json`. Las líneas son las del archivo después del cambio.
+
+**Hecho** (la checklist de §4.2 I1, I2, I3, I9, I10, §3.5, §3.7, M3, M14, M19 y M26 del informe)
+
+1. `docs/auth/specs/auth.md`
+   - M3: `:581`, el criterio 2 de la Fase 5 suma `menyu_refresh_token` y nombra todo lo demás que el grep
+     encuentra y no cuenta (ver Decisiones): el test de la regex de `includes-contract.spec.ts`, el `refresh_token`
+     del OAuth de Mercado Pago y lo que narra el pasado.
+   - Los 7 puntos de §3.5: `:156` (F3-07: `/sin-acceso` no cierra la sesión sola, ofrece "Ir a MenYU"), `:524`
+     (`/privacidad` rige desde el 26 de octubre), `:442` (F47-05: actualización funcional, no ref), `:581` (el 4, M3),
+     `:293` (la fila de `DELETE /mozos/:id`, tachada), `:275` (el tercer `*.base.spec.ts`, `historial-root`) y `:577`
+     (el tercer lugar que carga `cargarAuthClient()`, `cerrarSesionDeLaCuenta`).
+   - M26: `:19`, en la decisión del SSO, la cookie partida en `…auth-token.0`/`.1`.
+   - `:104` (Fase 0) pasa a pasado (decía "hoy" que `admin`, `mozo` y `cliente` guardan `password_hash`).
+   - I3: `:472` y `:612`, el puntero a la lista nueva; la lista de la Fase 4 queda en su lugar, como la de esa fase.
+2. `doc.md` (I1). `:13-38` la sección Global reescrita: sin login propio, los tres tipos de ruta (token de Supabase,
+   token de sesión de mesa, pública), los códigos y los roles por `Membresia` con los grupos de
+   `roles-del-personal.ts`. Borrados los 5 endpoints del login, el `TokenPair` y el payload del JWT; `:65` dice que
+   responden 404. `GET /auth/me` y `POST /auth/invitaciones` ya estaban y no se duplicaron. También: `:133` (el seed
+   no da credenciales), `:293-309` Marcas y `:371-384` Restaurantes sin `POST`/`DELETE` (están en `/root` desde la
+   4.3), `:448`, `:797`, `:932`, `:1157`, `:1234-1245` y `:1321-1366` con los roles reales (Mesas, Categorías, Items,
+   Ingredientes, Clasificaciones, Mozos), `:563` y `:598` el token de `POST /sessions/open` y `/sessions/close`, y
+   Mozos sin `POST`/`DELETE` ni `password`. Ninguna mención a `password_hash` quedaba; quedaron 0 hits del grep.
+3. `docs/plan-consola-root.md` (I2): `:7` encabezado de planificación histórica para todo lo de cuentas y
+   contraseñas (secciones 3, 7 con 7.1 y 7.2, 8.1, 9, 10, 11 y 13), con el puntero a lo vigente; `:150` el aviso de la
+   sección 7 dice que la tabla no es la API vigente; `:54` "va a retirar" → "retiró".
+4. `Documentacion/Doc_DB.md:9` y `:97`, `modulo-usuarios-y-autenticacion.md:7` (y `:177`, "sigue activo hasta la Fase
+   5" → "la Fase 5 borró") y `modulo-menu.md:7`: encabezado de documento histórico. `datos-de-prueba-local.md`:
+   corregido (`:1` título sin "credenciales", `:13-24` la sección Usuarios con lo que crea el seed hoy, sin contraseñas,
+   y el `/auth` de web-cliente como redirect).
+5. `docs/calidad/e2e-supabase.md:73` y `:149` sin la contraseña de `cliente`; `docs/auth/VariablesACambiar.md:94`
+   (sin `admin` ni contraseñas; el `curl` de verificación pasa de `admin`, que ya no existe, a `cliente`), `:136` y
+   `:146` ("Ingresar" va a web-auth, no al `/auth` de la app).
+6. `docs/checklist-qa-staging.md:21` "los cuatro frontends" y `:7` el puntero; **nuevo**
+   `docs/auth/checklist-staging.md`, con casilleros: los 7 casos de la Fase 4 (el 6, al día con la Fase 5), los de
+   navegador del criterio 4 de la Fase 5, lo que la Fase 5 dejó sin verificar (con SonarCloud y el SQL del E2E si se
+   instala en producción) y los casos de la pasada de §3.7, más la tabla de pasadas (2026-10-23 y 2026-10-27).
+7. `CLAUDE.md` (I9 sin `:116`, más M26): `:59-90` el árbol del backend contra el `ls` de `apps/backend/src/`
+   (`restaurante/`, `mesas/`, los 15 módulos que faltaban, `scripts/`; sin los `gateway.ts` por módulo, que no
+   existen: el gateway es `gateway/menyu.gateway.ts`); `:96-110` el de `packages/types` con `permisos.ts`,
+   `cart.types.ts`, `discovery.types.ts`, `root.types.ts` e `historial.types.ts`; `:125` la fila de Mozo con
+   `JEFE_SALON`; `:157` la nota de M26; `:225` "las cuatro apps".
+8. `Documentacion/WORKFLOW.md` (I10, M14, M19): `:46-48` sin la Preview URL por PR (vale `:127`); `:67` cinco
+   workflows, y `:109-122` las secciones de `e2e-staging.yml` y `carga-k6.yml`; `:92` con `menyu-auth` y `:94` el
+   paso del E2E; `:146` sin `resolveAppUrl`/`resolveLoginUrl` (el nombre importa por `ignorar-build.sh`; el login sale
+   de `VITE_AUTH_URL` y de la cookie); `:184` Node >= 22; `:212-215` "Trampas de desarrollo" con M14 y M19.
+9. **Correcciones que salieron de la revisión** (el revisor aprobó sin bloqueantes; van en el mismo commit, con
+   `--amend`):
+   - `WORKFLOW.md:119`: `pnpm carga:*` con `-f confirmar=si`, como `README.md:23,26` y `docs/calidad/k6.md:176`
+     (sin él no carga staging: `confirmar` es obligatorio).
+   - `docs/plan-consola-root.md:9` ya no se presenta como la referencia vigente, y el encabezado de `:7` nombra
+     también las secciones 5 y 12.
+   - `doc.md:371`: la baja de un restaurante es `POST /api/root/restaurantes/:id/baja`.
+   - Encabezado histórico fechado en dos notas de sesión que describían el login en presente y no estaban en la
+     lista del plan: `Documentacion/modulo-pedidos-y-cocina-kanban.md:7` y `sesion-integracion-carrito-menu.md:6`.
+   - `CLAUDE.md:59` suma `fix-removibles.ts`, y `docs/auth/checklist-staging.md:69`, la salvedad del caso de Google.
+
+**Decisiones**
+
+- **Corregir o histórico, por documento.** Corregidos los que se usan como referencia viva: `doc.md`,
+  `datos-de-prueba-local.md`, `e2e-supabase.md`, `VariablesACambiar.md`, los dos checklists, `CLAUDE.md` y
+  `WORKFLOW.md`. Fechados como históricos los que son el registro de un sprint o un plan, donde corregir es reescribir:
+  `Doc_DB.md` (schema del Sprint 1), `modulo-usuarios-y-autenticacion.md` (el login de abril, entero) y
+  `modulo-menu.md` (mayo, `apps/admin/`).
+- **`plan-consola-root.md`: histórico, no reemplazar la tabla.** Es un plan con la narración de sus etapas; la API
+  vigente ya está en `doc.md` ("ROOT console") y en "4.4, cómo quedó". Reemplazar solo la tabla dejaba 7.1, 7.2, 10, 11
+  y 13 hablando de contraseñas; un encabezado arriba y otro en la sección 7 los cubre con tres cambios.
+- **En `doc.md` también los roles por sección y las rutas borradas.** La sección Global nueva contradecía los "`Bearer`
+  + role `ROOT` or `OWNER`" de cada sección y los `POST`/`DELETE` de marcas, restaurantes y mozos (el de mozos con
+  contraseña): son el modelo de permisos del login borrado, y es lo más expuesto del repo. Los roles salen de los
+  decoradores de cada controller y de `roles-del-personal.ts`.
+- **El criterio 2 nombra lo que narra el pasado.** Con solo `menyu_refresh_token`, las migraciones y los resúmenes de
+  sprint igual lo romperían en su lectura literal. El texto nuevo lista las categorías con sus archivos, para que el
+  grep sea verificable contra la spec.
+- **Texto nuevo sin los 8 patrones** (salvo el criterio, que los tiene que nombrar): los encabezados históricos dicen
+  "las contraseñas" o "la de los refresh tokens", así no suman hits.
+- **La lista de staging marca cada caso por su origen** (`[F4-n]`, `[F5]`, `[R]`) en lugar de renumerar. §3.7 dice
+  "12 casos" pero describe 6 de la regresión del SSO y 7 viñetas de la Fase 5: están los 13.
+- `CLAUDE.md`: se cambió por pedido del plan (I9); la línea `:116` "(migración en curso)" queda para la Etapa 5.
+
+**No aplica / no hecho**
+
+- Ningún punto quedó como "no aplica": todos los diagnósticos seguían vigentes sobre `2afe8db` (las líneas se
+  movieron un poco; las de `CLAUDE.md` y `WORKFLOW.md` coincidían).
+- No se tocaron los resúmenes de sprint, las bitácoras, el informe de revisión ni el plan: narran el pasado.
+- M14 quedó solo en `WORKFLOW.md`, como pide el plan (el informe proponía `WORKFLOW.md` o `CLAUDE.md`).
+- Sin prueba en el navegador: no cambió código.
+
+**Para la sesión de limpieza:** son las entradas "(Etapa 3)" del bloque general, al final.
+
+**Verificaciones** (antes del commit)
+
+- `pnpm typecheck`: exit 0, `Tasks: 10 successful, 10 total` (`Cached: 10 cached`: ningún paquete cambió).
+- `pnpm lint`: exit 0, `Tasks: 9 successful, 9 total` (`Cached: 9 cached`).
+- Suites y `prisma generate`: no aplican, no se tocó código.
+- El grep de los 8 patrones del criterio 2 sobre todo el árbol (sin `node_modules`, `dist`, `coverage` ni `.git`):
+  147 líneas: las 144 de antes en los archivos versionados, menos las 6 corregidas, más las 5 de esta entrada y las 4 del plan, que no está
+  versionado. Todas en las categorías que el criterio exceptúa, ninguna fuera de ellas; `doc.md`,
+  `e2e-supabase.md` y `VariablesACambiar.md` pasaron a 0. La clasificación completa está en el reporte de la etapa.
 
 ## Etapa 4 — Release Fase 5 (preparación)
 
@@ -211,3 +310,19 @@ web-cliente, los dos `verify-carrito.*` y una línea de `.claude/settings.json`.
 - (Etapa 2) **web-cliente declara `@supabase/supabase-js` como dependencia directa** (`package.json:19`) y solo
   lo usa en `import type`. Ver si alcanza con los tipos que llegan por `@menyu/auth-client`, o pasarlo a
   `devDependencies`.
+- (Etapa 3) **`doc.md` sigue atrasado en lo que no es auth:** documenta las rutas de subcategorías
+  (`/api/categorias/:categoriaId/subcategorias` y `/api/categorias/subcategorias/:id`), que ningún controller tiene;
+  `:139` dice que las pantallas de dueños y cuentas ROOT (E2b) "are still to come", y están desde el 2026-10-22; y no
+  documenta pedidos, pagos, llamados, comensales, Personal ni reportes.
+- (Etapa 3) **Credenciales del seed viejo en notas de sesión** que no estaban en la lista de la etapa:
+  `Documentacion/contexto-division-pagos.md:31` (`root@menyu.com`/`root1234` y compañía, sin fecha) y
+  `Documentacion/sesion-pedidos-kanban-flujo-completo.md:372` (mayo de 2026). Ya no sirven (la Fase 5 borró `admin`
+  y las contraseñas), pero se leen como vigentes. Fecharlos o sacar las credenciales.
+- (Etapa 3) **`WORKFLOW.md:90` y `:103` dicen que los deploys "corren los mismos checks que CI"**: `deploy-staging.yml`
+  y `deploy-production.yml` solo tienen el paso `Build`.
+- (Etapa 3) **Dos notas viejas de la spec:** `auth.md:742` dice que `pnpm lint` de web-admin falla con una carpeta
+  `coverage/` (la Etapa 2 lo resolvió en las tres apps), y `auth.md:80`, que "hoy las apps corren en
+  `menyu-*.vercel.app`".
+- (Etapa 3) **`docs/plan-consola-root.md` quedó como historia en lo de cuentas.** Si se quiere que vuelva a ser la
+  referencia de la consola que `CLAUDE.md` dice que es, hay que reescribir las secciones 3, 7, 10, 11 y 13 sobre
+  Supabase.
