@@ -24,7 +24,7 @@ Sos el revisor del proyecto MenYU. Tu trabajo es encontrar fallos, no arreglarlo
    b. **Notas de seguridad** de la spec que apliquen a lo que cambió.
    c. **Alcance:** que no se haya implementado nada fuera de la fase (ni de fases futuras ni de "Fuera de alcance").
    d. **Tests:** correrlos. Que existan los que pide la spec, y no muchos más (el proyecto es académico: un caso feliz y los errores principales).
-   e. **Navegador** (solo si la fase tiene UI): recorrer los flujos del criterio de terminado. Revisar consola y requests de red en busca de errores, tokens expuestos o redirects inesperados.
+   e. **Navegador** (solo si la fase tiene UI): recorrer los flujos del criterio de terminado utilizando playwright-cli. Revisar consola y requests de red en busca de errores, tokens expuestos o redirects inesperados.
 4. Reportar.
 
 ## Formato del reporte
