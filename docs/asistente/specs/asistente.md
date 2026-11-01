@@ -184,7 +184,7 @@ Reglas:
 
 - **Modelo inicial:** `gemini-3.1-flash-lite` (Gemini API, sin sufijo preview). Probado con curl el 2026-10-31: respuesta completa y streaming SSE funcionan. Sin tokens de razonamiento con la configuración por defecto (`usageMetadata` sin `thoughtsTokenCount`).
 - **Costo:** USD 0 (free tier, sin facturación habilitada). Referencia si se pasa a pago (precios del 2026-10-31): USD 0,25 entrada / 1,50 salida por 1M tokens; caché USD 0,025 (no disponible en free tier). Estimación en pago: ~USD 0,0017 por pregunta (5k de contexto + 300 de salida); con el tope de 300/día, ~USD 15/mes como máximo.
-- **Keys:** un proyecto de Google por entorno, porque la cuota es por proyecto y no por key. `menyu-staging` para local y Railway staging; el de producción se crea y se carga con el deploy.
+- **Keys:** un proyecto de Google por entorno, porque la cuota es por proyecto y no por key. `menyu-staging` para local y Railway staging; `menyu-prod` para Railway producción (cargada el 2026-10-31).
 - **Límites del free tier** (`menyu-staging`, vistos en AI Studio el 2026-10-31): 15 RPM, 250K TPM, 500 RPD. El RPD se reinicia a la medianoche del Pacífico y lo comparten local, la orquestación, la evaluación y staging.
 - **Tope de gasto:** el free tier es el corte duro (no cobra; al agotarse, la API devuelve 429). En free tier Google usa el contenido para mejorar sus productos; antes del piloto con comensales reales, evaluar pasar el proyecto de producción a pago, con presupuesto y alertas (alertan, no cortan; el corte propio es `ASISTENTE_MAX_PREGUNTAS_DIA`).
 - **Variables:** `GOOGLE_GENERATIVE_AI_API_KEY`, `ASISTENTE_MODELO` y las `ASISTENTE_*` de la tabla de límites, cargadas en `apps/backend/.env` y en Railway staging.
