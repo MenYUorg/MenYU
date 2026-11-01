@@ -34,11 +34,13 @@ interface DatosDelPersonal {
 export const REVALIDACION_POR_DEFECTO_MS = 10 * 60_000
 /** Por debajo de esto, `WS_REVALIDACION_MS` se ignora: revalidar más seguido sería castigar a la base. */
 export const REVALIDACION_MINIMA_MS = 1_000
+/** Por encima de esto, también: `setInterval` con más de 2^31-1 ms se dispara cada 1 ms. */
+export const REVALIDACION_MAXIMA_MS = 24 * 60 * 60_000
 
 export function intervaloDeRevalidacion(valor = process.env.WS_REVALIDACION_MS): number {
   const ms = Number(valor)
   if (!valor || !Number.isFinite(ms)) return REVALIDACION_POR_DEFECTO_MS
-  return Math.max(Math.floor(ms), REVALIDACION_MINIMA_MS)
+  return Math.min(Math.max(Math.floor(ms), REVALIDACION_MINIMA_MS), REVALIDACION_MAXIMA_MS)
 }
 
 /** El nombre de cada sala lo arma el servidor: el cliente solo manda un id, que se valida antes. */
@@ -65,7 +67,8 @@ function paraElLog(valor: unknown): string {
  * - `cocina:{restauranteId}` (`cocina:join`): todo el personal (TODO_EL_PERSONAL).
  * - `sesion:{sesionId}` (`session:join` con el JWT de mesa): el comensal de esa sesión.
  * - `menu:{restauranteId}` (`session:join`, con o sin token): pública, solo avisa que cambió la carta.
- * El token va en el handshake (`auth.token`) y se verifica en cada join: un socket sin join válido no recibe nada.
+ * El token va en el handshake (`auth.token`) y se verifica en el primer join de la conexión; los siguientes se apoyan
+ * en esa identidad y vuelven a chequear el rol. Un socket sin join válido no recibe nada.
  */
 @WebSocketGateway({
   // Protege solo de otras páginas en un navegador; la barrera real es el token de cada join.
@@ -202,7 +205,12 @@ export class MenyuGateway implements OnGatewayConnection, OnGatewayDisconnect, O
     sala: SalaDelPersonal,
     restauranteId: unknown,
   ): Promise<RespuestaDelJoin> {
-    const acceso = await this.accesoDelSocket.personal(this.tokenDe(client), restauranteId, sala)
+    // El token se exige en el primer join. Después, la identidad es la de ese join y solo se vuelve a mirar el rol: el
+    // token del handshake no cambia mientras vive la conexión y el de Supabase vence a la hora.
+    const yaAutenticado = this.personalDe(client)
+    const acceso = yaAutenticado
+      ? await this.accesoDelSocket.personalYaAutenticado(yaAutenticado.usuarioId, restauranteId, sala)
+      : await this.accesoDelSocket.personal(this.tokenDe(client), restauranteId, sala)
     if (!acceso.ok) return this.rechazar(client, evento, restauranteId, acceso.motivo)
     const id = restauranteId as string
 

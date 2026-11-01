@@ -1,8 +1,20 @@
 import { Logger } from '@nestjs/common'
+import { JwtService } from '@nestjs/jwt'
 import { GATEWAY_OPTIONS } from '@nestjs/websockets/constants'
+import { errors } from 'jose'
 import { Namespace, Socket } from 'socket.io'
+import { AccesoService } from '../auth/supabase/acceso.service'
+import { VerificadorTokenSupabase } from '../auth/supabase/verificador-token.service'
+import { PrismaService } from '../prisma/prisma.service'
+import { accesoDeTest, CUENTAS, MUNDO } from '../test/acceso-de-test'
 import { AccesoDelSocket } from './acceso-del-socket.service'
-import { intervaloDeRevalidacion, MenyuGateway, REVALIDACION_MINIMA_MS, REVALIDACION_POR_DEFECTO_MS } from './menyu.gateway'
+import {
+  intervaloDeRevalidacion,
+  MenyuGateway,
+  REVALIDACION_MAXIMA_MS,
+  REVALIDACION_MINIMA_MS,
+  REVALIDACION_POR_DEFECTO_MS,
+} from './menyu.gateway'
 
 // El gateway de Socket.io (DT-08): quién entra a qué sala y a qué salas va cada evento. AccesoDelSocket, el Namespace
 // y los sockets son dobles; la verificación de tokens y roles está en acceso-del-socket.service.spec.ts.
@@ -26,7 +38,7 @@ function crearSocket(auth: Record<string, unknown> = { token: TOKEN }, id = 's1'
   } as unknown as SocketFalso
 }
 
-let acceso: { personal: jest.Mock; comensal: jest.Mock; sigueAutorizado: jest.Mock }
+let acceso: { personal: jest.Mock; personalYaAutenticado: jest.Mock; comensal: jest.Mock; sigueAutorizado: jest.Mock }
 let emitir: jest.Mock
 let hacia: jest.Mock
 let gateway: MenyuGateway
@@ -37,6 +49,7 @@ beforeEach(() => {
     personal: jest.fn(async () => ({ ok: true, usuarioId: 'usuario-1' })),
     comensal: jest.fn(() => null),
     sigueAutorizado: jest.fn(async () => true),
+    personalYaAutenticado: jest.fn(async (usuarioId: string) => ({ ok: true, usuarioId })),
   }
   emitir = jest.fn()
   hacia = jest.fn((_salas: string | string[]) => ({ emit: emitir }))
@@ -167,7 +180,7 @@ describe('MenyuGateway', () => {
     it('un join rechazado a otro restaurante no lo saca del que ya tenía', async () => {
       const socket = crearSocket()
       await gateway.unirseAlSalon({ restauranteId: R1 }, socket)
-      acceso.personal.mockResolvedValueOnce({ ok: false, motivo: 'sin-rol' })
+      acceso.personalYaAutenticado.mockResolvedValueOnce({ ok: false, motivo: 'sin-rol' })
 
       expect(await gateway.unirseAlSalon({ restauranteId: R2 }, socket)).toEqual({ ok: false, error: 'No autorizado' })
 
@@ -300,6 +313,8 @@ describe('MenyuGateway', () => {
       ['con decimales', '1500.7', 1500],
       ['por debajo del mínimo', '10', REVALIDACION_MINIMA_MS],
       ['negativa', '-5', REVALIDACION_MINIMA_MS],
+      ['por encima del máximo', '99999999999', REVALIDACION_MAXIMA_MS],
+      ['enorme', '1e20', REVALIDACION_MAXIMA_MS],
     ])('WS_REVALIDACION_MS %s: %s', (_caso, valor, esperado) => {
       expect(intervaloDeRevalidacion(valor)).toBe(esperado)
     })
@@ -428,6 +443,147 @@ describe('MenyuGateway', () => {
 
       expect(acceso.sigueAutorizado).toHaveBeenCalledTimes(1)
     })
+  })
+})
+
+// El token del handshake no cambia mientras vive la conexión y el de Supabase vence a la hora: se exige en el primer
+// join y los siguientes se apoyan en esa identidad. Acá AccesoDelSocket es el real, con el verificador y la base dobles.
+describe('MenyuGateway: los joins de un socket ya autenticado', () => {
+  const TOKEN_DEL_MOZO = 'token-del-mozo'
+  const TOKEN_DEL_OWNER = 'token-del-owner'
+  const vencido = () => new errors.JWTExpired('"exp" claim timestamp check failed', {})
+
+  let verificar: jest.Mock
+  let activos: Set<string>
+  let buscarUsuario: jest.Mock
+  let accesoReal: AccesoService
+  let conAcceso: MenyuGateway
+
+  beforeEach(() => {
+    const deToken: Record<string, string> = {
+      [TOKEN_DEL_MOZO]: CUENTAS.MOZO.supabaseUserId,
+      [TOKEN_DEL_OWNER]: CUENTAS.OWNER_A.supabaseUserId,
+    }
+    verificar = jest.fn(async (token: string) => {
+      if (deToken[token]) return deToken[token]
+      throw new errors.JWSSignatureVerificationFailed()
+    })
+    activos = new Set([CUENTAS.MOZO.id, CUENTAS.OWNER_A.id])
+    buscarUsuario = jest.fn(async ({ where }: { where: { supabaseUserId?: string; id?: string } }) => {
+      const cuenta = Object.values(CUENTAS).find((c) => c.supabaseUserId === where.supabaseUserId || c.id === where.id)
+      return cuenta ? { id: cuenta.id, activo: activos.has(cuenta.id) } : null
+    })
+    accesoReal = accesoDeTest()
+    conAcceso = new MenyuGateway(
+      new AccesoDelSocket(
+        { verificar } as unknown as VerificadorTokenSupabase,
+        { usuario: { findUnique: buscarUsuario } } as unknown as PrismaService,
+        accesoReal,
+        new JwtService({ secret: 'secreto-de-test' }),
+      ),
+    )
+    conAcceso.server = { to: jest.fn(() => ({ emit: jest.fn() })), sockets: new Map() } as unknown as Namespace
+  })
+
+  it('primer join con el token vencido: rechazado', async () => {
+    verificar.mockRejectedValueOnce(vencido())
+    const socket = crearSocket({ token: TOKEN_DEL_MOZO })
+
+    expect(await conAcceso.unirseAlSalon({ restauranteId: MUNDO.REST_1 }, socket)).toEqual({ ok: false, error: 'No autorizado' })
+    expect(socket.salas.size).toBe(0)
+    expect(logs.warn).toHaveBeenCalledWith(expect.stringContaining('motivo token-invalido'))
+  })
+
+  it('primer join con un token inválido: rechazado', async () => {
+    const socket = crearSocket({ token: 'token-falsificado' })
+
+    expect(await conAcceso.unirseAlSalon({ restauranteId: MUNDO.REST_1 }, socket)).toEqual({ ok: false, error: 'No autorizado' })
+    expect(socket.data.personal).toBeUndefined()
+  })
+
+  it('segundo join a otra sala con el token ya vencido: ok, sin volver a verificar el token', async () => {
+    const socket = crearSocket({ token: TOKEN_DEL_MOZO })
+    await conAcceso.unirseAlSalon({ restauranteId: MUNDO.REST_1 }, socket)
+    verificar.mockRejectedValue(vencido())
+
+    expect(await conAcceso.unirseALaCocina({ restauranteId: MUNDO.REST_1 }, socket)).toEqual({ ok: true })
+
+    expect(verificar).toHaveBeenCalledTimes(1)
+    expect([...socket.salas].sort()).toEqual([`cocina:${MUNDO.REST_1}`, `salon:${MUNDO.REST_1}`])
+  })
+
+  it('segundo join a otro restaurante donde tiene rol, con el token ya vencido: ok y sale del anterior', async () => {
+    const socket = crearSocket({ token: TOKEN_DEL_OWNER })
+    await conAcceso.unirseAlSalon({ restauranteId: MUNDO.REST_1 }, socket)
+    verificar.mockRejectedValue(vencido())
+
+    expect(await conAcceso.unirseAlSalon({ restauranteId: MUNDO.REST_2 }, socket)).toEqual({ ok: true })
+
+    expect(verificar).toHaveBeenCalledTimes(1)
+    expect([...socket.salas]).toEqual([`salon:${MUNDO.REST_2}`])
+    expect(socket.data.personal).toEqual({ usuarioId: CUENTAS.OWNER_A.id, restauranteId: MUNDO.REST_2, salas: ['salon'] })
+  })
+
+  it('segundo join a un restaurante donde no tiene rol: rechazado y conserva sus salas', async () => {
+    const socket = crearSocket({ token: TOKEN_DEL_MOZO })
+    await conAcceso.unirseAlSalon({ restauranteId: MUNDO.REST_1 }, socket)
+
+    expect(await conAcceso.unirseAlSalon({ restauranteId: MUNDO.REST_B }, socket)).toEqual({ ok: false, error: 'No autorizado' })
+
+    expect([...socket.salas]).toEqual([`salon:${MUNDO.REST_1}`])
+    expect(socket.data.personal.restauranteId).toBe(MUNDO.REST_1)
+    expect(socket.leave).not.toHaveBeenCalled()
+  })
+
+  it('segundo join con un restauranteId que no es UUID: rechazado sin tocar la base', async () => {
+    const socket = crearSocket({ token: TOKEN_DEL_MOZO })
+    await conAcceso.unirseAlSalon({ restauranteId: MUNDO.REST_1 }, socket)
+    buscarUsuario.mockClear()
+
+    expect(await conAcceso.unirseALaCocina({ restauranteId: 'rest-1' }, socket)).toEqual({ ok: false, error: 'No autorizado' })
+    expect(buscarUsuario).not.toHaveBeenCalled()
+  })
+
+  it('con el usuario desactivado entre un join y el siguiente: rechazado', async () => {
+    const socket = crearSocket({ token: TOKEN_DEL_MOZO })
+    await conAcceso.unirseAlSalon({ restauranteId: MUNDO.REST_1 }, socket)
+    activos.delete(CUENTAS.MOZO.id)
+
+    expect(await conAcceso.unirseALaCocina({ restauranteId: MUNDO.REST_1 }, socket)).toEqual({ ok: false, error: 'No autorizado' })
+    expect(logs.warn).toHaveBeenCalledWith(expect.stringContaining('motivo usuario-inactivo'))
+    expect([...socket.salas]).toEqual([`salon:${MUNDO.REST_1}`])
+  })
+
+  it('un error de base en el segundo join: rechazado, sin salir de sus salas', async () => {
+    const socket = crearSocket({ token: TOKEN_DEL_MOZO })
+    await conAcceso.unirseAlSalon({ restauranteId: MUNDO.REST_1 }, socket)
+    buscarUsuario.mockRejectedValueOnce(new Error("Can't reach database server"))
+
+    expect(await conAcceso.unirseALaCocina({ restauranteId: MUNDO.REST_1 }, socket)).toEqual({ ok: false, error: 'No autorizado' })
+
+    expect(logs.warn).toHaveBeenCalledWith(expect.stringContaining('motivo error-de-verificacion'))
+    expect(logs.error).toHaveBeenCalledWith(expect.stringContaining("Can't reach database server"))
+    expect([...socket.salas]).toEqual([`salon:${MUNDO.REST_1}`])
+    expect(socket.leave).not.toHaveBeenCalled()
+  })
+
+  it('después de perder todas las salas por la revalidación, el próximo join vuelve a exigir un token válido', async () => {
+    const socket = crearSocket({ token: TOKEN_DEL_MOZO })
+    await conAcceso.unirseAlSalon({ restauranteId: MUNDO.REST_1 }, socket)
+    ;(conAcceso.server.sockets as Map<string, Socket>).set(socket.id, socket)
+    const perdioElRol = jest.spyOn(accesoReal, 'rolesEnRestaurante').mockResolvedValueOnce([])
+
+    await conAcceso.revalidar()
+    expect(socket.data.personal).toBeUndefined()
+    expect(socket.emit).toHaveBeenCalledWith('acceso:revocado', { restauranteId: MUNDO.REST_1 })
+
+    // Le devuelven el rol, pero el token del handshake ya venció.
+    perdioElRol.mockRestore()
+    verificar.mockRejectedValue(vencido())
+
+    expect(await conAcceso.unirseAlSalon({ restauranteId: MUNDO.REST_1 }, socket)).toEqual({ ok: false, error: 'No autorizado' })
+    expect(verificar).toHaveBeenCalledTimes(2)
+    expect(socket.salas.size).toBe(0)
   })
 })
 

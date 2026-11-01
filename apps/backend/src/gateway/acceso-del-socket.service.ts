@@ -99,6 +99,23 @@ export class AccesoDelSocket {
     }
   }
 
+  /**
+   * Un join más de un socket que ya entró como `usuarioId`: el token del handshake no se vuelve a verificar (el de
+   * Supabase vence a la hora y la conexión dura todo el turno), pero sí la cuenta activa y el rol en la sala pedida.
+   */
+  async personalYaAutenticado(usuarioId: string, restauranteId: unknown, sala: SalaDelPersonal): Promise<AccesoDelPersonal> {
+    if (!esIdDeRestaurante(restauranteId)) return { ok: false, motivo: 'restaurante-invalido' }
+    try {
+      const usuario = await this.prisma.usuario.findUnique({ where: { id: usuarioId }, select: { activo: true } })
+      if (!usuario?.activo) return { ok: false, motivo: 'usuario-inactivo' }
+      if (!(await this.tieneRol(usuarioId, restauranteId, sala))) return { ok: false, motivo: 'sin-rol' }
+      return { ok: true, usuarioId }
+    } catch (error) {
+      this.logger.error(`No se pudo verificar el acceso del socket: ${(error as Error).message}`)
+      return { ok: false, motivo: 'error-de-verificacion' }
+    }
+  }
+
   /** La sesión de mesa del token. Cualquier otra cosa (sin token, invitado, cuenta sin sesión, token de Supabase): null. */
   comensal(token: unknown): SesionDelComensal | null {
     if (!esToken(token)) return null

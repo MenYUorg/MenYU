@@ -159,6 +159,57 @@ describe('AccesoDelSocket.personal', () => {
   })
 })
 
+describe('AccesoDelSocket.personalYaAutenticado (los joins siguientes de una conexión)', () => {
+  it('no vuelve a verificar el token: solo la cuenta y el rol', async () => {
+    expect(await socket.personalYaAutenticado(CUENTAS.MOZO.id, MUNDO.REST_1, 'cocina')).toEqual({
+      ok: true,
+      usuarioId: CUENTAS.MOZO.id,
+    })
+    expect(verificar).not.toHaveBeenCalled()
+  })
+
+  it('el OWNER pasa a otra sucursal de su marca', async () => {
+    expect(await socket.personalYaAutenticado(CUENTAS.OWNER_A.id, MUNDO.REST_2, 'salon')).toEqual({
+      ok: true,
+      usuarioId: CUENTAS.OWNER_A.id,
+    })
+  })
+
+  it('con un restauranteId que no es UUID: rechaza sin tocar la base', async () => {
+    expect(await socket.personalYaAutenticado(CUENTAS.MOZO.id, 'rest-1', 'salon')).toEqual({
+      ok: false,
+      motivo: 'restaurante-invalido',
+    })
+    expect(buscarUsuario).not.toHaveBeenCalled()
+  })
+
+  it('en un restaurante donde no tiene rol: rechaza', async () => {
+    expect(await socket.personalYaAutenticado(CUENTAS.MOZO.id, MUNDO.REST_B, 'salon')).toEqual({ ok: false, motivo: 'sin-rol' })
+  })
+
+  it('la COCINA no entra al salón', async () => {
+    expect(await socket.personalYaAutenticado(CUENTAS.COCINA.id, MUNDO.REST_1, 'salon')).toEqual({ ok: false, motivo: 'sin-rol' })
+  })
+
+  it('con la cuenta desactivada (o borrada): rechaza', async () => {
+    expect(await socket.personalYaAutenticado(INACTIVO.id, MUNDO.REST_1, 'salon')).toEqual({ ok: false, motivo: 'usuario-inactivo' })
+    expect(await socket.personalYaAutenticado('usuario-borrado', MUNDO.REST_1, 'salon')).toEqual({
+      ok: false,
+      motivo: 'usuario-inactivo',
+    })
+  })
+
+  it('un error de base rechaza y queda en el log', async () => {
+    buscarUsuario.mockRejectedValueOnce(new Error("Can't reach database server"))
+
+    expect(await socket.personalYaAutenticado(CUENTAS.MOZO.id, MUNDO.REST_1, 'salon')).toEqual({
+      ok: false,
+      motivo: 'error-de-verificacion',
+    })
+    expect(errorDelLog).toHaveBeenCalledWith(expect.stringContaining("Can't reach database server"))
+  })
+})
+
 describe('AccesoDelSocket.comensal', () => {
   const SESION = { sub: 'cliente-1', tipo: 'cliente', sesionId: 'sesion-1', mesaId: 'mesa-1', restauranteId: MUNDO.REST_1 }
 
