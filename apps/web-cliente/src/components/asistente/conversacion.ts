@@ -10,6 +10,13 @@ const PREFIJO = 'menyu_asistente:'
 /** El restaurante cuya carta está abierta: solo se guarda su conversación. */
 let restauranteActivo: string | null = null
 
+/**
+ * Cuántas veces se entró a la carta de un restaurante distinto del anterior. La conversación que el chat tiene en memoria
+ * vale solo en la visita en que se cargó: de A a B y de vuelta a A, la de A arranca de cero aunque el chat no se haya
+ * abierto en B (sessionStorage no alcanza: el chat también la tiene en memoria).
+ */
+let visita = 0
+
 // Los ids son UUID: no importan las mayúsculas (como `menuEsDe` del store del menú).
 const normalizar = (restauranteId: string) => restauranteId.toLowerCase()
 const claveDe = (restauranteId: string) => `${PREFIJO}${normalizar(restauranteId)}`
@@ -21,11 +28,17 @@ function esMensaje(valor: unknown): valor is MensajeDelChatAsistente {
 }
 
 /**
- * Se entró a la carta de este restaurante: las conversaciones de los demás se borran. Así, al pasar a otro restaurante
- * (y también al volver al anterior) la conversación arranca de cero: no se arrastra nada de un restaurante a otro.
+ * Se entró a la carta de este restaurante: las conversaciones de los demás se borran y, si se viene de otro, empieza una
+ * visita nueva. Así, al pasar a otro restaurante (y también al volver al anterior) la conversación arranca de cero: no se
+ * arrastra nada de un restaurante a otro. Volver a la misma carta sin pasar por otra (después del detalle de un plato, o
+ * cuando el menú se recarga) no es una visita nueva: la conversación sigue, con la respuesta que esté llegando.
  */
 export function entrarAlRestaurante(restauranteId: string): void {
-  restauranteActivo = normalizar(restauranteId)
+  const id = normalizar(restauranteId)
+  if (id !== restauranteActivo) {
+    restauranteActivo = id
+    visita++
+  }
   try {
     const propia = claveDe(restauranteId)
     const otras: string[] = []
@@ -39,6 +52,9 @@ export function entrarAlRestaurante(restauranteId: string): void {
   }
 }
 
+/** La visita a la carta en curso (ver `visita`): lo que el chat cargó en otra ya no es la conversación de ahora. */
+export const visitaActual = (): number => visita
+
 /** La conversación guardada de este restaurante; vacía si no hay, o si lo guardado no tiene la forma esperada. */
 export function leerConversacion(restauranteId: string): MensajeDelChatAsistente[] {
   try {
@@ -51,9 +67,12 @@ export function leerConversacion(restauranteId: string): MensajeDelChatAsistente
   }
 }
 
-/** Guarda la conversación, salvo que ya se haya pasado a la carta de otro restaurante (una respuesta que llegó tarde). */
-export function guardarConversacion(restauranteId: string, mensajes: MensajeDelChatAsistente[]): void {
-  if (restauranteActivo !== normalizar(restauranteId)) return
+/**
+ * Guarda la conversación de esa visita, salvo que ya no sea la de ahora: una respuesta que llegó tarde, después de pasar a
+ * la carta de otro restaurante (aunque se haya vuelto a esta).
+ */
+export function guardarConversacion(restauranteId: string, mensajes: MensajeDelChatAsistente[], deLaVisita: number): void {
+  if (deLaVisita !== visita || restauranteActivo !== normalizar(restauranteId)) return
   try {
     sessionStorage.setItem(claveDe(restauranteId), JSON.stringify(mensajes))
   } catch {

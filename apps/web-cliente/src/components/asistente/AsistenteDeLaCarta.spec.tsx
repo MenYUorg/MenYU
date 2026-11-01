@@ -25,8 +25,26 @@ function respuestaEnStreaming() {
   }
 }
 
+/** Una respuesta que llega entera, en un solo pedazo. */
+const respuestaEntera = (texto: string) =>
+  new Response(
+    sse([
+      { type: 'start' },
+      { type: 'text-start', id: 't' },
+      { type: 'text-delta', id: 't', delta: texto },
+      { type: 'text-end', id: 't' },
+      { type: 'finish', finishReason: 'stop' },
+    ]) + 'data: [DONE]\n\n',
+    { status: 200, headers: { 'content-type': 'text/event-stream', 'x-vercel-ai-ui-message-stream': 'v1' } },
+  )
+
+/** La carta de un restaurante con el asistente, con `key` por restaurante como en `MenuView`. */
+const carta = (restauranteId: string) => (
+  <AsistenteDeLaCarta key={restauranteId} restauranteId={restauranteId} nombreRestaurante="La Parrilla" habilitado conCarrito={false} />
+)
+
 function renderAsistente() {
-  render(<AsistenteDeLaCarta restauranteId="rest-1" nombreRestaurante="La Parrilla" habilitado conCarrito={false} />)
+  render(carta('rest-1'))
 }
 
 /** Abre el chat y espera el input (el panel se baja aparte y sube en el cuadro siguiente). */
@@ -35,7 +53,7 @@ async function abrirElChat() {
   return screen.findByRole('textbox', { name: 'Tu pregunta' })
 }
 
-const cuerpoEnviado = () => JSON.parse(fetchFalso.mock.calls[0]?.[1]?.body as string) as unknown
+const cuerpoEnviado = (llamada = 0) => JSON.parse(fetchFalso.mock.calls[llamada]?.[1]?.body as string) as unknown
 
 describe('AsistenteDeLaCarta', () => {
   beforeEach(() => {
@@ -132,5 +150,34 @@ describe('AsistenteDeLaCarta', () => {
     expect(input).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Enviar pregunta' })).toBeDisabled()
     expect(JSON.parse(sessionStorage.getItem(CLAVE) ?? 'null')).toEqual(conversacion)
+  })
+
+  it('al volver a un restaurante después de entrar a la carta de otro, sin abrir el chat ahí, la conversación arranca de cero', async () => {
+    fetchFalso
+      .mockImplementationOnce(() => Promise.resolve(respuestaEntera('Es suave.')))
+      .mockImplementationOnce(() => Promise.resolve(respuestaEntera('Sí, hay wifi.')))
+    const { rerender } = render(carta('rest-1'))
+    await userEvent.type(await abrirElChat(), '¿La provoleta pica?{Enter}')
+    expect(await screen.findByText('Es suave.')).toBeInTheDocument()
+
+    // La carta de otro restaurante (el chat ni se abre) y de vuelta a la primera.
+    rerender(carta('rest-2'))
+    rerender(carta('rest-1'))
+
+    const input = await abrirElChat()
+    const hilo = screen.getByRole('log', { name: 'Conversación con el asistente' })
+    expect(within(hilo).queryByText('¿La provoleta pica?')).not.toBeInTheDocument()
+    expect(within(hilo).queryByText('Es suave.')).not.toBeInTheDocument()
+    expect(within(hilo).getByRole('button', { name: '¿Qué me recomendás?' })).toBeInTheDocument()
+
+    // La pregunta siguiente no lleva la conversación de antes, y lo guardado es solo la nueva.
+    await userEvent.type(input, '¿Hay wifi?{Enter}')
+    expect(cuerpoEnviado(1)).toEqual({ mensajes: [{ rol: 'usuario', contenido: '¿Hay wifi?' }] })
+    expect(await within(hilo).findByText('Sí, hay wifi.')).toBeInTheDocument()
+    expect(within(hilo).queryByText('¿La provoleta pica?')).not.toBeInTheDocument()
+    expect(JSON.parse(sessionStorage.getItem(CLAVE) ?? 'null')).toEqual([
+      { rol: 'usuario', contenido: '¿Hay wifi?' },
+      { rol: 'asistente', contenido: 'Sí, hay wifi.' },
+    ])
   })
 })

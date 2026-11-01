@@ -955,3 +955,44 @@ netstat -ano | grep -E ':(3000|5176) .*LISTENING'                               
   - Las preguntas de ejemplo son genéricas. Si el piloto muestra otras más útiles, se cambian en `SUGERENCIAS` de `PanelDelAsistente.tsx`.
   - El teclado del celular (`visualViewport`) no está probado en un teléfono real.
 - **Fuera de alcance, sin tocar:** el test de ESLint de web-cliente (`authClientDiferido.spec.ts`) que se pasa de 30 s con todo el CI en paralelo en esta máquina (anotado en las Fases 3 y 5).
+
+### Ronda de corrección 1 (2026-11-01)
+
+Estado: completada. El revisor marcó la fase **NO APROBADA** por un bloqueante (reproducido en el navegador); esta ronda lo corrige y suma el test que faltaba.
+
+**El bug:** la conversación no se reiniciaba al volver a un restaurante si en el medio no se abría el chat. `entrarAlRestaurante` solo borraba `sessionStorage`; el store (`asistenteStore.ts`, que vive toda la pestaña una vez que bajó el chunk) seguía con `restauranteId` = A y sus mensajes, y `abrir(A)` comparaba solo el restaurante, así que no hacía nada. Carta de Restaurante Seed → pregunta → carta de Restaurante Seed 2 sin abrir el chat → carta de Restaurante Seed: el panel mostraba la conversación vieja, la pregunta siguiente la mandaba como historial y la volvía a guardar en `sessionStorage`. El spec temporal de la Fase 6 probaba el cambio de restaurante abriendo el chat en B, que es justo el camino que sí reiniciaba (`abrir(B)` cargaba otra conversación); el camino del bug no estaba probado.
+
+**Qué cambié** (solo el chat de web-cliente; el backend no se tocó):
+- `conversacion.ts`: un contador de **visitas**, que sube cuando `entrarAlRestaurante` recibe un restaurante distinto del activo, y `visitaActual()`. `guardarConversacion(restauranteId, mensajes, deLaVisita)` no guarda si esa visita ya pasó: una respuesta que llega tarde después de A → B → A no vuelve a escribir la conversación vieja.
+- `asistenteStore.ts`: el estado guarda la `visita` en que se cargó, y `esLaConversacionVigente(estado, restauranteId)` exige el mismo restaurante **y** la misma visita. `abrir` recarga desde `sessionStorage` (y corta lo que esté llegando) si no es la vigente; `preguntar` descarta, sin sumarla ni guardarla, la respuesta de una visita pasada.
+- `PanelDelAsistente.tsx`: `cargado` usa `esLaConversacionVigente` (reemplaza a su `mismoRestaurante` local), así no se dibuja ni un cuadro de la conversación vieja antes del efecto que llama a `abrir`.
+- **Lo opcional del revisor:** con el input bloqueado, el placeholder pasa a "Preguntale al mozo" (entra en una línea a 390 px; el textarea tiene ~282 px útiles). El aviso entero ya está en el hilo y los tres avisos que bloquean nombran al mozo.
+
+**Decisión: contador de visitas, no de entradas** (una variante de la sugerencia del revisor). Un contador que subiera en cada entrada (cada montaje de `AsistenteDeLaCarta`) también reiniciaría al volver del detalle de un plato o cuando `menu:updated` recarga la carta, y cortaría la respuesta en curso: contradice la decisión 10 de la fase ("dentro del mismo restaurante sobrevive"). Además, el `StrictMode` de desarrollo monta dos veces. Como sube solo al cambiar de restaurante, cubre A → B → A y deja intacto A → plato → A. "Entrar a otro restaurante" sigue siendo entrar a su carta (donde vive el chat), igual que el borrado de `sessionStorage`: pasar por Discovery o por la ficha `/restaurante/:id` de otro restaurante no reinicia.
+
+**Test nuevo** (`AsistenteDeLaCarta.spec.tsx`, con la `key` por restaurante como en `MenuView`): "al volver a un restaurante después de entrar a la carta de otro, sin abrir el chat ahí, la conversación arranca de cero". En la carta de `rest-1` pregunta y recibe la respuesta; pasa a la carta de `rest-2` sin abrir el chat y vuelve a `rest-1`. Al abrir, el hilo no tiene la pregunta ni la respuesta de antes y están las preguntas de ejemplo. La pregunta siguiente sale con un solo mensaje en el body y lo guardado es solo la conversación nueva. **Antes de la corrección falló** (con "¿La provoleta pica?" en el hilo, lo mismo que vio el revisor) y después pasa.
+
+**Verificación:**
+- **Bordes, con un spec temporal** (6 casos, borrado antes del commit):
+  - La misma carta remontada (el detalle de un plato) con la respuesta ya terminada: sigue a la vista y guardada.
+  - La misma carta remontada con la respuesta todavía llegando: sigue llegando, termina y se guarda.
+  - A pregunta, B sin abrir, vuelta a A sin abrir y la respuesta llega tarde: no se guarda ni aparece, y la siguiente sale sin historial.
+  - A → B abriendo el chat en B → A: arranca de cero y lo de B tampoco vuelve.
+  - Con `StrictMode` (efectos dobles), la conversación de la misma carta sobrevive el remontaje.
+  - El mismo id con otras mayúsculas no cuenta como otro restaurante.
+- typecheck ✓ y lint ✓ (`turbo typecheck lint` de web-cliente; lint con `--max-warnings 0`).
+- tests ✓: `turbo test` de web-cliente, 763 en 43 archivos (eran 762: +1 caso). Cobertura ✓ (`test:coverage`): `components/asistente/`, 83,5 % de líneas.
+- build ✓: `PanelDelAsistente-*.js` sigue aparte (15,8 kB, 6,0 kB con gzip). `conversacion.ts` sigue en el bundle principal, compartido con el chunk del chat.
+- Llamadas reales al modelo: **0**. El presupuesto restante sigue en 186.
+
+Commit: `fix(web-cliente): la conversación del asistente arranca de cero al volver de otro restaurante (Fase 6, ronda 1)`. El hash lo registra el orquestador al cierre.
+
+**Para el revisor (re-verificación):**
+- El paso B.3 de la receta, ahora por el camino del bug, en 390 × 844:
+  1. Carta de Restaurante Seed → preguntar.
+  2. Carta de Restaurante Seed 2, **sin abrir el chat** (no tiene botón).
+  3. Volver a la carta de Restaurante Seed y abrir el chat: tienen que estar la presentación y las tres preguntas de ejemplo, sin la conversación vieja.
+  4. Una pregunta más: en la red, el body lleva un solo mensaje.
+  5. Control: en Restaurante Seed, preguntar, abrir un plato y volver a la carta: la conversación sigue.
+- Gasta 2 o 3 llamadas.
+- El placeholder bloqueado (flujo F) entra en una línea a 390 px.

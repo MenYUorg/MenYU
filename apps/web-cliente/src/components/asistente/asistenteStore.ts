@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import type { MensajeDelChatAsistente } from '@menyu/types'
 import { useSessionStore } from '../../store/sessionStore'
 import { avisoDeLaFalla, type Aviso } from './avisos'
-import { guardarConversacion, leerConversacion } from './conversacion'
+import { guardarConversacion, leerConversacion, visitaActual } from './conversacion'
 import { pedirRespuesta, type ResultadoDelPedido } from './streamDelAsistente'
 
 // El chat del asistente de la carta (docs/asistente/specs/asistente.md, Fase 6). Vive en un store y no en el panel: una
@@ -34,11 +34,16 @@ export type ResultadoDePreguntar = 'respondida' | 'fallida' | 'devolver' | 'igno
 interface AsistenteStore {
   /** El restaurante de la conversación cargada. */
   restauranteId: string | null
+  /** La visita a la carta en que se cargó (`visitaActual` de conversacion.ts): pasada esa visita, ya no vale. */
+  visita: number
   /** Lo confirmado: cada pregunta que tuvo respuesta, con su respuesta. Es lo que se guarda y lo que se le manda. */
   mensajes: MensajeDelChatAsistente[]
   enCurso: IntercambioEnCurso | null
   fallido: IntercambioFallido | null
-  /** Carga la conversación de este restaurante (si ya está cargada, no hace nada: puede haber una respuesta llegando). */
+  /**
+   * Carga la conversación de este restaurante. Si ya es la vigente (la de esta visita a su carta), no hace nada: puede
+   * haber una respuesta llegando.
+   */
   abrir: (restauranteId: string) => void
   preguntar: (texto: string) => Promise<ResultadoDePreguntar>
   /** Vuelve a mandar la pregunta que falló, si su aviso lo ofrece. */
@@ -49,6 +54,13 @@ interface AsistenteStore {
 export const preguntasHechas = (mensajes: MensajeDelChatAsistente[]) => mensajes.filter((m) => m.rol === 'usuario').length
 
 const mismoRestaurante = (a: string | null, b: string | null) => !!a && !!b && a.toLowerCase() === b.toLowerCase()
+
+/**
+ * Si lo que tiene el store es la conversación vigente de este restaurante: la cargada en esta visita a su carta. Si se
+ * pasó por la carta de otro restaurante, ya no lo es, aunque el chat no se haya abierto ahí.
+ */
+export const esLaConversacionVigente = (estado: Pick<AsistenteStore, 'restauranteId' | 'visita'>, restauranteId: string) =>
+  mismoRestaurante(estado.restauranteId, restauranteId) && estado.visita === visitaActual()
 
 /** Sin espacios en los costados, sin el carácter nulo (el backend lo rechaza) y con el tope de largo. */
 const limpiar = (texto: string) => texto.split('\u0000').join('').trim().slice(0, MAX_CARACTERES_PREGUNTA)
@@ -73,19 +85,21 @@ const sesionVencida = (resultado: ResultadoDelPedido) =>
 
 export const useAsistenteStore = create<AsistenteStore>()((set, get) => ({
   restauranteId: null,
+  visita: 0,
   mensajes: [],
   enCurso: null,
   fallido: null,
 
   abrir: (restauranteId) => {
-    if (mismoRestaurante(get().restauranteId, restauranteId)) return
+    if (esLaConversacionVigente(get(), restauranteId)) return
+    // Otro restaurante, o el mismo después de pasar por otro: lo que había (y lo que esté llegando) ya no va.
     pedidoEnCurso?.abort()
     pedidoEnCurso = null
-    set({ restauranteId, mensajes: leerConversacion(restauranteId), enCurso: null, fallido: null })
+    set({ restauranteId, visita: visitaActual(), mensajes: leerConversacion(restauranteId), enCurso: null, fallido: null })
   },
 
   preguntar: async (texto) => {
-    const { restauranteId, mensajes, enCurso } = get()
+    const { restauranteId, visita, mensajes, enCurso } = get()
     const pregunta = limpiar(texto)
     if (!restauranteId || enCurso || !pregunta) return 'ignorada'
     if (preguntasHechas(mensajes) >= MAX_PREGUNTAS_POR_CONVERSACION) return 'ignorada'
@@ -110,14 +124,17 @@ export const useAsistenteStore = create<AsistenteStore>()((set, get) => ({
       resultado = await pedir(null)
     }
 
-    // Mientras tanto se pasó a otro restaurante: esta respuesta ya no es de la conversación que se ve.
+    // Mientras tanto se abrió el chat de otra conversación: esta respuesta ya no es de la que se ve.
     if (pedidoEnCurso !== pedido) return 'ignorada'
     pedidoEnCurso = null
+    // Mientras tanto se pasó por la carta de otro restaurante (aunque se haya vuelto a esta sin abrir el chat): la
+    // conversación arranca de cero, y esta respuesta no se suma ni se guarda.
+    if (visita !== visitaActual()) return 'ignorada'
 
     if (resultado.ok) {
       const confirmados: MensajeDelChatAsistente[] = [...conLaPregunta, { rol: 'asistente', contenido: resultado.texto }]
       set({ mensajes: confirmados, enCurso: null })
-      guardarConversacion(restauranteId, confirmados)
+      guardarConversacion(restauranteId, confirmados, visita)
       return 'respondida'
     }
     if (resultado.falla.tipo === 'cancelada') {

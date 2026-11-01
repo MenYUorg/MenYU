@@ -2,6 +2,7 @@ import { Fragment, useEffect, useId, useLayoutEffect, useRef, useState, type CSS
 import { Icono } from '../discovery/Icono'
 import { CM } from '../menu/paleta'
 import {
+  esLaConversacionVigente,
   MAX_CARACTERES_PREGUNTA,
   MAX_PREGUNTAS_POR_CONVERSACION,
   preguntasHechas,
@@ -19,8 +20,6 @@ const AVISO_AL_PIE = 'Respuestas generadas con IA a partir de los datos del loca
 
 /** El input crece con el texto hasta unas cuatro líneas; después scrollea. */
 const ALTO_MAXIMO_DEL_INPUT = 120
-
-const mismoRestaurante = (a: string | null, b: string) => !!a && a.toLowerCase() === b.toLowerCase()
 
 const SIN_MENSAJES: never[] = []
 
@@ -191,8 +190,9 @@ export default function PanelDelAsistente({ abierto, onCerrar, restauranteId, no
   const abrir = useAsistenteStore((s) => s.abrir)
   const preguntar = useAsistenteStore((s) => s.preguntar)
   const reintentar = useAsistenteStore((s) => s.reintentar)
-  // Hasta que se carga la de este restaurante (el efecto de abajo), no se muestra la conversación de otro.
-  const cargado = useAsistenteStore((s) => mismoRestaurante(s.restauranteId, restauranteId))
+  // Hasta que se carga la vigente (el efecto de abajo), no se muestra otra: la de otro restaurante, o la de este de antes
+  // de pasar por la carta de otro.
+  const cargado = useAsistenteStore((s) => esLaConversacionVigente(s, restauranteId))
   const mensajesGuardados = useAsistenteStore((s) => s.mensajes)
   const enCursoGuardado = useAsistenteStore((s) => s.enCurso)
   const fallidoGuardado = useAsistenteStore((s) => s.fallido)
@@ -517,7 +517,8 @@ export default function PanelDelAsistente({ abierto, onCerrar, restauranteId, no
               enterKeyHint="send"
               disabled={bloqueado}
               aria-describedby={idContador}
-              placeholder={bloqueado ? 'Para otras consultas, preguntale al mozo' : 'Escribí tu pregunta'}
+              // Corto, para que entre en una línea en el celular: el aviso entero ya está en el hilo.
+              placeholder={bloqueado ? 'Preguntale al mozo' : 'Escribí tu pregunta'}
               className="border border-[#ECECEE] bg-[#F7F7F8] focus:border-[#E8563A] focus:bg-white focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
               style={{
                 flex: 1,
