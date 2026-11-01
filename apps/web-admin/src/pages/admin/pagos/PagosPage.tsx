@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Bell, CheckCircle, RefreshCw, X } from 'lucide-react'
+import { authDelSocket } from '@menyu/auth-client'
 import { urlDelSocket } from '@menyu/ui/socket'
 import { io, type Socket } from 'socket.io-client'
 import { useContextStore, useRolActual } from '../../../store/contextStore'
@@ -455,14 +456,15 @@ export function PagosPage() {
   useEffect(() => {
     if (!selectedRestauranteId) return
 
-    // El gateway no autentica la conexión (docs/auth/specs/auth.md, Fuera de alcance): no se le manda ningún token.
+    // El token viaja en el handshake (`auth`) y el gateway lo verifica al unirse a la sala.
     const socket: Socket = io(`${WS_URL}/ws`, {
       transports: ['websocket'],
+      auth: authDelSocket,
     })
     socketRef.current = socket
 
     socket.on('connect', () => {
-      socket.emit('cocina:join', { restauranteId: selectedRestauranteId })
+      socket.emit('mozo:join', { restauranteId: selectedRestauranteId })
     })
 
     socket.on('sesion:quierePagar', ({ sesionId }: { sesionId: string }) => {

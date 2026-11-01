@@ -163,14 +163,14 @@ describe('GerenceMesasPage', () => {
   })
 
   describe('tiempo real', () => {
-    it('se conecta sin token y entra a la sala; al salir se desconecta', async () => {
+    it('se conecta con el token y entra a la sala; al salir se desconecta', async () => {
       mesasApi.list.mockResolvedValue([])
       const { unmount } = abrir()
 
-      // El gateway no autentica la conexión (docs/auth/specs/auth.md, Fuera de alcance).
-      expect(io).toHaveBeenCalledWith(expect.stringMatching(/\/ws$/), { transports: ['websocket'] })
+      // El token viaja en el handshake (`auth`) y el gateway lo verifica al unirse a la sala.
+      expect(io).toHaveBeenCalledWith(expect.stringMatching(/\/ws$/), { transports: ['websocket'], auth: expect.any(Function) })
       recibir('connect')
-      expect(socket.emit).toHaveBeenCalledWith('cocina:join', { restauranteId: 'rest-1' })
+      expect(socket.emit).toHaveBeenCalledWith('mozo:join', { restauranteId: 'rest-1' })
 
       unmount()
       expect(socket.disconnect).toHaveBeenCalled()

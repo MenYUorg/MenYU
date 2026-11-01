@@ -214,11 +214,11 @@ describe('PedidosPage (mozo)', () => {
   })
 
   describe('tiempo real', () => {
-    it('se conecta sin token, entra a la sala y se desconecta al salir', async () => {
+    it('se conecta con el token, entra a la sala y se desconecta al salir', async () => {
       pedidosApi.getByRestaurante.mockResolvedValue([] as never)
       const { unmount } = abrir()
 
-      expect(io).toHaveBeenCalledWith(expect.stringMatching(/\/ws$/), { transports: ['websocket'] })
+      expect(io).toHaveBeenCalledWith(expect.stringMatching(/\/ws$/), { transports: ['websocket'], auth: expect.any(Function) })
       recibir('connect')
       expect(socket.emit).toHaveBeenCalledWith('cocina:join', { restauranteId: 'rest-1' })
 
