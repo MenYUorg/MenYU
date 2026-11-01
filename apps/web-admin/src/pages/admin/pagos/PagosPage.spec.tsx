@@ -206,7 +206,7 @@ describe('PagosPage (caja)', () => {
     it('se conecta y entra a la sala del restaurante; se desconecta al salir', async () => {
       const { unmount } = render(<MemoryRouter><PagosPage /></MemoryRouter>)
 
-      expect(io).toHaveBeenCalledWith(expect.stringMatching(/\/ws$/), expect.objectContaining({ transports: ['websocket'] }))
+      expect(io).toHaveBeenCalledWith(expect.stringMatching(/\/ws$/), expect.objectContaining({ transports: ['websocket'], auth: expect.any(Function) }))
       recibir('connect')
       expect(socket.emit).toHaveBeenCalledWith('mozo:join', { restauranteId: 'rest-1' })
 
