@@ -86,3 +86,130 @@ Llamadas reales al modelo: 0.
 - **Fase 5:** el campo es `createdAt` (timestamptz) y el índice `(createdAt)` es el del contador diario.
 - **Base local de otra sesión:** en una base ya seedeada, `prisma migrate dev` + `prisma db seed` cargan todo lo nuevo; las guardas dejan pasar los datos porque las columnas nuevas arrancan vacías.
 - **Fuera de alcance, sin tocar:** Prisma avisa que `package.json#prisma` (donde está el comando del seed) está deprecado y que se va en Prisma 7; hoy `prisma db seed` lo sigue tomando aunque exista `prisma.config.ts`. Habría que pasarlo a `migrations.seed` de `prisma.config.ts` antes de subir a Prisma 7.
+
+## Cierre de la Fase 1 (orquestador, 2026-11-01)
+
+- **Veredicto del revisor:** APROBADA CON OBSERVACIONES. Bloqueantes: ninguno. Rondas de corrección: 0.
+- **Commit de la fase:** `16c69b9`. Criterio "Terminado cuando" y checklist "Revisor:" verificados punto por punto (migración limpia, seed completo, typecheck y tests del backend en verde, alcance correcto).
+- **Llamadas reales acumuladas:** 1 de 200 (solo la prueba de precondición). **Restante: 199.**
+- **Observaciones del revisor no aplicadas** (quedan anotadas para las fases siguientes y para Lauti):
+  1. La spec todavía dice `creadoEn` en las líneas de `RegistroAsistente` (~89), índices (~98) y tabla de límites (~122); el campo real es `createdAt`. **El orquestador lo pasará explícito en los prompts de las Fases 4 y 5.**
+  2. `apps/backend/README.md` ("9 ítems") y `Documentacion/datos-de-prueba-local.md` quedaron desactualizados respecto del seed nuevo (10 ítems, recomendados, descripciones, asistente prendido). Pendiente menor de docs.
+  3. **`ClasificacionDieta` duplicada** (decisión para Lauti en el checkpoint): el filtro "Dietas" de la carta sale del catálogo global y el asistente va a leer `etiquetasDietarias`; pueden divergir. Decidir antes de la Fase 4 si el contexto suma también el catálogo.
+  4. La Fase 2 tiene que validar `@IsInt() @Min(1)` en `porcionPersonas` y `tiempoPreparacionMin`, y definir qué pasa con `porcionPersonas` cuando `tamanioPorcion` deja de ser `PARA_N_PERSONAS`. **Se pasará en el prompt de la Fase 2.**
+  5. Menores sin acción: `etiquetas_dietarias` admite NULL por SQL directo (impacto despreciable); la cascada de `RegistroAsistente` con el restaurante baja el contador diario si un e2e borra restaurantes (tenido en cuenta).
+- **Checkpoint de la orquestación:** la corrida se frena acá para pedirle a Lauti el visto bueno del schema antes de la Fase 2.
+
+## Checkpoint del schema — resuelto (orquestador, 2026-11-01)
+
+Lauti dio el **visto bueno al schema de la Fase 1** tal como está (incluidas las decisiones `createdAt`, timestamptz, cascadas y validaciones de rango en la Fase 2). Además decidió sobre el hallazgo de `ClasificacionDieta`: **el contexto de la Fase 4 incluye también las clasificaciones del catálogo global de cada plato, aclarando su origen**, además de `etiquetasDietarias`. La corrida sigue desatendida con las Fases 2–7.
+
+---
+
+## Fase 2 — API de administración (2026-11-01)
+Estado: completada
+Plan y "A verificar" resueltos: en las subsecciones "Plan" y "A verificar en plan mode" de abajo, escritas antes de tocar código.
+
+### Plan (escrito antes de tocar código)
+
+1. **Plato (`PATCH /items/:id`):** `UpdateItemDto` suma los nueve campos (`@IsEnum` para los tres enums, `@IsArray` + `@IsEnum({ each: true })` para las etiquetas, `@IsInt() @Min(1)` + un `@Max` de dominio para `porcionPersonas` y `tiempoPreparacionMin`, textos con tope y sin carácter nulo). `null` borra cada campo (`@IsOptional()` deja pasar null). `ItemsService.update`: etiquetas `null` → `[]` (la columna es una lista; vacía = sin etiquetas) y sin repetidas; `porcionPersonas` se borra al guardar si el plato queda con un tamaño que no es `PARA_N_PERSONAS`. Las respuestas del panel ya traen los campos (`serializeItem` hace `...rest`).
+2. **Información del local:** módulo nuevo `src/informacion-local/` con `GET` y `PUT /restaurantes/:restauranteId/informacion-local` (upsert parcial, flag incluido) y `select` explícito. Sin fila, `GET` devuelve todo en null y el flag en `false`.
+3. **Preguntas frecuentes:** módulo nuevo `src/preguntas-frecuentes/` con `GET`, `POST`, `PUT /:id` y `DELETE /:id` bajo `/restaurantes/:restauranteId/preguntas-frecuentes`. Editar o borrar una de otro restaurante → 404.
+4. **Permisos:** `@RequiereRol(...ADMINISTRACION)` a nivel de controller, como `PersonalController` (mismo par de guards, `SupabaseAuthGuard` + `MembresiaGuard`, y el mismo grupo de roles que la edición de la carta). No hace falta tocar `rutas-por-autenticacion.spec.ts`: no son rutas `@Personal()`.
+5. **Carta pública (`GET /menu/:restauranteId`):** `restaurante.asistenteHabilitado` (de `InformacionLocal`; sin fila, `false`).
+6. **`@menyu/types`:** los enums como uniones, `InformacionLocal`, `PreguntaFrecuente`, los campos nuevos (opcionales) en `ItemMenu` y `asistenteHabilitado` en `MenuPublico`, para que las Fases 3 y 6 no los dupliquen.
+7. **Swagger:** `@ApiTags`/`@ApiOperation`/`@ApiResponse` en los controllers nuevos y `@ApiProperty` con `enum`/`nullable` en los DTOs.
+8. **Tests (1 feliz + error principal por módulo):** info local (PUT guarda y GET la devuelve; rol sin permiso → 403), plato (los campos nuevos se guardan; enum inválido → 400), FAQs (alta y listado; baja de una de otro restaurante → 404/403) y el flag en la carta pública.
+9. **Verificación con curl contra local** sin tocar staging: backend de la rama en otro puerto con `SUPABASE_URL` apuntando a un JWKS local (servidor de prueba en el scratchpad, que firma tokens para el `supabaseUserId` ficticio del OWNER del seed y el del MOZO). Al terminar, dejar los datos del seed como estaban (las Fases 4 y 7 dependen de ellos).
+
+### "A verificar en plan mode", resueltos leyendo el código
+
+- **Guards de la edición de la carta:** desde la entrega 4.3 de auth, todo sobre Supabase. Las rutas de un restaurante usan `@RequiereRolEn({ body | query }, ...ADMINISTRACION)` (`POST`/`GET /items`, `/categorias`) o `@RequiereRol(...ADMINISTRACION)` con `:restauranteId` (`PersonalController`); las de un recurso, `@Personal()` + `AccesoService.exigirRol(..., ADMINISTRACION)` en el service (`PATCH /items/:id`). `ADMINISTRACION` = OWNER (de la marca) y GERENTE (del restaurante), en `auth/roles-del-personal.ts`. Solo el borrado de ítems y categorías es solo OWNER (el de ingredientes es ADMINISTRACION). No queda nada del `@Roles` legacy.
+- **Endpoint de edición del plato:** `PATCH /items/:id` (`ItemsController.update` → `ItemsService.update`), con `UpdateItemDto`. `ValidationPipe({ whitelist: true, transform: true })` global: un campo sin decorador se descarta en silencio (por eso el test feliz del endpoint comprueba que los campos lleguen al service).
+- **Endpoint público de la carta:** `GET /menu/:restauranteId` (`MenuService.getMenuPublico`). Lo usan las dos vistas de web-cliente (mesa y carta desde Discovery), las dos con `MenuView` y `api.menu` (`services/api.ts`). Arma la respuesta campo por campo, así que el flag hay que sumarlo explícito. `GET /discovery/restaurantes/:id` no lo necesita (no muestra la carta).
+- **Swagger:** `DocumentBuilder` en `main.ts`, plugin `@nestjs/swagger` en `nest-cli.json`; los DTOs igual declaran `@ApiProperty` explícito.
+- **Tests de endpoints:** `crearAppDeEndpoints` (`src/test/app-endpoints.ts`) con las cuentas de `CUENTAS` y el `MUNDO` de `acceso-de-test.ts`; `crearPrismaMock` para los services.
+- **Migración:** esta fase no agrega ninguna (el schema de la Fase 1 alcanza).
+- **CI:** `turbo typecheck`, `turbo lint` (el del backend es un `echo`) y `turbo test`, más los tests de `scripts/`.
+
+### Qué se hizo
+
+- **Plato:** `items/dto/update-item.dto.ts` suma los nueve campos con Swagger (`enum`, `nullable`, topes). `items.service.ts` (`update`): etiquetas `null` → `[]` y sin repetidas, y `porcionPersonasCoherente` borra `porcionPersonas` si el tamaño que queda no es `PARA_N_PERSONAS`.
+- **Información del local:** `src/informacion-local/` (module, controller, service, `dto/update-informacion-local.dto.ts`). `GET` y `PUT /restaurantes/:restauranteId/informacion-local`, `select` explícito sin el `id` de la fila; la respuesta lleva `restauranteId`.
+- **Preguntas frecuentes:** `src/preguntas-frecuentes/` (module, controller, service, `dto/pregunta-frecuente.dto.ts`). `GET`, `POST` (201), `PUT /:id` y `DELETE /:id` (204) en `/restaurantes/:restauranteId/preguntas-frecuentes`; el restaurante sale siempre de la ruta.
+- **Textos libres:** `src/common/texto-libre.ts` con `TextoOpcional(max)` (recorta; vacío o `null` borra) y `TextoObligatorio(max)`, los dos con `SinCaracterNulo` (Postgres no acepta el carácter nulo: sería un 500).
+- **Carta pública:** `menu.service.ts` suma `informacionLocal: { select: { asistenteHabilitado: true } }` y devuelve `restaurante.asistenteHabilitado` (sin fila, `false`); la descripción de Swagger de `GET /menu/:restauranteId` lo menciona.
+- **`AppModule`** registra `InformacionLocalModule` y `PreguntasFrecuentesModule`.
+- **`@menyu/types`:** `asistente.types.ts` nuevo (los cuatro enums como uniones, `DatosDelPlatoParaElAsistente`, `InformacionLocal`, `PreguntaFrecuente`), `ItemMenu extends Partial<DatosDelPlatoParaElAsistente>` y `MenuPublico.restaurante.asistenteHabilitado?`.
+- **Tests (27 nuevos):** `informacion-local-endpoints.spec.ts` y `preguntas-frecuentes-endpoints.spec.ts` (ruta, `ValidationPipe` y service reales; la base, en memoria con `crearPrismaMock`); en `items.service.spec.ts`, "update — datos para el asistente"; en `items-endpoints.spec.ts`, "PATCH /items/:id: los datos para el asistente"; en `menu.service.spec.ts`, el flag (y los dos tests que fijan la forma exacta de la respuesta y del `select`, actualizados).
+- Sin migración y sin dependencias nuevas.
+
+### Decisiones tomadas por ambigüedad
+
+1. **Rutas anidadas en `/restaurantes/:restauranteId/…`** con `@RequiereRol(...ADMINISTRACION)` a nivel de controller, como `PersonalController`, y no planas como las de la carta (`/items?restauranteId=`): es el mismo par de guards y el mismo grupo de roles, y la información del local es 1:1 con el restaurante. Al tener `MembresiaGuard`, no van en la lista de `@Personal()` de `rutas-por-autenticacion.spec.ts` (el spec pasa sin tocarlo).
+2. **Dos módulos de primer nivel** (`informacion-local`, `preguntas-frecuentes`), como los de la carta (uno por entidad). `src/asistente/` queda para la Fase 4 (contexto, proveedor y registro).
+3. **Todo con `ADMINISTRACION` (OWNER y GERENTE), también el flag y el borrado de FAQs.** La Fase 2 pide "exactamente los mismos roles que la edición de la carta"; el borrado solo del OWNER de ítems y categorías protege la historia de pedidos y la estructura de la carta (el de ingredientes ya es `ADMINISTRACION`). "Que el dueño prende" (decisión 3) se leyó en sentido amplio.
+4. **`PUT` de la información del local = upsert parcial:** lo que no viene no cambia y `null` lo borra. Así el switch puede mandar solo `{ asistenteHabilitado }` y el formulario, el resto. `asistenteHabilitado: null` da 400 (la columna no admite null).
+5. **Edición de FAQ con `PUT` y las dos partes obligatorias:** un solo DTO para alta y edición (una FAQ se edita como par). Una FAQ de otro restaurante da 404 desde el propio (no se revela si existe) y 403 desde el ajeno (el guard).
+6. **`porcionPersonas` (pedido del revisor de la Fase 1):** se borra al guardar si el plato queda con un tamaño que no es `PARA_N_PERSONAS` o sin tamaño, aunque venga en el body (no es un 400: el formulario puede mandar todo su estado sin limpiar a mano). `PARA_N_PERSONAS` sin `porcionPersonas` se acepta (N sin declarar). Si no se manda ninguno de los dos campos, no se toca.
+7. **Topes `@Max` además de `@IsInt() @Min(1)`:** 100 personas y 600 minutos. Sin tope, un entero fuera de `int4` llega a Prisma y da 500.
+8. **Topes de los textos** (detalle de la porción 100, acompañamiento 200, información adicional 500, horarios 500, formas de pago 200, pregunta 200, respuesta 1000): van al prompt en cada pregunta, así que también acotan el contexto. Recortados y, en los opcionales, vacío = `null`.
+9. **Etiquetas:** `null` → `[]` (Prisma no admite null en una lista) y una repetida se guarda una vez (no es un 400).
+10. **`POST /items` no acepta los campos nuevos:** la spec habla del "endpoint de edición" y el formulario de web-admin ya hace llamadas después del alta (imagen, clasificaciones, ingredientes). Ojo: el `ValidationPipe` los descartaría en silencio.
+11. **Tipos en `@menyu/types`,** para que las Fases 3 y 6 no los dupliquen (regla del CLAUDE.md). Los campos del plato van opcionales en `ItemMenu` y `asistenteHabilitado` opcional en `MenuPublico.restaurante`, para no romper los fixtures de web-admin y web-cliente (el backend siempre los manda). No se tocaron los `*Request` de `api/requests.ts`: están desactualizados y nadie los usa (web-admin define los suyos en `services/api.ts`).
+12. **Sin `menu:updated`** al cambiar la información del local o las FAQs: de la carta pública solo cambia el flag; si la Fase 6 lo necesita, lo decide ahí.
+13. **Verificación con un JWKS local** y no con el login del Supabase de staging que usa `docs/probar-consola-root.md`: así no se tocó staging (ver la receta abajo).
+
+Commit: `feat(api): API de administración del asistente de mesa (Fase 2)`. El hash lo registra el orquestador al cierre (un commit no puede contener su propio hash).
+
+### Verificación
+
+- typecheck ✓: el comando del CI (`turbo typecheck` de api, web-admin, web-cliente, web-staff, web-auth y auth-client), 7/7, con `@menyu/types` recompilado.
+- lint ✓: el comando del CI, 5/5 (el del backend sigue siendo un `echo`).
+- tests ✓: backend 2048 pasan y 36 se saltean, en 86 suites (eran 2021 en 84: +27 tests, +2 suites). Los 36 son los 3 `*.base.spec.ts` (acceso, usuarios e historial de ROOT, que esta fase no toca), que piden `TEST_DATABASE_URL`. Frontends en verde (web-admin 48 archivos, web-cliente 42, web-staff 14, web-auth 9, auth-client 10, ui 5). Tests de `scripts/`: 78/78. Cobertura del código nuevo y cambiado: 100 % de líneas (`informacion-local`, `preguntas-frecuentes`, `texto-libre.ts`, `items.service.ts`, `menu.service.ts`).
+- "Terminado cuando", punto por punto:
+  1. **Los tests pasan** ✓ (arriba). Los seis que pide la fase: info local, `PUT` guarda y `GET` la devuelve, y rol sin permiso → 403 (MOZO, JEFE_SALON, COCINA, ROOT, OWNER de otra marca, GERENTE de otra sucursal); plato, los campos nuevos se guardan, y enum inválido → 400 (más `porcionPersonas` y `tiempoPreparacionMin` en 0, con decimales o como texto); FAQs, alta y listado (con edición y baja), y baja de una de otro restaurante → 404 desde el propio y 403 desde el ajeno.
+  2. **Con curl contra local, se cargaron y quedaron en la base** ✓, verificado con `psql` en `menyu-postgres`:
+     - Información del local: alta en Restaurante Seed 2, que no tenía fila (GERENTE, upsert create), y `PUT` parcial en Restaurante Seed (OWNER; cambió solo lo enviado). El MOZO recibe 403 en `GET` y `PUT`; sin token, 401; `asistenteHabilitado: null`, 400. `GET /api/menu/:id` devolvió `asistenteHabilitado: true` para Seed y `false` para Seed 2.
+     - Una FAQ en Restaurante Seed (con espacios de más, recortados), editada con `PUT`; listada (6); borrarla desde Seed 2 → 404; el MOZO → 403; respuesta vacía → 400.
+     - Los nueve campos en un plato del seed (Rabas): guardados tal cual, con las etiquetas sin repetir; `temperatura: "TIBIO"` → 400, `porcionPersonas: 0` → 400, el MOZO → 403; al pasarlo a `INDIVIDUAL`, `porcionPersonas` quedó en null. Con el body desde un archivo UTF-8, los acentos llegan bien a la base (`ó` = `c3 b3`).
+     - Después se dejó el seed como estaba: Rabas con todo en `null` vía `PATCH` (las etiquetas en `[]`: prueba que `null` borra), la información de Seed vuelta a sus valores vía `PUT` (con `estacionamiento: null`), la FAQ borrada vía `DELETE` (204) y la fila de prueba de Seed 2 borrada con `psql` (la API no borra la información del local). Un snapshot antes y después de `informacion_local`, `pregunta_frecuente` y los platos de Restaurante Seed da **sin diferencias**.
+  3. **Swagger** ✓: `/docs-json` lista las seis rutas nuevas, los enums en `UpdateItemDto` y los DTOs nuevos.
+
+Llamadas reales al modelo: 0.
+
+### Para el revisor / fases siguientes
+
+- **Receta para probar con curl en local sin Supabase** (no toca staging): un JWKS propio con una clave ES256 y tokens firmados para los `supabaseUserId` que ya están en la base local. `SupabaseAuthGuard` verifica la firma, `iss` = `<SUPABASE_URL>/auth/v1` y `aud` = `authenticated`, así que alcanza con levantar el backend con `SUPABASE_URL` apuntando a ese servidor:
+
+  ```js
+  // jwks-local.js (fuera del repo). node jwks-local.js → escribe token-<cuenta>.txt y sirve el JWKS en :54999
+  const jose = require('<repo>/apps/backend/node_modules/jose'), http = require('http'), fs = require('fs')
+  const URL_BASE = 'http://localhost:54999'
+  const CUENTAS = { owner: 'ffffffff-0002-4002-a002-000000000002', mozo: 'd8f4bdff-7b9a-4596-9ecc-21b2d3c44d06' }
+  ;(async () => {
+    const { publicKey, privateKey } = await jose.generateKeyPair('ES256')
+    const jwk = { ...(await jose.exportJWK(publicKey)), kid: 'local-1', alg: 'ES256', use: 'sig' }
+    for (const [nombre, sub] of Object.entries(CUENTAS)) {
+      const token = await new jose.SignJWT({})
+        .setProtectedHeader({ alg: 'ES256', kid: 'local-1' })
+        .setSubject(sub).setIssuer(`${URL_BASE}/auth/v1`).setAudience('authenticated')
+        .setIssuedAt().setExpirationTime('2h').sign(privateKey)
+      fs.writeFileSync(`token-${nombre}.txt`, token)
+    }
+    http.createServer((req, res) => req.url === '/auth/v1/.well-known/jwks.json'
+      ? res.end(JSON.stringify({ keys: [jwk] }))
+      : (res.writeHead(404), res.end())).listen(54999)
+  })()
+  ```
+
+  Backend: `cd apps/backend && npx nest build && PORT=3100 SUPABASE_URL=http://localhost:54999 node dist/main.js` (no pisa el `.env`: dotenv no reemplaza variables ya definidas). `owner@menyu.com` del seed (`supabaseUserId` ficticio `ffffffff-0002-…`) es OWNER de Marca Seed; el MOZO de Restaurante Seed es `mozo-supabase.pruebas-auth@…` (`d8f4bdff-…`), vinculado en esta base local (en otra puede no estar). En Windows, mandar los bodies con acentos desde un archivo (`--data-binary @body.json`): Git Bash le pasa a `curl.exe` los argumentos en otra codificación y llegan como `�`.
+- **Fase 3 (web-admin):**
+  - Para borrar un campo hay que mandar `null` (o `""` en los textos); `undefined` no lo toca. Hoy el formulario del plato manda `descripcion: descripcion.trim() || undefined`, así que **la descripción no se puede borrar desde el panel** (preexistente, fuera de alcance; no repetir el patrón con los campos nuevos).
+  - En el alta de un plato, los datos para el asistente van en un `PATCH /items/:id` después del `POST` (el `POST` los descarta).
+  - El switch puede mandar solo `{ asistenteHabilitado }` al `PUT` de la información del local. La edición de una FAQ es `PUT` con las dos partes.
+  - Los tipos están en `@menyu/types` (`InformacionLocal`, `PreguntaFrecuente`, `TamanioPorcion`…); los inputs se definen en `services/api.ts`, como el resto de web-admin.
+  - Errores de validación: 400 con `message` como lista (los de class-validator, en inglés), como el resto de la API.
+- **Fase 4 (contexto):** la cantidad de FAQs por restaurante no tiene tope (los textos sí); si el contexto crece, decidir ahí. Sin fila de `InformacionLocal`, el asistente está apagado. La API mantiene `porcionPersonas` coherente con `PARA_N_PERSONAS`, pero lo cargado por SQL o por el seed no pasa por ahí: que el contexto igual lo muestre solo con ese tamaño.
+- **Fase 6 (web-cliente):** el flag llega en `GET /menu/:restauranteId` como `restaurante.asistenteHabilitado`; en `MenuPublico` es opcional (si se vuelve obligatorio, actualizar `crearMenu` de `src/test/fixtures.ts`).
+- **Fuera de alcance, sin tocar:** la matriz por ruta de `docs/auth/specs/auth.md` no lista las rutas nuevas; `CreateItemRequest` y `UpdateItemRequest` de `@menyu/types` están desactualizados y sin uso.

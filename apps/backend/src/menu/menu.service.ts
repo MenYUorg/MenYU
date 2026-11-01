@@ -50,6 +50,7 @@ export class MenuService {
         direccion: true,
         logoUrl: true,
         marca: { select: { logoUrl: true, activo: true } },
+        informacionLocal: { select: { asistenteHabilitado: true } },
       },
     })
     // Dado de baja el restaurante o su marca, la carta deja de verse (igual que en Discovery).
@@ -117,6 +118,8 @@ export class MenuService {
         direccion: restaurante.direccion,
         // El logo propio del restaurante manda; si no tiene, el de su marca; si tampoco, `null` (la app muestra el de MenYU).
         logoUrl: restaurante.logoUrl ?? restaurante.marca?.logoUrl ?? null,
+        // Si web-cliente muestra el botón del asistente. Sin información del local cargada, apagado.
+        asistenteHabilitado: restaurante.informacionLocal?.asistenteHabilitado ?? false,
       },
       categorias: result,
       recomendados,

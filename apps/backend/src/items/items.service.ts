@@ -1,4 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common'
+import { TamanioPorcion } from '@prisma/client'
 import { PrismaService } from '../prisma/prisma.service'
 import { StorageService } from '../storage/storage.service'
 import { MenyuGateway } from '../gateway/menyu.gateway'
@@ -18,6 +19,19 @@ import {
 } from './descuento.util'
 
 const IMAGEN_BUCKET = 'menu-items'
+
+/**
+ * `porcionPersonas` solo tiene sentido con `PARA_N_PERSONAS`: si el plato queda con otro tamaño (o sin tamaño), se borra
+ * al guardar, aunque venga en el body. Si no se toca ninguno de los dos campos, no cambia nada.
+ */
+function porcionPersonasCoherente(
+  actual: { tamanioPorcion: TamanioPorcion | null },
+  dto: Pick<UpdateItemDto, 'tamanioPorcion' | 'porcionPersonas'>,
+): { porcionPersonas?: null } {
+  if (dto.tamanioPorcion === undefined && dto.porcionPersonas === undefined) return {}
+  const tamanio = dto.tamanioPorcion === undefined ? actual.tamanioPorcion : dto.tamanioPorcion
+  return tamanio === TamanioPorcion.PARA_N_PERSONAS ? {} : { porcionPersonas: null }
+}
 
 const DETAIL_INCLUDE = {
   categoria: true,
@@ -83,12 +97,15 @@ export class ItemsService {
       assertPrecioBaseCompatible(dto.precioBase, item.precioDescuento)
     }
 
-    const { esRecomendado, ...rest } = dto
+    const { esRecomendado, etiquetasDietarias, ...rest } = dto
     const data = {
       ...rest,
       ...(esRecomendado !== undefined
         ? { recomendadoEn: esRecomendado ? new Date() : null }
         : {}),
+      // La columna es una lista: null la deja vacía (= sin etiquetas declaradas). Una repetida queda una vez.
+      ...(etiquetasDietarias !== undefined ? { etiquetasDietarias: [...new Set(etiquetasDietarias ?? [])] } : {}),
+      ...porcionPersonasCoherente(item, dto),
     }
 
     const updated = await this.prisma.itemMenu.update({ where: { id }, data, include: DETAIL_INCLUDE })

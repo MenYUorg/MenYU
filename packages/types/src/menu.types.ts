@@ -1,3 +1,5 @@
+import type { DatosDelPlatoParaElAsistente } from './asistente.types'
+
 export interface ClasificacionDieta {
   id: string
   nombre: string
@@ -59,7 +61,8 @@ export interface ItemIngrediente {
   ingrediente?: Ingrediente
 }
 
-export interface ItemMenu {
+/** Las respuestas del panel (`/items`) traen además los datos del plato para el asistente. */
+export interface ItemMenu extends Partial<DatosDelPlatoParaElAsistente> {
   id: string
   restauranteId: string
   categoriaId: string | null
@@ -125,6 +128,8 @@ export interface MenuPublico {
     direccion: string | null
     /** El logo propio del restaurante o, si no tiene, el de su marca; `null` si ninguno tiene (la app muestra el de MenYU). */
     logoUrl: string | null
+    /** Si se muestra el asistente de mesa. El backend siempre lo manda (sin información del local cargada, `false`). */
+    asistenteHabilitado?: boolean
   }
   categorias: MenuPublicoCategoria[]
   recomendados: MenuPublicoItem[]

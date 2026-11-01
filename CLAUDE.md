@@ -69,6 +69,7 @@ apps/backend/
     ├── mozos/            (module, controller, service — el perfil operativo)
     ├── menu/             (module, controller, service — la carta pública)
     ├── categorias/, items/, ingredientes/, clasificaciones/   (la carta en el panel: module, controller, service)
+    ├── informacion-local/, preguntas-frecuentes/   (datos del local para el asistente, en /restaurantes/:restauranteId/…)
     ├── discovery/        (module, controller, service, dto/ — público, sin guards)
     ├── sessions/         (module, controller, service)
     ├── comensales/       (module, controllers, service, division.service.ts)
@@ -99,6 +100,7 @@ packages/types/src/
 ├── permisos.ts           (ROLES_QUE_PUEDE_INVITAR; también como @menyu/types/permisos)
 ├── session.types.ts
 ├── menu.types.ts
+├── asistente.types.ts    (enums del plato, InformacionLocal y PreguntaFrecuente del asistente de mesa)
 ├── cart.types.ts
 ├── order.types.ts
 ├── payment.types.ts
@@ -352,7 +354,7 @@ Un descuento se guarda como `precio_descuento` (entero, con un CHECK en la base:
 
 ## Asistente de mesa (en curso, rama `feat/asistente`)
 
-Chatbot de solo lectura sobre la carta y el local de un restaurante. Spec por fases: `docs/asistente/specs/asistente.md`; lo hecho en cada fase y las decisiones: `docs/asistente/specs/bitacora.md`. **Fase 1 (modelo de datos):** los datos del plato para el asistente van en `ItemMenu` (enums `TamanioPorcion`, `Temperatura`, `NivelPicante` y el array `etiquetasDietarias`, aparte del catálogo de `ClasificacionDieta`); `InformacionLocal` (1:1 con `Restaurante`, con el flag `asistenteHabilitado` y los servicios `Boolean?`: null = no declarado), `PreguntaFrecuente` y `RegistroAsistente` (una fila por pregunta, fuente de los límites de uso). Recomendado por el dueño = `recomendadoEn` no nulo. En el seed, Restaurante Seed tiene el asistente prendido y Restaurante Seed 2 no.
+Chatbot de solo lectura sobre la carta y el local de un restaurante. Spec por fases: `docs/asistente/specs/asistente.md`; lo hecho en cada fase y las decisiones: `docs/asistente/specs/bitacora.md`. **Fase 1 (modelo de datos):** los datos del plato para el asistente van en `ItemMenu` (enums `TamanioPorcion`, `Temperatura`, `NivelPicante` y el array `etiquetasDietarias`, aparte del catálogo de `ClasificacionDieta`); `InformacionLocal` (1:1 con `Restaurante`, con el flag `asistenteHabilitado` y los servicios `Boolean?`: null = no declarado), `PreguntaFrecuente` y `RegistroAsistente` (una fila por pregunta, fuente de los límites de uso). Recomendado por el dueño = `recomendadoEn` no nulo. En el seed, Restaurante Seed tiene el asistente prendido y Restaurante Seed 2 no. **Fase 2 (API de administración):** `PATCH /items/:id` acepta los datos del plato (`null` borra; `porcionPersonas` se borra solo si el tamaño no es `PARA_N_PERSONAS`; `POST /items` no los acepta); `GET`/`PUT /restaurantes/:restauranteId/informacion-local` (upsert parcial, con el flag) y el CRUD de `/restaurantes/:restauranteId/preguntas-frecuentes` (edición con `PUT`), los dos con `@RequiereRol(...ADMINISTRACION)`; `GET /menu/:restauranteId` trae `restaurante.asistenteHabilitado`. Para probarlos con curl en local sin Supabase: la receta del JWKS local está en la entrada de la Fase 2 de la bitácora.
 
 ---
 

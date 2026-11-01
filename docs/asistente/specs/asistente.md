@@ -218,7 +218,16 @@ Reglas:
 
 **Revisor:** el schema cubre todos los campos de la definición con los tipos y opcionalidad correctos (servicios tri-estado, arrays de etiquetas); índices de `RegistroAsistente`; la migración no altera datos existentes; el seed alcanza para demo y evaluación.
 
-### Fase 2 — API de administración
+### Fase 2 — API de administración ✅ (2026-11-01)
+
+**Cómo quedó** (detalle y decisiones en la bitácora):
+- Permisos: OWNER de la marca y GERENTE del restaurante (`ADMINISTRACION`), con `@RequiereRol` a nivel de controller como `PersonalController`. Sin token, 401; MOZO, JEFE_SALON, COCINA, ROOT y quien no es del restaurante, 403.
+- `PATCH /items/:id` acepta los nueve campos; `null` borra cada uno (las etiquetas quedan en `[]`) y un texto vacío también. `porcionPersonas` y `tiempoPreparacionMin`: enteros desde 1 (topes 100 y 600). **`porcionPersonas` se borra al guardar** si el plato queda con un tamaño que no es `PARA_N_PERSONAS` (o sin tamaño), aunque venga en el body. `POST /items` no los acepta (el `ValidationPipe` los descarta): en el alta, el formulario los manda con un `PATCH` después de crear, como ya hace con la imagen y los ingredientes.
+- `GET` y `PUT /restaurantes/:restauranteId/informacion-local` (módulo `src/informacion-local/`): el `PUT` es un upsert parcial (lo que no viene no cambia, `null` borra; `asistenteHabilitado` no admite `null`). Sin fila, el `GET` devuelve todo en `null` y el flag en `false`.
+- `GET`, `POST`, `PUT /:id` y `DELETE /:id` en `/restaurantes/:restauranteId/preguntas-frecuentes` (módulo `src/preguntas-frecuentes/`): la edición es un `PUT` con la pregunta y la respuesta; una de otro restaurante da 404.
+- `GET /menu/:restauranteId` suma `restaurante.asistenteHabilitado` (sin `InformacionLocal`, `false`).
+- Textos con tope (van al prompt): detalle de la porción 100, acompañamiento 200, información adicional 500, horarios 500, formas de pago 200, pregunta 200 y respuesta 1000.
+- Tipos en `@menyu/types` (`asistente.types.ts`): los enums, `InformacionLocal`, `PreguntaFrecuente` y los campos del plato en `ItemMenu`; `MenuPublico.restaurante.asistenteHabilitado`.
 
 **Objetivo:** el backend acepta los datos nuevos con los permisos de la carta.
 
