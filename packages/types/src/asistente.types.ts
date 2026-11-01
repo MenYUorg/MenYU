@@ -47,3 +47,36 @@ export interface PreguntaFrecuente {
   createdAt: string
   updatedAt: string
 }
+
+/** Un mensaje de la conversación con el asistente, como lo guarda web-cliente. */
+export interface MensajeDelChatAsistente {
+  rol: 'usuario' | 'asistente'
+  contenido: string
+}
+
+/**
+ * Body de `POST /asistente/:restauranteId/mensajes`: la conversación, del más viejo al más nuevo, y el último es la
+ * pregunta. El token de la sesión de mesa, si hay, va en `Authorization: Bearer`. La respuesta es el UI message stream
+ * (SSE) del AI SDK.
+ */
+export interface PeticionAlAsistente {
+  mensajes: MensajeDelChatAsistente[]
+}
+
+/** Los códigos de error del asistente (los límites de uso de la Fase 5 suman los suyos). */
+export type CodigoErrorAsistente =
+  | 'asistente_deshabilitado'
+  | 'sesion_invalida'
+  | 'pregunta_invalida'
+  | 'pregunta_larga'
+  | 'no_disponible_momentaneamente'
+  | 'error_del_asistente'
+
+/**
+ * Un error del asistente. Antes del stream es el cuerpo de la respuesta, con su status (400, 403, 502, 503); a mitad de
+ * la respuesta llega en el evento `error` del stream, como JSON en `errorText`.
+ */
+export interface ErrorDelAsistente {
+  codigo: CodigoErrorAsistente
+  mensaje: string
+}

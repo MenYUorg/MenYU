@@ -268,7 +268,23 @@ Reglas:
 
 **Revisor:** probar los formularios en el navegador; el tri-estado de servicios es claro (no un checkbox que confunde "no" con "sin dato"); vaciar un campo lo borra de verdad; textos en el mismo tono que el resto de web-admin.
 
-### Fase 4 — Endpoint del asistente (contexto + modelo + streaming)
+### Fase 4 — Endpoint del asistente (contexto + modelo + streaming) ✅ (2026-11-01)
+
+**Cómo quedó** (detalle y decisiones en la bitácora):
+- **SDK:** `ai@^6` + `@ai-sdk/google@^3` (la línea `ai-v6`, que se sigue publicando): `ai@7` es solo ESM y el backend es CommonJS con ts-jest. `zod@^4`, peer obligatoria del SDK, va explícita en el `package.json` del backend. La key es `GOOGLE_GENERATIVE_AI_API_KEY`.
+- **Módulo `src/asistente/`:** `AsistenteController` (`POST /api/asistente/:restauranteId/mensajes`, pública: está en `PUBLICAS` de `rutas-por-autenticacion.spec.ts`), `AsistenteService` (valida y orquesta), `ContextoService` + `system-prompt.ts` (el contexto y el prompt), `ProveedorService` + `modelo.ts` (`modelo.ts` es el único archivo que conoce a Google; el modelo se inyecta con el token `MODELO_DEL_ASISTENTE`) y `RegistroAsistenteService`.
+- **Body:** el de esta spec, `{ mensajes: [{ rol: 'usuario' | 'asistente', contenido }] }` (`PeticionAlAsistente` y `ErrorDelAsistente` en `@menyu/types`). **Respuesta:** el UI message stream (SSE) del AI SDK. La Fase 6 puede usar `useChat` con `DefaultChatTransport` y un `prepareSendMessagesRequest` que arme `{ mensajes }`, o leer el SSE a mano.
+- **Validaciones, en este orden:**
+  - Restaurante que existe, disponible (él y su marca, como la carta) y con el flag; si no, `403 asistente_deshabilitado`.
+  - Token de mesa opcional (`Authorization: Bearer`, verificado con `verificarSesionDeMesa`, como `orders`); inválido o de otro restaurante, `403 sesion_invalida`.
+  - La pregunta es el último mensaje y tiene que ser del usuario: vacía o de otro rol, `400 pregunta_invalida`; más de `ASISTENTE_MAX_CARACTERES_PREGUNTA`, `400 pregunta_larga`.
+  - El historial se trunca a los últimos `ASISTENTE_MAX_MENSAJES_HISTORIAL`.
+  - Los límites de la Fase 5 van después de eso y antes del registro (marcado en `AsistenteService.responder`).
+- **Errores:** todos con `{ codigo, mensaje }`. Una falla del proveedor antes del primer texto sale con su status: `503 no_disponible_momentaneamente` si es un 429 (cupo de Google), `502 error_del_asistente` si es otra. Un error a mitad de la respuesta llega en el evento `error` del stream, con el mismo JSON en `errorText`.
+- **Llamada al modelo:** `maxOutputTokens` de `ASISTENTE_MAX_TOKENS_RESPUESTA`, temperatura 0,3, sin reintentos, timeout de 30 s. Al cliente no le llegan el razonamiento ni los metadatos del proveedor. Un error se loguea en una línea, sin la key.
+- **Contexto:** el formato de esta spec, más "Dietas (filtro de la carta): …" con las clasificaciones del catálogo, aparte de "Etiquetas: …". Platos disponibles por categoría; los que no tienen, en "Otros". Hasta 30 preguntas frecuentes (las primeras por fecha). Los textos del dueño van en una sola línea y sin `===`.
+- **Registro:** la fila se inserta antes de llamar al modelo y se completa en el `onFinish` con la respuesta, los tokens y la duración. Si falla, antes o a mitad, la respuesta queda en null.
+- **Probado con la key real:** con un dato cargado responde en streaming; con el estacionamiento en null, "No tengo esa información, te sugiero consultarle al mozo…". Con el seed son ~1.250 tokens de entrada por pregunta y ninguno de razonamiento.
 
 **Objetivo:** una pregunta por HTTP devuelve una respuesta real en streaming, basada solo en los datos del restaurante.
 
