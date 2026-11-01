@@ -248,7 +248,13 @@ Reglas:
 
 **Revisor:** permisos iguales a los del resto de la carta (probar con un rol sin acceso), los campos opcionales se pueden limpiar (mandar `null` los borra), el flag llega en el endpoint público de la carta, nada del asistente quedó accesible sin permiso.
 
-### Fase 3 — Formularios en web-admin
+### Fase 3 — Formularios en web-admin ✅ (2026-11-01)
+
+**Cómo quedó** (detalle y decisiones en la bitácora; la verificación en el navegador la hace el revisor con la receta de la bitácora):
+- **Datos del plato:** bloque "Datos para el asistente" al final del formulario del plato (`ItemFormModal`, con `DatosAsistenteFields.tsx` y la lógica en `datosAsistente.ts`). Tamaño, temperatura y picante con una opción "Sin dato"; "¿Para cuántas personas?" solo aparece con "Para N personas" (con otro tamaño se vacía y se manda `null`); minutos y personas se validan en el cliente con los topes del backend; etiquetas como chips. Se mandan los nueve campos en cada `PATCH`, con `null` en los vacíos. En el alta van en un `PATCH` después del `POST`; si ese `PATCH` falla, el modal lo avisa y el botón pasa a "Guardar datos del asistente", que reintenta sin volver a crear el plato.
+- **Pantalla "Asistente"** (`/admin/asistente`, OWNER y GERENTE, en la sección Configuración del menú; por restaurante elegido): el interruptor del asistente (guarda al tocarlo, solo el flag), la información del local (horarios, formas de pago y los cinco servicios en tri-estado con radios "Sin dato / Sí / No", "Sin dato" dibujado como un casillero vacío) y el ABM de preguntas frecuentes (alta, edición en el lugar y borrado con confirmación).
+- **Cliente HTTP:** `api.asistente` en `services/api.ts` (`informacion`, `guardarInformacion`, `preguntas.listar|crear|editar|borrar`) y `UpdateItemInput` con los datos del plato. Los errores muestran el mensaje de la API si es un 4xx con texto (`mensajeDeLaApi`); un 5xx o un error de red, uno propio.
+- Tests: feliz y error de cada formulario (`ItemFormModal.spec.tsx` y `AsistentePage.spec.tsx`).
 
 **Objetivo:** el dueño carga todo sin tocar la base.
 
