@@ -1,4 +1,10 @@
-import type { DiscoveryBusquedaResponse, DiscoveryResponse, DiscoveryRestauranteDetalle, MenuPublico } from '@menyu/types'
+import type {
+  DiscoveryBusquedaResponse,
+  DiscoveryResponse,
+  DiscoveryRestauranteDetalle,
+  MenuPublico,
+  PeticionAlAsistente,
+} from '@menyu/types'
 import { tokenParaAbrirMesa } from '../utils/cuenta'
 
 const BASE = import.meta.env.VITE_API_URL ?? ''
@@ -194,6 +200,21 @@ export const api = {
         undefined,
         jwt,
       ),
+  },
+
+  // El asistente de la carta (docs/asistente/specs/asistente.md, Fase 6). Responde en streaming (SSE), así que devuelve
+  // la respuesta cruda: la lee `components/asistente/streamDelAsistente.ts`. El token de la sesión de mesa es opcional.
+  asistente: {
+    preguntar: (restauranteId: string, peticion: PeticionAlAsistente, token: string | null, signal?: AbortSignal) => {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json', Accept: 'text/event-stream' }
+      if (token) headers['Authorization'] = `Bearer ${token}`
+      return fetch(`${BASE}/asistente/${encodeURIComponent(restauranteId)}/mensajes`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(peticion),
+        signal,
+      })
+    },
   },
 
   marca: {

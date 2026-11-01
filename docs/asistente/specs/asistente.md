@@ -337,7 +337,15 @@ Reglas:
 
 **Revisor:** probar las tres capas con curl; verificar que el límite por sesión no pueda evadirse abriendo "conversaciones nuevas"; revisar la config de `trust proxy` (que un `X-Forwarded-For` inventado por el cliente no cambie la IP vista); confirmar que los contadores cuentan intentos (fila insertada antes de llamar al modelo).
 
-### Fase 6 — Chat en web-cliente
+### Fase 6 — Chat en web-cliente ✅ (2026-11-01)
+
+**Cómo quedó** (detalle y decisiones en la bitácora; la verificación en el navegador la hace el revisor con la receta de la bitácora):
+- **Consumo del stream: SSE a mano, sin `@ai-sdk/react`** (`components/asistente/streamDelAsistente.ts`): lee los `data:` del UI message stream (`text-delta`, `error`, `finish`, `abort`, `[DONE]`) con el body propio de la Fase 4. Sin dependencias nuevas.
+- **Botón y panel:** `AsistenteDeLaCarta` (`BotonDelAsistente.tsx`, en `MenuView`, para la mesa y la carta vista desde Discovery) es una píldora "Asistente" abajo a la derecha, solo con `restaurante.asistenteHabilitado === true`; con el carrito a la vista se corre a su izquierda. El chat (`PanelDelAsistente.tsx`, el store y el lector del stream) es otro chunk (`React.lazy`, ~6 kB con gzip), con un límite de errores propio: si no baja, avisa y la carta sigue. En el celular es una hoja desde abajo que deja ver la carta (tocarla cierra) y se apoya arriba del teclado; en pantallas anchas, un panel de 400 px abajo a la derecha.
+- **Chat:** "escribiendo" hasta el primer texto y después el texto a medida que llega; input con `maxLength` 500 y contador; Enter manda; tres preguntas de ejemplo; negritas y viñetas del modelo sin HTML; al pie, "Respuestas generadas con IA a partir de los datos del local. Ante dudas, consultá al mozo.".
+- **Historial** (`conversacion.ts`): `sessionStorage` con la clave `menyu_asistente:<restauranteId>`, solo las preguntas con su respuesta. Al entrar a la carta de un restaurante se borran las de los demás (también arranca de cero al volver al anterior). Se mandan los últimos 10 mensajes. El estado (`asistenteStore.ts`, zustand) sigue vivo con el panel cerrado o la carta desmontada.
+- **Token de mesa:** `Authorization: Bearer` con el `jwt` de `sessionStore`, solo si la sesión es de este restaurante. Con `403 sesion_invalida` (token vencido) se reintenta una vez sin el token, que no se vuelve a mandar.
+- **Errores** (`avisos.ts`, en el hilo y sin romperlo): `limite_sesion`, `no_disponible_hoy` y `asistente_deshabilitado` deshabilitan el input; `limite_ip` muestra el mensaje del backend (con los minutos); `no_disponible_momentaneamente`, `error_del_asistente`, otros 5xx, la red y el corte a mitad del stream ofrecen "Reintentar"; `pregunta_larga`, el 400 del `ValidationPipe` y un 200 sin texto devuelven la pregunta al input. Tope de 20 preguntas por conversación, con aviso desde las 3 que quedan.
 
 **Objetivo:** un cliente en la mesa (o mirando la carta desde discovery) chatea con el asistente.
 
