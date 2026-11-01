@@ -350,6 +350,12 @@ Un descuento se guarda como `precio_descuento` (entero, con un CHECK en la base:
 
 ---
 
+## Asistente de mesa (en curso, rama `feat/asistente`)
+
+Chatbot de solo lectura sobre la carta y el local de un restaurante. Spec por fases: `docs/asistente/specs/asistente.md`; lo hecho en cada fase y las decisiones: `docs/asistente/specs/bitacora.md`. **Fase 1 (modelo de datos):** los datos del plato para el asistente van en `ItemMenu` (enums `TamanioPorcion`, `Temperatura`, `NivelPicante` y el array `etiquetasDietarias`, aparte del catálogo de `ClasificacionDieta`); `InformacionLocal` (1:1 con `Restaurante`, con el flag `asistenteHabilitado` y los servicios `Boolean?`: null = no declarado), `PreguntaFrecuente` y `RegistroAsistente` (una fila por pregunta, fuente de los límites de uso). Recomendado por el dueño = `recomendadoEn` no nulo. En el seed, Restaurante Seed tiene el asistente prendido y Restaurante Seed 2 no.
+
+---
+
 ## Comandos útiles
 
 ```bash

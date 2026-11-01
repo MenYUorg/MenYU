@@ -194,7 +194,15 @@ Reglas:
   - Que el system prompt pida voseo: sin indicación, el modelo responde en español neutro.
 - **A tener en cuenta en la Fase 7:** el script de evaluación espacia las llamadas (una cada 4–5 s) para no superar los 15 RPM.
 
-### Fase 1 — Modelo de datos (Prisma)
+### Fase 1 — Modelo de datos (Prisma) ✅ (2026-11-01)
+
+**Cómo quedó** (migración `20261101151932_asistente_modelo_de_datos`; detalle en la bitácora):
+- El plato es `ItemMenu` (`item_menu`): los nueve campos van ahí, con los nombres de esta spec. `etiquetasDietarias` arranca en `[]`.
+- Timestamps con la convención del schema: `createdAt` (`created_at`), no `creadoEn`. En `RegistroAsistente` es `timestamptz` (como `HistorialRoot`) y los índices son `(restauranteId, createdAt)`, `(sesionMesaId)` y `(createdAt)`. `PreguntaFrecuente` tiene `createdAt` y `updatedAt`, con índice `(restauranteId, createdAt)`.
+- `InformacionLocal` tiene `id` propio y `restauranteId` único. Las tres tablas nuevas borran en cascada con su restaurante; `RegistroAsistente.sesionMesaId` queda en null si se borra la sesión.
+- Recomendado por el dueño = `ItemMenu.recomendadoEn` no nulo (no se duplicó).
+- Ya existía un catálogo global de dietas (`ClasificacionDieta`, con el filtro "Dietas" de la carta). `etiquetasDietarias` se implementó igual, como pide esta spec: está anotado en la bitácora para que Lauti decida si se unifican.
+- Seed: Restaurante Seed con el asistente prendido, información del local (estacionamiento en null), los datos del plato en 9 de sus 10 platos (cada valor de cada enum al menos una vez; Rabas, sin nada), Provoleta y Bife de Chorizo recomendados, un plato vegano nuevo (Bowl de Quinoa) y 5 FAQs. Restaurante Seed 2 queda sin `InformacionLocal` (asistente apagado).
 
 **Objetivo:** todos los datos nuevos en la base, con seed para desarrollar y evaluar.
 
