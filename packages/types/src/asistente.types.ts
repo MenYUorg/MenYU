@@ -63,18 +63,26 @@ export interface PeticionAlAsistente {
   mensajes: MensajeDelChatAsistente[]
 }
 
-/** Los códigos de error del asistente (los límites de uso de la Fase 5 suman los suyos). */
+/**
+ * Los códigos de error del asistente. Los de los límites de uso: `limite_sesion` (429, con token de mesa), `limite_ip`
+ * (429, sin token) y `no_disponible_hoy` (503, el tope diario: "el asistente no está disponible por hoy").
+ * `no_disponible_momentaneamente` (503) es el proveedor sin cupo, no el tope propio.
+ */
 export type CodigoErrorAsistente =
   | 'asistente_deshabilitado'
   | 'sesion_invalida'
   | 'pregunta_invalida'
   | 'pregunta_larga'
+  | 'limite_sesion'
+  | 'limite_ip'
+  | 'no_disponible_hoy'
   | 'no_disponible_momentaneamente'
   | 'error_del_asistente'
 
 /**
- * Un error del asistente. Antes del stream es el cuerpo de la respuesta, con su status (400, 403, 502, 503); a mitad de
- * la respuesta llega en el evento `error` del stream, como JSON en `errorText`.
+ * Un error del asistente. Antes del stream es el cuerpo de la respuesta, con su status (400, 403, 429, 502, 503); a mitad
+ * de la respuesta llega en el evento `error` del stream, como JSON en `errorText`. Los límites siempre fallan antes del
+ * stream.
  */
 export interface ErrorDelAsistente {
   codigo: CodigoErrorAsistente

@@ -7,6 +7,7 @@ import { PrismaService } from '../prisma/prisma.service'
 import { ConfiguracionDelAsistente, configuracionDelAsistente } from './configuracion'
 import { ContextoService } from './contexto.service'
 import { errorDelAsistente } from './errores'
+import { LimitePorIpService } from './limite-por-ip.service'
 import { MensajeDelChat, ProveedorService } from './proveedor.service'
 import { RegistroAsistenteService } from './registro-asistente.service'
 
@@ -39,9 +40,9 @@ export function historialParaElModelo(
 }
 
 /**
- * `POST /asistente/:restauranteId/mensajes` (docs/asistente/specs/asistente.md, Fase 4): valida el pedido en el orden de
- * la spec, registra el intento y arranca la respuesta del modelo. Lo que falla antes del stream responde su status con
- * `{ codigo, mensaje }`.
+ * `POST /asistente/:restauranteId/mensajes` (docs/asistente/specs/asistente.md, Fases 4 y 5): valida el pedido en el
+ * orden de la spec, aplica los límites de uso, registra el intento y arranca la respuesta del modelo. Lo que falla antes
+ * del stream responde su status con `{ codigo, mensaje }`.
  */
 @Injectable()
 export class AsistenteService {
@@ -51,29 +52,33 @@ export class AsistenteService {
     private readonly contexto: ContextoService,
     private readonly proveedor: ProveedorService,
     private readonly registro: RegistroAsistenteService,
+    private readonly limitePorIp: LimitePorIpService,
   ) {}
 
   async responder(
     restauranteId: string,
     mensajes: MensajeDelChat[],
     authHeader: string | undefined,
+    ip: string | undefined,
   ): Promise<ReadableStream<UIMessageChunk>> {
     await this.exigirAsistenteHabilitado(restauranteId)
     const sesionMesaId = this.sesionDeMesa(restauranteId, authHeader)
     const configuracion = configuracionDelAsistente()
     const pregunta = this.pregunta(mensajes, configuracion.maxCaracteresPregunta)
     const historial = historialParaElModelo(mensajes, configuracion)
-    // Los límites de uso (Fase 5) van acá: con el pedido ya validado y antes de registrar el intento.
+
+    // Los límites de uso (Fase 5), con el pedido ya validado: los propios primero (429) y después el tope diario (503).
+    // Sin token de mesa, el límite por IP; con él, el de la sesión, que se cuenta en el registro junto con el diario.
+    if (!sesionMesaId) await this.limitePorIp.exigir(ip, configuracion)
+    const inicio = await this.registro.iniciar(
+      { restauranteId, sesionMesaId, pregunta, modelo: this.proveedor.nombreDelModelo },
+      configuracion,
+    )
+    if (!inicio.ok) throw errorDelAsistente(inicio.codigo)
 
     const system = await this.contexto.systemPrompt(restauranteId)
-    const registroId = await this.registro.iniciar({
-      restauranteId,
-      sesionMesaId,
-      pregunta,
-      modelo: this.proveedor.nombreDelModelo,
-    })
     const arranque = await this.proveedor.responder(system, historial, (resultado) =>
-      this.registro.completar(registroId, resultado),
+      this.registro.completar(inicio.id, resultado),
     )
     if (!arranque.ok) throw errorDelAsistente(arranque.error.codigo, arranque.error.mensaje)
     return arranque.stream

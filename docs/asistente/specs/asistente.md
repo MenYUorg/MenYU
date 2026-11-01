@@ -304,7 +304,24 @@ Reglas:
 
 **Revisor:** leer el system prompt y el armado del contexto contra esta spec; probar a mano 2–3 intentos de prompt injection (en la pregunta y simulando un texto malicioso cargado como descripción) y verificar que los trata como datos; que no inventa ante datos faltantes; que la key no aparece en logs ni en ninguna respuesta; separación contexto/proveedor respetada.
 
-### Fase 5 — Límites de uso
+### Fase 5 — Límites de uso ✅ (2026-11-01)
+
+**Cómo quedó** (detalle y decisiones en la bitácora):
+- **Dónde:** todo en `AsistenteService.responder`, después de validar el restaurante, el token de mesa, la pregunta y el historial, y antes de registrar el intento. La ruta sigue sin guards: `rutas-por-autenticacion.spec.ts` no cambió.
+- **Orden:** los límites propios primero (`429`) y después el tope diario (`503`).
+  - Sin token de mesa, el límite por IP. Con un token válido, el de la sesión. Un token inválido ya es `403 sesion_invalida`.
+  - Un pedido frenado no se registra ni llama al modelo. Todo intento que pasa los límites se registra antes de la llamada, aunque el modelo falle.
+- **Por sesión y tope diario** (`RegistroAsistenteService.iniciar`):
+  - `count` de `RegistroAsistente` por `sesionMesaId` y por `createdAt` desde la medianoche UTC (todos los restaurantes), en la misma transacción serializable que el insert (`runSerializableTransaction`). Así una ráfaga en paralelo no pasa el límite.
+  - Si la transacción vuelve a chocar después del reintento: `503 no_disponible_momentaneamente`, sin registrar.
+- **Por IP** (`LimitePorIpService`): el storage en memoria de `@nestjs/throttler@6`, con su misma semántica (al pasarse, bloquea una ventana entera) y la IP de `req.ip` normalizada (`normalizeIp`). Un reinicio lo borra; el tope de gasto real es el diario.
+- **`trust proxy`** (`main.ts` + `common/trust-proxy.ts`):
+  - 1 salto en Railway, que se reconoce por `RAILWAY_ENVIRONMENT_ID`. `req.ip` es la entrada de `X-Forwarded-For` que pone su edge, y una entrada que inventa el cliente queda a la izquierda y no se lee.
+  - 0 fuera de Railway: no se lee `X-Forwarded-For`.
+  - `TRUST_PROXY_HOPS` lo fija a mano, por ejemplo con el proxy de Cloudflare.
+  - La documentación de Railway solo garantiza `X-Real-IP`: queda un chequeo para después del deploy (bitácora).
+- **Códigos** (`errores.ts` y `CodigoErrorAsistente` de `@menyu/types`): `429 limite_sesion`, `429 limite_ip` (con los minutos que faltan en el mensaje) y `503 no_disponible_hoy` ("El asistente no está disponible por hoy.").
+- **Variables:** las de la tabla, con sus defaults (`ASISTENTE_MAX_PREGUNTAS_SESION`, `ASISTENTE_THROTTLE_LIMITE`, `ASISTENTE_THROTTLE_TTL` en segundos y `ASISTENTE_MAX_PREGUNTAS_DIA`). Se leen en cada pedido y están en `.env.example`. `maxOutputTokens` ya estaba desde la Fase 4.
 
 **Objetivo:** el gasto queda acotado por código, no por confianza.
 

@@ -635,3 +635,169 @@ Llamadas reales al modelo: **2** (una por el dato cargado y otra por el dato en 
   - El panel no avisa que solo entran 30 preguntas frecuentes.
   - `ai@7` queda para cuando el backend pase a ESM.
 - **Fuera de alcance, sin tocar:** nada nuevo.
+
+## Cierre de la Fase 4 (orquestador, 2026-11-01)
+
+- **Veredicto del revisor:** APROBADA CON OBSERVACIONES. Bloqueantes: ninguno. Rondas de corrección: 0.
+- **Commit de la fase:** `5494e9d`. "Terminado cuando" verificado en vivo (streaming SSE con datos del seed, "no tengo esa información" + mozo, registro con tokens y duración) y checklist "Revisor:" completo: system prompt palabra por palabra + voseo, contexto sin "null", **4 intentos de prompt injection tratados como datos** (en la pregunta, en el historial, en la descripción con `=== FIN DE LOS DATOS ===` falso y en la info adicional), key ausente de logs/headers/cuerpos, separación contexto/proveedor respetada.
+- **Llamadas reales:** 2 del trabajador + 6 del revisor = 8 en la fase. **Acumuladas: 9 de 200. Restante: 191.** (En `registro_asistente` quedan solo las 2 filas del trabajador; el revisor borró las suyas por id.)
+- **Observaciones no aplicadas / decisiones para Lauti:**
+  1. **Nombre del restaurante concatenado a las instrucciones** del system prompt (la spec lo templatea así, pero roza la nota de seguridad "nunca concatenados"). Alternativa: nombrarlo solo dentro del bloque de datos. Decide Lauti.
+  2. **La sección "## Otros" del contexto incluye platos sin categoría que la carta de web-cliente no muestra** (salvo recomendados o con descuento): el asistente podría ofrecer un plato que el comensal no encuentra. Decidir si se sacan.
+  3. Un body mal formado devuelve el 400 estándar del ValidationPipe (sin `{codigo, mensaje}`) — **se pasa a la Fase 6** para que lo contemple.
+  4. Una respuesta bloqueada por el content-filter de Gemini daría 200 sin texto — **se pasa a la Fase 6** (mostrar algo).
+  5. Tipos del contrato duplicados entre el backend y `@menyu/types` sin un test que los compare (sugerencia: test de tipos como el de `puede-invitar.ts`).
+  6. Decisiones del trabajador aceptadas: `ai@6` + `@ai-sdk/google@3` (CommonJS), `zod` explícito, 429→`503 no_disponible_momentaneamente` leyendo hasta el primer texto, tope de 30 FAQs en el contexto, filtrado de `thoughtSignature`, respuesta null si el stream falla a mitad, dirección del restaurante fuera del contexto (el formato de la spec no la lista).
+- Notas operativas para la Fase 5: las 2 filas de `registro_asistente` cuentan para el tope diario de hoy; hay 2 sesiones de mesa abiertas (mesa 99 de Seed y mesa 1 de Seed 2).
+
+---
+
+## Fase 5 — Límites de uso (2026-11-01)
+Estado: completada
+Plan y "A verificar" resueltos: en las subsecciones "A verificar en plan mode" y "Plan" de abajo, escritas antes de tocar código.
+
+### "A verificar en plan mode", resueltos leyendo el código y la documentación
+
+- **`@nestjs/throttler`:** no está instalado y no hay ninguna config global que pisar: ni `ThrottlerModule`, ni `APP_GUARD`, ni otro rate limit por IP en el backend. El único limitador que existe es `common/limite-intentos.ts` (`LimiteIntentos`), en memoria, que `SessionsService` aplica **desde el service** a los intentos fallidos de PIN y de código de sesión (por restaurante o mesa, no por IP). La versión vigente es `@nestjs/throttler@6.7.1` (peers: Nest 7 a 12; el backend está en Nest 11). Leí su código en un tarball bajado aparte, sin ejecutarlo: `ThrottlerStorage.increment(key, ttl, limit, blockDuration, throttlerName)` con `ttl` y `blockDuration` **en milisegundos** (la env está en segundos); `ThrottlerStorageService` es en memoria y su `increment` no tiene ningún `await` adentro (dos pedidos simultáneos del mismo proceso no se pisan); el guard bloquea por `blockDuration` (por defecto, el `ttl`) después del hit N+1 y toma la IP con `normalizeIp(req.ip)` (IPv4 mapeada a IPv4, IPv6 agrupada por /64).
+- **`trust proxy`:** no está configurado en ningún lado. `main.ts` crea la app con `NestFactory.create(AppModule)` (Express 5.2.1 por debajo) y nadie lee `req.ip`, `req.protocol`, `req.hostname` ni `req.secure`, así que configurarlo no cambia nada de lo que ya existe. En Express 5, un `trust proxy` numérico es `(addr, i) => i < saltos`: con 1 confía solo en quien abre la conexión, y `req.ip` es la entrada **de más a la derecha** de `X-Forwarded-For`, la que agregó ese proxy. Lo que el cliente haya escrito antes queda a la izquierda y no se lee. Con `true`, Express toma la de más a la izquierda, que escribe el cliente: spoofeable.
+- **El proxy de Railway:** el DNS de `api.menyu-app.com` y `api.staging.menyu-app.com` está en Cloudflare **sin proxy** (`docs/auth/VariablesACambiar.md`), así que delante del backend hay un solo salto: el edge de Railway. La documentación vigente de Railway (Public Networking, "Specs & Limits") solo garantiza `X-Real-IP` "for identifying client's remote IP", `X-Forwarded-Proto` y `X-Forwarded-Host`; `X-Forwarded-For` no figura. En issues y PRs públicos de otros proyectos en Railway, con `trust proxy = 1` Express usa la dirección que agrega el edge, y un moderador de Railway afirma que el edge pisa `X-Forwarded-For` y `X-Real-IP`. Pise o agregue, con 1 salto `req.ip` es lo que puso el edge. Railway inyecta `RAILWAY_ENVIRONMENT_ID` en cada servicio (el backend ya lee otra variable de Railway, `RAILWAY_GIT_COMMIT_SHA`, en `health.service.ts`).
+- **Dónde van los límites:** en `AsistenteService.responder`, en el lugar que dejó marcado la Fase 4: con el restaurante, la sesión (`sesionMesaId`), la pregunta y el historial ya resueltos, y antes de `registro.iniciar`.
+- **Contadores en la base:** `registro_asistente.created_at` es `timestamptz` con índice propio (contador diario) y `sesion_mesa_id` también tiene índice (contador por sesión). Para "contar y después insertar" sin carreras ya existe `common/run-serializable-transaction.ts` (lo usan `SessionsService`, `PaymentsService` y `RootDuenosService`). `crearPrismaMock` corre el callback de `$transaction` con el mismo mock.
+- **`rutas-por-autenticacion.spec.ts`:** el test "las rutas públicas no tienen ningún guard" solo falla si la ruta suma un guard.
+- **CI:** `turbo typecheck`, `turbo lint` (el del backend es un `echo`), `turbo test`, los tests de `scripts/` y el job de e2e del backend (levanta `AppModule`).
+- **Migración:** esta fase no agrega ninguna.
+- **Base local:** 2 filas de hoy (UTC) en `registro_asistente`, de la Fase 4; la primera, con la sesión de la mesa 99 de Restaurante Seed. Son las 19:25 UTC: el día UTC no cambia durante la fase.
+
+### Plan (escrito antes de tocar código)
+
+1. **Dependencia:** `@nestjs/throttler@^6.7.1` en `apps/backend` (la prevé la spec).
+2. **`configuracion.ts`:** `ASISTENTE_MAX_PREGUNTAS_SESION` (20), `ASISTENTE_THROTTLE_LIMITE` (10), `ASISTENTE_THROTTLE_TTL` (900 s) y `ASISTENTE_MAX_PREGUNTAS_DIA` (300), leídas en cada pedido como las de la Fase 4. `maxOutputTokens` ya lo puso la Fase 4 (`ASISTENTE_MAX_TOKENS_RESPUESTA`).
+3. **`errores.ts` y `@menyu/types`:** `429 limite_sesion`, `429 limite_ip` y `503 no_disponible_hoy`, con `{ codigo, mensaje }`.
+4. **Límite por IP desde el service, con el storage de `@nestjs/throttler`** (`limite-por-ip.service.ts`), no con un guard. Así:
+   - Se respeta el orden de validaciones de la spec (los límites, al final).
+   - "Solo sin token de mesa" lo decide la misma verificación del token que ya hace el service: sin verificarlo dos veces y sin la heurística de "trae un header".
+   - Solo cuentan los pedidos válidos, los mismos que se registran.
+   - La ruta sigue sin guards, así que `rutas-por-autenticacion.spec.ts` no se toca.
+   - Es el mismo lugar que eligió `SessionsService` para su límite de intentos.
+   El controller le pasa al service la IP con `@Ip()` (`req.ip`).
+5. **Por sesión y tope diario, en la misma transacción serializable que el insert del registro** (`RegistroAsistenteService.iniciar` con `runSerializableTransaction`). Así una ráfaga de pedidos en paralelo no evade el límite contando todos antes de que se inserte el primero. El tope diario cuenta las filas de **todos** los restaurantes con `createdAt` desde el inicio del día UTC.
+6. **Orden:** los límites propios primero (por sesión con token válido o por IP sin él, `429`) y después el global (`503`), como en la tabla de la spec. Después, el registro y el modelo.
+7. **`trust proxy`** en `main.ts`, con los saltos de `common/trust-proxy.ts`: `TRUST_PROXY_HOPS` si está; si no, 1 en Railway (`RAILWAY_ENVIRONMENT_ID`) y 0 fuera de Railway (local y CI), donde no hay proxy y no se lee `X-Forwarded-For`.
+8. **Tests** (proveedor mockeado): los tres de la fase en `asistente-endpoints.spec.ts`. Feliz: por debajo de todos los límites responde normal. Error principal: tope diario alcanzado, `503 no_disponible_hoy`. Y `429 limite_sesion` en la pregunta N+1. Ninguno de los dos errores llama al modelo ni deja fila. El límite por IP, a mano con curl, como pide la fase. Uno chico de `trust-proxy.ts`, que es la config de seguridad que mira el revisor.
+9. **Verificación con límites bajos por env**, sin tocar el `.env`, que queda con 50. Las capas se alcanzan con un backend **sin la key**: un `.env` de copia sin esa línea en el scratchpad, con `DOTENV_CONFIG_PATH`. Ahí cada pedido que pasa los límites se registra y responde `502 error_del_asistente` sin salir a la red. Una sola llamada real para el caso feliz: con sesión y con el límite por IP ya agotado. Al final, borrar las filas que deje la prueba sin key.
+10. `.env.example`, la spec (Fase 5 hecha, con "Cómo quedó") y la línea de la Fase 5 en `CLAUDE.md`.
+
+### Incidente durante la verificación: 4 llamadas reales no previstas (19:34 UTC)
+
+- **Qué pasó:** para alcanzar las capas sin llamar al modelo levanté el backend con `DOTENV_CONFIG_PATH` apuntando a una copia del `.env` sin la línea de la key. Pero **Prisma Client 6 carga por su cuenta el `.env` del proyecto** al instanciarse y completa `process.env` con lo que falte, key incluida. Los cuatro pedidos que pasaron los límites (dos con la sesión de la mesa 99 y dos sin sesión) llegaron a Gemini y respondieron 200 con texto. Son las filas `90d782e9…`, `82853898…`, `5f15a4ea…` y `e2f8994a…`, con respuesta, 1.248/11 tokens cada una y entre 565 y 2.869 ms.
+- **Lo que sí se verificó en esa corrida** (sesión 3, IP 2 cada 900 s, día 100): la pregunta N+1 de la sesión dio `429 limite_sesion`. Sin sesión y desde la misma IP siguió pasando (el límite de la sesión no se aplica sin token). La N+1 sin sesión dio `429 limite_ip` ("Probá de nuevo en 15 minutos"), y otra con un `X-Forwarded-For: 203.0.113.50` inventado, también (localmente `trust proxy` es 0). Las 4 llamadas sirven además como el caso feliz real: por debajo de todos los límites, responde normal en streaming, con sesión y sin ella.
+- **Corrección:** el resto de la verificación corre con un preload de Node en el scratchpad (`--require`) que reemplaza `globalThis.fetch` solo para `generativelanguage.googleapis.com` y responde un 500 sin salir a la red. Además, `GOOGLE_GENERATIVE_AI_API_KEY` va definida en el entorno del proceso con un valor falso, que ni Prisma ni dotenv pisan. Cada pedido bloqueado deja una línea en el log, para contarlos.
+- **Las 4 filas reales quedan en la base:** son gasto real de hoy y cuentan para el tope diario.
+
+### Qué se hizo
+
+- **Dependencia** (`apps/backend/package.json` y `pnpm-lock.yaml`): `@nestjs/throttler@^6.7.1` (instalada 6.7.1). Es la única nueva, y la prevé la spec.
+- **`src/asistente/`:**
+  - `configuracion.ts`: `maxPreguntasSesion`, `limitePorIp`, `ventanaPorIpSegundos` y `maxPreguntasDia`, con los defaults de la tabla (20, 10, 900 y 300). Se leen en cada pedido.
+  - `errores.ts`: `429 limite_sesion`, `429 limite_ip` y `503 no_disponible_hoy` ("El asistente no está disponible por hoy.").
+  - `limite-por-ip.service.ts` (nuevo): `LimitePorIpService.exigir(ip, configuracion)` sobre `ThrottlerStorage` (`increment` con la ventana en ms y bloqueo de una ventana, como el guard del throttler) y `normalizeIp`. El mensaje dice cuántos minutos faltan.
+  - `registro-asistente.service.ts`: `iniciar(intento, limites)` cuenta las filas de la sesión (si hay) y las del día UTC (`inicioDelDiaUtc`, exportada) en una transacción serializable con el insert (`runSerializableTransaction`). Devuelve `{ ok: true, id }` o el código que lo frenó. Si la transacción vuelve a chocar después del reintento, devuelve `no_disponible_momentaneamente` sin registrar.
+  - `asistente.service.ts`: en el lugar marcado, sin token el límite por IP y después `registro.iniciar` con los límites. El contexto se arma después de pasar los límites: un pedido frenado no hace sus tres consultas.
+  - `asistente.controller.ts`: la IP con `@Ip()` (`req.ip`) y Swagger con los 429 y el 503 nuevos.
+  - `asistente.module.ts`: `LimitePorIpService` y `{ provide: ThrottlerStorage, useClass: ThrottlerStorageService }`, solo en este módulo.
+- **`trust proxy`:** `src/common/trust-proxy.ts` (nuevo, `saltosDeProxy`) y `main.ts` (`NestFactory.create<NestExpressApplication>` + `app.set('trust proxy', saltosDeProxy())`).
+- **`@menyu/types`:** `CodigoErrorAsistente` suma los tres códigos.
+- **`.env.example`:** las cuatro variables de los límites y `TRUST_PROXY_HOPS`, comentada.
+- **Tests:**
+  - En `asistente-endpoints.spec.ts`, el `describe('límites de uso')`, con un registro en memoria donde `count` cuenta lo insertado. El feliz: por debajo de todos los límites responde normal, con los dos `count` y la transacción serializable. El tope diario alcanzado da `503 no_disponible_hoy`, con sesión y sin ella. La pregunta N+1 de la sesión da `429 limite_sesion`. Ninguno de los errores llama al modelo ni registra nada.
+  - `common/trust-proxy.spec.ts`: Railway, local, la variable que manda y un valor inválido.
+  - Una mutación (`>=` → `>` en las dos comparaciones) hace fallar los tres tests de error.
+
+### Decisiones tomadas por ambigüedad
+
+1. **El límite por IP va en el service, con el storage de `@nestjs/throttler`, no con un `ThrottlerGuard`.** La spec pide el throttler, solo sin token de mesa, con los límites al final del orden de validaciones. Un guard corre antes que todo y no sabe si el token es válido: habría que verificarlo dos veces o saltear el límite con solo mandar un header. Desde el service:
+   - Se aplica exactamente a los pedidos sin una sesión válida. Uno con un token inválido ya es `403 sesion_invalida` y no llega al modelo.
+   - Solo cuentan los pedidos que pasan las validaciones.
+   - Es el mismo lugar que eligió `SessionsService` para `LimiteIntentos`.
+   - La ruta sigue sin guards, así que `rutas-por-autenticacion.spec.ts` no se tocó y lo que garantiza sigue igual para todas las rutas.
+2. **Orden de las capas:** sesión o IP (`429`) antes que el tope diario (`503`), como en la tabla. Un pedido sin sesión que frena el tope diario igual gasta un hit de su IP. Es irrelevante: ese día el asistente ya no responde.
+3. **Conteo e insert en una transacción serializable** (`runSerializableTransaction`, el patrón del repo para contar y después insertar). Sin eso, una ráfaga en paralelo con el mismo token pasaba el límite. Si una transacción choca dos veces, el intento no se registra y responde `503 no_disponible_momentaneamente`, el mismo código que el proveedor sin cupo ("muchas consultas en este momento"). No se usó un lock de Postgres: no es un patrón del repo. Con poco tráfico, el reintento alcanza.
+4. **`trust proxy` por detección de Railway**, con `TRUST_PROXY_HOPS` para fijarlo a mano.
+   - Con el valor fijo en 1, en local un cliente podría inventar su IP. Con 0 por defecto, en Railway todos los pedidos sin sesión compartirían la IP del edge.
+   - No puedo cargar variables en Railway (es un panel externo), y `RAILWAY_ENVIRONMENT_ID` la inyecta Railway en cada servicio.
+   - Un `TRUST_PROXY_HOPS` inválido se ignora y manda la detección.
+   - Nunca `true`.
+5. **La semántica del bloqueo por IP es la del throttler:** al pasarse, una ventana entera de bloqueo, que es el `blockDuration` por defecto del guard. Con el storage en memoria, un reinicio lo borra y cada réplica cuenta por separado, como `LimiteIntentos`. El tope que acota el gasto es el diario, en Postgres.
+6. **Textos de los errores:**
+   - `limite_ip` dice los minutos que faltan, como `LimiteIntentos`.
+   - `limite_sesion` sugiere preguntarle al mozo.
+   - `no_disponible_hoy` es el texto de la spec.
+   - El cuerpo sigue siendo exactamente `{ codigo, mensaje }`.
+7. **El tope diario cuenta las filas de todos los restaurantes** ("tope global"), con `createdAt >= medianoche UTC` calculada en Node (`Date.UTC`) contra la columna `timestamptz`.
+8. **Un test más que los de la fase** (`trust-proxy.spec.ts`, una tabla de 5 casos). Es la config de seguridad que revisa el revisor y no tiene otro test; mismo criterio del orquestador en las Fases 2 y 4.
+9. **Las 4 filas de las llamadas reales quedan en la base** (ver el incidente): son gasto real de hoy. Las 12 filas que dejaron los pedidos bloqueados se borraron.
+
+Commit: `feat(api): límites de uso del asistente de mesa (Fase 5)`. El hash lo registra el orquestador al cierre: un commit no puede contener su propio hash. El commit también lleva el "Cierre de la Fase 4" que el orquestador dejó sin commitear en esta bitácora.
+
+### Verificación
+
+- typecheck ✓: el comando del CI (`turbo typecheck` de api, web-admin, web-cliente, web-staff, web-auth y auth-client), 7/7, con `@menyu/types` recompilado.
+- lint ✓: el comando del CI, 5/5 (el del backend sigue siendo un `echo`).
+- tests ✓:
+  - api: 2073 pasan y 36 se saltean, en 89 suites. Eran 2064 en 88: +9 tests (4 del asistente y 5 de `trust-proxy`) y +1 suite. Los 36 son los 3 `*.base.spec.ts`, que piden `TEST_DATABASE_URL`.
+  - web-admin 859, web-cliente 759, web-staff 211, web-auth 93, auth-client 80 y ui 41.
+  - En la corrida conjunta del CI, un test de web-cliente que levanta ESLint (`authClientDiferido.spec.ts`) cayó por timeout (30 s), con api, web-admin y web-cliente corriendo en paralelo en esta máquina. Turbo cortó ahí. Por separado, web-cliente pasa 759/759 (ese test tarda 12 s), y api y web-admin pasan. Esta fase no toca web-cliente.
+  - Tests de `scripts/`: 78/78.
+  - e2e del backend (`pnpm test:e2e:local`, que levanta `AppModule` con el módulo nuevo): migraciones desde cero, drift sin diferencias y 13/13. El aviso "Jest did not exit one second after the test run" no viene de esta fase: el storage del throttler no crea timers hasta el primer `increment` (y el de él va con `unref()`), y el e2e no le pega al asistente.
+  - Cobertura del módulo `asistente` + `trust-proxy.ts`: 95,8 % de líneas y 86,6 % de ramas. Sin cubrir: el bloqueo por IP (la fase lo pide a mano) y el mapeo del doble conflicto (verificado en vivo).
+- **"Terminado cuando", punto por punto.** Backend de la rama compilado, en `localhost:3100`, contra `menyu-postgres`, con límites bajos por variables del proceso. El `.env` no se tocó: sigue con `ASISTENTE_MAX_PREGUNTAS_DIA=50`.
+  1. **Cada capa se alcanza y responde su código** ✓.
+     - Por sesión (N=3; la mesa 99 tenía 1): la N+1 dio `429 limite_sesion`. Lo mismo con N=4 en la segunda corrida.
+     - Por IP (N=2): la N+1 dio `429 limite_ip`, "Probá de nuevo en 15 minutos".
+     - Tope diario (N = filas de hoy + 1 = 18): la 19 dio `503 no_disponible_hoy` sin sesión, y con sesión también.
+  2. **El contador diario sigue correcto tras reiniciar** ✓. Bajé y volví a levantar el backend con el mismo tope: sin sesión y con sesión, `503 no_disponible_hoy`, con la base en 18 filas de hoy.
+  3. **Con sesión de mesa no aplica el límite por IP, y viceversa** ✓.
+     - Con la IP agotada (simulando el edge de Railway), un pedido con el token de la mesa 99 pasó los límites y llegó al proveedor.
+     - Con la sesión de la mesa 99 agotada (`429 limite_sesion`), un pedido sin token desde la misma IP pasó (respondió el modelo: es una de las 4 llamadas reales).
+- **`trust proxy` y `X-Forwarded-For`** ✓.
+  - Local (0 saltos): con un `X-Forwarded-For` inventado, sigue el `429 limite_ip` de la IP real.
+  - Simulando Railway (`TRUST_PROXY_HOPS=1`, mandando `X-Forwarded-For: <inventada>, <la del edge>`): rotar la inventada no esquiva el límite (la tercera, `429`) y otra "IP del edge" tiene su propio contador.
+- **Ráfagas en paralelo con el mismo token** ✓ (no lo pide la fase; lo mira el revisor).
+  - 6 en paralelo con 2 lugares: entraron exactamente 2. Antes del ajuste de la decisión 3, dos de los frenados recibieron un 500 genérico.
+  - Después del ajuste: 8 con 2 lugares, entraron 2 y 6 dieron `429`. 12 con 3 lugares, entraron 3, 8 dieron `429` y 1 dio `503 no_disponible_momentaneamente`, sin ningún 500 ni ERROR en el log.
+- **Los contadores cuentan intentos** ✓: cada pedido que pasó los límites dejó su fila antes de llamar al proveedor, aunque el proveedor fallara. Los bloqueados quedaron con la respuesta en null y se borraron al final.
+- **La key no aparece** ✓ en los logs de las siete corridas ni en las respuestas guardadas. Lo comprobé con un script que lee la key del `.env` y la busca, sin imprimirla.
+- **Estado final de la base local:** 6 filas en `registro_asistente`: las 2 de la Fase 4 y las 4 reales de esta fase, todas de hoy en UTC. La sesión de la mesa 99 (`418a6d8a…`) tiene 3. Las dos sesiones abiertas siguen igual; no se abrió ninguna nueva.
+
+Llamadas reales al modelo: **4**, no previstas (ver el incidente). El resto de la verificación corrió sin salir a la red. Presupuesto restante: 191 − 4 = **187**.
+
+### Para el revisor / fases siguientes
+
+- **Receta para probar las capas sin llamar al modelo.** Ojo: Prisma Client carga el `.env` por su cuenta, así que sacarle la key a una copia del `.env` **no alcanza**.
+  1. Un preload fuera del repo, `sin-proveedor.cjs`. Responde 500 sin red a todo pedido al proveedor, y cada pedido bloqueado deja una línea en el log:
+     ```js
+     const original = globalThis.fetch
+     globalThis.fetch = async (input, init) => {
+       const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+       if (url.includes('generativelanguage.googleapis.com')) {
+         process.stdout.write('[verificacion] pedido al proveedor bloqueado\n')
+         return new Response('{"error":{"code":500,"message":"bloqueado"}}', { status: 500, headers: { 'content-type': 'application/json' } })
+       }
+       return original(input, init)
+     }
+     ```
+  2. Levantar el backend: `cd apps/backend && npx nest build && env PORT=3100 GOOGLE_GENERATIVE_AI_API_KEY=key-falsa ASISTENTE_MAX_PREGUNTAS_SESION=2 ASISTENTE_THROTTLE_LIMITE=2 ASISTENTE_MAX_PREGUNTAS_DIA=<filas de hoy + 1> node --require <ruta>/sin-proveedor.cjs dist/main.js`. La key falsa en el entorno del proceso no la pisan ni Prisma ni dotenv. Un pedido que pasa los límites responde `502 error_del_asistente`.
+  3. El token de la mesa 99 y los bodies, como en la receta de la Fase 4. Para simular el edge de Railway, `TRUST_PROXY_HOPS=1` y `-H "X-Forwarded-For: <inventada>, <ip del edge>"`.
+  4. Contar las filas: `select count(*) filter (where created_at >= date_trunc('day', now() at time zone 'utc') at time zone 'utc') from registro_asistente`. Al final, borrar las filas de la prueba: `respuesta is null` y `created_at` desde que se arrancó.
+- **Para Lauti, después del deploy a staging (no lo pude verificar):** la documentación de Railway solo garantiza `X-Real-IP`; que el edge ponga la IP real en `X-Forwarded-For` lo dicen issues de terceros y un moderador de Railway. Para comprobarlo, sin sesión y con un límite bajo:
+  - Desde una red, agotar el límite por IP y probar desde otra red (por ejemplo, datos del celular): tiene que pasar.
+  - Desde la red agotada, mandar un `X-Forwarded-For` inventado: tiene que seguir en `429`.
+  - Si desde la otra red también da `429`, hay más saltos de los esperados (todos comparten la IP de un proxy: limita de más, nunca de menos). Se ajusta con `TRUST_PROXY_HOPS`.
+  - Si el `X-Forwarded-For` inventado esquiva el límite, el edge no lo pisa ni lo completa, y habría que pasar a `X-Real-IP`.
+- **Fase 6 (web-cliente):** los códigos nuevos llegan siempre antes del stream, con su status y `{ codigo, mensaje }`:
+  - `429 limite_sesion`: la mesa ya no puede preguntar más.
+  - `429 limite_ip`: el `mensaje` trae los minutos que faltan.
+  - `503 no_disponible_hoy`: "el asistente no está disponible por hoy".
+  - `503 no_disponible_momentaneamente` también puede salir de una ráfaga, además del cupo del proveedor: es para reintentar más tarde.
+  - Un pedido frenado no queda registrado: no hace falta nada del lado del chat para "devolverlo".
+- **Fuera de alcance, sin tocar:** el timeout del test de ESLint de web-cliente (`authClientDiferido.spec.ts`, 30 s) cuando turbo corre varias apps en paralelo en una máquina cargada. Si pasa en el CI, subirle el timeout a ese test. El aviso "Jest did not exit" del e2e del backend es anterior a esta fase.

@@ -1,3 +1,4 @@
+import { ThrottlerStorage, ThrottlerStorageService } from '@nestjs/throttler'
 import { APICallError, simulateReadableStream } from 'ai'
 import { MockLanguageModelV3 } from 'ai/test'
 import { PrismaService } from '../prisma/prisma.service'
@@ -7,12 +8,13 @@ import { AsistenteController } from './asistente.controller'
 import { AsistenteService, historialParaElModelo } from './asistente.service'
 import { configuracionDelAsistente } from './configuracion'
 import { ContextoService } from './contexto.service'
+import { LimitePorIpService } from './limite-por-ip.service'
 import { MODELO_DEL_ASISTENTE } from './modelo'
 import { ProveedorService } from './proveedor.service'
-import { RegistroAsistenteService } from './registro-asistente.service'
+import { inicioDelDiaUtc, RegistroAsistenteService } from './registro-asistente.service'
 
 // La ruta, el ValidationPipe, el token de mesa y los services reales. La base, en memoria (crearPrismaMock); el modelo,
-// el mock del AI SDK: ninguna llamada real.
+// el mock del AI SDK: ninguna llamada real. El límite por IP se prueba a mano con curl (Fase 5 de la spec).
 
 const REST = MUNDO.REST_1
 const RUTA = `/asistente/${REST}/mensajes`
@@ -86,6 +88,8 @@ describe('POST /asistente/:restauranteId/mensajes', () => {
   let api: AppDeEndpoints
   let prisma: PrismaMock
   const doStream = jest.fn()
+  // Supertest pega siempre desde la misma IP: los contadores en memoria se vacían después de cada test.
+  const contadoresPorIp = new ThrottlerStorageService()
 
   beforeAll(async () => {
     prisma = crearPrismaMock()
@@ -94,12 +98,15 @@ describe('POST /asistente/:restauranteId/mensajes', () => {
       ContextoService,
       ProveedorService,
       RegistroAsistenteService,
+      LimitePorIpService,
+      { provide: ThrottlerStorage, useValue: contadoresPorIp },
       { provide: PrismaService, useValue: comoPrisma(prisma) },
       { provide: MODELO_DEL_ASISTENTE, useValue: new MockLanguageModelV3({ doStream }) },
     ])
   })
 
   afterAll(() => api.cerrar())
+  afterEach(() => contadoresPorIp.onApplicationShutdown())
 
   beforeEach(() => {
     jest.clearAllMocks()
@@ -107,6 +114,7 @@ describe('POST /asistente/:restauranteId/mensajes', () => {
     prisma.restaurante.findUnique.mockResolvedValue(restauranteSeed())
     prisma.itemMenu.findMany.mockResolvedValue([provoleta])
     prisma.preguntaFrecuente.findMany.mockResolvedValue([])
+    prisma.registroAsistente.count.mockResolvedValue(0)
     prisma.registroAsistente.create.mockResolvedValue({ id: 'registro-1' })
     prisma.registroAsistente.update.mockResolvedValue({})
   })
@@ -260,6 +268,73 @@ describe('POST /asistente/:restauranteId/mensajes', () => {
     expect(JSON.parse(String(error?.errorText))).toEqual({ codigo: 'error_del_asistente', mensaje: expect.any(String) })
     expect(res.text).not.toContain('se cortó la conexión')
     expect(prisma.registroAsistente.update).not.toHaveBeenCalled()
+  })
+
+  describe('límites de uso', () => {
+    const LIMITES = { ASISTENTE_MAX_PREGUNTAS_SESION: '2', ASISTENTE_MAX_PREGUNTAS_DIA: '5' }
+    const conSesion = { sesion: { ...SESION_CLIENTE, restauranteId: REST } }
+
+    beforeEach(() => Object.assign(process.env, LIMITES))
+    afterEach(() => Object.keys(LIMITES).forEach((nombre) => delete process.env[nombre]))
+
+    /** El registro en memoria: `count` cuenta lo que se insertó, por sesión o (con las filas previas) en el día. */
+    function registroEnMemoria(filasPreviasDelDia = 0) {
+      const filas: Array<{ sesionMesaId: string | null }> = []
+      prisma.registroAsistente.create.mockImplementation(async ({ data }) => {
+        filas.push(data)
+        return { id: `registro-${filas.length}` }
+      })
+      prisma.registroAsistente.count.mockImplementation(async ({ where }) =>
+        where.sesionMesaId
+          ? filas.filter((f) => f.sesionMesaId === where.sesionMesaId).length
+          : filasPreviasDelDia + filas.length,
+      )
+      return filas
+    }
+
+    it('por debajo de todos los límites responde normal: cuenta la sesión y el día en la transacción del registro', async () => {
+      registroEnMemoria(3)
+
+      const res = await api.pedir('post', RUTA, { ...conSesion, body: pregunta('¿La provoleta pica?') })
+
+      expect(res.status).toBe(200)
+      const deltas = eventos(res.text).filter((e) => e.type === 'text-delta').map((e) => e.delta)
+      expect(deltas.join('')).toBe(RESPUESTA.join(''))
+      expect(prisma.$transaction).toHaveBeenCalledWith(expect.any(Function), { isolationLevel: 'Serializable' })
+      expect(prisma.registroAsistente.count).toHaveBeenCalledWith({ where: { sesionMesaId: SESION_CLIENTE.sesionId } })
+      expect(prisma.registroAsistente.count).toHaveBeenCalledWith({ where: { createdAt: { gte: inicioDelDiaUtc() } } })
+      expect(prisma.registroAsistente.create).toHaveBeenCalledTimes(1)
+      expect(doStream).toHaveBeenCalledTimes(1)
+    })
+
+    it.each([
+      ['sin sesión', {}],
+      ['con sesión', conSesion],
+    ])('con el tope diario alcanzado, 503 no_disponible_hoy %s: no llama al modelo ni registra nada', async (_caso, opciones) => {
+      registroEnMemoria(5)
+
+      const res = await api.pedir('post', RUTA, { ...opciones, body: pregunta('¿Hay wifi?') })
+
+      expect(res.status).toBe(503)
+      expect(res.body).toEqual({ codigo: 'no_disponible_hoy', mensaje: 'El asistente no está disponible por hoy.' })
+      expect(doStream).not.toHaveBeenCalled()
+      expect(prisma.registroAsistente.create).not.toHaveBeenCalled()
+    })
+
+    it('la pregunta N+1 de la sesión es 429 limite_sesion, aunque cada una llegue como una conversación nueva', async () => {
+      const filas = registroEnMemoria()
+
+      for (const contenido of ['Pregunta 1', 'Pregunta 2']) {
+        const res = await api.pedir('post', RUTA, { ...conSesion, body: pregunta(contenido) })
+        expect(res.status).toBe(200)
+      }
+      const tercera = await api.pedir('post', RUTA, { ...conSesion, body: pregunta('Pregunta 3') })
+
+      expect(tercera.status).toBe(429)
+      expect(tercera.body).toEqual({ codigo: 'limite_sesion', mensaje: expect.any(String) })
+      expect(filas).toHaveLength(2)
+      expect(doStream).toHaveBeenCalledTimes(2)
+    })
   })
 })
 
