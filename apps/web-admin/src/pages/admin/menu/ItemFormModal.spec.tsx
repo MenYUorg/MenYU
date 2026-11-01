@@ -486,7 +486,7 @@ describe('ItemFormModal', () => {
       } as ItemMenu)
 
       expect(asistente().getByLabelText('Tamaño de la porción')).toHaveValue('PARA_N_PERSONAS')
-      expect(asistente().getByLabelText('¿Para cuántas personas?')).toHaveValue(2)
+      expect(asistente().getByLabelText('¿Para cuántas personas?')).toHaveValue('2')
       expect(asistente().getByLabelText('Acompañamiento incluido')).toHaveValue('Papas fritas')
       expect(etiqueta('Sin TACC')).toHaveAttribute('aria-pressed', 'true')
 

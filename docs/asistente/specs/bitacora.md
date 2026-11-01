@@ -229,7 +229,7 @@ Llamadas reales al modelo: 0.
 ---
 
 ## Fase 3 — Formularios en web-admin (2026-11-01)
-Estado: en curso
+Estado: completada. La retomó un segundo trabajador después de la pausa del orquestador; ver "Retomada después de la pausa", al final de esta entrada.
 Plan y "A verificar" resueltos: en las subsecciones "Plan" y "A verificar en plan mode" de abajo, escritas antes de tocar código.
 
 ### "A verificar en plan mode", resueltos leyendo el código
@@ -257,3 +257,200 @@ Plan y "A verificar" resueltos: en las subsecciones "Plan" y "A verificar en pla
 6. **Verificación:** typecheck, lint y tests del CI para web-admin (y `@menyu/types` sin cambios). El "terminado cuando" (cargar desde la pantalla y verlo en la base) queda para el revisor con la receta; yo no tengo navegador.
 
 > **[PAUSA DEL ORQUESTADOR — 2026-11-01]** Corrida pausada a pedido de Lauti (apagado de la máquina) mientras el trabajador de la Fase 3 completaba su entrega. Estado exacto: implementación completa en el árbol (ver archivos del commit WIP `wip(web-admin)`), la entrada de bitácora de arriba quedó con el plan y los "A verificar" pero **sin** las secciones de estado/verificación/receta, y **no se sabe si typecheck, lint y tests llegaron a correr**. Al retomar: un `trabajador-front` continúa la Fase 3 desde este WIP (verificar todo de cero, completar la entrada de bitácora con la receta para el revisor y hacer el commit final de la fase); después sigue el ciclo normal (revisión con navegador). Fases 1 y 2 cerradas y aprobadas; presupuesto usado: 1 de 200. `ASISTENTE_MAX_PREGUNTAS_DIA` sigue en 50 (original 300, restaurar al cierre).
+
+### Retomada después de la pausa (trabajador-front, 2026-11-01)
+
+Arranqué de cero sobre el WIP `c734431`. El árbol estaba limpio salvo `.claude/settings.local.json`, que queda local y fuera del commit a propósito. Leí la spec, la definición, el CLAUDE.md y la bitácora entera. Después revisé cada archivo del WIP contra el plan de arriba y contra la spec de la Fase 3, incluido lo que el revisor de la Fase 2 dejó para esta fase (`porcionPersonas` oculto y vacío fuera de `PARA_N_PERSONAS`; `null` borra, `undefined` no).
+
+El plan estaba implementado completo, y typecheck, lint y tests de web-admin ya pasaban sobre el WIP (49 archivos, 859 tests). Corregí dos cosas, que están en "Ajustes al retomar".
+
+### Qué se hizo (WIP `c734431` más los ajustes de este commit)
+
+- **Cliente HTTP (`services/api.ts`):**
+  - `UpdateItemInput extends Partial<DatosDelPlatoParaElAsistente>`.
+  - `api.asistente` con `informacion` (`GET`), `guardarInformacion` (`PUT`, con `GuardarInformacionLocalInput`) y `preguntas.listar|crear|editar|borrar` (con `PreguntaFrecuenteInput`), sobre `/restaurantes/:restauranteId/informacion-local` y `/preguntas-frecuentes`.
+  - Los tipos de respuesta salen de `@menyu/types`, sin duplicarlos.
+- **`utils/mensajeDeError.ts`:** `mensajeDeLaApi(err, porDefecto)` muestra el mensaje de la API solo si es un 4xx con texto ("No tenés permiso para esta acción"). En los demás casos muestra el mensaje propio de cada pantalla: un 5xx ("Internal server error"), un 400 de class-validator (que llega como "Error 400") o un error de red.
+- **Datos del plato (`pages/admin/menu/`):**
+  - `datosAsistente.ts` tiene la lógica pura: las opciones de cada enum con su texto, los topes del backend, el formulario a partir del ítem, `conTamanio`, `errorDatosAsistente`, `datosParaGuardar` (los nueve campos, con `null` en los vacíos) y `hayDatosAsistente`.
+  - `DatosAsistenteFields.tsx` es el bloque "Datos para el asistente", un `fieldset` con `legend` al final del formulario:
+    - Tamaño, temperatura y picante son selects con "Sin dato" como primera opción.
+    - "¿Para cuántas personas?" aparece solo con "Para N personas", y elegir otro tamaño lo vacía.
+    - Detalle, acompañamiento e información adicional llevan el `maxLength` del backend; la información adicional, también un contador.
+    - Las etiquetas dietarias son chips con `aria-pressed`. Si el formulario también muestra el catálogo "Dietas / Restricciones", una línea aclara que son cosas distintas.
+  - `estilosFormulario.ts`: `labelSt`, `inputSt` y `chipSt`, movidos de `ItemFormModal` sin cambios para que el bloque nuevo use los mismos estilos.
+  - `ItemFormModal.tsx`:
+    - En la edición manda un solo `PATCH` con los nueve campos.
+    - En el alta manda el `POST` y, solo si hay algún dato del asistente, un `PATCH` después. Si ese `PATCH` falla, el modal queda abierto con el aviso "El plato se creó, pero sus datos para el asistente no se guardaron…". El botón pasa a decir "Guardar datos del asistente" y reintenta solo el `PATCH`, sin crear un plato repetido.
+    - Valida las cantidades antes de llamar a la API.
+    - El select de Categoría ganó `htmlFor`, y "Dietas / Restricciones" pasó a ser un `role="group"` con nombre: sus chips se llaman igual que algunas etiquetas nuevas ("Sin TACC", "Vegetariano").
+- **Pantalla Asistente (`pages/admin/asistente/`, ruta `/admin/asistente`):**
+  - **Ruta y menú:** `App.tsx` la monta sin `RoleGuard`, como Menú, Mesas y Personal. `AdminLayout.tsx` la agrega a la sección "CONFIGURACIÓN": el OWNER ve Marca y sucursales y Asistente; el GERENTE, que antes no tenía la sección, ve solo Asistente. La barra superior dice "Asistente".
+  - **`AsistentePage.tsx`:** carga en paralelo la información y las preguntas del restaurante elegido. Muestra "Cargando…" mientras tanto y, si falla, el error con un botón "Reintentar". Al cambiar de restaurante, los formularios arrancan de cero y una respuesta atrasada del restaurante anterior no pisa nada.
+  - **`InterruptorDelAsistente.tsx`:**
+    - Usa el `ToggleSwitch` de la app, con 44 px de alto.
+    - Una línea explica qué prende ("Suma a la carta de <restaurante> un chat… no toma pedidos ni llama al mozo").
+    - El estado también va en texto: "Prendido: los clientes ven el asistente en la carta." o "Apagado: …".
+    - Guarda al tocarlo, mandando solo `{ asistenteHabilitado }`. Si falla, queda como estaba y muestra el error.
+  - **`InformacionLocalForm.tsx`:**
+    - Horarios (con contador), formas de pago y los cinco servicios.
+    - El `PUT` manda los textos vacíos como `null` y nunca incluye el interruptor.
+    - "Guardar información" se habilita solo si hay cambios. Mientras tanto avisa "Tenés cambios sin guardar." y, al guardar, "Información guardada".
+  - **`ServicioTriestado.tsx`:** cada servicio es un grupo de tres radios de verdad ("Sin dato / Sí / No"):
+    - `role="radiogroup"`, se elige con las flechas y el foco se ve.
+    - Sí o No elegidos se ven llenos, en el azul de la marca. "Sin dato" elegido es un casillero blanco con borde punteado.
+    - Nunca es un checkbox.
+  - **`PreguntasFrecuentes.tsx`:**
+    - La lista, por fecha de creación.
+    - Editar en el lugar, con "Cancelar", y borrar con `window.confirm`, como el plato.
+    - Alta con "Agregar pregunta": vacía el formulario y avisa "Pregunta agregada". La respuesta tiene contador.
+    - Sin preguntas, un texto que sugiere por cuáles empezar.
+  - `informacionLocal.ts` pasa el formulario a `InformacionLocal` y tiene los topes. `estilos.ts` tiene los campos de 44 px de alto y 16 px de letra, como `DireccionField` de Marca y sucursales, para que iOS no haga zoom. Los tokens salen de `marca/estilos.ts`.
+- **Tests (7, en dos archivos):**
+  - `ItemFormModal.spec.tsx`:
+    - Feliz: carga lo guardado y el `PATCH` lleva el cuerpo exacto. Vaciar un campo manda `null`, y pasar de "Para N personas" a "Individual" oculta la cantidad y manda `porcionPersonas: null`.
+    - Error: en el alta, el `PATCH` responde 500. Aparece el aviso propio, no "Internal server error", y reintentar guarda sin volver a crear el plato.
+    - Se ajustaron los tests que ya existían: el que fija el cuerpo exacto del `PATCH`, y los que buscaban "Sin TACC" sin distinguir los dos grupos de chips.
+  - `AsistentePage.spec.tsx`, con el `api` real y `fetch` simulado, para ver el método, la ruta y el cuerpo exactos:
+    - Información del local, feliz: el `PUT` lleva el tri-estado y los textos vacíos en `null`.
+    - Interruptor, feliz: manda solo el flag.
+    - Información del local, error: un 403 muestra el mensaje de la API y no da nada por guardado.
+    - Preguntas frecuentes, feliz: lista y alta.
+    - Preguntas frecuentes, error: un 500 muestra el mensaje propio y no agrega la pregunta.
+- **Spec:** la Fase 3 marcada como hecha, con su "Cómo quedó". **CLAUDE.md:** la línea de la Fase 3 en "Asistente de mesa".
+
+### Ajustes al retomar (en este commit)
+
+1. **Las dos cantidades del plato pasaron de `type="number"` a `type="text" inputMode="numeric"`**, igual que los campos del descuento (`DescuentoModal`).
+   - Con `type="number"`, si se escribe algo que no es un número (Firefox deja escribir "15 min"; Chrome, "1e"), el campo devuelve un valor vacío. El formulario lo habría guardado como "sin dato" sin avisar, con el texto todavía a la vista.
+   - Ahora lo frena `errorDatosAsistente` ("El tiempo de preparación va en minutos enteros, de 1 a 600."), y en el celular sigue saliendo el teclado numérico.
+   - El test feliz ahora espera `'2'` en lugar de `2`.
+2. **`AsistentePage` sin restaurante elegido** (una marca sin sucursales) mostraba "Cargando…" para siempre. Ahora dice "Seleccioná un restaurante para configurar su asistente.", como Personal.
+
+### Decisiones tomadas por ambigüedad
+
+1. **Una pantalla propia, `/admin/asistente`, en la sección Configuración**, y no adentro de Marca y sucursales. Esa pantalla es solo del OWNER y es por marca; la API del asistente es de OWNER y GERENTE y es por restaurante. Por eso el GERENTE ahora tiene una sección Configuración, solo con Asistente.
+2. **El interruptor guarda al tocarlo, por separado del formulario.** Manda solo `{ asistenteHabilitado }`, el upsert parcial de la Fase 2. Así, prenderlo o apagarlo no guarda la información del local a medio escribir, y tampoco la descarta. El GERENTE también lo ve y lo puede tocar, igual que en la API; falta que Lauti lo confirme (observación 2 del cierre de la Fase 2).
+3. **El tri-estado son tres radios segmentados, "Sin dato / Sí / No".** "Sin dato" va primero porque es el estado inicial de todo, y se dibuja como un casillero vacío de borde punteado para que no se confunda con "No". La línea de ayuda dice qué responde el asistente en cada caso.
+4. **El formulario del plato manda siempre los nueve campos**, con `null` en los vacíos y `[]` en las etiquetas. Así vaciar un campo lo borra sin tener que llevar la cuenta de qué cambió. La información del local también manda todos sus campos, salvo el interruptor.
+5. **"¿Para cuántas personas?" existe solo con "Para N personas".** Elegir otro tamaño lo vacía y se manda `null`: la API lo borraría igual, pero así lo que se ve es lo que se guarda. Si un plato tiene una cantidad cargada por SQL sin ese tamaño, no se muestra y se borra al guardar.
+6. **Las cantidades se validan en el cliente con los topes del backend** (1 a 100 personas, 1 a 600 minutos). Los 400 de class-validator llegan en inglés y como lista, y la pantalla los mostraría como "Error 400".
+7. **Los errores muestran el mensaje de la API solo si le sirve al dueño** (`mensajeDeLaApi`). Para el resto hay un mensaje propio, con voseo y qué hacer ("Probá de nuevo en un rato"). La edición del plato sigue mostrando `e.message`, como antes de esta fase.
+8. **En el alta, el `PATCH` de los datos va solo si hay algún dato, y su error se muestra.** Los errores de la imagen, las clasificaciones y los ingredientes se siguen descartando como antes, pero este no: el dueño creería que los datos del asistente quedaron guardados.
+9. **Las etiquetas dietarias van aparte de "Dietas / Restricciones"**, el catálogo global que filtra la carta. Si el catálogo aparece en el formulario, la ayuda aclara que son cosas distintas. Lauti decidió en el checkpoint que el asistente usa las dos.
+10. **Estilos.** El bloque del plato usa los estilos del modal, con letra de 13 px como el resto del formulario. La pantalla nueva usa los de Marca y sucursales:
+    - los colores de `C`;
+    - tarjetas blancas con borde y radio 16;
+    - Montserrat en los títulos e Inter en el texto;
+    - botones y campos de 44 px, con letra de 16 px en los campos.
+
+    No hay librerías nuevas. Lo único que se destaca es el tri-estado.
+11. **Cantidad de tests: un feliz y un error por formulario** (plato, información del local y preguntas frecuentes). El interruptor tiene solo el feliz, porque el "terminado cuando" pide verificar que "prende y apaga el flag". Su caso de error usa el mismo `PUT` y el mismo `mensajeDeLaApi` que ya cubre el test del 403 de la información.
+
+Commits: el WIP `c734431` (la implementación, commiteada en la pausa) más `feat(web-admin): formularios del asistente de mesa (Fase 3)` (los ajustes, la bitácora y la verificación). El hash del segundo lo anota el orquestador al cierre, porque un commit no puede contener su propio hash.
+
+### Verificación
+
+- typecheck ✓: el comando del CI (`turbo typecheck` de api, web-admin, web-cliente, web-staff, web-auth y auth-client), 7/7.
+- lint ✓: el comando del CI, 5/5. web-admin corre con `--max-warnings 0`; el lint del backend sigue siendo un `echo`.
+- tests ✓: el comando del CI (`turbo test` de api, web-admin, web-cliente, web-staff, web-auth, ui y auth-client), 8/8 tareas. web-admin: 859 tests en 49 archivos (eran 852 en 48 en la línea base: +7 tests y +1 archivo). api: 2048 pasan y 36 se saltean, en 86 suites (los 3 `*.base.spec.ts`, que piden `TEST_DATABASE_URL`; esta fase no toca el backend). web-cliente 759, web-staff 211, web-auth 93, auth-client 80, ui 41. Tests de `scripts/`: 78/78. Una aclaración: en la primera corrida, con todas las suites en paralelo, falló por tiempo `authClientDiferido.spec.ts` de web-cliente (corre ESLint adentro del test y tardó 46 s). Esta fase no toca web-cliente; el test pasa solo en 1,8 s, y el mismo comando del CI con `--concurrency=1` dio todo en verde. Es un test lento cuando la máquina está cargada, no una regresión.
+- Cobertura del código nuevo: 96,5 % de líneas y 88,9 % de ramas, medida sobre los archivos de `asistente/`, `datosAsistente.ts`, `DatosAsistenteFields.tsx`, `ItemFormModal.tsx` y `mensajeDeError.ts`. Lo que falta cubrir es sobre todo editar y borrar una pregunta y el "Reintentar" de la carga, que entran en la receta del revisor.
+- Sin dependencias nuevas y sin tocar el backend. No se agregó ninguna key ni variable `VITE_*`.
+- "Terminado cuando", punto por punto:
+  1. **Desde web-admin en local se cargan la información del local, una FAQ y los campos de un plato** → queda **para el revisor** (necesita navegador). Sin navegador ya está verificado lo siguiente:
+     - Los tests fijan el método, la ruta y el cuerpo exacto de cada llamada: el `PUT` de la información (con `null` en lo vaciado y el tri-estado), el `POST` de la FAQ y el `PATCH` del plato con los nueve campos.
+     - Esos mismos cuerpos ya se probaron con curl contra la base local en la Fase 2.
+  2. **Se verifican en la base** → queda **para el revisor**, con las consultas de la receta.
+  3. **El switch prende y apaga el flag** → queda **para el revisor**, en el navegador. El test ya fija que manda `PUT { asistenteHabilitado: true }` y que la pantalla muestra el estado que devuelve la API.
+- Checklist del revisor de la fase (tri-estado claro, vaciar un campo lo borra, textos en el tono de web-admin): lo comprueba él en el navegador. Desde el código ya se ve que son radios y no un checkbox, que todo lo vaciado se manda como `null` y no `undefined` (lo cubren los tests felices) y que todos los textos van con voseo.
+
+Llamadas reales al modelo: 0.
+
+### Receta para el revisor
+
+Se levanta el backend de la rama contra la base local (`menyu-postgres`, ya migrada y con el seed), y el Supabase de staging se usa solo para autenticar. No toca staging: las cuentas de prueba ya están en la base local con su `supabase_user_id`.
+
+`apps/backend/.env`, `apps/web-admin/.env.local` y `apps/web-auth/.env.local` ya están listos (`VITE_API_URL=/api`, la cookie en `.menyu.local`). Es el mismo procedimiento de "Probar la entrega 4.5 en local" de `docs/auth/usuarios-prueba-staging.md`.
+
+**1. Servidores:** tres terminales, desde la raíz del repo, y después el chequeo de puertos.
+
+```bash
+pnpm --filter @menyu/api dev                                                          # API en http://localhost:3000
+pnpm --filter @menyu/web-auth exec vite --host 127.0.0.1 --strictPort --port 5173     # login
+pnpm --filter @menyu/web-admin exec vite --host 127.0.0.1 --strictPort --port 5174    # panel
+netstat -ano | grep -E ':(3000|5173|5174) .*LISTENING'                                # tienen que aparecer los tres
+```
+
+- No usar `pnpm --filter <app> dev -- --host 127.0.0.1`: no le pasa el flag a Vite, que queda escuchando solo en `[::1]`.
+- Con `--strictPort`, si un Vite viejo tiene el puerto, el nuevo falla en lugar de elegir otro.
+
+**2. Navegador:** `playwright-cli`, corrido desde el scratchpad, con `playwright-cli open --config=<config>.json`. El config lleva:
+- `channel: "chrome"`, sin `browserName`;
+- `browser.launchOptions.args: ["--host-resolver-rules=MAP *.menyu.local 127.0.0.1"]`, porque la máquina no tiene `*.menyu.local` en el archivo hosts.
+
+**3. Cuentas:** las contraseñas están en `docs/auth/.env.usuarios-staging`; no imprimirlas.
+- OWNER de Marca Seed: `STAGING_AUTH_OWNER_EMAIL` / `STAGING_AUTH_OWNER_PASSWORD` (`owner-supabase.pruebas-auth@menyu-app.com`).
+- GERENTE de Restaurante Seed: `STAGING_AUTH_GERENTE_EMAIL` / `STAGING_AUTH_GERENTE_PASSWORD` (`gerente-supabase.pruebas-auth@menyu-app.com`).
+- Varias: `STAGING_AUTH_VARIAS_EMAIL` / `STAGING_AUTH_VARIAS_PASSWORD`. Es OWNER de Marca Seed y GERENTE de Restaurante Seed 2.
+- Se entra por `http://auth.menyu.local:5173`, que redirige a `http://admin.menyu.local:5174/admin`.
+- Restaurante Seed (`22222222-2222-4222-a222-222222222222`) tiene el asistente prendido, el estacionamiento sin dato y 5 FAQs. Restaurante Seed 2, de Marca Seed 2, no tiene información cargada.
+
+**4. Antes de tocar nada, guardar el estado de los datos.** Las Fases 4 y 7 dependen del seed, y volver a correr el seed no pisa lo editado, así que hay que dejarlo como estaba a mano. En Git Bash:
+
+```bash
+Q="select row_to_json(i)::text from informacion_local i union all select json_build_object('pregunta', pregunta, 'respuesta', respuesta)::text from pregunta_frecuente union all select row_to_json(x)::text from (select nombre, tamanio_porcion, porcion_personas, porcion_detalle, temperatura, nivel_picante, acompanamiento, tiempo_preparacion_min, etiquetas_dietarias, info_adicional from item_menu) x order by 1"
+docker exec menyu-postgres psql -U menyu -d menyu -At -c "$Q" > estado-antes.txt   # 16 líneas: 1 información, 5 FAQs, 10 platos
+```
+
+Al terminar, correr la misma consulta hacia `estado-despues.txt`; `diff estado-antes.txt estado-despues.txt` tiene que dar vacío.
+
+**5. Flujos:** cada uno en **viewport móvil** (`playwright-cli resize 390 844`) y en **escritorio** (`resize 1280 800`). En el celular, el menú lateral se abre como un panel deslizable.
+
+- **A. Pantalla Asistente:** con el OWNER, en `http://admin.menyu.local:5174/admin/asistente` o desde Configuración → Asistente.
+  1. **Carga lo del seed:**
+     - El interruptor está prendido y dice "Prendido: los clientes ven el asistente en la carta.".
+     - Horarios y formas de pago, cargados.
+     - Wifi Sí, Pet friendly No, Accesible Sí y Opciones para chicos Sí.
+     - **Estacionamiento en "Sin dato"**: un casillero blanco con borde punteado, distinto de un "No" lleno.
+     - "Guardar información", deshabilitado.
+  2. **Tri-estado:**
+     - Poner Estacionamiento en Sí y guardar: tiene que aparecer "Información guardada". En la base, `select estacionamiento from informacion_local where restaurante_id = '22222222-2222-4222-a222-222222222222'` da `t`.
+     - Volver a "Sin dato" y guardar: tiene que dar **NULL**, no `f`.
+     - Probarlo también con el teclado (Tab hasta el grupo y después las flechas). El foco se tiene que ver.
+  3. **Vaciar borra:** copiar las formas de pago, vaciar el campo y guardar. `formas_pago` tiene que quedar en NULL. Después volver a escribirlas tal cual y guardar.
+  4. **Interruptor:**
+     - Apagarlo: `asistente_habilitado` queda en `f`, y `curl -s http://localhost:3000/api/menu/22222222-2222-4222-a222-222222222222` trae `"asistenteHabilitado":false`.
+     - Prenderlo de nuevo: `t` y `true`.
+     - Tocarlo con cambios sin guardar en el formulario de abajo: esos cambios tienen que seguir ahí.
+  5. **FAQ:**
+     - Agregar una: aparece "Pregunta agregada" y la pregunta queda última.
+     - Editarla en el lugar y tocar "Guardar cambios". En la base, `select pregunta, respuesta from pregunta_frecuente where restaurante_id = '22222222-2222-4222-a222-222222222222' order by created_at` la muestra editada.
+     - Borrarla (pide confirmación) y comprobar que desapareció de la base.
+  6. **Cambio de restaurante** (opcional, con la cuenta Varias): pasar de Restaurante Seed a Restaurante Seed 2 en el menú lateral.
+     - La pantalla se recarga vacía: todo en "Sin dato", el interruptor apagado y el texto de "sin preguntas".
+     - No guardar nada ahí: crearía una fila en `informacion_local` que la API no puede borrar.
+- **B. Datos del plato:** con el OWNER, en Menú, editar un plato y bajar hasta el bloque "Datos para el asistente", al final del modal.
+  1. **Rabas** (no tiene ningún dato en el seed):
+     - Elegir "Para N personas" en Tamaño: tiene que aparecer "¿Para cuántas personas?".
+     - Cargar 3 personas, Temperatura Caliente, Picante Suave, un acompañamiento, 15 minutos, las etiquetas Sin TACC y Vegano y una información adicional, y guardar.
+     - Verlo en la base: `select tamanio_porcion, porcion_personas, temperatura, nivel_picante, acompanamiento, tiempo_preparacion_min, etiquetas_dietarias, info_adicional from item_menu where id = 'bbbbbbbb-0003-4003-a003-000000000003'`.
+  2. **Cambio de tamaño:** reabrir Rabas; tiene que mostrar lo guardado. Cambiar Tamaño a "Individual": la cantidad de personas desaparece. Guardar: `porcion_personas` queda en NULL y `tamanio_porcion` en `INDIVIDUAL`.
+  3. **Validación:** escribir "15 min" en el tiempo de preparación y guardar. Tiene que aparecer "El tiempo de preparación va en minutos enteros, de 1 a 600." y no tiene que salir ningún `PATCH`.
+  4. **Vaciar borra** (y de paso deja Rabas como en el seed): poner todo en "Sin dato", vaciar los textos, desmarcar las etiquetas y guardar. Rabas tiene que quedar con todo en NULL y `etiquetas_dietarias = {}`.
+  5. **Milanesa Napo** (en el seed: "Para N personas", 2): tiene que abrir con "¿Para cuántas personas?" en 2. Cerrar sin guardar.
+  6. **Alta:** crear un plato con "Nuevo plato", con nombre, precio, categoría y algún dato del asistente. En la base, el plato tiene que tener esos datos (el `PATCH` sale después del `POST`). Después borrarlo con "Eliminar plato", para que el diff del paso 4 dé vacío.
+  7. **En el celular:** el bloque se acomoda en una columna, y el modal se puede recorrer hasta el botón de guardar.
+- **C. GERENTE:**
+  - Ve Configuración → Asistente y no ve Marca y sucursales.
+  - Carga la pantalla y puede guardar; por ejemplo, cambiar un servicio y después volverlo a su valor.
+  - También ve el interruptor y lo puede tocar, igual que en la API. Esto está pendiente de confirmación de Lauti.
+- **D. Tono:** comparar los textos de la pantalla y del bloque del plato con los de Marca y sucursales y Personal: voseo y sin tecnicismos.
+
+### Para fases siguientes
+
+- **Fase 6 (web-cliente):** no necesita nada más de web-admin. El flag se prende en esta pantalla y llega en `GET /menu/:restauranteId` como `restaurante.asistenteHabilitado`. El paso A.4 de la receta (apagar el interruptor) sirve para comprobar que el botón del chat no aparezca.
+- **Fase 4 (contexto):** lo que carga el dueño llega sin espacios en los costados y con `null` en lo vacío. "Sin dato" en un servicio es `null`, y el contexto no tiene que mostrarlo. El panel sigue sin poner un tope a la cantidad de preguntas frecuentes.
+- **Problemas anteriores a esta fase, fuera de alcance:**
+  - La descripción del plato no se puede borrar desde el panel: si queda vacía manda `undefined` (anotado en la Fase 2).
+  - La edición del plato muestra el `e.message` crudo ante un 5xx.
+- **Para Lauti:** el GERENTE ve y puede tocar el interruptor, igual que en la API (observación 2 del cierre de la Fase 2). Si el flag pasa a ser solo del OWNER, en web-admin alcanza con mostrar el interruptor deshabilitado según `useRolActual()`.

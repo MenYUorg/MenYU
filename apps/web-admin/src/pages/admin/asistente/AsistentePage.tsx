@@ -57,7 +57,16 @@ export function AsistentePage() {
     [],
   )
 
-  if (!restauranteId || carga.estado === 'cargando' || (carga.estado === 'lista' && carga.restauranteId !== restauranteId)) {
+  // Como en Personal: sin restaurante elegido (una marca sin sucursales) no hay nada que cargar.
+  if (!restauranteId) {
+    return (
+      <div className="mx-auto w-full max-w-3xl p-4 md:p-6">
+        <p style={{ ...textoAyuda, fontSize: 14 }}>Seleccioná un restaurante para configurar su asistente.</p>
+      </div>
+    )
+  }
+
+  if (carga.estado === 'cargando' || (carga.estado === 'lista' && carga.restauranteId !== restauranteId)) {
     return (
       <div className="mx-auto w-full max-w-3xl p-4 md:p-6">
         <p role="status" style={{ ...textoAyuda, fontSize: 14 }}>Cargando…</p>

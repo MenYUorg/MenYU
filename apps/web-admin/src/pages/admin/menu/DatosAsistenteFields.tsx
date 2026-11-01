@@ -62,6 +62,9 @@ export function DatosAsistenteFields({ valor, onChange, conFiltroDeDietas = fals
         dato, responde que no lo sabe y sugiere consultar al mozo.
       </p>
 
+      {/* Los números van en campos de texto, como en el descuento: un `type="number"` con algo que no es un número
+          (Firefox deja escribir "15 min") da un valor vacío, y se guardaría "sin dato" sin avisar. Así lo ataja la
+          validación del formulario. */}
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <label htmlFor={`${id}-tamanio`} style={labelSt}>Tamaño de la porción</label>
@@ -82,11 +85,9 @@ export function DatosAsistenteFields({ valor, onChange, conFiltroDeDietas = fals
             <label htmlFor={`${id}-personas`} style={labelSt}>¿Para cuántas personas?</label>
             <input
               id={`${id}-personas`}
-              type="number"
+              type="text"
               inputMode="numeric"
-              min={LIMITES.porcionPersonas.min}
-              max={LIMITES.porcionPersonas.max}
-              step={1}
+              autoComplete="off"
               value={valor.porcionPersonas}
               onChange={(e) => cambiar({ porcionPersonas: e.target.value })}
               placeholder="Ej: 2"
@@ -149,11 +150,9 @@ export function DatosAsistenteFields({ valor, onChange, conFiltroDeDietas = fals
           <label htmlFor={`${id}-tiempo`} style={labelSt}>Tiempo de preparación (minutos)</label>
           <input
             id={`${id}-tiempo`}
-            type="number"
+            type="text"
             inputMode="numeric"
-            min={LIMITES.tiempoPreparacionMin.min}
-            max={LIMITES.tiempoPreparacionMin.max}
-            step={1}
+            autoComplete="off"
             value={valor.tiempoPreparacionMin}
             onChange={(e) => cambiar({ tiempoPreparacionMin: e.target.value })}
             placeholder="Ej: 15"
