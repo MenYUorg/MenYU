@@ -60,6 +60,9 @@ export class MenuService {
       ? { nombre: { contains: filtros.buscar, mode: 'insensitive' as const } }
       : {}
 
+    // El conjunto que devuelve este método (la unión de las tres secciones: esta, los recomendados y los descuentos)
+    // es el mismo que el asistente repite en su contexto. Si cambia qué platos entran acá, actualizá
+    // `enAlgunaSeccionDeLaCarta` (common/carta-publica.ts) y su test en asistente/contexto.service.spec.ts.
     const categorias = await this.prisma.categoriaMenu.findMany({
       where: {
         restauranteId,

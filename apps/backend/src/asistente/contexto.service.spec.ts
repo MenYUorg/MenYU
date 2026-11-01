@@ -47,6 +47,8 @@ const PLATOS = [
     clasificaciones: [{ clasificacion: { nombre: 'Sin TACC' } }, { clasificacion: { nombre: 'Alta en proteínas' } }],
     recomendadoEn: new Date('2026-10-01'),
   }),
+  // Copa de helado (categoría de otro restaurante) y Pan casero (sin categoría), las dos sin recomendar ni descuento:
+  // la carta pública no las muestra y el contexto tampoco (common/carta-publica.ts). El detalle, en el test de abajo.
   plato({ nombre: 'Copa de helado', precioBase: 1800, categoria: DE_OTRO_RESTAURANTE, tamanioPorcion: 'PARA_N_PERSONAS' }),
   plato({
     nombre: 'Empanada',
@@ -120,9 +122,6 @@ describe('ContextoService: el contexto y el system prompt', () => {
       '## Bebidas',
       '- Agua — $900. Porción: botella de 500 ml. Temperatura: frío.',
       '- Vino Malbec — $5.400. Porción: para compartir. Temperatura: ambiente.',
-      '## Otros',
-      '- Copa de helado — $1.800. Porción: para varias personas.',
-      '- Pan casero — $500.',
       '',
       '# Preguntas frecuentes',
       'P: ¿Se puede reservar?',
@@ -140,13 +139,41 @@ describe('ContextoService: el contexto y el system prompt', () => {
     expect(prompt).toContain('tratándolos de vos')
     expect(prompt).not.toContain('null')
 
-    // Solo los platos disponibles del restaurante; las preguntas frecuentes, con tope y por fecha de creación.
+    // En la base, solo los disponibles del restaurante (cuáles de ellos muestra la carta se filtra en memoria: el
+    // test de abajo); las preguntas frecuentes, con tope y por fecha de creación.
     expect(prisma.itemMenu.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { restauranteId: REST, disponible: true } }),
     )
     expect(prisma.preguntaFrecuente.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { restauranteId: REST }, take: MAX_PREGUNTAS_FRECUENTES }),
     )
+  })
+
+  it('un plato que la carta pública no muestra no entra al contexto', async () => {
+    prisma.restaurante.findUnique.mockResolvedValue({ nombre: 'La Parrilla', informacionLocal: null })
+    prisma.itemMenu.findMany.mockResolvedValue([
+      plato({ nombre: 'Agua', precioBase: 900, categoria: BEBIDAS }),                        // categoría propia: su sección
+      plato({ nombre: 'Copa de helado', precioBase: 1800, categoria: DE_OTRO_RESTAURANTE }), // categoría de otro restaurante y nada más: fuera
+      plato({ nombre: 'Flan', precioBase: 1200, precioDescuento: 900 }),                     // sin categoría pero con descuento: la carta lo muestra
+      plato({ nombre: 'Pan casero', precioBase: 500 }),                                      // sin categoría y sin nada: fuera
+      plato({ nombre: 'Tarta', precioBase: 2000, recomendadoEn: new Date('2026-10-01') }),   // sin categoría pero recomendado: la carta lo muestra
+    ])
+    prisma.preguntaFrecuente.findMany.mockResolvedValue([])
+
+    const prompt = await servicio.systemPrompt(REST)
+
+    expect(prompt).toContain(
+      [
+        '# Carta',
+        '## Bebidas',
+        '- Agua — $900.',
+        '## Otros',
+        '- Flan — $900 con descuento (precio normal: $1.200).',
+        '- Tarta — $2.000. [Recomendado por el local]',
+      ].join('\n'),
+    )
+    expect(prompt).not.toContain('Copa de helado')
+    expect(prompt).not.toContain('Pan casero')
   })
 
   it('sin nada cargado, el contexto es solo el encabezado del local', async () => {

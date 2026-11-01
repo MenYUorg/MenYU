@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common'
 import { EtiquetaDietaria, NivelPicante, Prisma, TamanioPorcion, Temperatura } from '@prisma/client'
+import { enAlgunaSeccionDeLaCarta } from '../common/carta-publica'
 import { derivarDescuento, formatearPesos } from '../items/descuento.util'
 import { PrismaService } from '../prisma/prisma.service'
 import { armarSystemPrompt } from './system-prompt'
@@ -172,10 +173,14 @@ function seccionDelLocal(nombre: string, informacion: Informacion | null): strin
 }
 
 /**
- * Los platos disponibles por categoría (por su orden y su nombre), como la carta de web-cliente. Los que no tienen una
- * categoría del restaurante van al final, en "Otros". Dentro de cada una, en el orden de la consulta (por nombre).
+ * Exactamente los platos que muestra la carta pública (`enAlgunaSeccionDeLaCarta`), por categoría (por su orden y su
+ * nombre), como la carta de web-cliente. Los que la carta muestra sin tener una categoría del restaurante (los
+ * recomendados y los que están en descuento) van al final, en "Otros". Dentro de cada una, en el orden de la consulta
+ * (por nombre).
  */
-function seccionDeLaCarta(restauranteId: string, platos: Plato[]): string | null {
+function seccionDeLaCarta(restauranteId: string, disponibles: Plato[]): string | null {
+  // Nada que el comensal no pueda encontrar en la carta (common/carta-publica.ts).
+  const platos = disponibles.filter((plato) => enAlgunaSeccionDeLaCarta(plato, restauranteId))
   if (platos.length === 0) return null
   const categorias = new Map<string, { nombre: string; orden: number; id: string; platos: Plato[] }>()
   const otros: Plato[] = []
@@ -212,6 +217,8 @@ export class ContextoService {
     const [restaurante, platos, preguntas] = await Promise.all([
       this.prisma.restaurante.findUnique({ where: { id: restauranteId }, select: RESTAURANTE_SELECT }),
       this.prisma.itemMenu.findMany({
+        // El filtro barato va en la base; cuáles de estos muestra la carta lo decide `enAlgunaSeccionDeLaCarta`, que
+        // necesita la categoría de cada plato (la misma que usa el agrupado por sección).
         where: { restauranteId, disponible: true },
         select: PLATO_SELECT,
         orderBy: [{ nombre: 'asc' }, { id: 'asc' }],
