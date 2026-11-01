@@ -208,7 +208,7 @@ describe('PagosPage (caja)', () => {
 
       expect(io).toHaveBeenCalledWith(expect.stringMatching(/\/ws$/), expect.objectContaining({ transports: ['websocket'] }))
       recibir('connect')
-      expect(socket.emit).toHaveBeenCalledWith('cocina:join', { restauranteId: 'rest-1' })
+      expect(socket.emit).toHaveBeenCalledWith('mozo:join', { restauranteId: 'rest-1' })
 
       unmount()
       expect(socket.disconnect).toHaveBeenCalled()

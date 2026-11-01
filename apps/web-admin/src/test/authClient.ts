@@ -37,6 +37,10 @@ export async function moduloSimulado(): Promise<typeof import('@menyu/auth-clien
     urlDeLaApi: () => '',
     tokenDeAcceso: () => Promise.resolve(sesionDePrueba.token),
     renovarSesion: () => Promise.resolve(sesionDePrueba.tokenRenovado),
+    // Como el real, pero con el token de `sesionDePrueba`: el real lee la sesión de Supabase.
+    authDelSocket: (cb) => {
+      void Promise.resolve(sesionDePrueba.token).then((token) => cb(token ? { token } : {}))
+    },
     irAlLogin: irAlLoginSimulado,
     logout: logoutSimulado,
     usePerfil: () => {

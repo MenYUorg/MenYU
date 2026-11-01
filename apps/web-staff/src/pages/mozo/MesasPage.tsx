@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { io, type Socket } from 'socket.io-client'
 import type { Mesa } from '@menyu/types'
 import { Bell, Clock, DollarSign, DoorOpen, LayoutGrid, ShoppingBag, Users } from 'lucide-react'
-import { usePerfil } from '@menyu/auth-client'
+import { authDelSocket, usePerfil } from '@menyu/auth-client'
 import { urlDelSocket } from '@menyu/ui/socket'
 import { useNombreDelRol, useRestauranteId } from '../../store/contextoStore'
 import { api } from '../../services/api'
@@ -283,8 +283,8 @@ export function MesasPage() {
   // WebSocket
   useEffect(() => {
     if (!restauranteId) return
-    // El gateway no autentica la conexión (docs/auth/specs/auth.md, Fuera de alcance): no se le manda ningún token.
-    const socket: Socket = io(`${WS_URL}/ws`, { transports: ['websocket'] })
+    // El token viaja en el handshake (`auth`) y el gateway lo verifica al unirse a la sala.
+    const socket: Socket = io(`${WS_URL}/ws`, { transports: ['websocket'], auth: authDelSocket })
     socket.on('connect', () => {
       socket.emit('mozo:join', { restauranteId })
     })

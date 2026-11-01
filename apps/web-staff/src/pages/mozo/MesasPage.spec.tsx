@@ -183,11 +183,11 @@ describe('MesasPage (mozo)', () => {
   })
 
   describe('tiempo real', () => {
-    it('se conecta sin token, entra como mozo, recarga los llamados y se desconecta al salir', async () => {
+    it('se conecta con el token, entra como mozo, recarga los llamados y se desconecta al salir', async () => {
       mesasApi.getAll.mockResolvedValue([])
       const { unmount } = abrir()
 
-      expect(io).toHaveBeenCalledWith(expect.stringMatching(/\/ws$/), { transports: ['websocket'] })
+      expect(io).toHaveBeenCalledWith(expect.stringMatching(/\/ws$/), { transports: ['websocket'], auth: expect.any(Function) })
       recibir('connect')
       expect(socket.emit).toHaveBeenCalledWith('mozo:join', { restauranteId: 'rest-1' })
       recibir('waiter:called')
