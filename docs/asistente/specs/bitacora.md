@@ -1168,3 +1168,53 @@ Llamadas reales al modelo: **28** (la corrida, una sola vez, sin reanudar). Las 
   2. `--reanudar` no valida `--max-llamadas` (`NaN` desactiva el tope) y la guarda "no pisa una corrida" depende de la fecha UTC del nombre del archivo.
   3. La receta del "Gemini simulado" apunta a un archivo fuera del repo: conviene versionarlo en `scripts/asistente/`.
   4. Hallazgo preexistente del trabajador (fuera de alcance): `PrismaService` pasa un pool propio que `$disconnect()` no cierra (causa probable del "Jest did not exit" del e2e); arreglo sugerido `disposeExternalPool: true`.
+
+---
+
+## Informe final de la corrida (orquestador, 2026-11-01)
+
+**Resultado: las 7 fases completadas y aprobadas por el revisor.** La rama `feat/asistente` queda pusheada a `origin`, sin PR ni merge (eso es de Lauti).
+
+### Fases y commits
+
+| Fase | Commits | Veredicto | Rondas |
+|---|---|---|---|
+| 1 — Modelo de datos | `16c69b9` | Aprobada con observaciones | 0 |
+| 2 — API de administración | `caec562` | Aprobada con observaciones | 0 |
+| 3 — Formularios web-admin | `c734431` + `ea52448` | Aprobada con observaciones (navegador) | 0 |
+| 4 — Endpoint del asistente | `5494e9d` | Aprobada con observaciones | 0 |
+| 5 — Límites de uso | `9006491` | Aprobada con observaciones | 0 |
+| 6 — Chat web-cliente | `340d89d` + `f1534e5` | No aprobada → aprobada tras corrección | 1 |
+| 7 — Set y evaluación | `5428d88` + `c063c65` | Aprobada con observaciones | 0 |
+
+Además: `6b49068` (docs de Fase 0) y el commit de este informe. La corrida tuvo una pausa a pedido de Lauti durante la Fase 3 (WIP commiteado y retomado sin pérdida).
+
+### Presupuesto
+
+**48 de 200 llamadas reales** (1 precondición, 2+6 Fase 4, 4 Fase 5 — incidente documentado, 1+4+2 Fase 6, 28 Fase 7). `ASISTENTE_MAX_PREGUNTAS_DIA` restaurado de 50 a **300** (su valor original). Servidores bajados.
+
+### Evaluación (Fase 7)
+
+27/28 = **96,4 %**, **pre-evaluado por IA, pendiente de validación de Lauti** (la única incorrecta: `fuera-capital`; marca discutible junto con `fuera-receta`). Elección del modelo **postergada**: `gemini-3.1-flash-lite` provisorio, solo hay key de Google. Costo si fuera pago: ~USD 0,36 por mil preguntas.
+
+### Decisiones tomadas por ambigüedad (lista completa en cada entrada de fase)
+
+Las estructurales: `createdAt` en vez de `creadoEn`; cascadas con el restaurante; sin CHECKs de rango en la base (validan los DTOs con `@Min(1)` y topes); `porcionPersonas` se limpia al cambiar el tamaño; GERENTE también administra info local, FAQs y el flag; `PUT` de info local parcial; topes de largo en todos los textos; `ai@6` + `@ai-sdk/google@3` (CommonJS) + `zod` explícito; 429 del proveedor → `503 no_disponible_momentaneamente` leyendo hasta el primer texto; tope de 30 FAQs en el contexto; dirección del restaurante fuera del contexto; límites sin `ThrottlerGuard` (orden de validaciones); `trust proxy` por saltos con `TRUST_PROXY_HOPS`; stream del chat leído a mano (sin `@ai-sdk/react`); contador de visitas para reiniciar la conversación; categoría "acción" en el set; evaluación contra los services (no el endpoint). La decisión del checkpoint de Lauti (sumar el catálogo `ClasificacionDieta` al contexto) está implementada.
+
+### Sugerencias del revisor no aplicadas (detalle en cada cierre)
+
+1. **Confirmar si el GERENTE puede prender el flag del asistente** (hoy sí, como el resto de la carta; habilita gasto).
+2. System prompt: el nombre del restaurante queda concatenado a las instrucciones (como templatea la spec); alternativa anotada.
+3. El contexto incluye platos sin categoría ("## Otros") que la carta no muestra.
+4. El límite por sesión se evade cerrando y reabriendo la sesión con el QR impreso (el tope diario contiene el gasto); opción: tope por mesa/día.
+5. Set v2: alinear los criterios de "fuera de tema" y considerar una regla del prompt para fuera de tema (después, re-correr el set como regresión).
+6. Menores: docs del seed desactualizadas (README "9 ítems", datos-de-prueba-local), matriz por ruta de auth sin las 6 rutas nuevas, comentario en la `key` de `MenuView`, 5xx crudo del `menuStore`, `--reanudar` sin validar `--max-llamadas`, versionar el "Gemini simulado", pool de `PrismaService` sin `disposeExternalPool`.
+
+### Pendientes humanos (Lauti)
+
+1. **Validar la pre-evaluación de la Fase 7** (28 marcas en `docs/asistente/evaluacion/…json`; las dudosas: `fuera-capital`, `fuera-receta`) y confirmar o cambiar la elección provisoria del modelo.
+2. **Revisar y mergear `feat/asistente`** (el PR lo abre Lauti; el CI corre el e2e con Postgres limpio).
+3. **Probar en staging**, incluido el chequeo de `X-Forwarded-For` detrás del edge de Railway (receta en la entrada de la Fase 5) **antes** de producción.
+4. **Cargar las variables `ASISTENTE_*` y la key en Railway de producción** cuando toque (la key `menyu-prod` ya existe).
+5. **Prender el flag del restaurante del piloto** desde web-admin (pantalla Asistente).
+6. Limpieza opcional de la base local: comensales "Revisor*" y un `llamado_mozo` pendiente de las revisiones.
