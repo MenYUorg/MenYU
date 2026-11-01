@@ -238,6 +238,6 @@ export class ContextoService {
     ]
       .filter(esTexto)
       .join('\n\n')
-    return armarSystemPrompt(nombre, contexto)
+    return armarSystemPrompt(contexto)
   }
 }

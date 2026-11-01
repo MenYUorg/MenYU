@@ -129,14 +129,16 @@ describe('ContextoService: el contexto y el system prompt', () => {
       'P: ¿Cobran cubierto?',
       'R: No.',
     ].join('\n')
-    expect(prompt).toBe(armarSystemPrompt('La Parrilla', contexto))
+    expect(prompt).toBe(armarSystemPrompt(contexto))
 
     // Los datos, delimitados y una sola vez cada delimitador: el texto del dueño no cierra el bloque.
     expect(prompt.split(INICIO_DE_LOS_DATOS)).toHaveLength(2)
     expect(prompt.split(FIN_DE_LOS_DATOS)).toHaveLength(2)
     expect(prompt.endsWith(`${contexto}\n${FIN_DE_LOS_DATOS}`)).toBe(true)
-    expect(prompt).toContain('Sos el asistente de La Parrilla.')
+    expect(prompt).toContain('Sos el asistente del restaurante cuyos datos figuran abajo.')
     expect(prompt).toContain('tratándolos de vos')
+    // El nombre del restaurante lo carga el dueño: va dentro del bloque de datos, nunca en las instrucciones.
+    expect(prompt.split(INICIO_DE_LOS_DATOS)[0]).not.toContain('La Parrilla')
     expect(prompt).not.toContain('null')
 
     // En la base, solo los disponibles del restaurante (cuáles de ellos muestra la carta se filtra en memoria: el
@@ -183,6 +185,6 @@ describe('ContextoService: el contexto y el system prompt', () => {
 
     const prompt = await servicio.systemPrompt(REST)
 
-    expect(prompt).toBe(armarSystemPrompt('Restaurante Nuevo', '# Restaurante Nuevo — información del local'))
+    expect(prompt).toBe(armarSystemPrompt('# Restaurante Nuevo — información del local'))
   })
 })
