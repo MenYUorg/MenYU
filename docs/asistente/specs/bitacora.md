@@ -1150,3 +1150,21 @@ Llamadas reales al modelo: **28** (la corrida, una sola vez, sin reanudar). Las 
   - Para elegir el modelo: una key de OpenAI o de Anthropic, su paquete del AI SDK de la línea `ai-v6` en `apps/backend`, una línea en `PROVEEDORES` y su precio vigente en `PRECIOS_POR_MILLON`. Después, correr solo el modelo nuevo con `--modelos <proveedor>:<modelo>` (la corrida de Gemini ya existe; con los dos modelos serían 56 llamadas y `--max-llamadas 60`). Se elige por precisión, costo y latencia; cambiar de modelo es `ASISTENTE_MODELO`, y de proveedor, `modelo.ts`.
   - El set depende del seed: si cambian los datos del Restaurante Seed, cambian las respuestas esperadas (cada corrida guarda el hash del system prompt que usó).
 - **Fuera de alcance, sin tocar:** `PrismaService` crea un `pg.Pool` y se lo pasa a `PrismaPg` sin `disposeExternalPool`. Con `@prisma/adapter-pg@6.19.3`, `$disconnect()` no cierra un pool externo (`dispose` solo lo hace con esa opción), así que un proceso que usa `PrismaService` queda vivo hasta el timeout de inactividad de `pg` (10 s). No lo verifiqué, pero es una causa probable del aviso "Jest did not exit one second after the test run" del e2e del backend (anotado en la Fase 5 como anterior). Se arreglaría con `new PrismaPg(pool, { disposeExternalPool: true })` o pasándole la config en lugar del pool.
+
+### Pre-evaluación aplicada (2026-11-01)
+
+- Las marcas del revisor de la corrida desatendida (`correcta` y `nota` de las 28 respuestas) quedaron en `docs/asistente/evaluacion/2026-11-01-google-gemini-3.1-flash-lite.json`, con `corrida.estadoDeLaEvaluacion`: "pre-evaluado por IA (revisor de la corrida desatendida), pendiente de validación de Lauti". No cambió ninguna respuesta ni otro dato de la corrida; `--resumen` regeneró el resumen y el CSV.
+- **Precisión (`--resumen`): 27/28 = 96,4 %.** Por categoría: dato_cargado 8/8 (100 %), dato_faltante 4/4 (100 %), celiaquia 4/4 (100 %), recomendacion 3/3 (100 %), prompt_injection 4/4 (100 %), fuera_de_tema 2/3 (67 %), accion 2/2 (100 %). La única incorrecta es `fuera-capital`.
+- Llamadas reales al modelo: 0.
+
+## Cierre de la Fase 7 (orquestador, 2026-11-01)
+
+- **Veredicto del revisor:** APROBADA CON OBSERVACIONES. Bloqueantes: ninguno. Rondas de corrección: 0.
+- **Commit de la fase:** `5428d88`. "Terminado cuando" completo: set versionado (28 preguntas, 7 categorías — se sumó "acción"), corrida guardada (28/28 sin errores; mediana 726 ms al primer texto, ~1.260/33 tokens, USD 0,36 por mil preguntas si fuera pago) y elección del modelo **postergada** explícitamente (solo hay key de Google; `gemini-3.1-flash-lite` queda provisorio).
+- **Llamadas reales:** 28 (la corrida del set, estimada antes de correr) + 0 del revisor. **Acumuladas: 48 de 200. Restante: 152.**
+- **Pre-evaluación (adaptación 3 de la orquestación): 27/28 = 96,4 %, pre-evaluado por IA, pendiente de validación de Lauti.** Por categoría: dato cargado 8/8, faltante 4/4, celiaquía 4/4, recomendación 3/3, injection 4/4, fuera de tema 2/3, acción 2/2. La única incorrecta es `fuera-capital` (trata lo fuera de tema como dato faltante en vez de decir que solo ayuda con la carta y el local); `fuera-receta` pasó con el mismo patrón porque su `debe` lo admite — las dos marcas más discutibles, que Lauti decida.
+- **Observaciones no aplicadas (para Lauti):**
+  1. Alinear los criterios de "fuera de tema" del set (v2, sin re-correr) y considerar una regla del system prompt para preguntas fuera de tema (hoy caen en la regla 1 y suenan a "dato faltante"); cualquier ajuste del prompt → re-correr el set como regresión.
+  2. `--reanudar` no valida `--max-llamadas` (`NaN` desactiva el tope) y la guarda "no pisa una corrida" depende de la fecha UTC del nombre del archivo.
+  3. La receta del "Gemini simulado" apunta a un archivo fuera del repo: conviene versionarlo en `scripts/asistente/`.
+  4. Hallazgo preexistente del trabajador (fuera de alcance): `PrismaService` pasa un pool propio que `$disconnect()` no cierra (causa probable del "Jest did not exit" del e2e); arreglo sugerido `disposeExternalPool: true`.
