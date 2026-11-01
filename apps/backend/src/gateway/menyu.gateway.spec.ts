@@ -2,7 +2,7 @@ import { Logger } from '@nestjs/common'
 import { GATEWAY_OPTIONS } from '@nestjs/websockets/constants'
 import { Namespace, Socket } from 'socket.io'
 import { AccesoDelSocket } from './acceso-del-socket.service'
-import { MenyuGateway } from './menyu.gateway'
+import { intervaloDeRevalidacion, MenyuGateway, REVALIDACION_MINIMA_MS, REVALIDACION_POR_DEFECTO_MS } from './menyu.gateway'
 
 // El gateway de Socket.io (DT-08): quién entra a qué sala y a qué salas va cada evento. AccesoDelSocket, el Namespace
 // y los sockets son dobles; la verificación de tokens y roles está en acceso-del-socket.service.spec.ts.
@@ -50,7 +50,10 @@ beforeEach(() => {
   }
 })
 
-afterEach(() => jest.restoreAllMocks())
+afterEach(() => {
+  gateway.onModuleDestroy()
+  jest.restoreAllMocks()
+})
 
 /** Todo lo que el gateway mandó al log, para afirmar que el token no aparece. */
 function todoElLog(): string {
@@ -267,6 +270,163 @@ describe('MenyuGateway', () => {
       gateway.emitOrderUpdated(R1, pedidoSinSesion as { sesionId?: string | null })
 
       expect(hacia).toHaveBeenCalledWith([`salon:${R1}`, `cocina:${R1}`])
+    })
+  })
+
+  describe('revalidación del acceso del personal', () => {
+    const revalidacionOriginal = process.env.WS_REVALIDACION_MS
+
+    afterEach(() => {
+      jest.useRealTimers()
+      if (revalidacionOriginal === undefined) delete process.env.WS_REVALIDACION_MS
+      else process.env.WS_REVALIDACION_MS = revalidacionOriginal
+    })
+
+    /** Un socket del personal ya unido a esas salas de R1, en la lista de sockets del Namespace. */
+    async function socketDelPersonal(id: string, salas: ('salon' | 'cocina')[] = ['salon']): Promise<SocketFalso> {
+      const socket = crearSocket({ token: TOKEN }, id)
+      for (const sala of salas) {
+        await (sala === 'salon' ? gateway.unirseAlSalon : gateway.unirseALaCocina).call(gateway, { restauranteId: R1 }, socket)
+      }
+      ;(gateway.server.sockets as Map<string, Socket>).set(id, socket)
+      return socket
+    }
+
+    it.each([
+      ['sin la variable', undefined, REVALIDACION_POR_DEFECTO_MS],
+      ['vacía', '', REVALIDACION_POR_DEFECTO_MS],
+      ['que no es un número', 'diez minutos', REVALIDACION_POR_DEFECTO_MS],
+      ['con un valor válido', '5000', 5000],
+      ['con decimales', '1500.7', 1500],
+      ['por debajo del mínimo', '10', REVALIDACION_MINIMA_MS],
+      ['negativa', '-5', REVALIDACION_MINIMA_MS],
+    ])('WS_REVALIDACION_MS %s: %s', (_caso, valor, esperado) => {
+      expect(intervaloDeRevalidacion(valor)).toBe(esperado)
+    })
+
+    it('el intervalo se crea al iniciar el módulo, con unref, y OnModuleDestroy lo limpia', () => {
+      jest.useFakeTimers()
+      const programar = jest.spyOn(global, 'setInterval')
+
+      gateway.onModuleInit()
+      expect(jest.getTimerCount()).toBe(1)
+      expect(programar).toHaveBeenCalledWith(expect.any(Function), REVALIDACION_POR_DEFECTO_MS)
+
+      gateway.onModuleDestroy()
+      expect(jest.getTimerCount()).toBe(0)
+    })
+
+    it('el intervalo no retiene el proceso (unref)', () => {
+      gateway.onModuleInit()
+      const intervalo = (gateway as unknown as { revalidacion: NodeJS.Timeout }).revalidacion
+
+      expect(intervalo.hasRef()).toBe(false)
+      gateway.onModuleDestroy()
+    })
+
+    it('quien pierde el rol sale de la sala y recibe acceso:revocado en la próxima pasada', async () => {
+      jest.useFakeTimers()
+      process.env.WS_REVALIDACION_MS = '1000'
+      const socket = await socketDelPersonal('s1')
+      acceso.sigueAutorizado.mockResolvedValue(false)
+      gateway.onModuleInit()
+
+      await jest.advanceTimersByTimeAsync(1000)
+
+      expect(acceso.sigueAutorizado).toHaveBeenCalledWith('usuario-1', R1, 'salon')
+      expect(socket.leave).toHaveBeenCalledWith(`salon:${R1}`)
+      expect(socket.salas.size).toBe(0)
+      expect(socket.emit).toHaveBeenCalledWith('acceso:revocado', { restauranteId: R1 })
+      expect(socket.data.personal).toBeUndefined()
+      expect(todoElLog()).not.toContain(TOKEN)
+    })
+
+    it('si pierde solo el salón, sigue en la cocina y recibe un solo aviso', async () => {
+      const socket = await socketDelPersonal('s1', ['salon', 'cocina'])
+      acceso.sigueAutorizado.mockImplementation(async (_u: string, _r: string, sala: string) => sala === 'cocina')
+
+      await gateway.revalidar()
+
+      expect([...socket.salas]).toEqual([`cocina:${R1}`])
+      expect(socket.data.personal.salas).toEqual(['cocina'])
+      expect(socket.emit).toHaveBeenCalledTimes(1)
+      expect(socket.emit).toHaveBeenCalledWith('acceso:revocado', { restauranteId: R1 })
+    })
+
+    it('quien sigue autorizado no nota nada', async () => {
+      const socket = await socketDelPersonal('s1', ['salon', 'cocina'])
+
+      await gateway.revalidar()
+
+      expect(socket.leave).not.toHaveBeenCalled()
+      expect(socket.emit).not.toHaveBeenCalled()
+      expect(socket.salas.size).toBe(2)
+    })
+
+    it('chequea cada (usuario, restaurante, sala) una sola vez por pasada', async () => {
+      await socketDelPersonal('s1')
+      await socketDelPersonal('s2')
+
+      await gateway.revalidar()
+
+      expect(acceso.sigueAutorizado).toHaveBeenCalledTimes(1)
+    })
+
+    it('los sockets que no son del personal (comensales) no se revisan', async () => {
+      const comensal = crearSocket({}, 'c1')
+      gateway.unirseALaSesion({ restauranteId: R1 }, comensal)
+      ;(gateway.server.sockets as Map<string, Socket>).set('c1', comensal)
+
+      await gateway.revalidar()
+
+      expect(acceso.sigueAutorizado).not.toHaveBeenCalled()
+      expect([...comensal.salas]).toEqual([`menu:${R1}`])
+    })
+
+    it('un error de base no revoca a nadie: lo loguea y reintenta en la próxima pasada', async () => {
+      jest.useFakeTimers()
+      process.env.WS_REVALIDACION_MS = '1000'
+      const socket = await socketDelPersonal('s1')
+      acceso.sigueAutorizado.mockRejectedValueOnce(new Error("Can't reach database server"))
+      gateway.onModuleInit()
+
+      await jest.advanceTimersByTimeAsync(1000)
+
+      expect(socket.leave).not.toHaveBeenCalled()
+      expect(socket.emit).not.toHaveBeenCalled()
+      expect(logs.error).toHaveBeenCalledWith(expect.stringContaining("Can't reach database server"))
+
+      acceso.sigueAutorizado.mockResolvedValueOnce(false)
+      await jest.advanceTimersByTimeAsync(1000)
+
+      expect(acceso.sigueAutorizado).toHaveBeenCalledTimes(2)
+      expect(socket.emit).toHaveBeenCalledWith('acceso:revocado', { restauranteId: R1 })
+    })
+
+    it('si el socket pasó a otro restaurante durante el chequeo, no se lo saca del nuevo', async () => {
+      const socket = await socketDelPersonal('s1')
+      acceso.sigueAutorizado.mockImplementationOnce(async () => {
+        await gateway.unirseAlSalon({ restauranteId: R2 }, socket)
+        return false
+      })
+
+      await gateway.revalidar()
+
+      expect([...socket.salas]).toEqual([`salon:${R2}`])
+      expect(socket.emit).not.toHaveBeenCalled()
+    })
+
+    it('una pasada no arranca si la anterior sigue corriendo', async () => {
+      await socketDelPersonal('s1')
+      let liberar!: (sigue: boolean) => void
+      acceso.sigueAutorizado.mockImplementationOnce(() => new Promise<boolean>((resolve) => (liberar = resolve)))
+
+      const primera = gateway.revalidar()
+      await gateway.revalidar()
+      liberar(true)
+      await primera
+
+      expect(acceso.sigueAutorizado).toHaveBeenCalledTimes(1)
     })
   })
 })

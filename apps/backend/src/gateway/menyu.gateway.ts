@@ -1,4 +1,4 @@
-import { Logger } from '@nestjs/common'
+import { Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common'
 import {
   ConnectedSocket,
   MessageBody,
@@ -28,6 +28,17 @@ interface DatosDelPersonal {
   usuarioId: string
   restauranteId: string
   salas: SalaDelPersonal[]
+}
+
+/** Cada cuánto se revalida el acceso del personal, si `WS_REVALIDACION_MS` no dice otra cosa. */
+export const REVALIDACION_POR_DEFECTO_MS = 10 * 60_000
+/** Por debajo de esto, `WS_REVALIDACION_MS` se ignora: revalidar más seguido sería castigar a la base. */
+export const REVALIDACION_MINIMA_MS = 1_000
+
+export function intervaloDeRevalidacion(valor = process.env.WS_REVALIDACION_MS): number {
+  const ms = Number(valor)
+  if (!valor || !Number.isFinite(ms)) return REVALIDACION_POR_DEFECTO_MS
+  return Math.max(Math.floor(ms), REVALIDACION_MINIMA_MS)
 }
 
 /** El nombre de cada sala lo arma el servidor: el cliente solo manda un id, que se valida antes. */
@@ -61,14 +72,26 @@ function paraElLog(valor: unknown): string {
   cors: { origin: (origin: string | undefined, callback: (error: Error | null, permitido?: boolean) => void) => callback(null, isAllowedOrigin(origin)) },
   namespace: '/ws',
 })
-export class MenyuGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class MenyuGateway implements OnGatewayConnection, OnGatewayDisconnect, OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(MenyuGateway.name)
+  private revalidacion: NodeJS.Timeout | null = null
+  private revalidando = false
 
   /** Con `namespace`, lo que inyecta Nest es el Namespace `/ws`, no el Server. */
   @WebSocketServer()
   server!: Namespace
 
   constructor(private readonly accesoDelSocket: AccesoDelSocket) {}
+
+  onModuleInit() {
+    this.revalidacion = setInterval(() => void this.revalidar(), intervaloDeRevalidacion())
+    this.revalidacion.unref()
+  }
+
+  onModuleDestroy() {
+    if (this.revalidacion) clearInterval(this.revalidacion)
+    this.revalidacion = null
+  }
 
   handleConnection(client: Socket) {
     this.logger.debug(`conectado: ${client.id}`)
@@ -140,6 +163,39 @@ export class MenyuGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.server.to(SALA.menu(restauranteId)).emit('menu:updated', { restauranteId })
   }
 
+  /**
+   * Vuelve a mirar el acceso de cada socket del personal: a quien perdió el rol (o la cuenta) lo saca de la sala y le
+   * avisa con `acceso:revocado`. Un error de base corta la pasada sin revocar a nadie; se reintenta en la próxima.
+   */
+  async revalidar(): Promise<void> {
+    if (this.revalidando) return
+    this.revalidando = true
+    try {
+      const decisiones = new Map<string, Promise<boolean>>()
+      const revocados: { socket: Socket; restauranteId: string; salas: SalaDelPersonal[] }[] = []
+
+      for (const socket of this.server.sockets.values()) {
+        const personal = this.personalDe(socket)
+        if (!personal) continue
+        const salas: SalaDelPersonal[] = []
+        for (const sala of personal.salas) {
+          const clave = `${personal.usuarioId}|${personal.restauranteId}|${sala}`
+          if (!decisiones.has(clave)) {
+            decisiones.set(clave, this.accesoDelSocket.sigueAutorizado(personal.usuarioId, personal.restauranteId, sala))
+          }
+          if (!(await decisiones.get(clave))) salas.push(sala)
+        }
+        if (salas.length) revocados.push({ socket, restauranteId: personal.restauranteId, salas })
+      }
+
+      for (const { socket, restauranteId, salas } of revocados) this.revocar(socket, restauranteId, salas)
+    } catch (error) {
+      this.logger.error(`No se pudo revalidar el acceso de los sockets; se reintenta en la próxima pasada: ${(error as Error).message}`)
+    } finally {
+      this.revalidando = false
+    }
+  }
+
   private async unirseAlPersonal(
     client: Socket,
     evento: 'mozo:join' | 'cocina:join',
@@ -164,6 +220,18 @@ export class MenyuGateway implements OnGatewayConnection, OnGatewayDisconnect {
       salas: salas.includes(sala) ? salas : [...salas, sala],
     } satisfies DatosDelPersonal
     return { ok: true }
+  }
+
+  /** Saca al socket de las salas que perdió y le avisa. Si pasó a otro restaurante mientras tanto, no lo toca. */
+  private revocar(socket: Socket, restauranteId: string, salas: SalaDelPersonal[]) {
+    const personal = this.personalDe(socket)
+    if (!personal || personal.restauranteId !== restauranteId) return
+
+    for (const sala of salas) void socket.leave(SALA[sala](restauranteId))
+    const quedan = personal.salas.filter((sala) => !salas.includes(sala))
+    socket.data.personal = quedan.length ? { ...personal, salas: quedan } : undefined
+    socket.emit('acceso:revocado', { restauranteId })
+    this.logger.warn(`acceso revocado: socket ${socket.id}, restaurante ${restauranteId}, salas ${salas.join(', ')}`)
   }
 
   private rechazar(client: Socket, evento: string, restauranteId: unknown, motivo: MotivoDeRechazo): RespuestaDelJoin {
