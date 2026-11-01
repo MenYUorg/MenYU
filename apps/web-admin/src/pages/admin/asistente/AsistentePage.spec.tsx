@@ -2,7 +2,7 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { InformacionLocal, PreguntaFrecuente, Restaurante } from '@menyu/types'
 import { useContextStore } from '../../../store/contextStore'
-import { perfilDeOwner, reiniciarSesionDePrueba, sesionDePrueba } from '../../../test/authClient'
+import { perfilDeGerente, perfilDeOwner, reiniciarSesionDePrueba, sesionDePrueba } from '../../../test/authClient'
 import { AsistentePage } from './AsistentePage'
 
 vi.mock('@menyu/auth-client', async () => (await import('../../../test/authClient')).moduloSimulado())
@@ -129,6 +129,20 @@ describe('AsistentePage', () => {
       await waitFor(() => expect(interruptor).toHaveAttribute('aria-checked', 'true'))
       expect(enviados('PUT', URL_INFORMACION)).toEqual([{ asistenteHabilitado: true }])
       expect(screen.getByText('Prendido: los clientes ven el asistente en la carta.')).toBeInTheDocument()
+    })
+
+    it('el gerente ve el estado del interruptor pero no lo puede tocar', async () => {
+      // El switch deshabilitado le suma " (no disponible)" a su nombre accesible (ToggleSwitch).
+      sesionDePrueba.perfil = perfilDeGerente()
+      informacion.asistenteHabilitado = true
+      await abrir()
+
+      const interruptor = screen.getByRole('switch', { name: /^Asistente en la carta/ })
+      expect(interruptor).toHaveAttribute('aria-disabled', 'true')
+      expect(interruptor).toHaveAttribute('aria-checked', 'true')
+      expect(screen.getByText('Prendido: los clientes ven el asistente en la carta.')).toBeInTheDocument()
+      expect(screen.getByText(/Solo el dueño de la marca puede prenderlo o apagarlo/)).toBeInTheDocument()
+      expect(enviados('PUT', URL_INFORMACION)).toEqual([])
     })
 
     it('si la API responde 403, muestra su mensaje y no da nada por guardado', async () => {

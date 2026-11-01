@@ -1,11 +1,14 @@
 import { Body, Controller, Get, Param, Put } from '@nestjs/common'
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger'
 import { RequiereRol } from '../auth/decorators/requiere-rol.decorator'
+import { UsuarioActual } from '../auth/decorators/usuario-actual.decorator'
 import { ADMINISTRACION } from '../auth/roles-del-personal'
+import { UsuarioAutenticado } from '../auth/supabase/usuario-autenticado'
 import { UpdateInformacionLocalDto } from './dto/update-informacion-local.dto'
 import { InformacionDelLocal, InformacionLocalService } from './informacion-local.service'
 
-// OWNER de la marca o GERENTE del restaurante: los mismos roles que la edición de la carta.
+// OWNER de la marca o GERENTE del restaurante: los mismos roles que la edición de la carta. El switch del asistente
+// es solo del OWNER, y lo exige el service porque es un campo más del mismo PUT.
 @ApiTags('informacion-local')
 @Controller('restaurantes/:restauranteId/informacion-local')
 @RequiereRol(...ADMINISTRACION)
@@ -23,10 +26,12 @@ export class InformacionLocalController {
   @ApiOperation({ summary: 'Guardar la información del local y el switch del asistente (lo que no viene no cambia; null lo borra)' })
   @ApiResponse({ status: 200, description: 'La información guardada' })
   @ApiResponse({ status: 400, description: 'Datos inválidos' })
+  @ApiResponse({ status: 403, description: 'Solo el OWNER puede mandar asistenteHabilitado' })
   guardar(
     @Param('restauranteId') restauranteId: string,
     @Body() dto: UpdateInformacionLocalDto,
+    @UsuarioActual() usuario: UsuarioAutenticado,
   ): Promise<InformacionDelLocal> {
-    return this.informacion.guardar(restauranteId, dto)
+    return this.informacion.guardar(restauranteId, dto, usuario)
   }
 }

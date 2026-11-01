@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { InformacionLocal, PreguntaFrecuente } from '@menyu/types'
 import { api, type GuardarInformacionLocalInput, type PreguntaFrecuenteInput } from '../../../services/api'
-import { useContextStore } from '../../../store/contextStore'
+import { useContextStore, useRolActual } from '../../../store/contextStore'
 import { mensajeDeLaApi } from '../../../utils/mensajeDeError'
 import { botonSecundario, textoAyuda } from '../marca/estilos'
 import { mensajeDeFalla } from './estilos'
@@ -21,10 +21,12 @@ type Carga = { estado: 'cargando' } | { estado: 'error'; mensaje: string } | Lis
 
 /**
  * Lo que sabe el asistente de la carta sobre el restaurante elegido, además de los platos: el interruptor que lo
- * prende, la información del local y las preguntas frecuentes. OWNER y GERENTE (docs/asistente/specs/asistente.md).
+ * prende, la información del local y las preguntas frecuentes. OWNER y GERENTE (docs/asistente/specs/asistente.md);
+ * el interruptor, solo el OWNER.
  */
 export function AsistentePage() {
   const { selectedRestauranteId: restauranteId, restaurantes } = useContextStore()
+  const esOwner = useRolActual() === 'OWNER'
   const nombre = restaurantes.find((r) => r.id === restauranteId)?.nombre ?? 'este restaurante'
   const [carga, setCarga] = useState<Carga>({ estado: 'cargando' })
   const [intento, setIntento] = useState(0)
@@ -94,6 +96,7 @@ export function AsistentePage() {
       <InterruptorDelAsistente
         nombreRestaurante={nombre}
         habilitado={carga.informacion.asistenteHabilitado}
+        puedeCambiar={esOwner}
         onCambiar={async (habilitado) => {
           const guardada = await guardarInformacion({ asistenteHabilitado: habilitado })
           // Solo el interruptor: el resto de la información lo maneja su formulario, que puede tener cambios sin guardar.

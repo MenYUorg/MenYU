@@ -7,12 +7,14 @@ import { mensajeDeFalla } from './estilos'
 interface Props {
   nombreRestaurante: string
   habilitado:        boolean
+  /** Solo el dueño lo prende y lo apaga; el gerente ve el estado pero no lo puede cambiar (el backend también lo exige). */
+  puedeCambiar:      boolean
   /** Guarda el interruptor; si falla, el interruptor queda como estaba. */
   onCambiar:         (habilitado: boolean) => Promise<void>
 }
 
 /** Prende o apaga el asistente en la carta del restaurante. Se guarda al tocarlo. */
-export function InterruptorDelAsistente({ nombreRestaurante, habilitado, onCambiar }: Props) {
+export function InterruptorDelAsistente({ nombreRestaurante, habilitado, puedeCambiar, onCambiar }: Props) {
   const id = useId()
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -48,7 +50,7 @@ export function InterruptorDelAsistente({ nombreRestaurante, habilitado, onCambi
           value={habilitado}
           onChange={() => { void cambiar() }}
           title="Asistente en la carta"
-          disabled={guardando}
+          disabled={guardando || !puedeCambiar}
           altoMinimo={44}
         />
       </div>
@@ -67,6 +69,11 @@ export function InterruptorDelAsistente({ nombreRestaurante, habilitado, onCambi
             ? 'Prendido: los clientes ven el asistente en la carta.'
             : 'Apagado: los clientes no ven el asistente.'}
       </p>
+      {!puedeCambiar && (
+        <p style={{ ...textoAyuda, marginTop: 8 }}>
+          Solo el dueño de la marca puede prenderlo o apagarlo. El resto de esta pantalla la podés editar.
+        </p>
+      )}
       {error && <p role="alert" style={{ ...mensajeDeFalla, marginTop: 8 }}>{error}</p>}
     </section>
   )

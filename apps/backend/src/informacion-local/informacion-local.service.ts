@@ -1,5 +1,7 @@
-import { Injectable } from '@nestjs/common'
+import { ForbiddenException, Injectable } from '@nestjs/common'
 import { Prisma } from '@prisma/client'
+import { AccesoService } from '../auth/supabase/acceso.service'
+import { UsuarioAutenticado } from '../auth/supabase/usuario-autenticado'
 import { PrismaService } from '../prisma/prisma.service'
 import { UpdateInformacionLocalDto } from './dto/update-informacion-local.dto'
 
@@ -32,10 +34,19 @@ const SIN_CARGAR: Informacion = {
   estacionamiento: null,
 }
 
+/**
+ * Prender el asistente habilita el gasto en el modelo, así que es del dueño, como la dirección y los logos: el GERENTE
+ * administra el resto de la información del local pero no el switch (decisión de Lauti, cierre de la rama).
+ */
+const SOLO_EL_OWNER = 'Solo el dueño de la marca puede prender o apagar el asistente'
+
 /** La información del local para el asistente. El rol en el restaurante (OWNER o GERENTE) lo exige la ruta. */
 @Injectable()
 export class InformacionLocalService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly acceso: AccesoService,
+  ) {}
 
   async obtener(restauranteId: string): Promise<InformacionDelLocal> {
     const informacion = await this.prisma.informacionLocal.findUnique({
@@ -45,8 +56,16 @@ export class InformacionLocalService {
     return { restauranteId, ...(informacion ?? SIN_CARGAR) }
   }
 
-  /** Upsert parcial: lo que no viene en el DTO no cambia y null lo borra. */
-  async guardar(restauranteId: string, dto: UpdateInformacionLocalDto): Promise<InformacionDelLocal> {
+  /** Upsert parcial: lo que no viene en el DTO no cambia y null lo borra. El switch del asistente, solo el OWNER. */
+  async guardar(
+    restauranteId: string,
+    dto: UpdateInformacionLocalDto,
+    usuario: UsuarioAutenticado,
+  ): Promise<InformacionDelLocal> {
+    if (dto.asistenteHabilitado !== undefined) {
+      const roles = await this.acceso.rolesEnRestaurante(usuario.id, restauranteId)
+      if (!roles.includes('OWNER')) throw new ForbiddenException(SOLO_EL_OWNER)
+    }
     const informacion = await this.prisma.informacionLocal.upsert({
       where: { restauranteId },
       create: { ...dto, restauranteId },

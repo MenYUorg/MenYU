@@ -66,6 +66,15 @@ describe('endpoints de la información del local', () => {
     })
   })
 
+  it('el GERENTE no puede prender ni apagar el asistente: 403 y no guarda nada', async () => {
+    // El switch habilita el gasto en el modelo, así que es del dueño. El resto de la información sí la guarda (test de arriba).
+    const respuesta = await api.pedir('put', RUTA, { cuenta: CUENTAS.GERENTE, body: { asistenteHabilitado: true, horarios: 'De 12 a 24' } })
+
+    expect(respuesta.status).toBe(403)
+    expect(respuesta.body.message).toBe('Solo el dueño de la marca puede prender o apagar el asistente')
+    expect(prisma.informacionLocal.upsert).not.toHaveBeenCalled()
+  })
+
   it.each([
     ['el MOZO', CUENTAS.MOZO, REST],
     ['el JEFE_SALON', CUENTAS.JEFE_SALON, REST],
