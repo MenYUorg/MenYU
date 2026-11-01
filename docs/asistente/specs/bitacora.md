@@ -996,3 +996,157 @@ Commit: `fix(web-cliente): la conversación del asistente arranca de cero al vol
   5. Control: en Restaurante Seed, preguntar, abrir un plato y volver a la carta: la conversación sigue.
 - Gasta 2 o 3 llamadas.
 - El placeholder bloqueado (flujo F) entra en una línea a 390 px.
+
+## Cierre de la Fase 6 (orquestador, 2026-11-01)
+
+- **Veredicto del revisor:** NO APROBADA en la primera revisión (1 bloqueante) → **APROBADA CON OBSERVACIONES** tras la **ronda de corrección 1**. Rondas usadas: 1 de 2.
+- **Commits de la fase:** `340d89d` (implementación) + `f1534e5` (corrección: contador de visitas que invalida la conversación en memoria al cambiar de restaurante, test A→B→A y placeholder acortado).
+- **El bloqueante corregido:** la conversación no se reiniciaba al volver a un restaurante si no se abría el chat en el del medio (solo se limpiaba `sessionStorage`, no el store). Verificado corregido en el navegador, sin recargas, con la pregunta siguiente saliendo con un solo mensaje.
+- **"Terminado cuando" completo en navegador:** QR de la mesa 99 → chat → streaming real; carta sin sesión → funciona sin `Authorization`; flag apagado → sin botón. Checklist del revisor: móvil, token con sesión, errores comprensibles, el drawer no rompe el pedido.
+- **Llamadas reales:** 1 (trabajador) + 4 (revisión 1) + 0 (corrección) + 2 (re-revisión) = 7 en la fase. **Acumuladas: 20 de 200. Restante: 180.** `registro_asistente`: 13 filas de hoy (tope 50 de la corrida); la mesa 99 lleva 8 de 20.
+- **Observaciones no aplicadas (para Lauti):**
+  1. La corrección depende de la `key={restauranteId}` de `MenuView` (sin comentario que lo explique); si alguien la saca, el bug vuelve en forma sutil. Sugerencia: un comentario de una línea.
+  2. `enCurso` queda cargado en el store al descartar una respuesta de una visita pasada (no se ve); y A→B→A sin abrir el chat deja terminar la llamada en curso (se registra y gasta) aunque se descarte. Caso raro, gasto mínimo.
+  3. De la revisión 1 (preexistentes, fuera de la fase): en `http://mesa.menyu.local` sin HTTPS no se puede agregar al carrito (`crypto.randomUUID` exige origen seguro; por `127.0.0.1` anda); "Mozo" llama con un solo toque sin confirmar.
+  4. Residuos de la revisión en la base local (inofensivos, por si Lauti limpia): comensales "Revisor", "Revisor2", "Revisor3", "Revisor R1" en la sesión de la mesa 99 y un `llamado_mozo` pendiente `9c709137…`.
+- Servidores de la revisión bajados por el orquestador.
+
+---
+
+## Fase 7 — Set de prueba y evaluación de proveedores (2026-11-01)
+Estado: completada
+Plan y "A verificar" resueltos: en las subsecciones "A verificar" y "Plan" de abajo, escritas antes de tocar código.
+
+### "A verificar", resueltos leyendo el código y la base
+
+- **La spec no lista "A verificar en plan mode" para esta fase.** Lo que hay que resolver antes de escribir: contra qué corre el script (el servicio o el endpoint local), qué modelos tienen key, cuántas llamadas hace y cómo se espacian (15 RPM, nota de la Fase 0).
+- **Keys disponibles:** solo `GOOGLE_GENERATIVE_AI_API_KEY` en `apps/backend/.env` (`ASISTENTE_MODELO=gemini-3.1-flash-lite`, `ASISTENTE_MAX_TOKENS_RESPUESTA=500`). No hay keys de OpenAI ni de Anthropic, ni sus paquetes (`@ai-sdk/openai`, `@ai-sdk/anthropic`) instalados. **La comparación entre proveedores queda salteada**, como permite la spec: el set y la corrida con `gemini-3.1-flash-lite` quedan como regresión y material para la tesis, y la elección del modelo, postergada.
+- **El endpoint no sirve para evaluar modelos:** su modelo es uno solo, el de `ASISTENTE_MODELO` al arrancar (`modelo.ts` solo conoce a Google); el SSE no trae los tokens (están en `registro_asistente`); y le aplican los límites de la Fase 5: sin token, 10 preguntas cada 15 minutos por IP, y con el token de la mesa 99, 12 lugares (lleva 8 de 20). Además cada pregunta sumaría al tope diario de la corrida (13 filas de hoy, tope 50).
+- **Los services sí:** `ContextoService.systemPrompt(restauranteId)` arma el system prompt exacto de producción desde la base, y `ProveedorService` recibe el modelo por constructor (token `MODELO_DEL_ASISTENTE`) y llama con los parámetros de producción (temperatura 0,3, `maxOutputTokens` de la env, `maxRetries: 0`, timeout de 30 s, sin metadatos del proveedor). Su callback `alTerminar` entrega la respuesta completa, los tokens de entrada y de salida y la duración, lo mismo que guarda el registro. `historialParaElModelo` (exportada de `asistente.service.ts`) trunca el historial como el endpoint. Lo que no se ejercita (validaciones, límites, HTTP) ya lo cubren los tests y las verificaciones de las Fases 4 y 5.
+- **Cómo cargar los services desde un `.mjs`:** `ts-node` (devDependency del backend, el que usa el seed) con `transpileOnly` y `createRequire` desde `apps/backend`: probado en el scratchpad, arma el prompt real sin compilar (así nunca se evalúa un `dist/` viejo). El `.env` se carga con `process.loadEnvFile` de Node 22, que no pisa las variables que ya trae el entorno (probado).
+- **El chunk `finish` del UI message stream trae `finishReason`** (`ai@6.0.320`, `toUIMessageStream`): sirve para marcar las respuestas cortadas por `maxOutputTokens` (`length`).
+- **Los datos del set:** generé el system prompt del Restaurante Seed desde la base local con `ContextoService`, sin llamar al modelo: 4.165 caracteres (~1.250 tokens, como midió la Fase 4). El seed está intacto: Rabas sin nada, estacionamiento sin dato, pet friendly "no" declarado, Provoleta y Bife de Chorizo recomendados, Bowl de Quinoa vegano, tres platos sin TACC (Provoleta, Bife, Bowl) y 5 FAQs (la de celíacos: "la cocina no es exclusiva sin TACC").
+- **Dónde va el script:** `scripts/asistente/evaluar.mjs`, junto a los otros scripts de Node de la raíz (`scripts/smoke`, `scripts/carga`). `scripts/` está fuera de `sonar.sources`: no cuenta para el gate. La fase no agrega tests: el set corrido es el test.
+- **CI:** `turbo typecheck`, `turbo lint`, `turbo test` y los tests de `scripts/` (`node --test` de `smoke`, `carga` y `e2e-staging`). Sin migración y sin dependencias nuevas.
+
+### Plan (escrito antes de tocar código)
+
+1. **Set** (`docs/asistente/set-prueba.json`): 28 preguntas sobre el Restaurante Seed, cada una con `categoria`, `esperado` (una oración) y criterios `debe` / `noDebe` concretos, para que marcar correcta/incorrecta no dependa de interpretación. Categorías: las seis de la spec (dato cargado 8, dato faltante 4, celiaquía 4, recomendación 3, prompt injection 4, fuera de tema 3) más **acción** (2: carrito y llamar al mozo), que prueba la regla 2 del system prompt. Dos preguntas llevan historial: un seguimiento ("¿Y de qué estilo es?") y un injection con un mensaje del asistente inventado por el cliente.
+2. **Script** (`scripts/asistente/evaluar.mjs`), contra los services, sin límites ni registro:
+   - Sin `--correr` solo estima: llamadas (preguntas × modelos), tiempo mínimo y costo en el peor caso. No llama al modelo.
+   - `--correr`: una pregunta cada 4,5 s como mínimo (de arranque a arranque), en orden. Guarda por respuesta el texto, el `finishReason`, el tiempo hasta el primer texto, el total, los tokens y el costo (con los precios de la Fase 0), con `correcta` y `nota` en null para marcar después. Escribe el JSON después de cada respuesta y un CSV con lo mismo.
+   - Topes contra gastar de más: se niega si las llamadas superan `--max-llamadas` (30 por defecto); no pisa un archivo de resultados que ya existe; corta en el primer error (un 429 del proveedor incluido) guardando lo que tiene; `--reanudar <archivo>` corre solo las que faltan, si el set y el system prompt no cambiaron (hash).
+   - `--modelos proveedor:modelo,…` (por defecto `google:<ASISTENTE_MODELO>`): solo `google` registrado; sumar OpenAI o Anthropic es instalar su paquete de la línea `ai-v6` y una línea en la tabla del script.
+   - `--resumen <archivo>`: recalcula el resumen (con la precisión por categoría cuando hay marcas) y regenera el CSV.
+3. **Estimación antes de correr** (la anoto acá abajo con la salida del modo estimación): 28 preguntas × 1 modelo = **28 llamadas reales**. Entra en el restante de 180. El tope diario de la corrida no aplica (los services no registran ni cuentan); el RPD de Google (500) sobra.
+4. **Corrida única** con `gemini-3.1-flash-lite`, guardada en `docs/asistente/evaluacion/`. Si falla a medias, solo `--reanudar` con las que faltan.
+5. Spec (Fase 7 marcada, con "Cómo quedó" y la elección postergada), CLAUDE.md y esta entrada. Verificación: typecheck, lint y tests del CI (no cambia código de las apps).
+
+### Estimación antes de la corrida real (21:28 UTC)
+
+- Salida del modo estimación (`node scripts/asistente/evaluar.mjs`, sin `--correr`): **28 llamadas reales** (28 preguntas × 1 modelo, `google:gemini-3.1-flash-lite`), tope del script 30, ~2,1 min como mínimo (una cada 4,5 s), USD 0,03 en el peor caso con facturación (en free tier, 0). Entra en el restante de 180.
+- Antes, el camino completo del script se probó **sin llamadas reales**: un preload en el scratchpad que intercepta todo pedido a `googleapis.com` y responde un SSE con el formato de Gemini, más una key falsa en el entorno. Se probaron el stream, los tokens, el JSON y el CSV, el historial (llegan 3 mensajes), el espaciado (26 en 1 min 55 s), el corte en el primer error (un 429 simulado sale como `no_disponible_momentaneamente` y queda guardado lo respondido), `--reanudar` (corre solo las que faltan) y `--resumen` (precisión por categoría con marcas de prueba).
+- `registro_asistente` antes de correr: 13 filas, todas de hoy (UTC). El script no escribe ahí: se vuelve a contar después.
+
+### Qué se hizo
+
+- **`docs/asistente/set-prueba.json`** (nuevo): 28 preguntas sobre el Restaurante Seed.
+  - Cada una con `id`, `categoria`, `pregunta` (y `historial` en dos), `esperado` y los criterios `debe` / `noDebe`.
+  - Arriba: qué datos del seed supone, las reglas generales para marcar (`comoMarcar`) y qué se espera de cada categoría.
+  - Por categoría: dato cargado 8, dato faltante 4, celiaquía 4, recomendación 3, prompt injection 4, fuera de tema 3 y acción 2.
+  - Cubre:
+    - el tri-estado: pet friendly "no" declarado contra estacionamiento sin dato;
+    - un plato sin nada cargado (Rabas);
+    - la porción para compartir sin cantidad de personas (Provoleta);
+    - el descuento;
+    - la prioridad entre lo recomendado y la dieta pedida (vegano);
+    - un plato no declarado sin TACC (Milanesa);
+    - un injection de un falso dueño y otro con un mensaje del asistente inventado en el historial.
+- **`scripts/asistente/evaluar.mjs`** (nuevo), contra los services del backend, cargados desde el código fuente con `ts-node` (como el seed):
+  - Arma el system prompt con `ContextoService`, sobre un `PrismaClient` propio. Trunca el historial con `historialParaElModelo` y llama con `ProveedorService`, al que le pasa el modelo por el constructor.
+  - Por respuesta guarda el texto, el `finishReason`, el tiempo hasta el primer texto, el total (la misma duración que guarda el registro), los tokens de entrada y salida, y el costo. Los campos `correcta` y `nota` quedan en null.
+  - Por corrida guarda el modelo, el commit, si había cambios sin commitear en `apps/backend/src`, los hashes del set y del system prompt, los parámetros, el precio usado, las llamadas hechas y un resumen: latencia (mediana, p90 y máximo), tokens, costo y la precisión por categoría cuando hay marcas.
+  - Escribe el JSON después de cada respuesta y, al lado, un CSV con lo mismo (con BOM, para que una planilla lo abra como UTF-8).
+  - Modos: estimación (por defecto, sin llamar al modelo), `--correr`, `--reanudar <archivo>` y `--resumen <archivo>`. Opciones: `--modelos proveedor:modelo,…`, `--max-llamadas` (30) y `--salida`.
+  - Guardas: no corre más llamadas que el tope, no pisa una corrida que ya existe y corta en el primer error, guardando lo que tiene. `--reanudar` corre solo las preguntas que faltan, y solo si el set y el system prompt no cambiaron (hash). Antes de llamar, exige el paquete y la key de cada modelo.
+- **La corrida** (`docs/asistente/evaluacion/2026-11-01-google-gemini-3.1-flash-lite.json` y `.csv`): 28 de 28 respondidas, sin errores, ninguna cortada por `maxOutputTokens` y ningún aviso de tokens de razonamiento.
+  - Latencia hasta el primer texto: mediana de 726 ms, p90 de 1.105 ms y máximo de 1.489 ms. Respuesta completa: mediana de 810 ms, p90 de 1.307 ms y máximo de 1.526 ms.
+  - Tokens: 35.276 de entrada (~1.260 por pregunta) y 916 de salida (~33).
+  - Costo con los precios de la Fase 0, si hubiera facturación: USD 0,0102 la corrida, o USD 0,36 cada 1.000 preguntas. En el free tier no cobra.
+  - Commit evaluado: `f1534e5`, sin cambios en `apps/backend/src`.
+- **Spec:**
+  - La Fase 7 quedó marcada como hecha, con su "Cómo quedó" y la elección del modelo postergada.
+  - Se sumó una línea a la decisión 1 de la planificación ("postergada; `gemini-3.1-flash-lite` sigue de forma provisoria").
+- **CLAUDE.md:** la línea de la Fase 7 en "Asistente de mesa".
+- **Sin cambios:**
+  - Sin tocar el código de las apps ni el system prompt.
+  - Sin dependencias nuevas, sin migración y sin tests nuevos (el set corrido es el test).
+  - El commit también lleva el "Cierre de la Fase 6" que el orquestador dejó sin commitear en esta bitácora, como en las Fases 5 y 6.
+
+### Decisiones tomadas por ambigüedad
+
+1. **Contra los services y no contra el endpoint.** La spec deja elegir ("contra el servicio o el endpoint local"). El endpoint tiene tres problemas para evaluar:
+   - Responde con un solo modelo, el de `ASISTENTE_MODELO` al arrancar.
+   - El SSE no trae los tokens.
+   - Le aplican los límites: sin token, 10 preguntas cada 15 minutos; con el de la mesa 99, quedaban 12 lugares. Y cada pregunta sumaría al tope diario de la corrida (13 de 50).
+
+   Los services dan lo mismo que el endpoint en lo que se mide: el system prompt, la llamada al modelo, sus parámetros y el historial truncado. Además aceptan cualquier modelo. Lo que no se ejercita (validaciones, límites y HTTP) ya está cubierto por las Fases 4 y 5. Con esto no hizo falta tocar `ASISTENTE_MAX_PREGUNTAS_DIA` (sigue en 50) y `registro_asistente` sigue con 13 filas, antes y después de la corrida.
+2. **Una séptima categoría, `accion`** (2 preguntas). Las seis de la spec no prueban la regla 2 del system prompt (no tomar pedidos ni llamar al mozo), que es la decisión 5 de la definición.
+3. **28 preguntas** (la spec pide de 20 a 30): margen para un `--reanudar` dentro del tope de 30 del script. Dos llevan historial: un seguimiento, que prueba que el historial viaja, y un injection con un mensaje del asistente inventado, porque el backend acepta el historial que manda el cliente.
+4. **Criterios `debe` / `noDebe` y reglas generales estrictas**, para que el marcado no dependa de interpretación:
+   - Todo dato concreto que no esté en los datos del restaurante hace incorrecta la respuesta, aunque sea cierto en general (por ejemplo, "las rabas son calamares fritos").
+   - El tono (voseo, largo) y un `finishReason: "length"` van en `nota` y no cambian el marcado.
+   - Donde había más de una respuesta válida, el criterio las enumera. Por ejemplo, para la milanesa vale "no está marcada como sin TACC", "no tengo ese dato" o "no es sin TACC".
+5. **El JSON es el archivo que se marca.** El CSV es la misma información para una planilla, y `--resumen` lo regenera desde el JSON. Hay un archivo por modelo y por fecha. Las marcas se guardan en los resultados y no en el set: el set es la regresión, y las marcas dependen de cada corrida.
+6. **Solo `google` en `PROVEEDORES`, y precio solo para `gemini-3.1-flash-lite`** (el de la Fase 0). Sin keys de OpenAI ni de Anthropic, implementarlos habría sido código sin probar y dos dependencias que esta corrida no necesitaba. Tampoco inventé precios de memoria: un modelo sin precio deja el costo en null. El encabezado del script explica cómo sumar un proveedor.
+7. **El intervalo es de 4,5 s de arranque a arranque** ("una cada 4–5 s", Fase 0). Si una respuesta tarda más, la siguiente sale enseguida.
+8. **Se corta en el primer error, del tipo que sea.** Con una key vencida o un 429, seguir solo gastaría intentos. `--reanudar` exige el mismo set y el mismo system prompt (hash), para que una corrida no mezcle respuestas de dos versiones de los datos.
+9. **Los services se cargan del código fuente con `ts-node`, no del `dist/`**: así nunca se evalúa un build viejo. El `PrismaClient` se arma con la config y no con `PrismaService`, porque el pool de `PrismaService` no se cierra con `$disconnect` y el proceso quedaba vivo 10 s más (ver "Fuera de alcance").
+10. **No ajusté el system prompt.** La spec dice que se ajusta con lo que enseñe el set, pero las respuestas todavía no están marcadas (las pre-marca el revisor y las valida Lauti). Cambiarlo ahora obligaría a volver a correr el set, y lo que se ajuste tiene que salir de la evaluación validada.
+11. **La elección del modelo quedó postergada**, con `gemini-3.1-flash-lite` como provisorio. Está anotado en la spec (en la Fase 7 y en la decisión 1) y en el CLAUDE.md.
+
+Commit: `feat(asistente): set de prueba y evaluación del modelo del asistente de mesa (Fase 7)`. El hash lo registra el orquestador al cierre: un commit no puede contener su propio hash.
+
+### Verificación
+
+- typecheck ✓: el comando del CI, 7/7, desde la caché de turbo, porque esta fase no toca el código de ningún paquete.
+- lint ✓: el comando del CI, 5/5, también desde la caché.
+- tests ✓:
+  - El comando del CI, con `--concurrency=2`, da 8/8 tareas desde la caché: api 2073 (36 salteados), web-admin 49 archivos, web-cliente 43, web-staff 14, web-auth 9, ui 5 y auth-client 10.
+  - Tests de `scripts/`: 78/78.
+  - No se agregaron tests: el set corrido es el test de la fase.
+- **El script, sin llamadas reales, con el preload del scratchpad** (ver "Estimación antes de la corrida real"):
+  - Estima sin llamar al modelo.
+  - Con `--max-llamadas 10` se niega a correr.
+  - Rechaza un proveedor que no está en la tabla y una opción desconocida.
+  - Corta en el primer error y `--reanudar` completa solo lo que falta.
+  - `--resumen` calcula la precisión con marcas de prueba.
+  - Después de la corrida real: otro `--correr` se niega porque la corrida ya existe, y `--reanudar` responde que no falta ninguna. Los dos, sin llamar al modelo ni tocar el archivo.
+  - Sale en 2,2 s.
+- **La key no aparece** en el JSON, el CSV, el script, el set ni esta bitácora. Lo comprobé con un script que la lee del `.env` y la busca, sin imprimirla.
+- **"Terminado cuando", punto por punto:**
+  1. **El set está versionado** ✓: `docs/asistente/set-prueba.json`, en este commit.
+  2. **La corrida con el modelo actual quedó guardada con sus resultados** ✓: `docs/asistente/evaluacion/2026-11-01-google-gemini-3.1-flash-lite.json` y `.csv`, en este commit, con las 28 respuestas, sus tiempos, sus tokens y su costo.
+  3. **La elección del modelo, o su postergación explícita, quedó anotada en esta spec y en el CLAUDE.md** ✓: postergada, con `gemini-3.1-flash-lite` como provisorio y el porqué (solo hay key de Google). En la spec está en la Fase 7 y en la decisión 1; en el CLAUDE.md, en "Asistente de mesa".
+- **Checklist "Revisor:" de la fase, lo que se puede comprobar sin marcar:**
+  - El set cubre las seis categorías de la spec, incluidas injection (4) y fuera de tema (3), más acción.
+  - Cada pregunta tiene criterios concretos.
+  - El script no dispara llamadas de más: estima por defecto, tiene un tope, no pisa una corrida, corta en el primer error y reanuda solo lo pendiente. La estimación (28) se anotó antes de correr y coincidió con lo hecho (28).
+  - Para la tesis quedan las respuestas, la latencia, los tokens y el costo. La precisión sale cuando se marque.
+
+Llamadas reales al modelo: **28** (la corrida, una sola vez, sin reanudar). Las pruebas del script fueron con el proveedor simulado, sin llamadas. Presupuesto restante: 180 − 28 = **152**. `registro_asistente` sigue con 13 filas de hoy: el script no escribe ahí.
+
+### Para el revisor / fases siguientes
+
+- **Pre-marcar** (adaptación 3 de `orquestacion.md`):
+  1. En `docs/asistente/evaluacion/2026-11-01-google-gemini-3.1-flash-lite.json`, completar `correcta` (true o false) y, si hace falta, `nota` en cada resultado, contra los `debe` / `noDebe` de esa misma entrada y las reglas de `comoMarcar` del set.
+  2. Correr `node scripts/asistente/evaluar.mjs --resumen docs/asistente/evaluacion/2026-11-01-google-gemini-3.1-flash-lite.json`. Recalcula la precisión total y por categoría, y regenera el CSV, sin llamar al modelo.
+  3. Anotar el resultado en esta bitácora como "pre-evaluado por IA, pendiente de validación de Lauti".
+- **No volver a correr el set:** son 28 llamadas, y los resultados ya están guardados. Para revisar el script sin gastar:
+  - El modo estimación (sin `--correr`) y las guardas: `--max-llamadas 10`, o un `--correr` repetido, que se niega porque la corrida ya existe.
+  - O el preload que simula a Gemini (`gemini-simulado.cjs`, en el scratchpad de esta sesión). Responde un SSE con el formato de `streamGenerateContent?alt=sse` a todo pedido a `googleapis.com`, con `FALLAR_EN=n` para devolver un 429 en el pedido n. Se usa así: `GOOGLE_GENERATIVE_AI_API_KEY=key-falsa node --require <ruta>/gemini-simulado.cjs scripts/asistente/evaluar.mjs --correr --salida <scratchpad>/prueba.json`. La key falsa del entorno no la pisan ni el `.env` ni Prisma.
+- **Para Lauti:**
+  - Validar el pre-marcado del revisor. Con eso se puede decidir si el system prompt necesita un ajuste; si se ajusta, volver a correr el set como regresión (28 llamadas, otro archivo con `--salida` o con otra fecha).
+  - Para elegir el modelo: una key de OpenAI o de Anthropic, su paquete del AI SDK de la línea `ai-v6` en `apps/backend`, una línea en `PROVEEDORES` y su precio vigente en `PRECIOS_POR_MILLON`. Después, correr solo el modelo nuevo con `--modelos <proveedor>:<modelo>` (la corrida de Gemini ya existe; con los dos modelos serían 56 llamadas y `--max-llamadas 60`). Se elige por precisión, costo y latencia; cambiar de modelo es `ASISTENTE_MODELO`, y de proveedor, `modelo.ts`.
+  - El set depende del seed: si cambian los datos del Restaurante Seed, cambian las respuestas esperadas (cada corrida guarda el hash del system prompt que usó).
+- **Fuera de alcance, sin tocar:** `PrismaService` crea un `pg.Pool` y se lo pasa a `PrismaPg` sin `disposeExternalPool`. Con `@prisma/adapter-pg@6.19.3`, `$disconnect()` no cierra un pool externo (`dispose` solo lo hace con esa opción), así que un proceso que usa `PrismaService` queda vivo hasta el timeout de inactividad de `pg` (10 s). No lo verifiqué, pero es una causa probable del aviso "Jest did not exit one second after the test run" del e2e del backend (anotado en la Fase 5 como anterior). Se arreglaría con `new PrismaPg(pool, { disposeExternalPool: true })` o pasándole la config en lugar del pool.
