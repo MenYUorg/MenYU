@@ -292,6 +292,7 @@ export function MenuView({ modo, restauranteId }: MenuViewProps) {
 
       {modo === 'mesa' && <BotonCarrito />}
 
+      {/* La key reinicia el chat al cambiar de restaurante: sin ella, la conversación anterior sobrevive (Fase 6, ronda 1). */}
       <AsistenteDeLaCarta
         key={restauranteId}
         restauranteId={restauranteId}

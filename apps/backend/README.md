@@ -52,10 +52,19 @@ Deja además dos perfiles sin cuenta, que sirven para probar los vínculos por e
 
 Mesas: número 99 (pin 9998), 100 (pin 9997), 101 (pin 9996), y la mesa 1 de
 Restaurante Seed 2 (pin 9995), la segunda marca del seed.
-Menú: 3 categorías (Entradas, Principales, Bebidas) con 9 ítems de precios
+Menú: 3 categorías (Entradas, Principales, Bebidas) con 10 ítems de precios
 distintos entre sí, pensados para testear división de cuenta por consumo.
 Dos están en descuento (Milanesa Napo 20 % y Cerveza Artesanal 25 %): los
-pedidos se cobran al precio con descuento.
+pedidos se cobran al precio con descuento, y dos están recomendados por el
+local (Provoleta y Bife de Chorizo), así que la carta muestra su sección de
+recomendados.
+
+Datos del asistente de mesa: Restaurante Seed tiene el asistente **prendido**,
+su información del local cargada (horarios, formas de pago y los servicios,
+con el estacionamiento sin declarar, para probar el "no tengo ese dato"), 5
+preguntas frecuentes, descripción en 9 de los 10 ítems y los campos del plato
+en 9 (Rabas queda sin nada a propósito). Restaurante Seed 2 lo tiene apagado.
+El set de prueba de `docs/asistente/set-prueba.json` depende de estos datos.
 
 El seed es idempotente (upserts con IDs fijos), se puede correr las veces que
 haga falta. No siembra sesiones ni pedidos.
