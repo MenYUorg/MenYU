@@ -18,7 +18,11 @@
 //   --salida <archivo.json>                         con un solo modelo; por defecto, <fecha>-<proveedor>-<modelo>.json
 //
 // Para no gastar de más: sin --correr no llama al modelo; espacia las llamadas (15 RPM del free tier de Gemini); no pisa
-// una corrida que ya existe; y corta en el primer error, guardando lo que tiene, para seguir con --reanudar.
+// una corrida que ya existe (ni el archivo, ni la misma huella de modelo + set + system prompt); y corta en el primer
+// error, guardando lo que tiene, para seguir con --reanudar.
+//
+// Para probar el camino completo sin gastar cuota está el Gemini simulado de scripts/asistente/gemini-simulado.cjs: su
+// encabezado trae el comando y FALLAR_EN=n para forzar un 429.
 //
 // Sumar un proveedor (por ejemplo, para comparar con OpenAI o Anthropic): instalar su paquete del AI SDK en apps/backend,
 // de la misma línea que `ai` (dist-tag ai-v6), cargar su key en apps/backend/.env y agregarlo a PROVEEDORES, con su
@@ -26,7 +30,7 @@
 
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { basename, dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -120,6 +124,37 @@ function leerJson(ruta) {
 
 // ---------------------------------------------------------------------------------------------------------------------
 // El set, el backend y los modelos
+
+/** El tope de --max-llamadas: un entero mayor que cero, o el de por defecto si no vino. Lo usan --correr y --reanudar. */
+function leerMaxLlamadas(valor) {
+  if (valor === undefined) return MAX_LLAMADAS_POR_DEFECTO
+  const maxLlamadas = Number(valor)
+  if (!Number.isInteger(maxLlamadas) || maxLlamadas < 1) fallar('--max-llamadas va con un entero mayor que cero.')
+  return maxLlamadas
+}
+
+/** Las corridas guardadas en CARPETA_RESULTADOS. Un JSON ajeno o roto se ignora: la guarda no bloquea por lo que no entiende. */
+function corridasGuardadas() {
+  if (!existsSync(CARPETA_RESULTADOS)) return []
+  return readdirSync(CARPETA_RESULTADOS)
+    .filter((nombre) => nombre.endsWith('.json'))
+    .flatMap((nombre) => {
+      const ruta = join(CARPETA_RESULTADOS, nombre)
+      try {
+        const { corrida } = JSON.parse(readFileSync(ruta, 'utf8'))
+        return corrida?.modelo ? [{ ruta, corrida }] : []
+      } catch {
+        return []
+      }
+    })
+}
+
+/**
+ * La misma corrida: mismo modelo, mismo set y mismo system prompt. No mira el nombre del archivo ni su fecha, porque con
+ * el nombre por defecto (que lleva la fecha UTC) la guarda dejaba de proteger la corrida del día anterior.
+ */
+const mismaCorrida = (corrida, { modeloId, setSha256, systemPromptSha256 }) =>
+  corrida.modelo === modeloId && corrida.setSha256 === setSha256 && corrida.systemPromptSha256 === systemPromptSha256
 
 function leerSet() {
   const texto = readFileSync(SET, 'utf8')
@@ -508,8 +543,7 @@ async function correr(values) {
   const backend = cargarBackend()
   const configuracion = backend.configuracionDelAsistente()
   const modelos = leerModelos(values.modelos, configuracion)
-  const maxLlamadas = values['max-llamadas'] ? Number(values['max-llamadas']) : MAX_LLAMADAS_POR_DEFECTO
-  if (!Number.isInteger(maxLlamadas) || maxLlamadas < 1) fallar('--max-llamadas va con un entero mayor que cero.')
+  const maxLlamadas = leerMaxLlamadas(values['max-llamadas'])
   if (values.salida && modelos.length > 1) fallar('--salida va con un solo modelo.')
 
   const sistema = await armarSystemPrompt(backend, set)
@@ -519,8 +553,6 @@ async function correr(values) {
     console.log('\nNo se llamó al modelo. Para correrlo: --correr')
     return
   }
-  exigirProveedores(backend, modelos)
-
   const fecha = new Date().toISOString().slice(0, 10)
   const corridas = modelos.map((modelo) => ({
     modelo,
@@ -528,11 +560,24 @@ async function correr(values) {
       ? resolve(values.salida)
       : join(CARPETA_RESULTADOS, `${fecha}-${modelo.id.replace(/[^\w.-]+/g, '-')}.json`),
   }))
-  for (const { rutaJson } of corridas) {
+  const systemPromptSha256 = sha256(sistema)
+  const guardadas = corridasGuardadas()
+  for (const { modelo, rutaJson } of corridas) {
     if (existsSync(rutaJson)) {
       fallar(`Ya hay una corrida en ${rutaRelativa(rutaJson)}. Para completar una cortada: --reanudar <archivo>; para otra, --salida <otro archivo>.`)
     }
+    const ya = guardadas.find(({ corrida }) =>
+      mismaCorrida(corrida, { modeloId: modelo.id, setSha256: set.sha256, systemPromptSha256 }),
+    )
+    if (ya) {
+      fallar(
+        `${modelo.id} ya se corrió con este set (versión ${set.version}) y este system prompt: ${rutaRelativa(ya.ruta)}.\n` +
+          `Si quedó cortada: --reanudar ${rutaRelativa(ya.ruta)}. Si cambiás el set o el prompt, la huella cambia y corre sola. ` +
+          'Para repetir la misma corrida a propósito, movela o borrala primero.',
+      )
+    }
   }
+  exigirProveedores(backend, modelos)
   mkdirSync(CARPETA_RESULTADOS, { recursive: true })
 
   for (const { modelo, rutaJson } of corridas) {
@@ -546,6 +591,8 @@ async function correr(values) {
 }
 
 async function reanudar(values) {
+  // Antes de leer el archivo y de abrir la base: un --max-llamadas inválido no puede desactivar el tope (quedaba en NaN).
+  const maxLlamadas = leerMaxLlamadas(values['max-llamadas'])
   const rutaJson = resolve(values.reanudar)
   const doc = leerJson(rutaJson)
   const set = leerSet()
@@ -553,7 +600,6 @@ async function reanudar(values) {
   const backend = cargarBackend()
   const configuracion = backend.configuracionDelAsistente()
   const [modelo] = leerModelos(doc.corrida.modelo, configuracion)
-  const maxLlamadas = values['max-llamadas'] ? Number(values['max-llamadas']) : MAX_LLAMADAS_POR_DEFECTO
   const sistema = await armarSystemPrompt(backend, set)
   if (doc.corrida.systemPromptSha256 !== sha256(sistema)) {
     fallar('Los datos del restaurante (el system prompt) cambiaron desde esa corrida: hay que correrla entera de nuevo (--correr).')

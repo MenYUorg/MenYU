@@ -26,7 +26,7 @@
     "llamadas": 28,
     "reanudada": [],
     "comoMarcar": "correcta: true o false según `debe` y `noDebe` de cada pregunta (y los criterios de `comoMarcar` del set); nota: lo que haga falta (voseo, largo, finishReason \"length\"). Después: node scripts/asistente/evaluar.mjs --resumen <este archivo>",
-    "estadoDeLaEvaluacion": "pre-evaluado por IA (revisor de la corrida desatendida), pendiente de validación de Lauti"
+    "estadoDeLaEvaluacion": "validado por Lauti el 2026-11-01; 0 discrepancias con la pre-evaluación del revisor (27/28 = 96,4 %); la única incorrecta (fuera-capital) queda corregida por la regla de fuera de tema del set v2"
   },
   "resumen": {
     "preguntasDelSet": 28,
