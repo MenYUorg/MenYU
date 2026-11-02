@@ -31,6 +31,7 @@ const WS_BASE =
 
 function SessionGuard({ children }: { children: React.ReactNode }) {
   const restauranteId = useSessionStore((s) => s.restauranteId)
+  const jwt           = useSessionStore((s) => s.jwt)
   const sesionId      = useSessionStore((s) => s.sesionId)
   const clear         = useSessionStore((s) => s.clear)
   const navigate      = useNavigate()
@@ -44,7 +45,9 @@ function SessionGuard({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!restauranteId) return
-    const socket = io(`${WS_BASE}/ws`, { transports: ['websocket'] })
+    // El JWT de la mesa viaja en el handshake (`auth`) y el gateway lo verifica al unirse a la sala. Con un JWT nuevo
+    // (otra mesa del mismo restaurante) se reconecta: socket.io reusa el `auth` en cada reconexión.
+    const socket = io(`${WS_BASE}/ws`, { transports: ['websocket'], auth: jwt ? { token: jwt } : {} })
     socket.on('connect', () => socket.emit('session:join', { restauranteId }))
     socket.on('sesion:cerrada', ({ sesionId: sid }: { sesionId: string }) => {
       if (sesionIdRef.current && sid === sesionIdRef.current) setShowGracias(true)
@@ -59,7 +62,7 @@ function SessionGuard({ children }: { children: React.ReactNode }) {
       void fetchMenu(rid)
     })
     return () => { socket.off('sesion:cobrada'); socket.disconnect() }
-  }, [restauranteId])
+  }, [restauranteId, jwt])
 
   const handleAceptar = () => {
     clear()

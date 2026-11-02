@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { io, type Socket } from 'socket.io-client'
 import { AlertTriangle, ChevronRight, ClipboardList, Clock, RefreshCw } from 'lucide-react'
-import { usePerfil } from '@menyu/auth-client'
+import { authDelSocket, usePerfil } from '@menyu/auth-client'
 import { APARIENCIA_PEDIDOS, EditarPedidoModal, type AparienciaEditarPedido, type ItemEditable } from '@menyu/ui/editar-pedido'
 import { urlDelSocket } from '@menyu/ui/socket'
 import { api } from '../../services/api'
@@ -237,8 +237,8 @@ export function PedidosPage() {
 
   useEffect(() => {
     if (!restauranteId) return
-    // El gateway no autentica la conexión (docs/auth/specs/auth.md, Fuera de alcance): no se le manda ningún token.
-    const socket: Socket = io(`${WS_URL}/ws`, { transports: ['websocket'] })
+    // El token viaja en el handshake (`auth`) y el gateway lo verifica al unirse a la sala.
+    const socket: Socket = io(`${WS_URL}/ws`, { transports: ['websocket'], auth: authDelSocket })
     socketRef.current = socket
     socket.on('connect', () => { socket.emit('cocina:join', { restauranteId }) })
     socket.on('order:new', (pedido: PedidoRico) => {

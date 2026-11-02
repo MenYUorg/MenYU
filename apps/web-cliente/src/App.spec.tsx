@@ -1,5 +1,5 @@
 import type { DiscoveryRestauranteDetalle } from '@menyu/types'
-import { render, screen } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import { App } from './App'
 import { api } from './services/api'
 import { reiniciarDiscoveryStore } from './store/discoveryStore'
@@ -15,6 +15,14 @@ vi.mock('./services/api', async (importarOriginal) => ({
     sessions: { open: vi.fn() },
   },
 }))
+
+// `vi.mock` se eleva arriba de todo, así que el socket falso se define con `vi.hoisted` para existir antes.
+const { ioFalso, socketFalso } = vi.hoisted(() => {
+  const socketFalso = { on: vi.fn(), off: vi.fn(), emit: vi.fn(), disconnect: vi.fn() }
+  return { socketFalso, ioFalso: vi.fn(() => socketFalso) }
+})
+
+vi.mock('socket.io-client', () => ({ io: ioFalso }))
 
 // La carta usa el IntersectionObserver para saber qué sección se ve; jsdom no lo trae.
 class IntersectionObserverFalso {
@@ -112,5 +120,57 @@ describe('rutas de la app', () => {
       expect(window.history.length).toBe(conLaDireccion)
       expect(conLaDireccion).toBe(entradasAntes + 1)
     })
+  })
+})
+
+describe('SessionGuard: el socket de la mesa', () => {
+  beforeEach(() => {
+    reiniciarDiscoveryStore()
+    sessionStorage.clear()
+    useSessionStore.getState().clear()
+    ioFalso.mockClear()
+    socketFalso.on.mockClear()
+    socketFalso.off.mockClear()
+    socketFalso.emit.mockClear()
+    socketFalso.disconnect.mockClear()
+    vi.mocked(api.discovery.listar).mockReset().mockResolvedValue({ restaurantes: [], ofertas: [] })
+  })
+
+  /** Las opciones con las que se abrió la conexión número `n` (desde 0). */
+  function opcionesDeLaConexion(n: number) {
+    return (ioFalso.mock.calls[n] as unknown as [string, { auth: unknown }])[1]
+  }
+
+  it('con JWT de mesa lo manda en el handshake', async () => {
+    useSessionStore.setState({ restauranteId: 'rest-1', jwt: 'jwt-de-mesa' })
+
+    abrirEn('/')
+    await screen.findByRole('heading', { level: 1, name: 'Descubrí dónde comer' })
+
+    expect(ioFalso).toHaveBeenCalledTimes(1)
+    expect(opcionesDeLaConexion(0)).toEqual({ transports: ['websocket'], auth: { token: 'jwt-de-mesa' } })
+  })
+
+  it('sin JWT conecta igual, sin token', async () => {
+    useSessionStore.setState({ restauranteId: 'rest-1', jwt: null })
+
+    abrirEn('/')
+    await screen.findByRole('heading', { level: 1, name: 'Descubrí dónde comer' })
+
+    expect(ioFalso).toHaveBeenCalledTimes(1)
+    expect(opcionesDeLaConexion(0)).toEqual({ transports: ['websocket'], auth: {} })
+  })
+
+  it('con un JWT nuevo en el mismo restaurante reconecta con ese JWT', async () => {
+    useSessionStore.setState({ restauranteId: 'rest-1', jwt: 'jwt-viejo' })
+    abrirEn('/')
+    await screen.findByRole('heading', { level: 1, name: 'Descubrí dónde comer' })
+
+    // Otra mesa del mismo restaurante: `openSession` deja otro JWT sin que cambie `restauranteId`.
+    act(() => { useSessionStore.setState({ jwt: 'jwt-nuevo' }) })
+
+    expect(socketFalso.disconnect).toHaveBeenCalledTimes(1)
+    expect(ioFalso).toHaveBeenCalledTimes(2)
+    expect(opcionesDeLaConexion(1)).toEqual({ transports: ['websocket'], auth: { token: 'jwt-nuevo' } })
   })
 })

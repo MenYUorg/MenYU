@@ -4,6 +4,7 @@ import { api, PedidoAdmin } from '../../../services/api'
 import { useContextStore } from '../../../store/contextStore'
 import { ClipboardList, Clock, ChevronRight, RefreshCw, AlertTriangle } from 'lucide-react'
 import { APARIENCIA_PEDIDOS, EditarPedidoModal, type ItemEditable } from '@menyu/ui/editar-pedido'
+import { authDelSocket } from '@menyu/auth-client'
 import { urlDelSocket } from '@menyu/ui/socket'
 
 const C = {
@@ -314,9 +315,10 @@ export function PedidosPage() {
 
   useEffect(() => {
     if (!selectedRestauranteId) return
-    // El gateway no autentica la conexión (docs/auth/specs/auth.md, Fuera de alcance): no se le manda ningún token.
+    // El token viaja en el handshake (`auth`) y el gateway lo verifica al unirse a la sala.
     const socket: Socket = io(`${WS_URL}/ws`, {
       transports: ['websocket'],
+      auth: authDelSocket,
     })
     socketRef.current = socket
 

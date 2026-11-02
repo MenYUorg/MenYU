@@ -136,12 +136,12 @@ describe('PedidosPage', () => {
   })
 
   describe('tiempo real', () => {
-    it('se conecta sin token, entra a la sala del restaurante y se desconecta al salir', async () => {
+    it('se conecta con el token, entra a la sala del restaurante y se desconecta al salir', async () => {
       listar.mockResolvedValue([])
       const { unmount } = render(<PedidosPage />)
 
-      // El gateway no autentica la conexión (docs/auth/specs/auth.md, Fuera de alcance).
-      expect(io).toHaveBeenCalledWith(expect.stringMatching(/\/ws$/), { transports: ['websocket'] })
+      // El token viaja en el handshake (`auth`) y el gateway lo verifica al unirse a la sala.
+      expect(io).toHaveBeenCalledWith(expect.stringMatching(/\/ws$/), { transports: ['websocket'], auth: expect.any(Function) })
       recibir('connect')
       expect(socket.emit).toHaveBeenCalledWith('cocina:join', { restauranteId: 'rest-1' })
 
