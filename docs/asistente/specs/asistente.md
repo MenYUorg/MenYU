@@ -257,7 +257,7 @@ Reglas:
 
 **Cómo quedó** (detalle y decisiones en la bitácora; la verificación en el navegador la hace el revisor con la receta de la bitácora):
 - **Datos del plato:** bloque "Datos para el asistente" al final del formulario del plato (`ItemFormModal`, con `DatosAsistenteFields.tsx` y la lógica en `datosAsistente.ts`). Tamaño, temperatura y picante con una opción "Sin dato"; "¿Para cuántas personas?" solo aparece con "Para N personas" (con otro tamaño se vacía y se manda `null`); minutos y personas se validan en el cliente con los topes del backend; etiquetas como chips. Se mandan los nueve campos en cada `PATCH`, con `null` en los vacíos. En el alta van en un `PATCH` después del `POST`; si ese `PATCH` falla, el modal lo avisa y el botón pasa a "Guardar datos del asistente", que reintenta sin volver a crear el plato.
-- **Pantalla "Asistente"** (`/admin/asistente`, OWNER y GERENTE, en la sección Configuración del menú; por restaurante elegido): el interruptor del asistente (guarda al tocarlo, solo el flag), la información del local (horarios, formas de pago y los cinco servicios en tri-estado con radios "Sin dato / Sí / No", "Sin dato" dibujado como un casillero vacío) y el ABM de preguntas frecuentes (alta, edición en el lugar y borrado con confirmación).
+- **Pantalla "Asistente"** (`/admin/asistente`, OWNER y GERENTE, en la sección Configuración del menú; por restaurante elegido): el interruptor del asistente (guarda al tocarlo, solo el flag; **deshabilitado para quien no es OWNER**, con una línea que lo explica, y el estado se sigue mostrando), la información del local (horarios, formas de pago y los cinco servicios en tri-estado con radios "Sin dato / Sí / No", "Sin dato" dibujado como un casillero vacío) y el ABM de preguntas frecuentes (alta, edición en el lugar y borrado con confirmación).
 - **Cliente HTTP:** `api.asistente` en `services/api.ts` (`informacion`, `guardarInformacion`, `preguntas.listar|crear|editar|borrar`) y `UpdateItemInput` con los datos del plato. Los errores muestran el mensaje de la API si es un 4xx con texto (`mensajeDeLaApi`); un 5xx o un error de red, uno propio.
 - Tests: feliz y error de cada formulario (`ItemFormModal.spec.tsx` y `AsistentePage.spec.tsx`).
 
@@ -385,13 +385,14 @@ Reglas:
   - Sin `--correr` solo estima las llamadas y el costo.
   - Espacia las llamadas a una cada 4,5 s (15 RPM).
   - Se niega a correr si haría más de `--max-llamadas` (30), no pisa una corrida que ya existe y corta en el primer error. `--reanudar` corre solo las que faltan y `--resumen` calcula la precisión cuando ya están marcadas.
-- **Corrida con el modelo actual** (`docs/asistente/evaluacion/2026-11-01-google-gemini-3.1-flash-lite.json` y `.csv`): 28 de 28 respondidas, sin errores ni respuestas cortadas.
+- **Línea base, con el set v1** (`docs/asistente/evaluacion/2026-11-01-google-gemini-3.1-flash-lite.json` y `.csv`): 28 de 28 respondidas, sin errores ni respuestas cortadas. **Validada por Lauti**, sin discrepancias con la pre-evaluación: 27/28 (96,4 %).
   - Latencia: mediana de 726 ms hasta el primer texto y de 810 ms la respuesta completa (p90 de 1,3 s).
   - Tokens por pregunta: ~1.260 de entrada y ~33 de salida, ninguno de razonamiento.
   - Costo con facturación: USD 0,36 cada 1.000 preguntas. En el free tier no cobra.
-  - Cada respuesta tiene `correcta` y `nota` en null. Las pre-marca el revisor y las valida Lauti (adaptación 3 de `orquestacion.md`).
+  - Las marcas (`correcta` y `nota`) las pre-marca el revisor y las valida Lauti (adaptación 3 de `orquestacion.md`).
+- **Corrida vigente, con el set v2** (`docs/asistente/evaluacion/2026-11-02-google-gemini-3.1-flash-lite-v2.json` y `.csv`), del cierre de la rama: 28 de 28 respondidas y **28/28 (100 %)** en la pre-evaluación por IA, **pendiente de validación de Lauti**. `fuera_de_tema` pasó de 2/3 a 3/3 con la regla 7 del system prompt, y ninguna otra categoría bajó. ~1.329 tokens de entrada y ~35 de salida; USD 0,38 cada 1.000 preguntas. Su latencia no es comparable con la de la línea base: el proveedor estaba exigido (dos `503 high demand` que obligaron a reanudar).
 - **Elección del modelo: postergada.** Solo hay key de Google, así que la comparación entre proveedores quedó salteada, como permite esta fase. `gemini-3.1-flash-lite` sigue de forma **provisoria**. Para comparar más adelante hay que instalar el paquete del AI SDK del otro proveedor (línea `ai-v6`), cargar su key y sumarlo a `PROVEEDORES` y `PRECIOS_POR_MILLON` del script. Son 28 llamadas por modelo. La elección se toma con la precisión marcada, el costo y la latencia, y cambiar de modelo es editar `ASISTENTE_MODELO`.
-- **System prompt sin cambios:** esperar a que la evaluación esté validada. Si se ajusta, se vuelve a correr el set como regresión.
+- **El system prompt se ajustó en el cierre de la rama** (regla 1 acotada, regla 7 de fuera de tema y el nombre del restaurante fuera de las instrucciones), con el set v2 y su corrida de regresión. Cualquier ajuste siguiente repite el ciclo: set, corrida nueva y comparación contra la vigente.
 
 **Objetivo:** medir el asistente y elegir el modelo definitivo. Si falta tiempo, la **comparación entre proveedores es salteable**: el set y la corrida con el modelo actual quedan igual (sirven como regresión y material para la tesis).
 

@@ -1199,7 +1199,7 @@ Además: `6b49068` (docs de Fase 0) y el commit de este informe. La corrida tuvo
 
 ### Decisiones tomadas por ambigüedad (lista completa en cada entrada de fase)
 
-Las estructurales: `createdAt` en vez de `creadoEn`; cascadas con el restaurante; sin CHECKs de rango en la base (validan los DTOs con `@Min(1)` y topes); `porcionPersonas` se limpia al cambiar el tamaño; GERENTE también administra info local, FAQs y el flag; `PUT` de info local parcial; topes de largo en todos los textos; `ai@6` + `@ai-sdk/google@3` (CommonJS) + `zod` explícito; 429 del proveedor → `503 no_disponible_momentaneamente` leyendo hasta el primer texto; tope de 30 FAQs en el contexto; dirección del restaurante fuera del contexto; límites sin `ThrottlerGuard` (orden de validaciones); `trust proxy` por saltos con `TRUST_PROXY_HOPS`; stream del chat leído a mano (sin `@ai-sdk/react`); contador de visitas para reiniciar la conversación; categoría "acción" en el set; evaluación contra los services (no el endpoint). La decisión del checkpoint de Lauti (sumar el catálogo `ClasificacionDieta` al contexto) está implementada.
+Las estructurales: `createdAt` en vez de `creadoEn`; cascadas con el restaurante; sin CHECKs de rango en la base (validan los DTOs con `@Min(1)` y topes); `porcionPersonas` se limpia al cambiar el tamaño; GERENTE también administra info local y FAQs (**el flag ya no: la sesión de cierre lo dejó solo para el OWNER**); `PUT` de info local parcial; topes de largo en todos los textos; `ai@6` + `@ai-sdk/google@3` (CommonJS) + `zod` explícito; 429 del proveedor → `503 no_disponible_momentaneamente` leyendo hasta el primer texto; tope de 30 FAQs en el contexto; dirección del restaurante fuera del contexto; límites sin `ThrottlerGuard` (orden de validaciones); `trust proxy` por saltos con `TRUST_PROXY_HOPS`; stream del chat leído a mano (sin `@ai-sdk/react`); contador de visitas para reiniciar la conversación; categoría "acción" en el set; evaluación contra los services (no el endpoint). La decisión del checkpoint de Lauti (sumar el catálogo `ClasificacionDieta` al contexto) está implementada.
 
 ### Sugerencias del revisor no aplicadas (detalle en cada cierre)
 
@@ -1223,7 +1223,7 @@ Las estructurales: `createdAt` en vez de `creadoEn`; cascadas con el restaurante
 
 ## Cierre de la rama — set v2 y corrida de regresión (2026-11-01)
 
-Tercer commit de la sesión de cierre: la regla 7 del system prompt pedía re-correr el set como regresión, y los criterios de `fuera_de_tema` quedaron alineados con ella.
+Cuarto commit de la sesión de cierre: la regla 7 del system prompt pedía re-correr el set como regresión, y los criterios de `fuera_de_tema` quedaron alineados con ella.
 
 **Antes de empezar, Lauti validó la línea base** (pendiente 1 del informe final): `2026-11-01-google-gemini-3.1-flash-lite.json` pasó a `estadoDeLaEvaluacion`: "validado por Lauti el 2026-11-01; 0 discrepancias con la pre-evaluación del revisor (27/28 = 96,4 %)". Esa edición es de Lauti, no de esta sesión; va commiteada acá porque es del mismo archivo de evaluación.
 
@@ -1281,3 +1281,45 @@ Salida del modo estimación: **28 llamadas** (28 preguntas × 1 modelo, `google:
 **Nada empeoró.** El riesgo que había que vigilar era que la regla 7 o la regla 1 acotada le quitaran el "consultale al mozo" a lo que sí es un dato faltante: las 4 de `dato_faltante` y las 4 de `celiaquia` siguen derivando al mozo y siguen en 4/4. Las notas que quedan son de detalle (una advertencia general antes de la respuesta puntual en `celiaquia-milanesa-no-declarada`, una respuesta genérica en `celiaquia-garantia-contaminacion`, saludos y opiniones de más en dos respuestas).
 
 **Fuera de alcance, anotado y no implementado:** `PrismaService` le pasa a Prisma un pool propio que `$disconnect()` no cierra, así que el proceso del e2e queda vivo 10 s más ("Jest did not exit"); el arreglo sugerido es `new PrismaPg(pool, { disposeExternalPool: true })`.
+
+---
+
+## Cierre de la rama (2026-11-01)
+
+Las cinco decisiones que el informe final de la corrida dejó abiertas "para Lauti" están tomadas e implementadas. La rama queda lista para el PR, que abre Lauti.
+
+### Los cinco commits
+
+| # | Commit | Qué cierra |
+|---|---|---|
+| 1 | `6194891` | **El switch `asistenteHabilitado`, solo del OWNER** (sugerencia 1 del informe). `InformacionLocalService` chequea el campo con `rolesEnRestaurante` y responde 403 con mensaje propio, igual que `direccion` en `RestauranteService`; la ruta sigue pidiendo `ADMINISTRACION`, así que el GERENTE administra el resto. En web-admin el interruptor va deshabilitado para quien no es OWNER, con una línea que lo explica, y el estado se sigue mostrando. +1 test por lado. |
+| 2 | `5b9b7a0` | **El contexto del asistente = los platos que muestra la carta pública** (sugerencia 3). La regla (categoría propia ∨ recomendado ∨ con descuento) quedó en `common/carta-publica.ts`, con el precedente de `restaurante-disponible.ts`; el filtro va en memoria, donde `seccionDeLaCarta` ya mira la categoría, así la regla no queda escrita dos veces. `MenuService` apunta a ella. +1 test. |
+| 3 | `9a52a94` | **Regla 7 de fuera de tema, regla 1 acotada y el nombre del restaurante fuera de las instrucciones** (sugerencias 2 y 5). `armarSystemPrompt(contexto)` ya no recibe el nombre: nada que cargue el dueño se concatena con las reglas. |
+| 4 | `6a40199` | **Set v2 y corrida de regresión** (sugerencia 5), más el endurecimiento del script y el Gemini simulado versionado (observaciones 2 y 3 del cierre de la Fase 7). Detalle en la entrada de arriba. |
+| 5 | `416ae9d` | **Docs menores** (observación 6): el seed real en el README y en `datos-de-prueba-local.md`, las rutas del asistente en la matriz por ruta de `auth.md` (con el flag solo-OWNER y el chat como ruta pública, fuera de la matriz) y el comentario de la `key` de `MenuView`. |
+
+Más este commit, con el cierre y las correcciones de documentación que pidió el revisor.
+
+### Veredicto del revisor: APROBADA CON OBSERVACIONES, sin bloqueantes
+
+Verificó, con **0 llamadas reales al modelo**: el 403 del flag con curl en 12 combinaciones de cuenta y cuerpo (incluido que un `PUT` rechazado no cambia nada y que la cuenta con dos roles recibe 200 donde es OWNER y 403 donde es GERENTE); el interruptor deshabilitado en el navegador, en escritorio y en móvil, con el click y el teclado bloqueados y sin `PUT`; la equivalencia del contexto con la carta **contra la base real**, en siete escenarios sobre Rabas, en una transacción revertida; que el bloque de instrucciones del prompt real no contiene el nombre del restaurante ni `null`, y que la spec lo fija palabra por palabra igual que el código; que la corrida v2 es reproducible (sus dos hashes coinciden con el set y el prompt de hoy) y que sus 28 marcas son defendibles; y las guardas del script con el preload versionado. Tests del CI: typecheck 7/7, lint 5/5, test 2.075 (36 salteados, 89 suites), scripts 78/78, e2e 13/13, build 6/6. El seed quedó idéntico (diff vacío tres veces) y `registro_asistente` en sus 13 filas.
+
+**Observaciones aplicadas en este commit:** la evaluación vigente y los commits 2 y 3 en el `CLAUDE.md`; la Fase 7 de la spec, que apuntaba solo a la corrida vieja y decía "system prompt sin cambios"; la Fase 3, que no mencionaba el interruptor deshabilitado; el README, que decía "descripción en 9 de los 10 ítems" cuando son 8 (Rabas y Agua Mineral quedan sin ella); y en esta bitácora, el numeral del commit y la decisión del informe final que esta sesión revirtió.
+
+**Observaciones no aplicadas, para Lauti:**
+1. **Nada impide que `MenuService` y `carta-publica.ts` vuelvan a divergir salvo el comentario:** el spec del contexto mockea Prisma, así que prueba la regla pero no las consultas de la carta. Hoy coinciden (el revisor lo comprobó contra la base). Una red sería un test que compare los dos conjuntos sobre los mismos datos.
+2. **El interruptor deshabilitado se dibuja con `opacity: 0.4`:** prendido-pero-deshabilitado queda en naranja pálido. Se distingue del apagado y abajo está el texto explícito, así que no es ambiguo; queda por si se quiere más contraste.
+3. Las dos marcas más opinables de la v2, las dos de celiaquía, están anotadas en su `nota`: `celiaquia-garantia-contaminacion` responde genérico (no nombra el bife ni dice "no puedo garantizar") y `celiaquia-milanesa-no-declarada` parafrasea la FAQ en vez de repetirla textual, que es lo que pide la regla 4.
+
+### Llamadas reales al modelo
+
+**30 de las 40 del tope de la sesión**: las 28 de la corrida del set v2 más 2 intentos perdidos por los `503 high demand` de Google. El revisor usó 0.
+
+### Lo que queda para Lauti
+
+1. **Validar las 28 marcas de la corrida v2** (`docs/asistente/evaluacion/2026-11-02-google-gemini-3.1-flash-lite-v2.json`); las dudosas están en el punto 3 de arriba. La línea base ya la validó.
+2. **Abrir el PR de `feat/asistente` y mergearlo.** El CI corre el e2e con un Postgres limpio y el quality gate de SonarCloud, que no se puede evaluar en local.
+3. **Probar en staging**, incluido el chequeo de `X-Forwarded-For` detrás del edge de Railway (receta en la entrada de la Fase 5) **antes** de producción.
+4. **Cargar las `ASISTENTE_*` y la key en Railway de producción** cuando toque (la key `menyu-prod` ya existe).
+5. **Prender el flag del restaurante del piloto** desde web-admin (ahora, con una cuenta OWNER).
+6. Limpieza opcional de la base local: los comensales "Revisor*" y el `llamado_mozo` pendiente que dejaron las revisiones.

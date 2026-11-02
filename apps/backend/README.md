@@ -62,8 +62,8 @@ recomendados.
 Datos del asistente de mesa: Restaurante Seed tiene el asistente **prendido**,
 su información del local cargada (horarios, formas de pago y los servicios,
 con el estacionamiento sin declarar, para probar el "no tengo ese dato"), 5
-preguntas frecuentes, descripción en 9 de los 10 ítems y los campos del plato
-en 9 (Rabas queda sin nada a propósito). Restaurante Seed 2 lo tiene apagado.
+preguntas frecuentes, descripción en 8 de los 10 ítems (Rabas y Agua Mineral
+quedan sin ella) y los campos del plato en 9 (Rabas queda sin nada a propósito). Restaurante Seed 2 lo tiene apagado.
 El set de prueba de `docs/asistente/set-prueba.json` depende de estos datos.
 
 El seed es idempotente (upserts con IDs fijos), se puede correr las veces que
