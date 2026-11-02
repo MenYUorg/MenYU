@@ -132,6 +132,7 @@ describe('MenuService', () => {
         nombreSeccionRecomendados: 'Recomendaciones del chef',
         direccion: 'Av. Siempreviva 742',
         logoUrl: null,
+        asistenteHabilitado: false,
       })
       expect(result.categorias).toEqual([])
     })
@@ -190,9 +191,22 @@ describe('MenuService', () => {
             direccion: true,
             logoUrl: true,
             marca: { select: { logoUrl: true, activo: true } },
+            informacionLocal: { select: { asistenteHabilitado: true } },
           },
         })
       })
+    })
+
+    it.each([
+      ['con el asistente prendido', { asistenteHabilitado: true }, true],
+      ['con el asistente apagado', { asistenteHabilitado: false }, false],
+      ['sin información del local cargada', null, false],
+    ])('%s: restaurante.asistenteHabilitado lo refleja (web-cliente muestra o no el botón)', async (_caso, informacionLocal, esperado) => {
+      mockPrisma.restaurante.findUnique.mockResolvedValue({ ...RESTAURANTE, informacionLocal })
+
+      const result = await service.getMenuPublico('rest-1', {})
+
+      expect(result.restaurante.asistenteHabilitado).toBe(esperado)
     })
 
     // 2. Todos los ítems de una categoría aparecen en itemsDirectos

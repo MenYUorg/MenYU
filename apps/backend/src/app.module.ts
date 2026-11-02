@@ -10,6 +10,9 @@ import { MesasModule } from './mesas/mesas.module'
 import { IngredientesModule } from './ingredientes/ingredientes.module'
 import { CategoriasModule } from './categorias/categorias.module'
 import { ItemsModule } from './items/items.module'
+import { InformacionLocalModule } from './informacion-local/informacion-local.module'
+import { PreguntasFrecuentesModule } from './preguntas-frecuentes/preguntas-frecuentes.module'
+import { AsistenteModule } from './asistente/asistente.module'
 import { SessionsModule } from './sessions/sessions.module'
 import { MenuModule } from './menu/menu.module'
 import { GatewayModule } from './gateway/gateway.module'
@@ -38,6 +41,9 @@ import { RootModule } from './root/root.module'
     IngredientesModule,
     CategoriasModule,
     ItemsModule,
+    InformacionLocalModule,
+    PreguntasFrecuentesModule,
+    AsistenteModule,
     SessionsModule,
     MenuModule,
     GatewayModule,

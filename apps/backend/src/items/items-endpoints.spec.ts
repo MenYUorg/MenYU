@@ -150,6 +150,48 @@ describe('endpoints de ítems', () => {
     })
   })
 
+  describe('PATCH /items/:id: los datos para el asistente', () => {
+    it('llegan al service tal cual (con null para borrar) y los textos sin espacios de más', async () => {
+      const body = {
+        tamanioPorcion: 'PARA_N_PERSONAS',
+        porcionPersonas: 2,
+        porcionDetalle: '  300 g  ',
+        temperatura: 'FRIO',
+        nivelPicante: 'ALTO',
+        acompanamiento: '',
+        tiempoPreparacionMin: 15,
+        etiquetasDietarias: ['VEGANO', 'SIN_LACTOSA'],
+        infoAdicional: null,
+      }
+
+      const res = await api.pedir('patch', '/items/item-1', { cuenta: CUENTAS.OWNER_A, body })
+
+      expect(res.status).toBe(200)
+      expect(items.update).toHaveBeenCalledWith(
+        'item-1',
+        { ...body, porcionDetalle: '300 g', acompanamiento: null },
+        CUENTAS.OWNER_A,
+      )
+    })
+
+    it.each([
+      ['un tamaño de porción que no existe', { tamanioPorcion: 'XL' }],
+      ['una temperatura que no existe', { temperatura: 'TIBIO' }],
+      ['un nivel de picante que no existe', { nivelPicante: 'EXTREMO' }],
+      ['una etiqueta que no existe', { etiquetasDietarias: ['VEGANO', 'KETO'] }],
+      ['etiquetas que no son una lista', { etiquetasDietarias: 'VEGANO' }],
+      ['personas en 0', { porcionPersonas: 0 }],
+      ['personas con decimales', { porcionPersonas: 1.5 }],
+      ['tiempo de preparación en 0', { tiempoPreparacionMin: 0 }],
+      ['tiempo de preparación como texto', { tiempoPreparacionMin: '15' }],
+    ])('%s → 400 y no llega al service', async (_caso, body) => {
+      const res = await api.pedir('patch', '/items/item-1', { cuenta: CUENTAS.OWNER_A, body })
+
+      expect(res.status).toBe(400)
+      expect(items.update).not.toHaveBeenCalled()
+    })
+  })
+
   describe('PUT /items/:id/descuento: validación del body', () => {
     it.each([
       ['precio con decimales', { precioDescuento: 1199.5 }],

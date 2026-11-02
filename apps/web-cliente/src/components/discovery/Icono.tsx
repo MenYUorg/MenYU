@@ -42,6 +42,26 @@ const TRAZOS = {
       <path d="M21 21l-4.3-4.3" />
     </>
   ),
+  // Los del asistente de la carta (components/asistente).
+  globo: (
+    <>
+      <path d="M21 11.5a8.4 8.4 0 0 1-12.2 7.5L3 20.5l1.6-5.3A8.5 8.5 0 1 1 21 11.5z" />
+      <path d="M8.5 11.5h.01M12.5 11.5h.01M16.5 11.5h.01" />
+    </>
+  ),
+  enviar: (
+    <>
+      <path d="M12 19V5" />
+      <path d="M5 12l7-7 7 7" />
+    </>
+  ),
+  cerrar: <path d="M18 6L6 18M6 6l12 12" />,
+  reintentar: (
+    <>
+      <path d="M3 12a9 9 0 1 0 2.6-6.4L3 8" />
+      <path d="M3 3v5h5" />
+    </>
+  ),
 } as const
 
 export type NombreIcono = keyof typeof TRAZOS
