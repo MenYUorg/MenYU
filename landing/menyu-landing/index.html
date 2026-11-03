@@ -1,0 +1,440 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MenYU — La mesa no espera a nadie</title>
+<meta name="description" content="Tus comensales escanean el QR, ven la carta, piden y pagan desde su teléfono. La comanda entra sola a cocina y el mozo queda libre para atender.">
+
+<link rel="icon" type="image/png" href="img/favicon-64.png">
+<link rel="apple-touch-icon" href="img/apple-touch-icon.png">
+
+<link rel="preload" href="fonts/archivo-var.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/inter-var.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="styles.css">
+
+<meta property="og:title" content="MenYU — La mesa no espera a nadie">
+<meta property="og:description" content="Carta, pedido y pago desde el teléfono del comensal. La comanda entra sola a cocina.">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="es_AR">
+</head>
+
+<body>
+<a class="salto-contenido" href="#contenido">Saltar al contenido</a>
+
+<!-- ======================= navegación ======================= -->
+<header class="nav" id="nav">
+  <div class="contenedor nav__interior">
+    <a class="nav__logo" href="#" aria-label="MenYU — inicio">
+      <img src="img/logo.webp" width="760" height="151" alt="MenYU" style="height:26px;width:auto">
+    </a>
+    <nav class="nav__links" aria-label="Secciones">
+      <a class="nav__link" href="#como-funciona">Cómo funciona</a>
+      <a class="nav__link" href="#cocina">Cocina</a>
+      <a class="nav__link" href="#panel">Panel</a>
+      <a class="nav__link" href="#asistente">Asistente</a>
+    </nav>
+    <a class="btn btn--primario nav__cta" href="#contacto">Quiero MenYU</a>
+  </div>
+</header>
+
+<main id="contenido">
+
+<!-- ======================= hero ======================= -->
+<section class="hero">
+  <div class="contenedor hero__grid">
+
+    <div>
+      <p class="op rotulo">Para restaurantes</p>
+      <h1>La mesa<br>no espera<br><em>a nadie</em></h1>
+      <p class="hero__bajada">
+        Tus comensales escanean el QR, ven la carta, piden y pagan desde su teléfono.
+        <strong>El mozo atiende, no toma nota.</strong>
+      </p>
+      <div class="btn-grupo">
+        <a class="btn btn--primario" href="#contacto">Quiero MenYU en mi restaurante</a>
+        <a class="btn btn--secundario" href="#como-funciona">Ver cómo funciona</a>
+      </div>
+      <p class="hero__pie">Sin app para descargar · Sin hardware nuevo · Cobrás con tu cuenta</p>
+    </div>
+
+    <!-- panel en vivo: la secuencia real del producto -->
+    <div class="panel-vivo sobre-navy" id="panel-vivo">
+      <div class="panel-vivo__barra">
+        <span class="op panel-vivo__mesa"><span class="punto-vivo" aria-hidden="true"></span> Mesa 7 · en vivo</span>
+        <span class="op cronometro" id="cronometro" aria-hidden="true">00:00</span>
+      </div>
+
+      <ol class="flujo" id="flujo">
+        <li class="paso" data-estado="espera">
+          <span class="paso__marca" aria-hidden="true">
+            <svg viewBox="0 0 16 16" fill="none" stroke="#ED6A4F" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5l3.2 3.2L13 5"/></svg>
+          </span>
+          <span>
+            <span class="paso__titulo">Escanea el QR de la mesa</span>
+            <span class="paso__detalle">Se abre la sesión. No descarga nada.</span>
+          </span>
+        </li>
+        <li class="paso" data-estado="espera">
+          <span class="paso__marca" aria-hidden="true">
+            <svg viewBox="0 0 16 16" fill="none" stroke="#ED6A4F" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5l3.2 3.2L13 5"/></svg>
+          </span>
+          <span>
+            <span class="paso__titulo">Arma el pedido</span>
+            <span class="paso__detalle">Elige, saca ingredientes, deja una nota.</span>
+          </span>
+        </li>
+        <li class="paso" data-estado="espera">
+          <span class="paso__marca" aria-hidden="true">
+            <svg viewBox="0 0 16 16" fill="none" stroke="#ED6A4F" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5l3.2 3.2L13 5"/></svg>
+          </span>
+          <span>
+            <span class="paso__titulo">La comanda entra a cocina</span>
+            <span class="paso__detalle">Aparece en la pantalla en el momento.</span>
+          </span>
+        </li>
+        <li class="paso" data-estado="espera">
+          <span class="paso__marca" aria-hidden="true">
+            <svg viewBox="0 0 16 16" fill="none" stroke="#ED6A4F" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5l3.2 3.2L13 5"/></svg>
+          </span>
+          <span>
+            <span class="paso__titulo">Paga desde la mesa</span>
+            <span class="paso__detalle">Mercado Pago. No pide la cuenta.</span>
+          </span>
+        </li>
+      </ol>
+    </div>
+
+  </div>
+</section>
+
+<!-- ======================= las cuatro esperas ======================= -->
+<section class="seccion seccion--fondo">
+  <div class="contenedor">
+    <p class="op rotulo">Dónde se va el tiempo</p>
+    <h2 class="medida">Cuatro esperas que nadie extraña</h2>
+    <p class="bajada" style="margin-top:var(--s-5)">
+      No hace falta un estudio para saber dónde se traba una mesa. Lo viviste de los dos lados del mostrador.
+    </p>
+
+    <ul class="esperas" id="esperas">
+      <li class="espera"><span class="op espera__num">01</span><span class="espera__texto">Esperar a que traigan la carta</span></li>
+      <li class="espera"><span class="op espera__num">02</span><span class="espera__texto">Esperar a que vengan a tomar el pedido</span></li>
+      <li class="espera"><span class="op espera__num">03</span><span class="espera__texto">Esperar a que traigan la cuenta</span></li>
+      <li class="espera"><span class="op espera__num">04</span><span class="espera__texto">Esperar a que vuelvan con el posnet</span></li>
+    </ul>
+
+    <p class="esperas__cierre medida">
+      MenYU saca las cuatro. El mozo queda para lo que de verdad necesita una persona.
+    </p>
+  </div>
+</section>
+
+<!-- ======================= cómo funciona ======================= -->
+<section class="seccion" id="como-funciona">
+  <div class="contenedor">
+    <p class="op rotulo">Del lado del comensal</p>
+    <h2 class="medida">Cuatro pasos, todos desde su teléfono</h2>
+
+    <div class="pasos-grid">
+
+      <article class="tarjeta-paso tarjeta-paso--ancha sobre-navy" style="padding:var(--s-6)">
+        <div class="tarjeta-paso__cuerpo">
+          <p class="op rotulo" style="margin-bottom:var(--s-2)">Paso 01</p>
+          <h3>Escanea el QR de su mesa</h3>
+          <p>
+            El QR de la mesa se escanea desde dentro de MenYU y no es un link: es un identificador interno.
+            Eso impide que alguien abra la mesa de otro desde afuera. Si el escáner falla, hay un PIN de respaldo.
+          </p>
+          <p style="color:#9DA2B8">
+            El de acá al lado es distinto — te lleva a la home pública, para que veas el producto desde tu teléfono.
+          </p>
+        </div>
+        <div>
+          <div class="qr-marco">
+            <img src="img/qr-mesa.svg" width="152" height="152" alt="Código QR que lleva a mesa.menyu-app.com">
+          </div>
+          <p class="op qr-pie">Probalo</p>
+        </div>
+      </article>
+
+      <article class="tarjeta-paso">
+        <p class="op rotulo" style="margin-bottom:0">Paso 02</p>
+        <h3>Arma el pedido a su gusto</h3>
+        <p>Saca el jamón, pide el aderezo aparte, suma una nota. Las modificaciones viajan con el plato hasta la pantalla de cocina, sin que nadie las transcriba.</p>
+      </article>
+
+      <article class="tarjeta-paso">
+        <p class="op rotulo" style="margin-bottom:0">Paso 03</p>
+        <h3>Llama al mozo cuando quiere</h3>
+        <p>Un botón. El llamado le llega al salón en el momento, con el número de mesa. Nadie levanta la mano ni busca una mirada.</p>
+      </article>
+
+      <article class="tarjeta-paso">
+        <p class="op rotulo" style="margin-bottom:0">Paso 04</p>
+        <h3>Paga y se va</h3>
+        <p>Mercado Pago, cobrando a la cuenta del restaurante. Al confirmarse el pago, la sesión de la mesa se cierra sola.</p>
+      </article>
+
+    </div>
+  </div>
+</section>
+
+<!-- ======================= cocina ======================= -->
+<section class="sobre-navy" id="cocina">
+  <div class="contenedor cocina-grid">
+
+    <div>
+      <p class="op rotulo">En la cocina</p>
+      <h2>La comanda entra sola, y todos ven lo mismo</h2>
+      <p class="bajada" style="margin-top:var(--s-5)">
+        El pedido aparece en la pantalla de cocina en el instante en que el comensal lo confirma, con las
+        modificaciones tal como las eligió. El estado lo cambia quien cocina, y ese cambio se ve al mismo
+        tiempo en el salón y en el teléfono de la mesa.
+      </p>
+      <p class="bajada" style="margin-top:var(--s-4)">
+        Nadie vuelve a preguntar si ya salió.
+      </p>
+    </div>
+
+    <div>
+      <div class="comanda" id="comanda">
+        <div class="comanda__cabecera">
+          <span class="op comanda__mesa">Mesa 7</span>
+          <span class="op comanda__hora">21:14</span>
+        </div>
+
+        <ul class="comanda__items">
+          <li class="comanda__item">
+            <span class="op comanda__cant">2×</span>
+            <span>
+              <span class="comanda__nombre">Milanesa napolitana</span>
+              <span class="comanda__mod">sin jamón · <span>papas en lugar de puré</span></span>
+            </span>
+          </li>
+          <li class="comanda__item">
+            <span class="op comanda__cant">1×</span>
+            <span>
+              <span class="comanda__nombre">Ensalada César</span>
+              <span class="comanda__mod">sin croutons · <span>aderezo aparte</span></span>
+            </span>
+          </li>
+          <li class="comanda__item">
+            <span class="op comanda__cant">2×</span>
+            <span><span class="comanda__nombre">Agua con gas</span></span>
+          </li>
+        </ul>
+
+        <div class="comanda__pie">
+          <span class="op estado" data-estado="PENDIENTE" id="estado-comanda" role="status">Pendiente</span>
+          <span class="op comanda__hora" id="estado-hora">hace 0 s</span>
+        </div>
+      </div>
+
+      <div class="aviso-mozo" id="aviso-mozo">
+        <span class="punto-vivo" aria-hidden="true"></span>
+        <span class="op">Mesa 7 llama al mozo</span>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ======================= panel del dueño ======================= -->
+<section class="seccion" id="panel">
+  <div class="contenedor panel-grid">
+
+    <div>
+      <p class="op rotulo">Del lado del restaurante</p>
+      <h2>Lo cambiás vos, no llamás a nadie</h2>
+      <p class="bajada" style="margin-top:var(--s-5)">
+        Subiste mal un precio un viernes a las nueve de la noche. En MenYU lo arreglás vos, desde el panel,
+        y la carta de todas las mesas cambia en el momento.
+      </p>
+    </div>
+
+    <dl class="lista-op">
+      <div><dt class="op lista-op__clave">Carta</dt><dd class="lista-op__valor">Categorías, platos, ingredientes y fotos. Lo que publicás es exactamente lo que ve la mesa.</dd></div>
+      <div><dt class="op lista-op__clave">Precios y descuentos</dt><dd class="lista-op__valor">Descuento por plato, en monto o en porcentaje. Se aplica en la carta y en el cobro, sin recalcular nada a mano.</dd></div>
+      <div><dt class="op lista-op__clave">Mesas y QR</dt><dd class="lista-op__valor">Alta de mesas con su QR y un PIN de respaldo para cuando el escáner no coopera.</dd></div>
+      <div><dt class="op lista-op__clave">Personal y permisos</dt><dd class="lista-op__valor">Dueño, gerente, jefe de salón, mozo y cocina. Cada uno entra por invitación y solo a lo suyo.</dd></div>
+      <div><dt class="op lista-op__clave">Marca y sucursales</dt><dd class="lista-op__valor">Varios locales bajo una misma marca, cada uno con su logo, su dirección y su carta.</dd></div>
+      <div><dt class="op lista-op__clave">Reportes</dt><dd class="lista-op__valor">Lo vendido, por mesa y por quién cobró.</dd></div>
+    </dl>
+
+  </div>
+</section>
+
+<!-- ======================= asistente ======================= -->
+<section class="seccion seccion--fondo" id="asistente">
+  <div class="contenedor panel-grid">
+
+    <div>
+      <p class="op rotulo">Asistente de mesa</p>
+      <h2>Las preguntas de siempre, sin llamar a nadie</h2>
+      <p class="bajada" style="margin-top:var(--s-5)">
+        ¿Lleva gluten? ¿Alcanza para dos? ¿Cuánto tarda? El asistente responde desde tu carta y los datos
+        que cargaste vos — y solo desde ahí. No inventa platos ni promete lo que no ofrecés.
+      </p>
+      <p class="bajada" style="margin-top:var(--s-4)">
+        Si no tiene el dato, lo dice y deriva al mozo. Responde: no toma pedidos ni toca la mesa.
+      </p>
+    </div>
+
+    <div class="chat">
+      <p class="burbuja burbuja--persona">¿La milanesa napolitana alcanza para dos?</p>
+      <p class="burbuja burbuja--asistente">Sí. Está cargada como <strong>porción para 2 personas</strong> y viene con guarnición a elección. Si querés, se puede pedir sin jamón.</p>
+      <p class="burbuja burbuja--persona">¿Y cuánto tarda?</p>
+      <p class="burbuja burbuja--asistente">Unos <strong>20 minutos</strong>. Si tenés apuro, los platos fríos de la carta salen en bastante menos.</p>
+    </div>
+
+  </div>
+</section>
+
+<!-- ======================= discovery ======================= -->
+<section class="seccion">
+  <div class="contenedor">
+    <p class="op rotulo">Antes de que elijan</p>
+    <h2 class="medida">Tus ofertas, donde la gente busca dónde comer</h2>
+    <p class="bajada" style="margin-top:var(--s-5)">
+      MenYU tiene una home pública donde se busca restaurante y se ven los platos en oferta del día.
+      Si cargás un descuento en el panel, aparece ahí solo, sin que tengas que publicarlo en ningún otro lado.
+    </p>
+
+    <div class="discovery-grid">
+      <article class="ficha">
+        <span class="op ficha__descuento">−25 %</span>
+        <span class="ficha__plato">Milanesa napolitana</span>
+        <span class="ficha__precios"><span class="ficha__antes">$12.000</span><span class="ficha__ahora">$9.000</span></span>
+        <span class="ficha__local">Restaurante de ejemplo · Nueva Córdoba</span>
+      </article>
+      <article class="ficha">
+        <span class="op ficha__descuento">−15 %</span>
+        <span class="ficha__plato">Risotto de hongos</span>
+        <span class="ficha__precios"><span class="ficha__antes">$14.000</span><span class="ficha__ahora">$11.900</span></span>
+        <span class="ficha__local">Restaurante de ejemplo · Güemes</span>
+      </article>
+      <article class="ficha">
+        <span class="op ficha__descuento">−30 %</span>
+        <span class="ficha__plato">Tabla para compartir</span>
+        <span class="ficha__precios"><span class="ficha__antes">$20.000</span><span class="ficha__ahora">$14.000</span></span>
+        <span class="ficha__local">Restaurante de ejemplo · Centro</span>
+      </article>
+    </div>
+    <p class="op" style="margin-top:var(--s-4);color:var(--borde)">Ejemplo de cómo se ve una oferta en la home pública</p>
+  </div>
+</section>
+
+<!-- ======================= lo que no te pedimos ======================= -->
+<section class="seccion seccion--fondo">
+  <div class="contenedor">
+    <p class="op rotulo">Sin letra chica</p>
+    <h2 class="medida">Lo que no te pedimos</h2>
+
+    <ul class="negaciones">
+      <li class="negacion">
+        <span class="negacion__cruz" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 5l10 10M15 5L5 15"/></svg></span>
+        <div><h3>Que descarguen una app</h3><p>MenYU corre en el navegador del teléfono. El comensal escanea y ya está adentro.</p></div>
+      </li>
+      <li class="negacion">
+        <span class="negacion__cruz" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 5l10 10M15 5L5 15"/></svg></span>
+        <div><h3>Que compres hardware</h3><p>No hay tablets, ni comanderas, ni una impresora nueva. Con lo que ya tenés alcanza.</p></div>
+      </li>
+      <li class="negacion">
+        <span class="negacion__cruz" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 5l10 10M15 5L5 15"/></svg></span>
+        <div><h3>Que cambies cómo cobrás</h3><p>El dinero entra a tu propia cuenta de Mercado Pago, con tu vinculación. MenYU no toca la plata.</p></div>
+      </li>
+      <li class="negacion">
+        <span class="negacion__cruz" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 5l10 10M15 5L5 15"/></svg></span>
+        <div><h3>Que eches a nadie</h3><p>El mozo deja de tomar nota y de ir y volver con el posnet. Sigue atendiendo, que es lo único que acá no se automatiza.</p></div>
+      </li>
+    </ul>
+  </div>
+</section>
+
+<!-- ======================= contacto ======================= -->
+<section class="seccion seccion--calida" id="contacto">
+  <div class="contenedor cta-grid">
+
+    <div>
+      <p class="op rotulo">Primera etapa</p>
+      <h2>Contanos de tu restaurante</h2>
+      <p class="bajada" style="margin-top:var(--s-5)">
+        Estamos sumando locales para la primera etapa. Dejanos tus datos y coordinamos una demo
+        con tu propia carta cargada, para que veas cómo queda antes de decidir nada.
+      </p>
+    </div>
+
+    <!-- El destino se cambia solo acá, en el action. -->
+    <form class="form" id="form-contacto" action="#" method="post">
+      <div class="campo">
+        <label for="nombre">Tu nombre</label>
+        <input type="text" id="nombre" name="nombre" autocomplete="name" required>
+      </div>
+      <div class="campo">
+        <label for="restaurante">Restaurante</label>
+        <input type="text" id="restaurante" name="restaurante" autocomplete="organization" required>
+      </div>
+      <div class="campo">
+        <label for="email">Email</label>
+        <input type="email" id="email" name="email" autocomplete="email" required>
+      </div>
+      <div class="campo">
+        <label for="telefono">Teléfono <span style="color:var(--gris);font-weight:400">(opcional)</span></label>
+        <input type="tel" id="telefono" name="telefono" autocomplete="tel">
+      </div>
+      <div class="campo">
+        <label for="mensaje">Contanos algo del local <span style="color:var(--gris);font-weight:400">(opcional)</span></label>
+        <textarea id="mensaje" name="mensaje" placeholder="Cuántas mesas, qué tipo de servicio, qué te gustaría resolver."></textarea>
+      </div>
+      <button class="btn btn--primario" type="submit" style="align-self:flex-start">Enviar</button>
+      <p class="form__nota">Te escribimos nosotros. No compartimos tus datos con nadie.</p>
+    </form>
+
+  </div>
+</section>
+
+</main>
+
+<!-- ======================= pie ======================= -->
+<footer class="pie sobre-navy">
+  <div class="contenedor">
+    <div class="pie__grid">
+
+      <div class="pie__logo">
+        <img src="img/logo-oscuro.webp" width="760" height="253" alt="MenYU" style="height:30px;width:auto">
+        <p style="font-size:var(--t-small);line-height:1.6;max-width:38ch">
+          Carta, pedido y pago desde la mesa. La comanda entra sola a cocina.
+        </p>
+      </div>
+
+      <div>
+        <h4>Entrar</h4>
+        <ul>
+          <li><a href="https://mesa.menyu-app.com">Comensales</a></li>
+          <li><a href="https://admin.menyu-app.com">Panel del restaurante</a></li>
+          <li><a href="https://staff.menyu-app.com">Salón y cocina</a></li>
+          <li><a href="https://auth.menyu-app.com/privacidad">Política de privacidad</a></li>
+        </ul>
+      </div>
+
+      <div>
+        <h4>Contacto</h4>
+        <ul>
+          <li><a href="#contacto">Pedir una demo</a></li>
+          <li><a href="mailto:hola@menyu-app.com">hola@menyu-app.com</a></li>
+        </ul>
+      </div>
+
+    </div>
+
+    <p class="pie__academico">
+      MenYU es el proyecto integrador de la carrera de Ingeniería en Sistemas de la
+      Universidad Católica de Córdoba (ODS390 · 2026), desarrollado por De Marcos, Ojeda y Strumia Carrara.
+    </p>
+  </div>
+</footer>
+
+<script src="main.js" defer></script>
+</body>
+</html>
