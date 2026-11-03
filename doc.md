@@ -591,22 +591,6 @@ If the restaurant is in `seguro` mode and a session already exists, `codigoSesio
 
 ---
 
-### `POST /api/sessions/close`
-
-Close the active session for the authenticated client.
-
-**Auth required:** the table-session token (`Bearer <jwt>` from `POST /api/sessions/open`)
-
-**Responses**
-
-| Status | Description |
-|---|---|
-| 200 | Session closed — returns `{ ok: true }` |
-| 400 | Session already closed |
-| 401 | Missing or invalid table-session token |
-
----
-
 ## Menú público — `/api/menu`
 
 No authentication required.

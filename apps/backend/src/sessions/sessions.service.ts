@@ -267,27 +267,6 @@ export class SessionsService {
     }
   }
 
-  async close(payload: SessionJwtPayload): Promise<{ ok: boolean }> {
-    const sesion = await this.prisma.sesionMesa.findUnique({ where: { id: payload.sesionId } })
-    if (!sesion) throw new NotFoundException('Sesión no encontrada')
-    if (sesion.estado !== 'activa') throw new BadRequestException('La sesión ya está cerrada')
-
-    await this.prisma.$transaction([
-      this.prisma.sesionMesa.update({
-        where: { id: payload.sesionId },
-        data: { estado: 'cerrada', cerradaEn: new Date() },
-      }),
-      this.prisma.mesa.update({
-        where: { id: payload.mesaId },
-        data: { estado: 'libre' },
-      }),
-    ])
-
-    this.gateway.emitSesionCerrada(payload.restauranteId, payload.sesionId)
-
-    return { ok: true }
-  }
-
   async cerrarMesaAdmin(mesaId: string, usuario: UsuarioAutenticado): Promise<{ ok: boolean }> {
     const mesa = await this.prisma.mesa.findUnique({ where: { id: mesaId } })
     if (!mesa) throw new NotFoundException('Mesa no encontrada')
