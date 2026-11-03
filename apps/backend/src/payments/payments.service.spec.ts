@@ -50,7 +50,7 @@ function createTxMock() {
       update: jest.fn(),
       updateMany: jest.fn(),
     },
-    sesionMesa: { findUnique: jest.fn(), update: jest.fn() },
+    sesionMesa: { findUnique: jest.fn(), updateMany: jest.fn() },
     mesa: { update: jest.fn() },
     llamadoMozo: { deleteMany: jest.fn(), create: jest.fn() },
   }
@@ -331,10 +331,15 @@ describe('PaymentsService', () => {
 
     // La aprobación es un updateMany condicionado al estado pendiente: con count 0, otro lo cobró antes.
     const APROBACION = { id: 'pago-ef', estado: ESTADO_PAGO_PENDIENTE }
+    // El cierre (cerrarSesionDeMesa) es un updateMany condicionado a que la sesión siga activa.
+    const CIERRE = { where: { id: 'sesion-1', estado: 'activa' }, data: { estado: 'cerrada', cerradaEn: expect.any(Date) } }
+    const sesionNoActiva = new ConflictException('La sesión ya no está activa')
 
     beforeEach(() => {
       tx = createTxMock()
       mockPrisma.$transaction.mockImplementation((fn: any) => fn(tx))
+      tx.sesionMesa.findUnique.mockResolvedValue({ estado: 'activa' })
+      tx.sesionMesa.updateMany.mockResolvedValue({ count: 1 })
       tx.pago.updateMany.mockResolvedValue({ count: 1 })
       mockPrisma.pago.findUnique.mockResolvedValue({
         id: 'pago-ef',
@@ -352,12 +357,15 @@ describe('PaymentsService', () => {
       const result = await service.confirmarEfectivo({ pagoId: 'pago-ef' }, CUENTAS.MOZO)
 
       expect(tx.pago.updateMany).toHaveBeenNthCalledWith(1, expect.objectContaining({ where: APROBACION }))
+      expect(tx.sesionMesa.updateMany).toHaveBeenCalledWith(CIERRE)
       expect(tx.pago.updateMany).toHaveBeenNthCalledWith(2, {
         where: { sesionId: 'sesion-1', estado: ESTADO_PAGO_PENDIENTE }, // sin filtro de método
         data: { estado: ESTADO_PAGO_CANCELADO },
       })
+      expect(tx.mesa.update).toHaveBeenCalledWith({ where: { id: 'mesa-1' }, data: { estado: 'libre' } })
       const orden = (fn: jest.Mock, vez = 0) => fn.mock.invocationCallOrder[vez]
-      expect(orden(tx.pago.updateMany, 1)).toBeLessThan(orden(tx.sesionMesa.update))
+      expect(orden(tx.sesionMesa.findUnique)).toBeLessThan(orden(tx.pago.updateMany, 0))
+      expect(orden(tx.sesionMesa.updateMany)).toBeLessThan(orden(tx.pago.updateMany, 1))
       expect(result).toEqual({ sesionId: 'sesion-1', estado: 'cerrada' })
     })
 
@@ -368,8 +376,34 @@ describe('PaymentsService', () => {
       const result = await service.confirmarEfectivo({ pagoId: 'pago-ef' }, CUENTAS.MOZO)
 
       expect(tx.pago.updateMany).toHaveBeenCalledTimes(1) // solo la aprobación
-      expect(tx.sesionMesa.update).not.toHaveBeenCalled()
+      expect(tx.sesionMesa.updateMany).not.toHaveBeenCalled()
+      expect(tx.mesa.update).not.toHaveBeenCalled()
       expect(result).toEqual({ sesionId: 'sesion-1', estado: 'activa' })
+    })
+
+    it.each([
+      ['cerrada', { estado: 'cerrada' }],
+      ['inexistente', null],
+    ])('sesión %s (leída dentro de la tx): 409 antes de aprobar, y el pago sigue pendiente', async (_caso, sesion) => {
+      tx.sesionMesa.findUnique.mockResolvedValue(sesion)
+
+      await expect(service.confirmarEfectivo({ pagoId: 'pago-ef' }, CUENTAS.MOZO)).rejects.toThrow(sesionNoActiva)
+
+      expect(tx.sesionMesa.findUnique).toHaveBeenCalledWith({ where: { id: 'sesion-1' }, select: { estado: true } })
+      expect(tx.pago.updateMany).not.toHaveBeenCalled()
+      expect(tx.sesionMesa.updateMany).not.toHaveBeenCalled()
+      expect(tx.mesa.update).not.toHaveBeenCalled()
+    })
+
+    it('si otro cierra la sesión después de la relectura (el helper da false): 409, que revierte la aprobación', async () => {
+      mockDivision.calcularTotalSesion.mockResolvedValue(1000)
+      tx.pago.findMany.mockResolvedValue([{ monto: 1000 }])
+      tx.sesionMesa.updateMany.mockResolvedValue({ count: 0 })
+
+      await expect(service.confirmarEfectivo({ pagoId: 'pago-ef' }, CUENTAS.MOZO)).rejects.toThrow(sesionNoActiva)
+
+      expect(tx.pago.updateMany).toHaveBeenCalledTimes(1) // la aprobación, que se revierte con la tx; no se cancela nada
+      expect(tx.mesa.update).not.toHaveBeenCalled()
     })
 
     describe('a nombre de quién queda (#356)', () => {
@@ -404,7 +438,7 @@ describe('PaymentsService', () => {
           new ConflictException('Ese pago ya no está pendiente'),
         )
         expect(tx.pago.updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: APROBACION }))
-        expect(tx.sesionMesa.update).not.toHaveBeenCalled()
+        expect(tx.sesionMesa.updateMany).not.toHaveBeenCalled()
         expect(tx.mesa.update).not.toHaveBeenCalled()
       })
 
@@ -471,6 +505,7 @@ describe('PaymentsService', () => {
       warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation()
       tx = createTxMock()
       mockPrisma.$transaction.mockImplementation((fn: any) => fn(tx))
+      tx.sesionMesa.updateMany.mockResolvedValue({ count: 1 })
       mockMpOAuth.getAccessTokenDecrypted.mockResolvedValue('token')
     })
 
@@ -513,9 +548,11 @@ describe('PaymentsService', () => {
         where: { id: PAGO_ID },
         data: expect.objectContaining({ estado: ESTADO_PAGO_APROBADO, referenciaExterna: 'mo-123' }),
       })
-      expect(tx.sesionMesa.update).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { id: 'sesion-1' }, data: expect.objectContaining({ estado: 'cerrada' }) }),
-      )
+      expect(tx.sesionMesa.updateMany).toHaveBeenCalledWith({
+        where: { id: 'sesion-1', estado: 'activa' },
+        data: { estado: 'cerrada', cerradaEn: expect.any(Date) },
+      })
+      expect(tx.mesa.update).toHaveBeenCalledWith({ where: { id: 'mesa-1' }, data: { estado: 'libre' } })
       expect(mockGateway.emitSesionCobrada).toHaveBeenCalledWith('rest-1', {
         sesionId: 'sesion-1',
         mesaId: 'mesa-1',
@@ -552,8 +589,8 @@ describe('PaymentsService', () => {
         data: { estado: ESTADO_PAGO_CANCELADO },
       })
       const orden = (fn: jest.Mock) => fn.mock.invocationCallOrder[0]
-      expect(orden(tx.pago.update)).toBeLessThan(orden(tx.pago.updateMany))
-      expect(orden(tx.pago.updateMany)).toBeLessThan(orden(tx.sesionMesa.update))
+      expect(orden(tx.pago.update)).toBeLessThan(orden(tx.sesionMesa.updateMany))
+      expect(orden(tx.sesionMesa.updateMany)).toBeLessThan(orden(tx.pago.updateMany))
     })
 
     it('webhook que no cubre el total: no cancela nada ni cierra la sesión', async () => {
@@ -564,7 +601,29 @@ describe('PaymentsService', () => {
       await webhook('APROBADO')
 
       expect(tx.pago.updateMany).not.toHaveBeenCalled()
-      expect(tx.sesionMesa.update).not.toHaveBeenCalled()
+      expect(tx.sesionMesa.updateMany).not.toHaveBeenCalled()
+    })
+
+    it('aprobado sobre una sesión ya cerrada: el pago queda aprobado, sin tocar la sesión ni la mesa, sin emitir y con warning', async () => {
+      pagoEnBase('pendiente')
+      mockDivision.calcularTotalSesion.mockResolvedValue(1000)
+      tx.pago.findMany.mockResolvedValue([{ monto: 1000 }])
+      tx.sesionMesa.updateMany.mockResolvedValue({ count: 0 }) // la cerraron a mano o la cobró el mozo
+
+      await expect(webhook('APROBADO')).resolves.toBeUndefined()
+
+      expect(tx.pago.update).toHaveBeenCalledWith({
+        where: { id: PAGO_ID },
+        data: expect.objectContaining({ estado: ESTADO_PAGO_APROBADO }),
+      })
+      expect(tx.pago.updateMany).not.toHaveBeenCalled()
+      expect(tx.mesa.update).not.toHaveBeenCalled()
+      expect(mockGateway.emitSesionCobrada).not.toHaveBeenCalled()
+      expect(warnSpy).toHaveBeenCalledTimes(1)
+      const mensaje = String(warnSpy.mock.calls[0][0])
+      expect(mensaje).toContain('MP aprobado sobre una sesión ya cerrada; revisar')
+      expect(mensaje).toContain('sesionId=sesion-1')
+      expect(mensaje).toContain('pagoId=pago-1')
     })
 
     it('aprobado sobre cancelado → no revive, deja warning de devolución manual', async () => {
@@ -573,7 +632,7 @@ describe('PaymentsService', () => {
       await webhook('APROBADO')
 
       expect(tx.pago.update).not.toHaveBeenCalled()
-      expect(tx.sesionMesa.update).not.toHaveBeenCalled()
+      expect(tx.sesionMesa.updateMany).not.toHaveBeenCalled()
       expect(mockGateway.emitSesionCobrada).not.toHaveBeenCalled()
       const mensaje = String(warnSpy.mock.calls[0][0])
       expect(mensaje).toContain('devolución manual pendiente')
@@ -615,7 +674,7 @@ describe('PaymentsService', () => {
       await webhook('APROBADO')
 
       expect(tx.pago.update).not.toHaveBeenCalled()
-      expect(tx.sesionMesa.update).not.toHaveBeenCalled()
+      expect(tx.sesionMesa.updateMany).not.toHaveBeenCalled()
       expect(mockGateway.emitSesionCobrada).not.toHaveBeenCalled()
       expect(String(warnSpy.mock.calls[0][0])).toContain('devolución manual pendiente')
     })
