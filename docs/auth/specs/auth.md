@@ -619,13 +619,48 @@ Y lo que destrabó el hotfix de Node 22: **subir un logo** responde 201 con su U
 
   La lección, y de ahí el criterio 2 del "Terminado cuando": una columna borrada puede tener consumidores fuera de `apps/` y `packages/`. El grep de verificación va sobre todo el repo, y lo que vive instalado en una base (funciones, vistas, políticas) no lo encuentra ningún grep: hay que revisarlo aparte.
 
+## Gateway de Socket.io autenticado (DT-08)
+
+Estaba en "Fuera de alcance": el gateway no autenticaba (`cors: '*'`, y cada conexión se unía a `restaurante-{id}` con el id que mandaba), así que cualquiera recibía los pedidos, llamados y cobros de cualquier local, y los comensales, los eventos del personal. Se resolvió en dos PR: el **#449** (los frontends mandan el token en el handshake, sin cambiar eventos ni payloads) y el PR 2/2 del backend, "feat(gateway): el backend exige token para unirse a las salas", que se mergea **después** del #449 ya desplegado. Sin verificar todavía en staging.
+
+**Salas.** El nombre lo arma el servidor; el cliente solo manda un id, que se valida (forma de UUID) antes de tocar la base o las salas. Los eventos y los payloads de join no cambiaron (`{ restauranteId }`).
+
+| Sala | Se entra con | Quién |
+|---|---|---|
+| `salon:{restauranteId}` | `mozo:join` | `Usuario` activo con un rol de `SALON` en ese restaurante (OWNER, GERENTE, JEFE_SALON, MOZO) |
+| `cocina:{restauranteId}` | `cocina:join` | `Usuario` activo con un rol de `TODO_EL_PERSONAL` (incluye MOZO, porque `/mozo/pedidos` usa `cocina:join`, y COCINA) |
+| `sesion:{sesionId}` | `session:join` con el JWT de mesa | El comensal de esa sesión. `sesionId` sale del token, no del payload |
+| `menu:{restauranteId}` | `session:join`, con o sin token | Pública. Con el JWT de mesa, el restaurante del token; sin token o con uno que no es de mesa, el del payload |
+
+Los grupos son los de `auth/roles-del-personal.ts` y los roles los resuelve `AccesoService.rolesEnRestaurante` (el OWNER de la marca cubre sus sucursales; ROOT no entra).
+
+**El token.** Va en el handshake (`auth.token`, solo si es un string no vacío): el personal manda el access token de Supabase (`authDelSocket` de `@menyu/auth-client`) y el comensal, el JWT de su sesión de mesa (o `{}`). Se exige en el **primer** join de la conexión (`AccesoDelSocket.personal`: firma con el JWKS, `Usuario` activo y rol). Los joins siguientes se apoyan en esa identidad y solo vuelven a mirar la cuenta activa y el rol en la sala pedida (`personalYaAutenticado`): el token del handshake no cambia mientras vive la conexión y el de Supabase vence a la hora, y el socket de web-staff dura todo el turno. Un socket sin join válido no recibe nada. Un socket del personal está en un restaurante a la vez: un join aceptado a otro lo saca de las salas `salon:` y `cocina:` del anterior (esto también resuelve la deuda de la 4.6, que pedía un `leave`).
+
+**Rechazos.** El ack es siempre `{ ok: false, error: 'No autorizado' }`, sea cual sea el motivo; el motivo (sin token, restaurante inválido, token inválido o vencido, usuario inactivo, sin rol, error de verificación) va a un `Logger.warn` con el socket, el evento y el restaurante, nunca con el token. Una falla de infraestructura (JWKS caído, base) también rechaza y queda en el log con el detalle. Un join rechazado no cambia el estado del socket. Aceptado: `{ ok: true }`, y en `session:join` además `sesion: true|false`.
+
+**Ruteo de eventos.** Las firmas de los `emit*` no cambiaron. Cada evento sale en una sola llamada `server.to([...salas])`, así que un socket que está en dos salas lo recibe una vez.
+
+| Evento | Salas |
+|---|---|
+| `order:new`, `order:edited` | `salon` + `cocina` |
+| `order:updated` | `salon` + `cocina` + `sesion:{pedido.sesionId}` (si trae `sesionId`) |
+| `waiter:called`, `sesion:quierePagar` | `salon` |
+| `sesion:cobrada`, `sesion:cerrada` | `salon` + `sesion:{sesionId}` |
+| `menu:updated` | `menu` |
+
+**Revalidación.** El personal puede perder el rol a mitad de turno: un intervalo del servidor (cada `WS_REVALIDACION_MS`: 10 minutos por defecto, mínimo 1 s, máximo 24 h, porque `setInterval` con más de 2^31-1 ms se dispara cada 1 ms) recorre los sockets del personal y, para cada usuario, restaurante y sala (una consulta por combinación en cada pasada), vuelve a mirar `Usuario.activo` y el rol. A quien ya no le corresponde lo saca de la sala y le manda `acceso:revocado` con `{ restauranteId }`. Si pierde todas sus salas, su próximo join vuelve a exigir un token válido. Un error de base corta la pasada sin revocar a nadie y se reintenta en la siguiente. El intervalo se crea al iniciar el módulo con `.unref()` y se limpia en `OnModuleDestroy`.
+
+**CORS.** El del socket usa `isAllowedOrigin` (las mismas `CORS_ORIGINS` y `CORS_ORIGIN_PATTERNS` que la API) en lugar de `'*'`. Solo protege de otras páginas en un navegador: la barrera real es el token.
+
+**Dónde está.** `apps/backend/src/gateway/`: `menyu.gateway.ts` (salas, joins, ruteo y revalidación) y `acceso-del-socket.service.ts` (tokens y roles). Los tests: `acceso-del-socket.service.spec.ts`, `menyu.gateway.spec.ts` y `gateway.e2e-spec.ts`, que levanta la app con socket.io real y prueba el cruce entre restaurantes, los roles por sala, las sesiones, el cambio de restaurante, la revalidación, que no haya eventos duplicados y el token vencido en una conexión ya autenticada.
+
 ## Fuera de alcance
 
 - Otros proveedores además de Google (Apple, Microsoft, etc.).
 - Fidelización de clientes (v2). La cuenta opcional de cliente sí está en alcance (Fase 4b).
 - 2FA.
 - Accesibilidad WCAG (etapa posterior).
-- Autenticación del gateway de Socket.io: hoy no tiene (`cors: '*'`, y cada conexión se une a la sala del `restauranteId` que manda). Problema conocido, fuera de esta spec.
+- ~~Autenticación del gateway de Socket.io: hoy no tiene (`cors: '*'`, y cada conexión se une a la sala del `restauranteId` que manda). Problema conocido, fuera de esta spec.~~ Resuelta: ver "Gateway de Socket.io autenticado (DT-08)".
 
 ## Notas de seguridad
 
@@ -735,7 +770,7 @@ Observaciones que dejaron las Fases 0 a 3b (2026-10-20 y 2026-10-21). Revisarlas
   - ~~**Deuda pre-existente que quedó a la vista:** `api.payments.initiate` (`apps/web-cliente/src/services/api.ts`) apunta a `POST /payments/initiate`, que no existe en el controller.~~ Borrada en la 4b, con `resolveAppUrl`.
   - **Otro test inestable, en web-cliente:** dos casos del buscador de `ClienteMenuPage.spec.tsx` ("si el plato en descuento coincide…" y "si nada coincide…") fallaron **una vez**, con las suites del backend y de web-cliente corriendo en paralelo. No reprodujo: pasan aislados, en la suite completa y en una segunda corrida en paralelo. Escriben con `userEvent.type` y afirman sin esperar, así que probablemente compiten con la carga del menú. Si vuelve a aparecer, es de los que pueden frenar un release.
 - **Lo que dejó la 4.6 (2026-10-22):**
-  - **El gateway de Socket.io no saca a nadie de una sala.** Se resolvió por el lado del cliente (la conexión recuerda su sala y reconecta al cambiar de restaurante), pero los handlers del socket compartido —`MozoNotifications`, `MozoPanel`, `CocinaPage` y `PagosMozo`— no filtran por restaurante: si alguna vez una conexión queda en dos salas, se mezclan los datos de dos sucursales. `MesasPage` y `PedidosPage` abren su propia conexión y la cierran al cambiar, así que no les pasa. El arreglo de fondo es un `leave` en el gateway, junto con autenticarlo (hoy está en "Fuera de alcance").
+  - **El gateway de Socket.io no saca a nadie de una sala.** Se resolvió por el lado del cliente (la conexión recuerda su sala y reconecta al cambiar de restaurante), pero los handlers del socket compartido —`MozoNotifications`, `MozoPanel`, `CocinaPage` y `PagosMozo`— no filtran por restaurante: si alguna vez una conexión queda en dos salas, se mezclan los datos de dos sucursales. `MesasPage` y `PedidosPage` abren su propia conexión y la cierran al cambiar, así que no les pasa. ~~El arreglo de fondo es un `leave` en el gateway, junto con autenticarlo (hoy está en "Fuera de alcance").~~ Resuelto en el gateway autenticado (DT-08): un join aceptado a otro restaurante saca al socket de las salas del anterior. Ver "Gateway de Socket.io autenticado (DT-08)".
   - ~~**Para la 4.7, los tokens legacy en la URL.**~~ Hecho en la 4.7: web-cliente no se los pasa a nadie.
   - **Un 401 que persiste después de renovar la sesión deja la pantalla vacía y sin cartel, también en staff** (`MozoPanel` dice "Sin alertas pendientes"). Es la misma deuda de interfaz que anotó la 4.5 para web-admin, y por la misma razón: mandar al login ante un 401 con sesión viva armaría un loop.
   - ~~**`packages/auth` quedó sin ningún consumidor.**~~ Borrado en la 4.7.
