@@ -12,4 +12,5 @@ export {
   type AccionesDeRevalidacion,
 } from './revalidacion'
 export { renovarSesion, tokenDeAcceso } from './sesion'
+export { authDelSocket, type DatosDelSocket } from './socket'
 export { useSession, type EstadoSesion } from './useSession'

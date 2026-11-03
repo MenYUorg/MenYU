@@ -9,7 +9,10 @@ export class MenuController {
 
   @Get(':restauranteId')
   @ApiOperation({ summary: 'Obtener menú público de un restaurante' })
-  @ApiResponse({ status: 200, description: 'Menú completo con categorías, ítems e ingredientes' })
+  @ApiResponse({
+    status: 200,
+    description: 'Menú completo con categorías, ítems e ingredientes. restaurante.asistenteHabilitado dice si se muestra el asistente',
+  })
   @ApiResponse({ status: 404, description: 'Restaurante no encontrado' })
   @ApiQuery({ name: 'categoriaId', required: false, description: 'Filtrar por categoría' })
   @ApiQuery({ name: 'buscar', required: false, description: 'Búsqueda por nombre de ítem' })

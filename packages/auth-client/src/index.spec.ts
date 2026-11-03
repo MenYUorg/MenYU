@@ -9,6 +9,7 @@ describe('@menyu/auth-client', () => {
       'alVolverALaPestana',
       'appDeUrl',
       'appsDelPerfil',
+      'authDelSocket',
       'clienteAuth',
       'irASinAcceso',
       'irASuApp',

@@ -1,5 +1,5 @@
 import { io, Socket } from 'socket.io-client'
-import { logout } from '@menyu/auth-client'
+import { authDelSocket, logout } from '@menyu/auth-client'
 import type { Pedido } from '@menyu/types'
 import { urlDelSocket } from '@menyu/ui/socket'
 
@@ -15,8 +15,8 @@ const eventosDeLaSala = new Set<EventoDeSala>()
 
 function getSocket(): Socket {
   if (!socket) {
-    // El gateway no autentica la conexión (docs/auth/specs/auth.md, Fuera de alcance): no se le manda ningún token.
-    const nuevo = io(`${WS_URL}/ws`, { transports: ['websocket'] })
+    // El token viaja en el handshake (`auth`) y el gateway lo verifica al unirse a la sala.
+    const nuevo = io(`${WS_URL}/ws`, { transports: ['websocket'], auth: authDelSocket })
     // Socket.io reconecta solo (una caída de red, un reinicio del backend), y el socket nuevo del servidor no está en
     // ninguna sala: sin volver a entrar acá, el tiempo real se moriría en silencio hasta navegar a otra pantalla.
     nuevo.on('connect', () => {

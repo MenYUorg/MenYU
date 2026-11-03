@@ -1,5 +1,5 @@
 import 'dotenv/config'
-import { PrismaClient } from '@prisma/client'
+import { Prisma, PrismaClient } from '@prisma/client'
 
 const prisma = new PrismaClient()
 
@@ -27,6 +27,7 @@ const ITEM_BIFE_ID      = 'bbbbbbbb-0005-4005-a005-000000000005'
 const ITEM_AGUA_ID      = 'bbbbbbbb-0006-4006-a006-000000000006'
 const ITEM_CERVEZA_ID   = 'bbbbbbbb-0007-4007-a007-000000000007'
 const ITEM_VINO_ID      = 'bbbbbbbb-0008-4008-a008-000000000008'
+const ITEM_BOWL_ID      = 'bbbbbbbb-0009-4009-a009-000000000009'
 
 // Mesas adicionales
 const MESA2_ID = 'cccccccc-0001-4001-a001-000000000001'
@@ -258,6 +259,7 @@ async function main() {
     { id: ITEM_RABAS_ID,     categoriaId: CAT_ENTRADAS_ID,    nombre: 'Rabas',             precioBase: 3100.0 },
     { id: ITEM_MILANESA_ID,  categoriaId: CAT_PRINCIPALES_ID, nombre: 'Milanesa Napo',     precioBase: 4200.0 },
     { id: ITEM_BIFE_ID,      categoriaId: CAT_PRINCIPALES_ID, nombre: 'Bife de Chorizo',   precioBase: 6800.0 },
+    { id: ITEM_BOWL_ID,      categoriaId: CAT_PRINCIPALES_ID, nombre: 'Bowl de Quinoa',    precioBase: 3900.0 },
     { id: ITEM_AGUA_ID,      categoriaId: CAT_BEBIDAS_ID,     nombre: 'Agua Mineral',      precioBase:  900.0 },
     { id: ITEM_CERVEZA_ID,   categoriaId: CAT_BEBIDAS_ID,     nombre: 'Cerveza Artesanal', precioBase: 2600.0 },
     { id: ITEM_VINO_ID,      categoriaId: CAT_BEBIDAS_ID,     nombre: 'Vino Malbec',       precioBase: 5400.0 },
@@ -282,6 +284,158 @@ async function main() {
     await prisma.itemMenu.updateMany({
       where: { id: d.id, precioDescuento: null },
       data: { precioDescuento: d.precioDescuento },
+    })
+  }
+
+  // ── Asistente de mesa (docs/asistente/specs/asistente.md) ─────
+  // Base del set de prueba de la Fase 7. Restaurante Seed tiene el asistente prendido, la información del local
+  // (el estacionamiento queda sin declarar, para probar el "no tengo ese dato"), los datos del plato en casi toda la
+  // carta (cada valor de cada enum al menos una vez; Rabas, sin nada), dos platos recomendados y preguntas
+  // frecuentes. Restaurante Seed 2 queda sin información del local: su asistente está apagado.
+
+  // Descripciones: solo si el plato todavía no tiene una. Rabas y Agua Mineral quedan sin descripción.
+  const descripciones = [
+    { id: ITEM_EMPANADA_ID,  descripcion: 'Empanada cordobesa de carne cortada a cuchillo, con un toque de ají molido.' },
+    { id: ITEM_PROVOLETA_ID, descripcion: 'Provolone a la parrilla con orégano y ají molido.' },
+    { id: ITEM_ID,           descripcion: 'Medallón de carne con cheddar, lechuga, tomate y cebolla, en pan de papa.' },
+    { id: ITEM_MILANESA_ID,  descripcion: 'Milanesa de ternera con salsa de tomate, jamón y muzzarella gratinada.' },
+    { id: ITEM_BIFE_ID,      descripcion: 'Bife de chorizo a la parrilla.' },
+    { id: ITEM_BOWL_ID,      descripcion: 'Quinoa, garbanzos, palta, tomates cherry y vegetales asados, con aderezo de limón.' },
+    { id: ITEM_CERVEZA_ID,   descripcion: 'Cerveza artesanal tirada.' },
+    { id: ITEM_VINO_ID,      descripcion: 'Malbec de Mendoza.' },
+  ]
+  for (const d of descripciones) {
+    await prisma.itemMenu.updateMany({
+      where: { id: d.id, descripcion: null },
+      data: { descripcion: d.descripcion },
+    })
+  }
+
+  // Datos del plato para el asistente: solo si el plato no tiene ninguno cargado, así re-seedear no pisa lo que se
+  // edite desde el panel. Los recomendados (recomendadoEn, el sistema de recomendaciones del dueño) entran con el resto.
+  const sinDatosDelAsistente: Prisma.ItemMenuWhereInput = {
+    tamanioPorcion: null,
+    porcionPersonas: null,
+    porcionDetalle: null,
+    temperatura: null,
+    nivelPicante: null,
+    acompanamiento: null,
+    tiempoPreparacionMin: null,
+    etiquetasDietarias: { isEmpty: true },
+    infoAdicional: null,
+  }
+  const datosDelAsistente: Array<{ id: string; data: Prisma.ItemMenuUpdateManyMutationInput }> = [
+    {
+      id: ITEM_EMPANADA_ID,
+      data: {
+        tamanioPorcion: 'INDIVIDUAL', porcionDetalle: '1 unidad', temperatura: 'CALIENTE', nivelPicante: 'MEDIO',
+        tiempoPreparacionMin: 10, infoAdicional: 'Masa casera, horneadas en el momento.',
+      },
+    },
+    {
+      id: ITEM_PROVOLETA_ID,
+      data: {
+        tamanioPorcion: 'PARA_COMPARTIR', porcionDetalle: '250 g', temperatura: 'CALIENTE', nivelPicante: 'SUAVE',
+        tiempoPreparacionMin: 12, etiquetasDietarias: ['VEGETARIANO', 'SIN_TACC'],
+        infoAdicional: 'El pan de la panera no es sin TACC.', recomendadoEn: new Date(),
+      },
+    },
+    // Rabas: sin ningún dato del asistente.
+    {
+      id: ITEM_ID,
+      data: {
+        tamanioPorcion: 'INDIVIDUAL', porcionDetalle: '180 g de carne', temperatura: 'CALIENTE', nivelPicante: 'ALTO',
+        acompanamiento: 'papas fritas', tiempoPreparacionMin: 20, infoAdicional: 'Lleva la salsa picante de la casa.',
+      },
+    },
+    {
+      id: ITEM_MILANESA_ID,
+      data: {
+        tamanioPorcion: 'PARA_N_PERSONAS', porcionPersonas: 2, porcionDetalle: '500 g', temperatura: 'CALIENTE',
+        nivelPicante: 'NADA', acompanamiento: 'papas fritas o puré, a elección', tiempoPreparacionMin: 25,
+      },
+    },
+    {
+      id: ITEM_BIFE_ID,
+      data: {
+        tamanioPorcion: 'INDIVIDUAL', porcionDetalle: '400 g', temperatura: 'CALIENTE', nivelPicante: 'NADA',
+        acompanamiento: 'ensalada mixta', tiempoPreparacionMin: 30, etiquetasDietarias: ['SIN_TACC', 'SIN_LACTOSA'],
+        infoAdicional: 'Sale jugoso; si lo preferís a punto o bien cocido, avisale al mozo.', recomendadoEn: new Date(),
+      },
+    },
+    {
+      id: ITEM_BOWL_ID,
+      data: {
+        tamanioPorcion: 'INDIVIDUAL', temperatura: 'FRIO', nivelPicante: 'NADA', tiempoPreparacionMin: 15,
+        etiquetasDietarias: ['VEGETARIANO', 'VEGANO', 'SIN_TACC', 'SIN_LACTOSA'],
+      },
+    },
+    {
+      id: ITEM_AGUA_ID,
+      data: { porcionDetalle: 'botella de 500 ml', temperatura: 'FRIO', infoAdicional: 'Hay con gas y sin gas.' },
+    },
+    {
+      id: ITEM_CERVEZA_ID,
+      data: { porcionDetalle: 'pinta de 500 ml', temperatura: 'FRIO', infoAdicional: 'IPA de una cervecería de Córdoba.' },
+    },
+    {
+      id: ITEM_VINO_ID,
+      data: { tamanioPorcion: 'PARA_COMPARTIR', porcionDetalle: 'botella de 750 ml', temperatura: 'AMBIENTE' },
+    },
+  ]
+  for (const d of datosDelAsistente) {
+    await prisma.itemMenu.updateMany({ where: { id: d.id, ...sinDatosDelAsistente }, data: d.data })
+  }
+
+  // Información del local: con el update vacío, re-seedear no pisa lo que se edite desde el panel.
+  await prisma.informacionLocal.upsert({
+    where: { restauranteId: REST_ID },
+    update: {},
+    create: {
+      restauranteId: REST_ID,
+      asistenteHabilitado: true,
+      horarios: 'Martes a domingo de 12 a 15.30 y de 20 a 0. Los lunes está cerrado.',
+      formasPago: 'Efectivo, débito, crédito y Mercado Pago.',
+      wifi: true,
+      petFriendly: false,
+      accesibleSillaRuedas: true,
+      opcionesParaChicos: true,
+      // estacionamiento: sin declarar (null).
+    },
+  })
+
+  const preguntasFrecuentes = [
+    {
+      id: '99999999-0001-4001-a001-000000000001',
+      pregunta: '¿Se puede reservar?',
+      respuesta: 'Sí, por teléfono o en el local. Los viernes y sábados conviene reservar con anticipación.',
+    },
+    {
+      id: '99999999-0002-4002-a002-000000000002',
+      pregunta: '¿Hacen delivery?',
+      respuesta: 'No hacemos delivery, pero cualquier plato de la carta se puede pedir para llevar.',
+    },
+    {
+      id: '99999999-0003-4003-a003-000000000003',
+      pregunta: '¿Tienen opciones para celíacos?',
+      respuesta: 'Algunos platos están marcados como sin TACC, pero la cocina no es exclusiva sin TACC. Ante cualquier duda, consultá al mozo.',
+    },
+    {
+      id: '99999999-0004-4004-a004-000000000004',
+      pregunta: '¿Se puede festejar un cumpleaños?',
+      respuesta: 'Sí. Para grupos de más de 10 personas, avisá con 48 horas de anticipación. Se puede traer torta.',
+    },
+    {
+      id: '99999999-0005-4005-a005-000000000005',
+      pregunta: '¿Cobran cubierto?',
+      respuesta: 'No, no cobramos cubierto.',
+    },
+  ]
+  for (const p of preguntasFrecuentes) {
+    await prisma.preguntaFrecuente.upsert({
+      where: { id: p.id },
+      update: {},
+      create: { ...p, restauranteId: REST_ID },
     })
   }
 
@@ -359,9 +513,15 @@ async function main() {
 
   console.log('\n--- Menú por categoría ---')
   console.log('Entradas    : Empanada de Carne 800 | Provoleta 2300 | Rabas 3100')
-  console.log('Principales : Hamburguesa Seed 1500 | Milanesa Napo 4200 | Bife de Chorizo 6800')
+  console.log('Principales : Hamburguesa Seed 1500 | Milanesa Napo 4200 | Bife de Chorizo 6800 | Bowl de Quinoa 3900')
   console.log('Bebidas     : Agua Mineral 900 | Cerveza Artesanal 2600 | Vino Malbec 5400')
   console.log('En descuento: Milanesa Napo 4200 -> 3360 (-20%) | Cerveza Artesanal 2600 -> 1950 (-25%)')
+
+  console.log('\n--- Asistente de mesa ---')
+  console.log('Restaurante Seed  : asistente prendido, información del local (estacionamiento sin declarar) y 5 FAQs')
+  console.log('Recomendados      : Provoleta | Bife de Chorizo')
+  console.log('Sin datos         : Rabas')
+  console.log('Restaurante Seed 2: sin información del local (asistente apagado)')
 }
 
 main()

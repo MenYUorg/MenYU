@@ -59,16 +59,33 @@ const MILANESA = {
   ],
 } as unknown as ItemMenu
 
+/** Lo que manda el formulario de un plato sin datos para el asistente: todo en null, para que vaciar un campo lo borre. */
+const SIN_DATOS_ASISTENTE = {
+  tamanioPorcion: null,
+  porcionPersonas: null,
+  porcionDetalle: null,
+  temperatura: null,
+  nivelPicante: null,
+  acompanamiento: null,
+  tiempoPreparacionMin: null,
+  etiquetasDietarias: [],
+  infoAdicional: null,
+}
+
 const onClose = vi.fn()
 function abrir(item: ItemMenu | null = null, canDelete = true) {
   return render(<ItemFormModal open item={item} onClose={onClose} canDelete={canDelete} />)
 }
 
 const nombre = () => screen.getByPlaceholderText('Ej: Milanesa napolitana') as HTMLInputElement
+const categoria = () => screen.getByRole('combobox', { name: 'Categoría' })
+// El catálogo "Dietas / Restricciones" (el filtro de la carta): sus nombres se repiten en las etiquetas del asistente.
+const dieta = (texto: string) =>
+  within(screen.getByRole('group', { name: 'Dietas / Restricciones' })).getByRole('button', { name: texto })
 const precio = () => screen.getByPlaceholderText('0.00') as HTMLInputElement
 const escribir = (el: HTMLElement, valor: string) => fireEvent.change(el, { target: { value: valor } })
 const filaIngrediente = (texto: string) => screen.getByText(texto).parentElement as HTMLElement
-const guardar = (texto: 'Crear plato' | 'Guardar cambios') => act(async () => { fireEvent.click(screen.getByRole('button', { name: texto })) })
+const guardar = (texto: 'Crear plato' | 'Guardar cambios' | 'Guardar datos del asistente') => act(async () => { fireEvent.click(screen.getByRole('button', { name: texto })) })
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -109,7 +126,7 @@ describe('ItemFormModal', () => {
     it('arranca vacío con la primera categoría; sin categorías lo avisa', () => {
       const { unmount } = abrir()
       expect(nombre().value).toBe('')
-      expect(screen.getByRole('combobox')).toHaveValue('cat-1')
+      expect(categoria()).toHaveValue('cat-1')
       expect(screen.getByText('Sin ingredientes asignados.')).toBeInTheDocument()
       expect(screen.queryByRole('button', { name: /Eliminar plato/ })).not.toBeInTheDocument()
       unmount()
@@ -166,12 +183,12 @@ describe('ItemFormModal', () => {
 
       escribir(nombre(), '  Pizza  ')
       escribir(screen.getByPlaceholderText('Breve descripción del plato...'), '  Muzza  ')
-      fireEvent.change(screen.getByRole('combobox'), { target: { value: 'cat-2' } })
+      fireEvent.change(categoria(), { target: { value: 'cat-2' } })
       escribir(precio(), '4200.5')
       const archivo = new File(['x'], 'pizza.png', { type: 'image/png' })
       await act(async () => { fireEvent.change(document.querySelector('input[type="file"]')!, { target: { files: [archivo] } }) })
       expect(screen.getByAltText('preview')).toHaveAttribute('src', 'blob:preview')
-      fireEvent.click(screen.getByRole('button', { name: 'Sin TACC' }))
+      fireEvent.click(dieta('Sin TACC'))
 
       fireEvent.click(screen.getByRole('button', { name: '+ Agregar ingrediente' }))
       escribir(screen.getByPlaceholderText('Buscar ingrediente...'), 'que')
@@ -223,8 +240,8 @@ describe('ItemFormModal', () => {
       await act(async () => { fireEvent.click(screen.getByText('Jamón')) })
       await act(async () => { fireEvent.click(filaIngrediente('Jamón').querySelector('.lucide-trash-2')!.closest('button')!) })
       expect(screen.queryByText('Jamón')).not.toBeInTheDocument()
-      fireEvent.click(screen.getByRole('button', { name: 'Sin TACC' }))
-      fireEvent.click(screen.getByRole('button', { name: 'Sin TACC' }))
+      fireEvent.click(dieta('Sin TACC'))
+      fireEvent.click(dieta('Sin TACC'))
       expect(clasifApi.addToItem).not.toHaveBeenCalled()
     })
 
@@ -306,7 +323,7 @@ describe('ItemFormModal', () => {
       expect(screen.getByText('Editar plato')).toBeInTheDocument()
       expect(nombre().value).toBe('Milanesa')
       expect(screen.getByPlaceholderText('Breve descripción del plato...')).toHaveValue('Con papas')
-      expect(screen.getByRole('combobox')).toHaveValue('cat-2')
+      expect(categoria()).toHaveValue('cat-2')
       expect(precio().value).toBe('5000')
       expect(screen.getByAltText('preview')).toHaveAttribute('src', 'https://storage.test/milanesa.png')
       expect(screen.getByText('Queso rallado')).toBeInTheDocument()
@@ -323,7 +340,9 @@ describe('ItemFormModal', () => {
       escribir(precio(), '5500')
       await guardar('Guardar cambios')
 
-      expect(tienda.updateItem).toHaveBeenCalledWith('item-1', { nombre: 'Milanesa napo', descripcion: undefined, categoriaId: 'cat-2', precioBase: 5500 })
+      expect(tienda.updateItem).toHaveBeenCalledWith('item-1', {
+        nombre: 'Milanesa napo', descripcion: undefined, categoriaId: 'cat-2', precioBase: 5500, ...SIN_DATOS_ASISTENTE,
+      })
       expect(onClose).toHaveBeenCalled()
     })
 
@@ -340,9 +359,9 @@ describe('ItemFormModal', () => {
     it('las dietas y los ingredientes se guardan en el momento', async () => {
       abrir(MILANESA)
 
-      await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Vegetariano' })) })
+      await act(async () => { fireEvent.click(dieta('Vegetariano')) })
       expect(clasifApi.removeFromItem).toHaveBeenCalledWith('item-1', 'cl-veg')
-      await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Sin TACC' })) })
+      await act(async () => { fireEvent.click(dieta('Sin TACC')) })
       expect(clasifApi.addToItem).toHaveBeenCalledWith('item-1', 'cl-tacc')
 
       await act(async () => { fireEvent.click(within(filaIngrediente('Queso rallado')).getByRole('button', { name: 'Agregable' })) })
@@ -372,8 +391,8 @@ describe('ItemFormModal', () => {
       itemsApi.addIngrediente.mockRejectedValue(new Error('caído'))
       abrir(MILANESA)
 
-      await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Sin TACC' })) })
-      await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Vegetariano' })) })
+      await act(async () => { fireEvent.click(dieta('Sin TACC')) })
+      await act(async () => { fireEvent.click(dieta('Vegetariano')) })
       fireEvent.click(screen.getByRole('button', { name: '+ Agregar ingrediente' }))
       await act(async () => { fireEvent.click(screen.getByText('Jamón')) })
 
@@ -444,6 +463,83 @@ describe('ItemFormModal', () => {
       abrir(MILANESA, false)
 
       expect(screen.queryByRole('button', { name: /Eliminar plato/ })).not.toBeInTheDocument()
+    })
+  })
+
+  describe('datos para el asistente', () => {
+    const asistente = () => within(screen.getByRole('group', { name: 'Datos para el asistente' }))
+    const etiqueta = (texto: string) =>
+      within(screen.getByRole('group', { name: 'Etiquetas dietarias' })).getByRole('button', { name: texto })
+
+    it('carga lo guardado y lo manda en el PATCH: vaciar un campo manda null y la cantidad de personas solo va con «Para N personas»', async () => {
+      abrir({
+        ...MILANESA,
+        tamanioPorcion: 'PARA_N_PERSONAS',
+        porcionPersonas: 2,
+        porcionDetalle: '400 g',
+        temperatura: 'CALIENTE',
+        nivelPicante: 'NADA',
+        acompanamiento: 'Papas fritas',
+        tiempoPreparacionMin: 20,
+        etiquetasDietarias: ['SIN_TACC'],
+        infoAdicional: 'Se puede pedir a caballo',
+      } as ItemMenu)
+
+      expect(asistente().getByLabelText('Tamaño de la porción')).toHaveValue('PARA_N_PERSONAS')
+      expect(asistente().getByLabelText('¿Para cuántas personas?')).toHaveValue('2')
+      expect(asistente().getByLabelText('Acompañamiento incluido')).toHaveValue('Papas fritas')
+      expect(etiqueta('Sin TACC')).toHaveAttribute('aria-pressed', 'true')
+
+      // Con otro tamaño, la cantidad de personas no se ve: el backend la borraría igual.
+      fireEvent.change(asistente().getByLabelText('Tamaño de la porción'), { target: { value: 'INDIVIDUAL' } })
+      expect(asistente().queryByLabelText('¿Para cuántas personas?')).not.toBeInTheDocument()
+      fireEvent.change(asistente().getByLabelText('Temperatura'), { target: { value: '' } })
+      fireEvent.change(asistente().getByLabelText('Nivel de picante'), { target: { value: 'MEDIO' } })
+      escribir(asistente().getByLabelText('Acompañamiento incluido'), '')
+      escribir(asistente().getByLabelText('Tiempo de preparación (minutos)'), '25')
+      fireEvent.click(etiqueta('Sin TACC'))
+      fireEvent.click(etiqueta('Vegano'))
+      escribir(asistente().getByLabelText('Información adicional'), '   ')
+      await guardar('Guardar cambios')
+
+      expect(tienda.updateItem).toHaveBeenCalledWith('item-1', {
+        nombre: 'Milanesa',
+        descripcion: 'Con papas',
+        categoriaId: 'cat-2',
+        precioBase: 5000,
+        tamanioPorcion: 'INDIVIDUAL',
+        porcionPersonas: null,
+        porcionDetalle: '400 g',
+        temperatura: null,
+        nivelPicante: 'MEDIO',
+        acompanamiento: null,
+        tiempoPreparacionMin: 25,
+        etiquetasDietarias: ['VEGANO'],
+        infoAdicional: null,
+      })
+      expect(onClose).toHaveBeenCalled()
+    })
+
+    it('en el alta, si la API rechaza los datos lo avisa y reintentar los guarda sin volver a crear el plato', async () => {
+      tienda.updateItem.mockRejectedValueOnce(Object.assign(new Error('Internal server error'), { status: 500 }))
+      abrir()
+      escribir(nombre(), 'Pizza')
+      escribir(precio(), '100')
+      fireEvent.change(asistente().getByLabelText('Nivel de picante'), { target: { value: 'SUAVE' } })
+
+      await guardar('Crear plato')
+
+      expect(tienda.createItem).toHaveBeenCalledTimes(1)
+      expect(tienda.updateItem).toHaveBeenCalledWith('nuevo-1', { ...SIN_DATOS_ASISTENTE, nivelPicante: 'SUAVE' })
+      expect(screen.getByText(/El plato se creó, pero sus datos para el asistente no se guardaron./)).toBeInTheDocument()
+      expect(screen.queryByText('Internal server error', { exact: false })).not.toBeInTheDocument()
+      expect(onClose).not.toHaveBeenCalled()
+
+      await guardar('Guardar datos del asistente')
+
+      expect(tienda.createItem).toHaveBeenCalledTimes(1)
+      expect(tienda.updateItem).toHaveBeenCalledTimes(2)
+      expect(onClose).toHaveBeenCalled()
     })
   })
 })

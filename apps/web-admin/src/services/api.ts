@@ -25,6 +25,9 @@ import type {
   RootCuentaInvitada,
   RootDueno,
   RootInvitarCuentaRequest,
+  DatosDelPlatoParaElAsistente,
+  InformacionLocal,
+  PreguntaFrecuente,
 } from '@menyu/types'
 
 export class ApiError extends Error {
@@ -104,13 +107,23 @@ export interface CreateItemInput {
   disponible?: boolean
 }
 
-export interface UpdateItemInput {
+/** Los datos para el asistente van solo en la edición (`POST /items` los descarta): null borra cada uno. */
+export interface UpdateItemInput extends Partial<DatosDelPlatoParaElAsistente> {
   nombre?: string
   precioBase?: number
   descripcion?: string
   categoriaId?: string | null
   disponible?: boolean
   esRecomendado?: boolean
+}
+
+/** `PUT /restaurantes/:id/informacion-local`: lo que no viene no cambia y null lo borra. El interruptor no admite null. */
+export type GuardarInformacionLocalInput = Partial<Omit<InformacionLocal, 'restauranteId'>>
+
+/** Alta y edición de una pregunta frecuente: van las dos partes. */
+export interface PreguntaFrecuenteInput {
+  pregunta: string
+  respuesta: string
 }
 
 export interface SesionResumen {
@@ -384,6 +397,33 @@ export const api = {
         'DELETE',
         `/restaurantes/${encodeURIComponent(restauranteId)}/personal/${encodeURIComponent(membresiaId)}`,
       ),
+  },
+
+  /** Lo que sabe el asistente de mesa de cada restaurante, además de la carta. OWNER y GERENTE del restaurante. */
+  asistente: {
+    /** Sin nada cargado, todo en null y el asistente apagado. */
+    informacion: (restauranteId: string) =>
+      req<InformacionLocal>('GET', `/restaurantes/${encodeURIComponent(restauranteId)}/informacion-local`),
+    guardarInformacion: (restauranteId: string, data: GuardarInformacionLocalInput) =>
+      req<InformacionLocal>('PUT', `/restaurantes/${encodeURIComponent(restauranteId)}/informacion-local`, data),
+    preguntas: {
+      /** Por fecha de creación. */
+      listar: (restauranteId: string) =>
+        req<PreguntaFrecuente[]>('GET', `/restaurantes/${encodeURIComponent(restauranteId)}/preguntas-frecuentes`),
+      crear: (restauranteId: string, data: PreguntaFrecuenteInput) =>
+        req<PreguntaFrecuente>('POST', `/restaurantes/${encodeURIComponent(restauranteId)}/preguntas-frecuentes`, data),
+      editar: (restauranteId: string, id: string, data: PreguntaFrecuenteInput) =>
+        req<PreguntaFrecuente>(
+          'PUT',
+          `/restaurantes/${encodeURIComponent(restauranteId)}/preguntas-frecuentes/${encodeURIComponent(id)}`,
+          data,
+        ),
+      borrar: (restauranteId: string, id: string) =>
+        req<void>(
+          'DELETE',
+          `/restaurantes/${encodeURIComponent(restauranteId)}/preguntas-frecuentes/${encodeURIComponent(id)}`,
+        ),
+    },
   },
 
   /** El alta de personal: Supabase le manda el mail para que elija su contraseña. */

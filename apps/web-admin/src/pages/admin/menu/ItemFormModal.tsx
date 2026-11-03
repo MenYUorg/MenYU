@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useId, useRef } from 'react'
 import type { ChangeEvent } from 'react'
 import { ImagePlus, X, Trash2 } from 'lucide-react'
 import type { ItemMenu, ItemIngrediente } from '@menyu/types'
@@ -6,7 +6,17 @@ import { useContextStore } from '../../../store/contextStore'
 import { useMenuStore } from '../../../store/menuStore'
 import { api } from '../../../services/api'
 import { motivoPrecioBaseIncompatible } from '../../../utils/descuento'
+import { mensajeDeLaApi } from '../../../utils/mensajeDeError'
 import { AvisoPrecioConDescuento } from './AvisoPrecioConDescuento'
+import { DatosAsistenteFields } from './DatosAsistenteFields'
+import {
+  FORMULARIO_DATOS_VACIO,
+  datosParaGuardar,
+  errorDatosAsistente,
+  formularioDesdeItem,
+  hayDatosAsistente,
+} from './datosAsistente'
+import { chipSt, inputSt, labelSt } from './estilosFormulario'
 
 const matchesBusqueda = (nombre: string, buscar: string): boolean => {
   if (!buscar.trim()) return true
@@ -33,29 +43,6 @@ interface IngredienteLocal {
   cantidadMax:   number
 }
 
-/* ── shared styles ──────────────────────────────────────────────────────── */
-const labelSt: React.CSSProperties = {
-  display:      'block',
-  fontFamily:   'Inter, sans-serif',
-  fontWeight:   500,
-  fontSize:     13,
-  color:        '#374151',
-  marginBottom: 6,
-}
-
-const inputSt: React.CSSProperties = {
-  width:        '100%',
-  boxSizing:    'border-box',
-  border:       '1px solid #e5e7eb',
-  borderRadius: 8,
-  padding:      '8px 12px',
-  fontFamily:   'Inter, sans-serif',
-  fontSize:     13,
-  color:        '#111827',
-  outline:      'none',
-  background:   'white',
-}
-
 /* ── component ──────────────────────────────────────────────────────────── */
 export function ItemFormModal({ open, onClose, item, canDelete }: Props) {
   const { selectedRestauranteId } = useContextStore()
@@ -68,6 +55,7 @@ export function ItemFormModal({ open, onClose, item, canDelete }: Props) {
   } = useMenuStore()
 
   const isEdit = item !== null
+  const idCampo       = useId()
   const fileInputRef  = useRef<HTMLInputElement>(null)
   const ingSearchRef  = useRef<HTMLDivElement>(null)
 
@@ -90,6 +78,11 @@ export function ItemFormModal({ open, onClose, item, canDelete }: Props) {
   const [ingQuery, setIngQuery]                       = useState('')
   const [creatingIng, setCreatingIng]                 = useState(false)
 
+  /* ── datos para el asistente ── */
+  const [datosAsistente, setDatosAsistente] = useState(FORMULARIO_DATOS_VACIO)
+  // En el alta van en un PATCH después de crear: si ese PATCH falla, el plato ya existe y reintentar no lo vuelve a crear.
+  const [platoCreadoId, setPlatoCreadoId]   = useState<string | null>(null)
+
   /* ── ui ── */
   const [saving, setSaving] = useState(false)
   const [error, setError]   = useState<string | null>(null)
@@ -101,6 +94,8 @@ export function ItemFormModal({ open, onClose, item, canDelete }: Props) {
     setPendingImage(null)
     setShowIngSearch(false)
     setIngQuery('')
+    setDatosAsistente(formularioDesdeItem(item))
+    setPlatoCreadoId(null)
     if (item) {
       setNombre(item.nombre)
       setDescripcion(item.descripcion ?? '')
@@ -331,7 +326,31 @@ export function ItemFormModal({ open, onClose, item, canDelete }: Props) {
   }
 
   /* ── guardar ── */
+  const avisoDatosSinGuardar = (e: unknown) => {
+    const detalle = mensajeDeLaApi(e, '')
+    return `El plato se creó, pero sus datos para el asistente no se guardaron${detalle ? ` (${detalle})` : ''}. ` +
+      'Tocá «Guardar datos del asistente» para reintentar.'
+  }
+
   const handleGuardar = async () => {
+    const motivoAsistente = errorDatosAsistente(datosAsistente)
+
+    // Reintento del alta: el plato ya existe y solo faltan sus datos para el asistente.
+    if (platoCreadoId) {
+      if (motivoAsistente) { setError(motivoAsistente); return }
+      setSaving(true)
+      setError(null)
+      try {
+        await updateItem(platoCreadoId, datosParaGuardar(datosAsistente))
+        onClose()
+      } catch (e) {
+        setError(avisoDatosSinGuardar(e))
+      } finally {
+        setSaving(false)
+      }
+      return
+    }
+
     const trimmedNombre = nombre.trim()
     if (!trimmedNombre) { setError('El nombre del plato es obligatorio'); return }
     const precioNum = parseFloat(precio)
@@ -345,10 +364,12 @@ export function ItemFormModal({ open, onClose, item, canDelete }: Props) {
       setError('Todos los ingredientes deben ser removibles o agregables.')
       return
     }
+    if (motivoAsistente) { setError(motivoAsistente); return }
     if (!selectedRestauranteId) return
 
     setSaving(true)
     setError(null)
+    let creadoId: string | null = null
     try {
       if (item) {
         await updateItem(item.id, {
@@ -356,6 +377,8 @@ export function ItemFormModal({ open, onClose, item, canDelete }: Props) {
           descripcion: descripcion.trim() || undefined,
           categoriaId: categoriaId || null,
           precioBase:  precioNum,
+          // Van todos, con null en los vacíos: así vaciar un campo lo borra.
+          ...datosParaGuardar(datosAsistente),
         })
       } else {
         if (!categoriaId) { setError('La categoría es obligatoria.'); setSaving(false); return }
@@ -393,10 +416,21 @@ export function ItemFormModal({ open, onClose, item, canDelete }: Props) {
             ),
           )
         }
+        // `POST /items` no acepta los datos para el asistente: van en un PATCH. Este error no se traga: si no, el
+        // dueño creería que quedaron guardados.
+        if (hayDatosAsistente(datosAsistente)) {
+          creadoId = nuevoItem.id
+          await updateItem(nuevoItem.id, datosParaGuardar(datosAsistente))
+        }
       }
       onClose()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Error al guardar')
+      if (creadoId) {
+        setPlatoCreadoId(creadoId)
+        setError(avisoDatosSinGuardar(e))
+      } else {
+        setError(e instanceof Error ? e.message : 'Error al guardar')
+      }
     } finally {
       setSaving(false)
     }
@@ -560,13 +594,13 @@ export function ItemFormModal({ open, onClose, item, canDelete }: Props) {
 
           {/* 4. Categoría */}
           <div>
-            <label style={labelSt}>Categoría</label>
+            <label htmlFor={`${idCampo}-categoria`} style={labelSt}>Categoría</label>
             {categorias.length === 0 ? (
               <p style={{ margin: 0, fontSize: 13, color: '#9ca3af' }}>
                 No hay categorías. Creá una desde Gestionar catálogo.
               </p>
             ) : (
-              <select value={categoriaId} onChange={(e) => setCategoriaId(e.target.value)} style={inputSt}>
+              <select id={`${idCampo}-categoria`} value={categoriaId} onChange={(e) => setCategoriaId(e.target.value)} style={inputSt}>
                 {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
               </select>
             )}
@@ -574,8 +608,8 @@ export function ItemFormModal({ open, onClose, item, canDelete }: Props) {
 
           {/* 5. Dietas */}
           {clasificaciones.length > 0 && (
-            <div>
-              <label style={labelSt}>Dietas / Restricciones</label>
+            <div role="group" aria-labelledby={`${idCampo}-dietas`}>
+              <span id={`${idCampo}-dietas`} style={labelSt}>Dietas / Restricciones</span>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                 {clasificaciones.map((cl) => {
                   const sel = selectedClasificaciones.includes(cl.id)
@@ -584,17 +618,7 @@ export function ItemFormModal({ open, onClose, item, canDelete }: Props) {
                       key={cl.id}
                       type="button"
                       onClick={() => { void handleToggleClasificacion(cl.id) }}
-                      style={{
-                        background:   sel ? '#2D3561' : 'white',
-                        color:        sel ? 'white' : '#374151',
-                        border:       `1px solid ${sel ? '#2D3561' : '#e5e7eb'}`,
-                        borderRadius: 999,
-                        padding:      '6px 14px',
-                        fontFamily:   'Inter, sans-serif',
-                        fontSize:     13,
-                        cursor:       'pointer',
-                        transition:   'all 150ms',
-                      }}
+                      style={chipSt(sel)}
                       onMouseEnter={(e) => { if (!sel) (e.currentTarget as HTMLButtonElement).style.borderColor = '#2D3561' }}
                       onMouseLeave={(e) => { if (!sel) (e.currentTarget as HTMLButtonElement).style.borderColor = '#e5e7eb' }}
                     >
@@ -814,6 +838,13 @@ export function ItemFormModal({ open, onClose, item, canDelete }: Props) {
             )}
           </div>
 
+          {/* 8. Datos para el asistente de la carta */}
+          <DatosAsistenteFields
+            valor={datosAsistente}
+            onChange={setDatosAsistente}
+            conFiltroDeDietas={clasificaciones.length > 0}
+          />
+
         </div>
 
         {/* ── Footer ── */}
@@ -876,7 +907,7 @@ export function ItemFormModal({ open, onClose, item, canDelete }: Props) {
               flexShrink:   0,
             }}
           >
-            {saving ? '…' : isEdit ? 'Guardar cambios' : 'Crear plato'}
+            {saving ? '…' : platoCreadoId ? 'Guardar datos del asistente' : isEdit ? 'Guardar cambios' : 'Crear plato'}
           </button>
         </div>
 

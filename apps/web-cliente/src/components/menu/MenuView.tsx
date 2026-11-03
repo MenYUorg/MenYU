@@ -5,8 +5,10 @@ import type { MenuPublicoItem } from '@menyu/types'
 import { useCuenta } from '../../hooks/useCuenta'
 import { usePuedeCerrarSesion } from '../../hooks/usePuedeCerrarSesion'
 import { menuEsDe, usePublicMenuStore } from '../../store/publicMenuStore'
+import { useCarritoStore } from '../../store/carritoStore'
 import { useComensalStore } from '../../store/comensalStore'
 import { AppHeader } from '../AppHeader'
+import { AsistenteDeLaCarta } from '../asistente/BotonDelAsistente'
 import { BloqueEstado } from '../discovery/BloqueEstado'
 import { VolverEnlace } from '../discovery/VolverEnlace'
 import { BarraBusqueda } from './BarraBusqueda'
@@ -51,6 +53,8 @@ interface MenuViewProps {
 export function MenuView({ modo, restauranteId }: MenuViewProps) {
   const navigate = useNavigate()
   const comensalNombre = useComensalStore((s) => s.nombre)
+  // El botón del carrito (solo en la mesa) aparece con algo en el carrito: el del asistente se corre para no taparlo.
+  const hayCarrito = useCarritoStore((s) => s.items.length > 0)
   const { menu: menuGuardado, loading, error, errorStatus, fetchMenu } = usePublicMenuStore()
   // El store guarda un solo menú: si es de otro restaurante (se pasó de uno a otro), todavía no llegó el de este.
   const menu = menuEsDe(menuGuardado, restauranteId) ? menuGuardado : null
@@ -240,6 +244,8 @@ export function MenuView({ modo, restauranteId }: MenuViewProps) {
 
   // En la carta no se pide: las tarjetas no se tocan.
   const abrirDetalle = modo === 'mesa' ? (item: MenuPublicoItem) => navigate(`/menu/${item.id}`) : undefined
+  // El asistente de la carta (docs/asistente/specs/asistente.md, Fase 6): solo si el restaurante lo tiene prendido.
+  const conAsistente = menu.restaurante.asistenteHabilitado === true
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', overflow: 'hidden', background: CM.bg }}>
@@ -269,7 +275,8 @@ export function MenuView({ modo, restauranteId }: MenuViewProps) {
 
       <ChipsSecciones secciones={seccionesConId} activa={categoriaActiva} onElegir={handleCategoriaClick} />
 
-      <div ref={scrollContainerRef} style={{ flex: 1, overflowY: 'auto', padding: 14 }}>
+      {/* Con el asistente, lugar abajo para que el último plato se vea entero por encima de los botones flotantes. */}
+      <div ref={scrollContainerRef} style={{ flex: 1, overflowY: 'auto', padding: conAsistente ? '14px 14px 88px' : 14 }}>
         <SeccionesMenu
           descuentos={descuentosFiltrados}
           recomendados={recomendadosFiltrados}
@@ -284,6 +291,15 @@ export function MenuView({ modo, restauranteId }: MenuViewProps) {
       </div>
 
       {modo === 'mesa' && <BotonCarrito />}
+
+      {/* La key reinicia el chat al cambiar de restaurante: sin ella, la conversación anterior sobrevive (Fase 6, ronda 1). */}
+      <AsistenteDeLaCarta
+        key={restauranteId}
+        restauranteId={restauranteId}
+        nombreRestaurante={menu.restaurante.nombre}
+        habilitado={conAsistente}
+        conCarrito={modo === 'mesa' && hayCarrito}
+      />
     </div>
   )
 }

@@ -14,6 +14,7 @@ import { HistorialSesionesPage } from './pages/admin/gerente/HistorialSesionesPa
 import { TomaPedidosPage } from './pages/admin/gerente/TomaPedidosPage'
 import { AuditoriaPage } from './pages/admin/auditoria/AuditoriaPage'
 import { MarcaPage } from './pages/admin/marca/MarcaPage'
+import { AsistentePage } from './pages/admin/asistente/AsistentePage'
 import { RoleGuard } from './components/RoleGuard'
 import { useRolActual } from './store/contextStore'
 
@@ -83,6 +84,8 @@ export function App() {
             <Route path="/admin/menu"   element={<AdminMenuPage />} />
             <Route path="/admin/tables" element={<MesasRouter />} />
             <Route path="/admin/mozos"  element={<MozosPage />} />
+            {/* El asistente de la carta: los mismos roles que la edición de la carta */}
+            <Route path="/admin/asistente" element={<AsistentePage />} />
 
             {/* Solo OWNER */}
             <Route path="/admin/dashboard" element={

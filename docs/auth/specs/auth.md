@@ -286,7 +286,7 @@ Entregas (ver Decisiones de la planificación de la Fase 4):
 | `POST /mesas`, `GET`/`PATCH /mesas/:id`, `regenerar-qr`, `pin` | OWNER, GERENTE |
 | `GET /mesas` | OWNER, GERENTE, JEFE_SALON, MOZO |
 | `DELETE /mesas/:id` | OWNER |
-| Ítems, categorías, ingredientes (con la imagen, los ingredientes de un ítem, el descuento y las clasificaciones de un ítem) | OWNER, GERENTE. `DELETE /items/:id` y `DELETE /categorias/:id`: OWNER |
+| Ítems, categorías, ingredientes (con la imagen, los ingredientes de un ítem, el descuento, las clasificaciones y los datos del plato para el asistente) | OWNER, GERENTE. `DELETE /items/:id` y `DELETE /categorias/:id`: OWNER |
 | `POST`, `PATCH` y `DELETE /clasificaciones` (catálogo global) | OWNER o GERENTE de algún restaurante. Deuda: es un catálogo global |
 | `GET /mozos`, `GET /mozos/:id`, mesas asignadas (listar, asignar y quitar), llamados de hoy | OWNER, GERENTE |
 | `PATCH /mozos/:id` (solo nombre y teléfono) | OWNER |
@@ -303,8 +303,12 @@ Entregas (ver Decisiones de la planificación de la Fase 4):
 | `PATCH /waiter-calls/:id/atender` | JEFE_SALON o MOZO del restaurante del llamado, con su `Mozo` activo |
 | `GET /restaurantes/:restauranteId/personal` (nueva) | OWNER, GERENTE |
 | `DELETE /restaurantes/:restauranteId/personal/:membresiaId` (nueva) | OWNER (quita GERENTE, JEFE_SALON, MOZO y COCINA), GERENTE (quita JEFE_SALON, MOZO y COCINA). Nadie se quita a sí mismo |
+| `GET` y `PUT /restaurantes/:restauranteId/informacion-local` (asistente de mesa) | OWNER, GERENTE. `asistenteHabilitado`: solo OWNER (prenderlo habilita el gasto en el modelo) |
+| `GET`, `POST`, `PUT /:id` y `DELETE /:id` de `/restaurantes/:restauranteId/preguntas-frecuentes` (asistente de mesa) | OWNER, GERENTE |
 
 Se quitan `POST /marcas`, `DELETE /marcas/:id`, `POST /restaurantes`, `DELETE /restaurantes/:id` (viven en `/root`), `POST /mozos`, `/admins` y `/admin-restaurante` (decisión 5).
+
+El chat del asistente, `POST /asistente/:restauranteId/mensajes`, no entra en esta matriz: es **pública** (está en `PUBLICAS` de `rutas-por-autenticacion.spec.ts`), con el token de la sesión de mesa **opcional**, como el resto de web-cliente. Lo que la acota son el flag del restaurante y los límites de uso, no una membresía.
 
 Decisiones de la planificación de la 4.3:
 1. **Solo backend.** `CobroModal` de web-staff se simplificó en la 4.6.

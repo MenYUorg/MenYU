@@ -46,6 +46,9 @@ model Restaurante {
   ingredientes  Ingrediente[]
   items         ItemMenu[]
   membresias    Membresia[]
+  informacionLocal    InformacionLocal?
+  preguntasFrecuentes PreguntaFrecuente[]
+  registrosAsistente  RegistroAsistente[]
 
   mpAccessToken     String?   @map("mp_access_token")
   mpRefreshToken    String?   @map("mp_refresh_token")
@@ -182,6 +185,7 @@ model SesionMesa {
   participantes SesionMesaCliente[]
   comensales    Comensal[]
   pagos         Pago[]
+  registrosAsistente RegistroAsistente[]
 
   @@map("sesion_mesa")
 }
@@ -289,6 +293,20 @@ model ItemMenu {
   disponible        Boolean  @default(true)
   recomendadoEn     DateTime? @map("recomendado_en")
   imagenUrl         String?  @map("imagen_url")
+
+  // Datos para el asistente de mesa (docs/asistente/specs/asistente.md). Todos opcionales: sin el dato, el asistente
+  // dice que no lo tiene. porcionPersonas solo tiene sentido con PARA_N_PERSONAS; porcionDetalle es texto libre
+  // ("300 g", "3 unidades"). etiquetasDietarias vacío = sin etiquetas declaradas. No reemplaza al catálogo de
+  // ClasificacionDieta: es el vocabulario cerrado que declara el local para el asistente.
+  tamanioPorcion       TamanioPorcion?    @map("tamanio_porcion")
+  porcionPersonas      Int?               @map("porcion_personas")
+  porcionDetalle       String?            @map("porcion_detalle")
+  temperatura          Temperatura?
+  nivelPicante         NivelPicante?      @map("nivel_picante")
+  acompanamiento       String?
+  tiempoPreparacionMin Int?               @map("tiempo_preparacion_min")
+  etiquetasDietarias   EtiquetaDietaria[] @default([]) @map("etiquetas_dietarias")
+  infoAdicional        String?            @map("info_adicional")
 
   restaurante    Restaurante        @relation(fields: [restauranteId], references: [id])
   categoria      CategoriaMenu?     @relation(fields: [categoriaId], references: [id])
@@ -573,4 +591,105 @@ model Membresia {
   @@index([restauranteId])
   @@index([marcaId])
   @@map("membresia")
+}
+
+// ─────────────────────────────────────────────
+// ASISTENTE DE MESA — docs/asistente/specs/asistente.md
+// ─────────────────────────────────────────────
+
+enum TamanioPorcion {
+  INDIVIDUAL
+  PARA_COMPARTIR
+  PARA_N_PERSONAS
+
+  @@map("tamanio_porcion")
+}
+
+enum Temperatura {
+  CALIENTE
+  FRIO
+  AMBIENTE
+
+  @@map("temperatura")
+}
+
+enum NivelPicante {
+  NADA
+  SUAVE
+  MEDIO
+  ALTO
+
+  @@map("nivel_picante")
+}
+
+enum EtiquetaDietaria {
+  VEGETARIANO
+  VEGANO
+  SIN_TACC
+  SIN_LACTOSA
+
+  @@map("etiqueta_dietaria")
+}
+
+// Información del local para el asistente, 1:1 con Restaurante. Sin fila = nada cargado (y el asistente apagado).
+// Los servicios son tri-estado a propósito: null = no declarado (el asistente dice que no tiene el dato),
+// true/false = declarado.
+model InformacionLocal {
+  id                   String   @id @default(uuid())
+  restauranteId        String   @unique @map("restaurante_id")
+  asistenteHabilitado  Boolean  @default(false) @map("asistente_habilitado")
+  horarios             String?
+  formasPago           String?  @map("formas_pago")
+  wifi                 Boolean?
+  petFriendly          Boolean? @map("pet_friendly")
+  accesibleSillaRuedas Boolean? @map("accesible_silla_ruedas")
+  opcionesParaChicos   Boolean? @map("opciones_para_chicos")
+  estacionamiento      Boolean?
+
+  restaurante Restaurante @relation(fields: [restauranteId], references: [id], onDelete: Cascade)
+
+  @@map("informacion_local")
+}
+
+// Preguntas frecuentes que carga el dueño. Se listan por fecha de creación: sin campo de orden en el MVP.
+model PreguntaFrecuente {
+  id            String   @id @default(uuid())
+  restauranteId String   @map("restaurante_id")
+  pregunta      String
+  respuesta     String
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  restaurante Restaurante @relation(fields: [restauranteId], references: [id], onDelete: Cascade)
+
+  @@index([restauranteId, createdAt])
+  @@map("pregunta_frecuente")
+}
+
+// Una fila por pregunta al asistente: log de evaluación y fuente de los contadores de uso (por sesión de mesa y
+// diario), así los límites sobreviven a un redeploy. Se inserta antes de llamar al modelo (cuenta el intento aunque
+// falle) y se completa al terminar el stream. Es anónimo: sesionMesaId identifica una mesa, no a una persona, y no
+// se guarda la IP. createdAt es timestamptz, como en HistorialRoot: el tope diario cuenta desde el inicio del día UTC.
+model RegistroAsistente {
+  id            String   @id @default(uuid())
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  restauranteId String   @map("restaurante_id")
+  // Solo si la pregunta vino con sesión de mesa.
+  sesionMesaId  String?  @map("sesion_mesa_id")
+  // Solo el último mensaje del usuario, no el historial.
+  pregunta      String
+  // Null hasta que termina el stream; queda null si falló.
+  respuesta     String?
+  modelo        String
+  tokensEntrada Int?     @map("tokens_entrada")
+  tokensSalida  Int?     @map("tokens_salida")
+  duracionMs    Int?     @map("duracion_ms")
+
+  restaurante Restaurante @relation(fields: [restauranteId], references: [id], onDelete: Cascade)
+  sesionMesa  SesionMesa? @relation(fields: [sesionMesaId], references: [id], onDelete: SetNull)
+
+  @@index([restauranteId, createdAt])
+  @@index([sesionMesaId])
+  @@index([createdAt])
+  @@map("registro_asistente")
 }

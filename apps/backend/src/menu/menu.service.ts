@@ -50,6 +50,7 @@ export class MenuService {
         direccion: true,
         logoUrl: true,
         marca: { select: { logoUrl: true, activo: true } },
+        informacionLocal: { select: { asistenteHabilitado: true } },
       },
     })
     // Dado de baja el restaurante o su marca, la carta deja de verse (igual que en Discovery).
@@ -59,6 +60,9 @@ export class MenuService {
       ? { nombre: { contains: filtros.buscar, mode: 'insensitive' as const } }
       : {}
 
+    // El conjunto que devuelve este método (la unión de las tres secciones: esta, los recomendados y los descuentos)
+    // es el mismo que el asistente repite en su contexto. Si cambia qué platos entran acá, actualizá
+    // `enAlgunaSeccionDeLaCarta` (common/carta-publica.ts) y su test en asistente/contexto.service.spec.ts.
     const categorias = await this.prisma.categoriaMenu.findMany({
       where: {
         restauranteId,
@@ -117,6 +121,8 @@ export class MenuService {
         direccion: restaurante.direccion,
         // El logo propio del restaurante manda; si no tiene, el de su marca; si tampoco, `null` (la app muestra el de MenYU).
         logoUrl: restaurante.logoUrl ?? restaurante.marca?.logoUrl ?? null,
+        // Si web-cliente muestra el botón del asistente. Sin información del local cargada, apagado.
+        asistenteHabilitado: restaurante.informacionLocal?.asistenteHabilitado ?? false,
       },
       categorias: result,
       recomendados,

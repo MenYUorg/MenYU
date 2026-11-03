@@ -405,6 +405,53 @@ describe('ItemsService — descuentos', () => {
     })
   })
 
+  // ── Datos para el asistente de mesa ────────────────────────────────────────
+
+  describe('update — datos para el asistente', () => {
+    const dataGuardada = () => mockPrisma.itemMenu.update.mock.calls[0][0].data
+
+    it('guarda los campos nuevos y los devuelve', async () => {
+      const datos = {
+        tamanioPorcion: 'PARA_N_PERSONAS' as const,
+        porcionPersonas: 2,
+        porcionDetalle: '600 g',
+        temperatura: 'CALIENTE' as const,
+        nivelPicante: 'SUAVE' as const,
+        acompanamiento: 'Papas fritas',
+        tiempoPreparacionMin: 20,
+        etiquetasDietarias: ['SIN_TACC' as const, 'VEGETARIANO' as const, 'SIN_TACC' as const],
+        infoAdicional: 'Se puede pedir sin cebolla',
+      }
+
+      const result = await service.update('item-1', datos, GERENTE)
+
+      // Las etiquetas repetidas quedan una vez.
+      expect(dataGuardada()).toEqual({ ...datos, etiquetasDietarias: ['SIN_TACC', 'VEGETARIANO'] })
+      expect(result).toMatchObject({ porcionPersonas: 2, temperatura: 'CALIENTE', etiquetasDietarias: ['SIN_TACC', 'VEGETARIANO'] })
+    })
+
+    it.each([
+      ['cambia a otro tamaño', { tamanioPorcion: 'INDIVIDUAL' as const }, 'PARA_N_PERSONAS'],
+      ['borra el tamaño', { tamanioPorcion: null }, 'PARA_N_PERSONAS'],
+      ['manda personas con otro tamaño', { porcionPersonas: 4 }, 'PARA_COMPARTIR'],
+    ])('porcionPersonas se borra si el plato %s', async (_caso, dto, tamanioActual) => {
+      mockPrisma.itemMenu.findUnique.mockResolvedValue({ ...ITEM, tamanioPorcion: tamanioActual, porcionPersonas: 3 })
+
+      await service.update('item-1', dto, OWNER)
+
+      expect(dataGuardada()).toMatchObject({ porcionPersonas: null })
+    })
+
+    it('null borra cada campo (las etiquetas quedan vacías) y sin mandarlos no se tocan', async () => {
+      await service.update('item-1', { temperatura: null, infoAdicional: null, etiquetasDietarias: null }, OWNER)
+      expect(dataGuardada()).toEqual({ temperatura: null, infoAdicional: null, etiquetasDietarias: [] })
+
+      mockPrisma.itemMenu.update.mockClear()
+      await service.update('item-1', { nombre: 'Milanesa XL' }, OWNER)
+      expect(dataGuardada()).toEqual({ nombre: 'Milanesa XL' })
+    })
+  })
+
   // ── Los campos derivados llegan en todas las respuestas ────────────────────
 
   describe('respuestas con precio vigente', () => {

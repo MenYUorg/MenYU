@@ -10,7 +10,7 @@ import {
   onSesionCobrada,
   onSesionQuierePagar,
 } from './socket'
-import { logoutSimulado, reiniciarSesionDePrueba } from '../test/authClient'
+import { logoutSimulado, reiniciarSesionDePrueba, sesionDePrueba } from '../test/authClient'
 
 vi.mock('@menyu/auth-client', async () => (await import('../test/authClient')).moduloSimulado())
 
@@ -51,13 +51,17 @@ function conectar() {
 }
 
 describe('el socket de web-staff', () => {
-  it('conecta sin mandar ningún token: el gateway no autentica la conexión', () => {
+  it('conecta con `auth`, que le entrega el token de la sesión al handshake', async () => {
+    sesionDePrueba.token = 'token-del-mozo'
     joinRestauranteComoMozo('rest-1')
 
     expect(ioFalso).toHaveBeenCalledTimes(1)
-    const [, opciones] = ioFalso.mock.calls[0] as unknown as [string, Record<string, unknown>]
-    expect(opciones).toEqual({ transports: ['websocket'] })
-    expect(opciones['auth']).toBeUndefined()
+    const [, opciones] = ioFalso.mock.calls[0] as unknown as [string, { auth: (cb: (datos: object) => void) => void }]
+    expect(opciones).toEqual({ transports: ['websocket'], auth: expect.any(Function) })
+
+    const cb = vi.fn()
+    opciones.auth(cb)
+    await vi.waitFor(() => expect(cb).toHaveBeenCalledWith({ token: 'token-del-mozo' }))
   })
 
   it('reusa la misma conexión para el mozo y para la cocina', () => {

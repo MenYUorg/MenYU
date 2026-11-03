@@ -33,6 +33,8 @@ const PUBLICAS = [
   'POST /orders',
   'POST /pedidos',
   'POST /waiter-calls',
+  // El asistente de mesa: el token de la sesión de mesa es opcional (sin él, la carta vista desde Discovery).
+  'POST /asistente/:restauranteId/mensajes',
   // Mercado Pago: el webhook y la vuelta del OAuth (con el `state` firmado).
   'POST /payments/webhook/mercadopago/restaurante/:restauranteId/pago/:pagoId',
   'GET /payments/mercadopago/oauth/callback',

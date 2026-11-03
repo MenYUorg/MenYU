@@ -2,12 +2,16 @@ import 'reflect-metadata'
 import 'dotenv/config'
 import { NestFactory } from '@nestjs/core'
 import { ValidationPipe, RequestMethod } from '@nestjs/common'
+import { NestExpressApplication } from '@nestjs/platform-express'
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger'
 import { AppModule } from './app.module'
 import { isAllowedOrigin } from './common/is-allowed-origin'
+import { saltosDeProxy } from './common/trust-proxy'
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule)
+  const app = await NestFactory.create<NestExpressApplication>(AppModule)
+  // La IP real detrás del edge de Railway, sin confiar en un X-Forwarded-For inventado (common/trust-proxy.ts).
+  app.set('trust proxy', saltosDeProxy())
 
   app.enableCors({
     origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {

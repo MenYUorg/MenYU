@@ -51,7 +51,8 @@ export function usePedidosCliente() {
 
     if (!restauranteId) return
 
-    const socket = io(`${WS_BASE}/ws`, { transports: ['websocket'] })
+    // El JWT de la mesa viaja en el handshake (`auth`) y el gateway lo verifica al unirse a la sala.
+    const socket = io(`${WS_BASE}/ws`, { transports: ['websocket'], auth: { token: jwt } })
 
     socket.on('connect', () => {
       socket.emit('session:join', { restauranteId })
