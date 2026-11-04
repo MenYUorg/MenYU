@@ -1,18 +1,16 @@
-import { Body, Controller, Get, Headers, HttpCode, HttpStatus, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common'
-import type { Request } from 'express'
+import { Body, Controller, Get, Headers, HttpCode, HttpStatus, Param, Patch, Post, Query } from '@nestjs/common'
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger'
 import { Personal } from '../auth/decorators/personal.decorator'
 import { RequiereRolEn } from '../auth/decorators/requiere-rol.decorator'
 import { UsuarioActual } from '../auth/decorators/usuario-actual.decorator'
 import { SALON } from '../auth/roles-del-personal'
 import { UsuarioAutenticado } from '../auth/supabase/usuario-autenticado'
-import { SessionAuthGuard, SessionJwtPayload } from '../auth/guards/session-auth.guard'
 import { SessionsService, OpenSessionResult, OpenStaffSessionResult } from './sessions.service'
 import { OpenSessionDto } from './dto/open-session.dto'
 import { OpenStaffSessionDto } from './dto/open-staff-session.dto'
 import { RegistrarCobroDto } from './dto/registrar-cobro.dto'
 
-// `open` y `close` son del comensal. Las demás, del salón (OWNER, GERENTE, JEFE_SALON y MOZO): con el restaurante en la
+// `open` es del comensal. Las demás, del salón (OWNER, GERENTE, JEFE_SALON y MOZO): con el restaurante en la
 // query lo exige la ruta; en las de una mesa o una sesión, el service con el restaurante de la mesa.
 @ApiTags('sessions')
 @Controller('sessions')
@@ -69,19 +67,6 @@ export class SessionsController {
     @UsuarioActual() usuario: UsuarioAutenticado,
   ) {
     return this.sessions.getSessionActiva(mesaId, usuario)
-  }
-
-  @Post('close')
-  @HttpCode(HttpStatus.OK)
-  @UseGuards(SessionAuthGuard)
-  @ApiOperation({ summary: 'Cerrar la sesión activa del cliente autenticado' })
-  @ApiResponse({ status: 200, description: 'Sesión cerrada' })
-  @ApiResponse({ status: 401, description: 'Session JWT requerido o inválido' })
-  @ApiResponse({ status: 400, description: 'La sesión ya está cerrada' })
-  close(
-    @Req() req: Request & { sessionUser: SessionJwtPayload },
-  ): Promise<{ ok: boolean }> {
-    return this.sessions.close(req.sessionUser)
   }
 
   @Get('activas')

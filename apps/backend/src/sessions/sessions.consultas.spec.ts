@@ -1,6 +1,5 @@
-import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common'
+import { ForbiddenException, NotFoundException } from '@nestjs/common'
 import { JwtService } from '@nestjs/jwt'
-import { SessionJwtPayload } from '../auth/guards/session-auth.guard'
 import { SALON } from '../auth/roles-del-personal'
 import { AccesoService } from '../auth/supabase/acceso.service'
 import { CuentaDeClienteService } from '../auth/supabase/cuenta-de-cliente.service'
@@ -16,9 +15,10 @@ import { CUENTAS } from '../test/acceso-de-test'
 const acceso = { exigirRol: jest.fn() }
 
 const prisma = {
-  sesionMesa: { findUnique: jest.fn(), findFirst: jest.fn(), findMany: jest.fn(), update: jest.fn() },
+  sesionMesa: { findFirst: jest.fn(), findMany: jest.fn(), updateMany: jest.fn() },
   sesionMesaCliente: { count: jest.fn() },
   mesa: { findUnique: jest.fn(), update: jest.fn() },
+  pago: { updateMany: jest.fn() },
   pedidoItem: { findMany: jest.fn() },
   llamadoMozo: { findFirst: jest.fn() },
   pedido: { findMany: jest.fn() },
@@ -27,7 +27,6 @@ const prisma = {
 const gateway = { emitSesionCerrada: jest.fn() }
 
 const MOZO = CUENTAS.MOZO
-const SESION_JWT: SessionJwtPayload = { sub: 'cli-1', tipo: 'cliente', sesionId: 'ses-1', mesaId: 'mesa-1', restauranteId: 'rest-1' }
 const MESA = { id: 'mesa-1', restauranteId: 'rest-1', numero: '4' }
 
 const fecha = (iso: string) => new Date(iso)
@@ -43,9 +42,10 @@ describe('SessionsService: cierre y consultas del staff', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     acceso.exigirRol.mockResolvedValue(['MOZO'])
-    // $transaction recibe las operaciones ya armadas: devuelve sus resultados.
-    prisma.$transaction.mockImplementation((operaciones: unknown[]) => Promise.all(operaciones))
-    prisma.sesionMesa.update.mockResolvedValue({})
+    // cerrarMesaAdmin abre una transacción con un callback: recibe este mismo doble como tx.
+    prisma.$transaction.mockImplementation((fn: (tx: typeof prisma) => unknown) => fn(prisma))
+    prisma.sesionMesa.updateMany.mockResolvedValue({ count: 1 })
+    prisma.pago.updateMany.mockResolvedValue({ count: 0 })
     prisma.mesa.update.mockResolvedValue({})
     service = new SessionsService(
       prisma as unknown as PrismaService,
@@ -61,45 +61,12 @@ describe('SessionsService: cierre y consultas del staff', () => {
     jest.useRealTimers()
   })
 
-  describe('close (el comensal cierra su sesión)', () => {
-    it('cierra la sesión, libera la mesa y avisa al restaurante', async () => {
-      // Arrange
-      prisma.sesionMesa.findUnique.mockResolvedValue({ id: 'ses-1', estado: 'activa' })
-
-      // Act
-      const resultado = await service.close(SESION_JWT)
-
-      // Assert
-      expect(resultado).toEqual({ ok: true })
-      expect(prisma.sesionMesa.update).toHaveBeenCalledWith({
-        where: { id: 'ses-1' },
-        data: { estado: 'cerrada', cerradaEn: expect.any(Date) },
-      })
-      expect(prisma.mesa.update).toHaveBeenCalledWith({ where: { id: 'mesa-1' }, data: { estado: 'libre' } })
-      expect(prisma.$transaction).toHaveBeenCalledTimes(1)
-      expect(gateway.emitSesionCerrada).toHaveBeenCalledWith('rest-1', 'ses-1')
-    })
-
-    it('si la sesión no existe responde 404', async () => {
-      prisma.sesionMesa.findUnique.mockResolvedValue(null)
-
-      await expect(service.close(SESION_JWT)).rejects.toThrow(new NotFoundException('Sesión no encontrada'))
-      expect(prisma.$transaction).not.toHaveBeenCalled()
-    })
-
-    it('si la sesión ya está cerrada responde 400 y no avisa', async () => {
-      prisma.sesionMesa.findUnique.mockResolvedValue({ id: 'ses-1', estado: 'cerrada' })
-
-      await expect(service.close(SESION_JWT)).rejects.toThrow(new BadRequestException('La sesión ya está cerrada'))
-      expect(gateway.emitSesionCerrada).not.toHaveBeenCalled()
-    })
-  })
-
   describe('cerrarMesaAdmin (el staff cierra la mesa)', () => {
-    it('cierra la sesión activa de la mesa, la libera y avisa', async () => {
+    it('cierra la sesión activa de la mesa, cancela sus pagos pendientes, la libera y avisa', async () => {
       // Arrange
       prisma.mesa.findUnique.mockResolvedValue(MESA)
       prisma.sesionMesa.findFirst.mockResolvedValue({ id: 'ses-9' })
+      prisma.pago.updateMany.mockResolvedValue({ count: 2 })
 
       // Act
       const resultado = await service.cerrarMesaAdmin('mesa-1', MOZO)
@@ -108,12 +75,30 @@ describe('SessionsService: cierre y consultas del staff', () => {
       expect(resultado).toEqual({ ok: true })
       expect(acceso.exigirRol).toHaveBeenCalledWith(MOZO.id, 'rest-1', SALON)
       expect(prisma.sesionMesa.findFirst).toHaveBeenCalledWith({ where: { mesaId: 'mesa-1', estado: 'activa' } })
-      expect(prisma.sesionMesa.update).toHaveBeenCalledWith({
-        where: { id: 'ses-9' },
+      expect(prisma.$transaction).toHaveBeenCalledWith(expect.any(Function), { isolationLevel: 'Serializable' })
+      expect(prisma.sesionMesa.updateMany).toHaveBeenCalledWith({
+        where: { id: 'ses-9', estado: 'activa' },
         data: { estado: 'cerrada', cerradaEn: expect.any(Date) },
+      })
+      expect(prisma.pago.updateMany).toHaveBeenCalledWith({
+        where: { sesionId: 'ses-9', estado: 'pendiente' },
+        data: { estado: 'cancelado' },
       })
       expect(prisma.mesa.update).toHaveBeenCalledWith({ where: { id: 'mesa-1' }, data: { estado: 'libre' } })
       expect(gateway.emitSesionCerrada).toHaveBeenCalledWith('rest-1', 'ses-9')
+    })
+
+    it('si otro la cerró entre la búsqueda y la transacción (el helper da false): 404, sin tocar nada más y sin avisar', async () => {
+      prisma.mesa.findUnique.mockResolvedValue(MESA)
+      prisma.sesionMesa.findFirst.mockResolvedValue({ id: 'ses-9' })
+      prisma.sesionMesa.updateMany.mockResolvedValue({ count: 0 })
+
+      await expect(service.cerrarMesaAdmin('mesa-1', MOZO)).rejects.toThrow(
+        new NotFoundException('No hay sesión activa en esta mesa'),
+      )
+      expect(prisma.pago.updateMany).not.toHaveBeenCalled()
+      expect(prisma.mesa.update).not.toHaveBeenCalled()
+      expect(gateway.emitSesionCerrada).not.toHaveBeenCalled()
     })
 
     it('si la mesa no existe responde 404 sin chequear acceso', async () => {

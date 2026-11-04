@@ -20,6 +20,7 @@ import { RegistrarCobroDto } from './dto/registrar-cobro.dto'
 import { DivisionService } from '../comensales/division.service'
 import { runSerializableTransaction } from '../common/run-serializable-transaction'
 import { atribucionDelCobro } from '../common/atribucion-del-cobro'
+import { cerrarSesionDeMesa } from '../common/cerrar-sesion-de-mesa'
 import { LimiteIntentos } from '../common/limite-intentos'
 import { EDITOR_INCLUDE, editorDe } from '../pedidos/editor-de-la-edicion'
 import { restauranteDisponible, SELECT_DISPONIBILIDAD } from '../common/restaurante-disponible'
@@ -266,27 +267,6 @@ export class SessionsService {
     }
   }
 
-  async close(payload: SessionJwtPayload): Promise<{ ok: boolean }> {
-    const sesion = await this.prisma.sesionMesa.findUnique({ where: { id: payload.sesionId } })
-    if (!sesion) throw new NotFoundException('Sesión no encontrada')
-    if (sesion.estado !== 'activa') throw new BadRequestException('La sesión ya está cerrada')
-
-    await this.prisma.$transaction([
-      this.prisma.sesionMesa.update({
-        where: { id: payload.sesionId },
-        data: { estado: 'cerrada', cerradaEn: new Date() },
-      }),
-      this.prisma.mesa.update({
-        where: { id: payload.mesaId },
-        data: { estado: 'libre' },
-      }),
-    ])
-
-    this.gateway.emitSesionCerrada(payload.restauranteId, payload.sesionId)
-
-    return { ok: true }
-  }
-
   async cerrarMesaAdmin(mesaId: string, usuario: UsuarioAutenticado): Promise<{ ok: boolean }> {
     const mesa = await this.prisma.mesa.findUnique({ where: { id: mesaId } })
     if (!mesa) throw new NotFoundException('Mesa no encontrada')
@@ -295,18 +275,17 @@ export class SessionsService {
     const sesion = await this.prisma.sesionMesa.findFirst({
       where: { mesaId, estado: 'activa' },
     })
-    if (!sesion) throw new NotFoundException('No hay sesión activa en esta mesa')
+    const sinSesionActiva = new NotFoundException('No hay sesión activa en esta mesa')
+    if (!sesion) throw sinSesionActiva
 
-    await this.prisma.$transaction([
-      this.prisma.sesionMesa.update({
-        where: { id: sesion.id },
-        data: { estado: 'cerrada', cerradaEn: new Date() },
-      }),
-      this.prisma.mesa.update({
-        where: { id: mesaId },
-        data: { estado: 'libre' },
-      }),
-    ])
+    // Cerrar a mano cancela los pagos pendientes: con la mesa cerrada ya no se van a cobrar, y un cobro tardío no la
+    // vuelve a cerrar. Si otro la cerró entre la búsqueda y acá, el helper no toca nada.
+    const cerro = await runSerializableTransaction(
+      this.prisma,
+      (tx) => cerrarSesionDeMesa(tx, sesion.id, mesaId, new Date()),
+      'cerrarMesaAdmin',
+    )
+    if (!cerro) throw sinSesionActiva
 
     this.gateway.emitSesionCerrada(mesa.restauranteId, sesion.id)
 
@@ -641,12 +620,19 @@ export class SessionsService {
     if (!sesion) throw new NotFoundException('Sesión no encontrada')
 
     const { usuarioId, mozoId } = await atribucionDelCobro(this.prisma, this.acceso, usuario, sesion.mesa.restauranteId, dto.mozoId)
-    if (sesion.cerradaEn !== null) throw new BadRequestException('La sesión ya fue cerrada')
+    // Filtro rápido; el que vale es el de adentro de la transacción.
+    const yaCerrada = new BadRequestException('La sesión ya fue cerrada')
+    if (sesion.cerradaEn !== null) throw yaCerrada
 
     const fechaCobro = new Date()
     const ahora = fechaCobro.getTime()
 
     const sesionCerrada = await runSerializableTransaction(this.prisma, async (tx) => {
+      // Se vuelve a mirar dentro de la transacción: la mesa se puede haber cerrado (a mano o con otro cobro) después de
+      // la lectura de arriba.
+      const actual = await tx.sesionMesa.findUnique({ where: { id: sesionId }, select: { estado: true } })
+      if (actual?.estado !== 'activa') throw yaCerrada
+
       const totalSesion = await this.divisionService.calcularTotalSesion(tx, sesionId)
 
       const pagosAprobadosPrevios = await tx.pago.findMany({
@@ -717,14 +703,8 @@ export class SessionsService {
       const totalCubierto = pagosAprobados.reduce((acc, p) => acc + Number(p.monto), 0)
 
       if (totalCubierto >= totalSesion) {
-        await tx.sesionMesa.update({
-          where: { id: sesionId },
-          data: { estado: 'cerrada', cerradaEn: fechaCobro },
-        })
-        await tx.mesa.update({
-          where: { id: sesion.mesaId },
-          data: { estado: 'libre' },
-        })
+        // El helper cancela lo que quede pendiente (p. ej. un segundo efectivo). Si da false, se revierte el cobro.
+        if (!(await cerrarSesionDeMesa(tx, sesionId, sesion.mesaId, fechaCobro))) throw yaCerrada
         return true
       }
 

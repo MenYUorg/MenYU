@@ -1,9 +1,9 @@
 // Verifica en staging el límite de intentos fallidos de PIN (PR #383).
 //
 // Secuencia: 9 PIN incorrectos (404) → el PIN correcto abre la sesión (200) → el 10.º incorrecto (404)
-// → el 11.º incorrecto responde 429. La sesión que se abre se cierra al final.
+// → el 11.º incorrecto responde 429. La sesión que se abre queda abierta: se cierra desde el panel del mozo.
 //
-// Escribe en staging: abre y cierra una sesión de mesa, y deja el ingreso por PIN de ese restaurante
+// Escribe en staging: abre una sesión de mesa (que queda abierta), y deja el ingreso por PIN de ese restaurante
 // bloqueado 15 minutos. Si el backend corre en varias instancias, cada una cuenta por separado y el
 // 429 puede no llegar en el intento 11.
 //
@@ -23,7 +23,7 @@
 //     y termina en /api (lista blanca: no hace falta conocer el host de producción para no pegarle).
 //   - Valida que el PIN sea de 4 dígitos y distinto del PIN incorrecto, sin imprimirlo.
 //   - Nunca imprime el PIN, el JWT ni el id del restaurante: solo los códigos HTTP y el mensaje del 429.
-//   - Cierra la sesión aunque falle un paso posterior (try/finally) y avisa si no la pudo cerrar.
+//   - Si abrió la sesión, avisa al final en qué mesa quedó abierta, aunque falle un paso posterior (try/finally).
 
 const { API_URL, RESTAURANTE_ID, PIN_CORRECTO, STAGING_API_HOST, CONFIRMAR_STAGING } = process.env
 
@@ -74,27 +74,25 @@ function anotar(descripcion, esperado, obtenido) {
 }
 
 let jwt
+let numeroMesa
 try {
   for (let i = 1; i <= 9; i++) anotar(`PIN incorrecto #${i}`, 404, (await abrir(PIN_INCORRECTO)).status)
 
   const correcto = await abrir(PIN_CORRECTO)
   anotar('PIN correcto con 9 fallos', 200, correcto.status)
   jwt = correcto.body?.jwt
+  numeroMesa = correcto.body?.numeroMesa
 
   anotar('PIN incorrecto #10', 404, (await abrir(PIN_INCORRECTO)).status)
   const bloqueado = await abrir(PIN_INCORRECTO)
   anotar('PIN incorrecto #11', 429, bloqueado.status)
   if (bloqueado.body?.message) console.log(`      mensaje: ${bloqueado.body.message}`)
 } finally {
+  // El comensal no tiene cómo cerrar la sesión (se cierra al cobrar o desde el salón): queda abierta hasta que la cierre
+  // el mozo.
   if (jwt) {
-    const cierre = await fetch(`${base}/sessions/close`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${jwt}` },
-      signal: AbortSignal.timeout(15_000),
-    }).catch(() => null)
-    console.log(cierre?.ok
-      ? `Cierre de la sesión abierta por el script: HTTP ${cierre.status}`
-      : 'No se pudo cerrar la sesión abierta por el script: cerrala desde el panel del mozo')
+    const mesa = numeroMesa ? `la mesa ${numeroMesa}` : 'la mesa'
+    console.log(`Quedó una sesión abierta en ${mesa} (la abrió el script con el PIN correcto): cerrala desde el panel del mozo`)
   }
 }
 

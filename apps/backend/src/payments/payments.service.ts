@@ -17,6 +17,7 @@ import { isAllowedOrigin } from '../common/is-allowed-origin'
 import { runSerializableTransaction } from '../common/run-serializable-transaction'
 import { SELECT_DISPONIBILIDAD, restauranteDisponible } from '../common/restaurante-disponible'
 import { atribucionDelCobro } from '../common/atribucion-del-cobro'
+import { cerrarSesionDeMesa } from '../common/cerrar-sesion-de-mesa'
 import { AccesoService } from '../auth/supabase/acceso.service'
 import { UsuarioAutenticado } from '../auth/supabase/usuario-autenticado'
 import { ConfirmarEfectivoDto } from './dto/confirmar-efectivo.dto'
@@ -221,7 +222,14 @@ export class PaymentsService {
     const yaNoPendiente = new ConflictException('Ese pago ya no está pendiente')
     if (pago.estado !== ESTADO_PAGO_PENDIENTE) throw yaNoPendiente
 
+    // Un efectivo pendiente de una mesa que ya se cerró no se confirma: le pisaría `cerradaEn` y liberaría una mesa que
+    // puede tener otra sesión abierta.
+    const sesionNoActiva = new ConflictException('La sesión ya no está activa')
+
     return runSerializableTransaction(this.prisma, async (tx) => {
+      const sesion = await tx.sesionMesa.findUnique({ where: { id: pago.sesionId }, select: { estado: true } })
+      if (sesion?.estado !== 'activa') throw sesionNoActiva
+
       // El estado se vuelve a mirar al escribir: otro cobro, el webhook o el reintento de esta transacción pueden haberlo
       // cambiado después de la lectura de arriba.
       const { count } = await tx.pago.updateMany({
@@ -237,21 +245,10 @@ export class PaymentsService {
       const totalCubierto = pagosAprobados.reduce((acc, p) => acc + Number(p.monto), 0)
       const sesionCubierta = totalCubierto >= totalSesion
 
-      if (sesionCubierta) {
-        // La mesa quedó cobrada: cualquier pago que siga pendiente (p. ej. un MP que un
-        // comensal inició) ya no se va a cobrar. El pago de este cobro ya está aprobado, no entra.
-        await tx.pago.updateMany({
-          where: { sesionId: pago.sesionId, estado: ESTADO_PAGO_PENDIENTE },
-          data: { estado: ESTADO_PAGO_CANCELADO },
-        })
-        await tx.sesionMesa.update({
-          where: { id: pago.sesionId },
-          data: { estado: 'cerrada', cerradaEn: fechaCobro },
-        })
-        await tx.mesa.update({
-          where: { id: pago.sesion.mesaId },
-          data: { estado: 'libre' },
-        })
+      // La mesa quedó cobrada: el helper cancela lo que siga pendiente (p. ej. un MP que un comensal inició). El pago de
+      // este cobro ya está aprobado, no entra. Si otro la cerró en el medio, se revierte la aprobación.
+      if (sesionCubierta && !(await cerrarSesionDeMesa(tx, pago.sesionId, pago.sesion.mesaId, fechaCobro))) {
+        throw sesionNoActiva
       }
 
       return { sesionId: pago.sesionId, estado: sesionCubierta ? 'cerrada' : 'activa' }
@@ -439,24 +436,19 @@ export class PaymentsService {
       const totalCubierto = pagosAprobados.reduce((acc, p) => acc + Number(p.monto), 0)
       const sesionCubierta = totalCubierto >= totalSesion
 
-      if (sesionCubierta) {
-        // La mesa quedó cobrada: cualquier pago que siga pendiente (p. ej. un efectivo que un
-        // comensal pidió) ya no se va a cobrar. El pago de este webhook ya está aprobado, no entra.
-        await tx.pago.updateMany({
-          where: { sesionId: pagoActual.sesionId, estado: ESTADO_PAGO_PENDIENTE },
-          data: { estado: ESTADO_PAGO_CANCELADO },
-        })
-        await tx.sesionMesa.update({
-          where: { id: pagoActual.sesionId },
-          data: { estado: 'cerrada', cerradaEn: new Date() },
-        })
-        await tx.mesa.update({
-          where: { id: pagoActual.sesion.mesaId },
-          data: { estado: 'libre' },
-        })
-      }
+      if (!sesionCubierta) return false
 
-      return sesionCubierta
+      // La mesa quedó cobrada: el helper cancela lo que siga pendiente (p. ej. un efectivo que un comensal pidió). El
+      // pago de este webhook ya está aprobado, no entra.
+      if (await cerrarSesionDeMesa(tx, pagoActual.sesionId, pagoActual.sesion.mesaId, new Date())) return true
+
+      // La sesión ya estaba cerrada: la plata entró, así que el pago queda aprobado, pero la sesión y la mesa no se tocan
+      // (la mesa puede tener otra sesión abierta).
+      this.logger.warn(
+        `procesarWebhookMercadoPago: MP aprobado sobre una sesión ya cerrada; revisar ` +
+          `(sesionId=${pagoActual.sesionId}, pagoId=${pagoId}, merchantOrderId=${resultado.externalId})`,
+      )
+      return false
     }, 'procesarWebhookMercadoPago')
 
     if (sesionCerrada) {
