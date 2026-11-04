@@ -166,10 +166,11 @@ describe('Cierre de una sesión de mesa (e2e)', () => {
   describe('estado heredado: una sesión vieja cerrada con un efectivo pendiente y la mesa con una sesión nueva', () => {
     const CERRADA_EN = new Date('2026-11-02T22:00:00.000Z')
 
-    async function mesaConSesionNueva() {
+    /** La sesión vieja es de 1000; `montoPendiente` es el del efectivo que le quedó pendiente. */
+    async function mesaConSesionNueva(montoPendiente = 1000) {
       const m = await crearMesa('ocupada')
       const vieja = await crearSesion(m.id, 1000, CERRADA_EN)
-      const pagoViejo = await crearPago(vieja.id, 'efectivo', ESTADO_PAGO_PENDIENTE, 1000)
+      const pagoViejo = await crearPago(vieja.id, 'efectivo', ESTADO_PAGO_PENDIENTE, montoPendiente)
       const nueva = await crearSesion(m.id, 2000)
       return { m, vieja, pagoViejo, nueva }
     }
@@ -189,6 +190,16 @@ describe('Cierre de una sesión de mesa (e2e)', () => {
 
     it('c) confirmarEfectivo del pago viejo: 409 "La sesión ya no está activa", y no libera la mesa ni toca la sesión nueva', async () => {
       const mundo = await mesaConSesionNueva()
+
+      await expect(payments.confirmarEfectivo({ pagoId: mundo.pagoViejo.id }, owner)).rejects.toThrow(
+        new ConflictException('La sesión ya no está activa'),
+      )
+
+      await nadaCambio(mundo)
+    })
+
+    it('f) confirmarEfectivo de un pago viejo que no cubre el total (no se llega al helper): 409 por la relectura, y el pago sigue pendiente', async () => {
+      const mundo = await mesaConSesionNueva(400)
 
       await expect(payments.confirmarEfectivo({ pagoId: mundo.pagoViejo.id }, owner)).rejects.toThrow(
         new ConflictException('La sesión ya no está activa'),
