@@ -1,5 +1,18 @@
-import { Body, Controller, Get, Headers, HttpCode, HttpStatus, Logger, OnModuleInit, Param, Post, Query, Res, UseGuards } from '@nestjs/common'
-import { Response } from 'express'
+import {
+  Body,
+  Controller,
+  Get,
+  Headers,
+  HttpCode,
+  HttpStatus,
+  InternalServerErrorException,
+  Logger,
+  OnModuleInit,
+  Param,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common'
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger'
 import { SessionAuthGuard } from '../auth/guards/session-auth.guard'
 import { Personal } from '../auth/decorators/personal.decorator'
@@ -10,6 +23,7 @@ import { UsuarioAutenticado } from '../auth/supabase/usuario-autenticado'
 import { PaymentsService } from './payments.service'
 import { ConfirmarEfectivoDto } from './dto/confirmar-efectivo.dto'
 import { evaluarFirmaDelWebhook } from './firma-del-webhook'
+import { clasificarErrorDelWebhook, mensajeDelError } from './clasificar-error-del-webhook'
 
 /** Cuántos nombres de parámetros de la query entran en el log del webhook. */
 const MAX_PARAMETROS_EN_EL_LOG = 10
@@ -77,23 +91,37 @@ export class PaymentsController implements OnModuleInit {
   // pasa por otro lado: procesarWebhookMercadoPago vuelve a consultar el pago/orden contra la
   // API de MP con el access token del restaurante, no confía en el body de la request entrante.
   // La firma (DT-02) por ahora solo se observa: se evalúa y se loguea, y la notificación se procesa igual.
+  // Responde después de procesar (DT-11): 200 si quedó procesada o no se puede procesar nunca; 500 si la falla es
+  // transitoria o hay que hacer algo (reconectar MP), para que MP reintente. Qué es cada cosa lo decide
+  // clasificarErrorDelWebhook.
   @Post('webhook/mercadopago/restaurante/:restauranteId/pago/:pagoId')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Webhook de notificaciones de Mercado Pago' })
+  @ApiResponse({ status: 200, description: 'Procesada, o no se puede procesar (MP no reintenta)' })
+  @ApiResponse({ status: 500, description: 'Falla transitoria o MP desconectado (MP reintenta)' })
   async webhookMercadoPago(
     @Param('restauranteId') restauranteId: string,
     @Param('pagoId') pagoId: string,
     @Query() query: Record<string, string>,
     @Headers('x-signature') xSignature: string | undefined,
     @Headers('x-request-id') xRequestId: string | undefined,
-    @Res() res: Response,
-  ) {
+  ): Promise<string> {
     this.registrarFirma(restauranteId, pagoId, query, xSignature, xRequestId)
-    res.status(HttpStatus.OK).send('OK')
     try {
       await this.payments.procesarWebhookMercadoPago(restauranteId, pagoId, query)
+      return 'OK'
     } catch (err) {
-      console.error('Error procesando webhook MP:', err)
+      const { respuesta, codigo, status, accion } = clasificarErrorDelWebhook(err)
+      const contexto =
+        `pagoId=${paraElLog(pagoId)} restauranteId=${paraElLog(restauranteId)} codigo=${codigo}` +
+        `${status ? ` status=${status}` : ''} mensaje="${mensajeDelError(err)}"`
+      if (respuesta === 200) {
+        this.logger.warn(`webhook MP: notificación no procesable (${contexto})`)
+        return 'OK'
+      }
+      this.logger.error(`webhook MP: ${accion ? `hay que ${accion}` : 'no se pudo procesar, MP va a reintentar'} (${contexto})`)
+      // El cuerpo es genérico: el detalle queda en el log.
+      throw new InternalServerErrorException('No se pudo procesar la notificación')
     }
   }
 

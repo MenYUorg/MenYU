@@ -13,6 +13,7 @@ import {
   ESTADO_PAGO_PENDIENTE,
   ESTADO_PAGO_CANCELADO,
 } from '../common/estado-pago.constant'
+import { MercadoPagoNoConectadoError } from './clasificar-error-del-webhook'
 
 // Mocks de PrismaService/DivisionService con el mismo patrón que sessions.service.spec.ts.
 const mockPrisma = {
@@ -522,7 +523,7 @@ describe('PaymentsService', () => {
         metodo,
         estado,
         referenciaExterna: null,
-        sesion: { mesaId: 'mesa-1' },
+        sesion: { mesaId: 'mesa-1', mesa: { restauranteId: 'rest-1' } },
       })
       tx.pago.findUnique.mockResolvedValue({ estado: estadoEnTx })
     }
@@ -689,17 +690,150 @@ describe('PaymentsService', () => {
       expect(String(warnSpy.mock.calls[0][0])).toContain('no coincide con pagoId pago-1')
     })
 
-    it('el pago no es de Mercado Pago → no escribe', async () => {
+    it('el pago no es de Mercado Pago → no escribe ni le consulta a MP', async () => {
       pagoEnBase('pendiente', 'efectivo')
 
       await webhook('APROBADO')
 
+      expect(mockMpOAuth.getAccessTokenDecrypted).not.toHaveBeenCalled()
+      expect(mockMpProvider.processWebhook).not.toHaveBeenCalled()
       expect(mockPrisma.$transaction).not.toHaveBeenCalled()
       expect(tx.pago.update).not.toHaveBeenCalled()
       expect(String(warnSpy.mock.calls[0][0])).toContain('no es de Mercado Pago')
     })
 
-    it('pago no encontrado → no escribe, no emite y deja un warning (la notificación se ignora sin error)', async () => {
+    it('el pago es de otro restaurante que el de la URL → no procesable, sin pedir el token ni consultar a MP', async () => {
+      // Arrange
+      pagoEnBase('pendiente')
+
+      mockMpProvider.processWebhook.mockResolvedValue({ externalId: 'mo-123', status: 'APROBADO', externalReference: PAGO_ID })
+
+      // Act
+      const resultado = await service.procesarWebhookMercadoPago('rest-otro', PAGO_ID, {})
+
+      // Assert
+      expect(resultado).toBeUndefined()
+      expect(mockMpOAuth.getAccessTokenDecrypted).not.toHaveBeenCalled()
+      expect(mockMpProvider.processWebhook).not.toHaveBeenCalled()
+      expect(mockPrisma.$transaction).not.toHaveBeenCalled()
+      expect(warnSpy).toHaveBeenCalledTimes(1)
+      expect(String(warnSpy.mock.calls[0][0])).toContain('el pago pago-1 no es del restaurante rest-otro de la URL')
+    })
+
+    it('el restaurante no tiene MP conectado → MercadoPagoNoConectadoError (500 en el controller), sin escribir', async () => {
+      // Arrange
+      pagoEnBase('pendiente')
+      mockMpOAuth.getAccessTokenDecrypted.mockRejectedValue(
+        new BadRequestException('Este restaurante no tiene Mercado Pago conectado'),
+      )
+
+      // Act
+      const resultado = webhook('APROBADO')
+
+      // Assert
+      await expect(resultado).rejects.toBeInstanceOf(MercadoPagoNoConectadoError)
+      expect(mockMpProvider.processWebhook).not.toHaveBeenCalled()
+      expect(mockPrisma.$transaction).not.toHaveBeenCalled()
+    })
+
+    it('otro error al leer el token (p. ej. la base) pasa tal cual para que lo clasifique el controller', async () => {
+      // Arrange
+      pagoEnBase('pendiente')
+      const caida = new Error('db caída')
+      mockMpOAuth.getAccessTokenDecrypted.mockRejectedValue(caida)
+
+      // Act
+      const resultado = webhook('APROBADO')
+
+      // Assert
+      await expect(resultado).rejects.toBe(caida)
+    })
+
+    it('un error de MP pasa tal cual (lo clasifica el controller) y no se escribe nada', async () => {
+      // Arrange
+      pagoEnBase('pendiente')
+      const deMp = { message: 'internal error', status: 503 }
+      mockMpProvider.processWebhook.mockRejectedValue(deMp)
+
+      // Act
+      const resultado = service.procesarWebhookMercadoPago('rest-1', PAGO_ID, {})
+
+      // Assert
+      await expect(resultado).rejects.toBe(deMp)
+      expect(mockPrisma.$transaction).not.toHaveBeenCalled()
+    })
+
+    describe('después del commit, nada lanza (un 500 haría que MP reintente un cobro ya aplicado)', () => {
+      let errorSpy: jest.SpyInstance
+
+      beforeEach(() => {
+        errorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation()
+        pagoEnBase('pendiente')
+        mockDivision.calcularTotalSesion.mockResolvedValue(1000)
+        tx.pago.findMany.mockResolvedValue([{ monto: 1000 }])
+      })
+
+      afterEach(() => errorSpy.mockRestore())
+
+      it('si falla el emit: el cobro queda registrado, no lanza y deja un logger.error', async () => {
+        // Arrange
+        mockPrisma.sesionMesa.findUnique.mockResolvedValue({ mesa: { id: 'mesa-1', numero: '5' } })
+        mockGateway.emitSesionCobrada.mockImplementationOnce(() => {
+          throw new Error('socket caído')
+        })
+
+        // Act
+        const resultado = webhook('APROBADO')
+
+        // Assert
+        await expect(resultado).resolves.toBeUndefined()
+        expect(tx.pago.update).toHaveBeenCalled()
+        expect(tx.sesionMesa.updateMany).toHaveBeenCalled()
+        expect(errorSpy).toHaveBeenCalledTimes(1)
+        const mensaje = String(errorSpy.mock.calls[0][0])
+        expect(mensaje).toContain('el cobro quedó registrado pero no se pudo avisar a las pantallas')
+        expect(mensaje).toContain('pagoId=pago-1, restauranteId=rest-1, sesionId=sesion-1, mensaje="socket caído"')
+      })
+
+      it('si falla la lectura de la mesa para el aviso: tampoco lanza', async () => {
+        // Arrange
+        mockPrisma.sesionMesa.findUnique.mockRejectedValue(new Error('db caída'))
+
+        // Act
+        const resultado = webhook('APROBADO')
+
+        // Assert
+        await expect(resultado).resolves.toBeUndefined()
+        expect(mockGateway.emitSesionCobrada).not.toHaveBeenCalled()
+        expect(String(errorSpy.mock.calls[0][0])).toContain('mensaje="db caída"')
+      })
+
+      it('el emit va después de la transacción, no adentro', async () => {
+        // Arrange
+        mockPrisma.sesionMesa.findUnique.mockResolvedValue({ mesa: { id: 'mesa-1', numero: '5' } })
+        let dentroDeLaTx = false
+        mockPrisma.$transaction.mockImplementation(async (fn: any) => {
+          dentroDeLaTx = true
+          try {
+            return await fn(tx)
+          } finally {
+            dentroDeLaTx = false
+          }
+        })
+        let emitidoDentro: boolean | undefined
+        mockGateway.emitSesionCobrada.mockImplementationOnce(() => {
+          emitidoDentro = dentroDeLaTx
+        })
+
+        // Act
+        await webhook('APROBADO')
+
+        // Assert
+        expect(emitidoDentro).toBe(false)
+      })
+    })
+
+    it('pago no encontrado → no escribe, no emite, no consulta a MP y deja un warning (la notificación se ignora sin error)', async () => {
       // Arrange
       mockPrisma.pago.findUnique.mockResolvedValue(null)
 
@@ -708,6 +842,8 @@ describe('PaymentsService', () => {
 
       // Assert
       expect(resultado).toBeUndefined()
+      expect(mockMpOAuth.getAccessTokenDecrypted).not.toHaveBeenCalled()
+      expect(mockMpProvider.processWebhook).not.toHaveBeenCalled()
       expect(mockPrisma.$transaction).not.toHaveBeenCalled()
       expect(mockGateway.emitSesionCobrada).not.toHaveBeenCalled()
       expect(warnSpy).toHaveBeenCalledTimes(1)

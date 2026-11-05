@@ -160,7 +160,7 @@ describe('PaymentsService: caja, cuenta, back_urls y webhooks sin cambios', () =
         metodo: 'mercadopago',
         estado: 'aprobado',
         referenciaExterna: 'mo-1',
-        sesion: { mesaId: 'mesa-1' },
+        sesion: { mesaId: 'mesa-1', mesa: { restauranteId: 'rest-1' } },
       })
 
       await service.procesarWebhookMercadoPago('rest-1', 'pago-1', {})
