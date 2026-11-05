@@ -14,6 +14,10 @@ import {
   ESTADO_PAGO_CANCELADO,
 } from '../common/estado-pago.constant'
 import { MercadoPagoNoConectadoError } from './clasificar-error-del-webhook'
+import {
+  MOTIVO_REVISION_APROBADO_SOBRE_CANCELADO,
+  MOTIVO_REVISION_APROBADO_SOBRE_SESION_CERRADA,
+} from '../common/motivo-revision.constant'
 
 // Mocks de PrismaService/DivisionService con el mismo patrón que sessions.service.spec.ts.
 const mockPrisma = {
@@ -507,6 +511,7 @@ describe('PaymentsService', () => {
       tx = createTxMock()
       mockPrisma.$transaction.mockImplementation((fn: any) => fn(tx))
       tx.sesionMesa.updateMany.mockResolvedValue({ count: 1 })
+      tx.sesionMesa.findUnique.mockResolvedValue({ estado: 'activa' })
       mockMpOAuth.getAccessTokenDecrypted.mockResolvedValue('token')
     })
 
@@ -514,9 +519,18 @@ describe('PaymentsService', () => {
       warnSpy.mockRestore()
     })
 
+    /** Los updates del pago que llevan una marca de revisión. */
+    const marcas = () => tx.pago.update.mock.calls.map(([arg]) => arg).filter((arg) => 'requiereRevision' in arg.data)
+
     // `estado` es lo que ve la lectura de afuera de la transacción; `estadoEnTx` lo que ve
     // la lectura de adentro (distinto cuando alguien lo cambió en el medio).
-    function pagoEnBase(estado: string, metodo = 'mercadopago', estadoEnTx = estado) {
+    // `enTx` es lo demás que ve la lectura de adentro: la referencia y si ya tiene una marca de revisión.
+    function pagoEnBase(
+      estado: string,
+      metodo = 'mercadopago',
+      estadoEnTx = estado,
+      enTx: { referenciaExterna?: string | null; requiereRevision?: boolean } = {},
+    ) {
       mockPrisma.pago.findUnique.mockResolvedValue({
         id: PAGO_ID,
         sesionId: 'sesion-1',
@@ -525,7 +539,7 @@ describe('PaymentsService', () => {
         referenciaExterna: null,
         sesion: { mesaId: 'mesa-1', mesa: { restauranteId: 'rest-1' } },
       })
-      tx.pago.findUnique.mockResolvedValue({ estado: estadoEnTx })
+      tx.pago.findUnique.mockResolvedValue({ estado: estadoEnTx, referenciaExterna: null, requiereRevision: false, ...enTx })
     }
 
     function webhook(status: string, externalReference = PAGO_ID) {
@@ -605,7 +619,7 @@ describe('PaymentsService', () => {
       expect(tx.sesionMesa.updateMany).not.toHaveBeenCalled()
     })
 
-    it('aprobado sobre una sesión ya cerrada: el pago queda aprobado, sin tocar la sesión ni la mesa, sin emitir y con warning', async () => {
+    it('aprobado y la sesión se cierra entre la lectura y el helper (helper false): queda aprobado y marcado, sin tocar la mesa ni emitir', async () => {
       pagoEnBase('pendiente')
       mockDivision.calcularTotalSesion.mockResolvedValue(1000)
       tx.pago.findMany.mockResolvedValue([{ monto: 1000 }])
@@ -617,29 +631,35 @@ describe('PaymentsService', () => {
         where: { id: PAGO_ID },
         data: expect.objectContaining({ estado: ESTADO_PAGO_APROBADO }),
       })
+      expect(marcas()).toEqual([
+        { where: { id: PAGO_ID }, data: { requiereRevision: true, motivoRevision: MOTIVO_REVISION_APROBADO_SOBRE_SESION_CERRADA } },
+      ])
       expect(tx.pago.updateMany).not.toHaveBeenCalled()
       expect(tx.mesa.update).not.toHaveBeenCalled()
       expect(mockGateway.emitSesionCobrada).not.toHaveBeenCalled()
       expect(warnSpy).toHaveBeenCalledTimes(1)
       const mensaje = String(warnSpy.mock.calls[0][0])
       expect(mensaje).toContain('MP aprobado sobre una sesión ya cerrada; revisar')
-      expect(mensaje).toContain('sesionId=sesion-1')
-      expect(mensaje).toContain('pagoId=pago-1')
+      expect(mensaje).toContain('sesionId=sesion-1, pagoId=pago-1, restauranteId=rest-1, merchantOrderId=mo-123')
     })
 
-    it('aprobado sobre cancelado → no revive, deja warning de devolución manual', async () => {
+    it('aprobado sobre cancelado → no revive, lo marca y deja warning de devolución manual', async () => {
       pagoEnBase('cancelado')
 
       await webhook('APROBADO')
 
-      expect(tx.pago.update).not.toHaveBeenCalled()
+      expect(tx.pago.update).toHaveBeenCalledTimes(1)
+      expect(marcas()).toEqual([
+        {
+          where: { id: PAGO_ID },
+          data: { requiereRevision: true, motivoRevision: MOTIVO_REVISION_APROBADO_SOBRE_CANCELADO, referenciaExterna: 'mo-123' },
+        },
+      ])
       expect(tx.sesionMesa.updateMany).not.toHaveBeenCalled()
       expect(mockGateway.emitSesionCobrada).not.toHaveBeenCalled()
       const mensaje = String(warnSpy.mock.calls[0][0])
       expect(mensaje).toContain('devolución manual pendiente')
-      expect(mensaje).toContain('sesionId=sesion-1')
-      expect(mensaje).toContain('pagoId=pago-1')
-      expect(mensaje).toContain('merchantOrderId=mo-123')
+      expect(mensaje).toContain('sesionId=sesion-1, pagoId=pago-1, restauranteId=rest-1, merchantOrderId=mo-123')
     })
 
     it('pendiente sobre aprobado → no degrada, deja warning de transición ignorada', async () => {
@@ -669,15 +689,200 @@ describe('PaymentsService', () => {
       expect(warnSpy).not.toHaveBeenCalled()
     })
 
-    it('carrera: la lectura de afuera ve pendiente pero adentro de la tx ya está cancelado → no revive', async () => {
+    it('carrera: la lectura de afuera ve pendiente pero adentro de la tx ya está cancelado → no revive, solo lo marca', async () => {
       pagoEnBase('pendiente', 'mercadopago', 'cancelado') // el mozo cobró la mesa en el medio
 
       await webhook('APROBADO')
 
-      expect(tx.pago.update).not.toHaveBeenCalled()
+      expect(tx.pago.update).toHaveBeenCalledTimes(1)
+      expect(tx.pago.update.mock.calls[0][0].data).not.toHaveProperty('estado')
+      expect(marcas()).toHaveLength(1)
       expect(tx.sesionMesa.updateMany).not.toHaveBeenCalled()
       expect(mockGateway.emitSesionCobrada).not.toHaveBeenCalled()
       expect(String(warnSpy.mock.calls[0][0])).toContain('devolución manual pendiente')
+    })
+
+    describe('marcas de revisión (requiereRevision y motivoRevision)', () => {
+      describe('(a) MP aprueba un pago ya cancelado', () => {
+        it('con referenciaExterna vacía: marca y guarda la orden de MP en el mismo update, sin cambiar el estado', async () => {
+          // Arrange
+          pagoEnBase('cancelado', 'mercadopago', 'cancelado', { referenciaExterna: null })
+
+          // Act
+          await webhook('APROBADO')
+
+          // Assert
+          expect(tx.pago.update).toHaveBeenCalledTimes(1)
+          expect(tx.pago.update).toHaveBeenCalledWith({
+            where: { id: PAGO_ID },
+            data: { requiereRevision: true, motivoRevision: MOTIVO_REVISION_APROBADO_SOBRE_CANCELADO, referenciaExterna: 'mo-123' },
+          })
+          expect(mockGateway.emitSesionCobrada).not.toHaveBeenCalled()
+        })
+
+        it('con una referenciaExterna existente: marca y no la pisa', async () => {
+          // Arrange
+          pagoEnBase('cancelado', 'mercadopago', 'cancelado', { referenciaExterna: 'mo-viejo' })
+
+          // Act
+          await webhook('APROBADO')
+
+          // Assert
+          expect(tx.pago.update).toHaveBeenCalledTimes(1)
+          expect(tx.pago.update).toHaveBeenCalledWith({
+            where: { id: PAGO_ID },
+            data: { requiereRevision: true, motivoRevision: MOTIVO_REVISION_APROBADO_SOBRE_CANCELADO },
+          })
+        })
+
+        it('repetida sobre un pago ya marcado y con referencia: no hay nada nuevo, cero updates y el warn igual', async () => {
+          // Arrange
+          pagoEnBase('cancelado', 'mercadopago', 'cancelado', { requiereRevision: true, referenciaExterna: 'mo-123' })
+
+          // Act
+          await webhook('APROBADO')
+
+          // Assert
+          expect(tx.pago.update).not.toHaveBeenCalled()
+          expect(warnSpy).toHaveBeenCalledTimes(1)
+          expect(String(warnSpy.mock.calls[0][0])).toContain('devolución manual pendiente')
+        })
+
+        it('un pendiente o rechazado sobre cancelado no marca (solo la plata que entró)', async () => {
+          // Arrange
+          pagoEnBase('cancelado')
+
+          // Act
+          await webhook('PENDIENTE')
+          await webhook('RECHAZADO')
+
+          // Assert
+          expect(tx.pago.update).not.toHaveBeenCalled()
+        })
+      })
+
+      describe('(b) MP aprueba un pago de una sesión ya cerrada', () => {
+        it.each([
+          ['cubriendo el total', 1000],
+          ['sin cubrir el total', 5000],
+        ])('%s: lo aprueba, lo marca y vuelve sin calcular totales ni llamar al helper', async (_caso, total) => {
+          // Arrange
+          pagoEnBase('pendiente')
+          tx.sesionMesa.findUnique.mockResolvedValue({ estado: 'cerrada' })
+          mockDivision.calcularTotalSesion.mockResolvedValue(total)
+          tx.pago.findMany.mockResolvedValue([{ monto: 1000 }])
+
+          // Act
+          await expect(webhook('APROBADO')).resolves.toBeUndefined()
+
+          // Assert
+          expect(tx.pago.update.mock.calls.map(([arg]) => arg)).toEqual([
+            { where: { id: PAGO_ID }, data: expect.objectContaining({ estado: ESTADO_PAGO_APROBADO, referenciaExterna: 'mo-123' }) },
+            { where: { id: PAGO_ID }, data: { requiereRevision: true, motivoRevision: MOTIVO_REVISION_APROBADO_SOBRE_SESION_CERRADA } },
+          ])
+          expect(tx.sesionMesa.findUnique).toHaveBeenCalledWith({ where: { id: 'sesion-1' }, select: { estado: true } })
+          expect(mockDivision.calcularTotalSesion).not.toHaveBeenCalled()
+          expect(tx.pago.findMany).not.toHaveBeenCalled()
+          expect(tx.sesionMesa.updateMany).not.toHaveBeenCalled() // el helper no corre
+          expect(tx.mesa.update).not.toHaveBeenCalled()
+          expect(mockGateway.emitSesionCobrada).not.toHaveBeenCalled()
+          expect(String(warnSpy.mock.calls[0][0])).toContain('MP aprobado sobre una sesión ya cerrada; revisar')
+        })
+
+        it('la sesión se lee después de aprobar, dentro de la misma transacción', async () => {
+          // Arrange
+          pagoEnBase('pendiente')
+          tx.sesionMesa.findUnique.mockResolvedValue({ estado: 'cerrada' })
+
+          // Act
+          await webhook('APROBADO')
+
+          // Assert
+          expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1)
+          const orden = (fn: jest.Mock, i = 0) => fn.mock.invocationCallOrder[i]
+          expect(orden(tx.pago.update, 0)).toBeLessThan(orden(tx.sesionMesa.findUnique))
+          expect(orden(tx.sesionMesa.findUnique)).toBeLessThan(orden(tx.pago.update, 1))
+        })
+
+        it('un pendiente sobre una sesión cerrada no marca: no entró plata', async () => {
+          // Arrange
+          pagoEnBase('pendiente')
+          tx.sesionMesa.findUnique.mockResolvedValue({ estado: 'cerrada' })
+
+          // Act
+          await webhook('EN_PROCESO')
+
+          // Assert
+          expect(marcas()).toEqual([])
+        })
+      })
+
+      it.each([
+        // En (a) sin referencia, para que haya algo que escribir (con referencia no hay update: ver el test de la repetida)
+        ['(a) sobre cancelado', 'cancelado', null, { requiereRevision: true, referenciaExterna: 'mo-123' }],
+        ['(b) sobre sesión cerrada', 'pendiente', 'mo-viejo', { requiereRevision: true }],
+      ])('%s: si ya tenía una marca, no pisa el motivo (queda el primero)', async (_caso, estado, referenciaExterna, data) => {
+        // Arrange: ya marcado antes
+        pagoEnBase(estado, 'mercadopago', estado, { requiereRevision: true, referenciaExterna })
+        tx.sesionMesa.findUnique.mockResolvedValue({ estado: 'cerrada' })
+
+        // Act
+        await webhook('APROBADO')
+
+        // Assert
+        const conMarca = marcas()
+        expect(conMarca).toHaveLength(1)
+        expect(conMarca[0].data).toEqual(data)
+        expect(conMarca[0].data).not.toHaveProperty('motivoRevision')
+      })
+
+      it('una notificación repetida sobre un pago ya aprobado y sin marca no marca nada, aunque la sesión esté cerrada', async () => {
+        // Arrange: lo aprobó una notificación anterior, que cerró la sesión
+        pagoEnBase('aprobado', 'mercadopago', 'aprobado', { referenciaExterna: 'mo-otro' })
+        tx.sesionMesa.findUnique.mockResolvedValue({ estado: 'cerrada' })
+
+        // Act
+        await webhook('APROBADO')
+
+        // Assert
+        expect(tx.pago.update).not.toHaveBeenCalled()
+        expect(tx.sesionMesa.findUnique).not.toHaveBeenCalled()
+        expect(warnSpy).not.toHaveBeenCalled()
+      })
+
+      describe('con la sesión activa nada cambia: ni marca ni lo que devuelve para el emit', () => {
+        it('cubre el total: cierra la sesión y emite, sin marca', async () => {
+          // Arrange
+          pagoEnBase('pendiente')
+          mockDivision.calcularTotalSesion.mockResolvedValue(1000)
+          tx.pago.findMany.mockResolvedValue([{ monto: 1000 }])
+          mockPrisma.sesionMesa.findUnique.mockResolvedValue({ mesa: { id: 'mesa-1', numero: '5' } })
+
+          // Act
+          await webhook('APROBADO')
+
+          // Assert
+          expect(marcas()).toEqual([])
+          expect(tx.sesionMesa.updateMany).toHaveBeenCalled()
+          expect(mockGateway.emitSesionCobrada).toHaveBeenCalledTimes(1)
+          expect(warnSpy).not.toHaveBeenCalled()
+        })
+
+        it('no cubre el total: no cierra ni emite, y tampoco marca', async () => {
+          // Arrange
+          pagoEnBase('pendiente')
+          mockDivision.calcularTotalSesion.mockResolvedValue(5000)
+          tx.pago.findMany.mockResolvedValue([{ monto: 1000 }])
+
+          // Act
+          await webhook('APROBADO')
+
+          // Assert
+          expect(marcas()).toEqual([])
+          expect(tx.sesionMesa.updateMany).not.toHaveBeenCalled()
+          expect(mockGateway.emitSesionCobrada).not.toHaveBeenCalled()
+        })
+      })
     })
 
     it('externalReference distinto del pagoId → no escribe', async () => {

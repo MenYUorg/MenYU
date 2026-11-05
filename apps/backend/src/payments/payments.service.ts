@@ -27,6 +27,11 @@ import {
   ESTADO_PAGO_APROBADO,
   ESTADO_PAGO_CANCELADO,
 } from '../common/estado-pago.constant'
+import {
+  MOTIVO_REVISION_APROBADO_SOBRE_CANCELADO,
+  MOTIVO_REVISION_APROBADO_SOBRE_SESION_CERRADA,
+  MotivoRevision,
+} from '../common/motivo-revision.constant'
 
 const MP_STATUS_MAP: Record<PaymentStatus, string> = {
   APROBADO: 'aprobado',
@@ -413,22 +418,44 @@ export class PaymentsService {
       return
     }
 
+    const detalle =
+      `sesionId=${pagoActual.sesionId}, pagoId=${pagoId}, restauranteId=${restauranteId}, ` +
+      `merchantOrderId=${resultado.externalId}`
+
     const sesionCerrada = await runSerializableTransaction(this.prisma, async (tx) => {
-      // Estados finales: aprobado y cancelado no los cambia el webhook (ni siquiera
-      // referenciaExterna). Se lee acá, dentro de la tx, porque registrarCobro puede
-      // cancelar el pago entre la lectura de arriba y este punto.
-      const actual = await tx.pago.findUnique({ where: { id: pagoId }, select: { estado: true } })
+      // Estados finales: aprobado y cancelado no los cambia el webhook. Se lee acá, dentro de la tx, porque
+      // registrarCobro puede cancelar el pago entre la lectura de arriba y este punto.
+      const actual = await tx.pago.findUnique({
+        where: { id: pagoId },
+        select: { estado: true, referenciaExterna: true, requiereRevision: true },
+      })
+      // Si ya tenía una marca, no se pisa el motivo: queda el primero.
+      const marcar = (motivo: MotivoRevision) =>
+        actual?.requiereRevision ? { requiereRevision: true } : { requiereRevision: true, motivoRevision: motivo }
+
       if (
         actual &&
         (actual.estado === ESTADO_PAGO_APROBADO || actual.estado === ESTADO_PAGO_CANCELADO)
       ) {
-        if (actual.estado !== estadoInterno) {
-          const detalle = `sesionId=${pagoActual.sesionId}, pagoId=${pagoId}, merchantOrderId=${resultado.externalId}`
+        if (actual.estado === ESTADO_PAGO_CANCELADO && estadoInterno === ESTADO_PAGO_APROBADO) {
+          // La única excepción a "el webhook no toca estados finales": la plata entró por un pago que ya estaba cancelado.
+          // El pago sigue cancelado (la mesa ya se cobró por otro lado), pero queda marcado para devolverla a mano, y con la
+          // orden de MP para encontrarla si todavía no tenía referencia. No cambia el estado ni nada más. Una notificación
+          // repetida sobre un pago ya marcado y con referencia no tiene nada nuevo que escribir.
+          if (!actual.requiereRevision || !actual.referenciaExterna) {
+            await tx.pago.update({
+              where: { id: pagoId },
+              data: {
+                ...marcar(MOTIVO_REVISION_APROBADO_SOBRE_CANCELADO),
+                ...(actual.referenciaExterna ? {} : { referenciaExterna: resultado.externalId }),
+              },
+            })
+          }
           this.logger.warn(
-            actual.estado === ESTADO_PAGO_CANCELADO && estadoInterno === ESTADO_PAGO_APROBADO
-              ? `procesarWebhookMercadoPago: MP informó aprobado para un pago cancelado; devolución manual pendiente (${detalle})`
-              : `procesarWebhookMercadoPago: transición ignorada ${actual.estado} → ${estadoInterno} (${detalle})`,
+            `procesarWebhookMercadoPago: MP informó aprobado para un pago cancelado; devolución manual pendiente (${detalle})`,
           )
+        } else if (actual.estado !== estadoInterno) {
+          this.logger.warn(`procesarWebhookMercadoPago: transición ignorada ${actual.estado} → ${estadoInterno} (${detalle})`)
         }
         return false
       }
@@ -444,6 +471,16 @@ export class PaymentsService {
 
       if (estadoInterno !== 'aprobado') return false
 
+      // La plata entró por una sesión que ya no está activa (la cerraron a mano o la cobró el mozo): el pago queda
+      // aprobado y marcado, cubra o no el total, y la sesión y la mesa no se tocan (la mesa puede tener otra sesión).
+      const marcarSesionCerrada = async () => {
+        await tx.pago.update({ where: { id: pagoId }, data: marcar(MOTIVO_REVISION_APROBADO_SOBRE_SESION_CERRADA) })
+        this.logger.warn(`procesarWebhookMercadoPago: MP aprobado sobre una sesión ya cerrada; revisar (${detalle})`)
+        return false
+      }
+      const sesion = await tx.sesionMesa.findUnique({ where: { id: pagoActual.sesionId }, select: { estado: true } })
+      if (sesion?.estado !== 'activa') return marcarSesionCerrada()
+
       const totalSesion = await this.divisionService.calcularTotalSesion(tx, pagoActual.sesionId)
       const pagosAprobados = await tx.pago.findMany({
         where: { sesionId: pagoActual.sesionId, estado: 'aprobado' },
@@ -457,13 +494,8 @@ export class PaymentsService {
       // pago de este webhook ya está aprobado, no entra.
       if (await cerrarSesionDeMesa(tx, pagoActual.sesionId, pagoActual.sesion.mesaId, new Date())) return true
 
-      // La sesión ya estaba cerrada: la plata entró, así que el pago queda aprobado, pero la sesión y la mesa no se tocan
-      // (la mesa puede tener otra sesión abierta).
-      this.logger.warn(
-        `procesarWebhookMercadoPago: MP aprobado sobre una sesión ya cerrada; revisar ` +
-          `(sesionId=${pagoActual.sesionId}, pagoId=${pagoId}, merchantOrderId=${resultado.externalId})`,
-      )
-      return false
+      // La sesión se cerró entre la lectura de arriba y el helper: el mismo caso.
+      return marcarSesionCerrada()
     }, 'procesarWebhookMercadoPago')
 
     if (!sesionCerrada) return
