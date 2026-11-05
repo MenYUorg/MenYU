@@ -13,6 +13,7 @@ describe('endpoints de pagos', () => {
     confirmarEfectivo: jest.fn(),
     crearPreferenciaMercadoPago: jest.fn(),
     procesarWebhookMercadoPago: jest.fn(),
+    listarPagosParaRevision: jest.fn(),
   }
   const DE_LA_SESION = { sesionId: SESION_CLIENTE.sesionId }
 
@@ -144,6 +145,93 @@ describe('endpoints de pagos', () => {
       // Assert
       expect([comensal.status, sinUsuario.status]).toEqual([401, 403])
       expect(payments.confirmarEfectivo).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('GET /payments/requieren-revision (OWNER y GERENTE del restaurante)', () => {
+    const RUTA = '/payments/requieren-revision'
+    const PAGO = {
+      pagoId: 'pago-1',
+      sesionId: 'ses-1',
+      mesaNumero: '7',
+      monto: 1500.5,
+      metodo: 'mercadopago',
+      estado: 'aprobado',
+      motivo: 'aprobado-sobre-sesion-cerrada',
+      referenciaExterna: 'mo-1',
+      fechaCobro: '2026-11-04T20:15:00.000Z',
+      creadoEn: '2026-11-04T20:00:00.000Z',
+    }
+
+    it.each([
+      ['el OWNER de la marca', CUENTAS.OWNER_A, MUNDO.REST_1],
+      ['el OWNER de la marca, en una sucursal sin personal propio', CUENTAS.OWNER_A, MUNDO.REST_2],
+      ['el GERENTE del restaurante', CUENTAS.GERENTE, MUNDO.REST_1],
+    ])('%s: 200 con la lista del servicio para ese restaurante', async (_caso, cuenta, restauranteId) => {
+      // Arrange
+      payments.listarPagosParaRevision.mockResolvedValue([PAGO])
+
+      // Act
+      const res = await api.pedir('get', RUTA, { cuenta, query: { restauranteId } })
+
+      // Assert
+      expect(res.status).toBe(200)
+      expect(res.body).toEqual([PAGO])
+      expect(payments.listarPagosParaRevision).toHaveBeenCalledWith(restauranteId)
+    })
+
+    it('sin sesión: 401', async () => {
+      // Act
+      const res = await api.pedir('get', RUTA, { query: { restauranteId: MUNDO.REST_1 } })
+
+      // Assert
+      expect(res.status).toBe(401)
+      expect(payments.listarPagosParaRevision).not.toHaveBeenCalled()
+    })
+
+    it('con el token de la sesión de mesa: 401', async () => {
+      // Act
+      const res = await api.pedir('get', RUTA, { sesion: SESION_CLIENTE, query: { restauranteId: MUNDO.REST_1 } })
+
+      // Assert
+      expect(res.status).toBe(401)
+      expect(payments.listarPagosParaRevision).not.toHaveBeenCalled()
+    })
+
+    it.each([
+      ['el MOZO del restaurante', CUENTAS.MOZO, MUNDO.REST_1],
+      ['el JEFE_SALON del restaurante', CUENTAS.JEFE_SALON, MUNDO.REST_1],
+      ['la COCINA del restaurante', CUENTAS.COCINA, MUNDO.REST_1],
+      ['el OWNER de otra marca', CUENTAS.OWNER_B, MUNDO.REST_1],
+      ['el OWNER pidiendo un restaurante de otra marca', CUENTAS.OWNER_A, MUNDO.REST_B],
+      ['el GERENTE pidiendo otro restaurante de su marca', CUENTAS.GERENTE, MUNDO.REST_2],
+      ['ROOT', CUENTAS.ROOT, MUNDO.REST_1],
+    ])('%s: 403, sin llamar al servicio', async (_caso, cuenta, restauranteId) => {
+      // Act
+      const res = await api.pedir('get', RUTA, { cuenta, query: { restauranteId } })
+
+      // Assert
+      expect(res.status).toBe(403)
+      expect(payments.listarPagosParaRevision).not.toHaveBeenCalled()
+    })
+
+    it('una cuenta de Supabase sin Usuario: 403', async () => {
+      // Act
+      const res = await api.pedir('get', RUTA, { cuenta: SIN_USUARIO, query: { restauranteId: MUNDO.REST_1 } })
+
+      // Assert
+      expect(res.status).toBe(403)
+      expect(payments.listarPagosParaRevision).not.toHaveBeenCalled()
+    })
+
+    it('sin restauranteId en la query: 400 del guard, sin llegar al servicio', async () => {
+      // Act
+      const res = await api.pedir('get', RUTA, { cuenta: CUENTAS.OWNER_A })
+
+      // Assert
+      expect(res.status).toBe(400)
+      expect(res.body.message).toBe('Falta restauranteId en la query')
+      expect(payments.listarPagosParaRevision).not.toHaveBeenCalled()
     })
   })
 

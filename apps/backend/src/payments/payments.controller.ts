@@ -18,7 +18,7 @@ import { SessionAuthGuard } from '../auth/guards/session-auth.guard'
 import { Personal } from '../auth/decorators/personal.decorator'
 import { RequiereRolEn } from '../auth/decorators/requiere-rol.decorator'
 import { UsuarioActual } from '../auth/decorators/usuario-actual.decorator'
-import { SALON } from '../auth/roles-del-personal'
+import { ADMINISTRACION, SALON } from '../auth/roles-del-personal'
 import { UsuarioAutenticado } from '../auth/supabase/usuario-autenticado'
 import { PaymentsService } from './payments.service'
 import { ConfirmarEfectivoDto } from './dto/confirmar-efectivo.dto'
@@ -64,6 +64,18 @@ export class PaymentsController implements OnModuleInit {
   @ApiResponse({ status: 200, description: 'Lista de sesiones con estado de pago' })
   getSesiones(@Query('restauranteId') restauranteId: string) {
     return this.payments.getSesiones(restauranteId)
+  }
+
+  @Get('requieren-revision')
+  @RequiereRolEn({ query: 'restauranteId' }, ...ADMINISTRACION)
+  @ApiOperation({
+    summary: 'Pagos de Mercado Pago marcados para revisión (aprobados sobre un pago cancelado o una sesión cerrada)',
+  })
+  @ApiResponse({ status: 200, description: 'Hasta 200 pagos del restaurante, más nuevos primero. Solo lectura' })
+  @ApiResponse({ status: 401, description: 'Sin sesión de Supabase' })
+  @ApiResponse({ status: 403, description: 'Sin el rol OWNER o GERENTE en el restaurante' })
+  listarPagosParaRevision(@Query('restauranteId') restauranteId: string) {
+    return this.payments.listarPagosParaRevision(restauranteId)
   }
 
   @Post('confirmar-efectivo')

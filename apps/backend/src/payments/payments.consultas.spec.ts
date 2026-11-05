@@ -1,18 +1,19 @@
 import { ForbiddenException, Logger, NotFoundException } from '@nestjs/common'
+import { Prisma } from '@prisma/client'
 import { DivisionService } from '../comensales/division.service'
 import { AccesoService } from '../auth/supabase/acceso.service'
 import { MenyuGateway } from '../gateway/menyu.gateway'
 import { PrismaService } from '../prisma/prisma.service'
 import { MercadoPagoOAuthService } from './mercado-pago-oauth.service'
-import { PaymentsService } from './payments.service'
+import { MAX_PAGOS_PARA_REVISION, PaymentsService } from './payments.service'
 import { MercadoPagoProvider } from './providers/mercado-pago.provider'
 
 // Sesiones para caja, el aviso de "pedir la cuenta", las back_urls de Mercado Pago según el Origin y los
-// webhooks que no cambian nada. El resto de PaymentsService está en payments.service.spec.
+// webhooks que no cambian nada y los pagos para revisión. El resto de PaymentsService está en payments.service.spec.
 const prisma = {
   sesionMesa: { findMany: jest.fn(), findUnique: jest.fn() },
   llamadoMozo: { deleteMany: jest.fn(), create: jest.fn() },
-  pago: { findUnique: jest.fn(), updateMany: jest.fn() },
+  pago: { findUnique: jest.fn(), findMany: jest.fn(), updateMany: jest.fn() },
   $transaction: jest.fn(),
 }
 const gateway = { emitMozoCalled: jest.fn(), emitQuierePagar: jest.fn(), emitSesionCobrada: jest.fn() }
@@ -132,6 +133,134 @@ describe('PaymentsService: caja, cuenta, back_urls y webhooks sin cambios', () =
       expect(backUrls()).toEqual({ successUrl: undefined, failureUrl: undefined, pendingUrl: undefined })
       expect(debug).toHaveBeenCalledWith(expect.stringContaining('uso fallback FRONTEND_URL'))
       debug.mockRestore()
+    })
+  })
+
+  describe('listarPagosParaRevision', () => {
+    const fila = (id: string, extra: object = {}) => ({
+      id,
+      sesionId: `ses-${id}`,
+      monto: new Prisma.Decimal('1500.50'),
+      metodo: 'mercadopago',
+      estado: 'aprobado',
+      motivoRevision: 'aprobado-sobre-sesion-cerrada',
+      referenciaExterna: `mo-${id}`,
+      fechaCobro: new Date('2026-11-04T20:15:00Z'),
+      createdAt: new Date('2026-11-04T20:00:00Z'),
+      sesion: { mesa: { numero: '7' } },
+      ...extra,
+    })
+
+    beforeEach(() => {
+      prisma.pago.findMany.mockResolvedValue([])
+    })
+
+    it('pide solo los marcados del restaurante (por la mesa de la sesión), más nuevos primero y con tope de 200', async () => {
+      // Act
+      await service.listarPagosParaRevision('rest-1')
+
+      // Assert
+      expect(prisma.pago.findMany).toHaveBeenCalledTimes(1)
+      const consulta = prisma.pago.findMany.mock.calls[0][0]
+      expect(consulta.where).toEqual({ requiereRevision: true, sesion: { mesa: { restauranteId: 'rest-1' } } })
+      expect(consulta.orderBy).toEqual([{ createdAt: 'desc' }, { id: 'desc' }])
+      expect(consulta.take).toBe(200)
+      expect(MAX_PAGOS_PARA_REVISION).toBe(200)
+    })
+
+    it('el select es explícito y no trae nada de comensales ni de quién cobró', async () => {
+      // Act
+      await service.listarPagosParaRevision('rest-1')
+
+      // Assert
+      const { select, include } = prisma.pago.findMany.mock.calls[0][0]
+      expect(include).toBeUndefined()
+      expect(select).toEqual({
+        id: true,
+        sesionId: true,
+        monto: true,
+        metodo: true,
+        estado: true,
+        motivoRevision: true,
+        referenciaExterna: true,
+        fechaCobro: true,
+        createdAt: true,
+        sesion: { select: { mesa: { select: { numero: true } } } },
+      })
+      expect(JSON.stringify(select)).not.toMatch(/mozo|usuario|cobradoPor|cliente|comensal/)
+    })
+
+    it('la forma de cada pago: monto como number, fechas ISO y fechaCobro null si no hay', async () => {
+      // Arrange
+      prisma.pago.findMany.mockResolvedValue([
+        fila('p2'),
+        fila('p1', { estado: 'cancelado', motivoRevision: 'aprobado-sobre-cancelado', referenciaExterna: null, fechaCobro: null }),
+      ])
+
+      // Act
+      const pagos = await service.listarPagosParaRevision('rest-1')
+
+      // Assert
+      expect(pagos).toEqual([
+        {
+          pagoId: 'p2',
+          sesionId: 'ses-p2',
+          mesaNumero: '7',
+          monto: 1500.5,
+          metodo: 'mercadopago',
+          estado: 'aprobado',
+          motivo: 'aprobado-sobre-sesion-cerrada',
+          referenciaExterna: 'mo-p2',
+          fechaCobro: '2026-11-04T20:15:00.000Z',
+          creadoEn: '2026-11-04T20:00:00.000Z',
+        },
+        {
+          pagoId: 'p1',
+          sesionId: 'ses-p1',
+          mesaNumero: '7',
+          monto: 1500.5,
+          metodo: 'mercadopago',
+          estado: 'cancelado',
+          motivo: 'aprobado-sobre-cancelado',
+          referenciaExterna: null,
+          fechaCobro: null,
+          creadoEn: '2026-11-04T20:00:00.000Z',
+        },
+      ])
+      expect(typeof pagos[0].monto).toBe('number')
+    })
+
+    it('respeta el orden de la base (no reordena)', async () => {
+      // Arrange
+      prisma.pago.findMany.mockResolvedValue([fila('c'), fila('a'), fila('b')])
+
+      // Act
+      const pagos = await service.listarPagosParaRevision('rest-1')
+
+      // Assert
+      expect(pagos.map((p) => p.pagoId)).toEqual(['c', 'a', 'b'])
+    })
+
+    it('aislamiento: con pagos marcados de dos restaurantes, solo aparecen los del pedido', async () => {
+      // Arrange: una base de mentira que aplica el where que le llega (marcados y del restaurante de la mesa)
+      const base = [
+        { ...fila('del-1'), restauranteId: 'rest-1', requiereRevision: true },
+        { ...fila('del-otro'), restauranteId: 'rest-otro', requiereRevision: true },
+        { ...fila('sin-marca'), restauranteId: 'rest-1', requiereRevision: false },
+      ]
+      prisma.pago.findMany.mockImplementation(async ({ where }) =>
+        base.filter(
+          (p) => p.requiereRevision === where.requiereRevision && p.restauranteId === where.sesion.mesa.restauranteId,
+        ),
+      )
+
+      // Act
+      const deUno = await service.listarPagosParaRevision('rest-1')
+      const deOtro = await service.listarPagosParaRevision('rest-otro')
+
+      // Assert
+      expect(deUno.map((p) => p.pagoId)).toEqual(['del-1'])
+      expect(deOtro.map((p) => p.pagoId)).toEqual(['del-otro'])
     })
   })
 

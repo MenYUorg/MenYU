@@ -50,6 +50,23 @@ export interface SesionResumen {
   cerradaEn?: string
 }
 
+/** Un pago marcado para revisión, como lo devuelve `GET /payments/requieren-revision`. */
+export interface PagoParaRevision {
+  pagoId: string
+  sesionId: string
+  mesaNumero: string
+  monto: number
+  metodo: string
+  estado: string
+  motivo: string | null
+  referenciaExterna: string | null
+  fechaCobro: string | null
+  creadoEn: string
+}
+
+/** Tope de `listarPagosParaRevision`. */
+export const MAX_PAGOS_PARA_REVISION = 200
+
 @Injectable()
 export class PaymentsService {
   private readonly logger = new Logger(PaymentsService.name)
@@ -126,6 +143,44 @@ export class PaymentsService {
         cerradaEn: sesion.cerradaEn?.toISOString(),
       }
     })
+  }
+
+  /**
+   * Los pagos que el webhook marcó para revisión (`requiereRevision`), del restaurante y más nuevos primero. El rol lo
+   * exige la ruta (`@RequiereRolEn`). Con tope: todavía no hay cómo marcarlos como resueltos y la lista solo crece.
+   * `select` explícito: ni comensales ni quién cobró.
+   */
+  async listarPagosParaRevision(restauranteId: string): Promise<PagoParaRevision[]> {
+    const pagos = await this.prisma.pago.findMany({
+      where: { requiereRevision: true, sesion: { mesa: { restauranteId } } },
+      select: {
+        id: true,
+        sesionId: true,
+        monto: true,
+        metodo: true,
+        estado: true,
+        motivoRevision: true,
+        referenciaExterna: true,
+        fechaCobro: true,
+        createdAt: true,
+        sesion: { select: { mesa: { select: { numero: true } } } },
+      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: MAX_PAGOS_PARA_REVISION,
+    })
+
+    return pagos.map((p) => ({
+      pagoId: p.id,
+      sesionId: p.sesionId,
+      mesaNumero: p.sesion.mesa.numero,
+      monto: Number(p.monto),
+      metodo: p.metodo,
+      estado: p.estado,
+      motivo: p.motivoRevision,
+      referenciaExterna: p.referenciaExterna,
+      fechaCobro: p.fechaCobro?.toISOString() ?? null,
+      creadoEn: p.createdAt.toISOString(),
+    }))
   }
 
   async solicitarEfectivo(sesionId: string) {
