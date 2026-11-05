@@ -1,4 +1,4 @@
-import { MercadoPagoProvider } from './mercado-pago.provider'
+import { MercadoPagoProvider, TIMEOUT_DE_LAS_CONSULTAS_DEL_WEBHOOK_MS } from './mercado-pago.provider'
 
 // El SDK de Mercado Pago es el borde externo (HTTP): se mockea el módulo entero.
 const sdk = {
@@ -78,6 +78,8 @@ describe('MercadoPagoProvider', () => {
   })
 
   describe('processWebhook', () => {
+    const CON_TIMEOUT = { timeout: 4000 }
+
     const orden = (payments: object[], extra: object = {}) => ({
       id: 777,
       total_amount: 1000,
@@ -99,7 +101,7 @@ describe('MercadoPagoProvider', () => {
       const resultado = await provider.processWebhook({ topic: 'merchant_order', id: '777' }, 'token')
 
       // Assert
-      expect(sdk.merchantOrderGet).toHaveBeenCalledWith({ merchantOrderId: '777' })
+      expect(sdk.merchantOrderGet).toHaveBeenCalledWith({ merchantOrderId: '777', requestOptions: CON_TIMEOUT })
       expect(resultado).toEqual({ externalId: '777', status: estado, externalReference: 'sesion-1:pago-1' })
     })
 
@@ -112,9 +114,34 @@ describe('MercadoPagoProvider', () => {
       const resultado = await provider.processWebhook({ type: 'payment', 'data.id': '555' }, 'token')
 
       // Assert
-      expect(sdk.paymentGet).toHaveBeenCalledWith({ id: '555' })
-      expect(sdk.merchantOrderGet).toHaveBeenCalledWith({ merchantOrderId: '777' })
+      expect(sdk.paymentGet).toHaveBeenCalledWith({ id: '555', requestOptions: CON_TIMEOUT })
+      expect(sdk.merchantOrderGet).toHaveBeenCalledWith({ merchantOrderId: '777', requestOptions: CON_TIMEOUT })
       expect(resultado.status).toBe('APROBADO')
+    })
+
+    it('las consultas del webhook van con 4000 ms de timeout por intento, sin tocar los reintentos del SDK', async () => {
+      // Arrange
+      sdk.paymentGet.mockResolvedValue({ id: '555', order: { id: '777' } })
+      sdk.merchantOrderGet.mockResolvedValue(orden([{ status: 'approved', transaction_amount: 1000 }]))
+
+      // Act
+      await provider.processWebhook({ type: 'payment', 'data.id': '555' }, 'token')
+      await provider.processWebhook({ topic: 'merchant_order', id: '777' }, 'token')
+
+      // Assert
+      expect(TIMEOUT_DE_LAS_CONSULTAS_DEL_WEBHOOK_MS).toBe(4000)
+      const opciones = [...sdk.paymentGet.mock.calls, ...sdk.merchantOrderGet.mock.calls].map(([arg]) => arg.requestOptions)
+      expect(opciones).toHaveLength(3) // payment.get, y merchantOrder.get en las dos notificaciones
+      expect(opciones).toEqual([CON_TIMEOUT, CON_TIMEOUT, CON_TIMEOUT])
+      expect(sdk.config).toHaveBeenCalledWith({ accessToken: 'token' }) // sin options: los reintentos quedan los del SDK
+    })
+
+    it('createPreference no cambia: sin timeout propio', async () => {
+      // Act
+      await provider.createPreference(PAGO)
+
+      // Assert
+      expect(sdk.preferenceCreate.mock.calls[0][0]).not.toHaveProperty('requestOptions')
     })
 
     it('un payment todavía sin orden queda PENDIENTE', async () => {

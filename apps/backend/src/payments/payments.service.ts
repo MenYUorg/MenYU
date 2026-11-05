@@ -21,11 +21,17 @@ import { cerrarSesionDeMesa } from '../common/cerrar-sesion-de-mesa'
 import { AccesoService } from '../auth/supabase/acceso.service'
 import { UsuarioAutenticado } from '../auth/supabase/usuario-autenticado'
 import { ConfirmarEfectivoDto } from './dto/confirmar-efectivo.dto'
+import { MercadoPagoNoConectadoError, mensajeDelError } from './clasificar-error-del-webhook'
 import {
   ESTADO_PAGO_PENDIENTE,
   ESTADO_PAGO_APROBADO,
   ESTADO_PAGO_CANCELADO,
 } from '../common/estado-pago.constant'
+import {
+  MOTIVO_REVISION_APROBADO_SOBRE_CANCELADO,
+  MOTIVO_REVISION_APROBADO_SOBRE_SESION_CERRADA,
+  MotivoRevision,
+} from '../common/motivo-revision.constant'
 
 const MP_STATUS_MAP: Record<PaymentStatus, string> = {
   APROBADO: 'aprobado',
@@ -43,6 +49,23 @@ export interface SesionResumen {
   pagos: { id: string; metodo: string; estado: string; monto: number }[]
   cerradaEn?: string
 }
+
+/** Un pago marcado para revisión, como lo devuelve `GET /payments/requieren-revision`. */
+export interface PagoParaRevision {
+  pagoId: string
+  sesionId: string
+  mesaNumero: string
+  monto: number
+  metodo: string
+  estado: string
+  motivo: string | null
+  referenciaExterna: string | null
+  fechaCobro: string | null
+  creadoEn: string
+}
+
+/** Tope de `listarPagosParaRevision`. */
+export const MAX_PAGOS_PARA_REVISION = 200
 
 @Injectable()
 export class PaymentsService {
@@ -120,6 +143,44 @@ export class PaymentsService {
         cerradaEn: sesion.cerradaEn?.toISOString(),
       }
     })
+  }
+
+  /**
+   * Los pagos que el webhook marcó para revisión (`requiereRevision`), del restaurante y más nuevos primero. El rol lo
+   * exige la ruta (`@RequiereRolEn`). Con tope: todavía no hay cómo marcarlos como resueltos y la lista solo crece.
+   * `select` explícito: ni comensales ni quién cobró.
+   */
+  async listarPagosParaRevision(restauranteId: string): Promise<PagoParaRevision[]> {
+    const pagos = await this.prisma.pago.findMany({
+      where: { requiereRevision: true, sesion: { mesa: { restauranteId } } },
+      select: {
+        id: true,
+        sesionId: true,
+        monto: true,
+        metodo: true,
+        estado: true,
+        motivoRevision: true,
+        referenciaExterna: true,
+        fechaCobro: true,
+        createdAt: true,
+        sesion: { select: { mesa: { select: { numero: true } } } },
+      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: MAX_PAGOS_PARA_REVISION,
+    })
+
+    return pagos.map((p) => ({
+      pagoId: p.id,
+      sesionId: p.sesionId,
+      mesaNumero: p.sesion.mesa.numero,
+      monto: Number(p.monto),
+      metodo: p.metodo,
+      estado: p.estado,
+      motivo: p.motivoRevision,
+      referenciaExterna: p.referenciaExterna,
+      fechaCobro: p.fechaCobro?.toISOString() ?? null,
+      creadoEn: p.createdAt.toISOString(),
+    }))
   }
 
   async solicitarEfectivo(sesionId: string) {
@@ -362,33 +423,47 @@ export class PaymentsService {
     pagoId: string,
     query: Record<string, string>,
   ) {
-    const accessToken = await this.mpOAuth.getAccessTokenDecrypted(restauranteId)
-    const resultado = await this.mpProvider.processWebhook(query, accessToken)
-    const estadoInterno = MP_STATUS_MAP[resultado.status]
-
+    // Lo que se puede decidir con la base va antes de pedirle nada a MP. Volver sin lanzar es "no procesable": el
+    // controller responde 200 y MP no reintenta. Lo que lance lo clasifica clasificarErrorDelWebhook.
     const pagoActual = await this.prisma.pago.findUnique({
       where: { id: pagoId },
-      include: { sesion: { select: { mesaId: true } } },
+      include: { sesion: { select: { mesaId: true, mesa: { select: { restauranteId: true } } } } },
     })
     if (!pagoActual) {
       this.logger.warn(`procesarWebhookMercadoPago: pago ${pagoId} no encontrado, ignorando notificación`)
       return
     }
-
-    // La notificación tiene que ser de ESTE pago y el pago tiene que ser de Mercado Pago.
-    // Va antes de la transacción: externalReference viene del request y metodo no cambia
-    // mientras el pago está en este flujo. Con el provider actual, las notificaciones de
-    // relleno (tópico desconocido, payment sin order) traen externalReference '' y caen acá.
-    if (resultado.externalReference !== pagoId) {
+    // La URL la arma quien llama: con el restaurante de otro, se consultaría a MP con el token equivocado.
+    if (pagoActual.sesion.mesa.restauranteId !== restauranteId) {
       this.logger.warn(
-        `procesarWebhookMercadoPago: externalReference "${resultado.externalReference}" no coincide con pagoId ${pagoId}, ` +
-          `ignorando notificación (sesionId=${pagoActual.sesionId}, merchantOrderId=${resultado.externalId})`,
+        `procesarWebhookMercadoPago: el pago ${pagoId} no es del restaurante ${restauranteId} de la URL, ` +
+          `ignorando notificación (sesionId=${pagoActual.sesionId})`,
       )
       return
     }
+    // metodo no cambia mientras el pago está en este flujo.
     if (pagoActual.metodo !== 'mercadopago') {
       this.logger.warn(
         `procesarWebhookMercadoPago: el pago ${pagoId} no es de Mercado Pago (metodo=${pagoActual.metodo}), ` +
+          `ignorando notificación (sesionId=${pagoActual.sesionId})`,
+      )
+      return
+    }
+
+    // getAccessTokenDecrypted solo tira BadRequest cuando el restaurante no tiene MP conectado. Para el webhook no es
+    // un 400: hay que reconectar, y MP tiene que reintentar mientras tanto.
+    const accessToken = await this.mpOAuth.getAccessTokenDecrypted(restauranteId).catch((err: unknown) => {
+      throw err instanceof BadRequestException ? new MercadoPagoNoConectadoError() : err
+    })
+    const resultado = await this.mpProvider.processWebhook(query, accessToken)
+    const estadoInterno = MP_STATUS_MAP[resultado.status]
+
+    // La notificación tiene que ser de ESTE pago. Va antes de la transacción: externalReference viene de MP. Con el
+    // provider actual, las notificaciones de relleno (tópico desconocido, payment sin order) traen externalReference ''
+    // y caen acá.
+    if (resultado.externalReference !== pagoId) {
+      this.logger.warn(
+        `procesarWebhookMercadoPago: externalReference "${resultado.externalReference}" no coincide con pagoId ${pagoId}, ` +
           `ignorando notificación (sesionId=${pagoActual.sesionId}, merchantOrderId=${resultado.externalId})`,
       )
       return
@@ -398,22 +473,44 @@ export class PaymentsService {
       return
     }
 
+    const detalle =
+      `sesionId=${pagoActual.sesionId}, pagoId=${pagoId}, restauranteId=${restauranteId}, ` +
+      `merchantOrderId=${resultado.externalId}`
+
     const sesionCerrada = await runSerializableTransaction(this.prisma, async (tx) => {
-      // Estados finales: aprobado y cancelado no los cambia el webhook (ni siquiera
-      // referenciaExterna). Se lee acá, dentro de la tx, porque registrarCobro puede
-      // cancelar el pago entre la lectura de arriba y este punto.
-      const actual = await tx.pago.findUnique({ where: { id: pagoId }, select: { estado: true } })
+      // Estados finales: aprobado y cancelado no los cambia el webhook. Se lee acá, dentro de la tx, porque
+      // registrarCobro puede cancelar el pago entre la lectura de arriba y este punto.
+      const actual = await tx.pago.findUnique({
+        where: { id: pagoId },
+        select: { estado: true, referenciaExterna: true, requiereRevision: true },
+      })
+      // Si ya tenía una marca, no se pisa el motivo: queda el primero.
+      const marcar = (motivo: MotivoRevision) =>
+        actual?.requiereRevision ? { requiereRevision: true } : { requiereRevision: true, motivoRevision: motivo }
+
       if (
         actual &&
         (actual.estado === ESTADO_PAGO_APROBADO || actual.estado === ESTADO_PAGO_CANCELADO)
       ) {
-        if (actual.estado !== estadoInterno) {
-          const detalle = `sesionId=${pagoActual.sesionId}, pagoId=${pagoId}, merchantOrderId=${resultado.externalId}`
+        if (actual.estado === ESTADO_PAGO_CANCELADO && estadoInterno === ESTADO_PAGO_APROBADO) {
+          // La única excepción a "el webhook no toca estados finales": la plata entró por un pago que ya estaba cancelado.
+          // El pago sigue cancelado (la mesa ya se cobró por otro lado), pero queda marcado para devolverla a mano, y con la
+          // orden de MP para encontrarla si todavía no tenía referencia. No cambia el estado ni nada más. Una notificación
+          // repetida sobre un pago ya marcado y con referencia no tiene nada nuevo que escribir.
+          if (!actual.requiereRevision || !actual.referenciaExterna) {
+            await tx.pago.update({
+              where: { id: pagoId },
+              data: {
+                ...marcar(MOTIVO_REVISION_APROBADO_SOBRE_CANCELADO),
+                ...(actual.referenciaExterna ? {} : { referenciaExterna: resultado.externalId }),
+              },
+            })
+          }
           this.logger.warn(
-            actual.estado === ESTADO_PAGO_CANCELADO && estadoInterno === ESTADO_PAGO_APROBADO
-              ? `procesarWebhookMercadoPago: MP informó aprobado para un pago cancelado; devolución manual pendiente (${detalle})`
-              : `procesarWebhookMercadoPago: transición ignorada ${actual.estado} → ${estadoInterno} (${detalle})`,
+            `procesarWebhookMercadoPago: MP informó aprobado para un pago cancelado; devolución manual pendiente (${detalle})`,
           )
+        } else if (actual.estado !== estadoInterno) {
+          this.logger.warn(`procesarWebhookMercadoPago: transición ignorada ${actual.estado} → ${estadoInterno} (${detalle})`)
         }
         return false
       }
@@ -429,6 +526,16 @@ export class PaymentsService {
 
       if (estadoInterno !== 'aprobado') return false
 
+      // La plata entró por una sesión que ya no está activa (la cerraron a mano o la cobró el mozo): el pago queda
+      // aprobado y marcado, cubra o no el total, y la sesión y la mesa no se tocan (la mesa puede tener otra sesión).
+      const marcarSesionCerrada = async () => {
+        await tx.pago.update({ where: { id: pagoId }, data: marcar(MOTIVO_REVISION_APROBADO_SOBRE_SESION_CERRADA) })
+        this.logger.warn(`procesarWebhookMercadoPago: MP aprobado sobre una sesión ya cerrada; revisar (${detalle})`)
+        return false
+      }
+      const sesion = await tx.sesionMesa.findUnique({ where: { id: pagoActual.sesionId }, select: { estado: true } })
+      if (sesion?.estado !== 'activa') return marcarSesionCerrada()
+
       const totalSesion = await this.divisionService.calcularTotalSesion(tx, pagoActual.sesionId)
       const pagosAprobados = await tx.pago.findMany({
         where: { sesionId: pagoActual.sesionId, estado: 'aprobado' },
@@ -442,16 +549,15 @@ export class PaymentsService {
       // pago de este webhook ya está aprobado, no entra.
       if (await cerrarSesionDeMesa(tx, pagoActual.sesionId, pagoActual.sesion.mesaId, new Date())) return true
 
-      // La sesión ya estaba cerrada: la plata entró, así que el pago queda aprobado, pero la sesión y la mesa no se tocan
-      // (la mesa puede tener otra sesión abierta).
-      this.logger.warn(
-        `procesarWebhookMercadoPago: MP aprobado sobre una sesión ya cerrada; revisar ` +
-          `(sesionId=${pagoActual.sesionId}, pagoId=${pagoId}, merchantOrderId=${resultado.externalId})`,
-      )
-      return false
+      // La sesión se cerró entre la lectura de arriba y el helper: el mismo caso.
+      return marcarSesionCerrada()
     }, 'procesarWebhookMercadoPago')
 
-    if (sesionCerrada) {
+    if (!sesionCerrada) return
+
+    // Después del commit el cobro ya está registrado: si falla el aviso a las pantallas, no se lanza. Un 500 haría que
+    // MP reintente una notificación ya aplicada.
+    try {
       const sesion = await this.prisma.sesionMesa.findUnique({
         where: { id: pagoActual.sesionId },
         select: { mesa: { select: { id: true, numero: true } } },
@@ -463,6 +569,11 @@ export class PaymentsService {
           mesaNumero: sesion.mesa.numero,
         })
       }
+    } catch (err) {
+      this.logger.error(
+        `procesarWebhookMercadoPago: el cobro quedó registrado pero no se pudo avisar a las pantallas ` +
+          `(pagoId=${pagoId}, restauranteId=${restauranteId}, sesionId=${pagoActual.sesionId}, mensaje="${mensajeDelError(err)}")`,
+      )
     }
   }
 }

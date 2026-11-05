@@ -293,6 +293,7 @@ Entregas (ver Decisiones de la planificación de la Fase 4):
 | ~~`DELETE /mozos/:id` (solo un mozo sin cuenta: 409 si tiene `usuarioId`)~~ | ~~OWNER~~. La Fase 5 la borró (decisión 6): un perfil de mozo no se borra desde la app |
 | `GET /sessions/activas`, `pagadas` e `historial`, `POST /sessions/open-staff`, `mesa/:mesaId/cerrar` y `mesa/:mesaId/activa`, `PATCH /sessions/:id/cobro` | OWNER, GERENTE, JEFE_SALON, MOZO |
 | `GET /payments/sesiones`, `POST /payments/confirmar-efectivo` | OWNER, GERENTE, JEFE_SALON, MOZO |
+| `GET /payments/requieren-revision?restauranteId=` (solo lectura) | OWNER, GERENTE. Los pagos de Mercado Pago que el webhook marcó para revisión, hasta 200 y más nuevos primero |
 | `GET /payments/mercadopago/oauth/conectar` | OWNER, GERENTE. El `state` lleva el `usuarioId` |
 | `GET /pedidos`, `PATCH /pedidos/:id/estado` | OWNER, GERENTE, JEFE_SALON, MOZO, COCINA |
 | `POST /pedidos/staff` | OWNER, GERENTE, JEFE_SALON, MOZO |

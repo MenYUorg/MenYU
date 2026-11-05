@@ -8,6 +8,14 @@ import {
   PaymentStatus,
 } from './payment-provider.interface'
 
+/**
+ * Timeout por intento de las consultas del webhook (sin esto, cada intento tenía los 10 s del SDK). Los reintentos del
+ * SDK no se tocan: 2 intentos con 2 s de espera ante un 5xx, un error de red o un timeout. Peor caso: 2 consultas ×
+ * (4 s + 2 s + 4 s) = 20 s, por debajo de los 22 s que Mercado Pago espera la respuesta.
+ */
+export const TIMEOUT_DE_LAS_CONSULTAS_DEL_WEBHOOK_MS = 4000
+const OPCIONES_DEL_WEBHOOK = { timeout: TIMEOUT_DE_LAS_CONSULTAS_DEL_WEBHOOK_MS }
+
 @Injectable()
 export class MercadoPagoProvider implements PaymentProvider {
   private client(accessToken: string) {
@@ -72,14 +80,14 @@ export class MercadoPagoProvider implements PaymentProvider {
     let merchantOrder: any
 
     if (topic === 'merchant_order') {
-      merchantOrder = await merchantOrderClient.get({ merchantOrderId: id })
+      merchantOrder = await merchantOrderClient.get({ merchantOrderId: id, requestOptions: OPCIONES_DEL_WEBHOOK })
     } else if (topic === 'payment') {
-      const payment = await paymentClient.get({ id })
+      const payment = await paymentClient.get({ id, requestOptions: OPCIONES_DEL_WEBHOOK })
       const orderId = (payment as any).order?.id
       if (!orderId) {
         return { externalId: id, status: 'PENDIENTE', externalReference: '' }
       }
-      merchantOrder = await merchantOrderClient.get({ merchantOrderId: orderId })
+      merchantOrder = await merchantOrderClient.get({ merchantOrderId: orderId, requestOptions: OPCIONES_DEL_WEBHOOK })
     } else {
       return { externalId: id ?? 'desconocido', status: 'PENDIENTE', externalReference: '' }
     }
