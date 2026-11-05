@@ -246,3 +246,5 @@ ALTER TABLE "restaurante" ADD COLUMN IF NOT EXISTS "mp_user_id" TEXT;
 | Refresh del `mpAccessToken` cuando expira | Baja |
 | Página "Conectar Mercado Pago" en web-admin | Baja — OAuth backend listo, falta UI |
 | Resolver drift del historial de migraciones Prisma | Media |
+
+> **Nota (05/11/2026):** histórico. `MP_WEBHOOK_SECRET` ya existe y la firma del webhook se evalúa en modo observación (DT-02); lo vigente está en [`MercadoPago.md`](MercadoPago.md), secciones 7 y 14.
