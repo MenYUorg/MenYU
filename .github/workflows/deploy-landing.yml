@@ -1,0 +1,77 @@
+name: Deploy — Landing
+
+# La landing (landing/menyu-landing) es un sitio estático independiente del
+# monorepo: no tiene package.json y no entra ni en Turborepo ni en el CI. Por
+# eso tiene su propio deploy, que corre solo cuando cambia algo de landing/.
+# Antes esto era arrastrar la carpeta al dashboard de Cloudflare a mano.
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'landing/**'
+      - '.github/workflows/deploy-landing.yml'
+  workflow_dispatch:
+
+# Dos merges seguidos no se pisan: el segundo espera al primero.
+concurrency:
+  group: deploy-landing
+  cancel-in-progress: false
+
+jobs:
+  deploy-landing:
+    name: Deploy de la landing a Cloudflare Workers
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Sin credenciales no hay nada que hacer: corta con un mensaje claro en
+      # vez de fallar adentro de wrangler.
+      - name: Check Cloudflare credentials
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN" || { echo "::error::Falta el secret CLOUDFLARE_API_TOKEN (Documentacion/WORKFLOW.md)"; exit 1; }
+          test -n "$CLOUDFLARE_ACCOUNT_ID" || { echo "::error::Falta el secret CLOUDFLARE_ACCOUNT_ID (Documentacion/WORKFLOW.md)"; exit 1; }
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      # Toda la config está en landing/wrangler.jsonc: nombre del Worker,
+      # carpeta de assets y, en menyu-landing/.assetsignore, qué no se publica.
+      - name: Deploy a Cloudflare Workers
+        id: deploy
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: landing
+          wranglerVersion: '4.158.0'
+          command: deploy
+
+      # Smoke de solo lectura, sobre lo que ya se rompió una vez: que el
+      # formulario siga conectado (action y access_key) y con el honeypot que
+      # el navegador no puede autocompletar. Si no, el deploy queda en rojo.
+      - name: Smoke de la landing
+        env:
+          URL_DEPLOY: ${{ steps.deploy.outputs.deployment-url }}
+        run: |
+          url="${URL_DEPLOY:-https://menyu.dantelojeda05.workers.dev}"
+          url="${url%/}"
+          echo "Smoke contra $url"
+          pagina=$(curl -fsS --retry 5 --retry-delay 3 --retry-all-errors "$url/")
+          for marca in 'action="https://api.web3forms.com/submit"' 'name="access_key"' 'type="checkbox" name="botcheck"'; do
+            case "$pagina" in
+              *"$marca"*) echo "ok: $marca" ;;
+              *) echo "::error::La landing publicada no tiene: $marca"; exit 1 ;;
+            esac
+          done
+          curl -fsS -o /dev/null "$url/main.js"
+          curl -fsS -o /dev/null "$url/styles.css"
+          # README.md y DESIGN.md son documentación, no páginas: no se publican.
+          for privado in README.md DESIGN.md; do
+            codigo=$(curl -sS -o /dev/null -w '%{http_code}' "$url/$privado")
+            test "$codigo" = "404" || { echo "::error::$privado quedó publicado (HTTP $codigo)"; exit 1; }
+          done
+          echo "La landing responde, el formulario está conectado y la documentación no se publica."

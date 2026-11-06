@@ -1,0 +1,24 @@
+{
+  // Config del Worker que sirve la landing. Antes el deploy era arrastrar la
+  // carpeta al dashboard; ahora `wrangler deploy` desde landing/ hace lo mismo,
+  // y el workflow deploy-landing.yml lo corre solo en cada merge a main.
+
+  // El nombre define la URL de workers.dev: menyu.<subdominio>.workers.dev.
+  // Cambiarlo NO renombra el Worker que ya existe: publica uno nuevo en otra
+  // URL y deja el viejo andando. Los QR impresos apuntan acá: no tocar.
+  "name": "menyu",
+  "compatibility_date": "2026-11-06",
+
+  // Sitio estático puro: no hay script de Worker, solo los archivos de la
+  // carpeta. Lo que no se publica va en menyu-landing/.assetsignore.
+  // not_found_handling "none": una ruta que no existe da 404, que es lo que
+  // hacía el deploy a mano. No es una SPA: no hay que servirle index.html.
+  "assets": {
+    "directory": "./menyu-landing",
+    "not_found_handling": "none"
+  },
+
+  // Hasta que la landing se mude a menyu-app.com vive en workers.dev. Para el
+  // dominio propio: agregar "routes" acá y el registro en Cloudflare DNS.
+  "workers_dev": true
+}

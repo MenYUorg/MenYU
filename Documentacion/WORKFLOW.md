@@ -64,7 +64,7 @@ El repositorio tiene una única rama protegida: `main`.
 
 ## 3. Pipelines de GitHub Actions
 
-El repositorio tiene 5 workflows en `.github/workflows/`: `ci.yml`, `deploy-staging.yml`, `deploy-production.yml`, `e2e-staging.yml` y `carga-k6.yml`.
+El repositorio tiene 6 workflows en `.github/workflows/`: `ci.yml`, `deploy-staging.yml`, `deploy-production.yml`, `deploy-landing.yml`, `e2e-staging.yml` y `carga-k6.yml`.
 
 ### `ci.yml` — Integración continua
 **Trigger:** Pull Request hacia `main`
@@ -103,6 +103,18 @@ Los frontends de staging con dominio fijo (`menyu-*-staging`) no los despliega e
 1. Corre los mismos checks que CI
 2. Despliega el backend a **Railway producción**
 3. Despliega los frontends a **Vercel** (ambiente production, flag `--prod`)
+
+---
+
+### `deploy-landing.yml` — Despliegue de la landing
+**Trigger:** Push a `main` que toque `landing/**`, y a mano (*workflow_dispatch*)
+
+La landing (`landing/menyu-landing`) es un sitio estático que no forma parte del monorepo: no tiene `package.json` y no pasa por Turborepo ni por el CI. Por eso se despliega sola:
+
+1. Corre `wrangler deploy` desde `landing/`, con la config versionada en `landing/wrangler.jsonc` (el Worker `menyu`, con Static Assets)
+2. Smoke de solo lectura contra lo recién publicado: la página responde, el formulario sigue conectado (`action`, `access_key` y el honeypot `botcheck`) y ni `README.md` ni `DESIGN.md` quedan públicos
+
+Necesita los secrets `CLOUDFLARE_API_TOKEN` y `CLOUDFLARE_ACCOUNT_ID`. Qué archivos de la carpeta no se publican se decide en `landing/menyu-landing/.assetsignore`.
 
 ---
 
@@ -232,6 +244,8 @@ Los secrets están configurados en **Settings → Secrets and variables → Acti
 | `VERCEL_PROJECT_ID_CLIENTE` | ID del proyecto web-cliente en Vercel |
 | `VERCEL_PROJECT_ID_STAFF` | ID del proyecto web-staff en Vercel |
 | `VERCEL_PROJECT_ID_AUTH` | ID del proyecto web-auth en Vercel (`menyu-auth`) |
+| `CLOUDFLARE_API_TOKEN` | Token de Cloudflare para desplegar la landing (permiso *Workers Scripts: Edit*) |
+| `CLOUDFLARE_ACCOUNT_ID` | ID de la cuenta de Cloudflare donde vive el Worker `menyu` |
 
 Las URLs de producción que verifica el smoke son *variables* del repo (no secrets): `PROD_WEB_ADMIN_URL`, `PROD_WEB_CLIENTE_URL`, `PROD_WEB_STAFF_URL` y `PROD_WEB_AUTH_URL`.
 

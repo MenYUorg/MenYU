@@ -652,9 +652,11 @@ a:hover { color: var(--navy); }
 
 .form__nota { color: var(--gris); font-size: var(--t-small); }
 
-/* la trampa para bots no se ve, no se tabula y no la lee un lector de pantalla,
-   pero sigue en el flujo del formulario para que un bot la complete */
-.trampa { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+/* el honeypot de Web3Forms no se ve, no se tabula y no lo lee un lector de
+   pantalla. Va con display:none a propósito: el autofill del navegador rellena
+   igual los campos recortados con clip-path, y un honeypot autocompletado
+   descartaba envíos reales */
+.trampa { display: none; }
 
 /* un campo inválido se marca después del primer intento de envío, no mientras se escribe */
 .form[data-intentado='true'] .campo input:invalid,
