@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<style>
+  @font-face {
+    font-family: 'Archivo';
+    src: url('./fonts/archivo-var.woff2') format('woff2-variations');
+    font-weight: 100 900; font-stretch: 62% 125%; font-display: block;
+  }
+  @font-face {
+    font-family: 'Inter';
+    src: url('./fonts/inter-var.woff2') format('woff2-variations');
+    font-weight: 100 900; font-display: block;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    width: 1200px; height: 630px;
+    background: #242C58;
+    font-family: 'Inter', sans-serif;
+    overflow: hidden;
+    position: relative;
+  }
+
+  /* las púas del tenedor del logo, como ritmo de fondo */
+  .puas {
+    position: absolute;
+    inset: -40px 56px -40px auto;
+    width: 300px;
+    display: flex;
+    gap: 34px;
+    opacity: .09;
+  }
+  .puas span { flex: 1; border-radius: 999px; background: linear-gradient(180deg, transparent, #ED6A4F 30%, #ED6A4F 70%, transparent); }
+
+  .cuerpo { position: relative; padding: 68px 72px; height: 100%; display: flex; flex-direction: column; align-items: flex-start; }
+
+  .logo { height: 46px; width: auto; flex: none; }
+
+  h1 {
+    font-family: 'Archivo', sans-serif;
+    font-weight: 800;
+    font-stretch: 112%;
+    font-size: 104px;
+    line-height: .94;
+    letter-spacing: -.035em;
+    color: #fff;
+    margin-top: auto;
+  }
+  h1 em { font-style: normal; color: #ED6A4F; }
+
+  p {
+    margin-top: 30px;
+    font-size: 27px;
+    line-height: 1.45;
+    color: #B9BDD0;
+    max-width: 30ch;
+  }
+
+  .pie {
+    margin-top: auto;
+    padding-top: 34px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    font-family: 'Archivo', sans-serif;
+    font-weight: 600;
+    font-stretch: 85%;
+    font-size: 19px;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    color: #8A90AC;
+  }
+  .punto { width: 11px; height: 11px; border-radius: 999px; background: #ED6A4F; }
+</style>
+</head>
+<body>
+  <div class="puas"><span></span><span></span><span></span><span></span></div>
+
+  <div class="cuerpo">
+    <img class="logo" src="./img/logo-oscuro.webp" alt="">
+
+    <h1>La mesa<br>no espera <em>a nadie</em></h1>
+    <p>Carta, pedido y pago desde el teléfono del comensal.</p>
+
+    <div class="pie">
+      <span class="punto"></span>
+      <span>Sin app · Sin hardware · Cobrás con tu cuenta</span>
+    </div>
+  </div>
+</body>
+</html>

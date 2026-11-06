@@ -202,17 +202,103 @@
   }
 
   /* ---------- formulario ----------
-     El destino todavía no está decidido: hasta que el action apunte a
-     algún lado, el envío no se simula ni se finge que llegó. */
+
+     ÚNICA LÍNEA A CONFIGURAR ANTES DE PUBLICAR: DESTINO.
+
+       Web3Forms   'https://api.web3forms.com/submit'  (y completar CLAVE_WEB3FORMS)
+       Propio      '/api/contacto'                     (dejar CLAVE_WEB3FORMS vacía)
+
+     Mientras DESTINO esté vacío el formulario avisa que todavía no está
+     conectado, en vez de fingir que el mensaje llegó. */
+
+  var DESTINO = 'https://api.web3forms.com/submit';
+  var CLAVE_WEB3FORMS = '0a2aba6a-8cea-4607-b6b9-645c2d9d9b0f';
 
   var form = document.getElementById('form-contacto');
-  if (form) {
+  var boton = document.getElementById('form-enviar');
+  var error = document.getElementById('form-error');
+  var listo = document.getElementById('form-listo');
+
+  function mostrarError(texto) {
+    if (!error) return;
+    error.textContent = texto;
+    error.hidden = false;
+  }
+
+  function limpiarError() {
+    if (!error) return;
+    error.hidden = true;
+    error.textContent = '';
+  }
+
+  if (form && boton) {
     form.addEventListener('submit', function (ev) {
-      var destino = form.getAttribute('action');
-      if (!destino || destino === '#') {
-        ev.preventDefault();
-        window.console && console.warn('[MenYU] Falta configurar el action del formulario.');
+      ev.preventDefault();
+      limpiarError();
+
+      // Un bot completó el campo oculto: no mandamos nada y no lo decimos.
+      var trampa = form.querySelector('[name="apellido-2"]');
+      if (trampa && trampa.value) return;
+
+      // La validación nativa se muestra recién al intentar enviar.
+      form.dataset.intentado = 'true';
+      if (!form.checkValidity()) {
+        var primero = form.querySelector('.campo :invalid');
+        if (primero) primero.focus();
+        mostrarError('Revisá los campos marcados: falta completar algo o el email no tiene un formato válido.');
+        return;
       }
+
+      if (!DESTINO) {
+        mostrarError('El formulario todavía no está conectado. Escribinos mientras tanto a hola@menyu-app.com.');
+        return;
+      }
+
+      var datos = {};
+      new FormData(form).forEach(function (valor, clave) {
+        if (clave !== 'apellido-2') datos[clave] = valor;
+      });
+      if (CLAVE_WEB3FORMS) {
+        datos.access_key = CLAVE_WEB3FORMS;
+        datos.subject = 'MenYU — nueva consulta de ' + (datos.restaurante || 'un restaurante');
+        datos.from_name = 'Landing de MenYU';
+      }
+
+      boton.disabled = true;
+      boton.dataset.enviando = 'true';
+      var textoOriginal = boton.textContent;
+      boton.textContent = 'Enviando…';
+
+      var reponer = function () {
+        boton.disabled = false;
+        delete boton.dataset.enviando;
+        boton.textContent = textoOriginal;
+      };
+
+      fetch(DESTINO, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify(datos)
+      })
+        .then(function (r) {
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          form.hidden = true;
+          if (listo) {
+            listo.hidden = false;
+            listo.setAttribute('tabindex', '-1');
+            listo.focus();
+          }
+        })
+        .catch(function () {
+          reponer();
+          mostrarError('No pudimos enviar el mensaje. Probá de nuevo en un momento, o escribinos a hola@menyu-app.com.');
+        });
+    });
+
+    // Al corregir un campo marcado, el aviso general se va.
+    form.addEventListener('input', function () {
+      if (!error || error.hidden) return;
+      if (form.checkValidity()) limpiarError();
     });
   }
 

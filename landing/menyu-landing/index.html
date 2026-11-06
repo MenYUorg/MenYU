@@ -13,10 +13,18 @@
 <link rel="preload" href="fonts/inter-var.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="styles.css">
 
+<!-- og:image y og:url tienen que ser absolutas. Al mudar la landing al dominio
+     propio, cambiar las dos por https://menyu-app.com/… -->
 <meta property="og:title" content="MenYU — La mesa no espera a nadie">
 <meta property="og:description" content="Carta, pedido y pago desde el teléfono del comensal. La comanda entra sola a cocina.">
 <meta property="og:type" content="website">
 <meta property="og:locale" content="es_AR">
+<meta property="og:url" content="https://menyu.dantelojeda05.workers.dev/">
+<meta property="og:image" content="https://menyu.dantelojeda05.workers.dev/img/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="MenYU — La mesa no espera a nadie">
+<meta name="twitter:card" content="summary_large_image">
 </head>
 
 <body>
@@ -365,8 +373,17 @@
       </p>
     </div>
 
-    <!-- El destino se cambia solo acá, en el action. -->
-    <form class="form" id="form-contacto" action="#" method="post">
+    <!-- El destino se configura en main.js (DESTINO). El action queda como
+         respaldo sin JavaScript: con JS, el envío lo maneja main.js. -->
+    <form class="form" id="form-contacto" method="post" novalidate>
+
+      <!-- Trampa para bots: invisible y fuera del recorrido de teclado.
+           Si viene con contenido, el envío se descarta en silencio. -->
+      <div class="trampa" aria-hidden="true">
+        <label for="apellido-2">No completar este campo</label>
+        <input type="text" id="apellido-2" name="apellido-2" tabindex="-1" autocomplete="off">
+      </div>
+
       <div class="campo">
         <label for="nombre">Tu nombre</label>
         <input type="text" id="nombre" name="nombre" autocomplete="name" required>
@@ -387,9 +404,21 @@
         <label for="mensaje">Contanos algo del local <span style="color:var(--gris);font-weight:400">(opcional)</span></label>
         <textarea id="mensaje" name="mensaje" placeholder="Cuántas mesas, qué tipo de servicio, qué te gustaría resolver."></textarea>
       </div>
-      <button class="btn btn--primario" type="submit" style="align-self:flex-start">Enviar</button>
+      <button class="btn btn--primario" type="submit" id="form-enviar" style="align-self:flex-start">Enviar</button>
       <p class="form__nota">Te escribimos nosotros. No compartimos tus datos con nadie.</p>
+
+      <!-- Errores de red o de validación. Vacío mientras no haya nada que decir. -->
+      <p class="form__error" id="form-error" role="alert" hidden></p>
     </form>
+
+    <!-- Confirmación: reemplaza al formulario cuando el envío sale bien. -->
+    <div class="form-listo" id="form-listo" role="status" hidden>
+      <span class="form-listo__marca" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5 5L20 6.5"/></svg>
+      </span>
+      <h3>Nos llegó</h3>
+      <p>Te escribimos a la dirección que dejaste para coordinar la demo. Si no ves nada en un par de días, revisá el correo no deseado.</p>
+    </div>
 
   </div>
 </section>
@@ -409,7 +438,7 @@
       </div>
 
       <div>
-        <h4>Entrar</h4>
+        <h3>Entrar</h3>
         <ul>
           <li><a href="https://mesa.menyu-app.com">Comensales</a></li>
           <li><a href="https://admin.menyu-app.com">Panel del restaurante</a></li>
@@ -419,7 +448,7 @@
       </div>
 
       <div>
-        <h4>Contacto</h4>
+        <h3>Contacto</h3>
         <ul>
           <li><a href="#contacto">Pedir una demo</a></li>
           <li><a href="mailto:hola@menyu-app.com">hola@menyu-app.com</a></li>
