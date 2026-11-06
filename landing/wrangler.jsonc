@@ -1,7 +1,8 @@
 {
-  // Config del Worker que sirve la landing. Antes el deploy era arrastrar la
-  // carpeta al dashboard; ahora `wrangler deploy` desde landing/ hace lo mismo,
-  // y el workflow deploy-landing.yml lo corre solo en cada merge a main.
+  // Config del Worker que sirve la landing. La publica Cloudflare Workers
+  // Builds, conectado al repo por Git, que construye desde acá. Ojo: publica
+  // en producción cualquier rama que se pushee, no solo main.
+  // En local: `wrangler dev` desde landing/ la sirve igual que en producción.
 
   // El nombre define la URL de workers.dev: menyu.<subdominio>.workers.dev.
   // Cambiarlo NO renombra el Worker que ya existe: publica uno nuevo en otra
@@ -12,7 +13,7 @@
   // Sitio estático puro: no hay script de Worker, solo los archivos de la
   // carpeta. Lo que no se publica va en menyu-landing/.assetsignore.
   // not_found_handling "none": una ruta que no existe da 404, que es lo que
-  // hacía el deploy a mano. No es una SPA: no hay que servirle index.html.
+  // ya venía haciendo. No es una SPA: no hay que servirle index.html.
   "assets": {
     "directory": "./menyu-landing",
     "not_found_handling": "none"

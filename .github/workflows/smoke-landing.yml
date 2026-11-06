@@ -1,0 +1,76 @@
+name: Smoke — Landing
+
+# Este workflow NO despliega: la landing la publica Cloudflare Workers Builds,
+# conectado al repo por Git, que construye con landing/wrangler.jsonc. Acá solo
+# se verifica lo que quedó publicado, después de cada merge que toque landing/.
+#
+# Ojo: Workers Builds publica en producción cualquier rama que se pushee, no
+# solo main (observado el 2026-11-06: una rama sin mergear quedó en vivo).
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'landing/**'
+      - '.github/workflows/smoke-landing.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: smoke-landing
+  cancel-in-progress: false
+
+env:
+  LANDING_URL: https://menyu.dantelojeda05.workers.dev
+
+jobs:
+  smoke-landing:
+    name: Smoke de la landing publicada
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Cloudflare construye en paralelo a este workflow, así que primero hay
+      # que esperar a que lo publicado sea el index.html de este commit. Si no
+      # llega, lo más probable es que el build de Cloudflare haya fallado.
+      - name: Esperar a que Cloudflare publique este commit
+        run: |
+          esperado=$(tr -d '\r' < landing/menyu-landing/index.html | sha256sum | cut -d' ' -f1)
+          echo "index.html de este commit: $esperado"
+          fin=$((SECONDS + 600))
+          while :; do
+            publicado=$(curl -fsS "$LANDING_URL/" | tr -d '\r' | sha256sum | cut -d' ' -f1)
+            if [ "$publicado" = "$esperado" ]; then
+              echo "Cloudflare ya publicó este commit."
+              break
+            fi
+            if [ "$SECONDS" -ge "$fin" ]; then
+              echo "::error::Después de 10 min, $LANDING_URL no sirve el index.html de este commit (publicado: $publicado). Revisar el build de Cloudflare."
+              exit 1
+            fi
+            echo "Todavía no ($publicado). Reintento en 20 s."
+            sleep 20
+          done
+
+      # Lo que ya se rompió una vez: que el formulario siga conectado (action y
+      # access_key) y con el honeypot que el navegador no puede autocompletar.
+      - name: Smoke de la landing
+        run: |
+          pagina=$(curl -fsS --retry 3 --retry-delay 3 --retry-all-errors "$LANDING_URL/")
+          for marca in 'action="https://api.web3forms.com/submit"' 'name="access_key"' 'type="checkbox" name="botcheck"'; do
+            case "$pagina" in
+              *"$marca"*) echo "ok: $marca" ;;
+              *) echo "::error::La landing publicada no tiene: $marca"; exit 1 ;;
+            esac
+          done
+          curl -fsS -o /dev/null "$LANDING_URL/main.js"
+          curl -fsS -o /dev/null "$LANDING_URL/styles.css"
+          # README.md y DESIGN.md son documentación, no páginas: los saca
+          # .assetsignore y no tienen que quedar públicos.
+          for privado in README.md DESIGN.md; do
+            codigo=$(curl -sS -o /dev/null -w '%{http_code}' "$LANDING_URL/$privado")
+            test "$codigo" = "404" || { echo "::error::$privado quedó publicado (HTTP $codigo)"; exit 1; }
+          done
+          echo "La landing responde, el formulario está conectado y la documentación no se publica."

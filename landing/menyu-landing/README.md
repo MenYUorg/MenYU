@@ -20,16 +20,23 @@ La config del deploy está un nivel más arriba, en `../wrangler.jsonc`.
 
 ## Publicar
 
-**En cada merge a `main`**, si el commit toca `landing/`, lo hace solo el
-workflow `deploy-landing.yml`: corre `wrangler deploy` y después un smoke de
-solo lectura sobre lo publicado. No hay que subir nada a mano.
+La publica **Cloudflare Workers Builds**, conectado al repo por Git: construye
+con `../wrangler.jsonc` y publica sola. No hay que subir nada a mano.
 
-A mano, cuando haga falta (desde `landing/`, no desde acá):
+> **Cuidado: publica en producción cualquier rama que se pushee, no solo
+> `main`.** Observado el 2026-11-06: una rama sin mergear quedó en vivo. Si vas
+> a pushear una rama que toca `landing/`, dalo por publicado.
+
+Después de cada merge a `main` que toque `landing/`, el workflow
+`smoke-landing.yml` espera a que Cloudflare publique ese commit y verifica lo
+que quedó en vivo. No despliega nada: solo mira.
+
+Desde `landing/` (no desde acá) se puede además:
 
 ```bash
-npx wrangler@4.158.0 deploy          # publica
-npx wrangler@4.158.0 dev             # la sirve en local, igual que en producción
+npx wrangler@4.158.0 dev                # la sirve en local, igual que en producción
 npx wrangler@4.158.0 deploy --dry-run   # valida la config sin publicar
+npx wrangler@4.158.0 deploy             # publica a mano, si Cloudflare falla
 ```
 
 `wrangler dev` es la forma correcta de probarla en local: respeta
