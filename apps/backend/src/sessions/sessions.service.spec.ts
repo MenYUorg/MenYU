@@ -86,7 +86,7 @@ function createTxMock() {
       update: jest.fn(),
       create: jest.fn(),
     },
-    sesionMesa: { update: jest.fn() },
+    sesionMesa: { findUnique: jest.fn(), updateMany: jest.fn() },
     mesa: { update: jest.fn() },
   }
 }
@@ -659,6 +659,15 @@ describe('SessionsService', () => {
 
     let tx: ReturnType<typeof createTxMock>
 
+    // tx.pago.updateMany se usa dos veces: para cancelar los MP pendientes (por id, con su confirmación) y, al cerrar,
+    // en cerrarSesionDeMesa para cancelar lo que quede pendiente de la sesión.
+    const CANCELACION_AL_CERRAR = {
+      where: { sesionId: 'sesion-1', estado: ESTADO_PAGO_PENDIENTE },
+      data: { estado: ESTADO_PAGO_CANCELADO },
+    }
+    const cancelacionesDeMp = () =>
+      tx.pago.updateMany.mock.calls.filter(([args]) => args.where.id !== undefined).map(([args]) => args.where.id.in)
+
     beforeEach(() => {
       // Solo Date es falso: el resto de los timers (y las promesas) siguen reales.
       jest.useFakeTimers({
@@ -671,6 +680,9 @@ describe('SessionsService', () => {
       mockPrisma.sesionMesa.findUnique.mockResolvedValue(SESION_PARA_COBRO)
       tx = createTxMock()
       mockPrisma.$transaction.mockImplementation((fn: any) => fn(tx))
+      // Por defecto la sesión sigue activa dentro de la tx y el cierre (cerrarSesionDeMesa) la encuentra activa.
+      tx.sesionMesa.findUnique.mockResolvedValue({ estado: 'activa' })
+      tx.sesionMesa.updateMany.mockResolvedValue({ count: 1 })
       // Por defecto no hay efectivo pendiente: se crea una fila nueva.
       tx.pago.findFirst.mockResolvedValue(null)
     })
@@ -699,7 +711,7 @@ describe('SessionsService', () => {
       expect(tx.pago.updateMany).not.toHaveBeenCalled()
       expect(tx.pago.update).not.toHaveBeenCalled()
       expect(tx.pago.create).not.toHaveBeenCalled()
-      expect(tx.sesionMesa.update).not.toHaveBeenCalled()
+      expect(tx.sesionMesa.updateMany).not.toHaveBeenCalled()
     })
 
     it('MP pendiente reciente y viene el flag → queda cancelado y el cobro se registra', async () => {
@@ -723,8 +735,8 @@ describe('SessionsService', () => {
           data: expect.objectContaining({ monto: 1000, estado: ESTADO_PAGO_APROBADO }),
         }),
       )
-      expect(tx.sesionMesa.update).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { id: 'sesion-1' } }),
+      expect(tx.sesionMesa.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: 'sesion-1', estado: 'activa' } }),
       )
       expect(mockGateway.emitSesionCobrada).toHaveBeenCalled()
       expect(result).toEqual({ ok: true })
@@ -740,8 +752,9 @@ describe('SessionsService', () => {
 
       const result = await service.registrarCobro('sesion-1', DTO_BASE, USER_MOZO)
 
-      expect(tx.pago.updateMany).not.toHaveBeenCalled()
-      expect(tx.sesionMesa.update).toHaveBeenCalled()
+      expect(tx.pago.updateMany).toHaveBeenCalledTimes(1) // solo la del cierre, ninguna de MP
+      expect(tx.pago.updateMany).toHaveBeenCalledWith(CANCELACION_AL_CERRAR)
+      expect(tx.sesionMesa.updateMany).toHaveBeenCalled()
       expect(result).toEqual({ ok: true })
     })
 
@@ -755,7 +768,7 @@ describe('SessionsService', () => {
 
       const result = await service.registrarCobro('sesion-1', DTO_BASE, USER_MOZO)
 
-      expect(tx.sesionMesa.update).not.toHaveBeenCalled()
+      expect(tx.sesionMesa.updateMany).not.toHaveBeenCalled()
       expect(tx.mesa.update).not.toHaveBeenCalled()
       expect(mockGateway.emitSesionCobrada).not.toHaveBeenCalled()
       expect(result).toEqual({ ok: true })
@@ -863,7 +876,7 @@ describe('SessionsService', () => {
 
       // Assert
       expect(resultado).toBe(esperado)
-      expect(tx.pago.updateMany.mock.calls.map(([args]) => args.where.id.in)).toEqual(cancelados)
+      expect(cancelacionesDeMp()).toEqual(cancelados)
       expect(tx.pago.create).toHaveBeenCalledTimes(esperado === 'cobra' ? 1 : 0)
     })
 
@@ -898,7 +911,7 @@ describe('SessionsService', () => {
 
       const result = await service.registrarCobro('sesion-1', DTO_BASE, USER_MOZO)
 
-      expect(tx.pago.updateMany).not.toHaveBeenCalled()
+      expect(cancelacionesDeMp()).toEqual([])
       expect(tx.pago.create).not.toHaveBeenCalled()
       expect(tx.pago.update).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -911,6 +924,85 @@ describe('SessionsService', () => {
         }),
       )
       expect(result).toEqual({ ok: true })
+    })
+
+    it('con dos efectivos pendientes: reutiliza uno y el cierre cancela el otro, después de aprobar', async () => {
+      mockDivision.calcularTotalSesion.mockResolvedValue(1000)
+      tx.pago.findMany
+        .mockResolvedValueOnce([]) // aprobados previos
+        .mockResolvedValueOnce([]) // sin MP pendientes
+        .mockResolvedValueOnce([{ id: 'pago-ef-1', monto: 1000 }]) // aprobados post-update
+      tx.pago.findFirst.mockResolvedValue({ id: 'pago-ef-1' }) // el primero; pago-ef-2 sigue pendiente
+
+      await service.registrarCobro('sesion-1', DTO_BASE, USER_MOZO)
+
+      expect(tx.pago.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'pago-ef-1' } }))
+      // El cierre cancela todo lo pendiente de la sesión, sin filtro de método ni de id: ahí entra pago-ef-2.
+      expect(tx.pago.updateMany).toHaveBeenCalledTimes(1)
+      expect(tx.pago.updateMany).toHaveBeenCalledWith(CANCELACION_AL_CERRAR)
+      const orden = (fn: jest.Mock) => fn.mock.invocationCallOrder[0]
+      expect(orden(tx.pago.update)).toBeLessThan(orden(tx.sesionMesa.updateMany))
+      expect(orden(tx.sesionMesa.updateMany)).toBeLessThan(orden(tx.pago.updateMany))
+    })
+
+    it('camino feliz: cierra con el helper (sesión activa, libera la mesa) y emite sesionCobrada', async () => {
+      mockDivision.calcularTotalSesion.mockResolvedValue(1000)
+      tx.pago.findMany
+        .mockResolvedValueOnce([]) // aprobados previos
+        .mockResolvedValueOnce([]) // sin MP pendientes
+        .mockResolvedValueOnce([{ id: 'pago-nuevo', monto: 1000 }]) // aprobados post-insert
+      tx.pago.create.mockResolvedValue({ id: 'pago-nuevo' })
+
+      await expect(service.registrarCobro('sesion-1', DTO_BASE, USER_MOZO)).resolves.toEqual({ ok: true })
+
+      expect(tx.sesionMesa.findUnique).toHaveBeenCalledWith({ where: { id: 'sesion-1' }, select: { estado: true } })
+      expect(tx.sesionMesa.updateMany).toHaveBeenCalledWith({
+        where: { id: 'sesion-1', estado: 'activa' },
+        data: { estado: 'cerrada', cerradaEn: AHORA },
+      })
+      expect(tx.mesa.update).toHaveBeenCalledWith({ where: { id: 'mesa-1' }, data: { estado: 'libre' } })
+      expect(mockGateway.emitSesionCobrada).toHaveBeenCalledWith(MUNDO.REST_1, {
+        sesionId: 'sesion-1',
+        mesaId: 'mesa-1',
+        mesaNumero: '5',
+      })
+    })
+
+    it.each([
+      ['cerrada', { estado: 'cerrada' }],
+      ['inexistente', null],
+    ])('sesión %s al releerla dentro de la tx → 400 antes de calcular, sin crear ni actualizar pagos', async (_caso, sesion) => {
+      tx.sesionMesa.findUnique.mockResolvedValue(sesion) // afuera cerradaEn era null: la cerraron en el medio
+
+      await expect(service.registrarCobro('sesion-1', DTO_BASE, USER_MOZO)).rejects.toThrow(
+        new BadRequestException('La sesión ya fue cerrada'),
+      )
+
+      expect(mockDivision.calcularTotalSesion).not.toHaveBeenCalled()
+      expect(tx.pago.create).not.toHaveBeenCalled()
+      expect(tx.pago.update).not.toHaveBeenCalled()
+      expect(tx.pago.updateMany).not.toHaveBeenCalled()
+      expect(tx.sesionMesa.updateMany).not.toHaveBeenCalled()
+      expect(tx.mesa.update).not.toHaveBeenCalled()
+      expect(mockGateway.emitSesionCobrada).not.toHaveBeenCalled()
+    })
+
+    it('si otro la cierra después de la relectura (el helper da false) → 400, que revierte el cobro, y no emite', async () => {
+      mockDivision.calcularTotalSesion.mockResolvedValue(1000)
+      tx.pago.findMany
+        .mockResolvedValueOnce([]) // aprobados previos
+        .mockResolvedValueOnce([]) // sin MP pendientes
+        .mockResolvedValueOnce([{ id: 'pago-nuevo', monto: 1000 }]) // aprobados post-insert
+      tx.pago.create.mockResolvedValue({ id: 'pago-nuevo' })
+      tx.sesionMesa.updateMany.mockResolvedValue({ count: 0 })
+
+      await expect(service.registrarCobro('sesion-1', DTO_BASE, USER_MOZO)).rejects.toThrow(
+        new BadRequestException('La sesión ya fue cerrada'),
+      )
+
+      expect(tx.pago.updateMany).not.toHaveBeenCalled()
+      expect(tx.mesa.update).not.toHaveBeenCalled()
+      expect(mockGateway.emitSesionCobrada).not.toHaveBeenCalled()
     })
 
     it('el paso 4 solo busca efectivo pendiente: no toma un MP ni la fila recién cancelada', async () => {

@@ -1,4 +1,4 @@
-> **Copia** de `Documentacion/MercadoPago.md` para la entrega, hecha el 26/10/2026. El original sigue en `Documentacion/` y es el que se mantiene: si cambia, hay que volver a copiarlo.
+> **Copia** de `Documentacion/MercadoPago.md` para la entrega, hecha el 26/10/2026 y actualizada el 05/11/2026. El original sigue en `Documentacion/` y es el que se mantiene: si cambia, hay que volver a copiarlo.
 
 # Integración Mercado Pago — MenYu
 
@@ -6,7 +6,7 @@
 > - los endpoints actuales son `POST /api/payments/mercadopago/crear-preferencia`, `POST /api/payments/webhook/mercadopago/restaurante/:restauranteId/pago/:pagoId` y `GET /api/payments/mercadopago/oauth/conectar` y `/callback`, no `/initiate`, `/webhook`, `/connect` ni `/callback`;
 > - el webhook ya no busca el pago por `referenciaExterna`: usa el `pagoId` de la ruta.
 >
-> Las variables de entorno (sección 7) y el caso de Mercado Pago caído (sección 13) están al día con `main` (`3a8300b`).
+> Las variables de entorno (sección 7), el caso de Mercado Pago caído y los pagos para revisión (sección 13) y el log del webhook (sección 14) están al día con el PR B de la deuda de pagos (05/11/2026).
 
 ## Índice
 
@@ -23,6 +23,7 @@
 11. [Estados de pago](#estados-de-pago)
 12. [Bugs conocidos y diagnóstico](#bugs-conocidos-y-diagnóstico)
 13. [Si Mercado Pago está caído](#si-mercado-pago-está-caído)
+14. [El log del webhook y la firma](#el-log-del-webhook-y-la-firma)
 
 ---
 
@@ -291,8 +292,14 @@ Todas son del backend. Los frontends no tienen variables de Mercado Pago. Detall
 | `BASE_URL` | URL pública del backend con `/api`: arma el `redirect_uri` del OAuth y el `notification_url` del webhook | `mercado-pago-oauth.service.ts:33` y `:50`; `apps/backend/src/payments/providers/mercado-pago.provider.ts:22` |
 | `FRONTEND_URL` | Web-cliente: `back_urls` de respaldo cuando el `Origin` falta o no está en la lista de CORS | `mercado-pago.provider.ts:25-27` |
 | `FRONTEND_ADMIN_URL` | Panel admin: a dónde vuelve después de conectar Mercado Pago | `apps/backend/src/payments/mercado-pago-oauth.controller.ts:30` |
+| `MP_WEBHOOK_SECRET` | Opcional. La clave secreta de las notificaciones, para evaluar la firma del webhook (DT-02: validar la firma del webhook) | `apps/backend/src/payments/payments.controller.ts` (`registrarFirma` y el aviso de `onModuleInit`) |
 
-**Ya no existen en el código:** `MP_ACCESS_TOKEN`, `MP_WEBHOOK_SECRET`, `MP_WEBHOOK_URL`, `MP_SUCCESS_URL`, `MP_FAILURE_URL`, `MP_PENDING_URL`, `MP_REDIRECT_URI`, `MP_ENV` y `MP_MINIMAL_PREFERENCE` (`git grep` sobre `apps/*/src`, `packages`, `scripts` y `.github`, sin resultados). Lo que las secciones 2, 3, 5 y 10 dicen de ellas es histórico.
+**`MP_WEBHOOK_SECRET`** existe de nuevo desde el PR B de la deuda de pagos (05/11/2026), con otro uso que el de junio:
+- **De dónde sale:** en Tus integraciones de Mercado Pago, la aplicación → Webhooks → Configurar notificaciones → Clave secreta.
+- **Qué hace hoy (modo observación, DT-02):** con la clave, el webhook evalúa la firma de cada notificación y la anota en el log (sección 14). La notificación **se procesa igual**, con firma válida, inválida o sin firma. Exigirla queda para un PR posterior (PR C), cuando los logs de staging muestren qué notificaciones vienen firmadas.
+- **Si falta:** el backend arranca igual y avisa una vez al arrancar ("MP_WEBHOOK_SECRET no está definida: las firmas del webhook de Mercado Pago no se evalúan"). Cada notificación queda con `firma=sin-secreto`.
+
+**Ya no existen en el código:** `MP_ACCESS_TOKEN`, `MP_WEBHOOK_URL`, `MP_SUCCESS_URL`, `MP_FAILURE_URL`, `MP_PENDING_URL`, `MP_REDIRECT_URI`, `MP_ENV` y `MP_MINIMAL_PREFERENCE` (`git grep` sobre `apps/*/src`, `packages`, `scripts` y `.github`, sin resultados). Lo que las secciones 2, 3, 5 y 10 dicen de ellas es histórico.
 
 ---
 
@@ -446,19 +453,86 @@ Revisado el 26/10/2026 contra el código de `main` (`8b98247`; los archivos cita
 
 ### Si el webhook llega pero Mercado Pago no responde
 
-- El endpoint responde `200 OK` **antes** de procesar (`apps/backend/src/payments/payments.controller.ts:76`) y después consulta el pago a Mercado Pago (`payments.service.ts:419-420`).
-- Si esa consulta falla, el error solo va a `console.error` (`payments.controller.ts:77-81`). Mercado Pago no vuelve a avisar, porque ya recibió el 200.
-- El pago queda pendiente hasta que el personal cobre la mesa.
+Desde el PR B de la deuda de pagos (05/11/2026), que resolvió DT-11 (el webhook respondía 200 antes de procesar), el webhook **responde después de procesar** la notificación: el `200` sale solo cuando el pago ya quedó registrado en la base, o cuando la notificación no se puede procesar nunca. Si algo falla en el medio, responde `500` y Mercado Pago la vuelve a mandar.
 
-### Riesgo de doble cobro
+- **Quién decide qué responder:** una sola función, `clasificarErrorDelWebhook` (`apps/backend/src/payments/clasificar-error-del-webhook.ts`). El controller responde lo que ella dice y no tiene otra regla.
+- **Antes de consultar a Mercado Pago**, el servicio mira la base: si el pago no existe, si es de otro restaurante que el de la URL o si no es de Mercado Pago, no le pide nada a MP.
 
-- Si el personal cobra (y eso cancela el MP) y después Mercado Pago aprueba ese pago, el webhook no cambia nada. Solo deja un warning: "MP informó aprobado para un pago cancelado; devolución manual pendiente" (`payments.service.ts:460-472`).
-- No hay aviso en ninguna pantalla: la devolución se hace a mano desde Mercado Pago.
+| Caso | Respuesta | En el log |
+|---|---|---|
+| El pago no existe | `200` | warn |
+| El pago es de otro restaurante que el de la URL (no se consulta a MP) | `200` | warn |
+| El pago no es de Mercado Pago | `200` | warn |
+| El `external_reference` de la orden no es este pago | `200` | warn |
+| Tópico desconocido, o un `payment` todavía sin orden | `200` (cae en el caso anterior: la referencia viene vacía) | warn |
+| Mercado Pago responde `400` | `200` (reintentar no lo arregla) | warn, `codigo=mp-solicitud-invalida` |
+| El restaurante no tiene Mercado Pago conectado | `500` | error: "hay que reconectar Mercado Pago desde el panel del restaurante" |
+| Mercado Pago responde `401` o `403` (token vencido o revocado) | `500` | error: el mismo aviso de reconectar |
+| Mercado Pago responde `404`, `429` o `5xx` | `500` | error |
+| Otro 4xx de Mercado Pago (`409`, `422`…) | `500` | error, `codigo=mp-otro` |
+| Error de red o timeout | `500` | error |
+| Error de Prisma (la base) | `500` | error |
+| Cualquier otro error | `500` | error, `codigo=desconocido` |
+
+- **Qué devuelve un `500`:** un cuerpo genérico, `{ statusCode: 500, message: "No se pudo procesar la notificación", error: "Internal Server Error" }`. El detalle queda solo en el log: `pagoId`, `restauranteId`, el código, el status de MP y el mensaje del error en una línea. Nunca el objeto de error entero ni tokens.
+- **Cuánto reintenta Mercado Pago:** según su documentación de Webhooks, unos 4 días, con esperas crecientes (al momento, 15 min, 30 min, 6 h, 48 h, 96 h…). Mientras tanto el pago sigue pendiente y el personal puede cobrar la mesa igual (la sección anterior).
+- **Timeout por intento:** las consultas del webhook (`payment.get` y `merchantOrder.get`) van con **4000 ms** por intento (`TIMEOUT_DE_LAS_CONSULTAS_DEL_WEBHOOK_MS` en `mercado-pago.provider.ts`). Los reintentos del SDK se mantienen (2 intentos con 2 s de espera ante un 5xx, error de red o timeout). Peor caso: 2 consultas × (4 s + 2 s + 4 s) = **20 s**, por debajo de los **22 s** que Mercado Pago espera la respuesta. `createPreference` no cambió: sigue con los 10 s del SDK.
+- **Un cobro ya registrado nunca termina en `500`:** después del commit, el aviso a las pantallas (el `emit` de Socket.io y la lectura de la mesa) va protegido. Si falla, queda un `logger.error` y el webhook responde `200`. Si respondiera `500`, Mercado Pago reintentaría una notificación ya aplicada.
+- **Dos notificaciones iguales al mismo tiempo:** la transacción es serializable. Una de las dos choca (`P2034`), se reintenta una vez y ya ve el pago aprobado. Lo prueba el e2e `apps/backend/src/payments/webhook.e2e-spec.ts` (caso 8).
+
+### Riesgo de doble cobro y pagos para revisión
+
+Hay dos casos en que Mercado Pago aprueba un pago y la plata entra, pero la mesa ya se cobró o se cerró por otro lado. El webhook no los deshace: los **marca para revisión** en la tabla `pago`.
+
+| Caso | Qué pasó | Cómo queda el pago |
+|---|---|---|
+| **(a)** `aprobado-sobre-cancelado` | El personal cobró la mesa (o la cerró a mano), eso canceló el pago de MP, y después Mercado Pago lo aprobó | Sigue `cancelado`. `requiereRevision = true`, `motivoRevision = 'aprobado-sobre-cancelado'` y `referenciaExterna` con la orden de MP, solo si estaba vacía. Es la única excepción a "el webhook no toca un pago en estado final", y no cambia nada más |
+| **(b)** `aprobado-sobre-sesion-cerrada` | Mercado Pago aprueba un pago de una sesión que ya no está activa, cubra o no el total | Queda `aprobado`, con la marca y ese motivo. La sesión y la mesa no se tocan: la mesa puede tener otra sesión abierta. Tampoco se avisa a las pantallas |
+
+- **El motivo es el primero:** si el pago ya tenía la marca, no se pisa.
+- **Una notificación repetida** sobre un pago ya marcado y con referencia no escribe nada; solo vuelve a dejar el warn.
+- **Dónde verlos:** `GET /api/payments/requieren-revision?restauranteId=…`, para OWNER y GERENTE del restaurante. Devuelve hasta 200 pagos, más nuevos primero, con `pagoId`, `sesionId`, `mesaNumero`, `monto`, `metodo`, `estado`, `motivo`, `referenciaExterna`, `fechaCobro` y `creadoEn`. No trae datos de comensales ni de quién cobró.
+- **Cómo se resuelve hoy:** a mano. Con la `referenciaExterna` (la orden de Mercado Pago), se busca el pago en el panel de Mercado Pago de la cuenta del restaurante y se devuelve desde ahí.
+
+> **Limitación conocida:** no hay forma de marcar un pago como revisado o resuelto, ni una pantalla en el frontend. El endpoint es de solo lectura y la lista solo crece (por eso tiene tope de 200).
 
 ### Limitaciones conocidas (quedan para la tesis)
 
 1. **El mensaje que ve el comensal** no distingue una falla de Mercado Pago de cualquier otro error del servidor.
 2. **El panel de administración (web-admin)** no maneja el 409 del pago reciente pendiente: solo lo hace el panel de mozo (web-staff).
-3. **No hay aviso ni conciliación automática** para un pago aprobado por Mercado Pago después de haber sido cancelado por el personal.
+3. **Los pagos para revisión** no se pueden marcar como resueltos ni tienen pantalla, y no hay conciliación automática con Mercado Pago (la sección anterior).
 
-Además, como dice la sección 8 del plan de pruebas (corregida en el PR #440), un webhook cuya consulta a Mercado Pago falla deja el pago pendiente sin reintento.
+Lo que decía la versión anterior de esta sección, que un webhook cuya consulta a Mercado Pago falla deja el pago pendiente sin reintento, ya no vale: ahora responde `500` y Mercado Pago reintenta.
+
+---
+
+## El log del webhook y la firma
+
+Cada notificación deja **una línea** en el log, al principio, antes de procesarla (`registrarFirma` en `payments.controller.ts`). Por ejemplo:
+
+```
+webhook MP: restauranteId=<id> pagoId=<id> x-signature=sí x-request-id=sí query=[data.id,type] tipo=payment firma=valida
+```
+
+- **`restauranteId` y `pagoId`:** los de la URL, filtrados a `[\w.-]` y recortados a 40 caracteres.
+- **`x-signature` y `x-request-id`:** `sí` o `no`, si vinieron los headers.
+- **`query=[…]`:** los **nombres** de los parámetros de la query, filtrados igual y hasta 10.
+- **`tipo=`:** el único valor de la query que entra: `topic` y, si no viene, `type` (la misma precedencia que el provider), filtrado y recortado. Sin ninguno de los dos, `tipo=sin-tipo`.
+- **`firma=`:**
+
+| Valor | Qué significa | Nivel |
+|---|---|---|
+| `valida` | La firma coincide con la clave secreta | log |
+| `invalida` | No coincide con la clave secreta (también un `v1` que no es hexa) | warn |
+| `no-evaluable` | El header vino, pero mal armado: sin `ts`, sin `v1` o con otro formato | warn |
+| `sin-header` | Vino sin `x-signature` | warn |
+| `sin-secreto` | Falta `MP_WEBHOOK_SECRET` en el backend | warn |
+
+**Qué no se loguea nunca:** la clave secreta, el `v1` de la firma, los valores de la query (salvo el tipo), el `ts`, el `x-request-id` ni ningún token.
+
+**Qué mirar en staging para decidir el PR C** (exigir la firma): con `MP_WEBHOOK_SECRET` cargada y un pago real de prueba, qué combinaciones de `tipo=` y `firma=` aparecen. Mercado Pago manda más de una notificación por pago (`payment` y `merchant_order`) y puede no firmar todas: si alguna llega siempre `sin-header` o `invalida`, exigir la firma la rechazaría.
+
+**Lo que no está confirmado:**
+- **Las notificaciones IPN** (`?topic=…&id=…`, sin `data.id`) suelen venir sin `x-signature` (`sin-header`). Si alguna trae el header, no se puede validar: el manifest se arma con `data.id`, así que daría `invalida`. Sin confirmar con tráfico real.
+- **Las notificaciones de pagos con QR** no vienen firmadas, según la documentación de Mercado Pago. MenYU no usa QR de Mercado Pago, pero queda anotado.
+- **La unidad del `ts`** (segundos o milisegundos) no es la misma en todas las fuentes. Por eso, en modo observación no se aplica una tolerancia de tiempo.

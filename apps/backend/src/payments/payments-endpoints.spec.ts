@@ -1,6 +1,9 @@
 import { AppDeEndpoints, CUENTAS, MUNDO, SESION_CLIENTE, SIN_USUARIO, USUARIOS, crearAppDeEndpoints } from '../test/app-endpoints'
 import { PaymentsController } from './payments.controller'
 import { PaymentsService } from './payments.service'
+import { Logger } from '@nestjs/common'
+import { Prisma } from '@prisma/client'
+import { MercadoPagoNoConectadoError } from './clasificar-error-del-webhook'
 
 describe('endpoints de pagos', () => {
   let api: AppDeEndpoints
@@ -10,6 +13,7 @@ describe('endpoints de pagos', () => {
     confirmarEfectivo: jest.fn(),
     crearPreferenciaMercadoPago: jest.fn(),
     procesarWebhookMercadoPago: jest.fn(),
+    listarPagosParaRevision: jest.fn(),
   }
   const DE_LA_SESION = { sesionId: SESION_CLIENTE.sesionId }
 
@@ -144,6 +148,93 @@ describe('endpoints de pagos', () => {
     })
   })
 
+  describe('GET /payments/requieren-revision (OWNER y GERENTE del restaurante)', () => {
+    const RUTA = '/payments/requieren-revision'
+    const PAGO = {
+      pagoId: 'pago-1',
+      sesionId: 'ses-1',
+      mesaNumero: '7',
+      monto: 1500.5,
+      metodo: 'mercadopago',
+      estado: 'aprobado',
+      motivo: 'aprobado-sobre-sesion-cerrada',
+      referenciaExterna: 'mo-1',
+      fechaCobro: '2026-11-04T20:15:00.000Z',
+      creadoEn: '2026-11-04T20:00:00.000Z',
+    }
+
+    it.each([
+      ['el OWNER de la marca', CUENTAS.OWNER_A, MUNDO.REST_1],
+      ['el OWNER de la marca, en una sucursal sin personal propio', CUENTAS.OWNER_A, MUNDO.REST_2],
+      ['el GERENTE del restaurante', CUENTAS.GERENTE, MUNDO.REST_1],
+    ])('%s: 200 con la lista del servicio para ese restaurante', async (_caso, cuenta, restauranteId) => {
+      // Arrange
+      payments.listarPagosParaRevision.mockResolvedValue([PAGO])
+
+      // Act
+      const res = await api.pedir('get', RUTA, { cuenta, query: { restauranteId } })
+
+      // Assert
+      expect(res.status).toBe(200)
+      expect(res.body).toEqual([PAGO])
+      expect(payments.listarPagosParaRevision).toHaveBeenCalledWith(restauranteId)
+    })
+
+    it('sin sesión: 401', async () => {
+      // Act
+      const res = await api.pedir('get', RUTA, { query: { restauranteId: MUNDO.REST_1 } })
+
+      // Assert
+      expect(res.status).toBe(401)
+      expect(payments.listarPagosParaRevision).not.toHaveBeenCalled()
+    })
+
+    it('con el token de la sesión de mesa: 401', async () => {
+      // Act
+      const res = await api.pedir('get', RUTA, { sesion: SESION_CLIENTE, query: { restauranteId: MUNDO.REST_1 } })
+
+      // Assert
+      expect(res.status).toBe(401)
+      expect(payments.listarPagosParaRevision).not.toHaveBeenCalled()
+    })
+
+    it.each([
+      ['el MOZO del restaurante', CUENTAS.MOZO, MUNDO.REST_1],
+      ['el JEFE_SALON del restaurante', CUENTAS.JEFE_SALON, MUNDO.REST_1],
+      ['la COCINA del restaurante', CUENTAS.COCINA, MUNDO.REST_1],
+      ['el OWNER de otra marca', CUENTAS.OWNER_B, MUNDO.REST_1],
+      ['el OWNER pidiendo un restaurante de otra marca', CUENTAS.OWNER_A, MUNDO.REST_B],
+      ['el GERENTE pidiendo otro restaurante de su marca', CUENTAS.GERENTE, MUNDO.REST_2],
+      ['ROOT', CUENTAS.ROOT, MUNDO.REST_1],
+    ])('%s: 403, sin llamar al servicio', async (_caso, cuenta, restauranteId) => {
+      // Act
+      const res = await api.pedir('get', RUTA, { cuenta, query: { restauranteId } })
+
+      // Assert
+      expect(res.status).toBe(403)
+      expect(payments.listarPagosParaRevision).not.toHaveBeenCalled()
+    })
+
+    it('una cuenta de Supabase sin Usuario: 403', async () => {
+      // Act
+      const res = await api.pedir('get', RUTA, { cuenta: SIN_USUARIO, query: { restauranteId: MUNDO.REST_1 } })
+
+      // Assert
+      expect(res.status).toBe(403)
+      expect(payments.listarPagosParaRevision).not.toHaveBeenCalled()
+    })
+
+    it('sin restauranteId en la query: 400 del guard, sin llegar al servicio', async () => {
+      // Act
+      const res = await api.pedir('get', RUTA, { cuenta: CUENTAS.OWNER_A })
+
+      // Assert
+      expect(res.status).toBe(400)
+      expect(res.body.message).toBe('Falta restauranteId en la query')
+      expect(payments.listarPagosParaRevision).not.toHaveBeenCalled()
+    })
+  })
+
   describe('webhook de Mercado Pago (sin guard: lo llama Mercado Pago)', () => {
     const RUTA = '/payments/webhook/mercadopago/restaurante/rest-1/pago/pago-1'
 
@@ -160,18 +251,149 @@ describe('endpoints de pagos', () => {
       expect(payments.procesarWebhookMercadoPago).toHaveBeenCalledWith('rest-1', 'pago-1', { type: 'payment', 'data.id': '999' })
     })
 
-    it('si el procesamiento falla igual responde 200 (MP no reintenta por un error nuestro) y lo registra', async () => {
-      // Arrange
-      payments.procesarWebhookMercadoPago.mockRejectedValue(new Error('MP caído'))
-      const consola = jest.spyOn(console, 'error').mockImplementation(() => undefined)
+    describe('responde después de procesar (DT-11)', () => {
+      let warn: jest.SpyInstance
+      let error: jest.SpyInstance
 
-      // Act
-      const res = await api.pedir('post', RUTA, { query: { type: 'payment' } })
+      beforeEach(() => {
+        jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined)
+        warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined)
+        error = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined)
+      })
 
-      // Assert
-      expect(res.status).toBe(200)
-      expect(consola).toHaveBeenCalledWith('Error procesando webhook MP:', expect.any(Error))
-      consola.mockRestore()
+      afterEach(() => jest.restoreAllMocks())
+
+      const lineas = (espia: jest.SpyInstance) => espia.mock.calls.map((args) => String(args[0])).filter((l) => l.startsWith('webhook MP: ') && !l.includes('firma='))
+
+      /** El servicio queda colgado hasta que el test lo suelte: así se ve si la respuesta salió antes. */
+      function servicioDiferido() {
+        let soltar!: () => void
+        let fallar!: (err: unknown) => void
+        let avisarLlamado!: () => void
+        const llamado = new Promise<void>((r) => (avisarLlamado = r))
+        payments.procesarWebhookMercadoPago.mockImplementation(() => {
+          avisarLlamado()
+          return new Promise<void>((resolve, reject) => {
+            soltar = resolve
+            fallar = reject
+          })
+        })
+        return { llamado, soltar: () => soltar(), fallar: (err: unknown) => fallar(err) }
+      }
+
+      function pedirYMarcar() {
+        const estado = { respondio: false }
+        const respuesta = api.pedir('post', RUTA, { query: { type: 'payment', 'data.id': '999' } }).then((res) => {
+          estado.respondio = true
+          return res
+        })
+        return { estado, respuesta }
+      }
+
+      it('no responde hasta que el servicio termina, y después 200 "OK"', async () => {
+        // Arrange
+        const servicio = servicioDiferido()
+
+        // Act
+        const { estado, respuesta } = pedirYMarcar()
+        await servicio.llamado
+        await new Promise((r) => setTimeout(r, 50))
+        const antesDeTerminar = estado.respondio
+        servicio.soltar()
+        const res = await respuesta
+
+        // Assert
+        expect(antesDeTerminar).toBe(false)
+        expect([res.status, res.text]).toEqual([200, 'OK'])
+      })
+
+      it('si el servicio falla, tampoco responde antes: espera y da 500', async () => {
+        // Arrange
+        const servicio = servicioDiferido()
+
+        // Act
+        const { estado, respuesta } = pedirYMarcar()
+        await servicio.llamado
+        await new Promise((r) => setTimeout(r, 50))
+        const antesDeTerminar = estado.respondio
+        servicio.fallar({ message: 'internal error', status: 503 })
+        const res = await respuesta
+
+        // Assert
+        expect(antesDeTerminar).toBe(false)
+        expect(res.status).toBe(500)
+      })
+
+      it('lo que el servicio da por no procesable (vuelve sin lanzar) es 200 "OK" sin error en el log', async () => {
+        // Arrange
+        payments.procesarWebhookMercadoPago.mockResolvedValue(undefined)
+
+        // Act
+        const res = await api.pedir('post', RUTA, { query: { topic: 'chargebacks' } })
+
+        // Assert
+        expect([res.status, res.text]).toEqual([200, 'OK'])
+        expect(lineas(error)).toEqual([])
+      })
+
+      it('un 400 de Mercado Pago es no procesable: 200 "OK" y un warn con el código', async () => {
+        // Arrange
+        payments.procesarWebhookMercadoPago.mockRejectedValue({ message: 'bad request', status: 400 })
+
+        // Act
+        const res = await api.pedir('post', RUTA, { query: { type: 'payment' } })
+
+        // Assert
+        expect([res.status, res.text]).toEqual([200, 'OK'])
+        expect(lineas(warn)).toEqual([
+          'webhook MP: notificación no procesable (pagoId=pago-1 restauranteId=rest-1 codigo=mp-solicitud-invalida status=400 mensaje="bad request")',
+        ])
+        expect(lineas(error)).toEqual([])
+      })
+
+      it.each([
+        ['sin MP conectado', new MercadoPagoNoConectadoError(), 'hay que reconectar Mercado Pago desde el panel del restaurante', 'codigo=mp-no-conectado mensaje="El restaurante no tiene Mercado Pago conectado"'],
+        ['MP 401', { message: 'invalid access token', status: 401 }, 'hay que reconectar Mercado Pago desde el panel del restaurante', 'codigo=mp-token-invalido status=401 mensaje="invalid access token"'],
+        ['MP 403', { message: 'forbidden', status: 403 }, 'hay que reconectar Mercado Pago desde el panel del restaurante', 'codigo=mp-token-invalido status=403 mensaje="forbidden"'],
+        ['MP 404', { message: 'not found', status: 404 }, 'no se pudo procesar, MP va a reintentar', 'codigo=mp-no-encontrado status=404 mensaje="not found"'],
+        ['MP 429', { message: 'too many requests', status: 429 }, 'no se pudo procesar, MP va a reintentar', 'codigo=mp-limite status=429 mensaje="too many requests"'],
+        ['MP 500', { message: 'internal error', status: 500 }, 'no se pudo procesar, MP va a reintentar', 'codigo=mp-servidor status=500 mensaje="internal error"'],
+        ['MP 503', { message: 'unavailable', status: 503 }, 'no se pudo procesar, MP va a reintentar', 'codigo=mp-servidor status=503 mensaje="unavailable"'],
+        ['error de red', new TypeError('fetch failed'), 'no se pudo procesar, MP va a reintentar', 'codigo=red mensaje="fetch failed"'],
+        ['timeout', Object.assign(new Error('This operation was aborted'), { name: 'AbortError' }), 'no se pudo procesar, MP va a reintentar', 'codigo=timeout mensaje="This operation was aborted"'],
+        ['Prisma', new Prisma.PrismaClientKnownRequestError('db caída', { code: 'P1001', clientVersion: '6.19.3' }), 'no se pudo procesar, MP va a reintentar', 'codigo=prisma mensaje="db caída"'],
+        ['error desconocido', new Error('algo raro'), 'no se pudo procesar, MP va a reintentar', 'codigo=desconocido mensaje="algo raro"'],
+      ])('%s: 500 con cuerpo genérico y un logger.error con el contexto', async (_caso, err, que, detalle) => {
+        // Arrange
+        payments.procesarWebhookMercadoPago.mockRejectedValue(err)
+
+        // Act
+        const res = await api.pedir('post', RUTA, { query: { type: 'payment' } })
+
+        // Assert
+        expect(res.status).toBe(500)
+        expect(res.body).toEqual({ statusCode: 500, message: 'No se pudo procesar la notificación', error: 'Internal Server Error' })
+        expect(lineas(error)).toEqual([`webhook MP: ${que} (pagoId=pago-1 restauranteId=rest-1 ${detalle})`])
+      })
+
+      it('el log de error no lleva el objeto de error ni lo que traiga además del mensaje (headers, token)', async () => {
+        // Arrange
+        payments.procesarWebhookMercadoPago.mockRejectedValue({
+          message: 'unauthorized',
+          status: 401,
+          headers: { authorization: 'Bearer APP_USR-secreto' },
+        })
+
+        // Act
+        const res = await api.pedir('post', RUTA, { query: { type: 'payment' } })
+
+        // Assert
+        expect(res.status).toBe(500)
+        const todo = [...error.mock.calls, ...warn.mock.calls].flat().map(String).join('\n')
+        expect(todo).not.toContain('APP_USR')
+        expect(error.mock.calls.every((args) => args.every((a: unknown) => typeof a === 'string'))).toBe(true)
+        expect(JSON.stringify(res.body)).not.toContain('unauthorized')
+      })
     })
   })
 })

@@ -149,9 +149,9 @@ describe('el enrutador: un solo sistema de autenticación por ruta', () => {
   const textos = rutas.map(texto)
 
   it('recorre los controllers de toda la aplicación (si no, los demás tests de acá no prueban nada)', () => {
-    // Hoy son 120. El número exacto no importa: el tope es para que un recorrido vacío o cortado no pase inadvertido.
+    // Hoy son 127. El número exacto no importa: el tope es para que un recorrido vacío o cortado no pase inadvertido.
     expect(rutas.length).toBeGreaterThanOrEqual(115)
-    expect(textos).toEqual(expect.arrayContaining(['GET /auth/me', 'POST /sessions/close', 'GET /discovery', 'GET /root/historial']))
+    expect(textos).toEqual(expect.arrayContaining(['GET /auth/me', 'GET /sesiones/:sesionId/comensales', 'GET /discovery', 'GET /root/historial']))
   })
 
   it('las listas de este archivo no tienen rutas que no existen ni repetidas', () => {

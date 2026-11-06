@@ -269,6 +269,8 @@ MP_CLIENT_SECRET=         # secret de la aplicación MP (para OAuth)
 MP_REDIRECT_URI=          # callback URI registrada en MP (ej: https://api.menyu.com/payments/callback)
 ```
 
+> **Nota (05/11/2026):** histórico. `MP_WEBHOOK_SECRET` ya existe y la firma del webhook se evalúa en modo observación (DT-02); lo vigente está en [`MercadoPago.md`](MercadoPago.md), secciones 7 y 14.
+
 ---
 
 ## 9. Estado de la migración
@@ -304,3 +306,5 @@ El drift del historial de migraciones (columna `admin.rol` y `item_menu.restaura
 | Refresh del `mpAccessToken` cuando expira (usar `mpRefreshToken`) | Baja |
 | Página de configuración MP en `web-admin` (botón "Conectar Mercado Pago") | Baja — OAuth ya implementado en backend, falta la UI |
 | Resolver el drift del historial de migraciones Prisma | Media |
+
+> **Nota (05/11/2026):** histórico. `MP_WEBHOOK_SECRET` ya existe y la firma del webhook se evalúa en modo observación (DT-02); lo vigente está en [`MercadoPago.md`](MercadoPago.md), secciones 7 y 14.

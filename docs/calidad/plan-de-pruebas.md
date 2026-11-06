@@ -6,6 +6,7 @@
 | 0.2 | 24/10/2026 | Agrega criterios de entrada y salida por nivel de prueba, referencias a la matriz ISO/IEC 25010 y a la trazabilidad, y el estado final de los riesgos (R1–R9). |
 | 0.3 | 24/10/2026 | Cierra R4: el E2E contra Supabase de staging quedó implementado y corre en cada deploy (PR #433). Corrige el alcance: el soak de k6 sí se ejecutó contra staging, además del stress. |
 | 0.4 | 26/10/2026 | Agrega el plan de contingencia de Mercado Pago (qué pasa si está caído), revisado contra el código real de `main` (commit `8b98247`), sin pruebas en vivo contra la sandbox ni producción. |
+| 0.5 | 05/11/2026 | Actualiza el plan de contingencia de Mercado Pago tras el PR B de la deuda de pagos: el webhook responde después de procesar y los pagos aprobados sobre un pago cancelado o una sesión cerrada quedan marcados para revisión. |
 
 ## 1. Alcance
 
@@ -73,11 +74,11 @@ Revisado el 26/10/2026 contra el código real de `main` (commit `8b98247`). No s
 
 **Si Mercado Pago confirma un pago después de que el personal ya cobró y lo canceló:** el sistema no lo detecta ni lo corrige solo, deja un aviso en los logs del servidor y la devolución hay que hacerla a mano desde Mercado Pago. No existe ningún proceso automático de conciliación.
 
-**Si el webhook llega justo cuando Mercado Pago no responde:** el backend le contesta 200 a Mercado Pago antes de procesar la notificación (`payments.controller.ts:76-81`) y recién después le consulta el pago. Si esa consulta falla, el error solo queda en los logs y Mercado Pago no vuelve a avisar, porque ya recibió el 200. El pago queda pendiente hasta que el personal cobre la mesa.
+**Si el webhook llega justo cuando Mercado Pago no responde:** desde el PR B de la deuda de pagos (05/11/2026), que resolvió DT-11 (el webhook respondía 200 antes de procesar), el backend responde después de procesar la notificación. Si la consulta a Mercado Pago falla por algo transitorio (un 5xx, un 429, un error de red o un timeout de 4 s por intento) o el restaurante tiene que reconectar Mercado Pago, responde 500 y Mercado Pago la vuelve a mandar durante unos 4 días. Mientras tanto el pago queda pendiente y el personal puede cobrar la mesa igual. Lo que no se puede procesar nunca (por ejemplo, un pago que no existe) responde 200. La tabla completa está en `Documentacion/MercadoPago.md`, sección 13.
 
 **El comensal tiene una salida que no depende de que Mercado Pago esté arriba:** puede pedir pagar en efectivo, aunque tenga un pago de Mercado Pago pendiente. La excepción es un restaurante (o su marca) dado de baja: ahí pedir efectivo (`solicitarEfectivo`) responde 403, y a esa mesa solo le queda Mercado Pago.
 
-**Limitaciones conocidas, declaradas y no corregidas en este TP** (quedan para la tesis, el mismo criterio que se usó con el escenario de la base caída en la sección de Pruebas de resiliencia del informe): el mensaje de error que ve el comensal no distingue una falla de Mercado Pago de cualquier otro error del servidor; el panel de administración no maneja el caso del pago reciente pendiente (solo el panel de mozo); no hay aviso ni conciliación automática para un pago aprobado por Mercado Pago después de haber sido cancelado por el personal; y un webhook cuya consulta a Mercado Pago falla deja el pago pendiente sin reintento.
+**Limitaciones conocidas, declaradas y no corregidas en este TP** (quedan para la tesis, el mismo criterio que se usó con el escenario de la base caída en la sección de Pruebas de resiliencia del informe): el mensaje de error que ve el comensal no distingue una falla de Mercado Pago de cualquier otro error del servidor; el panel de administración no maneja el caso del pago reciente pendiente (solo el panel de mozo); y los pagos que Mercado Pago aprueba después de que el personal los canceló, o sobre una sesión ya cerrada, quedan marcados para revisión (`GET /payments/requieren-revision`, desde el 05/11/2026), pero no hay pantalla, no se pueden marcar como resueltos ni hay conciliación automática: la devolución se hace a mano desde Mercado Pago.
 
 ## 9. Referencias
 
