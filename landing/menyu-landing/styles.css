@@ -114,6 +114,10 @@ h3 {
 p { margin: 0; }
 img, svg { display: block; max-width: 100%; }
 
+/* [hidden] tiene que ganarle a cualquier display de más abajo: sin esto, un
+   .form { display: flex } deja visible un elemento marcado como oculto. */
+[hidden] { display: none !important; }
+
 a { color: var(--coral-texto); text-decoration: underline; text-underline-offset: 3px; transition: color var(--d-rapido) var(--e-salida); }
 a:hover { color: var(--navy); }
 
@@ -648,6 +652,49 @@ a:hover { color: var(--navy); }
 
 .form__nota { color: var(--gris); font-size: var(--t-small); }
 
+/* la trampa para bots no se ve, no se tabula y no la lee un lector de pantalla,
+   pero sigue en el flujo del formulario para que un bot la complete */
+.trampa { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* un campo inválido se marca después del primer intento de envío, no mientras se escribe */
+.form[data-intentado='true'] .campo input:invalid,
+.form[data-intentado='true'] .campo textarea:invalid {
+  border-color: var(--error);
+  background: var(--error-suave);
+}
+
+.form__error {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-2);
+  color: var(--error);
+  font-size: var(--t-small);
+  line-height: 1.5;
+}
+.form__error::before { content: '!'; flex: none; width: 18px; height: 18px; border-radius: var(--r-full); background: var(--error); color: var(--blanco); font-weight: 700; font-size: 12px; line-height: 18px; text-align: center; }
+
+.btn[data-enviando='true'] { opacity: .75; cursor: progress; }
+
+.form-listo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  background: var(--blanco);
+  border: 1px solid var(--linea);
+  border-radius: var(--r-md);
+  padding: var(--s-6);
+  box-shadow: var(--sh-card);
+}
+.form-listo__marca {
+  width: 40px; height: 40px;
+  border-radius: var(--r-full);
+  background: var(--estado-listo-bg);
+  color: var(--estado-listo);
+  display: grid; place-items: center;
+}
+.form-listo__marca svg { width: 22px; height: 22px; }
+.form-listo p { color: var(--gris); font-size: var(--t-small); line-height: 1.6; max-width: 46ch; }
+
 /* ---------- pie ---------- */
 
 .pie { background: var(--navy); color: #9DA2B8; padding-block: var(--s-9) var(--s-7); }
@@ -655,7 +702,7 @@ a:hover { color: var(--navy); }
 @media (min-width: 820px) { .pie__grid { grid-template-columns: minmax(0, 1.4fr) repeat(2, minmax(0, 1fr)); gap: var(--s-8); } }
 
 .pie__logo img { height: 30px; width: auto; margin-bottom: var(--s-4); }
-.pie h4 { color: var(--blanco); font-size: var(--t-op); font-weight: 600; font-stretch: 85%; text-transform: uppercase; letter-spacing: .08em; margin-bottom: var(--s-4); }
+.pie h3 { color: var(--blanco); font-size: var(--t-op); font-weight: 600; font-stretch: 85%; text-transform: uppercase; letter-spacing: .08em; margin-bottom: var(--s-4); }
 .pie ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-3); }
 .pie a { color: #C8CCDC; text-decoration: none; font-size: var(--t-small); }
 .pie a:hover { color: var(--blanco); text-decoration: underline; text-underline-offset: 3px; }
