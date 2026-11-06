@@ -44,8 +44,9 @@ npx wrangler@4.158.0 deploy             # publica a mano, si Cloudflare falla
 hace.
 
 El dominio público es **`menyu-app.com`**: es un *custom domain* del Worker,
-apuntado desde el DNS de Cloudflare. La URL vieja
-`menyu.dantelojeda05.workers.dev` sigue viva y sirve exactamente lo mismo.
+apuntado desde el DNS de Cloudflare. `www.menyu-app.com` redirige con 301 a la
+raíz, así que la URL canónica es sin `www` (es lo que dice el `og:url`). La URL
+vieja `menyu.dantelojeda05.workers.dev` sigue viva y sirve exactamente lo mismo.
 
 El Worker se llama `menyu`. **Cambiarle el nombre en `wrangler.jsonc` no lo
 renombra**: publica un Worker nuevo en otra URL y deja el viejo andando.

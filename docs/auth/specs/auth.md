@@ -76,6 +76,8 @@ En la misma sesión se decidieron también los puntos **Clientes**, **Convivenci
 | Landing (Worker)          | menyu-app.com       | —                           | —                 |
 
 
+> `www.menyu-app.com` existe solo para redirigir: manda un **301 a la raíz**, conservando la ruta y el query string. La URL canónica es sin `www`. Es una Redirect Rule de Cloudflare sobre un `AAAA 100::` proxeado (la dirección de descarte): no hay servidor detrás, el registro existe porque las Redirect Rules solo corren sobre hostnames proxeados.
+>
 > La cookie con dominio compartido NO funciona en `localhost`. En desarrollo se usan los subdominios `*.menyu.local` mapeados a 127.0.0.1 en el archivo hosts.
 >
 > Hoy las apps corren en `menyu-{cliente,admin,staff}.vercel.app` y la API en `menyu-backend-*.up.railway.app`. `vercel.app` está en la Public Suffix List: no se puede poner una cookie para `.vercel.app`, así que el SSO solo funciona con el dominio propio. Los previews de Vercel no comparten sesión; el SSO se prueba en staging y en `*.menyu.local`.
