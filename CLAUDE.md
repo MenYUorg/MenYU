@@ -179,7 +179,7 @@ apps/web-staff/     → staff.menyu-app.com    (cocina + mozo web)
 apps/web-admin/     → admin.menyu-app.com    (dueño/administrador)
 apps/web-auth/      → auth.menyu-app.com     (login central, Supabase Auth)
 ```
-La **landing pública** (`landing/menyu-landing`, HTML estático sin build) es la raíz `menyu-app.com`: la sirve un Worker de Cloudflare que publica Workers Builds desde el repo, no Vercel, y no entra en Turborepo ni en el CI. Ojo: Workers Builds publica en producción **cualquier rama que se pushee**, no solo `main`. Detalle en `landing/menyu-landing/README.md`.
+La **landing pública** (`landing/menyu-landing`, HTML estático sin build) es la raíz `menyu-app.com` (`www` redirige con 301 ahí): la sirve un Worker de Cloudflare que publica Workers Builds desde el repo, no Vercel, y no entra en Turborepo ni en el CI. Ojo: Workers Builds publica en producción **cualquier rama que se pushee**, no solo `main`. Detalle en `landing/menyu-landing/README.md`.
 
 La API (Railway) está en `api.menyu-app.com`. Staging: `<app>.staging.menyu-app.com`. Local: `<app>.menyu.local` (ver la sección Dominios de `docs/auth/specs/auth.md`). Los dominios viejos (`menyu-*.vercel.app`, `menyu-backend-*.up.railway.app`) siguen activos: no darlos de baja (QR impresos, webhooks de Mercado Pago). Las variables por plataforma: `docs/auth/VariablesACambiar.md`.
 
