@@ -55,3 +55,6 @@ apps/backend/prisma/migrations/*.sql.bak
 
 # Artefactos de playwright-cli (snapshots y logs de las pruebas en el navegador)
 .playwright-cli/
+
+# Caché local de Wrangler (deploy de la landing)
+.wrangler/

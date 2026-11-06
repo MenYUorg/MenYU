@@ -1,6 +1,6 @@
 # DESIGN.md — Landing de MenYU
 
-Documento de dirección visual para la landing pública (`menyu-app.com`), HTML estático servido desde Cloudflare Pages. Toda página o sección nueva se construye con estos tokens y estas reglas. Si algo no está acá, se decide una vez y se agrega.
+Documento de dirección visual para la landing pública (`menyu-app.com`), HTML estático servido como Worker de Cloudflare. Toda página o sección nueva se construye con estos tokens y estas reglas. Si algo no está acá, se decide una vez y se agrega.
 
 ---
 
@@ -245,6 +245,6 @@ Lista corta, para revisar antes de dar algo por terminado:
 
 ## 10. Pendiente de decidir
 
-- **Destino del CTA.** La página estática no recibe datos por sí sola. Opciones, de menor a mayor esfuerzo: Google Form embebido, Cloudflare Pages Function que postea al backend de Railway, o `mailto:`.
+- **Destino del CTA.** Resuelto: el formulario postea a Web3Forms desde el cliente, con el `action` y el `access_key` en el `<form>` de `index.html`. El detalle, y la alternativa de un endpoint propio en el Worker, en el README.
 - **Corte de Archivo.** Si el variable completo pesa de más, se sirve una instancia estática de los dos anchos en uso (112 y 85) en lugar del archivo con ejes.
 - **Referencias reales.** Esta dirección se decidió a partir de la marca, el producto y el argumento de venta, **no** comparando sitios reales: UXKIN no está conectado en esta sesión.

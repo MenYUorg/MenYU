@@ -373,16 +373,20 @@
       </p>
     </div>
 
-    <!-- El destino se configura en main.js (DESTINO). El action queda como
-         respaldo sin JavaScript: con JS, el envío lo maneja main.js. -->
-    <form class="form" id="form-contacto" method="post" novalidate>
+    <!-- El envío lo hace main.js por fetch. Sin JavaScript, el action hace el
+         POST nativo a Web3Forms, que responde con su propia confirmación.
+         Para cambiar de destino se tocan el action y el access_key de acá. -->
+    <form class="form" id="form-contacto" method="post"
+          action="https://api.web3forms.com/submit" novalidate>
 
-      <!-- Trampa para bots: invisible y fuera del recorrido de teclado.
-           Si viene con contenido, el envío se descarta en silencio. -->
-      <div class="trampa" aria-hidden="true">
-        <label for="apellido-2">No completar este campo</label>
-        <input type="text" id="apellido-2" name="apellido-2" tabindex="-1" autocomplete="off">
-      </div>
+      <input type="hidden" name="access_key" value="0a2aba6a-8cea-4607-b6b9-645c2d9d9b0f">
+      <input type="hidden" name="from_name" value="Landing de MenYU">
+
+      <!-- Trampa para bots: el honeypot de Web3Forms, que descarta del lado del
+           servidor todo envío que llegue con botcheck tildado. Es un checkbox a
+           propósito: un input de texto lo autocompletaba el navegador (se
+           llamaba "apellido") y se perdían envíos reales en silencio. -->
+      <input type="checkbox" name="botcheck" class="trampa" tabindex="-1" aria-hidden="true">
 
       <div class="campo">
         <label for="nombre">Tu nombre</label>

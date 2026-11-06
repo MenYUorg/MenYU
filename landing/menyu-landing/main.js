@@ -203,16 +203,14 @@
 
   /* ---------- formulario ----------
 
-     ÚNICA LÍNEA A CONFIGURAR ANTES DE PUBLICAR: DESTINO.
+     El destino y la access key viven en el HTML: el action del <form> y el
+     input oculto access_key. Así la configuración queda en un solo lugar y el
+     envío sin JavaScript también funciona. Para usar un endpoint propio basta
+     con poner action="/api/contacto" y borrar el access_key.
 
-       Web3Forms   'https://api.web3forms.com/submit'  (y completar CLAVE_WEB3FORMS)
-       Propio      '/api/contacto'                     (dejar CLAVE_WEB3FORMS vacía)
-
-     Mientras DESTINO esté vacío el formulario avisa que todavía no está
-     conectado, en vez de fingir que el mensaje llegó. */
-
-  var DESTINO = 'https://api.web3forms.com/submit';
-  var CLAVE_WEB3FORMS = '0a2aba6a-8cea-4607-b6b9-645c2d9d9b0f';
+     Nada se descarta en silencio acá. El honeypot (botcheck) lo filtra
+     Web3Forms del lado del servidor, y cualquier otro fallo se muestra en
+     pantalla y se explica en la consola. */
 
   var form = document.getElementById('form-contacto');
   var boton = document.getElementById('form-enviar');
@@ -232,13 +230,11 @@
   }
 
   if (form && boton) {
+    var DESTINO = form.getAttribute('action');
+
     form.addEventListener('submit', function (ev) {
       ev.preventDefault();
       limpiarError();
-
-      // Un bot completó el campo oculto: no mandamos nada y no lo decimos.
-      var trampa = form.querySelector('[name="apellido-2"]');
-      if (trampa && trampa.value) return;
 
       // La validación nativa se muestra recién al intentar enviar.
       form.dataset.intentado = 'true';
@@ -254,15 +250,10 @@
         return;
       }
 
+      // access_key, from_name y botcheck son campos del form: entran solos.
       var datos = {};
-      new FormData(form).forEach(function (valor, clave) {
-        if (clave !== 'apellido-2') datos[clave] = valor;
-      });
-      if (CLAVE_WEB3FORMS) {
-        datos.access_key = CLAVE_WEB3FORMS;
-        datos.subject = 'MenYU — nueva consulta de ' + (datos.restaurante || 'un restaurante');
-        datos.from_name = 'Landing de MenYU';
-      }
+      new FormData(form).forEach(function (valor, clave) { datos[clave] = valor; });
+      datos.subject = 'MenYU — nueva consulta de ' + (datos.restaurante || 'un restaurante');
 
       boton.disabled = true;
       boton.dataset.enviando = 'true';
@@ -275,22 +266,35 @@
         boton.textContent = textoOriginal;
       };
 
+      var mostrarListo = function () {
+        form.hidden = true;
+        if (listo) {
+          listo.hidden = false;
+          listo.setAttribute('tabindex', '-1');
+          listo.focus();
+        }
+      };
+
       fetch(DESTINO, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
         body: JSON.stringify(datos)
       })
         .then(function (r) {
-          if (!r.ok) throw new Error('HTTP ' + r.status);
-          form.hidden = true;
-          if (listo) {
-            listo.hidden = false;
-            listo.setAttribute('tabindex', '-1');
-            listo.focus();
-          }
+          // Web3Forms puede responder 200 con success:false (una key sin
+          // verificar, por ejemplo): el status por sí solo no alcanza.
+          return r.json()
+            .catch(function () { return { success: r.ok, message: 'HTTP ' + r.status }; })
+            .then(function (cuerpo) {
+              if (!r.ok || cuerpo.success === false) {
+                throw new Error(cuerpo.message || ('HTTP ' + r.status));
+              }
+              mostrarListo();
+            });
         })
-        .catch(function () {
+        .catch(function (e) {
           reponer();
+          if (window.console) console.error('[MenYU] el formulario no pudo enviarse:', e && e.message);
           mostrarError('No pudimos enviar el mensaje. Probá de nuevo en un momento, o escribinos a hola@menyu-app.com.');
         });
     });

@@ -1,0 +1,25 @@
+{
+  // Config del Worker que sirve la landing. La publica Cloudflare Workers
+  // Builds, conectado al repo por Git, que construye desde acá. Ojo: publica
+  // en producción cualquier rama que se pushee, no solo main.
+  // En local: `wrangler dev` desde landing/ la sirve igual que en producción.
+
+  // El nombre define la URL de workers.dev: menyu.<subdominio>.workers.dev.
+  // Cambiarlo NO renombra el Worker que ya existe: publica uno nuevo en otra
+  // URL y deja el viejo andando. Los QR impresos apuntan acá: no tocar.
+  "name": "menyu",
+  "compatibility_date": "2026-11-06",
+
+  // Sitio estático puro: no hay script de Worker, solo los archivos de la
+  // carpeta. Lo que no se publica va en menyu-landing/.assetsignore.
+  // not_found_handling "none": una ruta que no existe da 404, que es lo que
+  // ya venía haciendo. No es una SPA: no hay que servirle index.html.
+  "assets": {
+    "directory": "./menyu-landing",
+    "not_found_handling": "none"
+  },
+
+  // Hasta que la landing se mude a menyu-app.com vive en workers.dev. Para el
+  // dominio propio: agregar "routes" acá y el registro en Cloudflare DNS.
+  "workers_dev": true
+}

@@ -1,0 +1,7 @@
+# Lo que vive en la carpeta pero no es parte del sitio publicado.
+# Mientras el deploy fue a mano, README.md y DESIGN.md se sirvieron al público.
+README.md
+DESIGN.md
+
+# Fuente de img/og.png, no una página: se le saca la captura en local.
+og-template.html

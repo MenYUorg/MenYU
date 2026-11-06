@@ -64,7 +64,7 @@ El repositorio tiene una única rama protegida: `main`.
 
 ## 3. Pipelines de GitHub Actions
 
-El repositorio tiene 5 workflows en `.github/workflows/`: `ci.yml`, `deploy-staging.yml`, `deploy-production.yml`, `e2e-staging.yml` y `carga-k6.yml`.
+El repositorio tiene 6 workflows en `.github/workflows/`: `ci.yml`, `deploy-staging.yml`, `deploy-production.yml`, `smoke-landing.yml`, `e2e-staging.yml` y `carga-k6.yml`.
 
 ### `ci.yml` — Integración continua
 **Trigger:** Pull Request hacia `main`
@@ -103,6 +103,22 @@ Los frontends de staging con dominio fijo (`menyu-*-staging`) no los despliega e
 1. Corre los mismos checks que CI
 2. Despliega el backend a **Railway producción**
 3. Despliega los frontends a **Vercel** (ambiente production, flag `--prod`)
+
+---
+
+### `smoke-landing.yml` — Verificación de la landing
+**Trigger:** Push a `main` que toque `landing/**`, y a mano (*workflow_dispatch*)
+
+La landing (`landing/menyu-landing`) es un sitio estático que no forma parte del monorepo: no tiene `package.json` y no pasa por Turborepo ni por el CI. **No la despliega GitHub Actions:** la publica **Cloudflare Workers Builds**, conectado al repo por Git, que construye con `landing/wrangler.jsonc` (el Worker `menyu`, con Static Assets).
+
+Este workflow solo verifica lo que quedó publicado:
+
+1. Espera hasta 10 min a que `menyu.dantelojeda05.workers.dev` sirva el `index.html` de ese commit. Si no llega, lo más probable es que haya fallado el build de Cloudflare
+2. Smoke de solo lectura: la página responde, el formulario sigue conectado (`action`, `access_key` y el honeypot `botcheck`) y ni `README.md` ni `DESIGN.md` quedan públicos
+
+No usa secrets. Qué archivos de la carpeta no se publican se decide en `landing/menyu-landing/.assetsignore`.
+
+> **Workers Builds publica en producción cualquier rama que se pushee**, no solo `main`. Observado el 2026-11-06: una rama sin mergear quedó en vivo en `menyu.dantelojeda05.workers.dev`. Tenerlo en cuenta antes de pushear una rama que toque `landing/`.
 
 ---
 
