@@ -73,6 +73,7 @@ En la misma sesión se decidieron también los puntos **Clientes**, **Convivenci
 | web-staff (mozo + cocina) | staff.menyu-app.com | staff.staging.menyu-app.com | staff.menyu.local |
 | web-cliente               | mesa.menyu-app.com  | mesa.staging.menyu-app.com  | mesa.menyu.local  |
 | API NestJS                | api.menyu-app.com   | api.staging.menyu-app.com   | api.menyu.local   |
+| Landing (Worker)          | menyu-app.com       | —                           | —                 |
 
 
 > La cookie con dominio compartido NO funciona en `localhost`. En desarrollo se usan los subdominios `*.menyu.local` mapeados a 127.0.0.1 en el archivo hosts.
@@ -700,7 +701,7 @@ Observaciones que dejaron las Fases 0 a 3b (2026-10-20 y 2026-10-21). Revisarlas
   - **Después del deploy** (run `40737755116` de "Deploy — Production", los tres jobs en verde): `/health` con el SHA del tag y `"db":"ok"`; los cinco endpoints del login en 404 y `GET /api/auth/me` sin token en 401; Swagger solo con `/api/auth/invitaciones` y `/api/auth/me`; el smoke, 6 de 6; y en la base, la migración aplicada y sin las tres tablas, el tipo, la función ni las tres columnas.
   - **El quality gate de SonarCloud** pasó en el CI de `94fe19f`, pero medido contra *Previous version* del 17/10: la referencia de "código nuevo" no se movió, así que la Fase 5 no se midió sola. Queda para la sesión de limpieza.
 - **Fase 3b: pantalla de consentimiento de Google publicada (2026-10-21).** *Branding* es uno solo para los dos ambientes:
-  - Página principal: `https://mesa.menyu-app.com` (Discovery). La raíz `menyu-app.com` no tiene sitio.
+  - Página principal: `https://mesa.menyu-app.com` (Discovery). **Desde el 2026-11-06 la raíz `menyu-app.com` sí tiene sitio: la landing.** Conviene mover la página principal ahí, y resuelve los dos reparos de abajo: la landing es HTML estático (Google no necesita ejecutar JavaScript) y su pie ya linkea a la política de privacidad.
   - Política de privacidad: `https://auth.menyu-app.com/privacidad`. Google visita estas URLs: no cambiar la ruta ni dejarla caer.
   - Dominios autorizados: `menyu-app.com` y el `<ref>.supabase.co` de cada proyecto de Supabase.
   - Si Google pide verificar la marca, la página principal tiene que tener un link a la política de privacidad, y Discovery todavía no lo tiene.

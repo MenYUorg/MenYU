@@ -113,12 +113,12 @@ La landing (`landing/menyu-landing`) es un sitio estático que no forma parte de
 
 Este workflow solo verifica lo que quedó publicado:
 
-1. Espera hasta 10 min a que `menyu.dantelojeda05.workers.dev` sirva el `index.html` de ese commit. Si no llega, lo más probable es que haya fallado el build de Cloudflare
+1. Espera hasta 10 min a que `menyu-app.com` sirva el `index.html` de ese commit. Si no llega, lo más probable es que haya fallado el build de Cloudflare
 2. Smoke de solo lectura: la página responde, el formulario sigue conectado (`action`, `access_key` y el honeypot `botcheck`) y ni `README.md` ni `DESIGN.md` quedan públicos
 
 No usa secrets. Qué archivos de la carpeta no se publican se decide en `landing/menyu-landing/.assetsignore`.
 
-> **Workers Builds publica en producción cualquier rama que se pushee**, no solo `main`. Observado el 2026-11-06: una rama sin mergear quedó en vivo en `menyu.dantelojeda05.workers.dev`. Tenerlo en cuenta antes de pushear una rama que toque `landing/`.
+> **Workers Builds publica en producción cualquier rama que se pushee**, no solo `main`. Observado el 2026-11-06: una rama sin mergear quedó en vivo en `menyu-app.com`. Tenerlo en cuenta antes de pushear una rama que toque `landing/`.
 
 ---
 

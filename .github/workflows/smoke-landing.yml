@@ -5,7 +5,8 @@ name: Smoke — Landing
 # se verifica lo que quedó publicado, después de cada merge que toque landing/.
 #
 # Ojo: Workers Builds publica en producción cualquier rama que se pushee, no
-# solo main (observado el 2026-11-06: una rama sin mergear quedó en vivo).
+# solo main (observado el 2026-11-06: una rama sin mergear quedó en vivo en
+# menyu-app.com, que es el dominio público de verdad).
 on:
   push:
     branches:
@@ -20,7 +21,9 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  LANDING_URL: https://menyu.dantelojeda05.workers.dev
+  # El dominio público. workers.dev sigue sirviendo lo mismo, pero lo que hay
+  # que verificar es lo que ve la gente.
+  LANDING_URL: https://menyu-app.com
 
 jobs:
   smoke-landing:

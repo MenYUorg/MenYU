@@ -42,6 +42,9 @@ MenYu/
 │   ├── ui/               → @menyu/ui       (componentes React compartidos y tokens de marca: @menyu/ui/tailwind-preset)
 │   ├── auth-client/      → @menyu/auth-client (sesión de Supabase en cookie de dominio compartido, RequireAuth, logout)
 │   └── config/           → @menyu/config   (ESLint + TS configs base)
+├── landing/              → la landing de menyu-app.com (HTML estático, sin build; fuera del monorepo)
+│   ├── wrangler.jsonc    (config del Worker de Cloudflare que la sirve)
+│   └── menyu-landing/    (el sitio: index.html, styles.css, main.js, fonts/, img/)
 ├── turbo.json
 ├── package.json
 ├── pnpm-workspace.yaml
@@ -176,6 +179,8 @@ apps/web-staff/     → staff.menyu-app.com    (cocina + mozo web)
 apps/web-admin/     → admin.menyu-app.com    (dueño/administrador)
 apps/web-auth/      → auth.menyu-app.com     (login central, Supabase Auth)
 ```
+La **landing pública** (`landing/menyu-landing`, HTML estático sin build) es la raíz `menyu-app.com`: la sirve un Worker de Cloudflare que publica Workers Builds desde el repo, no Vercel, y no entra en Turborepo ni en el CI. Ojo: Workers Builds publica en producción **cualquier rama que se pushee**, no solo `main`. Detalle en `landing/menyu-landing/README.md`.
+
 La API (Railway) está en `api.menyu-app.com`. Staging: `<app>.staging.menyu-app.com`. Local: `<app>.menyu.local` (ver la sección Dominios de `docs/auth/specs/auth.md`). Los dominios viejos (`menyu-*.vercel.app`, `menyu-backend-*.up.railway.app`) siguen activos: no darlos de baja (QR impresos, webhooks de Mercado Pago). Las variables por plataforma: `docs/auth/VariablesACambiar.md`.
 
 Cada una es un proyecto Vite independiente con su propio deploy en Vercel.

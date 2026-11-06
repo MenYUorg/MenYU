@@ -6,7 +6,7 @@
 
   // El nombre define la URL de workers.dev: menyu.<subdominio>.workers.dev.
   // Cambiarlo NO renombra el Worker que ya existe: publica uno nuevo en otra
-  // URL y deja el viejo andando. Los QR impresos apuntan acá: no tocar.
+  // URL y deja el viejo andando. No tocar.
   "name": "menyu",
   "compatibility_date": "2026-11-06",
 
@@ -19,7 +19,8 @@
     "not_found_handling": "none"
   },
 
-  // Hasta que la landing se mude a menyu-app.com vive en workers.dev. Para el
-  // dominio propio: agregar "routes" acá y el registro en Cloudflare DNS.
+  // El dominio público es menyu-app.com (custom domain del Worker, apuntado
+  // desde el DNS de Cloudflare). La URL de workers.dev sigue viva y sirve lo
+  // mismo; dejarla no molesta y es útil para comparar.
   "workers_dev": true
 }
