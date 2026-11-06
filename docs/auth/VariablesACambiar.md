@@ -10,7 +10,7 @@ Checklist para pasar las apps a `*.menyu-app.com` (Fase 0 de `docs/auth/specs/au
 | API | `api.menyu-app.com` | `api.staging.menyu-app.com` | `menyu-backend-production.up.railway.app` / `menyu-backend-staging.up.railway.app` |
 | web-auth (Fase 3) | `auth.menyu-app.com` | `auth.staging.menyu-app.com` | — |
 
-Estado al 2026-10-20: los 6 dominios de Vercel responden y apuntan a sus proyectos. `api.staging.menyu-app.com` y `api.menyu-app.com` responden (producción volvió con v1.0.6 después del incidente P3009, ver la spec). El `CORS_ORIGINS` de producción ya acepta los dominios nuevos y los viejos. El DNS está en Cloudflare, sin proxy: dejarlo así (con proxy, el certificado de Cloudflare no cubre los subdominios de dos niveles como `admin.staging.menyu-app.com`).
+Estado al 2026-10-20: los 6 dominios de Vercel responden y apuntan a sus proyectos. `api.staging.menyu-app.com` y `api.menyu-app.com` responden (producción volvió con v1.0.6 después del incidente P3009, ver la spec). El `CORS_ORIGINS` de producción ya acepta los dominios nuevos y los viejos. El DNS está en Cloudflare, sin proxy: dejarlo así (con proxy, el certificado de Cloudflare no cubre los subdominios de dos niveles como `admin.staging.menyu-app.com`). **La excepción es la raíz `menyu-app.com`**, que desde el 2026-11-06 sirve la landing como *custom domain* de un Worker: esa va proxeada por fuerza, la maneja Cloudflare sola y no hay que "arreglarla". Es un dominio de un solo nivel, así que el certificado la cubre.
 
 ## Reglas
 

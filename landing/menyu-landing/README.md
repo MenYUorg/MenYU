@@ -43,10 +43,12 @@ npx wrangler@4.158.0 deploy             # publica a mano, si Cloudflare falla
 `.assetsignore` y el manejo de 404, cosa que un servidor estático cualquiera no
 hace.
 
-El Worker se llama `menyu` y de ahí sale la URL
-`menyu.dantelojeda05.workers.dev`. **Cambiarle el nombre en `wrangler.jsonc` no
-lo renombra**: publica un Worker nuevo en otra URL y deja el viejo andando. Los
-QR impresos apuntan a la URL actual.
+El dominio público es **`menyu-app.com`**: es un *custom domain* del Worker,
+apuntado desde el DNS de Cloudflare. La URL vieja
+`menyu.dantelojeda05.workers.dev` sigue viva y sirve exactamente lo mismo.
+
+El Worker se llama `menyu`. **Cambiarle el nombre en `wrangler.jsonc` no lo
+renombra**: publica un Worker nuevo en otra URL y deja el viejo andando.
 
 ## El formulario de contacto
 
@@ -99,12 +101,7 @@ cliente no descarta envíos sin decirlo.
 2. **Nombres del equipo.** El pie dice "De Marcos, Ojeda y Strumia Carrara".
    Completar con los nombres de pila.
 
-3. **URLs absolutas de Open Graph.** `index.html` tiene `og:url` y `og:image`
-   apuntando a `menyu.dantelojeda05.workers.dev`. Al mudar la landing al dominio
-   propio hay que cambiar las dos: una URL relativa no sirve, varios lectores de
-   previsualización no la resuelven.
-
-4. **Capturas reales.** Las secciones "Cómo funciona" y "Panel" describen las
+3. **Capturas reales.** Las secciones "Cómo funciona" y "Panel" describen las
    pantallas pero no las muestran. Van capturas de staging con el seed cargado.
 
 ## La imagen de Open Graph
