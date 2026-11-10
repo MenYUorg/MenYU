@@ -8,5 +8,8 @@ export const ADMINISTRACION: readonly Rol[] = ['OWNER', 'GERENTE']
 /** Las mesas en servicio: sesiones, cobros y llamados. */
 export const SALON: readonly Rol[] = ['OWNER', 'GERENTE', 'JEFE_SALON', 'MOZO']
 
+/** La caja: abrir y cerrar turnos, reasignar mesas y cargar movimientos. */
+export const CAJA: readonly Rol[] = ['OWNER', 'GERENTE', 'JEFE_SALON']
+
 /** Los pedidos, que también ve y avanza la cocina. */
 export const TODO_EL_PERSONAL: readonly Rol[] = ['OWNER', 'GERENTE', 'JEFE_SALON', 'MOZO', 'COCINA']

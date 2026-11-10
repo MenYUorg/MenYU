@@ -101,6 +101,8 @@ const CON_PERMISO_EN_EL_SERVICE = [
   'GET /pedidos/:id/ediciones',
   'PATCH /pedidos/:id/estado',
   'PATCH /waiter-calls/:id/atender',
+  // La caja, con el restaurante de la caja.
+  'PATCH /cajas/:id',
 ]
 
 const texto = (r: RutaDeLaApp) => `${r.metodo} ${r.ruta}`
@@ -149,7 +151,7 @@ describe('el enrutador: un solo sistema de autenticación por ruta', () => {
   const textos = rutas.map(texto)
 
   it('recorre los controllers de toda la aplicación (si no, los demás tests de acá no prueban nada)', () => {
-    // Hoy son 127. El número exacto no importa: el tope es para que un recorrido vacío o cortado no pase inadvertido.
+    // Hoy son 130. El número exacto no importa: el tope es para que un recorrido vacío o cortado no pase inadvertido.
     expect(rutas.length).toBeGreaterThanOrEqual(115)
     expect(textos).toEqual(expect.arrayContaining(['GET /auth/me', 'GET /sesiones/:sesionId/comensales', 'GET /discovery', 'GET /root/historial']))
   })
