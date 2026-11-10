@@ -28,6 +28,9 @@ export { CUENTAS, MOZOS, MUNDO } from './acceso-de-test'
  * - El ValidationPipe es el mismo que en main.ts.
  */
 
+/** El ValidationPipe global de main.ts, que lo arma inline: si cambia allá, hay que cambiarlo acá. */
+export const pipeDeValidacion = () => new ValidationPipe({ whitelist: true, transform: true })
+
 /** Una cuenta de Supabase sin `Usuario` (por ejemplo, del registro público): SupabaseAuthGuard da 403. */
 export const SIN_USUARIO = 'sin-usuario'
 
@@ -91,7 +94,7 @@ export async function crearAppDeEndpoints(controller: Type, providers: Provider[
     .compile()
 
   const app: INestApplication = moduleRef.createNestApplication()
-  app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }))
+  app.useGlobalPipes(pipeDeValidacion())
   await app.init()
 
   return {
