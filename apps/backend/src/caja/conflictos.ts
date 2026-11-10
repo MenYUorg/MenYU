@@ -30,3 +30,16 @@ export function esOperacionSimultanea(err: unknown): boolean {
 export function traducirOperacionSimultanea(err: unknown): unknown {
   return esOperacionSimultanea(err) ? new ConflictException(MENSAJE_OPERACION_SIMULTANEA) : err
 }
+
+export const MENSAJE_TURNO_ABIERTO = 'Ya hay un turno abierto en este restaurante'
+export const MENSAJE_CAJA_YA_ABIERTA = 'La caja ya está abierta'
+
+/**
+ * Los choques de una apertura: los dos índices únicos parciales (`turno_restaurante_id_abierto_key` y
+ * `turno_caja_caja_id_abierta_key`) y el P2034. Lo demás pasa tal cual.
+ */
+export function traducirConflictoDeApertura(err: unknown): unknown {
+  if (esUnicoViolado(err, 'Turno', ['restaurante_id'])) return new ConflictException(MENSAJE_TURNO_ABIERTO)
+  if (esUnicoViolado(err, 'TurnoCaja', ['caja_id'])) return new ConflictException(MENSAJE_CAJA_YA_ABIERTA)
+  return traducirOperacionSimultanea(err)
+}
