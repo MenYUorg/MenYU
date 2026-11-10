@@ -81,6 +81,8 @@ describe('Schema de la caja contra Postgres (e2e)', () => {
   let marcaId = ''
   let usuarioId = ''
   let restaurantes = 0
+  // Numera las mesas de toda la corrida: el PIN y el número nunca se repiten, y (restauranteId, pin) es único.
+  let mesas = 0
 
   async function crearRestaurante() {
     restaurantes += 1
@@ -119,8 +121,11 @@ describe('Schema de la caja contra Postgres (e2e)', () => {
     prisma.arqueoMetodo.create({ data: { turnoCajaId, metodo, esperado, declarado, diferencia } })
 
   async function crearMesa(restauranteId: string) {
-    const pin = randomUUID().slice(0, 4)
-    return prisma.mesa.create({ data: { restauranteId, numero: pin, pin, qrToken: `${E2E_MARCADOR}qr-${randomUUID()}` } })
+    mesas += 1
+    const pin = String(mesas).padStart(4, '0')
+    return prisma.mesa.create({
+      data: { restauranteId, numero: String(mesas), pin, qrToken: `${E2E_MARCADOR}qr-${randomUUID()}` },
+    })
   }
 
   async function limpiar() {
@@ -152,8 +157,11 @@ describe('Schema de la caja contra Postgres (e2e)', () => {
   })
 
   afterAll(async () => {
-    await limpiar()
-    await prisma.$disconnect()
+    try {
+      await limpiar()
+    } finally {
+      await prisma.$disconnect()
+    }
   })
 
   describe('catálogo: lo que la migración agrega a mano', () => {
