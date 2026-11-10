@@ -20,10 +20,29 @@ export interface BaseDeCaja {
   }[]
   turnoCajas: { id: string; turnoId: string; cajaId: string; fondoInicial: Prisma.Decimal; abiertoEn: Date }[]
   asignaciones: { turnoId: string; mesaId: string; mozoId: string }[]
+  movimientos: {
+    id: string
+    turnoCajaId: string
+    tipo: string
+    monto: Prisma.Decimal
+    motivo: string
+    usuarioId: string
+    createdAt: Date
+  }[]
 }
 
 export function baseDeCajaVacia(): BaseDeCaja {
-  return { usuarios: {}, cajas: [], mesas: [], mozos: [], mozoMesas: [], turnos: [], turnoCajas: [], asignaciones: [] }
+  return {
+    usuarios: {},
+    cajas: [],
+    mesas: [],
+    mozos: [],
+    mozoMesas: [],
+    turnos: [],
+    turnoCajas: [],
+    asignaciones: [],
+    movimientos: [],
+  }
 }
 
 type Donde = { id?: string | { in: string[] }; restauranteId?: string; cerradoEn?: null }
@@ -91,6 +110,26 @@ export function conectarBaseDeCaja(prisma: PrismaMock, base: BaseDeCaja): void {
     const fila = { id: nuevoId('apertura'), abiertoEn: new Date('2026-11-10T20:00:00Z'), ...data }
     base.turnoCajas.push(fila)
     return { id: fila.id }
+  })
+  prisma.turnoCaja.findFirst.mockImplementation(async ({ where }) => {
+    const fila = base.turnoCajas.find((tc) => tc.turnoId === where.turnoId && tc.cajaId === where.cajaId)
+    return fila ? { id: fila.id } : null
+  })
+  prisma.movimientoCaja.create.mockImplementation(async ({ data }) => {
+    const fila = { id: nuevoId('movimiento'), createdAt: new Date('2026-11-10T21:00:00Z'), ...data }
+    base.movimientos.push(fila)
+    const apertura = base.turnoCajas.find((tc) => tc.id === fila.turnoCajaId)
+    const caja = base.cajas.find((c) => c.id === apertura?.cajaId)
+    // Con la forma de MOVIMIENTO_SELECT (movimientos.service.ts).
+    return {
+      id: fila.id,
+      tipo: fila.tipo,
+      monto: fila.monto,
+      motivo: fila.motivo,
+      createdAt: fila.createdAt,
+      usuario: { id: fila.usuarioId, nombre: base.usuarios[fila.usuarioId] ?? '' },
+      turnoCaja: { cajaId: apertura?.cajaId ?? '', caja: { nombre: caja?.nombre ?? '' } },
+    }
   })
   prisma.asignacionTurno.deleteMany.mockImplementation(async ({ where }) => {
     const antes = base.asignaciones.length
