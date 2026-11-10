@@ -55,3 +55,12 @@ export function traducirConflictoDeReasignacion(err: unknown): unknown {
   if (esUnicoViolado(err, 'AsignacionTurno', ['turno_id', 'mesa_id'])) return new ConflictException(MENSAJE_OPERACION_SIMULTANEA)
   return traducirOperacionSimultanea(err)
 }
+
+/**
+ * Los choques de un cierre: si dos cierres chocan en el único (turno_caja_id, metodo) del arqueo, el que pierde ve que
+ * el turno ya se cerró. El P2034 es el 409 genérico; lo demás pasa tal cual.
+ */
+export function traducirConflictoDeCierre(err: unknown): unknown {
+  if (esUnicoViolado(err, 'ArqueoMetodo', ['turno_caja_id', 'metodo'])) return new ConflictException(MENSAJE_TURNO_CERRADO)
+  return traducirOperacionSimultanea(err)
+}
