@@ -1,6 +1,6 @@
 import { IsBoolean, IsIn, IsOptional, IsString } from 'class-validator'
 
-const METODOS_PAGO_STAFF = ['efectivo', 'debito', 'credito', 'transferencia', 'mercadopago'] as const
+export const METODOS_PAGO_STAFF = ['efectivo', 'debito', 'credito', 'transferencia', 'mercadopago'] as const
 
 export class RegistrarCobroDto {
   @IsIn(METODOS_PAGO_STAFF)

@@ -49,6 +49,8 @@ model Restaurante {
   informacionLocal    InformacionLocal?
   preguntasFrecuentes PreguntaFrecuente[]
   registrosAsistente  RegistroAsistente[]
+  cajas               Caja[]
+  turnos              Turno[]
 
   mpAccessToken     String?   @map("mp_access_token")
   mpRefreshToken    String?   @map("mp_refresh_token")
@@ -110,6 +112,7 @@ model Mozo {
   mozoMesas     MozoMesa[]
   ediciones     PedidoEdicion[]
   pagos         Pago[]
+  asignacionesTurno AsignacionTurno[]
 
   @@unique([usuarioId, restauranteId])
   @@map("mozo")
@@ -133,6 +136,7 @@ model Mesa {
   pedidos      Pedido[]
   asignaciones AsignacionMesa[]
   mozoMesas    MozoMesa[]
+  asignacionesTurno AsignacionTurno[]
 
   @@unique([restauranteId, pin])
   @@map("mesa")
@@ -500,11 +504,19 @@ model Pago {
   // cancelado (hay que devolver la plata) o sobre una sesión ya cerrada. Lo marca el webhook; el motivo es el primero.
   requiereRevision  Boolean   @default(false) @map("requiere_revision")
   motivoRevision    String?   @map("motivo_revision")
+  // La caja del turno en que se cobró (#355). Null en los pagos de antes y en los de Mercado Pago, que nunca van a
+  // una caja.
+  turnoCajaId       String?   @map("turno_caja_id")
+  // Solo en cobros manuales del personal. Va aparte de `monto` para no alterar el total de la sesión. Mayor o igual a
+  // 0 (CHECK en la migración).
+  propina           Decimal   @default(0) @db.Decimal(10, 2)
 
   sesion   SesionMesa @relation(fields: [sesionId], references: [id])
   mozo     Mozo?      @relation(fields: [mozoId], references: [id])
   usuario  Usuario?   @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+  turnoCaja TurnoCaja? @relation(fields: [turnoCajaId], references: [id], onDelete: Restrict)
 
+  @@index([turnoCajaId])
   @@map("pago")
 }
 
@@ -572,6 +584,9 @@ model Usuario {
   mozos      Mozo[]
   ediciones  PedidoEdicion[]
   cobros     Pago[]
+  turnosAbiertos  Turno[]          @relation("TurnoAbiertoPor")
+  turnosCerrados  Turno[]          @relation("TurnoCerradoPor")
+  movimientosCaja MovimientoCaja[]
 
   @@map("usuario")
 }
@@ -696,4 +711,131 @@ model RegistroAsistente {
   @@index([sesionMesaId])
   @@index([createdAt])
   @@map("registro_asistente")
+}
+
+// ─────────────────────────────────────────────
+// CAJA (#355): cajas, turnos, movimientos y arqueo. Es el modelo de #357 a #361.
+// ─────────────────────────────────────────────
+// Lo que Prisma no puede expresar va en SQL a mano en la migración (el chequeo de drift no lo ve):
+// - dos índices únicos parciales, `WHERE cerrado_en IS NULL`:
+//   - `turno_restaurante_id_abierto_key`: un solo Turno abierto por restaurante;
+//   - `turno_caja_caja_id_abierta_key`: una sola TurnoCaja abierta por caja;
+// - los CHECK:
+//   - `movimiento_caja_tipo_check`: `tipo` en TIPOS_MOVIMIENTO_CAJA (common/caja.constant.ts);
+//   - `arqueo_metodo_metodo_check`: `metodo` en METODOS_ARQUEO (common/caja.constant.ts), sin `mercadopago`;
+//   - `movimiento_caja_monto_check`: `monto > 0`;
+//   - `turno_caja_fondo_inicial_check`: `fondo_inicial >= 0`;
+//   - `pago_propina_check`: `propina >= 0`;
+//   - `turno_cierre_check`: `cerrado_en` y `cerrado_por_usuario_id` son null los dos o ninguno;
+//   - `arqueo_metodo_diferencia_check`: `diferencia = declarado - esperado`.
+// El historial financiero no se borra: todas las FKs de estas tablas son Restrict.
+
+// Una caja física del restaurante. No se borra: se desactiva con `activa = false`. El nombre es único en el
+// restaurante, también entre las inactivas.
+model Caja {
+  id            String   @id @default(uuid())
+  restauranteId String   @map("restaurante_id")
+  nombre        String
+  activa        Boolean  @default(true)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  restaurante Restaurante @relation(fields: [restauranteId], references: [id], onDelete: Restrict)
+  turnos      TurnoCaja[]
+
+  @@unique([restauranteId, nombre])
+  @@map("caja")
+}
+
+// El turno es del restaurante: agrupa las asignaciones de mesas y las cajas abiertas. Uno solo abierto por
+// restaurante (índice parcial en la migración).
+model Turno {
+  id                  String    @id @default(uuid())
+  restauranteId       String    @map("restaurante_id")
+  abiertoEn           DateTime  @default(now()) @map("abierto_en") @db.Timestamptz(3)
+  abiertoPorUsuarioId String    @map("abierto_por_usuario_id")
+  cerradoEn           DateTime? @map("cerrado_en") @db.Timestamptz(3)
+  cerradoPorUsuarioId String?   @map("cerrado_por_usuario_id")
+  observaciones       String?
+
+  restaurante  Restaurante       @relation(fields: [restauranteId], references: [id], onDelete: Restrict)
+  abiertoPor   Usuario           @relation("TurnoAbiertoPor", fields: [abiertoPorUsuarioId], references: [id], onDelete: Restrict)
+  cerradoPor   Usuario?          @relation("TurnoCerradoPor", fields: [cerradoPorUsuarioId], references: [id], onDelete: Restrict)
+  cajas        TurnoCaja[]
+  asignaciones AsignacionTurno[]
+
+  @@index([restauranteId, abiertoEn])
+  @@map("turno")
+}
+
+// Una caja abierta dentro de un turno, una sola vez por turno. Una sola abierta por caja (índice parcial en la
+// migración). El máximo de dos por turno lo valida el backend en una transacción serializable (#357).
+model TurnoCaja {
+  id           String    @id @default(uuid())
+  turnoId      String    @map("turno_id")
+  cajaId       String    @map("caja_id")
+  fondoInicial Decimal   @map("fondo_inicial") @db.Decimal(10, 2)
+  abiertoEn    DateTime  @default(now()) @map("abierto_en") @db.Timestamptz(3)
+  cerradoEn    DateTime? @map("cerrado_en") @db.Timestamptz(3)
+
+  turno       Turno            @relation(fields: [turnoId], references: [id], onDelete: Restrict)
+  caja        Caja             @relation(fields: [cajaId], references: [id], onDelete: Restrict)
+  movimientos MovimientoCaja[]
+  arqueos     ArqueoMetodo[]
+  pagos       Pago[]
+
+  @@unique([turnoId, cajaId])
+  @@index([cajaId])
+  @@map("turno_caja")
+}
+
+// Ingresos y egresos de efectivo de una caja (common/caja.constant.ts). Inmutable por diseño del servicio, que solo
+// inserta: no tiene updatedAt y, a diferencia de historial_root, la base no lo impone con triggers.
+model MovimientoCaja {
+  id          String   @id @default(uuid())
+  turnoCajaId String   @map("turno_caja_id")
+  tipo        String
+  monto       Decimal  @db.Decimal(10, 2)
+  motivo      String
+  usuarioId   String   @map("usuario_id")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  turnoCaja TurnoCaja @relation(fields: [turnoCajaId], references: [id], onDelete: Restrict)
+  usuario   Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Restrict)
+
+  @@index([turnoCajaId])
+  @@map("movimiento_caja")
+}
+
+// Una fila por método al cerrar la caja (common/caja.constant.ts). `mercadopago` no entra al arqueo, y `diferencia`
+// es siempre `declarado - esperado` (CHECK en la migración).
+model ArqueoMetodo {
+  id          String   @id @default(uuid())
+  turnoCajaId String   @map("turno_caja_id")
+  metodo      String
+  esperado    Decimal  @db.Decimal(10, 2)
+  declarado   Decimal  @db.Decimal(10, 2)
+  diferencia  Decimal  @db.Decimal(10, 2)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  turnoCaja TurnoCaja @relation(fields: [turnoCajaId], references: [id], onDelete: Restrict)
+
+  @@unique([turnoCajaId, metodo])
+  @@map("arqueo_metodo")
+}
+
+// Qué mozo atiende cada mesa en el turno. Se precarga desde MozoMesa como plantilla editable.
+model AsignacionTurno {
+  id        String   @id @default(uuid())
+  turnoId   String   @map("turno_id")
+  mesaId    String   @map("mesa_id")
+  mozoId    String   @map("mozo_id")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  turno Turno @relation(fields: [turnoId], references: [id], onDelete: Restrict)
+  mesa  Mesa  @relation(fields: [mesaId], references: [id], onDelete: Restrict)
+  mozo  Mozo  @relation(fields: [mozoId], references: [id], onDelete: Restrict)
+
+  @@unique([turnoId, mesaId])
+  @@index([mozoId])
+  @@map("asignacion_turno")
 }
