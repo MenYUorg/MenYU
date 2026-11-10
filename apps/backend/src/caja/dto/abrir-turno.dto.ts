@@ -1,3 +1,4 @@
+import { applyDecorators } from '@nestjs/common'
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 import { Type } from 'class-transformer'
 import { ArrayMaxSize, ArrayMinSize, ArrayUnique, IsArray, IsNumber, IsUUID, Max, Min, ValidateIf, ValidateNested } from 'class-validator'
@@ -31,6 +32,17 @@ export class AsignacionDeMesaDto {
   mozoId!: string
 }
 
+/** Una lista de asignaciones: hasta 500, sin mesas repetidas y cada una validada. La usan la apertura y la reasignación. */
+export function ListaDeAsignaciones(): PropertyDecorator {
+  return applyDecorators(
+    IsArray(),
+    ArrayMaxSize(MAX_ASIGNACIONES_POR_TURNO),
+    ArrayUnique((a: AsignacionDeMesaDto) => a?.mesaId, { message: 'Hay una mesa repetida' }),
+    ValidateNested({ each: true }),
+    Type(() => AsignacionDeMesaDto),
+  )
+}
+
 export class AbrirTurnoDto {
   @ApiProperty({ example: '6f1c2a40-1111-4a1b-9c3d-000000000001' })
   @IsUUID()
@@ -52,11 +64,7 @@ export class AbrirTurnoDto {
   })
   // Se valida siempre que venga: con @IsOptional() pasaría un null.
   @ValidateIf((_dto, valor: unknown) => valor !== undefined)
-  @IsArray()
-  @ArrayMaxSize(MAX_ASIGNACIONES_POR_TURNO)
-  @ArrayUnique((a: AsignacionDeMesaDto) => a?.mesaId, { message: 'Hay una mesa repetida' })
-  @ValidateNested({ each: true })
-  @Type(() => AsignacionDeMesaDto)
+  @ListaDeAsignaciones()
   asignaciones?: AsignacionDeMesaDto[]
 
   @ApiPropertyOptional({ nullable: true, maxLength: MAX_OBSERVACIONES_TURNO })

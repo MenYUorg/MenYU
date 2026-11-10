@@ -73,6 +73,10 @@ export function conectarBaseDeCaja(prisma: PrismaMock, base: BaseDeCaja): void {
     const turno = base.turnos.find((t) => cumple(t, where))
     return turno ? leerTurno(base, turno) : null
   })
+  prisma.turno.findUnique.mockImplementation(async ({ where }) => {
+    const turno = base.turnos.find((t) => t.id === where.id)
+    return turno ? leerTurno(base, turno) : null
+  })
   prisma.turno.findUniqueOrThrow.mockImplementation(async ({ where }) => {
     const turno = base.turnos.find((t) => t.id === where.id)
     if (!turno) throw new Error(`turno ${where.id} no encontrado`)
@@ -87,6 +91,11 @@ export function conectarBaseDeCaja(prisma: PrismaMock, base: BaseDeCaja): void {
     const fila = { id: nuevoId('apertura'), abiertoEn: new Date('2026-11-10T20:00:00Z'), ...data }
     base.turnoCajas.push(fila)
     return { id: fila.id }
+  })
+  prisma.asignacionTurno.deleteMany.mockImplementation(async ({ where }) => {
+    const antes = base.asignaciones.length
+    base.asignaciones = base.asignaciones.filter((a) => a.turnoId !== where.turnoId)
+    return { count: antes - base.asignaciones.length }
   })
   prisma.asignacionTurno.createMany.mockImplementation(async ({ data }) => {
     base.asignaciones.push(...data)

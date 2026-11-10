@@ -43,3 +43,15 @@ export function traducirConflictoDeApertura(err: unknown): unknown {
   if (esUnicoViolado(err, 'TurnoCaja', ['caja_id'])) return new ConflictException(MENSAJE_CAJA_YA_ABIERTA)
   return traducirOperacionSimultanea(err)
 }
+
+/** Un turno cerrado no admite cambios. */
+export const MENSAJE_TURNO_CERRADO = 'El turno está cerrado'
+
+/**
+ * Los choques de una reasignación: dos reemplazos a la vez pueden chocar en el único (turno_id, mesa_id) o en la
+ * serialización. Los dos son el 409 genérico; lo demás pasa tal cual.
+ */
+export function traducirConflictoDeReasignacion(err: unknown): unknown {
+  if (esUnicoViolado(err, 'AsignacionTurno', ['turno_id', 'mesa_id'])) return new ConflictException(MENSAJE_OPERACION_SIMULTANEA)
+  return traducirOperacionSimultanea(err)
+}
