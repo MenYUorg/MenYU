@@ -27,6 +27,7 @@ import { ComensalesModule } from './comensales/comensales.module'
 import { DiscoveryModule } from './discovery/discovery.module'
 import { HealthModule } from './health/health.module'
 import { RootModule } from './root/root.module'
+import { CajaModule } from './caja/caja.module'
 
 @Module({
   imports: [
@@ -58,6 +59,7 @@ import { RootModule } from './root/root.module'
     DiscoveryModule,
     HealthModule,
     RootModule,
+    CajaModule,
   ],
 })
 export class AppModule {}
