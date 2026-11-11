@@ -238,9 +238,26 @@ export function conectarBaseDeCaja(prisma: PrismaMock, base: BaseDeCaja): void {
     for (const fila of filas) Object.assign(fila, data)
     return { count: filas.length }
   })
-  prisma.movimientoCaja.findMany.mockImplementation(async ({ where }) =>
-    base.movimientos.filter((m) => m.turnoCajaId === where.turnoCajaId).map((m) => ({ tipo: m.tipo, monto: m.monto })),
-  )
+  // Lo que leen el cierre (tipo y monto de una apertura) y el detalle (todo MOVIMIENTO_SELECT de varias, por createdAt).
+  prisma.movimientoCaja.findMany.mockImplementation(async (args) => {
+    soloConoce('movimientoCaja.findMany', args, ['where', 'select', 'orderBy'])
+    soloConoce('el orderBy de movimientoCaja.findMany', args.orderBy, ['createdAt'])
+    const filas = [...porApertura(base.movimientos, args.where)]
+    if (args.orderBy?.createdAt === 'asc') filas.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+    return filas.map((m) => {
+      const apertura = base.turnoCajas.find((tc) => tc.id === m.turnoCajaId)
+      return {
+        id: m.id,
+        turnoCajaId: m.turnoCajaId,
+        tipo: m.tipo,
+        monto: m.monto,
+        motivo: m.motivo,
+        createdAt: m.createdAt,
+        usuario: { id: m.usuarioId, nombre: base.usuarios[m.usuarioId] ?? '' },
+        turnoCaja: { cajaId: apertura?.cajaId ?? '', caja: { nombre: base.cajas.find((c) => c.id === apertura?.cajaId)?.nombre ?? '' } },
+      }
+    })
+  })
   // Sin `where`, todos: un service que se olvida de un filtro cuenta pagos ajenos y el test lo nota. Devuelve todo lo que
   // leen el cierre y el resumen (con la mesa de la sesión y el nombre del mozo), y respeta el orden por `fechaCobro`.
   prisma.pago.findMany.mockImplementation(async (args) => {

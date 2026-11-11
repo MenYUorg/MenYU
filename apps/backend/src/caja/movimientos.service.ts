@@ -10,7 +10,8 @@ import { RegistrarMovimientoDto } from './dto/registrar-movimiento.dto'
 
 export const MENSAJE_CAJA_NO_ABIERTA = 'La caja no está abierta en este turno'
 
-const MOVIMIENTO_SELECT = {
+/** Lo que se lee de un movimiento para responder (también en el detalle del turno). */
+export const MOVIMIENTO_SELECT = {
   id: true,
   tipo: true,
   monto: true,
@@ -67,7 +68,7 @@ export class MovimientosService {
   }
 }
 
-function movimientoParaLaApi(m: Prisma.MovimientoCajaGetPayload<{ select: typeof MOVIMIENTO_SELECT }>) {
+export function movimientoParaLaApi(m: Prisma.MovimientoCajaGetPayload<{ select: typeof MOVIMIENTO_SELECT }>) {
   return {
     id: m.id,
     cajaId: m.turnoCaja.cajaId,

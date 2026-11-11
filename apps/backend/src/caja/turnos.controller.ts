@@ -1,5 +1,6 @@
-import { Body, Controller, Get, Post, Query } from '@nestjs/common'
+import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common'
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger'
+import { Personal } from '../auth/decorators/personal.decorator'
 import { RequiereRolEn } from '../auth/decorators/requiere-rol.decorator'
 import { UsuarioActual } from '../auth/decorators/usuario-actual.decorator'
 import { CAJA } from '../auth/roles-del-personal'
@@ -44,5 +45,16 @@ export class TurnosController {
   @ApiResponse({ status: 200 })
   actual(@Query('restauranteId') restauranteId: string) {
     return this.apertura.actual(restauranteId)
+  }
+
+  // Después de `actual`: si no, `/turnos/actual` llegaría acá con id "actual".
+  @Get(':id')
+  @Personal()
+  @ApiOperation({ summary: 'Un turno con el arqueo, los movimientos de cada caja y las mesas asignadas (OWNER, GERENTE y JEFE_SALON)' })
+  @ApiResponse({ status: 200, description: 'El turno, abierto o cerrado' })
+  @ApiResponse({ status: 403, description: 'Sin el rol en el restaurante del turno' })
+  @ApiResponse({ status: 404, description: 'Turno no encontrado' })
+  detalle(@Param('id') id: string, @UsuarioActual() usuario: UsuarioAutenticado) {
+    return this.historial.detalle(id, usuario)
   }
 }

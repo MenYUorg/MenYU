@@ -1,8 +1,13 @@
-import { BadRequestException, Injectable } from '@nestjs/common'
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
 import { Prisma } from '@prisma/client'
+import { CAJA } from '../auth/roles-del-personal'
+import { AccesoService } from '../auth/supabase/acceso.service'
+import { UsuarioAutenticado } from '../auth/supabase/usuario-autenticado'
 import { PrismaService } from '../prisma/prisma.service'
 import { FilaDeArqueo, metodosDelArqueoParaLaApi } from './arqueo-para-la-api'
 import { LIMITE_POR_DEFECTO, ListarTurnosDto } from './dto/listar-turnos.dto'
+import { MOVIMIENTO_SELECT, movimientoParaLaApi } from './movimientos.service'
+import { asignacionParaLaApi, TURNO_SELECT } from './turno.select'
 
 export const MENSAJE_CURSOR_INVALIDO = 'El cursor no es un turno de este restaurante'
 
@@ -20,18 +25,57 @@ const TURNO_DEL_HISTORIAL_SELECT = {
   },
 } satisfies Prisma.TurnoSelect
 
+/** El detalle: lo mismo que el historial, más las mesas asignadas. */
+const TURNO_DEL_DETALLE_SELECT = {
+  ...TURNO_DEL_HISTORIAL_SELECT,
+  asignaciones: TURNO_SELECT.asignaciones,
+} satisfies Prisma.TurnoSelect
+
 type TurnoDelHistorial = Prisma.TurnoGetPayload<{ select: typeof TURNO_DEL_HISTORIAL_SELECT }>
 type FilaDeArqueoDeCaja = FilaDeArqueo & { turnoCajaId: string }
 
 /**
  * El historial de turnos de un restaurante (#357): del más nuevo al más viejo, paginado con cursor. Cada turno trae sus
- * cajas con el arqueo (null si el turno sigue abierto) y los totales de sus movimientos. El rol lo exige la ruta. Una
+ * cajas con el arqueo (null si el turno sigue abierto) y los totales de sus movimientos; el rol lo exige la ruta. Una
  * página son 3 consultas (4 con cursor), tenga los turnos que tenga: la validación del cursor, los turnos, los arqueos y
- * los totales de los movimientos.
+ * los totales de los movimientos. Y el detalle de un turno, con su permiso en el service.
  */
 @Injectable()
 export class HistorialService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly acceso: AccesoService,
+  ) {}
+
+  /**
+   * Un turno, abierto o cerrado, con lo del historial más las mesas asignadas y, en cada caja, la lista entera de sus
+   * movimientos (del más viejo al más nuevo) en lugar de los totales. El rol (el grupo CAJA del restaurante del turno) se
+   * exige antes de leer nada más que el restaurante.
+   */
+  async detalle(turnoId: string, usuario: UsuarioAutenticado) {
+    const encontrado = await this.prisma.turno.findUnique({ where: { id: turnoId }, select: { restauranteId: true } })
+    if (!encontrado) throw new NotFoundException('Turno no encontrado')
+    await this.acceso.exigirRol(usuario.id, encontrado.restauranteId, CAJA)
+
+    const turno = await this.prisma.turno.findUniqueOrThrow({ where: { id: turnoId }, select: TURNO_DEL_DETALLE_SELECT })
+    const aperturas = turno.cajas.map((c) => c.id)
+    const [arqueos, movimientos] = await Promise.all([
+      this.prisma.arqueoMetodo.findMany({
+        where: { turnoCajaId: { in: aperturas } },
+        select: { turnoCajaId: true, metodo: true, esperado: true, declarado: true, diferencia: true },
+      }),
+      this.prisma.movimientoCaja.findMany({
+        where: { turnoCajaId: { in: aperturas } },
+        select: { ...MOVIMIENTO_SELECT, turnoCajaId: true },
+        orderBy: { createdAt: 'asc' },
+      }),
+    ])
+
+    return {
+      ...turnoParaElHistorial(turno, arqueos, (turnoCajaId) => movimientos.filter((m) => m.turnoCajaId === turnoCajaId).map(movimientoParaLaApi)),
+      asignaciones: turno.asignaciones.map(asignacionParaLaApi),
+    }
+  }
 
   async listar({ restauranteId, limite = LIMITE_POR_DEFECTO, cursor }: ListarTurnosDto) {
     if (cursor) {

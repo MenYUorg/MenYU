@@ -113,4 +113,98 @@ describe('endpoints del historial de turnos', () => {
       expect(segunda.body.items.map((t: { id: string }) => t.id)).toEqual([id(1)])
     })
   })
+
+  describe('GET /turnos/:id (el detalle)', () => {
+    const detalle = (turnoId: string, cuenta: (typeof CUENTAS)[keyof typeof CUENTAS] = CUENTAS.OWNER_A) =>
+      api.pedir('get', `/turnos/${turnoId}`, { cuenta })
+
+    it('GET /turnos/actual sigue llegando a actual, no al detalle', async () => {
+      const res = await api.pedir('get', '/turnos/actual', { cuenta: CUENTAS.OWNER_A, query: { restauranteId: REST } })
+
+      expect(res.status).toBe(200)
+      expect(Object.keys(res.body)).toEqual(['turno'])
+      expect(prisma.turno.findUniqueOrThrow).not.toHaveBeenCalled()
+    })
+
+    it.each([
+      ['el OWNER de la marca', CUENTAS.OWNER_A],
+      ['el GERENTE', CUENTAS.GERENTE],
+      ['el JEFE_SALON', CUENTAS.JEFE_SALON],
+    ])('%s ve el detalle: 200, con las fechas en ISO, los montos como number y los movimientos en lista', async (_caso, cuenta) => {
+      base.movimientos.push({
+        id: 'm-1',
+        turnoCajaId: 'ap-3',
+        tipo: 'INGRESO',
+        monto: new Prisma.Decimal('20.25'),
+        motivo: 'Cambio',
+        usuarioId: 'u-abre',
+        createdAt: new Date('2026-11-03T21:00:00.000Z'),
+      })
+
+      const res = await detalle(id(3), cuenta)
+
+      expect(res.status).toBe(200)
+      expect(res.body).toEqual({
+        id: id(3),
+        abiertoEn: '2026-11-03T20:00:00.000Z',
+        abiertoPor: { id: 'u-abre', nombre: 'Ana' },
+        cerradoEn: null,
+        cerradoPor: null,
+        observaciones: null,
+        cajas: [
+          {
+            id: 'ap-3',
+            cajaId: 'caja-1',
+            nombre: 'Principal',
+            fondoInicial: 100.5,
+            arqueo: null,
+            movimientos: [
+              {
+                id: 'm-1',
+                cajaId: 'caja-1',
+                cajaNombre: 'Principal',
+                tipo: 'INGRESO',
+                monto: 20.25,
+                motivo: 'Cambio',
+                usuario: { id: 'u-abre', nombre: 'Ana' },
+                createdAt: '2026-11-03T21:00:00.000Z',
+              },
+            ],
+          },
+        ],
+        asignaciones: [],
+      })
+    })
+
+    it('un turno cerrado también responde, con su arqueo', async () => {
+      base.turnos[0].cerradoEn = new Date('2026-11-02T02:00:00.000Z')
+      base.turnoCajas.push({ id: 'ap-1', turnoId: id(1), cajaId: 'caja-1', fondoInicial: new Prisma.Decimal(0), abiertoEn: new Date(), cerradoEn: new Date() })
+      for (const metodo of ['efectivo', 'debito', 'credito', 'transferencia']) {
+        base.arqueos.push({ turnoCajaId: 'ap-1', metodo, esperado: new Prisma.Decimal(0), declarado: new Prisma.Decimal(0), diferencia: new Prisma.Decimal(0) })
+      }
+
+      const res = await detalle(id(1))
+
+      expect(res.status).toBe(200)
+      expect(res.body.cerradoEn).toBe('2026-11-02T02:00:00.000Z')
+      expect(res.body.cajas[0].arqueo.map((a: { metodo: string }) => a.metodo)).toEqual(['efectivo', 'debito', 'credito', 'transferencia'])
+    })
+
+    it.each([
+      ['el MOZO', CUENTAS.MOZO],
+      ['COCINA', CUENTAS.COCINA],
+      ['el OWNER de otra marca', CUENTAS.OWNER_B],
+      ['ROOT', CUENTAS.ROOT],
+    ])('%s recibe 403', async (_caso, cuenta) => {
+      expect((await detalle(id(3), cuenta)).status).toBe(403)
+      expect(prisma.turno.findUniqueOrThrow).not.toHaveBeenCalled()
+    })
+
+    it('un turno de otro restaurante, 403; uno que no existe, 404; sin token, 401', async () => {
+      expect((await detalle(id(9))).status).toBe(403)
+      expect((await detalle(id(99))).status).toBe(404)
+      expect((await api.pedir('get', `/turnos/${id(3)}`)).status).toBe(401)
+      expect(prisma.turno.findUniqueOrThrow).not.toHaveBeenCalled()
+    })
+  })
 })

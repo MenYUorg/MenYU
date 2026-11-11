@@ -36,13 +36,13 @@ export function turnoParaLaApi(turno: TurnoLeido) {
       fondoInicial: c.fondoInicial.toNumber(),
       abiertoEn: c.abiertoEn,
     })),
-    asignaciones: turno.asignaciones.map((a) => ({
-      mesaId: a.mesaId,
-      mesaNumero: a.mesa.numero,
-      mozoId: a.mozoId,
-      mozoNombre: a.mozo.nombre,
-    })),
+    asignaciones: turno.asignaciones.map(asignacionParaLaApi),
   }
+}
+
+/** Una asignación de mesa como la devuelve la API (también en el detalle del turno). */
+export function asignacionParaLaApi(a: TurnoLeido['asignaciones'][number]) {
+  return { mesaId: a.mesaId, mesaNumero: a.mesa.numero, mozoId: a.mozoId, mozoNombre: a.mozo.nombre }
 }
 
 export type TurnoDeLaApi = ReturnType<typeof turnoParaLaApi>
