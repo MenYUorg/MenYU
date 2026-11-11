@@ -37,7 +37,18 @@ export interface BaseDeCaja {
     usuarioId: string
     createdAt: Date
   }[]
-  pagos: { id: string; turnoCajaId: string | null; metodo: string; estado: string; monto: Prisma.Decimal; propina: Prisma.Decimal }[]
+  pagos: {
+    id: string
+    turnoCajaId: string | null
+    metodo: string
+    estado: string
+    monto: Prisma.Decimal
+    propina: Prisma.Decimal
+    sesionId?: string
+    mozoId?: string | null
+    fechaCobro?: Date | null
+    requiereRevision?: boolean
+  }[]
   arqueos: {
     turnoCajaId: string
     metodo: string
@@ -73,6 +84,43 @@ function cumple(fila: { id: string; restauranteId?: string; cerradoEn?: Date | n
   if (typeof where.id === 'object' && !where.id.in.includes(fila.id)) return false
   if (where.restauranteId !== undefined && fila.restauranteId !== where.restauranteId) return false
   if (where.cerradoEn === null && fila.cerradoEn !== null) return false
+  return true
+}
+
+type RangoDeFechas = { gte?: Date; gt?: Date; lte?: Date; lt?: Date }
+type DondePago = {
+  turnoCajaId?: string
+  turnoCaja?: { turnoId: string }
+  metodo?: string
+  estado?: string
+  fechaCobro?: RangoDeFechas
+  sesion?: { mesa: { restauranteId: string } }
+}
+const FILTROS_DE_PAGO = new Set(['turnoCajaId', 'turnoCaja', 'metodo', 'estado', 'fechaCobro', 'sesion'])
+
+/**
+ * Si el pago cumple el `where` de la caja: su apertura o el turno de su apertura, el método, el estado, el rango de
+ * `fechaCobro` (un pago sin fecha no entra en ningún rango) y el restaurante de la mesa de su sesión. Un filtro que no
+ * conoce corta el test: así un service no filtra por algo que la base en memoria ignora en silencio.
+ */
+function cumplePago(base: BaseDeCaja, pago: BaseDeCaja['pagos'][number], where: DondePago = {}): boolean {
+  const desconocido = Object.keys(where).find((k) => !FILTROS_DE_PAGO.has(k))
+  if (desconocido) throw new Error(`caja-en-memoria: pago.findMany no sabe filtrar por ${desconocido}`)
+  if (where.turnoCajaId !== undefined && pago.turnoCajaId !== where.turnoCajaId) return false
+  if (where.turnoCaja && base.turnoCajas.find((tc) => tc.id === pago.turnoCajaId)?.turnoId !== where.turnoCaja.turnoId) return false
+  if (where.metodo !== undefined && pago.metodo !== where.metodo) return false
+  if (where.estado !== undefined && pago.estado !== where.estado) return false
+  if (where.fechaCobro) {
+    const fecha = pago.fechaCobro?.getTime()
+    const { gte, gt, lte, lt } = where.fechaCobro
+    if (fecha === undefined) return false
+    if ((gte && fecha < gte.getTime()) || (gt && fecha <= gt.getTime())) return false
+    if ((lte && fecha > lte.getTime()) || (lt && fecha >= lt.getTime())) return false
+  }
+  if (where.sesion) {
+    const sesion = base.sesiones.find((s) => s.id === pago.sesionId)
+    if (base.mesas.find((m) => m.id === sesion?.mesaId)?.restauranteId !== where.sesion.mesa.restauranteId) return false
+  }
   return true
 }
 
@@ -176,12 +224,28 @@ export function conectarBaseDeCaja(prisma: PrismaMock, base: BaseDeCaja): void {
   prisma.movimientoCaja.findMany.mockImplementation(async ({ where }) =>
     base.movimientos.filter((m) => m.turnoCajaId === where.turnoCajaId).map((m) => ({ tipo: m.tipo, monto: m.monto })),
   )
-  // Sin `where`, todos: un service que se olvida del filtro por apertura cuenta pagos ajenos y el test lo nota.
-  prisma.pago.findMany.mockImplementation(async (args) =>
-    base.pagos
-      .filter((p) => args?.where?.turnoCajaId === undefined || p.turnoCajaId === args.where.turnoCajaId)
-      .map((p) => ({ metodo: p.metodo, estado: p.estado, monto: p.monto, propina: p.propina })),
-  )
+  // Sin `where`, todos: un service que se olvida de un filtro cuenta pagos ajenos y el test lo nota. Devuelve todo lo que
+  // leen el cierre y el resumen (con la mesa de la sesión y el nombre del mozo), y respeta el orden por `fechaCobro`.
+  prisma.pago.findMany.mockImplementation(async (args) => {
+    const filas = base.pagos.filter((p) => cumplePago(base, p, args?.where))
+    if (args?.orderBy?.fechaCobro === 'asc') filas.sort((a, b) => (a.fechaCobro?.getTime() ?? 0) - (b.fechaCobro?.getTime() ?? 0))
+    return filas.map((p) => {
+      const sesion = base.sesiones.find((s) => s.id === p.sesionId)
+      const mozo = base.mozos.find((m) => m.id === p.mozoId)
+      return {
+        id: p.id,
+        metodo: p.metodo,
+        estado: p.estado,
+        monto: p.monto,
+        propina: p.propina,
+        mozoId: p.mozoId ?? null,
+        mozo: mozo ? { nombre: mozo.nombre } : null,
+        fechaCobro: p.fechaCobro ?? null,
+        requiereRevision: p.requiereRevision ?? false,
+        sesion: { mesa: { numero: base.mesas.find((m) => m.id === sesion?.mesaId)?.numero ?? '' } },
+      }
+    })
+  })
   prisma.arqueoMetodo.createMany.mockImplementation(async ({ data }) => {
     base.arqueos.push(...data)
     return { count: data.length }
