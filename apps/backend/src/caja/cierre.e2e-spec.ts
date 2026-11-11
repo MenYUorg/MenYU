@@ -5,7 +5,7 @@ import { PrismaService } from '../prisma/prisma.service'
 import { AppE2e, contar, contarReintentos, crearAppE2e, mostrarDistribucion } from '../test/app-e2e'
 import { FixtureDeCaja, marcadorDeLaCorrida } from '../test/fixture-de-caja'
 import { MENSAJE_CAJA_NO_ABIERTA } from './movimientos.service'
-import { MENSAJE_OPERACION_SIMULTANEA, MENSAJE_TURNO_CERRADO } from './conflictos'
+import { esOperacionSimultanea, MENSAJE_OPERACION_SIMULTANEA, MENSAJE_TURNO_CERRADO } from './conflictos'
 
 // Los movimientos y el cierre del turno con el arqueo (#357) por HTTP, contra Postgres, con los guards de permisos reales
 // (test/app-e2e.ts). El turno se abre por HTTP; los pagos y las sesiones se insertan con Prisma. Los esperados son
@@ -339,6 +339,27 @@ describe('Movimientos y cierre del turno contra Postgres (e2e)', () => {
     })
   })
 
+  // En una carrera, el cierre también puede terminar en 409 sin que nadie haya cerrado el turno: si su transacción
+  // serializable choca dos veces seguidas (un P2034 que sobrevive al único reintento de runSerializableTransaction), el
+  // service revierte todo y responde el 409 genérico (caja/conflictos.ts) para que se pruebe de nuevo. Es el
+  // comportamiento diseñado; en local nunca apareció, y en el CI del PR #463 el cierre de los casos 8 y 9a dio 409. Lo
+  // que no se tolera es un 409 que deje algo escrito: por eso comoTerminoElCierre revisa la base, y después se cierra sin
+  // carrera y se mira la invariante.
+
+  /**
+   * Cómo terminó un cierre de una carrera: 'cerrado' (200) o 'simultaneo' (el 409 genérico, con todo revertido: el turno
+   * y sus cajas siguen abiertos y no hay arqueo). Cualquier otro status, u otro 409, hace fallar el caso.
+   */
+  async function comoTerminoElCierre(res: { status: number; body: { message?: unknown } }, turnoId: string, aperturas: string[]) {
+    if (res.status === 200) return 'cerrado' as const
+    expect(res.status).toBe(409)
+    expect(res.body.message).toBe(MENSAJE_OPERACION_SIMULTANEA)
+    expect((await prisma.turno.findUniqueOrThrow({ where: { id: turnoId } })).cerradoEn).toBeNull()
+    expect(await prisma.turnoCaja.count({ where: { id: { in: aperturas }, cerradoEn: { not: null } } })).toBe(0)
+    expect(await prisma.arqueoMetodo.count({ where: { turnoCajaId: { in: aperturas } } })).toBe(0)
+    return 'simultaneo' as const
+  }
+
   it(`7. dos cierres a la vez (${RONDAS} rondas): un 200 y un 409, nunca un 500, y 4 filas de arqueo`, async () => {
     const porRonda: Record<string, number> = {}
     const antes = reintentos.foto()
@@ -348,12 +369,20 @@ describe('Movimientos y cierre del turno contra Postgres (e2e)', () => {
       const cuerpo = [{ cajaId: caja, declarado: declarado(100) }]
 
       const respuestas = await Promise.all([cerrar(owner, turnoId, cuerpo), cerrar(owner, turnoId, cuerpo)])
+      const estados = respuestas.map((r) => r.status).sort()
 
-      expect(respuestas.map((r) => r.status).sort()).toEqual([200, 409])
-      const perdedora = respuestas.find((r) => r.status === 409)
-      expect([MENSAJE_TURNO_CERRADO, MENSAJE_OPERACION_SIMULTANEA]).toContain(perdedora?.body.message)
+      if (estados[0] === 409 && estados[1] === 409) {
+        // Ninguno cerró: los dos tienen que ser el 409 genérico, sin nada escrito. Un tercer cierre, sin carrera, cierra.
+        for (const r of respuestas) await comoTerminoElCierre(r, turnoId, [apertura])
+        expect((await cerrar(owner, turnoId, cuerpo)).status).toBe(200)
+        contar(porRonda, 'ambos 409 simultanea')
+      } else {
+        expect(estados).toEqual([200, 409])
+        const perdedora = respuestas.find((r) => r.status === 409)
+        expect([MENSAJE_TURNO_CERRADO, MENSAJE_OPERACION_SIMULTANEA]).toContain(perdedora?.body.message)
+        contar(porRonda, `409: ${perdedora?.body.message}`)
+      }
       expect(await prisma.arqueoMetodo.count({ where: { turnoCajaId: apertura } })).toBe(4)
-      contar(porRonda, `409: ${perdedora?.body.message}`)
     }
 
     mostrarDistribucion(`[cierre e2e] caso 7: ${JSON.stringify(porRonda)}; reintentos: ${reintentos.desde(antes)}`)
@@ -370,11 +399,13 @@ describe('Movimientos y cierre del turno contra Postgres (e2e)', () => {
         movimiento(owner, turnoId, caja, 'INGRESO', 100),
         cerrar(owner, turnoId, [{ cajaId: caja, declarado: declarado(1000) }]),
       ])
-      contar(porRonda, `movimiento ${mov.status} / cierre ${cierre.status}`)
+      const comoCerro = await comoTerminoElCierre(cierre, turnoId, [apertura])
+      contar(porRonda, `movimiento ${mov.status} / cierre ${cierre.status}${comoCerro === 'simultaneo' ? ' simultanea' : ''}`)
 
-      expect(cierre.status).toBe(200)
       expect([201, 409]).toContain(mov.status)
       if (mov.status === 409) expect([MENSAJE_TURNO_CERRADO, MENSAJE_OPERACION_SIMULTANEA]).toContain(mov.body.message)
+      // Si el cierre de la carrera no cerró, se cierra sin carrera: la invariante se mira sobre el cierre que quedó.
+      if (comoCerro === 'simultaneo') expect((await cerrar(owner, turnoId, [{ cajaId: caja, declarado: declarado(1000) }])).status).toBe(200)
       const movimientos = await prisma.movimientoCaja.findMany({ where: { turnoCajaId: apertura }, select: { monto: true } })
       expect(movimientos).toHaveLength(mov.status === 201 ? 1 : 0)
       // 1000 de fondo más los ingresos que quedaron en la base: 1000.00 o 1100.00.
@@ -385,9 +416,16 @@ describe('Movimientos y cierre del turno contra Postgres (e2e)', () => {
     mostrarDistribucion(`[cierre e2e] caso 8: ${JSON.stringify(porRonda)}; reintentos: ${reintentos.desde(antes)}`)
   }, 120_000)
 
-  /** Cómo terminó un cobro simulado: 'cobrado', 'rechazado' (la caja estaba cerrada) o el error, que hace fallar el caso. */
+  /**
+   * Cómo terminó un cobro simulado: 'cobrado', 'rechazado' (la caja estaba cerrada), 'conflicto' (un P2034 que sobrevivió
+   * al reintento) o el error, que hace fallar el caso.
+   */
   const comoTermino = (cobro: Promise<string>) =>
-    cobro.catch((err: unknown) => (err instanceof ConflictException ? 'rechazado' : `error: ${(err as Error).message.split('\n')[0]}`))
+    cobro.catch((err: unknown) => {
+      if (err instanceof ConflictException) return 'rechazado'
+      if (esOperacionSimultanea(err)) return 'conflicto'
+      return `error: ${(err as Error).message.split('\n')[0]}`
+    })
 
   it(`9a. un cobro (el patrón de #358) y el cierre a la vez (${RONDAS} rondas): ningún pago commiteado queda fuera del arqueo`, async () => {
     const porRonda: Record<string, number> = {}
@@ -416,10 +454,15 @@ describe('Movimientos y cierre del turno contra Postgres (e2e)', () => {
       const sesion = await fx.sesion((await fx.mesa(rest)).id)
 
       const [cobro, cierre] = await Promise.all([cobrar(apertura, sesion), cerrar(owner, turnoId, [{ cajaId: caja, declarado: declarado(1000) }])])
-      contar(porRonda, `cobro ${cobro} / cierre ${cierre.status}`)
+      const comoCerro = await comoTerminoElCierre(cierre, turnoId, [apertura])
+      contar(porRonda, `cobro ${cobro} / cierre ${cierre.status}${comoCerro === 'simultaneo' ? ' simultanea' : ''}`)
 
-      expect(cierre.status).toBe(200)
-      expect(['cobrado', 'rechazado']).toContain(cobro)
+      expect(['cobrado', 'rechazado', 'conflicto']).toContain(cobro)
+      if (comoCerro === 'simultaneo') {
+        // El cierre no cerró: el cobro no pudo ver la caja cerrada. Después se cierra sin carrera.
+        expect(cobro).not.toBe('rechazado')
+        expect((await cerrar(owner, turnoId, [{ cajaId: caja, declarado: declarado(1000) }])).status).toBe(200)
+      }
       const pagos = await prisma.pago.findMany({ where: { turnoCajaId: apertura, estado: 'aprobado' }, select: { monto: true } })
       expect(pagos).toHaveLength(cobro === 'cobrado' ? 1 : 0)
       // 1000 de fondo más los pagos aprobados de la apertura que quedaron en la base: 1000.00 o 1250.00.

@@ -37,7 +37,18 @@ export interface BaseDeCaja {
     usuarioId: string
     createdAt: Date
   }[]
-  pagos: { id: string; turnoCajaId: string | null; metodo: string; estado: string; monto: Prisma.Decimal; propina: Prisma.Decimal }[]
+  pagos: {
+    id: string
+    turnoCajaId: string | null
+    metodo: string
+    estado: string
+    monto: Prisma.Decimal
+    propina: Prisma.Decimal
+    sesionId?: string
+    mozoId?: string | null
+    fechaCobro?: Date | null
+    requiereRevision?: boolean
+  }[]
   arqueos: {
     turnoCajaId: string
     metodo: string
@@ -76,6 +87,59 @@ function cumple(fila: { id: string; restauranteId?: string; cerradoEn?: Date | n
   return true
 }
 
+type RangoDeFechas = { gte?: Date; gt?: Date; lte?: Date; lt?: Date }
+type DondePago = {
+  turnoCajaId?: string
+  turnoCaja?: { turnoId: string }
+  metodo?: string
+  estado?: string
+  fechaCobro?: RangoDeFechas
+  sesion?: { mesa: { restauranteId: string } }
+}
+const FILTROS_DE_PAGO = new Set(['turnoCajaId', 'turnoCaja', 'metodo', 'estado', 'fechaCobro', 'sesion'])
+
+/**
+ * Si el pago cumple el `where` de la caja: su apertura o el turno de su apertura, el método, el estado, el rango de
+ * `fechaCobro` (un pago sin fecha no entra en ningún rango) y el restaurante de la mesa de su sesión. Un filtro que no
+ * conoce corta el test: así un service no filtra por algo que la base en memoria ignora en silencio.
+ */
+function cumplePago(base: BaseDeCaja, pago: BaseDeCaja['pagos'][number], where: DondePago = {}): boolean {
+  const desconocido = Object.keys(where).find((k) => !FILTROS_DE_PAGO.has(k))
+  if (desconocido) throw new Error(`caja-en-memoria: pago.findMany no sabe filtrar por ${desconocido}`)
+  if (where.turnoCajaId !== undefined && pago.turnoCajaId !== where.turnoCajaId) return false
+  if (where.turnoCaja && base.turnoCajas.find((tc) => tc.id === pago.turnoCajaId)?.turnoId !== where.turnoCaja.turnoId) return false
+  if (where.metodo !== undefined && pago.metodo !== where.metodo) return false
+  if (where.estado !== undefined && pago.estado !== where.estado) return false
+  if (where.fechaCobro) {
+    const fecha = pago.fechaCobro?.getTime()
+    const { gte, gt, lte, lt } = where.fechaCobro
+    if (fecha === undefined) return false
+    if ((gte && fecha < gte.getTime()) || (gt && fecha <= gt.getTime())) return false
+    if ((lte && fecha > lte.getTime()) || (lt && fecha >= lt.getTime())) return false
+  }
+  if (where.sesion) {
+    const sesion = base.sesiones.find((s) => s.id === pago.sesionId)
+    if (base.mesas.find((m) => m.id === sesion?.mesaId)?.restauranteId !== where.sesion.mesa.restauranteId) return false
+  }
+  return true
+}
+
+/** Corta el test si los argumentos traen algo que la base en memoria no sabe resolver (para que no lo ignore en silencio). */
+function soloConoce(operacion: string, objeto: object | undefined, conocidas: string[]): void {
+  const desconocida = Object.keys(objeto ?? {}).find((k) => !conocidas.includes(k))
+  if (desconocida) throw new Error(`caja-en-memoria: ${operacion} no sabe resolver ${desconocida}`)
+}
+
+/** Las filas cuyo `turnoCajaId` cumple el `where` de la caja: un id, una lista (`in`) o sin filtro (todas). */
+function porApertura<T extends { turnoCajaId: string }>(filas: T[], where: { turnoCajaId?: string | { in: string[] } } | undefined): T[] {
+  soloConoce('el where por apertura', where, ['turnoCajaId'])
+  const filtro = where?.turnoCajaId
+  if (filtro === undefined) return filas
+  if (typeof filtro === 'string') return filas.filter((f) => f.turnoCajaId === filtro)
+  soloConoce('el filtro de turnoCajaId', filtro, ['in'])
+  return filas.filter((f) => filtro.in.includes(f.turnoCajaId))
+}
+
 /** El turno con la forma de TURNO_SELECT. */
 function leerTurno(base: BaseDeCaja, turno: BaseDeCaja['turnos'][number]) {
   const nombreDeCaja = (id: string) => base.cajas.find((c) => c.id === id)?.nombre ?? ''
@@ -87,6 +151,7 @@ function leerTurno(base: BaseDeCaja, turno: BaseDeCaja['turnos'][number]) {
     cerradoEn: turno.cerradoEn,
     observaciones: turno.observaciones,
     abiertoPor: { id: turno.abiertoPorUsuarioId, nombre: base.usuarios[turno.abiertoPorUsuarioId] ?? '' },
+    cerradoPor: turno.cerradoPorUsuarioId ? { id: turno.cerradoPorUsuarioId, nombre: base.usuarios[turno.cerradoPorUsuarioId] ?? '' } : null,
     cajas: base.turnoCajas
       .filter((tc) => tc.turnoId === turno.id)
       .map((tc) => ({ id: tc.id, cajaId: tc.cajaId, fondoInicial: tc.fondoInicial, abiertoEn: tc.abiertoEn, caja: { nombre: nombreDeCaja(tc.cajaId) } }))
@@ -173,15 +238,91 @@ export function conectarBaseDeCaja(prisma: PrismaMock, base: BaseDeCaja): void {
     for (const fila of filas) Object.assign(fila, data)
     return { count: filas.length }
   })
-  prisma.movimientoCaja.findMany.mockImplementation(async ({ where }) =>
-    base.movimientos.filter((m) => m.turnoCajaId === where.turnoCajaId).map((m) => ({ tipo: m.tipo, monto: m.monto })),
-  )
-  // Sin `where`, todos: un service que se olvida del filtro por apertura cuenta pagos ajenos y el test lo nota.
-  prisma.pago.findMany.mockImplementation(async (args) =>
-    base.pagos
-      .filter((p) => args?.where?.turnoCajaId === undefined || p.turnoCajaId === args.where.turnoCajaId)
-      .map((p) => ({ metodo: p.metodo, estado: p.estado, monto: p.monto, propina: p.propina })),
-  )
+  // Lo que leen el cierre (tipo y monto de una apertura) y el detalle (todo MOVIMIENTO_SELECT de varias, por createdAt).
+  prisma.movimientoCaja.findMany.mockImplementation(async (args) => {
+    soloConoce('movimientoCaja.findMany', args, ['where', 'select', 'orderBy'])
+    soloConoce('el orderBy de movimientoCaja.findMany', args.orderBy, ['createdAt'])
+    const filas = [...porApertura(base.movimientos, args.where)]
+    if (args.orderBy?.createdAt === 'asc') filas.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+    return filas.map((m) => {
+      const apertura = base.turnoCajas.find((tc) => tc.id === m.turnoCajaId)
+      return {
+        id: m.id,
+        turnoCajaId: m.turnoCajaId,
+        tipo: m.tipo,
+        monto: m.monto,
+        motivo: m.motivo,
+        createdAt: m.createdAt,
+        usuario: { id: m.usuarioId, nombre: base.usuarios[m.usuarioId] ?? '' },
+        turnoCaja: { cajaId: apertura?.cajaId ?? '', caja: { nombre: base.cajas.find((c) => c.id === apertura?.cajaId)?.nombre ?? '' } },
+      }
+    })
+  })
+  // Sin `where`, todos: un service que se olvida de un filtro cuenta pagos ajenos y el test lo nota. Devuelve todo lo que
+  // leen el cierre y el resumen (con la mesa de la sesión y el nombre del mozo), y respeta el orden por `fechaCobro`.
+  prisma.pago.findMany.mockImplementation(async (args) => {
+    const filas = base.pagos.filter((p) => cumplePago(base, p, args?.where))
+    if (args?.orderBy?.fechaCobro === 'asc') filas.sort((a, b) => (a.fechaCobro?.getTime() ?? 0) - (b.fechaCobro?.getTime() ?? 0))
+    return filas.map((p) => {
+      const sesion = base.sesiones.find((s) => s.id === p.sesionId)
+      const mozo = base.mozos.find((m) => m.id === p.mozoId)
+      return {
+        id: p.id,
+        metodo: p.metodo,
+        estado: p.estado,
+        monto: p.monto,
+        propina: p.propina,
+        mozoId: p.mozoId ?? null,
+        mozo: mozo ? { nombre: mozo.nombre } : null,
+        fechaCobro: p.fechaCobro ?? null,
+        requiereRevision: p.requiereRevision ?? false,
+        sesion: { mesa: { numero: base.mesas.find((m) => m.id === sesion?.mesaId)?.numero ?? '' } },
+      }
+    })
+  })
+  // El historial: where por restaurante, orden de lista (abiertoEn e id), take y cursor inclusivo, como Prisma.
+  prisma.turno.findMany.mockImplementation(async (args) => {
+    soloConoce('turno.findMany', args, ['where', 'orderBy', 'take', 'cursor', 'select'])
+    soloConoce('el where de turno.findMany', args.where, ['restauranteId'])
+    const orden: Record<string, 'asc' | 'desc'>[] = args.orderBy ?? []
+    for (const o of orden) soloConoce('el orderBy de turno.findMany', o, ['abiertoEn', 'id'])
+    const valor = (t: BaseDeCaja['turnos'][number], campo: string) => (campo === 'abiertoEn' ? t.abiertoEn.getTime() : t.id)
+    let filas = base.turnos
+      .filter((t) => args.where?.restauranteId === undefined || t.restauranteId === args.where.restauranteId)
+      .sort((a, b) => {
+        for (const o of orden) {
+          const [campo, sentido] = Object.entries(o)[0]
+          const [va, vb] = [valor(a, campo), valor(b, campo)]
+          if (va !== vb) return (va < vb ? -1 : 1) * (sentido === 'desc' ? -1 : 1)
+        }
+        return 0
+      })
+    if (args.cursor) {
+      soloConoce('el cursor de turno.findMany', args.cursor, ['id'])
+      const desde = filas.findIndex((t) => t.id === args.cursor.id)
+      filas = desde === -1 ? [] : filas.slice(desde)
+    }
+    if (args.take !== undefined) filas = filas.slice(0, args.take)
+    return filas.map((t) => leerTurno(base, t))
+  })
+  // Los totales de los movimientos por apertura y tipo.
+  prisma.movimientoCaja.groupBy.mockImplementation(async (args) => {
+    soloConoce('movimientoCaja.groupBy', args, ['by', 'where', '_count', '_sum'])
+    if (JSON.stringify(args.by) !== JSON.stringify(['turnoCajaId', 'tipo'])) throw new Error('caja-en-memoria: groupBy solo por turnoCajaId y tipo')
+    const grupos = new Map<string, { turnoCajaId: string; tipo: string; _count: { _all: number }; _sum: { monto: Prisma.Decimal } }>()
+    for (const m of porApertura(base.movimientos, args.where)) {
+      const clave = `${m.turnoCajaId}|${m.tipo}`
+      const grupo = grupos.get(clave) ?? { turnoCajaId: m.turnoCajaId, tipo: m.tipo, _count: { _all: 0 }, _sum: { monto: new Prisma.Decimal(0) } }
+      grupo._count._all += 1
+      grupo._sum.monto = grupo._sum.monto.plus(m.monto)
+      grupos.set(clave, grupo)
+    }
+    return [...grupos.values()]
+  })
+  prisma.arqueoMetodo.findMany.mockImplementation(async (args) => {
+    soloConoce('arqueoMetodo.findMany', args, ['where', 'select'])
+    return porApertura(base.arqueos, args?.where).map((a) => ({ ...a }))
+  })
   prisma.arqueoMetodo.createMany.mockImplementation(async ({ data }) => {
     base.arqueos.push(...data)
     return { count: data.length }

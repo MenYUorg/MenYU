@@ -6,6 +6,7 @@ import { UsuarioAutenticado } from '../auth/supabase/usuario-autenticado'
 import { METODOS_ARQUEO, MetodoArqueo } from '../common/caja.constant'
 import { runSerializableTransaction } from '../common/run-serializable-transaction'
 import { PrismaService } from '../prisma/prisma.service'
+import { metodosDelArqueoParaLaApi } from './arqueo-para-la-api'
 import { MENSAJE_TURNO_CERRADO, traducirConflictoDeCierre } from './conflictos'
 import { MAX_MONTO } from './dto/abrir-turno.dto'
 import { CajaDelCierreDto, CerrarTurnoDto } from './dto/cerrar-turno.dto'
@@ -139,11 +140,6 @@ function arqueoParaLaApi({ apertura, metodos }: { apertura: Apertura; metodos: A
     cajaId: apertura.cajaId,
     cajaNombre: apertura.caja.nombre,
     fondoInicial: apertura.fondoInicial.toNumber(),
-    metodos: metodos.map((m) => ({
-      metodo: m.metodo,
-      esperado: m.esperado.toNumber(),
-      declarado: m.declarado.toNumber(),
-      diferencia: m.diferencia.toNumber(),
-    })),
+    metodos: metodosDelArqueoParaLaApi(metodos),
   }
 }

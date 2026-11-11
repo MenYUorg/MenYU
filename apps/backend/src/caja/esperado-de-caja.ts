@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client'
-import { METODOS_ARQUEO, MetodoArqueo } from '../common/caja.constant'
+import { esMetodoDeArqueo, METODOS_ARQUEO, MetodoArqueo } from '../common/caja.constant'
 import { ESTADO_PAGO_APROBADO } from '../common/estado-pago.constant'
 
 type Monto = Prisma.Decimal | number | string
@@ -9,8 +9,6 @@ export interface DatosDelEsperado {
   movimientos: { tipo: string; monto: Monto }[]
   pagos: { metodo: string; estado: string; monto: Monto; propina: Monto }[]
 }
-
-const esMetodoDeArqueo = (metodo: string): metodo is MetodoArqueo => (METODOS_ARQUEO as readonly string[]).includes(metodo)
 
 /**
  * Lo que tendría que haber en una caja al cerrarla, por método de arqueo (#357). Con Prisma.Decimal: nunca floats.
