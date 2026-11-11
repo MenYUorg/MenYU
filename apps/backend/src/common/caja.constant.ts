@@ -12,3 +12,6 @@ export const METODOS_ARQUEO = ['efectivo', 'debito', 'credito', 'transferencia']
 
 export type TipoMovimientoCaja = (typeof TIPOS_MOVIMIENTO_CAJA)[number]
 export type MetodoArqueo = (typeof METODOS_ARQUEO)[number]
+
+/** Si el método de un pago entra al arqueo (`mercadopago` no). */
+export const esMetodoDeArqueo = (metodo: string): metodo is MetodoArqueo => (METODOS_ARQUEO as readonly string[]).includes(metodo)

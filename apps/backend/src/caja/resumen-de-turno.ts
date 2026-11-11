@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client'
-import { METODOS_ARQUEO, MetodoArqueo } from '../common/caja.constant'
+import { esMetodoDeArqueo, METODOS_ARQUEO, MetodoArqueo } from '../common/caja.constant'
 import { ESTADO_PAGO_APROBADO } from '../common/estado-pago.constant'
 
 type Monto = Prisma.Decimal | number | string
@@ -20,8 +20,6 @@ export interface ResumenDeTurno {
   porMozo: ({ mozoId: string | null } & Acumulado)[]
   total: Acumulado
 }
-
-const esMetodoDeArqueo = (metodo: string): metodo is MetodoArqueo => (METODOS_ARQUEO as readonly string[]).includes(metodo)
 
 const vacio = (): Acumulado => ({ cantidad: 0, monto: new Prisma.Decimal(0), propina: new Prisma.Decimal(0) })
 
