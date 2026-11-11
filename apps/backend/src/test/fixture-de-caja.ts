@@ -76,10 +76,34 @@ export class FixtureDeCaja {
     return (await this.prisma.caja.create({ data: { restauranteId, nombre, activa } })).id
   }
 
-  /** Borra todo lo de la corrida, en el orden de las FKs Restrict (lo de la caja primero). */
+  /** Una sesión de mesa, con un código único. */
+  async sesion(mesaId: string, { estado = 'activa', iniciadaEn }: { estado?: string; iniciadaEn?: Date } = {}): Promise<string> {
+    const codigoSesion = `${this.marcador}${randomUUID().slice(0, 8)}`
+    return (await this.prisma.sesionMesa.create({ data: { mesaId, codigoSesion, estado, iniciadaEn } })).id
+  }
+
+  /** Un pago de una sesión, en la caja que se indique (o en ninguna). */
+  async pago(datos: {
+    sesionId: string
+    turnoCajaId: string | null
+    metodo: string
+    estado: string
+    monto: number | string
+    propina?: number | string
+  }): Promise<string> {
+    const { propina = 0, ...resto } = datos
+    return (await this.prisma.pago.create({ data: { ...resto, propina } })).id
+  }
+
+  /**
+   * Borra todo lo de la corrida, en el orden de las FKs Restrict: lo de la caja primero (los pagos antes que turno_caja),
+   * las sesiones antes que las mesas, y después el resto.
+   */
   async limpiar(): Promise<void> {
     const deLaCorrida = { restaurante: { marca: { slug: { startsWith: this.marcador } } } }
     const deSusTurnos = { turnoCaja: { turno: deLaCorrida } }
+    await this.prisma.pago.deleteMany({ where: { OR: [{ sesion: { mesa: deLaCorrida } }, deSusTurnos] } })
+    await this.prisma.sesionMesa.deleteMany({ where: { mesa: deLaCorrida } })
     await this.prisma.arqueoMetodo.deleteMany({ where: deSusTurnos })
     await this.prisma.movimientoCaja.deleteMany({ where: deSusTurnos })
     await this.prisma.asignacionTurno.deleteMany({ where: { turno: deLaCorrida } })

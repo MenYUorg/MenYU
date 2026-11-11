@@ -304,6 +304,8 @@ Entregas (ver Decisiones de la planificación de la Fase 4):
 | `POST /turnos` (abrir un turno con 1 o 2 cajas y las mesas asignadas; quién abre sale de la cuenta) | OWNER, GERENTE, JEFE_SALON (`CAJA`) |
 | `GET /turnos/actual?restauranteId=` | OWNER, GERENTE, JEFE_SALON (`CAJA`) |
 | `PUT /turnos/:id/asignaciones` (reemplaza la lista entera; un turno cerrado no se modifica) | OWNER, GERENTE, JEFE_SALON (`CAJA`), con el restaurante del turno |
+| `POST /turnos/:id/movimientos` (ingreso o egreso en una caja abierta del turno; quién lo carga sale de la cuenta) | OWNER, GERENTE, JEFE_SALON (`CAJA`), con el restaurante del turno |
+| `POST /turnos/:id/cierre` (cierra el turno y todas sus cajas con el arqueo de cada una; quién cierra sale de la cuenta) | OWNER, GERENTE, JEFE_SALON (`CAJA`), con el restaurante del turno |
 | `GET /pedidos`, `PATCH /pedidos/:id/estado` | OWNER, GERENTE, JEFE_SALON, MOZO, COCINA |
 | `POST /pedidos/staff` | OWNER, GERENTE, JEFE_SALON, MOZO |
 | `PATCH /pedidos/:id/editar` | GERENTE, JEFE_SALON, MOZO (el OWNER no edita, como hoy) |

@@ -16,14 +16,53 @@ export interface BaseDeCaja {
     abiertoPorUsuarioId: string
     abiertoEn: Date
     cerradoEn: Date | null
+    cerradoPorUsuarioId?: string | null
     observaciones: string | null
   }[]
-  turnoCajas: { id: string; turnoId: string; cajaId: string; fondoInicial: Prisma.Decimal; abiertoEn: Date }[]
+  turnoCajas: {
+    id: string
+    turnoId: string
+    cajaId: string
+    fondoInicial: Prisma.Decimal
+    abiertoEn: Date
+    cerradoEn?: Date | null
+  }[]
   asignaciones: { turnoId: string; mesaId: string; mozoId: string }[]
+  movimientos: {
+    id: string
+    turnoCajaId: string
+    tipo: string
+    monto: Prisma.Decimal
+    motivo: string
+    usuarioId: string
+    createdAt: Date
+  }[]
+  pagos: { id: string; turnoCajaId: string | null; metodo: string; estado: string; monto: Prisma.Decimal; propina: Prisma.Decimal }[]
+  arqueos: {
+    turnoCajaId: string
+    metodo: string
+    esperado: Prisma.Decimal
+    declarado: Prisma.Decimal
+    diferencia: Prisma.Decimal
+  }[]
+  sesiones: { id: string; mesaId: string; estado: string; iniciadaEn: Date }[]
 }
 
 export function baseDeCajaVacia(): BaseDeCaja {
-  return { usuarios: {}, cajas: [], mesas: [], mozos: [], mozoMesas: [], turnos: [], turnoCajas: [], asignaciones: [] }
+  return {
+    usuarios: {},
+    cajas: [],
+    mesas: [],
+    mozos: [],
+    mozoMesas: [],
+    turnos: [],
+    turnoCajas: [],
+    asignaciones: [],
+    movimientos: [],
+    pagos: [],
+    arqueos: [],
+    sesiones: [],
+  }
 }
 
 type Donde = { id?: string | { in: string[] }; restauranteId?: string; cerradoEn?: null }
@@ -92,6 +131,68 @@ export function conectarBaseDeCaja(prisma: PrismaMock, base: BaseDeCaja): void {
     base.turnoCajas.push(fila)
     return { id: fila.id }
   })
+  prisma.turnoCaja.findFirst.mockImplementation(async ({ where }) => {
+    const fila = base.turnoCajas.find((tc) => tc.turnoId === where.turnoId && tc.cajaId === where.cajaId)
+    return fila ? { id: fila.id } : null
+  })
+  prisma.movimientoCaja.create.mockImplementation(async ({ data }) => {
+    const fila = { id: nuevoId('movimiento'), createdAt: new Date('2026-11-10T21:00:00Z'), ...data }
+    base.movimientos.push(fila)
+    const apertura = base.turnoCajas.find((tc) => tc.id === fila.turnoCajaId)
+    const caja = base.cajas.find((c) => c.id === apertura?.cajaId)
+    // Con la forma de MOVIMIENTO_SELECT (movimientos.service.ts).
+    return {
+      id: fila.id,
+      tipo: fila.tipo,
+      monto: fila.monto,
+      motivo: fila.motivo,
+      createdAt: fila.createdAt,
+      usuario: { id: fila.usuarioId, nombre: base.usuarios[fila.usuarioId] ?? '' },
+      turnoCaja: { cajaId: apertura?.cajaId ?? '', caja: { nombre: caja?.nombre ?? '' } },
+    }
+  })
+  prisma.turno.update.mockImplementation(async ({ where, data }) => {
+    const turno = base.turnos.find((t) => t.id === where.id)
+    if (!turno) throw new Error(`turno ${where.id} no encontrado`)
+    Object.assign(turno, data)
+    return { id: turno.id }
+  })
+  prisma.turnoCaja.findMany.mockImplementation(async ({ where }) =>
+    base.turnoCajas
+      .filter((tc) => tc.turnoId === where.turnoId)
+      .map((tc) => ({
+        id: tc.id,
+        cajaId: tc.cajaId,
+        fondoInicial: tc.fondoInicial,
+        caja: { nombre: base.cajas.find((c) => c.id === tc.cajaId)?.nombre ?? '' },
+      }))
+      .sort((a, b) => a.caja.nombre.localeCompare(b.caja.nombre)),
+  )
+  prisma.turnoCaja.updateMany.mockImplementation(async ({ where, data }) => {
+    const filas = base.turnoCajas.filter((tc) => tc.turnoId === where.turnoId && (tc.cerradoEn ?? null) === null)
+    for (const fila of filas) Object.assign(fila, data)
+    return { count: filas.length }
+  })
+  prisma.movimientoCaja.findMany.mockImplementation(async ({ where }) =>
+    base.movimientos.filter((m) => m.turnoCajaId === where.turnoCajaId).map((m) => ({ tipo: m.tipo, monto: m.monto })),
+  )
+  // Sin `where`, todos: un service que se olvida del filtro por apertura cuenta pagos ajenos y el test lo nota.
+  prisma.pago.findMany.mockImplementation(async (args) =>
+    base.pagos
+      .filter((p) => args?.where?.turnoCajaId === undefined || p.turnoCajaId === args.where.turnoCajaId)
+      .map((p) => ({ metodo: p.metodo, estado: p.estado, monto: p.monto, propina: p.propina })),
+  )
+  prisma.arqueoMetodo.createMany.mockImplementation(async ({ data }) => {
+    base.arqueos.push(...data)
+    return { count: data.length }
+  })
+  prisma.sesionMesa.findMany.mockImplementation(async ({ where }) =>
+    base.sesiones
+      .filter((s) => s.estado === where.estado)
+      .filter((s) => base.mesas.find((m) => m.id === s.mesaId)?.restauranteId === where.mesa.restauranteId)
+      .sort((a, b) => a.iniciadaEn.getTime() - b.iniciadaEn.getTime())
+      .map((s) => ({ mesaId: s.mesaId, iniciadaEn: s.iniciadaEn, mesa: { numero: base.mesas.find((m) => m.id === s.mesaId)?.numero ?? '' } })),
+  )
   prisma.asignacionTurno.deleteMany.mockImplementation(async ({ where }) => {
     const antes = base.asignaciones.length
     base.asignaciones = base.asignaciones.filter((a) => a.turnoId !== where.turnoId)
