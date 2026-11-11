@@ -82,6 +82,17 @@ export class FixtureDeCaja {
     return (await this.prisma.sesionMesa.create({ data: { mesaId, codigoSesion, estado, iniciadaEn } })).id
   }
 
+  /**
+   * Un turno ya cerrado, insertado directo (sin cajas), con el id y las fechas que se elijan. Lo abre y lo cierra la
+   * misma cuenta: `turno_cierre_check` exige `cerradoEn` y `cerradoPorUsuarioId` juntos.
+   */
+  async turnoCerrado(restauranteId: string, usuarioId: string, datos: { id?: string; abiertoEn: Date; cerradoEn: Date }): Promise<string> {
+    const turno = await this.prisma.turno.create({
+      data: { ...datos, restauranteId, abiertoPorUsuarioId: usuarioId, cerradoPorUsuarioId: usuarioId },
+    })
+    return turno.id
+  }
+
   /** Un pago de una sesión, en la caja que se indique (o en ninguna). */
   async pago(datos: {
     sesionId: string
@@ -90,6 +101,9 @@ export class FixtureDeCaja {
     estado: string
     monto: number | string
     propina?: number | string
+    mozoId?: string | null
+    fechaCobro?: Date | null
+    requiereRevision?: boolean
   }): Promise<string> {
     const { propina = 0, ...resto } = datos
     return (await this.prisma.pago.create({ data: { ...resto, propina } })).id
