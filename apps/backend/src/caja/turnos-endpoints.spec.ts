@@ -3,6 +3,7 @@ import { AppDeEndpoints, CUENTAS, crearAppDeEndpoints, MUNDO } from '../test/app
 import { BaseDeCaja, baseDeCajaVacia, conectarBaseDeCaja } from '../test/caja-en-memoria'
 import { comoPrisma, crearPrismaMock, PrismaMock } from '../test/prisma-mock'
 import { AperturaService } from './apertura.service'
+import { HistorialService } from './historial.service'
 import { TurnosController } from './turnos.controller'
 
 // La ruta, los guards de permisos, el ValidationPipe y el service reales; la base, en memoria (test/caja-en-memoria.ts).
@@ -23,7 +24,7 @@ describe('endpoints de los turnos', () => {
 
   beforeAll(async () => {
     prisma = crearPrismaMock()
-    api = await crearAppDeEndpoints(TurnosController, [AperturaService, { provide: PrismaService, useValue: comoPrisma(prisma) }])
+    api = await crearAppDeEndpoints(TurnosController, [AperturaService, HistorialService, { provide: PrismaService, useValue: comoPrisma(prisma) }])
   })
 
   afterAll(() => api.cerrar())

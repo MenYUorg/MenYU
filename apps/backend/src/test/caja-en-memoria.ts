@@ -124,6 +124,22 @@ function cumplePago(base: BaseDeCaja, pago: BaseDeCaja['pagos'][number], where: 
   return true
 }
 
+/** Corta el test si los argumentos traen algo que la base en memoria no sabe resolver (para que no lo ignore en silencio). */
+function soloConoce(operacion: string, objeto: object | undefined, conocidas: string[]): void {
+  const desconocida = Object.keys(objeto ?? {}).find((k) => !conocidas.includes(k))
+  if (desconocida) throw new Error(`caja-en-memoria: ${operacion} no sabe resolver ${desconocida}`)
+}
+
+/** Las filas cuyo `turnoCajaId` cumple el `where` de la caja: un id, una lista (`in`) o sin filtro (todas). */
+function porApertura<T extends { turnoCajaId: string }>(filas: T[], where: { turnoCajaId?: string | { in: string[] } } | undefined): T[] {
+  soloConoce('el where por apertura', where, ['turnoCajaId'])
+  const filtro = where?.turnoCajaId
+  if (filtro === undefined) return filas
+  if (typeof filtro === 'string') return filas.filter((f) => f.turnoCajaId === filtro)
+  soloConoce('el filtro de turnoCajaId', filtro, ['in'])
+  return filas.filter((f) => filtro.in.includes(f.turnoCajaId))
+}
+
 /** El turno con la forma de TURNO_SELECT. */
 function leerTurno(base: BaseDeCaja, turno: BaseDeCaja['turnos'][number]) {
   const nombreDeCaja = (id: string) => base.cajas.find((c) => c.id === id)?.nombre ?? ''
@@ -135,6 +151,7 @@ function leerTurno(base: BaseDeCaja, turno: BaseDeCaja['turnos'][number]) {
     cerradoEn: turno.cerradoEn,
     observaciones: turno.observaciones,
     abiertoPor: { id: turno.abiertoPorUsuarioId, nombre: base.usuarios[turno.abiertoPorUsuarioId] ?? '' },
+    cerradoPor: turno.cerradoPorUsuarioId ? { id: turno.cerradoPorUsuarioId, nombre: base.usuarios[turno.cerradoPorUsuarioId] ?? '' } : null,
     cajas: base.turnoCajas
       .filter((tc) => tc.turnoId === turno.id)
       .map((tc) => ({ id: tc.id, cajaId: tc.cajaId, fondoInicial: tc.fondoInicial, abiertoEn: tc.abiertoEn, caja: { nombre: nombreDeCaja(tc.cajaId) } }))
@@ -245,6 +262,49 @@ export function conectarBaseDeCaja(prisma: PrismaMock, base: BaseDeCaja): void {
         sesion: { mesa: { numero: base.mesas.find((m) => m.id === sesion?.mesaId)?.numero ?? '' } },
       }
     })
+  })
+  // El historial: where por restaurante, orden de lista (abiertoEn e id), take y cursor inclusivo, como Prisma.
+  prisma.turno.findMany.mockImplementation(async (args) => {
+    soloConoce('turno.findMany', args, ['where', 'orderBy', 'take', 'cursor', 'select'])
+    soloConoce('el where de turno.findMany', args.where, ['restauranteId'])
+    const orden: Record<string, 'asc' | 'desc'>[] = args.orderBy ?? []
+    for (const o of orden) soloConoce('el orderBy de turno.findMany', o, ['abiertoEn', 'id'])
+    const valor = (t: BaseDeCaja['turnos'][number], campo: string) => (campo === 'abiertoEn' ? t.abiertoEn.getTime() : t.id)
+    let filas = base.turnos
+      .filter((t) => args.where?.restauranteId === undefined || t.restauranteId === args.where.restauranteId)
+      .sort((a, b) => {
+        for (const o of orden) {
+          const [campo, sentido] = Object.entries(o)[0]
+          const [va, vb] = [valor(a, campo), valor(b, campo)]
+          if (va !== vb) return (va < vb ? -1 : 1) * (sentido === 'desc' ? -1 : 1)
+        }
+        return 0
+      })
+    if (args.cursor) {
+      soloConoce('el cursor de turno.findMany', args.cursor, ['id'])
+      const desde = filas.findIndex((t) => t.id === args.cursor.id)
+      filas = desde === -1 ? [] : filas.slice(desde)
+    }
+    if (args.take !== undefined) filas = filas.slice(0, args.take)
+    return filas.map((t) => leerTurno(base, t))
+  })
+  // Los totales de los movimientos por apertura y tipo.
+  prisma.movimientoCaja.groupBy.mockImplementation(async (args) => {
+    soloConoce('movimientoCaja.groupBy', args, ['by', 'where', '_count', '_sum'])
+    if (JSON.stringify(args.by) !== JSON.stringify(['turnoCajaId', 'tipo'])) throw new Error('caja-en-memoria: groupBy solo por turnoCajaId y tipo')
+    const grupos = new Map<string, { turnoCajaId: string; tipo: string; _count: { _all: number }; _sum: { monto: Prisma.Decimal } }>()
+    for (const m of porApertura(base.movimientos, args.where)) {
+      const clave = `${m.turnoCajaId}|${m.tipo}`
+      const grupo = grupos.get(clave) ?? { turnoCajaId: m.turnoCajaId, tipo: m.tipo, _count: { _all: 0 }, _sum: { monto: new Prisma.Decimal(0) } }
+      grupo._count._all += 1
+      grupo._sum.monto = grupo._sum.monto.plus(m.monto)
+      grupos.set(clave, grupo)
+    }
+    return [...grupos.values()]
+  })
+  prisma.arqueoMetodo.findMany.mockImplementation(async (args) => {
+    soloConoce('arqueoMetodo.findMany', args, ['where', 'select'])
+    return porApertura(base.arqueos, args?.where).map((a) => ({ ...a }))
   })
   prisma.arqueoMetodo.createMany.mockImplementation(async ({ data }) => {
     base.arqueos.push(...data)

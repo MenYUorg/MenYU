@@ -6,13 +6,18 @@ import { CAJA } from '../auth/roles-del-personal'
 import { UsuarioAutenticado } from '../auth/supabase/usuario-autenticado'
 import { AperturaService } from './apertura.service'
 import { AbrirTurnoDto } from './dto/abrir-turno.dto'
+import { ListarTurnosDto } from './dto/listar-turnos.dto'
+import { HistorialService } from './historial.service'
 
 // Los turnos los abren y los consultan OWNER, GERENTE y JEFE_SALON (el grupo CAJA) del restaurante. Quién abre sale de
 // la cuenta, nunca del body.
 @ApiTags('turnos')
 @Controller('turnos')
 export class TurnosController {
-  constructor(private readonly apertura: AperturaService) {}
+  constructor(
+    private readonly apertura: AperturaService,
+    private readonly historial: HistorialService,
+  ) {}
 
   @Post()
   @RequiereRolEn({ body: 'restauranteId' }, ...CAJA)
@@ -22,6 +27,15 @@ export class TurnosController {
   @ApiResponse({ status: 409, description: 'Ya hay un turno abierto, la caja ya está abierta o una operación simultánea' })
   abrir(@Body() dto: AbrirTurnoDto, @UsuarioActual() usuario: UsuarioAutenticado) {
     return this.apertura.abrir(dto, usuario)
+  }
+
+  @Get()
+  @RequiereRolEn({ query: 'restauranteId' }, ...CAJA)
+  @ApiOperation({ summary: 'El historial de turnos del restaurante, del más nuevo al más viejo, con el arqueo y los totales de movimientos' })
+  @ApiResponse({ status: 200, description: 'Una página de turnos y el cursor de la siguiente (null si no hay más)' })
+  @ApiResponse({ status: 400, description: 'limite fuera de 1 a 100, o un cursor que no es un turno del restaurante' })
+  listar(@Query() dto: ListarTurnosDto) {
+    return this.historial.listar(dto)
   }
 
   @Get('actual')
