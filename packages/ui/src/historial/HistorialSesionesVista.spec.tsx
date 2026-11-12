@@ -186,6 +186,18 @@ describe('SesionDetalleModal', () => {
     fireEvent.click(screen.getAllByRole('button')[0])
     expect(onClose).toHaveBeenCalledTimes(2)
   })
+
+  it('es un diálogo con el nombre de la mesa y Escape lo cierra', () => {
+    const onClose = vi.fn()
+    render(<SesionDetalleModal sesion={sesion()} onClose={onClose} />)
+
+    expect(screen.getByRole('dialog', { name: 'Mesa 7' })).toHaveAttribute('aria-modal', 'true')
+
+    fireEvent.keyDown(document, { key: 'Enter' })
+    expect(onClose).not.toHaveBeenCalled()
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
 })
 
 describe('SesionCard', () => {
@@ -235,5 +247,13 @@ describe('SesionCard', () => {
 
     fireEvent.click(tarjeta)
     expect(onClick).toHaveBeenCalledTimes(1)
+  })
+
+  it('es un botón nativo (se enfoca y se activa con el teclado) que no envía formularios', () => {
+    render(<SesionCard sesion={sesion()} onClick={vi.fn()} />)
+    const tarjeta = screen.getByRole('button', { name: /MESA\s*7/ })
+
+    expect(tarjeta).toBe(screen.getByText('MESA').parentElement!.parentElement)
+    expect(tarjeta).toHaveAttribute('type', 'button')
   })
 })
