@@ -113,6 +113,18 @@ const inicio = new Date().toISOString()
 const resultados = []
 let versionAxe = null
 
+/**
+ * Espera a que la URL cumpla `condicion`, mirando page.url() cada 250 ms. Con waitForURL, el fin del login venció en dos
+ * de tres corridas (12/11/2026) aunque la página ya estaba en web-admin.
+ */
+async function esperarUrl(page, condicion, ms = 30_000) {
+  const hasta = Date.now() + ms
+  while (!condicion(new URL(page.url()))) {
+    if (Date.now() > hasta) throw new Error(`la URL no cambió en ${ms / 1000} s (sigue en ${new URL(page.url()).host})`)
+    await page.waitForTimeout(250)
+  }
+}
+
 /** Espera a que la pantalla termine de cargar: la red quieta (sin contar el socket) y un momento para el render. */
 async function esperarCarga(page) {
   await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
@@ -170,7 +182,7 @@ try {
       const page = await ctx.newPage()
       // El mismo link que el QR impreso: abre la sesión y sigue al menú (o a elegir el nombre, según la mesa).
       await page.goto(`${URLS['web-cliente']}/check-in?restaurantId=${restauranteId}&tableCode=${encodeURIComponent(rows[0].qr)}`)
-      await page.waitForURL((u) => !u.pathname.startsWith('/check-in'), { timeout: 30_000, waitUntil: 'commit' })
+      await esperarUrl(page, (u) => !u.pathname.startsWith('/check-in'))
       const primera = new URL(page.url()).pathname
       if (primera !== '/menu') await revisar(page, ['web-cliente', `Primera pantalla después del QR (${primera})`, primera], { navegar: false })
       for (const p of DE_MESA) await revisar(page, p)
@@ -195,7 +207,7 @@ try {
     await page.locator('input[type="email"]').fill(env.AXE_PERSONAL_EMAIL.trim())
     await page.locator('input[type="password"]').fill(env.AXE_PERSONAL_PASSWORD)
     await page.locator('button[type="submit"]').first().click()
-    await page.waitForURL((u) => u.host === new URL(URLS['web-admin']).host, { timeout: 30_000, waitUntil: 'commit' })
+    await esperarUrl(page, (u) => u.host === new URL(URLS['web-admin']).host)
     for (const p of DEL_PERSONAL) await revisar(page, p)
     await ctx.close()
   } else {
