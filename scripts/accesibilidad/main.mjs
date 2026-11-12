@@ -185,6 +185,12 @@ try {
       await esperarUrl(page, (u) => !u.pathname.startsWith('/check-in'))
       const primera = new URL(page.url()).pathname
       if (primera !== '/menu') await revisar(page, ['web-cliente', `Primera pantalla después del QR (${primera})`, primera], { navegar: false })
+      // Sin nombre, el resto de las pantallas de la mesa vuelven a /elegir-nombre (el comensal lo borra e2e_limpiar).
+      if (primera === '/elegir-nombre') {
+        await page.locator('form input[type="text"]').fill('Prueba axe')
+        await page.locator('form button[type="submit"]').click()
+        await esperarUrl(page, (u) => u.pathname === '/menu')
+      }
       for (const p of DE_MESA) await revisar(page, p)
       await ctx.close()
     } finally {
