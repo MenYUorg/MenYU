@@ -159,6 +159,18 @@ describe('EditarPedidoModal', () => {
     expect(onClose).toHaveBeenCalledTimes(3)
   })
 
+  it('es un diálogo con nombre, la justificación es la etiqueta de su campo y Escape lo cierra', () => {
+    const { onClose } = abrir()
+
+    expect(screen.getByRole('dialog', { name: 'Editar pedido #AB12CD34' })).toHaveAttribute('aria-modal', 'true')
+    expect(screen.getByLabelText('Justificación')).toBe(screen.getByPlaceholderText('Describí el motivo de la edición…'))
+
+    fireEvent.keyDown(document, { key: 'Enter' })
+    expect(onClose).not.toHaveBeenCalled()
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
   describe('apariencias', () => {
     it('la de pedidos: botones cuadrados sin resaltado, fila coloreada sin borde y el nombre sin tachar', () => {
       abrir({ apariencia: APARIENCIA_PEDIDOS })

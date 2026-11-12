@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { X } from 'lucide-react'
+import { useCerrarConEscape } from '../useCerrarConEscape'
 
 // Modal "Editar pedido": ajustar la cantidad de cada ítem con una justificación de hasta 50 palabras.
 // Lo usan el gerente (web-admin: pedidos, historial y sesiones) y el mozo (web-staff: pedidos).
@@ -139,6 +140,9 @@ export function EditarPedidoModal({
   const [justificacion, setJustificacion] = useState('')
   const [submitting, setSubmitting]       = useState(false)
   const [error, setError]                 = useState<string | null>(null)
+  const idTitulo        = useId()
+  const idJustificacion = useId()
+  useCerrarConEscape(onClose)
 
   const words = contarPalabras(justificacion)
 
@@ -262,7 +266,7 @@ export function EditarPedidoModal({
       {/* Justificación */}
       <div style={{ marginBottom: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-          <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, fontWeight: 600, color: '#374151' }}>
+          <label htmlFor={idJustificacion} style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, fontWeight: 600, color: '#374151' }}>
             Justificación
           </label>
           <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 11, color: words > MAX_PALABRAS ? '#E8563A' : '#9CA3AF' }}>
@@ -270,6 +274,7 @@ export function EditarPedidoModal({
           </span>
         </div>
         <textarea
+          id={idJustificacion}
           value={justificacion}
           onChange={(e) => setJustificacion(e.target.value)}
           rows={3}
@@ -330,8 +335,10 @@ export function EditarPedidoModal({
     </>
   )
 
+  // El fondo es solo un atajo de mouse para cerrar: el de teclado es Escape, y la ventana es el `dialog`.
   return (
     <div
+      role="presentation"
       style={{
         position:       'fixed',
         inset:          0,
@@ -345,6 +352,9 @@ export function EditarPedidoModal({
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={idTitulo}
         style={{
           background:   'white',
           borderRadius: apariencia.radio,
@@ -357,7 +367,7 @@ export function EditarPedidoModal({
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-          <h3 style={{ fontFamily: 'Montserrat, sans-serif', fontWeight: 700, fontSize: 16, color: '#2D3561', margin: 0 }}>
+          <h3 id={idTitulo} style={{ fontFamily: 'Montserrat, sans-serif', fontWeight: 700, fontSize: 16, color: '#2D3561', margin: 0 }}>
             Editar pedido {codigo}
           </h3>
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', padding: 4, display: 'flex' }}>
