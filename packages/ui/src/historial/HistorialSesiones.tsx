@@ -1,6 +1,7 @@
-import { useState, type CSSProperties, type ReactNode } from 'react'
+import { useId, useState, type CSSProperties, type ReactNode } from 'react'
 import { Clock, ClipboardList, DollarSign, ChevronRight, X, ChevronDown, ChevronUp } from 'lucide-react'
 import type { SesionHistorial } from '@menyu/types'
+import { useCerrarConEscape } from '../useCerrarConEscape'
 
 // Historial de sesiones cerradas: lo comparten el panel del gerente (web-admin) y el del mozo (web-staff).
 // Es solo vista; lo que depende del rol (editar un pedido) lo agrega cada app con `accionPedido`.
@@ -274,9 +275,13 @@ export function SesionDetalleModal({
   accionPedido?: AccionPedido
 }) {
   const duracion = calcDuracion(sesion.iniciadaEn, sesion.cerradaEn)
+  const idTitulo = useId()
+  useCerrarConEscape(onClose)
 
+  // El fondo es solo un atajo de mouse para cerrar: el de teclado es Escape, y la ventana es el `dialog`.
   return (
     <div
+      role="presentation"
       style={{
         position:       'fixed',
         inset:          0,
@@ -290,6 +295,9 @@ export function SesionDetalleModal({
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={idTitulo}
         style={{
           background:    'white',
           borderRadius:  16,
@@ -314,7 +322,7 @@ export function SesionDetalleModal({
           }}
         >
           <div>
-            <div style={{ fontFamily: 'Montserrat, sans-serif', fontWeight: 700, fontSize: 18, color: '#2D3561' }}>
+            <div id={idTitulo} style={{ fontFamily: 'Montserrat, sans-serif', fontWeight: 700, fontSize: 18, color: '#2D3561' }}>
               Mesa {sesion.mesaNumero}
             </div>
             <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#6b7280', marginTop: 2 }}>
@@ -371,13 +379,18 @@ export function SesionCard({
   const tieneEditados = sesion.pedidos.some((p) => p.tieneEdiciones)
 
   return (
-    <div
+    <button
+      type="button"
       onClick={onClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => { setHovered(false); setPressed(false) }}
       onMouseDown={() => setPressed(true)}
       onMouseUp={() => setPressed(false)}
       style={{
+        width:         '100%',
+        textAlign:     'left',
+        font:          'inherit',
+        color:         'inherit',
         background:    'white',
         border:        `1px solid ${hovered ? '#F6C4B8' : '#e5e7eb'}`,
         borderRadius:  12,
@@ -392,7 +405,7 @@ export function SesionCard({
       }}
     >
       {/* Table chip */}
-      <div
+      <span
         style={{
           width:          50,
           height:         50,
@@ -412,12 +425,12 @@ export function SesionCard({
         <span style={{ fontFamily: 'Montserrat, sans-serif', fontWeight: 800, fontSize: 21, color: '#2D3561', lineHeight: 1 }}>
           {sesion.mesaNumero}
         </span>
-      </div>
+      </span>
 
       {/* Info */}
-      <div style={{ flex: 1, minWidth: 0 }}>
+      <span style={{ display: 'block', flex: 1, minWidth: 0 }}>
         {/* Metrics */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#6b7280' }}>
             <Clock size={13} color="#9ca3af" />
             {duracion}
@@ -432,11 +445,11 @@ export function SesionCard({
             <DollarSign size={13} color="#9ca3af" />
             ${sesion.totalSesion.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
           </span>
-        </div>
+        </span>
 
         {/* Badges */}
         {(tieneAnulados || tieneEditados) && (
-          <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+          <span style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
             {tieneAnulados && (
               <span style={{ display: 'flex', alignItems: 'center', gap: 5, background: '#fef2f2', color: '#dc2626', fontFamily: 'Inter, sans-serif', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 999 }}>
                 <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: '#dc2626', flexShrink: 0 }} />
@@ -449,25 +462,25 @@ export function SesionCard({
                 con ediciones
               </span>
             )}
-          </div>
+          </span>
         )}
-      </div>
+      </span>
 
       {/* Right */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-        <div style={{ textAlign: 'right' }}>
+      <span style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+        <span style={{ display: 'block', textAlign: 'right' }}>
           {mostrarFecha && (
-            <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, color: '#9ca3af' }}>
+            <span style={{ display: 'block', fontFamily: 'Inter, sans-serif', fontSize: 12, color: '#9ca3af' }}>
               {fmtDate(sesion.cerradaEn)}
-            </div>
+            </span>
           )}
-          <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, color: '#9ca3af' }}>
+          <span style={{ display: 'block', fontFamily: 'Inter, sans-serif', fontSize: 12, color: '#9ca3af' }}>
             {fmtTime(sesion.cerradaEn)}
-          </div>
-        </div>
+          </span>
+        </span>
         <ChevronRight size={16} color={hovered ? '#F6C4B8' : '#d1d5db'} />
-      </div>
-    </div>
+      </span>
+    </button>
   )
 }
 
