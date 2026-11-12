@@ -1,6 +1,6 @@
 {
-  "inicio": "2026-11-12T17:29:51.733Z",
-  "fin": "2026-11-12T17:31:11.106Z",
+  "inicio": "2026-11-12T18:27:45.135Z",
+  "fin": "2026-11-12T18:29:23.702Z",
   "sha": "560e81ed9d2c91b4cd611cb5d8ec4ce412127dfe",
   "axe": "4.14.0",
   "etiquetas": [
@@ -87,33 +87,57 @@
     },
     {
       "app": "web-cliente",
+      "pantalla": "Primera pantalla después del QR (/elegir-nombre)",
+      "ruta": "/elegir-nombre",
+      "rutaFinal": "/elegir-nombre",
+      "incompletas": 0,
+      "reglasQuePasaron": 14,
+      "violaciones": 1
+    },
+    {
+      "app": "web-cliente",
       "pantalla": "Menú de la mesa",
       "ruta": "/menu",
-      "error": "fase de mesa salteada (sin la base)"
+      "rutaFinal": "/menu",
+      "incompletas": 2,
+      "reglasQuePasaron": 19,
+      "violaciones": 1
     },
     {
       "app": "web-cliente",
       "pantalla": "Detalle del plato",
       "ruta": "/menu/b358e646-c2c3-4732-8cae-11f3b2442565",
-      "error": "fase de mesa salteada (sin la base)"
+      "rutaFinal": "/menu/b358e646-c2c3-4732-8cae-11f3b2442565",
+      "incompletas": 1,
+      "reglasQuePasaron": 13,
+      "violaciones": 1
     },
     {
       "app": "web-cliente",
       "pantalla": "Carrito",
       "ruta": "/carrito",
-      "error": "fase de mesa salteada (sin la base)"
+      "rutaFinal": "/carrito",
+      "incompletas": 2,
+      "reglasQuePasaron": 15,
+      "violaciones": 1
     },
     {
       "app": "web-cliente",
       "pantalla": "Mis pedidos",
       "ruta": "/pedidos",
-      "error": "fase de mesa salteada (sin la base)"
+      "rutaFinal": "/pedidos",
+      "incompletas": 2,
+      "reglasQuePasaron": 15,
+      "violaciones": 1
     },
     {
       "app": "web-cliente",
       "pantalla": "Pagar",
       "ruta": "/pagar",
-      "error": "fase de mesa salteada (sin la base)"
+      "rutaFinal": "/pagar",
+      "incompletas": 2,
+      "reglasQuePasaron": 15,
+      "violaciones": 1
     },
     {
       "app": "web-admin",
@@ -342,6 +366,100 @@
         "span > span",
         "small",
         ".hover\\:\\!bg-\\[\\#d34a30\\]"
+      ]
+    },
+    {
+      "app": "web-cliente",
+      "pantalla": "Primera pantalla después del QR (/elegir-nombre)",
+      "regla": "color-contrast",
+      "gravedad": "serious",
+      "criterios": [
+        "1.4.3"
+      ],
+      "nivel": "AA",
+      "elementos": 1,
+      "ayuda": "Elements must meet minimum color contrast ratio thresholds",
+      "destinos": [
+        ".whitespace-nowrap.after\\:inset-x-\\[-2px\\].after\\:inset-y-\\[-8px\\]:nth-child(2)"
+      ]
+    },
+    {
+      "app": "web-cliente",
+      "pantalla": "Menú de la mesa",
+      "regla": "color-contrast",
+      "gravedad": "serious",
+      "criterios": [
+        "1.4.3"
+      ],
+      "nivel": "AA",
+      "elementos": 2,
+      "ayuda": "Elements must meet minimum color contrast ratio thresholds",
+      "destinos": [
+        "header > span",
+        ".group > div:nth-child(2) > div > span"
+      ]
+    },
+    {
+      "app": "web-cliente",
+      "pantalla": "Detalle del plato",
+      "regla": "color-contrast",
+      "gravedad": "serious",
+      "criterios": [
+        "1.4.3"
+      ],
+      "nivel": "AA",
+      "elementos": 2,
+      "ayuda": "Elements must meet minimum color contrast ratio thresholds",
+      "destinos": [
+        "button > span:nth-child(1)",
+        "span:nth-child(2)"
+      ]
+    },
+    {
+      "app": "web-cliente",
+      "pantalla": "Carrito",
+      "regla": "color-contrast",
+      "gravedad": "serious",
+      "criterios": [
+        "1.4.3"
+      ],
+      "nivel": "AA",
+      "elementos": 2,
+      "ayuda": "Elements must meet minimum color contrast ratio thresholds",
+      "destinos": [
+        "span:nth-child(3)",
+        "div > button"
+      ]
+    },
+    {
+      "app": "web-cliente",
+      "pantalla": "Mis pedidos",
+      "regla": "color-contrast",
+      "gravedad": "serious",
+      "criterios": [
+        "1.4.3"
+      ],
+      "nivel": "AA",
+      "elementos": 1,
+      "ayuda": "Elements must meet minimum color contrast ratio thresholds",
+      "destinos": [
+        "div > button"
+      ]
+    },
+    {
+      "app": "web-cliente",
+      "pantalla": "Pagar",
+      "regla": "color-contrast",
+      "gravedad": "serious",
+      "criterios": [
+        "1.4.3"
+      ],
+      "nivel": "AA",
+      "elementos": 2,
+      "ayuda": "Elements must meet minimum color contrast ratio thresholds",
+      "destinos": [
+        "span:nth-child(3)",
+        "div > button"
       ]
     },
     {
@@ -715,17 +833,17 @@
     }
   ],
   "totales": {
-    "observaciones": 25,
-    "elementos": 204,
+    "observaciones": 31,
+    "elementos": 214,
     "porCriterio": [
       {
         "clave": "1.4.3",
-        "observaciones": 19,
-        "elementos": 198,
+        "observaciones": 25,
+        "elementos": 208,
         "reglas": [
           "color-contrast"
         ],
-        "pantallas": 19
+        "pantallas": 25
       },
       {
         "clave": "4.1.2",
@@ -749,12 +867,12 @@
       },
       {
         "clave": "serious",
-        "observaciones": 19,
-        "elementos": 198,
+        "observaciones": 25,
+        "elementos": 208,
         "reglas": [
           "color-contrast"
         ],
-        "pantallas": 19
+        "pantallas": 25
       }
     ],
     "porApp": [
@@ -770,12 +888,12 @@
       },
       {
         "clave": "web-cliente",
-        "observaciones": 4,
-        "elementos": 17,
+        "observaciones": 10,
+        "elementos": 27,
         "reglas": [
           "color-contrast"
         ],
-        "pantallas": 4
+        "pantallas": 10
       },
       {
         "clave": "web-staff",
