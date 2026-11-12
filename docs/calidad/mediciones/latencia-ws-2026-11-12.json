@@ -1,0 +1,861 @@
+{
+  "inicio": "2026-11-12T18:24:45.018Z",
+  "fin": "2026-11-12T18:25:46.548Z",
+  "sha": "560e81ed9d2c91b4cd611cb5d8ec4ce412127dfe",
+  "marcador": "e2e-local-5039bde4-",
+  "restauranteId": "90c13073-cfe4-4f6b-98e5-9c2b8ded1ae0",
+  "pedidos": 100,
+  "resumen": {
+    "pedidos": 100,
+    "eventosRecibidos": 100,
+    "eventosPerdidos": 0,
+    "eventoAntesQueLaRespuesta": 86,
+    "sobreLaMeta": 0,
+    "metaMs": 500,
+    "esperaMs": 10000,
+    "desdeLaRespuestaMs": {
+      "n": 100,
+      "min": -301.7,
+      "p50": -1,
+      "p95": 0.9,
+      "max": 321
+    },
+    "desdeElEnvioMs": {
+      "n": 100,
+      "min": 414.8,
+      "p50": 434.9,
+      "p95": 668.4,
+      "max": 890.5
+    },
+    "respuestaHttpMs": {
+      "n": 100,
+      "min": 416.4,
+      "p50": 436.1,
+      "p95": 661.2,
+      "max": 891.5
+    }
+  },
+  "muestras": [
+    {
+      "i": 1,
+      "pedidoId": "50540013-04d3-47f5-bf29-1c60241d5136",
+      "http": 201,
+      "msEnvio": 4466.9007,
+      "msRespuesta": 5358.3876,
+      "msEvento": 5357.3707
+    },
+    {
+      "i": 2,
+      "pedidoId": "5e708810-b3c9-4766-89c9-68199bf4d5d8",
+      "http": 201,
+      "msEnvio": 5472.0364,
+      "msRespuesta": 5905.5759,
+      "msEvento": 5902.9657
+    },
+    {
+      "i": 3,
+      "pedidoId": "fc95fb96-4cf1-474a-b0fd-fe9ec9bd571c",
+      "http": 201,
+      "msEnvio": 6014.5483,
+      "msRespuesta": 6447.8657,
+      "msEvento": 6447.0556
+    },
+    {
+      "i": 4,
+      "pedidoId": "5e1be216-56aa-498b-a2f3-3087cfc8d71e",
+      "http": 201,
+      "msEnvio": 6561.9882,
+      "msRespuesta": 6996.9887,
+      "msEvento": 6995.8255
+    },
+    {
+      "i": 5,
+      "pedidoId": "48080584-45a8-4b9c-99db-b73791fb9d1c",
+      "http": 201,
+      "msEnvio": 7103.1312,
+      "msRespuesta": 7540.5322,
+      "msEvento": 7539.9651
+    },
+    {
+      "i": 6,
+      "pedidoId": "80bc5106-7a8e-49b7-80c3-1b210596b0af",
+      "http": 201,
+      "msEnvio": 7647.84,
+      "msRespuesta": 8087.8676,
+      "msEvento": 8087.2371
+    },
+    {
+      "i": 7,
+      "pedidoId": "e2a4c042-de84-480b-88c5-486cf3befacc",
+      "http": 201,
+      "msEnvio": 8192.5213,
+      "msRespuesta": 8629.3599,
+      "msEvento": 8628.4288
+    },
+    {
+      "i": 8,
+      "pedidoId": "039ec2c0-9075-4455-be0d-656e16ccece4",
+      "http": 201,
+      "msEnvio": 8740.3556,
+      "msRespuesta": 9173.8837,
+      "msEvento": 9172.7264
+    },
+    {
+      "i": 9,
+      "pedidoId": "81fa2544-2a43-4efc-aa56-92176edea192",
+      "http": 201,
+      "msEnvio": 9289.9695,
+      "msRespuesta": 9727.5286,
+      "msEvento": 9725.24
+    },
+    {
+      "i": 10,
+      "pedidoId": "b03ff58c-6c83-4fc7-a04b-561c852d21f3",
+      "http": 201,
+      "msEnvio": 9835.1129,
+      "msRespuesta": 10267.8185,
+      "msEvento": 10265.2929
+    },
+    {
+      "i": 11,
+      "pedidoId": "c65ad8bc-4be6-42a2-a8c6-09a7f62dda6d",
+      "http": 201,
+      "msEnvio": 10377.3603,
+      "msRespuesta": 10813.2055,
+      "msEvento": 10811.6537
+    },
+    {
+      "i": 12,
+      "pedidoId": "5112a84f-5e88-4d39-8cd9-cc1be96cc247",
+      "http": 201,
+      "msEnvio": 10923.6705,
+      "msRespuesta": 11591.2632,
+      "msEvento": 11592.0668
+    },
+    {
+      "i": 13,
+      "pedidoId": "af8a6f77-0c7e-45e3-9097-4fb45eb060df",
+      "http": 201,
+      "msEnvio": 11704.2053,
+      "msRespuesta": 12141.5912,
+      "msEvento": 12140.1184
+    },
+    {
+      "i": 14,
+      "pedidoId": "7f1e9ca6-da19-47eb-be8f-dccc5b15c73b",
+      "http": 201,
+      "msEnvio": 12248.138,
+      "msRespuesta": 12692.2387,
+      "msEvento": 12690.1829
+    },
+    {
+      "i": 15,
+      "pedidoId": "618e3634-cbf5-4870-9c74-24ab52c3a17a",
+      "http": 201,
+      "msEnvio": 12793.67,
+      "msRespuesta": 13229.3782,
+      "msEvento": 13230.5514
+    },
+    {
+      "i": 16,
+      "pedidoId": "f365ac2a-7ed9-475f-9120-4316923e7534",
+      "http": 201,
+      "msEnvio": 13351.1065,
+      "msRespuesta": 13788.8971,
+      "msEvento": 13787.3411
+    },
+    {
+      "i": 17,
+      "pedidoId": "cfbaad67-e4c9-4d2f-aef1-da5506b7c554",
+      "http": 201,
+      "msEnvio": 13893.1486,
+      "msRespuesta": 14333.7358,
+      "msEvento": 14333.1672
+    },
+    {
+      "i": 18,
+      "pedidoId": "421f1e43-6569-4095-992c-22c91e313326",
+      "http": 201,
+      "msEnvio": 14437.5618,
+      "msRespuesta": 14880.2171,
+      "msEvento": 14879.5438
+    },
+    {
+      "i": 19,
+      "pedidoId": "bcbfad60-8298-469b-86bb-411e0646c336",
+      "http": 201,
+      "msEnvio": 14996.4993,
+      "msRespuesta": 15435.7516,
+      "msEvento": 15434.6896
+    },
+    {
+      "i": 20,
+      "pedidoId": "182c27e8-8165-4e0a-a056-20141795e3e0",
+      "http": 201,
+      "msEnvio": 15538.654,
+      "msRespuesta": 15978.352,
+      "msEvento": 15977.0227
+    },
+    {
+      "i": 21,
+      "pedidoId": "f9c34a5d-cd21-4741-b767-e543e9081e0a",
+      "http": 201,
+      "msEnvio": 16084.2646,
+      "msRespuesta": 16524.3655,
+      "msEvento": 16527.2235
+    },
+    {
+      "i": 22,
+      "pedidoId": "d16dd162-d41b-48c8-945d-1a15d2e90b5a",
+      "http": 201,
+      "msEnvio": 16642.7185,
+      "msRespuesta": 17079.6148,
+      "msEvento": 17078.5971
+    },
+    {
+      "i": 23,
+      "pedidoId": "1fb2737b-a592-43ae-9f82-18662aa38ce4",
+      "http": 201,
+      "msEnvio": 17186.0911,
+      "msRespuesta": 17629.1457,
+      "msEvento": 17628.7536
+    },
+    {
+      "i": 24,
+      "pedidoId": "9593d33b-7cd7-49fa-99f4-e414b87f4ddc",
+      "http": 201,
+      "msEnvio": 17731.6918,
+      "msRespuesta": 18170.6762,
+      "msEvento": 18169.6516
+    },
+    {
+      "i": 25,
+      "pedidoId": "7fab56e5-4f11-47d7-8b69-b4fd30241303",
+      "http": 201,
+      "msEnvio": 18275.7671,
+      "msRespuesta": 18719.0592,
+      "msEvento": 18717.8861
+    },
+    {
+      "i": 26,
+      "pedidoId": "74a45622-0e98-4bd2-b067-c67591bf6b72",
+      "http": 201,
+      "msEnvio": 18822.2942,
+      "msRespuesta": 19259.5522,
+      "msEvento": 19257.5892
+    },
+    {
+      "i": 27,
+      "pedidoId": "17e38fac-b345-48cf-94bf-47b527b356fb",
+      "http": 201,
+      "msEnvio": 19367.2213,
+      "msRespuesta": 19801.2519,
+      "msEvento": 19800.7762
+    },
+    {
+      "i": 28,
+      "pedidoId": "91f3b312-5ebd-4491-a982-c1092cf4651e",
+      "http": 201,
+      "msEnvio": 19908.4278,
+      "msRespuesta": 20349.0453,
+      "msEvento": 20347.1436
+    },
+    {
+      "i": 29,
+      "pedidoId": "dab58c74-7340-439e-8dd7-46f76811ff6e",
+      "http": 201,
+      "msEnvio": 20450.7138,
+      "msRespuesta": 20875.9037,
+      "msEvento": 20871.0684
+    },
+    {
+      "i": 30,
+      "pedidoId": "dad13b87-b349-47c8-823a-2865e9f4cee9",
+      "http": 201,
+      "msEnvio": 20982.7617,
+      "msRespuesta": 21421.6201,
+      "msEvento": 21420.8843
+    },
+    {
+      "i": 31,
+      "pedidoId": "5c3a98be-a7ae-4d61-b2d8-af7e2661d59c",
+      "http": 201,
+      "msEnvio": 21524.872,
+      "msRespuesta": 21979.5898,
+      "msEvento": 21979.1954
+    },
+    {
+      "i": 32,
+      "pedidoId": "9c0dd309-f1cc-4934-bea6-88bd3c6d4ce7",
+      "http": 201,
+      "msEnvio": 22084.6149,
+      "msRespuesta": 22510.6796,
+      "msEvento": 22509.7193
+    },
+    {
+      "i": 33,
+      "pedidoId": "0b15334c-4c3b-4c1b-8399-17db33129bf4",
+      "http": 201,
+      "msEnvio": 22612.6389,
+      "msRespuesta": 23051.9666,
+      "msEvento": 23051.5523
+    },
+    {
+      "i": 34,
+      "pedidoId": "b5656586-7c9d-43c8-be02-dfa07b3daa10",
+      "http": 201,
+      "msEnvio": 23158.283,
+      "msRespuesta": 23599.6723,
+      "msEvento": 23595.6298
+    },
+    {
+      "i": 35,
+      "pedidoId": "67716510-424c-4493-b833-2a6c9d684029",
+      "http": 201,
+      "msEnvio": 23714.8447,
+      "msRespuesta": 24150.9739,
+      "msEvento": 24150.4981
+    },
+    {
+      "i": 36,
+      "pedidoId": "c3c5e0ad-72f0-4bf4-a0fe-f1d2585c3024",
+      "http": 201,
+      "msEnvio": 24258.0004,
+      "msRespuesta": 24693.429,
+      "msEvento": 24692.5328
+    },
+    {
+      "i": 37,
+      "pedidoId": "07143884-8b2c-4492-9b56-175fe1017c00",
+      "http": 201,
+      "msEnvio": 24801.9207,
+      "msRespuesta": 25237.1221,
+      "msEvento": 25236.1407
+    },
+    {
+      "i": 38,
+      "pedidoId": "2bf27579-da35-4a63-abe1-61e6f277f774",
+      "http": 201,
+      "msEnvio": 25346.3291,
+      "msRespuesta": 25778.2763,
+      "msEvento": 25783.6636
+    },
+    {
+      "i": 39,
+      "pedidoId": "e83d657d-5ce2-4a49-96c5-3e659658eab3",
+      "http": 201,
+      "msEnvio": 25887.1272,
+      "msRespuesta": 26322.0029,
+      "msEvento": 26320.5873
+    },
+    {
+      "i": 40,
+      "pedidoId": "ab2e7add-3d4f-4098-9f23-3075dc2cb468",
+      "http": 201,
+      "msEnvio": 26430.4715,
+      "msRespuesta": 26863.509,
+      "msEvento": 26861.6907
+    },
+    {
+      "i": 41,
+      "pedidoId": "ce3fa652-bbf2-4a9d-be82-7a9980c6fb3a",
+      "http": 201,
+      "msEnvio": 26972.2589,
+      "msRespuesta": 27403.1811,
+      "msEvento": 27402.226
+    },
+    {
+      "i": 42,
+      "pedidoId": "c6ba997e-7762-45df-a5f5-91f162baea83",
+      "http": 201,
+      "msEnvio": 27514.9431,
+      "msRespuesta": 27950.5944,
+      "msEvento": 27948.3894
+    },
+    {
+      "i": 43,
+      "pedidoId": "3cd776ad-4fbb-4fdd-9b6d-ed2eb5b188e6",
+      "http": 201,
+      "msEnvio": 28058.2959,
+      "msRespuesta": 28494.9334,
+      "msEvento": 28495.5595
+    },
+    {
+      "i": 44,
+      "pedidoId": "788a0033-9ed4-47e2-8f5f-e72a2faca5af",
+      "http": 201,
+      "msEnvio": 28623.2167,
+      "msRespuesta": 29058.2118,
+      "msEvento": 29056.7699
+    },
+    {
+      "i": 45,
+      "pedidoId": "2bca89fc-895e-4549-bb74-b1a5bedd2571",
+      "http": 201,
+      "msEnvio": 29167.1449,
+      "msRespuesta": 29599.1936,
+      "msEvento": 29598.0759
+    },
+    {
+      "i": 46,
+      "pedidoId": "af4e9e0e-2d59-4dd8-8002-29eaea2123a7",
+      "http": 201,
+      "msEnvio": 29711.6888,
+      "msRespuesta": 30472.4122,
+      "msEvento": 30470.5017
+    },
+    {
+      "i": 47,
+      "pedidoId": "7ecceea8-16ab-4edf-a717-29e8c0a7ed10",
+      "http": 201,
+      "msEnvio": 30585.0587,
+      "msRespuesta": 31016.0753,
+      "msEvento": 31014.7229
+    },
+    {
+      "i": 48,
+      "pedidoId": "8df35698-92d4-480e-8eba-444db276cd76",
+      "http": 201,
+      "msEnvio": 31130.2776,
+      "msRespuesta": 31553.2154,
+      "msEvento": 31553.7852
+    },
+    {
+      "i": 49,
+      "pedidoId": "fb647659-cf9b-4d2f-b3a1-6f64cf235158",
+      "http": 201,
+      "msEnvio": 31676.1333,
+      "msRespuesta": 32112.4148,
+      "msEvento": 32110.8583
+    },
+    {
+      "i": 50,
+      "pedidoId": "627a7aed-2f89-46fe-924b-4f20693a5d42",
+      "http": 201,
+      "msEnvio": 32221.0379,
+      "msRespuesta": 32656.0208,
+      "msEvento": 32654.8396
+    },
+    {
+      "i": 51,
+      "pedidoId": "b42bf8b1-0b41-4837-bdec-5098a7d8d6b6",
+      "http": 201,
+      "msEnvio": 32764.6817,
+      "msRespuesta": 33181.0609,
+      "msEvento": 33179.5269
+    },
+    {
+      "i": 52,
+      "pedidoId": "e616d762-ba6b-4534-9fb9-23573ec27310",
+      "http": 201,
+      "msEnvio": 33296.3987,
+      "msRespuesta": 33734.219,
+      "msEvento": 33732.1104
+    },
+    {
+      "i": 53,
+      "pedidoId": "04105398-1894-4611-a055-37458a7cc157",
+      "http": 201,
+      "msEnvio": 33841.2834,
+      "msRespuesta": 34271.7555,
+      "msEvento": 34270.4136
+    },
+    {
+      "i": 54,
+      "pedidoId": "901230a1-4d40-49be-9fdc-4e8c0b388ae2",
+      "http": 201,
+      "msEnvio": 34372.1681,
+      "msRespuesta": 34825.216,
+      "msEvento": 34804.8284
+    },
+    {
+      "i": 55,
+      "pedidoId": "a489f169-14ea-49e7-b109-9c785a513b1c",
+      "http": 201,
+      "msEnvio": 34930.5565,
+      "msRespuesta": 35359.9232,
+      "msEvento": 35359.709
+    },
+    {
+      "i": 56,
+      "pedidoId": "a9100ef0-5847-4c0f-ab21-c77e6f3374ce",
+      "http": 201,
+      "msEnvio": 35459.9983,
+      "msRespuesta": 35897.1695,
+      "msEvento": 35896.0925
+    },
+    {
+      "i": 57,
+      "pedidoId": "08ae7c67-4774-4a08-961e-f6308236efce",
+      "http": 201,
+      "msEnvio": 36005.8394,
+      "msRespuesta": 36438.3468,
+      "msEvento": 36436.3194
+    },
+    {
+      "i": 58,
+      "pedidoId": "5525fa10-f315-471c-88d4-979e4b3d1e62",
+      "http": 201,
+      "msEnvio": 36550.1696,
+      "msRespuesta": 36982.5068,
+      "msEvento": 36981.5613
+    },
+    {
+      "i": 59,
+      "pedidoId": "f73d5af9-b8fa-4031-aacc-bd2aacf4d339",
+      "http": 201,
+      "msEnvio": 37093.3759,
+      "msRespuesta": 37532.6309,
+      "msEvento": 37832.4572
+    },
+    {
+      "i": 60,
+      "pedidoId": "d7ce7012-9787-4ff5-9df4-2cce20741ff8",
+      "http": 201,
+      "msEnvio": 37933.7053,
+      "msRespuesta": 38437.2529,
+      "msEvento": 38434.9237
+    },
+    {
+      "i": 61,
+      "pedidoId": "19b54690-0746-4de6-bc74-09cc07ce0961",
+      "http": 201,
+      "msEnvio": 38541.3367,
+      "msRespuesta": 38975.7926,
+      "msEvento": 38976.1518
+    },
+    {
+      "i": 62,
+      "pedidoId": "96c23b3a-5ace-41e1-903b-d112b42b8889",
+      "http": 201,
+      "msEnvio": 39098.8305,
+      "msRespuesta": 39523.2079,
+      "msEvento": 39844.1837
+    },
+    {
+      "i": 63,
+      "pedidoId": "8d589e06-542f-4b49-942e-283419ba5288",
+      "http": 201,
+      "msEnvio": 39947.3668,
+      "msRespuesta": 40383.6645,
+      "msEvento": 40383.3997
+    },
+    {
+      "i": 64,
+      "pedidoId": "c06cf2aa-9888-436d-a435-c1bb9837312a",
+      "http": 201,
+      "msEnvio": 40492.4032,
+      "msRespuesta": 40948.2726,
+      "msEvento": 40946.7645
+    },
+    {
+      "i": 65,
+      "pedidoId": "ec559102-09d7-4e27-8534-b91efa763464",
+      "http": 201,
+      "msEnvio": 41056.4456,
+      "msRespuesta": 41500.8334,
+      "msEvento": 41500.0945
+    },
+    {
+      "i": 66,
+      "pedidoId": "c385977f-ce50-4d77-aa92-8527d7d1828b",
+      "http": 201,
+      "msEnvio": 41601.9285,
+      "msRespuesta": 42061.8291,
+      "msEvento": 42060.3241
+    },
+    {
+      "i": 67,
+      "pedidoId": "f2061905-7d8f-4117-b4c1-b4980955518b",
+      "http": 201,
+      "msEnvio": 42164.0885,
+      "msRespuesta": 42607.7975,
+      "msEvento": 42608.2859
+    },
+    {
+      "i": 68,
+      "pedidoId": "625dada8-c19e-4a15-b681-27ade83793ee",
+      "http": 201,
+      "msEnvio": 42721.1851,
+      "msRespuesta": 43153.1165,
+      "msEvento": 43152.7207
+    },
+    {
+      "i": 69,
+      "pedidoId": "d1fca34b-8955-40be-9277-0d2efb6450cd",
+      "http": 201,
+      "msEnvio": 43266.0941,
+      "msRespuesta": 43702.0361,
+      "msEvento": 43700.1045
+    },
+    {
+      "i": 70,
+      "pedidoId": "35d40d1a-1edf-440f-8965-31fbb091c88a",
+      "http": 201,
+      "msEnvio": 43808.2558,
+      "msRespuesta": 44242.4094,
+      "msEvento": 44240.9086
+    },
+    {
+      "i": 71,
+      "pedidoId": "246463be-3a1a-4a59-b2a6-8df86f34f940",
+      "http": 201,
+      "msEnvio": 44353.2962,
+      "msRespuesta": 44790.9001,
+      "msEvento": 44787.3136
+    },
+    {
+      "i": 72,
+      "pedidoId": "81980cf9-c5a8-4f7f-9929-17d544ae2554",
+      "http": 201,
+      "msEnvio": 44898.1917,
+      "msRespuesta": 45668.5762,
+      "msEvento": 45667.5537
+    },
+    {
+      "i": 73,
+      "pedidoId": "31825683-4494-4171-8930-0a21d123b643",
+      "http": 201,
+      "msEnvio": 45770.2658,
+      "msRespuesta": 46205.6259,
+      "msEvento": 46205.1235
+    },
+    {
+      "i": 74,
+      "pedidoId": "4af33b49-218e-4c2d-9299-246134de77e7",
+      "http": 201,
+      "msEnvio": 46314.7682,
+      "msRespuesta": 46755.0159,
+      "msEvento": 46751.3112
+    },
+    {
+      "i": 75,
+      "pedidoId": "abc35e22-dfdd-44bd-a540-4246a22e1aeb",
+      "http": 201,
+      "msEnvio": 46856.0359,
+      "msRespuesta": 47289.008,
+      "msEvento": 47289.3904
+    },
+    {
+      "i": 76,
+      "pedidoId": "5f0340c9-02ed-45c9-adb0-0fa4b065f781",
+      "http": 201,
+      "msEnvio": 47401.3576,
+      "msRespuesta": 47840.001,
+      "msEvento": 47838.7637
+    },
+    {
+      "i": 77,
+      "pedidoId": "da339e9d-b6ad-4ae6-a8f7-ac85c8b9be0b",
+      "http": 201,
+      "msEnvio": 47946.9844,
+      "msRespuesta": 48379.3369,
+      "msEvento": 48379.8372
+    },
+    {
+      "i": 78,
+      "pedidoId": "5064478b-ced5-4ff9-ab3c-996d74b7fd7d",
+      "http": 201,
+      "msEnvio": 48494.4929,
+      "msRespuesta": 48927.462,
+      "msEvento": 48926.5837
+    },
+    {
+      "i": 79,
+      "pedidoId": "298781c3-f8a6-4d54-973c-1ec51df9639d",
+      "http": 201,
+      "msEnvio": 49038.0222,
+      "msRespuesta": 49474.0988,
+      "msEvento": 49473.2177
+    },
+    {
+      "i": 80,
+      "pedidoId": "b0cb9026-53ca-45e8-816e-fb5cf5872688",
+      "http": 201,
+      "msEnvio": 49583.1895,
+      "msRespuesta": 50015.245,
+      "msEvento": 50014.5603
+    },
+    {
+      "i": 81,
+      "pedidoId": "e684df80-c4b9-4f8e-8ad4-f2b135bc5bda",
+      "http": 201,
+      "msEnvio": 50127.3546,
+      "msRespuesta": 50560.8512,
+      "msEvento": 50560.1263
+    },
+    {
+      "i": 82,
+      "pedidoId": "1d0121bb-e1d4-4f88-a5b1-a08bff1b9498",
+      "http": 201,
+      "msEnvio": 50666.9583,
+      "msRespuesta": 51099.9892,
+      "msEvento": 51100.9353
+    },
+    {
+      "i": 83,
+      "pedidoId": "41a626db-a13b-4f99-8f70-5ed532c53ed1",
+      "http": 201,
+      "msEnvio": 51225.2183,
+      "msRespuesta": 51663.2767,
+      "msEvento": 51662.3148
+    },
+    {
+      "i": 84,
+      "pedidoId": "b7f235a1-143e-48ab-bfe6-bdf1195ff8da",
+      "http": 201,
+      "msEnvio": 51773.1551,
+      "msRespuesta": 52207.0146,
+      "msEvento": 52206.4401
+    },
+    {
+      "i": 85,
+      "pedidoId": "83608304-c017-420d-9f42-ce23bc1e938f",
+      "http": 201,
+      "msEnvio": 52314.5152,
+      "msRespuesta": 52750.9791,
+      "msEvento": 52747.448
+    },
+    {
+      "i": 86,
+      "pedidoId": "b4fb668c-e94e-488b-bb13-93050cba9205",
+      "http": 201,
+      "msEnvio": 52857.7537,
+      "msRespuesta": 53604.7792,
+      "msEvento": 53303.0923
+    },
+    {
+      "i": 87,
+      "pedidoId": "58f84d7d-a43b-47c5-8db3-f228bf293dac",
+      "http": 201,
+      "msEnvio": 53715.2106,
+      "msRespuesta": 54146.8714,
+      "msEvento": 54145.0635
+    },
+    {
+      "i": 88,
+      "pedidoId": "721d4d2f-0f27-4ef7-89b9-10b5389b1da0",
+      "http": 201,
+      "msEnvio": 54260.8594,
+      "msRespuesta": 54695.045,
+      "msEvento": 54694.376
+    },
+    {
+      "i": 89,
+      "pedidoId": "723d3b22-2828-40af-b410-439ced8f55fc",
+      "http": 201,
+      "msEnvio": 54804.2126,
+      "msRespuesta": 55237.0322,
+      "msEvento": 55237.345
+    },
+    {
+      "i": 90,
+      "pedidoId": "4cab7314-a8a0-4640-a75d-3cc90d8b21aa",
+      "http": 201,
+      "msEnvio": 55364.6983,
+      "msRespuesta": 55796.7338,
+      "msEvento": 55795.5443
+    },
+    {
+      "i": 91,
+      "pedidoId": "341e93e9-4e35-4b26-87fc-d28d61520bc8",
+      "http": 201,
+      "msEnvio": 55911.8286,
+      "msRespuesta": 56346.7934,
+      "msEvento": 56346.115
+    },
+    {
+      "i": 92,
+      "pedidoId": "ad889f53-d86a-45d1-971e-09c791276de4",
+      "http": 201,
+      "msEnvio": 56456.0437,
+      "msRespuesta": 56893.3217,
+      "msEvento": 56892.1916
+    },
+    {
+      "i": 93,
+      "pedidoId": "d81478a9-4672-4b59-9891-c8c64e41769b",
+      "http": 201,
+      "msEnvio": 56999.2591,
+      "msRespuesta": 57421.9947,
+      "msEvento": 57421.5589
+    },
+    {
+      "i": 94,
+      "pedidoId": "527d9162-1992-42a0-bcbf-48655c329474",
+      "http": 201,
+      "msEnvio": 57527.106,
+      "msRespuesta": 57959.2112,
+      "msEvento": 57958.4846
+    },
+    {
+      "i": 95,
+      "pedidoId": "09744957-828b-4f94-b90b-bf3d0c0c23a9",
+      "http": 201,
+      "msEnvio": 58072.8217,
+      "msRespuesta": 58508.9883,
+      "msEvento": 58505.4277
+    },
+    {
+      "i": 96,
+      "pedidoId": "3cda74f1-6ad5-462f-ba57-5cc401f3b9f5",
+      "http": 201,
+      "msEnvio": 58617.1991,
+      "msRespuesta": 59278.4302,
+      "msEvento": 59277.5512
+    },
+    {
+      "i": 97,
+      "pedidoId": "4e131174-4183-44c3-a98b-01647aac0a00",
+      "http": 201,
+      "msEnvio": 59378.5617,
+      "msRespuesta": 59815.5638,
+      "msEvento": 59814.2612
+    },
+    {
+      "i": 98,
+      "pedidoId": "0eab9702-b81a-4c91-a011-ef1fc0e043b8",
+      "http": 201,
+      "msEnvio": 59925.0198,
+      "msRespuesta": 60361.7872,
+      "msEvento": 60361.0441
+    },
+    {
+      "i": 99,
+      "pedidoId": "7611f0ad-3d03-45f2-a155-0a44c993dea1",
+      "http": 201,
+      "msEnvio": 60468.9814,
+      "msRespuesta": 60910.6383,
+      "msEvento": 60909.1541
+    },
+    {
+      "i": 100,
+      "pedidoId": "a817c29d-db3f-4af1-afaa-293745124297",
+      "http": 201,
+      "msEnvio": 61013.5831,
+      "msRespuesta": 61442.3219,
+      "msEvento": 61440.8504
+    }
+  ],
+  "limpieza": {
+    "borradas": {
+      "mesa": 1,
+      "pago": 0,
+      "pedido": 100,
+      "cliente": 1,
+      "comensal": 0,
+      "mozo_mesa": 0,
+      "pedido_item": 100,
+      "sesion_mesa": 1,
+      "llamado_mozo": 0,
+      "item_comensal": 0,
+      "pedido_edicion": 0,
+      "asignacion_mesa": 0,
+      "pedido_item_mod": 0,
+      "pedido_edicion_item": 0,
+      "sesion_mesa_cliente": 1
+    },
+    "mesa_encontrada": true,
+    "clientes_candidatos": 1
+  }
+}
