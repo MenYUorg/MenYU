@@ -59,13 +59,18 @@ const dormir = (ms) => new Promise((r) => setTimeout(r, ms))
 const inicio = new Date().toISOString()
 
 async function http(metodo, url, { token, body, headers } = {}) {
-  const res = await fetch(url, {
-    method: metodo,
-    headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}), ...headers },
-    body: body === undefined ? undefined : JSON.stringify(body),
-    signal: AbortSignal.timeout(TIMEOUT_HTTP_MS),
-  })
-  return { status: res.status, body: await res.json().catch(() => null) }
+  try {
+    const res = await fetch(url, {
+      method: metodo,
+      headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}), ...headers },
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal: AbortSignal.timeout(TIMEOUT_HTTP_MS),
+    })
+    return { status: res.status, body: await res.json().catch(() => null) }
+  } catch (err) {
+    // Solo el método y la ruta: el host y los parámetros pueden ser de la configuración.
+    throw new Error(`${metodo} ${new URL(url).pathname}: ${err.message}`)
+  }
 }
 
 function exigir(condicion, mensaje) {
