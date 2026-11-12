@@ -1,0 +1,792 @@
+{
+  "inicio": "2026-11-12T17:29:51.733Z",
+  "fin": "2026-11-12T17:31:11.106Z",
+  "sha": "560e81ed9d2c91b4cd611cb5d8ec4ce412127dfe",
+  "axe": "4.14.0",
+  "etiquetas": [
+    "wcag2a",
+    "wcag2aa",
+    "wcag21a",
+    "wcag21aa",
+    "wcag22a",
+    "wcag22aa"
+  ],
+  "navegador": "chrome",
+  "pantallas": [
+    {
+      "app": "web-auth",
+      "pantalla": "Ingresar",
+      "ruta": "/",
+      "rutaFinal": "/",
+      "incompletas": 0,
+      "reglasQuePasaron": 23,
+      "violaciones": 0
+    },
+    {
+      "app": "web-auth",
+      "pantalla": "Crear cuenta",
+      "ruta": "/crear-cuenta",
+      "rutaFinal": "/crear-cuenta",
+      "incompletas": 0,
+      "reglasQuePasaron": 23,
+      "violaciones": 0
+    },
+    {
+      "app": "web-auth",
+      "pantalla": "Olvidé la contraseña",
+      "ruta": "/olvide-contrasena",
+      "rutaFinal": "/olvide-contrasena",
+      "incompletas": 0,
+      "reglasQuePasaron": 17,
+      "violaciones": 0
+    },
+    {
+      "app": "web-auth",
+      "pantalla": "Privacidad",
+      "ruta": "/privacidad",
+      "rutaFinal": "/privacidad",
+      "incompletas": 0,
+      "reglasQuePasaron": 15,
+      "violaciones": 0
+    },
+    {
+      "app": "web-cliente",
+      "pantalla": "Discovery (inicio)",
+      "ruta": "/",
+      "rutaFinal": "/",
+      "incompletas": 1,
+      "reglasQuePasaron": 25,
+      "violaciones": 1
+    },
+    {
+      "app": "web-cliente",
+      "pantalla": "Ficha del restaurante",
+      "ruta": "/restaurante/90c13073-cfe4-4f6b-98e5-9c2b8ded1ae0",
+      "rutaFinal": "/restaurante/90c13073-cfe4-4f6b-98e5-9c2b8ded1ae0",
+      "incompletas": 0,
+      "reglasQuePasaron": 14,
+      "violaciones": 1
+    },
+    {
+      "app": "web-cliente",
+      "pantalla": "Carta (solo lectura)",
+      "ruta": "/restaurante/90c13073-cfe4-4f6b-98e5-9c2b8ded1ae0/carta",
+      "rutaFinal": "/restaurante/90c13073-cfe4-4f6b-98e5-9c2b8ded1ae0/carta",
+      "incompletas": 1,
+      "reglasQuePasaron": 19,
+      "violaciones": 1
+    },
+    {
+      "app": "web-cliente",
+      "pantalla": "Ingreso a la mesa (PIN)",
+      "ruta": "/restaurante/90c13073-cfe4-4f6b-98e5-9c2b8ded1ae0/mesa",
+      "rutaFinal": "/restaurante/90c13073-cfe4-4f6b-98e5-9c2b8ded1ae0/mesa",
+      "incompletas": 0,
+      "reglasQuePasaron": 19,
+      "violaciones": 1
+    },
+    {
+      "app": "web-cliente",
+      "pantalla": "Menú de la mesa",
+      "ruta": "/menu",
+      "error": "fase de mesa salteada (sin la base)"
+    },
+    {
+      "app": "web-cliente",
+      "pantalla": "Detalle del plato",
+      "ruta": "/menu/b358e646-c2c3-4732-8cae-11f3b2442565",
+      "error": "fase de mesa salteada (sin la base)"
+    },
+    {
+      "app": "web-cliente",
+      "pantalla": "Carrito",
+      "ruta": "/carrito",
+      "error": "fase de mesa salteada (sin la base)"
+    },
+    {
+      "app": "web-cliente",
+      "pantalla": "Mis pedidos",
+      "ruta": "/pedidos",
+      "error": "fase de mesa salteada (sin la base)"
+    },
+    {
+      "app": "web-cliente",
+      "pantalla": "Pagar",
+      "ruta": "/pagar",
+      "error": "fase de mesa salteada (sin la base)"
+    },
+    {
+      "app": "web-admin",
+      "pantalla": "Dashboard",
+      "ruta": "/admin/dashboard",
+      "rutaFinal": "/admin/dashboard",
+      "incompletas": 1,
+      "reglasQuePasaron": 20,
+      "violaciones": 1
+    },
+    {
+      "app": "web-admin",
+      "pantalla": "Menú",
+      "ruta": "/admin/menu",
+      "rutaFinal": "/admin/menu",
+      "incompletas": 0,
+      "reglasQuePasaron": 27,
+      "violaciones": 1
+    },
+    {
+      "app": "web-admin",
+      "pantalla": "Mesas",
+      "ruta": "/admin/tables",
+      "rutaFinal": "/admin/tables",
+      "incompletas": 0,
+      "reglasQuePasaron": 20,
+      "violaciones": 2
+    },
+    {
+      "app": "web-admin",
+      "pantalla": "Pedidos",
+      "ruta": "/admin/pedidos",
+      "rutaFinal": "/admin/dashboard",
+      "error": "redirigió a /admin/dashboard"
+    },
+    {
+      "app": "web-admin",
+      "pantalla": "Personal",
+      "ruta": "/admin/mozos",
+      "rutaFinal": "/admin/mozos",
+      "incompletas": 0,
+      "reglasQuePasaron": 20,
+      "violaciones": 1
+    },
+    {
+      "app": "web-admin",
+      "pantalla": "Pagos",
+      "ruta": "/admin/pagos",
+      "rutaFinal": "/admin/pagos",
+      "incompletas": 0,
+      "reglasQuePasaron": 20,
+      "violaciones": 1
+    },
+    {
+      "app": "web-admin",
+      "pantalla": "Reportes",
+      "ruta": "/admin/reportes",
+      "rutaFinal": "/admin/reportes",
+      "incompletas": 0,
+      "reglasQuePasaron": 20,
+      "violaciones": 1
+    },
+    {
+      "app": "web-admin",
+      "pantalla": "Auditoría",
+      "ruta": "/admin/auditoria",
+      "rutaFinal": "/admin/auditoria",
+      "incompletas": 0,
+      "reglasQuePasaron": 22,
+      "violaciones": 1
+    },
+    {
+      "app": "web-admin",
+      "pantalla": "Historial de sesiones",
+      "ruta": "/admin/historial",
+      "rutaFinal": "/admin/dashboard",
+      "error": "redirigió a /admin/dashboard"
+    },
+    {
+      "app": "web-admin",
+      "pantalla": "Marca",
+      "ruta": "/admin/marca",
+      "rutaFinal": "/admin/marca",
+      "incompletas": 0,
+      "reglasQuePasaron": 25,
+      "violaciones": 1
+    },
+    {
+      "app": "web-admin",
+      "pantalla": "Asistente",
+      "ruta": "/admin/asistente",
+      "rutaFinal": "/admin/asistente",
+      "incompletas": 0,
+      "reglasQuePasaron": 27,
+      "violaciones": 1
+    },
+    {
+      "app": "web-staff",
+      "pantalla": "Selector de vista",
+      "ruta": "/selector",
+      "rutaFinal": "/selector",
+      "incompletas": 1,
+      "reglasQuePasaron": 12,
+      "violaciones": 1
+    },
+    {
+      "app": "web-staff",
+      "pantalla": "Cocina",
+      "ruta": "/cocina",
+      "rutaFinal": "/cocina",
+      "incompletas": 1,
+      "reglasQuePasaron": 11,
+      "violaciones": 0
+    },
+    {
+      "app": "web-staff",
+      "pantalla": "Mozo: mesas",
+      "ruta": "/mozo/mesas",
+      "rutaFinal": "/mozo/mesas",
+      "incompletas": 1,
+      "reglasQuePasaron": 11,
+      "violaciones": 2
+    },
+    {
+      "app": "web-staff",
+      "pantalla": "Mozo: pedidos",
+      "ruta": "/mozo/pedidos",
+      "rutaFinal": "/mozo/pedidos",
+      "incompletas": 1,
+      "reglasQuePasaron": 12,
+      "violaciones": 2
+    },
+    {
+      "app": "web-staff",
+      "pantalla": "Mozo: toma de pedidos",
+      "ruta": "/mozo/toma-pedidos",
+      "rutaFinal": "/mozo/toma-pedidos",
+      "incompletas": 1,
+      "reglasQuePasaron": 11,
+      "violaciones": 2
+    },
+    {
+      "app": "web-staff",
+      "pantalla": "Mozo: pagos",
+      "ruta": "/mozo/pagos",
+      "rutaFinal": "/mozo/pagos",
+      "incompletas": 0,
+      "reglasQuePasaron": 11,
+      "violaciones": 2
+    },
+    {
+      "app": "web-staff",
+      "pantalla": "Mozo: historial",
+      "ruta": "/mozo/historial",
+      "rutaFinal": "/mozo/historial",
+      "incompletas": 0,
+      "reglasQuePasaron": 14,
+      "violaciones": 2
+    }
+  ],
+  "observaciones": [
+    {
+      "app": "web-cliente",
+      "pantalla": "Discovery (inicio)",
+      "regla": "color-contrast",
+      "gravedad": "serious",
+      "criterios": [
+        "1.4.3"
+      ],
+      "nivel": "AA",
+      "elementos": 9,
+      "ayuda": "Elements must meet minimum color contrast ratio thresholds",
+      "destinos": [
+        ".whitespace-nowrap.after\\:inset-x-\\[-2px\\].after\\:inset-y-\\[-8px\\]:nth-child(2)",
+        "a[href=\"/restaurante/r-001\"] > span:nth-child(1) > span[aria-hidden=\"true\"]",
+        "a[href=\"/restaurante/r-003\"] > span:nth-child(1) > span[aria-hidden=\"true\"]",
+        "a[href=\"/restaurante/r-002\"] > span:nth-child(1) > span[aria-hidden=\"true\"]",
+        "a:nth-child(4) > span:nth-child(1) > span[aria-hidden=\"true\"]"
+      ]
+    },
+    {
+      "app": "web-cliente",
+      "pantalla": "Ficha del restaurante",
+      "regla": "color-contrast",
+      "gravedad": "serious",
+      "criterios": [
+        "1.4.3"
+      ],
+      "nivel": "AA",
+      "elementos": 3,
+      "ayuda": "Elements must meet minimum color contrast ratio thresholds",
+      "destinos": [
+        ".whitespace-nowrap.after\\:inset-x-\\[-2px\\].after\\:inset-y-\\[-8px\\]:nth-child(2)",
+        "span > span",
+        ".hover\\:\\!bg-\\[\\#d34a30\\]"
+      ]
+    },
+    {
+      "app": "web-cliente",
+      "pantalla": "Carta (solo lectura)",
+      "regla": "color-contrast",
+      "gravedad": "serious",
+      "criterios": [
+        "1.4.3"
+      ],
+      "nivel": "AA",
+      "elementos": 1,
+      "ayuda": "Elements must meet minimum color contrast ratio thresholds",
+      "destinos": [
+        ".group > div:nth-child(2) > div > span"
+      ]
+    },
+    {
+      "app": "web-cliente",
+      "pantalla": "Ingreso a la mesa (PIN)",
+      "regla": "color-contrast",
+      "gravedad": "serious",
+      "criterios": [
+        "1.4.3"
+      ],
+      "nivel": "AA",
+      "elementos": 4,
+      "ayuda": "Elements must meet minimum color contrast ratio thresholds",
+      "destinos": [
+        ".whitespace-nowrap.after\\:inset-x-\\[-2px\\].after\\:inset-y-\\[-8px\\]:nth-child(2)",
+        "span > span",
+        "small",
+        ".hover\\:\\!bg-\\[\\#d34a30\\]"
+      ]
+    },
+    {
+      "app": "web-admin",
+      "pantalla": "Dashboard",
+      "regla": "color-contrast",
+      "gravedad": "serious",
+      "criterios": [
+        "1.4.3"
+      ],
+      "nivel": "AA",
+      "elementos": 31,
+      "ayuda": "Elements must meet minimum color contrast ratio thresholds",
+      "destinos": [
+        ".w-full > .truncate",
+        "nav > div:nth-child(1) > p",
+        ".active",
+        "div:nth-child(2) > p",
+        "div:nth-child(3) > p"
+      ]
+    },
+    {
+      "app": "web-admin",
+      "pantalla": "Menú",
+      "regla": "color-contrast",
+      "gravedad": "serious",
+      "criterios": [
+        "1.4.3"
+      ],
+      "nivel": "AA",
+      "elementos": 15,
+      "ayuda": "Elements must meet minimum color contrast ratio thresholds",
+      "destinos": [
+        ".w-full > .truncate",
+        "nav > div:nth-child(1) > p",
+        "nav > div:nth-child(2) > p",
+        ".active",
+        "div:nth-child(3) > p"
+      ]
+    },
+    {
+      "app": "web-admin",
+      "pantalla": "Mesas",
+      "regla": "button-name",
+      "gravedad": "critical",
+      "criterios": [
+        "4.1.2"
+      ],
+      "nivel": "A",
+      "elementos": 1,
+      "ayuda": "Buttons must have discernible text",
+      "destinos": [
+        "div:nth-child(2) > button:nth-child(1)"
+      ]
+    },
+    {
+      "app": "web-admin",
+      "pantalla": "Mesas",
+      "regla": "color-contrast",
+      "gravedad": "serious",
+      "criterios": [
+        "1.4.3"
+      ],
+      "nivel": "AA",
+      "elementos": 19,
+      "ayuda": "Elements must meet minimum color contrast ratio thresholds",
+      "destinos": [
+        ".w-full > .truncate",
+        "nav > div:nth-child(1) > p",
+        ".active",
+        "div:nth-child(2) > p",
+        "div:nth-child(3) > p"
+      ]
+    },
+    {
+      "app": "web-admin",
+      "pantalla": "Personal",
+      "regla": "color-contrast",
+      "gravedad": "serious",
+      "criterios": [
+        "1.4.3"
+      ],
+      "nivel": "AA",
+      "elementos": 14,
+      "ayuda": "Elements must meet minimum color contrast ratio thresholds",
+      "destinos": [
+        ".w-full > .truncate",
+        "nav > div:nth-child(1) > p",
+        "div:nth-child(2) > p",
+        "div:nth-child(3) > p",
+        ".active"
+      ]
+    },
+    {
+      "app": "web-admin",
+      "pantalla": "Pagos",
+      "regla": "color-contrast",
+      "gravedad": "serious",
+      "criterios": [
+        "1.4.3"
+      ],
+      "nivel": "AA",
+      "elementos": 16,
+      "ayuda": "Elements must meet minimum color contrast ratio thresholds",
+      "destinos": [
+        ".w-full > .truncate",
+        "nav > div:nth-child(1) > p",
+        ".active",
+        "div:nth-child(2) > p",
+        "div:nth-child(3) > p"
+      ]
+    },
+    {
+      "app": "web-admin",
+      "pantalla": "Reportes",
+      "regla": "color-contrast",
+      "gravedad": "serious",
+      "criterios": [
+        "1.4.3"
+      ],
+      "nivel": "AA",
+      "elementos": 17,
+      "ayuda": "Elements must meet minimum color contrast ratio thresholds",
+      "destinos": [
+        ".w-full > .truncate",
+        "nav > div:nth-child(1) > p",
+        "div:nth-child(2) > p",
+        "div:nth-child(3) > p",
+        "nav > div:nth-child(4) > p"
+      ]
+    },
+    {
+      "app": "web-admin",
+      "pantalla": "Auditoría",
+      "regla": "color-contrast",
+      "gravedad": "serious",
+      "criterios": [
+        "1.4.3"
+      ],
+      "nivel": "AA",
+      "elementos": 13,
+      "ayuda": "Elements must meet minimum color contrast ratio thresholds",
+      "destinos": [
+        ".w-full > .truncate",
+        "nav > div:nth-child(1) > p",
+        "div:nth-child(2) > p",
+        "div:nth-child(3) > p",
+        "nav > div:nth-child(4) > p"
+      ]
+    },
+    {
+      "app": "web-admin",
+      "pantalla": "Marca",
+      "regla": "color-contrast",
+      "gravedad": "serious",
+      "criterios": [
+        "1.4.3"
+      ],
+      "nivel": "AA",
+      "elementos": 14,
+      "ayuda": "Elements must meet minimum color contrast ratio thresholds",
+      "destinos": [
+        ".text-left > .truncate",
+        "nav > div:nth-child(1) > p",
+        "nav > div:nth-child(2) > p",
+        "nav > div:nth-child(3) > p",
+        "nav > div:nth-child(4) > p"
+      ]
+    },
+    {
+      "app": "web-admin",
+      "pantalla": "Asistente",
+      "regla": "color-contrast",
+      "gravedad": "serious",
+      "criterios": [
+        "1.4.3"
+      ],
+      "nivel": "AA",
+      "elementos": 14,
+      "ayuda": "Elements must meet minimum color contrast ratio thresholds",
+      "destinos": [
+        ".text-left > .truncate",
+        "nav > div:nth-child(1) > p",
+        "nav > div:nth-child(2) > p",
+        "div:nth-child(3) > p",
+        "nav > div:nth-child(4) > p"
+      ]
+    },
+    {
+      "app": "web-staff",
+      "pantalla": "Selector de vista",
+      "regla": "color-contrast",
+      "gravedad": "serious",
+      "criterios": [
+        "1.4.3"
+      ],
+      "nivel": "AA",
+      "elementos": 2,
+      "ayuda": "Elements must meet minimum color contrast ratio thresholds",
+      "destinos": [
+        "button:nth-child(1) > p",
+        "main > div > p"
+      ]
+    },
+    {
+      "app": "web-staff",
+      "pantalla": "Mozo: mesas",
+      "regla": "button-name",
+      "gravedad": "critical",
+      "criterios": [
+        "4.1.2"
+      ],
+      "nivel": "A",
+      "elementos": 1,
+      "ayuda": "Buttons must have discernible text",
+      "destinos": [
+        "button"
+      ]
+    },
+    {
+      "app": "web-staff",
+      "pantalla": "Mozo: mesas",
+      "regla": "color-contrast",
+      "gravedad": "serious",
+      "criterios": [
+        "1.4.3"
+      ],
+      "nivel": "AA",
+      "elementos": 6,
+      "ayuda": "Elements must meet minimum color contrast ratio thresholds",
+      "destinos": [
+        "div:nth-child(5) > span:nth-child(1)",
+        "div:nth-child(7) > div:nth-child(2)",
+        "main > div > div:nth-child(1) > div:nth-child(2) > span",
+        "div:nth-child(2) > div:nth-child(2) > span",
+        "div:nth-child(3) > div:nth-child(1) > div > span"
+      ]
+    },
+    {
+      "app": "web-staff",
+      "pantalla": "Mozo: pedidos",
+      "regla": "button-name",
+      "gravedad": "critical",
+      "criterios": [
+        "4.1.2"
+      ],
+      "nivel": "A",
+      "elementos": 1,
+      "ayuda": "Buttons must have discernible text",
+      "destinos": [
+        "header > button:nth-child(3)"
+      ]
+    },
+    {
+      "app": "web-staff",
+      "pantalla": "Mozo: pedidos",
+      "regla": "color-contrast",
+      "gravedad": "serious",
+      "criterios": [
+        "1.4.3"
+      ],
+      "nivel": "AA",
+      "elementos": 5,
+      "ayuda": "Elements must meet minimum color contrast ratio thresholds",
+      "destinos": [
+        "div:nth-child(5) > span:nth-child(1)",
+        "div:nth-child(9) > div:nth-child(2)",
+        "div > div > div:nth-child(1) > div:nth-child(2) > div:nth-child(1) > div:nth-child(1) > span",
+        "div > div > div:nth-child(1) > div:nth-child(2) > div:nth-child(2) > div:nth-child(1) > span",
+        "div > div > div:nth-child(1) > div:nth-child(2) > div:nth-child(3) > div:nth-child(1) > span"
+      ]
+    },
+    {
+      "app": "web-staff",
+      "pantalla": "Mozo: toma de pedidos",
+      "regla": "button-name",
+      "gravedad": "critical",
+      "criterios": [
+        "4.1.2"
+      ],
+      "nivel": "A",
+      "elementos": 1,
+      "ayuda": "Buttons must have discernible text",
+      "destinos": [
+        "button"
+      ]
+    },
+    {
+      "app": "web-staff",
+      "pantalla": "Mozo: toma de pedidos",
+      "regla": "color-contrast",
+      "gravedad": "serious",
+      "criterios": [
+        "1.4.3"
+      ],
+      "nivel": "AA",
+      "elementos": 6,
+      "ayuda": "Elements must meet minimum color contrast ratio thresholds",
+      "destinos": [
+        "div:nth-child(5) > span:nth-child(1)",
+        "div:nth-child(7) > div:nth-child(2)",
+        "div:nth-child(1) > div:nth-child(2) > span",
+        "div:nth-child(2) > div:nth-child(2) > span",
+        "div:nth-child(3) > div:nth-child(1) > span:nth-child(2)"
+      ]
+    },
+    {
+      "app": "web-staff",
+      "pantalla": "Mozo: pagos",
+      "regla": "button-name",
+      "gravedad": "critical",
+      "criterios": [
+        "4.1.2"
+      ],
+      "nivel": "A",
+      "elementos": 1,
+      "ayuda": "Buttons must have discernible text",
+      "destinos": [
+        "button"
+      ]
+    },
+    {
+      "app": "web-staff",
+      "pantalla": "Mozo: pagos",
+      "regla": "color-contrast",
+      "gravedad": "serious",
+      "criterios": [
+        "1.4.3"
+      ],
+      "nivel": "AA",
+      "elementos": 2,
+      "ayuda": "Elements must meet minimum color contrast ratio thresholds",
+      "destinos": [
+        "div:nth-child(5) > span:nth-child(1)",
+        "div:nth-child(7) > div:nth-child(2)"
+      ]
+    },
+    {
+      "app": "web-staff",
+      "pantalla": "Mozo: historial",
+      "regla": "button-name",
+      "gravedad": "critical",
+      "criterios": [
+        "4.1.2"
+      ],
+      "nivel": "A",
+      "elementos": 1,
+      "ayuda": "Buttons must have discernible text",
+      "destinos": [
+        "header > button"
+      ]
+    },
+    {
+      "app": "web-staff",
+      "pantalla": "Mozo: historial",
+      "regla": "color-contrast",
+      "gravedad": "serious",
+      "criterios": [
+        "1.4.3"
+      ],
+      "nivel": "AA",
+      "elementos": 7,
+      "ayuda": "Elements must meet minimum color contrast ratio thresholds",
+      "destinos": [
+        "div:nth-child(5) > span:nth-child(1)",
+        "div:nth-child(7) > div:nth-child(2)",
+        "button:nth-child(1)",
+        "button:nth-child(2)",
+        "div:nth-child(1) > button:nth-child(3)"
+      ]
+    }
+  ],
+  "totales": {
+    "observaciones": 25,
+    "elementos": 204,
+    "porCriterio": [
+      {
+        "clave": "1.4.3",
+        "observaciones": 19,
+        "elementos": 198,
+        "reglas": [
+          "color-contrast"
+        ],
+        "pantallas": 19
+      },
+      {
+        "clave": "4.1.2",
+        "observaciones": 6,
+        "elementos": 6,
+        "reglas": [
+          "button-name"
+        ],
+        "pantallas": 6
+      }
+    ],
+    "porGravedad": [
+      {
+        "clave": "critical",
+        "observaciones": 6,
+        "elementos": 6,
+        "reglas": [
+          "button-name"
+        ],
+        "pantallas": 6
+      },
+      {
+        "clave": "serious",
+        "observaciones": 19,
+        "elementos": 198,
+        "reglas": [
+          "color-contrast"
+        ],
+        "pantallas": 19
+      }
+    ],
+    "porApp": [
+      {
+        "clave": "web-admin",
+        "observaciones": 10,
+        "elementos": 154,
+        "reglas": [
+          "button-name",
+          "color-contrast"
+        ],
+        "pantallas": 9
+      },
+      {
+        "clave": "web-cliente",
+        "observaciones": 4,
+        "elementos": 17,
+        "reglas": [
+          "color-contrast"
+        ],
+        "pantallas": 4
+      },
+      {
+        "clave": "web-staff",
+        "observaciones": 11,
+        "elementos": 33,
+        "reglas": [
+          "button-name",
+          "color-contrast"
+        ],
+        "pantallas": 6
+      }
+    ]
+  }
+}
