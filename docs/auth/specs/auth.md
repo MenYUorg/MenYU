@@ -287,14 +287,14 @@ Entregas (ver Decisiones de la planificación de la Fase 4):
 | `GET` y `PATCH /restaurantes/:id` | OWNER, GERENTE. `direccion` y `nombreSeccionRecomendados`: solo OWNER |
 | Logo del restaurante | OWNER |
 | `POST /mesas`, `GET`/`PATCH /mesas/:id`, `regenerar-qr`, `pin` | OWNER, GERENTE |
-| `GET /mesas` | OWNER, GERENTE, JEFE_SALON, MOZO |
+| `GET /mesas` | OWNER, GERENTE, JEFE_SALON, MOZO. Filtro por mozo (#357, solo de vista, no de seguridad): un MOZO ve las mesas que tiene asignadas en el turno abierto más las sin asignar; OWNER, GERENTE y JEFE_SALON ven todas |
 | `DELETE /mesas/:id` | OWNER |
 | Ítems, categorías, ingredientes (con la imagen, los ingredientes de un ítem, el descuento, las clasificaciones y los datos del plato para el asistente) | OWNER, GERENTE. `DELETE /items/:id` y `DELETE /categorias/:id`: OWNER |
 | `POST`, `PATCH` y `DELETE /clasificaciones` (catálogo global) | OWNER o GERENTE de algún restaurante. Deuda: es un catálogo global |
 | `GET /mozos`, `GET /mozos/:id`, mesas asignadas (listar, asignar y quitar), llamados de hoy | OWNER, GERENTE |
 | `PATCH /mozos/:id` (solo nombre y teléfono) | OWNER |
 | ~~`DELETE /mozos/:id` (solo un mozo sin cuenta: 409 si tiene `usuarioId`)~~ | ~~OWNER~~. La Fase 5 la borró (decisión 6): un perfil de mozo no se borra desde la app |
-| `GET /sessions/activas`, `pagadas` e `historial`, `POST /sessions/open-staff`, `mesa/:mesaId/cerrar` y `mesa/:mesaId/activa`, `PATCH /sessions/:id/cobro` | OWNER, GERENTE, JEFE_SALON, MOZO |
+| `GET /sessions/activas`, `pagadas` e `historial`, `POST /sessions/open-staff`, `mesa/:mesaId/cerrar` y `mesa/:mesaId/activa`, `PATCH /sessions/:id/cobro` | OWNER, GERENTE, JEFE_SALON, MOZO. En `GET /sessions/activas`, el mismo filtro por mozo que en `GET /mesas` (#357, solo de vista): un MOZO ve las sesiones de las mesas que tiene asignadas en el turno abierto más las sin asignar; OWNER, GERENTE y JEFE_SALON ven todas |
 | `GET /payments/sesiones`, `POST /payments/confirmar-efectivo` | OWNER, GERENTE, JEFE_SALON, MOZO |
 | `GET /payments/requieren-revision?restauranteId=` (solo lectura) | OWNER, GERENTE. Los pagos de Mercado Pago que el webhook marcó para revisión, hasta 200 y más nuevos primero |
 | `GET /payments/mercadopago/oauth/conectar` | OWNER, GERENTE. El `state` lleva el `usuarioId` |

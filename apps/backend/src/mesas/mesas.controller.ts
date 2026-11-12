@@ -9,8 +9,8 @@ import { CreateMesaDto } from './dto/create-mesa.dto'
 import { UpdateMesaDto } from './dto/update-mesa.dto'
 import { CambiarPinDto } from './dto/cambiar-pin.dto'
 
-// OWNER y GERENTE del restaurante (borrar, solo OWNER); el listado también lo ve el salón. En las rutas de una
-// mesa, el service pide el rol.
+// OWNER y GERENTE del restaurante (borrar, solo OWNER); el listado también lo ve el salón (un MOZO, solo las mesas
+// que tiene asignadas en el turno abierto más las sin asignar). En las rutas de una mesa, el service pide el rol.
 @Controller('mesas')
 export class MesasController {
   constructor(private readonly mesas: MesasService) {}
@@ -24,8 +24,8 @@ export class MesasController {
 
   @Get()
   @RequiereRolEn({ query: 'restauranteId' }, ...SALON)
-  findAll(@Query('restauranteId') restauranteId: string) {
-    return this.mesas.findAll(restauranteId)
+  findAll(@Query('restauranteId') restauranteId: string, @UsuarioActual() usuario: UsuarioAutenticado) {
+    return this.mesas.findAll(restauranteId, usuario)
   }
 
   @Get(':id')
