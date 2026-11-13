@@ -20,6 +20,9 @@ interface BarraBusquedaProps {
   cantidadDePlatos: number
 }
 
+/** Cuánto se espera sin que se escriba nada antes de anunciar cuántos platos quedaron. */
+export const MS_SIN_ESCRIBIR_PARA_ANUNCIAR = 600
+
 // Hay un solo filtro de dietas por pantalla: los ids son fijos.
 const ID_PANEL_DE_DIETAS = 'filtros-de-dieta'
 const ID_TITULO_DE_DIETAS = 'filtros-de-dieta-titulo'
@@ -33,15 +36,36 @@ export function BarraBusqueda({ buscar, onBuscar, clasificaciones, dietasActivas
   const [pendingDiets, setPendingDiets] = useState<Set<string>>(new Set())
   const dietRef = useRef<HTMLDivElement>(null)
   const botonDeDietasRef = useRef<HTMLButtonElement>(null)
+  const buscadorRef = useRef<HTMLInputElement>(null)
 
   // Al aplicar o limpiar las dietas la lista cambia sola: se anuncia cuántos platos quedan. Se compara con las dietas de la
   // vez anterior (y no con un "primera vez") para que StrictMode no anuncie al montar.
+  const ultimoAnuncio = useRef('')
   const dietasAnteriores = useRef(dietasActivas)
   useEffect(() => {
     if (dietasAnteriores.current === dietasActivas) return
     dietasAnteriores.current = dietasActivas
-    anunciar(textoDePlatos(cantidadDePlatos))
+    ultimoAnuncio.current = textoDePlatos(cantidadDePlatos)
+    anunciar(ultimoAnuncio.current)
   }, [dietasActivas, cantidadDePlatos])
+
+  // Al escribir en el buscador la lista también cambia sola: se anuncia cuántos platos quedan, pero recién cuando se deja de
+  // escribir (un anuncio por letra no se entiende) y solo si el texto cambió (seguir escribiendo sin que cambie la cantidad
+  // no repite lo mismo; tampoco repite lo que acaba de anunciar el filtro de dietas, que limpia las dos cosas juntas).
+  const buscarAnterior = useRef(buscar)
+  const cantidadDePlatosActual = useRef(cantidadDePlatos)
+  cantidadDePlatosActual.current = cantidadDePlatos
+  useEffect(() => {
+    if (buscarAnterior.current === buscar) return
+    buscarAnterior.current = buscar
+    const espera = setTimeout(() => {
+      const texto = textoDePlatos(cantidadDePlatosActual.current)
+      if (texto === ultimoAnuncio.current) return
+      ultimoAnuncio.current = texto
+      anunciar(texto)
+    }, MS_SIN_ESCRIBIR_PARA_ANUNCIAR)
+    return () => clearTimeout(espera)
+  }, [buscar])
 
   // Esc cierra el desplegable y el foco vuelve al botón (el hook escucha siempre: solo se actúa si está abierto).
   useCerrarConEscape(() => {
@@ -98,11 +122,13 @@ export function BarraBusqueda({ buscar, onBuscar, clasificaciones, dietasActivas
       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
         {/* Search input */}
         <div style={{ flex: 1, position: 'relative', display: 'flex', alignItems: 'center' }}>
-          <span style={{ position: 'absolute', left: 12, fontSize: 14, color: CM.textMuted, pointerEvents: 'none' }}>🔍</span>
+          <span aria-hidden="true" style={{ position: 'absolute', left: 12, fontSize: 14, color: CM.textMuted, pointerEvents: 'none' }}>🔍</span>
           <input
+            ref={buscadorRef}
             value={buscar}
             onChange={(e) => onBuscar(e.target.value)}
             placeholder="Buscar platos..."
+            aria-label="Buscar platos"
             style={{
               width: '100%', height: 40, boxSizing: 'border-box',
               paddingLeft: 34, paddingRight: buscar ? 32 : 14, borderRadius: 999,
@@ -114,15 +140,18 @@ export function BarraBusqueda({ buscar, onBuscar, clasificaciones, dietasActivas
             onBlur={(e) => { e.target.style.borderColor = CM.border; e.target.style.background = CM.bg }}
           />
           {buscar && (
+            // Al borrar, este botón desaparece: el foco pasa al campo, para seguir escribiendo sin buscarlo.
             <button
-              onClick={() => onBuscar('')}
+              type="button"
+              onClick={() => { onBuscar(''); buscadorRef.current?.focus() }}
+              aria-label="Borrar búsqueda"
               style={{
                 position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
                 background: 'none', border: 'none', cursor: 'pointer',
                 color: '#9CA3AF', fontSize: 16, lineHeight: 1, padding: 0,
               }}
             >
-              ×
+              <span aria-hidden="true">×</span>
             </button>
           )}
         </div>

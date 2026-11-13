@@ -1,7 +1,10 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { api } from '../../services/api'
 import { useSessionStore } from '../../store/sessionStore'
 import { MenuHeader } from './MenuHeader'
+import userEvent from '@testing-library/user-event'
+import { axe } from '../../test/axe'
+import { useAnunciadorStore } from '../../utils/anunciador'
 
 vi.mock('../../services/api', () => ({
   api: { waiterCalls: { llamar: vi.fn() } },
@@ -110,7 +113,7 @@ describe('MenuHeader', () => {
 
       fireEvent.click(screen.getByRole('button', { name: /Mozo/ }))
 
-      expect(await screen.findByRole('button', { name: /¡En camino!/ })).toBeDisabled()
+      expect(await screen.findByRole('button', { name: '¡En camino!' })).toHaveAttribute('aria-disabled', 'true')
       expect(api.waiterCalls.llamar).toHaveBeenCalledWith('ses-1', 'jwt')
     })
 
@@ -229,6 +232,96 @@ describe('MenuHeader', () => {
 
       expect(botonDelMenu()).toHaveAttribute('aria-expanded', 'false')
       expect(screen.getByRole('banner')).not.toHaveAttribute('inert')
+    })
+  })
+
+  describe('el botón "Mozo" (accesibilidad)', () => {
+    const anunciado = () => useAnunciadorStore.getState().mensaje
+    const botonDelMozo = (nombre: string | RegExp = /Mozo/) => screen.getByRole('button', { name: nombre })
+
+    beforeEach(() => {
+      useAnunciadorStore.setState({ mensaje: '', numero: 0 })
+    })
+
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('al llamar anuncia "Avisamos al mozo"', async () => {
+      renderHeader()
+
+      fireEvent.click(botonDelMozo())
+
+      await screen.findByRole('button', { name: '¡En camino!' })
+      expect(anunciado()).toBe('Avisamos al mozo')
+    })
+
+    it('si falla, anuncia el error', async () => {
+      vi.mocked(api.waiterCalls.llamar).mockRejectedValue(new Error('sin conexión'))
+      renderHeader()
+
+      fireEvent.click(botonDelMozo())
+
+      await screen.findByRole('button', { name: 'Error' })
+      expect(anunciado()).toBe('No pudimos avisar al mozo. Probá de nuevo.')
+    })
+
+    it('no se deshabilita (`disabled`): se marca aria-disabled mientras no se puede volver a llamar', async () => {
+      renderHeader()
+
+      fireEvent.click(botonDelMozo())
+
+      const enCamino = await screen.findByRole('button', { name: '¡En camino!' })
+      expect(enCamino).not.toBeDisabled()
+      expect(enCamino).toHaveAttribute('aria-disabled', 'true')
+    })
+
+    it('quien lo tocó no pierde el foco', async () => {
+      const usuario = userEvent.setup()
+      renderHeader()
+
+      await usuario.click(botonDelMozo())
+
+      expect(await screen.findByRole('button', { name: '¡En camino!' })).toHaveFocus()
+    })
+
+    it('un toque de más, con el pedido ya hecho, no vuelve a llamar ni a anunciar', async () => {
+      renderHeader()
+      fireEvent.click(botonDelMozo())
+      const enCamino = await screen.findByRole('button', { name: '¡En camino!' })
+      const anuncios = useAnunciadorStore.getState().numero
+
+      fireEvent.click(enCamino)
+
+      expect(api.waiterCalls.llamar).toHaveBeenCalledTimes(1)
+      expect(useAnunciadorStore.getState().numero).toBe(anuncios)
+    })
+
+    it('a los 3 segundos vuelve a "Mozo" y se puede llamar de nuevo', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true })
+      renderHeader()
+      fireEvent.click(botonDelMozo())
+      await screen.findByRole('button', { name: '¡En camino!' })
+
+      await act(async () => { await vi.advanceTimersByTimeAsync(3000) })
+
+      expect(botonDelMozo(/Mozo/)).toHaveAttribute('aria-disabled', 'false')
+      fireEvent.click(botonDelMozo())
+      await screen.findByRole('button', { name: '¡En camino!' })
+      expect(api.waiterCalls.llamar).toHaveBeenCalledTimes(2)
+    })
+
+    it('el emoji de la campana es decorativo: el nombre es solo "Mozo"', () => {
+      renderHeader()
+
+      const boton = screen.getByRole('button', { name: 'Mozo' })
+      expect(boton.querySelector('[aria-hidden="true"]')).toHaveTextContent('🔔')
+    })
+
+    it('no tiene violaciones de accesibilidad (axe)', async () => {
+      const { container } = renderHeader()
+
+      expect(await axe(container)).toHaveNoViolations()
     })
   })
 })
