@@ -8,7 +8,7 @@ Registro, etapa por etapa, de lo que se hizo para la accesibilidad del flujo del
 | --- | --- |
 | 1. Base compartida | Hecha y revisada (13/11/2026). Quality gate de SonarCloud: passed. Con los ajustes de la revisión (etiqueta de `MensajePage`, foco del `<h1>`) |
 | 2. Formato de precios | Hecha (13/11/2026), a la espera de revisión |
-| 3. Bloqueantes (menú lateral y filtro de dietas) | Pendiente |
+| 3. Bloqueantes (menú lateral y filtro de dietas) | Hecha (13/11/2026), a la espera de revisión |
 | 4. Menú, detalle y discovery | Pendiente |
 | 5. Carrito, pedidos, PIN, nombre y pago | Pendiente |
 | 6. Contraste, foco visible y tamaños | Pendiente |
@@ -174,6 +174,12 @@ Pendiente: se anota cuando corra el PR.
 
 Se miró la carta en Edge real (390 px): "$ 1.000", "$ 1.010"… con el espacio no separable, sin cortes de línea ni cambios de alto en las tarjetas.
 
+### Ajustes tras la revisión (13/11/2026)
+
+- **El mensaje que copia «Copiar mensaje» lleva espacios comunes, no el no separable.** En `MensajePage`, el helper `fmt` que arma el texto pasó de `formatearPrecio` a `formatearPrecio(n).replace(/\xa0/g, ' ')`, sin tocar `formatearPrecio`. Así el texto que se pega en WhatsApp, un SMS u otra app no lleva un carácter que no se ve (U+00A0). El resto de los precios en pantalla sigue con el no separable. El `<textarea>` muestra el mismo texto que se copia, así que ahí también es un espacio común.
+- **Tests (+2, 927 → 929):** `copiar el mensaje` suma uno por modo. El de partes iguales (6500 entre 3: miles y centavos, los dos casos en los que `formatearPrecio` pone el U+00A0) comprueba que el texto del campo no lleva U+00A0, que contiene «$ 6.500» y «$ 2.166,67 cada uno» con espacio común, y que lo que se manda al portapapeles es exactamente ese texto, también sin U+00A0. El de por consumo comprueba lo mismo con los platos y con lo que falta asignar. Los 18 importes que los tests del mensaje esperaban con el escape `\u00a0` pasaron a espacio común.
+- **Se comprobó que los tests detectan el problema:** sin el reemplazo, fallan 7 tests de `MensajePage`, los 2 nuevos entre ellos. Con el reemplazo, pasan los 25 del archivo.
+
 ### Problemas y cómo se resolvieron
 
 - **Corrida completa con 565 tests rotos ("Invalid hook call", "Cannot read properties of null (reading 'useState')"), sin que tuviera que ver con los precios.** La causa fue la letra de la unidad: las corridas que fallaron arrancaron con el directorio actual como `c:/Users/…` (minúscula; la línea `RUN` de Vitest lo muestra) y las que pasaron como `C:/Users/…`. Con la letra en minúscula, Vite carga `react` por dos rutas distintas (la real de `node_modules`, que sale en mayúscula, y la de la raíz del proyecto) y hay dos copias de React. Los subconjuntos de tests pasaban, la corrida completa no, y de forma determinista. **Se corre con la ruta en mayúscula:** `cd "C:/Users/…/apps/web-cliente"` en Git Bash, o `Set-Location 'C:\Users\…'` en PowerShell.
@@ -182,9 +188,90 @@ Se miró la carta en Edge real (390 px): "$ 1.000", "$ 1.010"… con el espacio 
 
 ### Pendiente
 
-- **El mensaje para el grupo lleva espacios no separables.** El texto que copia "Copiar mensaje" en `MensajePage` ahora dice "Total de la cuenta: $ 6.500" con un U+00A0 entre el "$" y el número (el plan pedía pasar los 13 formateos a `formatearPrecio`). Se ve igual y WhatsApp lo muestra bien, pero conviene saber que es un carácter distinto del espacio si alguien lo pega en un SMS o en un lugar que no lo soporte. Si molesta, se cambia solo ahí por un espacio común.
 - Cómo lee cada lector los precios nuevos ("$ 9.000"): pendiente de la prueba en celulares (etapa 7). La auditoría lo dejó como "verificar en dispositivo".
 
 ### Recorridos con lector (C1 a C8)
 
 Desde esta etapa los precios de todos los recorridos tienen formato de importe ("$ 9.000" en vez de "$9000.00"). Qué dice el lector con eso depende del dispositivo y se mide en la etapa 7.
+
+
+---
+
+## Etapa 3: bloqueantes, menú lateral y filtro de dietas (13/11/2026)
+
+Estado: hecha, a la espera de revisión. Va sobre la rama de las etapas anteriores, que siguen sin commitear en el árbol (los ajustes de la etapa 1, la etapa 2 y su ajuste del mensaje).
+
+### Qué cambió
+
+**Menú lateral** (`components/menu/MenuDrawer.tsx`, `MenuHeader.tsx`, `MenuView.tsx`)
+
+- Las filas pasan de `<div onClick>` a botones de verdad, con el ícono oculto del lector: el nombre es "Mis pedidos", no "📋 Mis pedidos". "Mis puntos" (que dice "Próximamente" y no hace nada) queda como botón deshabilitado.
+- Cerrado, el panel está `inert`; abierto, es un `role="dialog"` modal con el nombre "Menú de {restaurante}": el foco entra al panel, `MenuView` vuelve inertes el encabezado y el `<main>`, Esc cierra (`useCerrarConEscape`) y el foco vuelve a "Abrir el menú", que ahora dice `aria-expanded` y `aria-haspopup="dialog"`.
+- **Fuera del plan:** un botón "Cerrar el menú", el primero del panel, invisible hasta que recibe el foco con teclado. Esc no existe en el celular con lector, y el fondo oscuro que cerraba el menú es un `<div>`: sin este botón, una persona con TalkBack o VoiceOver no podía cerrar el menú sin elegir una opción. El fondo pasó a `aria-hidden`.
+- `packages/ui/src/index.ts`: exporta `useCerrarConEscape` (una línea), para reusarlo sin duplicarlo.
+
+**Filtro de dietas** (`components/menu/BarraBusqueda.tsx`, `utils/textoDePlatos.ts`)
+
+- Las opciones son casillas de verdad dentro de un `<label>` que ocupa toda la fila, con el nombre "Vegano, 2 platos"; el recuadro que se ve es decorativo y muestra el foco con teclado.
+- El botón se llama "Filtrar por dietas" (o "…, 1 filtro activo"), con `aria-expanded` y `aria-controls`; el emoji, la flecha y el número visibles están ocultos del lector. Se usó "dietas" (plural) y no "dieta" como decía el plan, para que el nombre contenga el texto que se ve, "Dietas" (WCAG 2.5.3).
+- Al aplicar o limpiar: se anuncia cuántos platos quedan y el foco vuelve al botón. Esc cierra el panel y devuelve el foco.
+- `utils/textoDePlatos.ts` arma el texto del anuncio ("12 platos", "1 plato", "Ningún plato coincide") y lo va a reusar el buscador en la etapa 4.
+
+### Tests
+
+67 tests nuevos (929 → 996), en 56 archivos (54 → 56):
+
+- `components/menu/BarraBusqueda.spec.tsx` (nuevo, 26): el nombre del botón y que contenga "Dietas", el emoji y la flecha ocultos, "1 filtro activo" y "2 filtros activos", `aria-expanded` y `aria-controls`, las casillas con su nombre y estado (con un toque en la casilla, en el nombre y con Espacio), que partan de lo aplicado, el foco visible del recuadro, "Aplicar" y "Limpiar" (cierran, devuelven el foco y anuncian "2 platos", "1 plato", "Ningún plato coincide"), que no anuncien al montarse ni al marcar casillas, Esc (con el panel abierto y con el cerrado), tocar afuera y adentro, el anuncio en la región viva y axe (con la regla de "nombre contiene el texto visible" encendida).
+- `components/menu/MenuDrawer.spec.tsx` (+23): el diálogo y su nombre, inerte cerrado y no abierto, el foco al abrir, las filas como botones (con Enter), el ícono oculto, "Mis puntos" deshabilitado, Esc (abierto, cerrado y con otra tecla), "Cerrar el menú" (primero, solo visible con foco), el fondo `aria-hidden`, el foco que vuelve (con Esc, con el botón y abriendo y cerrando tres veces) y axe con y sin cuenta.
+- `components/menu/MenuHeader.spec.tsx` (+4): `aria-expanded`, `aria-haspopup` e `inerte`.
+- `pages/menu/ClienteMenuPage.spec.tsx` (+9): el menú abierto y cerrado sobre la pantalla entera (encabezado y contenido inertes, foco que entra y vuelve con Esc y con "Cerrar el menú"), "Mis pedidos" con Enter, el anuncio al aplicar y limpiar dietas (incluida la búsqueda) y axe con el menú abierto.
+- `utils/textoDePlatos.spec.ts` (nuevo, 5).
+- Se actualizaron 3 tests del filtro de dietas (de `CartaPage` y `ClienteMenuPage`) a las casillas y al nombre nuevo.
+
+### Cobertura
+
+| | Fin de la etapa 2 | Después |
+| --- | --- | --- |
+| web-cliente, archivos / tests | 54 / 927 (929 con el ajuste del mensaje) | 56 / 996 |
+| web-cliente, líneas | 92,44 % | 92,61 % |
+| web-cliente, ramas | 92,08 % | 92,31 % |
+| web-cliente, funciones | 82,88 % | 83,18 % |
+| `packages/ui` | 5 archivos, 44 tests | igual (se sumó solo una línea de re-exportación) |
+
+Por archivo (líneas / ramas): `BarraBusqueda.tsx` 100 / 100, `MenuDrawer.tsx` 100 / 98, `MenuHeader.tsx` 100 / 92,5, `MenuView.tsx` 95 / 96, `textoDePlatos.ts` 100 / 100. Lo que no se ejecuta en `BarraBusqueda` son los manejadores de hover y el botón "×" de borrar la búsqueda (etapa 4).
+
+### Suites que exige tocar `packages/ui`
+
+Con el cambio en `packages/ui/src/index.ts` se corrieron las suites de las apps que usan el paquete: `@menyu/ui` 5 archivos y 44 tests, `@menyu/web-admin` 49 archivos y 860 tests, `@menyu/web-staff` 14 archivos y 211 tests. Todas en verde.
+
+### Quality gate de SonarCloud
+
+Pendiente: se anota cuando corra el PR.
+
+### Verificación en el navegador
+
+En Edge real (390 px, API simulada, un Vite propio en el puerto 5199), recorrido con teclado:
+
+- Menú cerrado: el primer Tab cae en "Abrir el menú" y después en "Mozo", el buscador y "Filtrar por dietas"; el panel está `inert` y no recibe foco.
+- Menú abierto con Enter: el foco queda en el panel ("Menú de Lupulus Casa Matriz"), "Abrir el menú" dice `aria-expanded="true"`, el encabezado y el contenido están inertes, y Tab recorre "Cerrar el menú", "Iniciar sesión", "Crear cuenta gratis", "Etiquetar pedidos", "Mis pedidos" y "Pagar la cuenta" y vuelve a empezar sin salir del menú.
+- Esc: se cierra, se saca la inercia y el foco vuelve a "Abrir el menú". "Mis pedidos" con Enter lleva a la pantalla y el foco queda en su `<h1>`.
+- Dietas: Enter abre el panel (`aria-expanded="true"`), Tab llega a "Vegano, 2 platos" (casilla, con un contorno visible en el recuadro), Espacio la marca, "Aplicar" cierra, devuelve el foco al botón ("Filtrar por dietas, 1 filtro activo") y la región viva dice "2 platos". Esc con el panel abierto lo cierra y devuelve el foco.
+- En las capturas, el menú y el panel se ven como antes. Solo cambió el botón "Cerrar el menú" (visible únicamente con el foco del teclado): se movió de arriba, donde tapaba el nombre del restaurante, a abajo, sobre el pie.
+
+### Problemas y cómo se resolvieron
+
+- **El nombre de la casilla salía "Vegano , 1 plato".** La primera versión armaba el nombre con un `<span class="sr-only">` dentro del `<label>`; el motor de nombres (dom-accessibility-api, el de Testing Library) pone un espacio entre los dos `<span>`, y otros navegadores podrían concatenarlos distinto. Se fijó con `aria-label` en la casilla, que empieza con el texto visible.
+- **`useCerrarConEscape` no estaba exportado desde `@menyu/ui`.** Se agregó el re-export (y por eso se corrieron las suites de ui, admin y staff). El hook no tiene un parámetro "activo": escucha siempre, así que los dos usos (menú y dietas) comprueban que estén abiertos antes de actuar.
+- **El script que inserta bloques de tests duplicó un import** (`@testing-library/react` con otros nombres). Se unificó a mano y el spec quedó con un solo import.
+- **`pnpm typecheck` del monorepo falla en `@menyu/api`** ("Property 'turno' does not exist on type 'PrismaService'", en `src/test/fixture-de-caja.ts`): el cliente de Prisma generado en esta máquina es anterior a las tablas de caja que entraron con `main` (hace falta `prisma generate`). No tiene que ver con estos cambios: los otros 9 proyectos pasan, y web-cliente, web-admin, web-staff, web-auth, auth-client, ui y types, también por separado. No se corrió `prisma generate` (falla con EPERM si el backend está corriendo).
+- **Un heredoc de Bash se comió una barra invertida** de un script de cobertura (`/\\/g` llegó como `/\/g`) y la carpeta `coverage/` se borró antes de leerla; se repitió la medición de los archivos tocados con un script escrito sin pasar por Bash.
+
+### Pendiente
+
+- **Para decidir** (cosas hechas por criterio propio, explicadas en el plan): el botón "Cerrar el menú" (no estaba en el plan), las filas como botones y no enlaces, "Mis puntos" deshabilitado, y "dietas" en plural en el nombre del botón.
+- Las casillas del panel de dietas no tienen botón "Cerrar" propio: se cierra con Esc, tocando afuera, "Aplicar" o "Limpiar". Con lector en el celular el panel se cierra con "Aplicar" o "Limpiar" (no hay otro modo sin elegir): si no se quiere cambiar nada, "Aplicar" sin marcar casillas equivale a limpiar.
+- El buscador, el botón "×", los chips de sección, el 🔍 y el 🔔 siguen para la etapa 4.
+
+### Recorridos con lector (C1 a C8)
+
+Desde esta etapa: **C5 y C7 se pueden empezar** (a "Mis pedidos", "Etiquetar pedidos" y "Pagar la cuenta" se llega desde el menú lateral con lector y con teclado), y el filtro de dietas de **C1** se puede usar de punta a punta, con el anuncio de cuántos platos quedan. Siguen sin completarse por lo que falta de las etapas 4 y 5.

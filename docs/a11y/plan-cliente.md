@@ -136,7 +136,7 @@ Las rutas son relativas a `apps/web-cliente/src/` salvo que digan otra cosa.
 
 **Cerrada.** El quality gate de SonarCloud pasó (ver la bitácora). Falta el OK de Margarita para empezar la etapa 2.
 
-### Etapa 2. Formato de precios — hecha (13/11/2026), a la espera de revisión
+### Etapa 2. Formato de precios — hecha y revisada (13/11/2026)
 
 - [x] `utils/precio.ts`: `formatearPrecio` con `Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' })`: "$ 9.000" si el número es entero y "$ 1.234,50" si tiene centavos. Detalles que no estaban en el plan:
   - Se **redondea a centavos antes de decidir** si es entero: el ruido de la coma flotante (`3000.0000000004`) no se escribe "$ 3.000,00", y `2999.999` es "$ 3.000".
@@ -150,31 +150,39 @@ Las rutas son relativas a `apps/web-cliente/src/` salvo que digan otra cosa.
   - `pages/dividir/CantidadComensalesPage.tsx`: 1
   - `pages/etiquetado/EtiquetarPedidosPage.tsx`: 1
   - `pages/pago/PagarPage.tsx`: 4
+- [x] **El mensaje que copia «Copiar mensaje» lleva espacios comunes** (decisión de la revisión, 13/11): en `MensajePage`, `fmt` reemplaza el espacio no separable por uno común al armar el texto, sin tocar `formatearPrecio`. En pantalla, el resto de los precios sigue con el no separable. Dos tests verifican que ni el texto del campo ni lo que va al portapapeles tengan U+00A0.
 - [x] Tests de `formatearPrecio` (`utils/precio.spec.ts`, de 1 test a 19): enteros, cero, montos grandes, centavos, que 1.234,50 no pase a "$ 1.235", la parte de una cuenta dividida (6500 entre 3 = "$ 2.166,67"), el redondeo a centavos, negativos y el cero negativo, y que el espacio sea no separable. Se sumaron 3 tests en las pantallas: la cuenta dividida con centavos en `CantidadComensalesPage` (6000 entre 7) y en el mensaje de `MensajePage` (6500 entre 3), y un extra con centavos en el detalle.
 - [x] Las 57 cadenas "$9000.00" de los tests (en 10 specs; `precio.spec.ts` se reescribió entero) pasaron al formato nuevo:
   - Con los matchers que normalizan los espacios (`getByText`, `toHaveTextContent`) se escribe un espacio común: "$ 1.500". jest-dom y Testing Library convierten el U+00A0 del DOM en un espacio común antes de comparar.
   - Con las comparaciones exactas (`toBe`, `toEqual` sobre el `textContent` de la cuenta de `/pagar`, el monto por persona y el texto del mensaje para el grupo) se escribe el escape `\u00a0`, que se ve en el código ("$\u00a01.500"), no el carácter. El lint (`no-irregular-whitespace`) rechaza el espacio no separable suelto fuera de un string.
 
-### Etapa 3. Bloqueantes
+### Etapa 3. Bloqueantes — hecha (13/11/2026), a la espera de revisión
 
 **Menú lateral** (`components/menu/MenuDrawer.tsx`). Hoy "Mis pedidos" y "Etiquetar pedidos" solo se abren desde acá y no se pueden activar con lector.
 
-- [ ] Las opciones son `<div>` clickeables (líneas 9-16 y las filas de 188-191): pasan a ser botones o enlaces reales.
-- [ ] Cerrado (líneas 104-110), el panel se oculta solo con `transform`, así que se sigue leyendo primero y recibe foco. Cerrado tiene que quedar fuera del árbol de accesibilidad (`inert`).
-- [ ] Abierto, se comporta como diálogo: foco adentro, fondo inerte, cierre con Esc (`useCerrarConEscape`) y foco de vuelta a "Abrir el menú". **Ojo:** el fondo inerte no puede incluir al anunciador (por eso se pinta en el `<body>`, fuera de `#root`).
-- [ ] `components/menu/MenuHeader.tsx:137`: "Abrir el menú" expone si está expandido.
+- [x] Las opciones eran `<div>` clickeables (líneas 9-16 y las filas de 188-191): ahora son `<button type="button">` (`DrawerRow`). Se eligió botón y no enlace porque las filas son acciones que cierran el menú y navegan (`ir()`), como "Iniciar sesión". El ícono de cada fila es decorativo (`aria-hidden`): el nombre del botón es solo el texto ("Mis pedidos", no "📋 Mis pedidos"). Eso **adelanta** de la etapa 4 el ítem "ocultar 🏷️, 📋 y 💳 del menú lateral", porque la fila se reescribió acá y no tenía sentido tocarla dos veces.
+  - "Mis puntos" (que solo dice "Próximamente" y no hace nada) es un botón **deshabilitado**: el lector lo anuncia como no disponible, y no se puede activar ni cierra el menú.
+- [x] Cerrado (líneas 104-110), el panel se ocultaba solo con `transform`: ahora lleva `inert` cuando `abierto` es `false`, así sale del árbol de accesibilidad y no recibe foco. Verificado en Edge: con el menú cerrado, el primer Tab cae en "Abrir el menú" (antes, en "Iniciar sesión").
+- [x] Abierto, se comporta como diálogo:
+  - El panel tiene `role="dialog"`, `aria-modal="true"`, el nombre "Menú de {restaurante}" y `tabIndex={-1}`: al abrir, el foco entra al panel (el lector lo anuncia como diálogo con su nombre). Sin anillo en ese contenedor (no es un control; los botones de adentro conservan el suyo).
+  - Fondo inerte: `MenuView` pone `inert` al encabezado y al `<main>` mientras el menú está abierto. El anunciador no se ve afectado (está en el `<body>`, fuera de `#root`).
+  - Esc cierra, con `useCerrarConEscape`. El hook escucha siempre, así que se actúa solo si el menú está abierto. **Para reusarlo se exporta desde el índice de `@menyu/ui`** (una línea en `packages/ui/src/index.ts`: antes solo lo usaban componentes internos del paquete). Por tocar `packages/ui` se corrieron las suites de ui, web-admin y web-staff (ver la bitácora).
+  - El foco vuelve a "Abrir el menú" al cerrar: el menú recuerda qué tenía el foco al abrirse y se lo devuelve (si se cierra porque se eligió una opción y se navega a otra pantalla, el foco lo lleva al `<h1>` de la pantalla nueva `SeguimientoDeRuta`).
+  - **Sumado fuera del plan: un botón "Cerrar el menú".** Cerrar con el fondo oscuro solo se podía tocando (un `<div>`), y Esc no existe en un celular con TalkBack o VoiceOver: quien usa lector en el celular no tenía cómo cerrar el menú sin elegir una opción. Es el primer botón del panel, invisible hasta que recibe el foco con teclado (entonces aparece abajo, sobre el pie: arriba tapaba el nombre del restaurante). El fondo oscuro pasó a `aria-hidden`, igual que el del asistente.
+- [x] `components/menu/MenuHeader.tsx:137`: "Abrir el menú" expone `aria-expanded` (y `aria-haspopup="dialog"`). El encabezado acepta `inerte` (lo usa `MenuView`).
 
 **Filtro de dietas** (`components/menu/BarraBusqueda.tsx`):
 
-- [ ] Las opciones (líneas 141-155) son `<div>` sin rol ni estado, y la elegida solo se marca con "✓". Pasan a casillas que digan si están marcadas ("Vegano, 2 platos, marcada").
-- [ ] El botón "🥗 Dietas ▾" (líneas 95-108) lee el emoji y la flecha. Pasa a un nombre limpio ("Filtrar por dieta, 1 activo"), con estado expandido y emojis ocultos.
-- [ ] Al aplicar o limpiar (líneas 49 y 55): anunciar cuántos platos quedan y devolver el foco al botón de dietas.
+- [x] Las opciones (líneas 141-155) eran `<div>` sin rol ni estado, y la elegida solo se marcaba con "✓": ahora son casillas de verdad (`<input type="checkbox">`) dentro de un `<label>` que ocupa toda la fila, con el nombre "Vegano, 2 platos" (`aria-label`; el lector dice "marcada" o "no marcada"). La casilla del navegador queda oculta (`sr-only`) y el recuadro de al lado, que es lo que se ve, muestra el foco con teclado (`peer-focus-visible`: contorno de 2 px) y la tilde; es decorativo. El número suelto de cada fila también. El nombre se fijó con `aria-label` y no con texto oculto dentro del `<label>` porque el motor de nombres separa los dos `<span>` con un espacio ("Vegano , 2 platos") y otros navegadores podrían hacerlo distinto.
+- [x] El botón "🥗 Dietas ▾" (líneas 95-108) leía el emoji y la flecha: ahora se llama **"Filtrar por dietas"** (y "Filtrar por dietas, 1 filtro activo" / "2 filtros activos"), con `aria-expanded` y `aria-controls` (el panel, un `role="group"` con el nombre "Filtros de dieta"), y el emoji, la flecha y el número que se ven son `aria-hidden`. **Se desvió del plan en una palabra:** el plan decía "Filtrar por dieta" y se usó el plural, "dietas", para que el nombre contenga el texto que se ve en el botón, "Dietas" (WCAG 2.5.3, lo mismo que se hizo con la etiqueta de `MensajePage`).
+- [x] Al aplicar o limpiar (líneas 49 y 55): se anuncia cuántos platos quedan ("12 platos", "1 plato" o "Ningún plato coincide") y el foco vuelve al botón de dietas. `MenuView` calcula `cantidadDePlatos` (los platos de las categorías con la búsqueda y las dietas aplicadas) y `BarraBusqueda` anuncia cuando cambia el conjunto de dietas, sin anunciar al montarse ni al abrir el panel o marcar casillas. El texto sale de `utils/textoDePlatos.ts`, que reusa la búsqueda en la etapa 4.
+- [x] Sumado: Esc cierra el desplegable y devuelve el foco al botón (era un panel que solo se cerraba tocando afuera). El foco queda en el botón al abrirlo (patrón de despliegue: el panel es lo que sigue en el orden de lectura).
 
 ### Etapa 4. Menú, detalle y discovery
 
 **Menú:**
 
-- [ ] `components/menu/BarraBusqueda.tsx:65`: el buscador lleva `aria-label="Buscar platos"` y anuncia "N platos" o "Ningún plato coincide".
+- [ ] `components/menu/BarraBusqueda.tsx:65`: el buscador lleva `aria-label="Buscar platos"` y anuncia "N platos" o "Ningún plato coincide". Reusar `utils/textoDePlatos.ts` y `anunciar()` (etapa 1), y la `cantidadDePlatos` que ya calcula `MenuView` (etapa 3).
 - [ ] `BarraBusqueda.tsx:80`: el botón "×" pasa a llamarse "Borrar búsqueda".
 - [ ] `components/menu/ChipsSecciones.tsx:23`: el chip de sección lleva el foco al encabezado de esa sección y expone cuál está activo.
 - [ ] `components/ItemCard.tsx:76`: el botón pasa a "Ver {plato}" (decisión 3).
@@ -183,7 +191,7 @@ Las rutas son relativas a `apps/web-cliente/src/` salvo que digan otra cosa.
 - [ ] `components/menu/MenuHeader.tsx:66-80`: el botón del mozo anuncia "Avisamos al mozo" o el error, sin deshabilitarse (hoy el foco se pierde).
 - [ ] `components/menu/BotonCarrito.tsx:8` y `:23`: hoy se lee "🛒 1" y el número cuenta líneas. Pasa a "Ver carrito, N ítems", sumando unidades.
 - [ ] `App.tsx:57-62`: si el menú se recarga porque el restaurante lo cambió, anunciar "El menú se actualizó".
-- [ ] Ocultar los emojis decorativos: 🔍, 🥗, ▾, 🔔, y 🏷️, 📋 y 💳 del menú lateral.
+- [ ] Ocultar los emojis decorativos: 🔍 y 🔔. (**Ya ocultos en la etapa 3:** 🥗 y ▾ del botón de dietas, y los del menú lateral, 🏷️, 📋, 💳, ⭐, 🍽️ y 🏠.)
 
 **Detalle** (`pages/menu/ItemDetailPage.tsx`):
 
