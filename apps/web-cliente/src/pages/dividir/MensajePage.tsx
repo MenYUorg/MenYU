@@ -18,7 +18,10 @@ interface PorConsumoResult {
   huerfanos: { total: number }
 }
 
-const fmt = formatearPrecio
+// Los importes del mensaje llevan un espacio común, no el espacio no separable (U+00A0) de `formatearPrecio`: el texto se
+// copia y se pega en otras apps (WhatsApp, SMS) y ahí un carácter que no se ve es un riesgo. En pantalla, el resto de
+// los precios sigue con el no separable.
+const fmt = (n: number) => formatearPrecio(n).replace(/\xa0/g, ' ')
 
 export function MensajePage() {
   const navigate = useNavigate()
