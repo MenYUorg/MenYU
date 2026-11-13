@@ -14,11 +14,12 @@ Rama: `feat/a11y-cliente`, creada desde `origin/main` en `92904e0` (13/11/2026).
 6. **Quality gate de SonarCloud** (solo mide el código nuevo del PR): cobertura de 80 % o más, duplicación de 5 % o menos, calificación A en confiabilidad, seguridad y mantenibilidad, y hotspots revisados. Cada línea que se toca tiene que quedar cubierta.
 7. **Dependencias:** solo `vitest-axe` (etapa 1) y `eslint-plugin-jsx-a11y` (etapa 7), de desarrollo y solo en web-cliente. Cualquier otra se consulta antes.
 8. **Reglas de `CLAUDE.md`:** ningún archivo de web-cliente importa `@menyu/auth-client` de forma estática (solo `utils/authClientDiferido.ts`, con `import()`) y el panel del asistente se carga con `React.lazy`.
-9. **Quién commitea:** los commits, el push y el PR los hace Margarita (en PowerShell, con mensajes en español con el formato del repo: `feat(web-cliente): …`, `test(web-cliente): …`, `docs(a11y): …`). Al cerrar cada etapa se entregan los comandos listos, sin firmas ni menciones a la herramienta.
+9. **Sin excepciones a propósito en los tests nuevos:** no se desactivan reglas de axe para que un test pase (la única regla desactivada es `color-contrast`, en el helper; ver la decisión 15). Si una pantalla tiene una violación real, se arregla en la etapa que corresponda o se consulta.
+10. **Quién commitea:** los commits, el push y el PR los hace Margarita (en PowerShell, con mensajes en español con el formato del repo: `feat(web-cliente): …`, `test(web-cliente): …`, `docs(a11y): …`). Al cerrar cada etapa se entregan los comandos listos, sin firmas ni menciones a la herramienta.
 
 ## Material de partida
 
-- **Auditoría:** `docs/a11y/Auditoría de accesibilidad — MenYU.md` (12/11/2026, sobre el commit `3fcb2f0`). El plan original la llama `auditoria-general.md`: está en el repo con otro nombre. Pendiente decidir si se renombra (ver "Preguntas abiertas").
+- **Auditoría:** `docs/a11y/auditoria-general.md` (12/11/2026, sobre el commit `3fcb2f0`). Se actualizó el 13/11 con una segunda parte (el flujo del comensal con lector de pantalla) y una tercera (decisiones y plan). Es el informe que se va marcando etapa por etapa; en la etapa 8 se le suman los hallazgos del asistente.
 - **Trabajo de Coty mergeado el 12/11** y que se cruza con este:
   - `useCerrarConEscape` en `packages/ui/src/useCerrarConEscape.ts`: se reusa, no se duplica.
   - El script de axe sobre staging: `scripts/accesibilidad/main.mjs`.
@@ -68,6 +69,13 @@ El resto de las líneas de las etapas 2 a 5 (menú lateral, filtro de dietas, de
 12. **Rama:** `feat/a11y-cliente`.
 13. **Celulares:** se prueba con iPhone y VoiceOver (Safari) y con Android y TalkBack (Chrome).
 
+Decididas el 13/11/2026, al revisar la etapa 1:
+
+14. **Nombre de la auditoría:** `docs/a11y/auditoria-general.md` (el que usa este plan), con la versión actualizada del 13/11.
+15. **Etiqueta del mensaje de `MensajePage`:** el título visible ("Mensaje para el grupo") pasa a ser un `<label>` asociado al `<textarea>`, no un `aria-label` (WCAG 2.5.3: el nombre accesible tiene que contener el texto visible). **No se dejan violaciones excluidas a propósito en los tests nuevos:** la única regla desactivada es `color-contrast`, en el helper, y la cubre el test de contraste de la etapa 6.
+16. **Anillo de foco del `<h1>`:** se quita solo en los títulos que reciben el foco por código (`h1[tabindex='-1']:focus`), con un estilo acotado a ese caso. Botones, enlaces y campos mantienen el foco visible.
+17. **Asistente de la carta (C8):** entra como etapa 8, con una auditoría primero y los arreglos después.
+
 ## Línea base
 
 Medida el 13/11/2026 sobre `92904e0` (Node 24.15; ver la nota en la bitácora sobre un error del entorno que hace perder el reporte de un archivo):
@@ -83,7 +91,7 @@ Archivos de web-cliente con poca cobertura que se van a tocar: `pages/entrada/El
 
 Las rutas son relativas a `apps/web-cliente/src/` salvo que digan otra cosa.
 
-### Etapa 1. Base compartida — hecha (13/11/2026), a la espera de revisión
+### Etapa 1. Base compartida — hecha y revisada (13/11/2026)
 
 - [x] `docs/a11y/plan-cliente.md` y `docs/a11y/bitacora.md`.
 - [x] `vitest-axe` 0.1.0 como dependencia de desarrollo (versión exacta, como las demás librerías de test) y el helper `test/axe.ts`, que corre axe sin `color-contrast`. Registrado en `test/setup.ts`; los tipos de los matchers, en `test/vitest-axe.d.ts` (la librería los declara para el espacio de nombres viejo de Vitest).
@@ -120,42 +128,61 @@ Las rutas son relativas a `apps/web-cliente/src/` salvo que digan otra cosa.
   - **Todavía sin `<h1>`:** `/pago/exitoso`, `/pago/fallido` y `/pago/pendiente` y la confirmación del carrito ("¡Pedido enviado a cocina!"). Son de la etapa 5.
 - [x] **`<main>`** en todas las pantallas que no lo tenían: `MarcoPantalla` (mis pedidos, etiquetar, pagar y las dos de dividir), los tres estados del carrito, el detalle del plato (y sus estados de carga y error), el menú y la carta (el buscador, las secciones y los botones flotantes; el encabezado queda afuera), el nombre, los tres resultados del pago y `Shell`. El `<main>` de `MarcoPantalla` y del carrito lleva `flex: 1` y `display: flex` para no mover nada de lugar; se comprobó en Edge real (390 px): la página no se desplaza y la carta sigue desplazándose por su zona interna.
 - [x] Tests: ver la bitácora. Cobertura de web-cliente: 86,08 % → 92,43 %.
+- [x] **Ajustes tras la revisión (13/11):**
+  - La auditoría actualizada pasa a `docs/a11y/auditoria-general.md` (decisión 14).
+  - `MensajePage`: el título visible es la etiqueta del `<textarea>` y se sacó la excepción del test de axe (decisión 15).
+  - `src/index.css`: sin anillo de foco en los `<h1>` enfocados por código, con un test que exige que sea la única regla que quita el contorno (decisión 16).
+  - Etapa 8 (asistente) agregada al plan (decisión 17).
 
-**Lo que queda de esta etapa:** abrir el PR como borrador y anotar el resultado de SonarCloud en la bitácora.
+**Cerrada.** El quality gate de SonarCloud pasó (ver la bitácora). Falta el OK de Margarita para empezar la etapa 2.
 
-### Etapa 2. Formato de precios
+### Etapa 2. Formato de precios — hecha y revisada (13/11/2026)
 
-- [ ] `utils/precio.ts`: `formatearPrecio` con `Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' })`, sin decimales si el número es entero y con dos si no.
-- [ ] Los 13 `toFixed(2)` sueltos pasan a usar `formatearPrecio`:
-  - `pages/carrito/CarritoPage.tsx`, líneas 185, 197, 440 y 551
-  - `pages/menu/ItemDetailPage.tsx`, líneas 286 y 441
-  - `pages/dividir/MensajePage.tsx`, línea 21
-  - `pages/dividir/CantidadComensalesPage.tsx`, línea 162
-  - `pages/etiquetado/EtiquetarPedidosPage.tsx`, línea 51
-  - `pages/pago/PagarPage.tsx`, líneas 222, 345, 351 y 376
-- [ ] Tests de `formatearPrecio`: enteros, centavos, cero y montos grandes.
-- [ ] Actualizar los precios escritos como "$9000.00" en los tests (57 en 12 archivos, según el plan; con los tests nuevos de la etapa 1 son más). `Intl` pone un espacio no separable (U+00A0) después del "$": comparar contra `formatearPrecio(...)` o contra ese espacio. Ojo con los tests nuevos de la etapa 1 que mencionan precios.
+- [x] `utils/precio.ts`: `formatearPrecio` con `Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' })`: "$ 9.000" si el número es entero y "$ 1.234,50" si tiene centavos. Detalles que no estaban en el plan:
+  - Se **redondea a centavos antes de decidir** si es entero: el ruido de la coma flotante (`3000.0000000004`) no se escribe "$ 3.000,00", y `2999.999` es "$ 3.000".
+  - Lo que se redondea a cero no queda como "-$ 0" (se normaliza el cero negativo).
+  - Los dos `Intl.NumberFormat` (sin y con centavos) se crean una vez, a nivel del módulo: construirlos es caro y esto corre en cada render.
+  - El espacio entre el "$" y el número es un espacio no separable (U+00A0): el precio no se corta entre dos líneas.
+- [x] Los 13 `toFixed(2)` sueltos pasan a usar `formatearPrecio` (en web-cliente no queda ningún `toFixed` fuera de los tests). Las líneas del plan estaban corridas 2 lugares en `CarritoPage` por los `<main>` de la etapa 1 (440 y 551 son ahora 442 y 553).
+  - `pages/carrito/CarritoPage.tsx`: 4 (el total de cada ítem de la confirmación, el subtotal, el total de cada ítem de la lista y el total)
+  - `pages/menu/ItemDetailPage.tsx`: 2 (el precio del extra, "+$ 150,50", y el total del botón)
+  - `pages/dividir/MensajePage.tsx`: 1 (el helper `fmt`, que arma el mensaje para el grupo; ahora es `const fmt = formatearPrecio`)
+  - `pages/dividir/CantidadComensalesPage.tsx`: 1
+  - `pages/etiquetado/EtiquetarPedidosPage.tsx`: 1
+  - `pages/pago/PagarPage.tsx`: 4
+- [x] **El mensaje que copia «Copiar mensaje» lleva espacios comunes** (decisión de la revisión, 13/11): en `MensajePage`, `fmt` reemplaza el espacio no separable por uno común al armar el texto, sin tocar `formatearPrecio`. En pantalla, el resto de los precios sigue con el no separable. Dos tests verifican que ni el texto del campo ni lo que va al portapapeles tengan U+00A0.
+- [x] Tests de `formatearPrecio` (`utils/precio.spec.ts`, de 1 test a 19): enteros, cero, montos grandes, centavos, que 1.234,50 no pase a "$ 1.235", la parte de una cuenta dividida (6500 entre 3 = "$ 2.166,67"), el redondeo a centavos, negativos y el cero negativo, y que el espacio sea no separable. Se sumaron 3 tests en las pantallas: la cuenta dividida con centavos en `CantidadComensalesPage` (6000 entre 7) y en el mensaje de `MensajePage` (6500 entre 3), y un extra con centavos en el detalle.
+- [x] Las 57 cadenas "$9000.00" de los tests (en 10 specs; `precio.spec.ts` se reescribió entero) pasaron al formato nuevo:
+  - Con los matchers que normalizan los espacios (`getByText`, `toHaveTextContent`) se escribe un espacio común: "$ 1.500". jest-dom y Testing Library convierten el U+00A0 del DOM en un espacio común antes de comparar.
+  - Con las comparaciones exactas (`toBe`, `toEqual` sobre el `textContent` de la cuenta de `/pagar`, el monto por persona y el texto del mensaje para el grupo) se escribe el escape `\u00a0`, que se ve en el código ("$\u00a01.500"), no el carácter. El lint (`no-irregular-whitespace`) rechaza el espacio no separable suelto fuera de un string.
 
-### Etapa 3. Bloqueantes
+### Etapa 3. Bloqueantes — hecha (13/11/2026), a la espera de revisión
 
 **Menú lateral** (`components/menu/MenuDrawer.tsx`). Hoy "Mis pedidos" y "Etiquetar pedidos" solo se abren desde acá y no se pueden activar con lector.
 
-- [ ] Las opciones son `<div>` clickeables (líneas 9-16 y las filas de 188-191): pasan a ser botones o enlaces reales.
-- [ ] Cerrado (líneas 104-110), el panel se oculta solo con `transform`, así que se sigue leyendo primero y recibe foco. Cerrado tiene que quedar fuera del árbol de accesibilidad (`inert`).
-- [ ] Abierto, se comporta como diálogo: foco adentro, fondo inerte, cierre con Esc (`useCerrarConEscape`) y foco de vuelta a "Abrir el menú". **Ojo:** el fondo inerte no puede incluir al anunciador (por eso se pinta en el `<body>`, fuera de `#root`).
-- [ ] `components/menu/MenuHeader.tsx:137`: "Abrir el menú" expone si está expandido.
+- [x] Las opciones eran `<div>` clickeables (líneas 9-16 y las filas de 188-191): ahora son `<button type="button">` (`DrawerRow`). Se eligió botón y no enlace porque las filas son acciones que cierran el menú y navegan (`ir()`), como "Iniciar sesión". El ícono de cada fila es decorativo (`aria-hidden`): el nombre del botón es solo el texto ("Mis pedidos", no "📋 Mis pedidos"). Eso **adelanta** de la etapa 4 el ítem "ocultar 🏷️, 📋 y 💳 del menú lateral", porque la fila se reescribió acá y no tenía sentido tocarla dos veces.
+  - "Mis puntos" (que solo dice "Próximamente" y no hace nada) es un botón **deshabilitado**: el lector lo anuncia como no disponible, y no se puede activar ni cierra el menú.
+- [x] Cerrado (líneas 104-110), el panel se ocultaba solo con `transform`: ahora lleva `inert` cuando `abierto` es `false`, así sale del árbol de accesibilidad y no recibe foco. Verificado en Edge: con el menú cerrado, el primer Tab cae en "Abrir el menú" (antes, en "Iniciar sesión").
+- [x] Abierto, se comporta como diálogo:
+  - El panel tiene `role="dialog"`, `aria-modal="true"`, el nombre "Menú de {restaurante}" y `tabIndex={-1}`: al abrir, el foco entra al panel (el lector lo anuncia como diálogo con su nombre). Sin anillo en ese contenedor (no es un control; los botones de adentro conservan el suyo).
+  - Fondo inerte: `MenuView` pone `inert` al encabezado y al `<main>` mientras el menú está abierto. El anunciador no se ve afectado (está en el `<body>`, fuera de `#root`).
+  - Esc cierra, con `useCerrarConEscape`. El hook escucha siempre, así que se actúa solo si el menú está abierto. **Para reusarlo se exporta desde el índice de `@menyu/ui`** (una línea en `packages/ui/src/index.ts`: antes solo lo usaban componentes internos del paquete). Por tocar `packages/ui` se corrieron las suites de ui, web-admin y web-staff (ver la bitácora).
+  - El foco vuelve a "Abrir el menú" al cerrar: el menú recuerda qué tenía el foco al abrirse y se lo devuelve (si se cierra porque se eligió una opción y se navega a otra pantalla, el foco lo lleva al `<h1>` de la pantalla nueva `SeguimientoDeRuta`).
+  - **Sumado fuera del plan: un botón "Cerrar el menú".** Cerrar con el fondo oscuro solo se podía tocando (un `<div>`), y Esc no existe en un celular con TalkBack o VoiceOver: quien usa lector en el celular no tenía cómo cerrar el menú sin elegir una opción. Es el primer botón del panel, invisible hasta que recibe el foco con teclado (entonces aparece abajo, sobre el pie: arriba tapaba el nombre del restaurante). El fondo oscuro pasó a `aria-hidden`, igual que el del asistente.
+- [x] `components/menu/MenuHeader.tsx:137`: "Abrir el menú" expone `aria-expanded` (y `aria-haspopup="dialog"`). El encabezado acepta `inerte` (lo usa `MenuView`).
 
 **Filtro de dietas** (`components/menu/BarraBusqueda.tsx`):
 
-- [ ] Las opciones (líneas 141-155) son `<div>` sin rol ni estado, y la elegida solo se marca con "✓". Pasan a casillas que digan si están marcadas ("Vegano, 2 platos, marcada").
-- [ ] El botón "🥗 Dietas ▾" (líneas 95-108) lee el emoji y la flecha. Pasa a un nombre limpio ("Filtrar por dieta, 1 activo"), con estado expandido y emojis ocultos.
-- [ ] Al aplicar o limpiar (líneas 49 y 55): anunciar cuántos platos quedan y devolver el foco al botón de dietas.
+- [x] Las opciones (líneas 141-155) eran `<div>` sin rol ni estado, y la elegida solo se marcaba con "✓": ahora son casillas de verdad (`<input type="checkbox">`) dentro de un `<label>` que ocupa toda la fila, con el nombre "Vegano, 2 platos" (`aria-label`; el lector dice "marcada" o "no marcada"). La casilla del navegador queda oculta (`sr-only`) y el recuadro de al lado, que es lo que se ve, muestra el foco con teclado (`peer-focus-visible`: contorno de 2 px) y la tilde; es decorativo. El número suelto de cada fila también. El nombre se fijó con `aria-label` y no con texto oculto dentro del `<label>` porque el motor de nombres separa los dos `<span>` con un espacio ("Vegano , 2 platos") y otros navegadores podrían hacerlo distinto.
+- [x] El botón "🥗 Dietas ▾" (líneas 95-108) leía el emoji y la flecha: ahora se llama **"Filtrar por dietas"** (y "Filtrar por dietas, 1 filtro activo" / "2 filtros activos"), con `aria-expanded` y `aria-controls` (el panel, un `role="group"` con el nombre "Filtros de dieta"), y el emoji, la flecha y el número que se ven son `aria-hidden`. **Se desvió del plan en una palabra:** el plan decía "Filtrar por dieta" y se usó el plural, "dietas", para que el nombre contenga el texto que se ve en el botón, "Dietas" (WCAG 2.5.3, lo mismo que se hizo con la etiqueta de `MensajePage`).
+- [x] Al aplicar o limpiar (líneas 49 y 55): se anuncia cuántos platos quedan ("12 platos", "1 plato" o "Ningún plato coincide") y el foco vuelve al botón de dietas. `MenuView` calcula `cantidadDePlatos` (los platos de las categorías con la búsqueda y las dietas aplicadas) y `BarraBusqueda` anuncia cuando cambia el conjunto de dietas, sin anunciar al montarse ni al abrir el panel o marcar casillas. El texto sale de `utils/textoDePlatos.ts`, que reusa la búsqueda en la etapa 4.
+- [x] Sumado: Esc cierra el desplegable y devuelve el foco al botón (era un panel que solo se cerraba tocando afuera). El foco queda en el botón al abrirlo (patrón de despliegue: el panel es lo que sigue en el orden de lectura).
 
 ### Etapa 4. Menú, detalle y discovery
 
 **Menú:**
 
-- [ ] `components/menu/BarraBusqueda.tsx:65`: el buscador lleva `aria-label="Buscar platos"` y anuncia "N platos" o "Ningún plato coincide".
+- [ ] `components/menu/BarraBusqueda.tsx:65`: el buscador lleva `aria-label="Buscar platos"` y anuncia "N platos" o "Ningún plato coincide". Reusar `utils/textoDePlatos.ts` y `anunciar()` (etapa 1), y la `cantidadDePlatos` que ya calcula `MenuView` (etapa 3).
 - [ ] `BarraBusqueda.tsx:80`: el botón "×" pasa a llamarse "Borrar búsqueda".
 - [ ] `components/menu/ChipsSecciones.tsx:23`: el chip de sección lleva el foco al encabezado de esa sección y expone cuál está activo.
 - [ ] `components/ItemCard.tsx:76`: el botón pasa a "Ver {plato}" (decisión 3).
@@ -164,7 +191,7 @@ Las rutas son relativas a `apps/web-cliente/src/` salvo que digan otra cosa.
 - [ ] `components/menu/MenuHeader.tsx:66-80`: el botón del mozo anuncia "Avisamos al mozo" o el error, sin deshabilitarse (hoy el foco se pierde).
 - [ ] `components/menu/BotonCarrito.tsx:8` y `:23`: hoy se lee "🛒 1" y el número cuenta líneas. Pasa a "Ver carrito, N ítems", sumando unidades.
 - [ ] `App.tsx:57-62`: si el menú se recarga porque el restaurante lo cambió, anunciar "El menú se actualizó".
-- [ ] Ocultar los emojis decorativos: 🔍, 🥗, ▾, 🔔, y 🏷️, 📋 y 💳 del menú lateral.
+- [ ] Ocultar los emojis decorativos: 🔍 y 🔔. (**Ya ocultos en la etapa 3:** 🥗 y ▾ del botón de dietas, y los del menú lateral, 🏷️, 📋, 💳, ⭐, 🍽️ y 🏠.)
 
 **Detalle** (`pages/menu/ItemDetailPage.tsx`):
 
@@ -236,7 +263,7 @@ Las rutas son relativas a `apps/web-cliente/src/` salvo que digan otra cosa.
 - [ ] Un solo token de coral en `theme.ts` (decisión 9). Las demás paletas lo importan en vez de redefinirlo.
 - [ ] Test unitario de contraste sobre los pares de colores de `theme.ts`.
 - [ ] El gris de texto `#9CA3AF` pasa a `#6B7280`.
-- [ ] **Foco visible** (WCAG 2.4.7): reemplazar los `outline: 'none'` en línea por un indicador de foco visible, como hace web-auth con `focus-visible:ring`. Por ejemplo, el buscador del menú hoy no tiene ninguno. Acá se decide también qué pasa con el anillo del `<h1>` al que va el foco en cada cambio de pantalla (ver "Preguntas abiertas").
+- [ ] **Foco visible** (WCAG 2.4.7): reemplazar los `outline: 'none'` en línea por un indicador de foco visible, como hace web-auth con `focus-visible:ring`. Por ejemplo, el buscador del menú hoy no tiene ninguno. **Ojo con el `<h1>`:** desde la etapa 1, `src/index.css` quita el contorno de `h1[tabindex='-1']:focus` a propósito (decisión 16) y `src/estilos.spec.ts` exige que esa sea la única regla de la hoja que lo quita. Un estilo global de `:focus-visible` que se agregue acá no tiene que volver a dibujárselo a ese título.
 - [ ] **Tamaños táctiles** (WCAG 2.5.8, mínimo 24×24 px, ideal 44×44):
   - "Quitar" del carrito (35×18) es el único debajo del mínimo: obligatorio.
   - Llevar a 44 si se puede: los "+" de las tarjetas (28×28), los "−"/"+" del detalle y del carrito (32×32), el interruptor (44×24), los chips de sección y de comensal (32-34 de alto), las flechas de volver (29×26) y los botones del encabezado (28-30 de alto).
@@ -255,8 +282,27 @@ Las rutas son relativas a `apps/web-cliente/src/` salvo que digan otra cosa.
 
 - [ ] `eslint-plugin-jsx-a11y` (configuración `recommended`) en el `eslint.config.js` de web-cliente, con todo en verde. El lint corre con `--max-warnings 0`.
 - [ ] Correr el axe de Coty sobre staging y anotar el resultado en la bitácora.
-- [ ] Prueba con los dos celulares siguiendo los recorridos C1 a C8, con los resultados en la tabla de registro de `docs/calidad/accesibilidad-recorridos-lector.md`.
-- [ ] Marcar en la auditoría qué hallazgo se resolvió en qué etapa, y cerrar este documento.
+- [ ] Prueba con los dos celulares siguiendo los recorridos C1 a C7, con los resultados en la tabla de registro de `docs/calidad/accesibilidad-recorridos-lector.md`. **C8 no va acá:** se prueba en la etapa 8.
+- [ ] Marcar en `docs/a11y/auditoria-general.md` qué hallazgo se resolvió en qué etapa, y cerrar este documento (cuando también esté hecha la etapa 8).
+
+### Etapa 8. Asistente de la carta (C8)
+
+El asistente no se auditó, así que la etapa tiene dos partes: **primero auditar, después arreglar**. Va después del cierre de la etapa 7 y tiene su propio punto de control.
+
+**Auditoría.** Mismos criterios que en el resto del plan: axe, teclado y árbol de accesibilidad en viewport de celular (390 px), con el stream de respuestas simulado. Se escribe la transcripción de cómo lo leería un lector y se anotan los hallazgos con archivo:línea, criterio WCAG y gravedad en `docs/a11y/auditoria-general.md`. **Se frena y se muestran los hallazgos antes de arreglar nada.** Qué mirar:
+
+- [ ] **Botón que abre el asistente** (`components/asistente/BotonDelAsistente.tsx`): tiene que tener nombre y decir si el panel está abierto.
+- [ ] **Panel** (`PanelDelAsistente.tsx`, `role="dialog"` en la línea 291): al abrir, el foco entra; Esc cierra (con `useCerrarConEscape`); al cerrar, el foco vuelve al botón; el fondo queda inerte.
+- [ ] **Respuesta que llega de a poco** (`role="log"` en la línea 394): es lo más importante de C8. Un `role="log"` anuncia cada cambio, así que la respuesta se puede leer en pedazos, repetida o nunca. Tiene que leerse **entera una sola vez, al terminar**. Mientras llega, se anuncia algo como "El asistente está respondiendo".
+- [ ] **Campo de la pregunta y botón de enviar:** label, nombre del botón, y que se pueda enviar con Enter.
+- [ ] **Errores y límites** (`avisos.ts`): tienen que anunciarse.
+- [ ] **Contraste y tamaños:** ya los cubre la etapa 6; se verifican acá.
+
+**Arreglos.** Lo que salga de la auditoría, con tests en `AsistenteDeLaCarta.spec.tsx` (anuncios, foco y lectura de la respuesta completa) y un chequeo de axe del panel abierto. Se respeta la regla de `CLAUDE.md`: el panel, su store y el lector del stream se cargan con `React.lazy` y no se importan de forma estática desde la carta.
+
+**Celulares.** Se prueba C8 con los dos teléfonos y se carga el resultado en la tabla de registro de `docs/calidad/accesibilidad-recorridos-lector.md`. La prueba de la etapa 7 no incluye C8.
+
+Verificación previa de las líneas (13/11): `PanelDelAsistente.tsx:291` es `role="dialog"` (con `aria-modal="true"` y `inert={!visible}`, líneas 292 y 295) y `:394` es `role="log"`; hay un `role="status"` en la 572 y un manejo de foco propio en las ~312-315. `BotonDelAsistente.tsx` ya carga el panel con `lazy` (línea 107). El panel no usa `useCerrarConEscape`. Todo eso es lectura del código, no auditoría: lo que cuenta es lo que se mida en la etapa.
 
 ## Recorridos con lector (C1 a C8) por etapa
 
@@ -270,19 +316,18 @@ Estimación de qué recorridos de `docs/calidad/accesibilidad-recorridos-lector.
 | 4 | C1 y C6 completos; C4 hasta agregar el plato; la búsqueda anuncia cuántos resultados hay. |
 | 5 | C2, C3, C4, C5 y C7 completos. |
 | 6 | Transversal: contraste, foco visible y tamaños de toque, en todos. |
-| 7 | Todos, con la prueba en los dos celulares. **C8 (asistente) no tiene etapa en este plan:** el panel ya tiene `role="dialog"`, pero no se revisó (preguntar si se incluye). |
+| 7 | C1 a C7, con la prueba en los dos celulares. |
+| 8 | C8 (asistente de la carta): se anuncia como diálogo, y la respuesta que llega de a poco se lee entera una sola vez, al terminar. Se prueba en los dos celulares dentro de esta etapa. |
 
-## Hallazgos fuera del plan (a decidir)
+## Hallazgos fuera del plan
 
-Cosas que aparecieron al trabajar y que el plan no menciona. No se tocaron.
+Cosas que aparecieron al trabajar y que el plan no mencionaba. Los dos primeros se decidieron el 13/11 y se resolvieron dentro de la etapa 1; los otros dos quedan abiertos.
 
-1. **`MensajePage`: el `<textarea>` con el mensaje armado no tiene etiqueta** (axe: `label`). Arreglo mínimo: `aria-label="Mensaje para compartir"`. Mientras tanto, el test de axe de esa pantalla desactiva solo esa regla, con un comentario que apunta acá.
-2. **Anillo de foco en el `<h1>`.** Al llevar el foco al título en cada cambio de pantalla, el navegador dibuja su anillo de foco alrededor (se ve cuando el foco llega por código o por teclado). Es correcto para accesibilidad, pero es un cambio visual. Opción: dejarlo, o quitarlo solo en los títulos (`h1[tabindex="-1"]:focus { outline: none }`), que no son controles.
+1. **Resuelto (13/11): `MensajePage`, el `<textarea>` con el mensaje armado no tenía etiqueta** (axe: `label`). El título visible, "Mensaje para el grupo", era un `<p>`: ahora es un `<label htmlFor>` asociado al `<textarea>` (con `id`), así el lector dice lo mismo que se ve (WCAG 2.5.3). Se sacó la excepción del test de axe de esa pantalla y se sumó un test del nombre accesible. Sin `aria-label`: un nombre distinto del texto visible no cumple 2.5.3.
+2. **Resuelto (13/11): anillo de foco en el `<h1>`.** Al llevar el foco al título en cada cambio de pantalla, el navegador dibujaba su anillo alrededor. Ahora `src/index.css` lo quita solo de los `<h1>` que reciben el foco por código: `h1[tabindex='-1']:focus { outline: none }`. Es un título, no un control, y WCAG 2.4.7 no pide indicador ahí. Botones, enlaces y campos mantienen el foco visible. Un test (`src/estilos.spec.ts`) comprueba que esa sea la **única** regla de la hoja que quita el contorno, y se verificó en Edge real: el título queda con `outline-style: none` y un botón enfocado con Tab muestra su anillo (`auto`).
 3. **Título de la pestaña sin restaurante al entrar directo a una pantalla de la mesa** (por ejemplo `/pedidos` recién abierto): dice "Mis pedidos · MenYU" hasta que se carga el menú. Hoy solo `/menu`, `/carrito` y el detalle piden el menú. No es un error de accesibilidad, solo un título menos completo.
 4. **Zona con scroll de la carta que no se puede enfocar con teclado** (la auditoría sugiere `tabIndex={0}`): no se puede comprobar en jsdom. Para verificarlo en el axe de staging (etapa 7); los navegadores recientes ya hacen enfocables los contenedores con scroll que no tienen nada enfocable adentro.
 
 ## Preguntas abiertas
 
-- ¿Se renombra `Auditoría de accesibilidad — MenYU.md` a `auditoria-general.md`, como la llama el plan? (hoy no está en git)
-- Hallazgos 1 y 2 de arriba: ¿se arreglan (y en qué etapa) o se dejan?
-- ¿El asistente (C8) entra en este plan?
+Las del cierre de la etapa 1 se respondieron el 13/11 (ver las decisiones 14 a 17). Hoy no hay preguntas abiertas.

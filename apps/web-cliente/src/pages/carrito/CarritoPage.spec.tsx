@@ -79,8 +79,8 @@ describe('CarritoPage', () => {
 
       await waitFor(() => expect(useCarritoStore.getState().items[0].precioUnitario).toBe(800))
       // 2 × $800 aparece en la línea del plato y en el total
-      expect(await screen.findAllByText('$1600.00')).not.toHaveLength(0)
-      expect(screen.queryByText('$2000.00')).not.toBeInTheDocument()
+      expect(await screen.findAllByText('$ 1.600')).not.toHaveLength(0)
+      expect(screen.queryByText('$ 2.000')).not.toBeInTheDocument()
     })
 
     it('avisa que se actualizaron los precios', async () => {

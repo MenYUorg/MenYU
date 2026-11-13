@@ -1,4 +1,6 @@
+import { useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useCerrarConEscape } from '@menyu/ui'
 import { useIrAlIngreso } from '../../hooks/useIrAlIngreso'
 import type { AccionDeIngreso } from '../../utils/cuenta'
 import { Icono } from '../discovery/Icono'
@@ -6,26 +8,32 @@ import { ImagenLogo } from './ImagenLogo'
 import type { ModoMenu } from './modo'
 import { CM } from './paleta'
 
+/** Una opción del menú: un botón de verdad (se alcanza con Tab y se activa con Enter, Espacio o doble toque). */
 function DrawerRow({
-  icon, label, badge, onClick, primary,
+  icon, label, badge, onClick, primary, deshabilitada,
 }: {
   icon: string; label: string; badge?: string; onClick: () => void; primary?: boolean
+  /** Una opción que todavía no hace nada ("Próximamente"): se anuncia como no disponible. */
+  deshabilitada?: boolean
 }) {
   return (
-    <div
+    <button
+      type="button"
       onClick={onClick}
+      disabled={deshabilitada}
       style={{
-        display: 'flex', alignItems: 'center', gap: 12,
-        padding: '11px 14px', borderRadius: 10, cursor: 'pointer',
+        display: 'flex', alignItems: 'center', gap: 12, width: '100%', textAlign: 'left',
+        border: 'none', padding: '11px 14px', borderRadius: 10, cursor: deshabilitada ? 'default' : 'pointer',
         color: primary ? CM.orange : CM.text,
         background: primary ? CM.orangeSoft : 'transparent',
         transition: 'background .12s',
         userSelect: 'none',
       }}
-      onMouseEnter={(e) => { if (!primary) (e.currentTarget as HTMLDivElement).style.background = CM.bg }}
-      onMouseLeave={(e) => { if (!primary) (e.currentTarget as HTMLDivElement).style.background = 'transparent' }}
+      onMouseEnter={(e) => { if (!primary) (e.currentTarget as HTMLButtonElement).style.background = CM.bg }}
+      onMouseLeave={(e) => { if (!primary) (e.currentTarget as HTMLButtonElement).style.background = 'transparent' }}
     >
-      <span style={{
+      {/* El ícono es decorativo: el nombre de la opción es el texto. */}
+      <span aria-hidden="true" style={{
         width: 32, height: 32, borderRadius: 8,
         background: primary ? CM.orange : '#F4F4F6',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -42,7 +50,7 @@ function DrawerRow({
           {badge}
         </span>
       )}
-    </div>
+    </button>
   )
 }
 
@@ -80,6 +88,22 @@ export function MenuDrawer({
   const navigate = useNavigate()
   const ir = (ruta: string) => { onCerrar(); navigate(ruta) }
 
+  // Abierto es un diálogo: Esc lo cierra (el hook escucha siempre, así que solo se actúa si está abierto), el foco entra
+  // al panel al abrirlo y vuelve a lo que lo abrió ("Abrir el menú") al cerrarlo. El resto de la pantalla queda inerte
+  // mientras tanto (lo hace MenuView).
+  useCerrarConEscape(() => { if (abierto) onCerrar() })
+  const panelRef = useRef<HTMLDivElement>(null)
+  const quienLoAbrio = useRef<HTMLElement | null>(null)
+  useEffect(() => {
+    if (abierto) {
+      quienLoAbrio.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+      panelRef.current?.focus()
+    } else if (quienLoAbrio.current) {
+      quienLoAbrio.current.focus()
+      quienLoAbrio.current = null
+    }
+  }, [abierto])
+
   const irAlIngreso = useIrAlIngreso()
   const irAWebAuth = (accion: AccionDeIngreso) => { onCerrar(); irAlIngreso(accion) }
 
@@ -88,8 +112,9 @@ export function MenuDrawer({
 
   return (
     <>
-      {/* Scrim */}
+      {/* Scrim: el fondo que se toca para cerrar. Para teclado y lector, el cierre es Esc y el botón "Cerrar el menú". */}
       <div
+        aria-hidden="true"
         onClick={onCerrar}
         style={{
           position: 'fixed', inset: 0, zIndex: 40,
@@ -100,16 +125,37 @@ export function MenuDrawer({
         }}
       />
 
-      {/* Panel */}
-      <div style={{
-        position: 'fixed', top: 0, left: 0, bottom: 0, zIndex: 50,
-        width: '82%', maxWidth: 320,
-        background: 'white',
-        boxShadow: '4px 0 32px rgba(0,0,0,0.2)',
-        display: 'flex', flexDirection: 'column', overflowY: 'auto',
-        transform: abierto ? 'translateX(0)' : 'translateX(-100%)',
-        transition: 'transform 0.26s cubic-bezier(0.32,0.72,0,1)',
-      }}>
+      {/* Panel. Cerrado está `inert`: sale del árbol de accesibilidad y no recibe foco (con solo el `transform`, el lector lo
+          leía primero y sus botones se alcanzaban con Tab). */}
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Menú de ${nombreRestaurante}`}
+        tabIndex={-1}
+        inert={!abierto}
+        style={{
+          position: 'fixed', top: 0, left: 0, bottom: 0, zIndex: 50,
+          width: '82%', maxWidth: 320,
+          background: 'white',
+          boxShadow: '4px 0 32px rgba(0,0,0,0.2)',
+          display: 'flex', flexDirection: 'column', overflowY: 'auto',
+          transform: abierto ? 'translateX(0)' : 'translateX(-100%)',
+          transition: 'transform 0.26s cubic-bezier(0.32,0.72,0,1)',
+          // Un contenedor al que se le da el foco por código, no un control: sin anillo (los controles de adentro conservan el suyo).
+          outline: 'none',
+        }}
+      >
+        {/* Para quien no ve el fondo que se toca: una forma de cerrar. Invisible hasta que recibe el foco con teclado; entonces
+            aparece abajo, en el lugar libre sobre el pie (arriba taparía el nombre del restaurante). */}
+        <button
+          type="button"
+          onClick={onCerrar}
+          className="sr-only focus:not-sr-only focus:absolute focus:bottom-16 focus:right-3 focus:z-10 focus:rounded-lg focus:bg-white focus:px-3 focus:py-2 focus:text-[13px] focus:font-bold focus:text-[#2D3561] focus:shadow-[0_2px_10px_rgba(0,0,0,0.25)]"
+        >
+          Cerrar el menú
+        </button>
+
         {/* Cabeza: el restaurante y la cuenta */}
         <div style={{ background: `linear-gradient(135deg, ${CM.navy} 0%, #3d4880 100%)`, padding: '22px 18px 18px', flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
@@ -187,7 +233,7 @@ export function MenuDrawer({
             <>
               <DrawerRow icon="🏷️" label="Etiquetar pedidos" onClick={() => ir('/etiquetar')} />
               <DrawerRow icon="📋" label="Mis pedidos" primary onClick={() => ir('/pedidos')} />
-              {usuario && <DrawerRow icon="⭐" label="Mis puntos" badge="Próximamente" onClick={() => {}} />}
+              {usuario && <DrawerRow icon="⭐" label="Mis puntos" badge="Próximamente" onClick={() => {}} deshabilitada />}
               <DrawerRow icon="💳" label="Pagar la cuenta" onClick={() => ir('/pagar')} />
             </>
           ) : (

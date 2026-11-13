@@ -108,7 +108,7 @@ describe('MensajePage', () => {
       expect(saldo).toHaveBeenCalledWith('jwt-mesa', 'ses-1')
       expect(porConsumo).not.toHaveBeenCalled()
       expect(sesionesPedidas.every((s) => s === '')).toBe(true)
-      expect(mensaje()).toBe(['🧾 Mesa 4 — MenYu', 'Total de la cuenta: $6500.00', '', 'Dividido en partes iguales entre 4: $1625.00 cada uno'].join('\n'))
+      expect(mensaje()).toBe(['🧾 Mesa 4 — MenYu', 'Total de la cuenta: $ 6.500', '', 'Dividido en partes iguales entre 4: $ 1.625 cada uno'].join('\n'))
     })
 
     it('si ya se cobró una parte lo dice y divide el saldo', async () => {
@@ -118,7 +118,15 @@ describe('MensajePage', () => {
       abrir('?cantidad=2')
 
       await screen.findByText('Mensaje para el grupo')
-      expect(mensaje()).toBe(['🧾 Mesa  — MenYu', 'Total de la cuenta: $6500.00', 'Ya cobrado: $2500.00', 'Falta cobrar: $4000.00', '', 'Dividido en partes iguales entre 2: $2000.00 cada uno'].join('\n'))
+      expect(mensaje()).toBe(['🧾 Mesa  — MenYu', 'Total de la cuenta: $ 6.500', 'Ya cobrado: $ 2.500', 'Falta cobrar: $ 4.000', '', 'Dividido en partes iguales entre 2: $ 2.000 cada uno'].join('\n'))
+    })
+
+    it('si el saldo no se divide justo, la parte lleva los centavos con coma (6500 entre 3)', async () => {
+      abrir('?cantidad=3')
+
+      await screen.findByText('Mensaje para el grupo')
+
+      expect(mensaje()).toBe(['🧾 Mesa 4 — MenYu', 'Total de la cuenta: $ 6.500', '', 'Dividido en partes iguales entre 3: $ 2.166,67 cada uno'].join('\n'))
     })
 
     it('si la carga falla muestra el error; "Reintentar" vuelve a pedir', async () => {
@@ -142,19 +150,19 @@ describe('MensajePage', () => {
       expect(porConsumo).toHaveBeenCalledWith('jwt-mesa', 'ses-1')
       expect(mensaje()).toBe([
         '🧾 Mesa 4 — MenYu',
-        'Total de la cuenta: $6500.00',
+        'Total de la cuenta: $ 6.500',
         '',
         'Ana',
-        '• 2x Milanesa — $3000.00',
-        '• 1x Pizza — $3000.00 (compartido entre 2)',
-        'Total Ana: $4500.00',
+        '• 2x Milanesa — $ 3.000',
+        '• 1x Pizza — $ 3.000 (compartido entre 2)',
+        'Total Ana: $ 4.500',
         '',
         'Luis',
-        '• 1x Pizza — $3000.00 (compartido entre 2)',
-        'Total Luis: $1500.00',
+        '• 1x Pizza — $ 3.000 (compartido entre 2)',
+        'Total Luis: $ 1.500',
         '',
-        '⚠️ Sin asignar todavía ($500.00):',
-        '• 1x Agua — $500.00',
+        '⚠️ Sin asignar todavía ($ 500):',
+        '• 1x Agua — $ 500',
         'Avisen quién lo pidió para sumarlo a su parte.',
       ].join('\n'))
     })
@@ -167,8 +175,8 @@ describe('MensajePage', () => {
       abrir('?modo=por_consumo')
 
       await screen.findByText('Mensaje para el grupo')
-      expect(mensaje()).toContain('Ya cobrado: $500.00')
-      expect(mensaje()).toContain('Total Ana: $0.00')
+      expect(mensaje()).toContain('Ya cobrado: $ 500')
+      expect(mensaje()).toContain('Total Ana: $ 0')
       expect(mensaje()).not.toContain('Sin asignar')
       expect(mensaje().split('\n').pop()).toBe('⚠️ Los montos de arriba son la parte de cada uno sobre el total de la cuenta. Si alguien ya pagó, no se lo vuelvas a pedir.')
     })
@@ -186,6 +194,38 @@ describe('MensajePage', () => {
   })
 
   describe('copiar el mensaje', () => {
+    // El texto se pega en otras apps: lleva un espacio común entre el "$" y el número, no el no separable (U+00A0) con el
+    // que se escriben los precios en pantalla (formatearPrecio). Se arma con fromCharCode para que se vea qué se busca.
+    const NO_SEPARABLE = String.fromCharCode(0xa0)
+
+    it('el mensaje no lleva espacios no separables (U+00A0): ni el que se ve ni el que se copia', async () => {
+      const escribir = vi.fn().mockResolvedValue(undefined)
+      vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText: escribir } })
+
+      abrir('?cantidad=3')
+      await screen.findByText('Mensaje para el grupo')
+
+      // Con miles y con centavos: los dos casos en los que formatearPrecio pone el espacio no separable.
+      expect(mensaje()).toContain('Total de la cuenta: $ 6.500')
+      expect(mensaje()).toContain('$ 2.166,67 cada uno')
+      expect(mensaje()).not.toContain(NO_SEPARABLE)
+
+      await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Copiar mensaje' })) })
+
+      expect(escribir).toHaveBeenCalledTimes(1)
+      expect(escribir.mock.calls[0][0]).toBe(mensaje())
+      expect(escribir.mock.calls[0][0]).not.toContain(NO_SEPARABLE)
+    })
+
+    it('tampoco lo lleva el mensaje por consumo (platos, partes y lo que falta asignar)', async () => {
+      abrir('?modo=por_consumo')
+      await screen.findByText('Mensaje para el grupo')
+
+      expect(mensaje()).toContain('• 2x Milanesa — $ 3.000')
+      expect(mensaje()).toContain('⚠️ Sin asignar todavía ($ 500):')
+      expect(mensaje()).not.toContain(NO_SEPARABLE)
+    })
+
     it('lo copia al portapapeles y avisa "¡Copiado!" por 2 s', async () => {
       const escribir = vi.fn().mockResolvedValue(undefined)
       vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText: escribir } })
@@ -298,13 +338,23 @@ describe('MensajePage', () => {
       await waitFor(() => expect(principal.querySelector('textarea[readonly]')).not.toBeNull())
     })
 
+    it('el mensaje armado se anuncia con su título visible, "Mensaje para el grupo" (WCAG 2.5.3)', async () => {
+      abrir('?cantidad=3')
+
+      const campo = await screen.findByLabelText('Mensaje para el grupo')
+
+      expect(campo.tagName).toBe('TEXTAREA')
+      expect(campo).toHaveAttribute('readonly')
+      expect(campo).toHaveAccessibleName('Mensaje para el grupo')
+      // Es el mismo texto que se ve: el <label> no es un nombre aparte.
+      expect(screen.getByText('Mensaje para el grupo').tagName).toBe('LABEL')
+    })
+
     it('no tiene violaciones de accesibilidad (axe)', async () => {
       const { container } = abrir('?cantidad=3')
       await waitFor(() => expect(container.querySelector('textarea[readonly]')).not.toBeNull())
 
-      // Sin la regla "label": el mensaje armado es un <textarea> sin etiqueta. Es un hallazgo que no estaba en el plan:
-      // queda a la espera de decisión en docs/a11y/plan-cliente.md ("Hallazgos fuera del plan"). Al resolverlo, se saca la excepción.
-      expect(await axe(container, { rules: { label: { enabled: false } } })).toHaveNoViolations()
+      expect(await axe(container)).toHaveNoViolations()
     })
   })
 })

@@ -104,7 +104,7 @@ describe('EtiquetarPedidosPage', () => {
       abrir()
 
       expect(screen.getByText('Etiquetá qué pediste vos para calcular tu parte de la cuenta.')).toBeInTheDocument()
-      expect(within(tarjeta('Milanesa')).getByText('$3000.00')).toBeInTheDocument()
+      expect(within(tarjeta('Milanesa')).getByText('$ 3.000')).toBeInTheDocument()
       expect(within(tarjeta('Pizza')).getByText('Se divide en partes iguales entre los 2 etiquetados')).toBeInTheDocument()
       expect(within(tarjeta('Agua')).getByText('Sin etiquetar todavía')).toBeInTheDocument()
       expect(within(tarjeta('Agua')).getAllByRole('button').map((b) => b.textContent)).toEqual(['Coty', 'Sol', 'Luis'])

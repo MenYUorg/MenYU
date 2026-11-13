@@ -54,8 +54,18 @@ describe('CantidadComensalesPage', () => {
     expect(await screen.findByText('Cantidad de comensales')).toBeInTheDocument()
     expect(saldo).toHaveBeenCalledWith('jwt-mesa', 'ses-1')
     expect(cantidad()).toBe('1')
-    expect(porPersona()).toBe('$6000.00')
+    expect(porPersona()).toBe('$\u00a06.000')
     expect(screen.getByRole('button', { name: 'Restar' })).toBeDisabled()
+  })
+
+  it('si la cuenta no se divide justo, el monto por persona lleva los centavos con coma (6000 entre 7)', async () => {
+    await abrir()
+    await screen.findByText('Cantidad de comensales')
+
+    for (let i = 0; i < 6; i++) fireEvent.click(screen.getByRole('button', { name: 'Sumar' }))
+
+    expect(cantidad()).toBe('7')
+    expect(porPersona()).toBe('$\u00a0857,14')
   })
 
   it('sumar y restar recalculan el monto por persona', async () => {
@@ -66,11 +76,11 @@ describe('CantidadComensalesPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Sumar' }))
     fireEvent.click(screen.getByRole('button', { name: 'Sumar' }))
     expect(cantidad()).toBe('4')
-    expect(porPersona()).toBe('$1500.00')
+    expect(porPersona()).toBe('$\u00a01.500')
 
     fireEvent.click(screen.getByRole('button', { name: 'Restar' }))
     expect(cantidad()).toBe('3')
-    expect(porPersona()).toBe('$2000.00')
+    expect(porPersona()).toBe('$\u00a02.000')
   })
 
   it('tocar el número deja escribirlo; Enter o salir del campo lo confirma, dentro de 1 a 99', async () => {

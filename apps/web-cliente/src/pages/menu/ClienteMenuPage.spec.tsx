@@ -11,6 +11,7 @@ import { compartirLaSesionDeWebAuth, cuentaDePrueba, sesionDeSupabase, signOutSi
 import { irA } from '../../utils/navegar'
 import { ClienteMenuPage } from './ClienteMenuPage'
 import { axe } from '../../test/axe'
+import { useAnunciadorStore } from '../../utils/anunciador'
 
 vi.mock('../../utils/navegar', () => ({ irA: vi.fn() }))
 
@@ -433,23 +434,23 @@ describe('ClienteMenuPage', () => {
       it('lista las clasificaciones con la cantidad de platos y aplica la elegida', () => {
         renderMenu(menuConDietas())
 
-        fireEvent.click(screen.getByRole('button', { name: /Dietas/ }))
-        expect(screen.getByText('Vegano')).toBeInTheDocument()
-        fireEvent.click(screen.getByText('Vegano'))
+        fireEvent.click(screen.getByRole('button', { name: 'Filtrar por dietas' }))
+        expect(screen.getByRole('checkbox', { name: 'Vegano, 1 plato' })).not.toBeChecked()
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Vegano, 1 plato' }))
         fireEvent.click(screen.getByRole('button', { name: 'Aplicar (1)' }))
 
         expect(screen.getByText('Ensalada')).toBeInTheDocument()
         expect(screen.queryByText('Bife')).not.toBeInTheDocument()
-        expect(screen.getByRole('button', { name: /Dietas/ })).toHaveTextContent('1')
+        expect(screen.getByRole('button', { name: 'Filtrar por dietas, 1 filtro activo' })).toHaveTextContent('1')
       })
 
       it('"Limpiar" vuelve a mostrar todos los platos', () => {
         renderMenu(menuConDietas())
-        fireEvent.click(screen.getByRole('button', { name: /Dietas/ }))
-        fireEvent.click(screen.getByText('Vegano'))
+        fireEvent.click(screen.getByRole('button', { name: 'Filtrar por dietas' }))
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Vegano, 1 plato' }))
         fireEvent.click(screen.getByRole('button', { name: 'Aplicar (1)' }))
 
-        fireEvent.click(screen.getByRole('button', { name: /Dietas/ }))
+        fireEvent.click(screen.getByRole('button', { name: 'Filtrar por dietas, 1 filtro activo' }))
         fireEvent.click(screen.getByRole('button', { name: 'Limpiar' }))
 
         expect(screen.getByText('Bife')).toBeInTheDocument()
@@ -494,8 +495,8 @@ describe('ClienteMenuPage', () => {
 
       expect(descuentos.getByText('Hamburguesa')).toBeInTheDocument()
       expect(descuentos.getByRole('img', { name: '20% de descuento' })).toBeInTheDocument()
-      expect(descuentos.getByText('$1500.00')).toBeInTheDocument()
-      expect(descuentos.getByText('$1200.00')).toBeInTheDocument()
+      expect(descuentos.getByText('$ 1.500')).toBeInTheDocument()
+      expect(descuentos.getByText('$ 1.200')).toBeInTheDocument()
     })
 
     it('en la categoría, el mismo plato también se ve con su descuento', () => {
@@ -503,14 +504,14 @@ describe('ClienteMenuPage', () => {
       const principales = within(seccion(container, 'cat-1')!)
 
       expect(principales.getByRole('img', { name: '20% de descuento' })).toBeInTheDocument()
-      expect(principales.getByText('$1200.00')).toBeInTheDocument()
+      expect(principales.getByText('$ 1.200')).toBeInTheDocument()
     })
 
     it('un plato sin descuento no tiene círculo en ninguna sección', () => {
       const { container } = renderMenu(menuCompleto())
       const postres = within(seccion(container, 'cat-2')!)
 
-      expect(postres.getByText('$700.00')).toBeInTheDocument()
+      expect(postres.getByText('$ 700')).toBeInTheDocument()
       expect(postres.queryByRole('img', { name: /de descuento/ })).not.toBeInTheDocument()
     })
 
@@ -620,6 +621,124 @@ describe('ClienteMenuPage', () => {
 
     it('no tiene violaciones de accesibilidad (axe)', async () => {
       const { container } = renderMenu(menuCompleto())
+
+      expect(await axe(container)).toHaveNoViolations()
+    })
+  })
+
+  describe('menú lateral y filtro de dietas (accesibilidad)', () => {
+    const abrirElMenu = () => fireEvent.click(screen.getByRole('button', { name: 'Abrir el menú' }))
+    const dialogo = () => screen.getByRole('dialog', { hidden: true })
+
+    beforeEach(() => {
+      useAnunciadorStore.setState({ mensaje: '', numero: 0 })
+    })
+
+    it('cerrado: el menú lateral está inerte y el resto de la pantalla no', () => {
+      renderMenu(menuCompleto())
+
+      expect(dialogo()).toHaveAttribute('inert')
+      expect(screen.getByRole('banner')).not.toHaveAttribute('inert')
+      expect(screen.getByRole('main')).not.toHaveAttribute('inert')
+      expect(screen.getByRole('button', { name: 'Abrir el menú' })).toHaveAttribute('aria-expanded', 'false')
+    })
+
+    it('abierto: el foco entra al menú, el encabezado y el contenido quedan inertes y el botón dice que está expandido', () => {
+      renderMenu(menuCompleto())
+
+      abrirElMenu()
+
+      expect(dialogo()).not.toHaveAttribute('inert')
+      expect(dialogo()).toHaveFocus()
+      expect(screen.getByRole('banner')).toHaveAttribute('inert')
+      expect(screen.getByRole('main')).toHaveAttribute('inert')
+      expect(screen.getByRole('button', { name: 'Abrir el menú', hidden: true })).toHaveAttribute('aria-expanded', 'true')
+    })
+
+    it('Esc cierra el menú: vuelve la pantalla, se saca la inercia y el foco vuelve a "Abrir el menú"', async () => {
+      const usuario = userEvent.setup()
+      renderMenu(menuCompleto())
+      await usuario.click(screen.getByRole('button', { name: 'Abrir el menú' }))
+
+      await usuario.keyboard('{Escape}')
+
+      expect(dialogo()).toHaveAttribute('inert')
+      expect(screen.getByRole('banner')).not.toHaveAttribute('inert')
+      expect(screen.getByRole('main')).not.toHaveAttribute('inert')
+      expect(screen.getByRole('button', { name: 'Abrir el menú' })).toHaveFocus()
+    })
+
+    it('"Cerrar el menú" lo cierra y el foco vuelve a "Abrir el menú"', async () => {
+      const usuario = userEvent.setup()
+      renderMenu(menuCompleto())
+      await usuario.click(screen.getByRole('button', { name: 'Abrir el menú' }))
+
+      await usuario.click(screen.getByRole('button', { name: 'Cerrar el menú' }))
+
+      expect(screen.getByRole('button', { name: 'Abrir el menú' })).toHaveFocus()
+      expect(screen.getByRole('main')).not.toHaveAttribute('inert')
+    })
+
+    it('"Mis pedidos" se activa desde el menú lateral con el teclado y lleva a la pantalla', async () => {
+      const usuario = userEvent.setup()
+      renderMenu(menuCompleto())
+      await usuario.click(screen.getByRole('button', { name: 'Abrir el menú' }))
+      screen.getByRole('button', { name: 'Mis pedidos' }).focus()
+
+      await usuario.keyboard('{Enter}')
+
+      expect(screen.getByText('Pantalla de pedidos')).toBeInTheDocument()
+    })
+
+    describe('el filtro de dietas anuncia cuántos platos quedan', () => {
+      const vegano = { id: 'veg', nombre: 'Vegano' }
+      const menuConDietas = () => crearMenu({
+        categorias: [{ id: 'cat-1', nombre: 'Principales', orden: 1, itemsDirectos: [
+          crearPlato({ id: 'ens', nombre: 'Ensalada', clasificaciones: [vegano] }),
+          crearPlato({ id: 'bife', nombre: 'Bife' }),
+          crearPlato({ id: 'flan', nombre: 'Flan' }),
+        ] }],
+      })
+
+      it('al aplicar una dieta dice cuántos platos quedan y el foco vuelve al botón "Dietas"', () => {
+        renderMenu(menuConDietas())
+
+        fireEvent.click(screen.getByRole('button', { name: 'Filtrar por dietas' }))
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Vegano, 1 plato' }))
+        fireEvent.click(screen.getByRole('button', { name: 'Aplicar (1)' }))
+
+        expect(useAnunciadorStore.getState().mensaje).toBe('1 plato')
+        expect(screen.getByRole('button', { name: 'Filtrar por dietas, 1 filtro activo' })).toHaveFocus()
+      })
+
+      it('al limpiar dice cuántos platos hay en total', () => {
+        renderMenu(menuConDietas())
+        fireEvent.click(screen.getByRole('button', { name: 'Filtrar por dietas' }))
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Vegano, 1 plato' }))
+        fireEvent.click(screen.getByRole('button', { name: 'Aplicar (1)' }))
+
+        fireEvent.click(screen.getByRole('button', { name: 'Filtrar por dietas, 1 filtro activo' }))
+        fireEvent.click(screen.getByRole('button', { name: 'Limpiar' }))
+
+        expect(useAnunciadorStore.getState().mensaje).toBe('3 platos')
+        expect(screen.getByRole('button', { name: 'Filtrar por dietas' })).toHaveFocus()
+      })
+
+      it('la cantidad tiene en cuenta lo que se escribió en el buscador', () => {
+        renderMenu(menuConDietas())
+        fireEvent.change(screen.getByPlaceholderText('Buscar platos...'), { target: { value: 'ens' } })
+
+        fireEvent.click(screen.getByRole('button', { name: 'Filtrar por dietas' }))
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Vegano, 1 plato' }))
+        fireEvent.click(screen.getByRole('button', { name: 'Aplicar (1)' }))
+
+        expect(useAnunciadorStore.getState().mensaje).toBe('1 plato')
+      })
+    })
+
+    it('no tiene violaciones de accesibilidad (axe), con el menú lateral abierto', async () => {
+      const { container } = renderMenu(menuCompleto())
+      abrirElMenu()
 
       expect(await axe(container)).toHaveNoViolations()
     })

@@ -1,3 +1,12 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/*
+ * El <h1> al que SeguimientoDeRuta lleva el foco por código al cambiar de pantalla (`tabindex="-1"`) no es un control: no se
+ * interactúa con él, y WCAG 2.4.7 no pide un indicador de foco ahí. Sin esta regla el navegador dibuja su anillo alrededor del
+ * título en cada cambio de pantalla. Botones, enlaces y campos conservan el suyo: esta regla no toca a nadie más.
+ */
+h1[tabindex='-1']:focus {
+  outline: none;
+}

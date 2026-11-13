@@ -119,15 +119,19 @@ interface MenuHeaderProps {
   modo: ModoMenu
   /** Abre el menú lateral. */
   onAbrirMenu: () => void
+  /** Si el menú lateral está abierto: el botón lo dice (`aria-expanded`). */
+  menuAbierto?: boolean
+  /** El encabezado queda inerte (sin foco ni lectura) mientras el menú lateral, que es un diálogo, está abierto. */
+  inerte?: boolean
 }
 
 /**
  * La barra de arriba del menú: el logo del restaurante (que es el botón del menú lateral), su nombre y, en la mesa,
  * "Mozo" y la mesa. El nombre puede ocupar dos líneas.
  */
-export function MenuHeader({ nombre, logoUrl, modo, onAbrirMenu }: MenuHeaderProps) {
+export function MenuHeader({ nombre, logoUrl, modo, onAbrirMenu, menuAbierto = false, inerte = false }: MenuHeaderProps) {
   return (
-    <header style={{
+    <header inert={inerte} style={{
       background: CM.navy, padding: '12px 14px',
       display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0,
     }}>
@@ -135,6 +139,8 @@ export function MenuHeader({ nombre, logoUrl, modo, onAbrirMenu }: MenuHeaderPro
       <button
         onClick={onAbrirMenu}
         aria-label="Abrir el menú"
+        aria-haspopup="dialog"
+        aria-expanded={menuAbierto}
         className="after:absolute after:-inset-0.5 after:content-['']"
         style={{
           width: 40, height: 40, padding: 4, borderRadius: 10, flexShrink: 0, boxSizing: 'border-box',

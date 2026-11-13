@@ -61,14 +61,14 @@ describe('ItemDetailPage', () => {
     it('muestra el precio original tachado y el precio con descuento', () => {
       const { container } = renderDetalle('hamb', menuConCategoria(hamburguesaEnDescuento()))
 
-      expect(container.querySelector('s')).toHaveTextContent('$1000.00')
-      expect(container).toHaveTextContent('Antes $1000.00, ahora $800.00')
+      expect(container.querySelector('s')).toHaveTextContent('$ 1.000')
+      expect(container).toHaveTextContent('Antes $ 1.000, ahora $ 800')
     })
 
     it('el botón de agregar parte del precio con descuento', () => {
       renderDetalle('hamb', menuConCategoria(hamburguesaEnDescuento()))
 
-      expect(botonAgregar()).toHaveTextContent('$800.00')
+      expect(botonAgregar()).toHaveTextContent('$ 800')
     })
 
     it('los extras se suman a precio normal, sin descuento', () => {
@@ -77,7 +77,7 @@ describe('ItemDetailPage', () => {
       // El primer "+" es el del extra; el segundo es el de la cantidad del plato.
       fireEvent.click(screen.getAllByRole('button', { name: '+' })[0])
 
-      expect(botonAgregar()).toHaveTextContent('$950.00') // 800 + 150
+      expect(botonAgregar()).toHaveTextContent('$ 950') // 800 + 150
     })
 
     it('la cantidad multiplica el precio con descuento más los extras', () => {
@@ -86,7 +86,7 @@ describe('ItemDetailPage', () => {
       fireEvent.click(screen.getAllByRole('button', { name: '+' })[0]) // 1 extra
       fireEvent.click(screen.getAllByRole('button', { name: '+' })[1]) // 2 platos
 
-      expect(botonAgregar()).toHaveTextContent('$1900.00') // (800 + 150) × 2
+      expect(botonAgregar()).toHaveTextContent('$ 1.900') // (800 + 150) × 2
     })
 
     it('al agregar, el carrito guarda el precio con descuento más los extras', () => {
@@ -112,7 +112,7 @@ describe('ItemDetailPage', () => {
       renderDetalle('hamb', crearMenu({ descuentos: [hamburguesaEnDescuento()] }))
 
       expect(screen.getByRole('heading', { name: 'Hamburguesa' })).toBeInTheDocument()
-      expect(botonAgregar()).toHaveTextContent('$800.00')
+      expect(botonAgregar()).toHaveTextContent('$ 800')
     })
   })
 
@@ -129,7 +129,7 @@ describe('ItemDetailPage', () => {
     it('el botón de agregar parte del precio base', () => {
       renderDetalle('mila', menuConCategoria(milanesa()))
 
-      expect(botonAgregar()).toHaveTextContent('$1000.00')
+      expect(botonAgregar()).toHaveTextContent('$ 1.000')
     })
 
     it('los extras se suman al precio base', () => {
@@ -137,7 +137,21 @@ describe('ItemDetailPage', () => {
 
       fireEvent.click(screen.getAllByRole('button', { name: '+' })[0])
 
-      expect(botonAgregar()).toHaveTextContent('$1150.00')
+      expect(botonAgregar()).toHaveTextContent('$ 1.150')
+    })
+
+    it('un extra con centavos los escribe con coma, y el total del botón también', () => {
+      const conCentavos = crearExtra({
+        id: 'ii-centavos',
+        precioExtra: 150.5,
+        ingrediente: { id: 'ing-centavos', restauranteId: 'rest-1', nombre: 'Panceta', esAlergeno: false },
+      })
+      renderDetalle('mila', menuConCategoria(crearPlato({ id: 'mila', nombre: 'Milanesa', precioBase: 1000, ingredientes: [conCentavos] })))
+
+      expect(screen.getByText('+$ 150,50')).toBeInTheDocument()
+      fireEvent.click(screen.getAllByRole('button', { name: '+' })[0])
+
+      expect(botonAgregar()).toHaveTextContent('$ 1.150,50')
     })
   })
 

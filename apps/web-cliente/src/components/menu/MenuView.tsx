@@ -111,6 +111,9 @@ export function MenuView({ modo, restauranteId }: MenuViewProps) {
     })).filter((cat) => cat.itemsDirectos.length > 0)
   }, [menu, buscar, activeDiets])
 
+  // Cuántos platos quedan con los filtros: lo que se anuncia al aplicar o limpiar las dietas.
+  const cantidadDePlatos = categoriasFiltradas.reduce((total, categoria) => total + categoria.itemsDirectos.length, 0)
+
   // Chef's recommendations with the same filters applied
   const recomendadosFiltrados = useMemo(() => {
     return (menu?.recomendados ?? []).filter((item) => itemPasaFiltros(item, buscar, activeDiets))
@@ -264,16 +267,25 @@ export function MenuView({ modo, restauranteId }: MenuViewProps) {
         onCerrarSesion={cerrarSesion}
       />
 
-      <MenuHeader nombre={menu.restaurante.nombre} logoUrl={menu.restaurante.logoUrl} modo={modo} onAbrirMenu={() => setDrawerOpen(true)} />
+      {/* Con el menú lateral abierto (un diálogo), el encabezado y el contenido quedan inertes: sin foco ni lectura. */}
+      <MenuHeader
+        nombre={menu.restaurante.nombre}
+        logoUrl={menu.restaurante.logoUrl}
+        modo={modo}
+        onAbrirMenu={() => setDrawerOpen(true)}
+        menuAbierto={drawerOpen}
+        inerte={drawerOpen}
+      />
 
       {/* Todo lo que no es el encabezado ni el menú lateral: el buscador, las secciones y los botones flotantes. */}
-      <main style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+      <main inert={drawerOpen} style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
       <BarraBusqueda
         buscar={buscar}
         onBuscar={setBuscar}
         clasificaciones={allClasifs}
         dietasActivas={activeDiets}
         onDietasActivas={setActiveDiets}
+        cantidadDePlatos={cantidadDePlatos}
       />
 
       <ChipsSecciones secciones={seccionesConId} activa={categoriaActiva} onElegir={handleCategoriaClick} />

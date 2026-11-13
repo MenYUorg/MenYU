@@ -40,8 +40,8 @@ describe('ItemCard', () => {
       )
 
       expect(screen.getByRole('img', { name: '20% de descuento' })).toBeInTheDocument()
-      expect(container.querySelector('s')).toHaveTextContent('$1500.00')
-      expect(screen.getByText('$1200.00')).toBeInTheDocument()
+      expect(container.querySelector('s')).toHaveTextContent('$ 1.500')
+      expect(screen.getByText('$ 1.200')).toBeInTheDocument()
       expect(screen.getByText('Con queso')).toBeInTheDocument()
     })
   })
@@ -52,7 +52,7 @@ describe('ItemCard', () => {
 
       expect(screen.getByText('Milanesa')).toBeInTheDocument()
       expect(screen.getByText('Con papas fritas')).toBeInTheDocument()
-      expect(screen.getByText('$1000.00')).toBeInTheDocument()
+      expect(screen.getByText('$ 1.000')).toBeInTheDocument()
     })
 
     it('no muestra el círculo del descuento ni un precio tachado', () => {
@@ -70,7 +70,7 @@ describe('ItemCard', () => {
 
       const { container } = render(<ItemCard item={vieja as ReturnType<typeof crearPlato>} onPress={vi.fn()} />)
 
-      expect(screen.getByText('$1000.00')).toBeInTheDocument()
+      expect(screen.getByText('$ 1.000')).toBeInTheDocument()
       expect(container.querySelector('s')).toBeNull()
       expect(screen.queryByRole('img', { name: /de descuento/ })).not.toBeInTheDocument()
     })
@@ -78,7 +78,7 @@ describe('ItemCard', () => {
     it('el precio base llega como texto (Decimal serializado) y el precio vigente como número', () => {
       render(<ItemCard item={crearPlato({ precioBase: '1250.00' as unknown as number, precioVigente: 1250 })} onPress={vi.fn()} />)
 
-      expect(screen.getByText('$1250.00')).toBeInTheDocument()
+      expect(screen.getByText('$ 1.250')).toBeInTheDocument()
     })
   })
 
@@ -94,27 +94,27 @@ describe('ItemCard', () => {
     it('muestra el precio original tachado y el precio con descuento', () => {
       const { container } = render(<ItemCard item={enDescuento()} onPress={vi.fn()} />)
 
-      expect(container.querySelector('s')).toHaveTextContent('$1000.00')
-      expect(screen.getByText('$800.00')).toBeInTheDocument()
+      expect(container.querySelector('s')).toHaveTextContent('$ 1.000')
+      expect(screen.getByText('$ 800')).toBeInTheDocument()
     })
 
     it('un lector de pantalla lee "Antes … ahora …"', () => {
       const { container } = render(<ItemCard item={enDescuento()} onPress={vi.fn()} />)
 
-      expect(container).toHaveTextContent('Antes $1000.00, ahora $800.00')
+      expect(container).toHaveTextContent('Antes $ 1.000, ahora $ 800')
     })
 
     it('el precio original tachado se lee bien aunque el precio base llegue como texto', () => {
       const plato = crearPlatoEnDescuento({ precioBase: '1000.00' as unknown as number, precioDescuento: 800 })
       const { container } = render(<ItemCard item={plato} onPress={vi.fn()} />)
 
-      expect(container.querySelector('s')).toHaveTextContent('$1000.00')
+      expect(container.querySelector('s')).toHaveTextContent('$ 1.000')
     })
 
     it('el precio con descuento se escribe en naranja', () => {
       render(<ItemCard item={enDescuento()} onPress={vi.fn()} />)
 
-      expect(screen.getByText('$800.00')).toHaveStyle({ color: '#E8563A' })
+      expect(screen.getByText('$ 800')).toHaveStyle({ color: '#E8563A' })
     })
   })
 
