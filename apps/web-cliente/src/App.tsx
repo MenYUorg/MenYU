@@ -25,6 +25,8 @@ import { ComensalRequiredRoute } from './ComensalRequiredRoute'
 import { useSessionStore } from './store/sessionStore'
 import { usePublicMenuStore } from './store/publicMenuStore'
 import { GraciasCard } from './components/GraciasCard'
+import { Anunciador } from './components/Anunciador'
+import { SeguimientoDeRuta } from './components/SeguimientoDeRuta'
 
 const WS_BASE =
   urlDelSocket(import.meta.env.VITE_WS_URL as string | undefined, import.meta.env.VITE_API_URL as string | undefined) ?? ''
@@ -156,6 +158,9 @@ function SessionGuard({ children }: { children: React.ReactNode }) {
 export function App() {
   return (
     <BrowserRouter>
+      {/* Desde el arranque, antes de cualquier mensaje: los lectores no leen una región viva recién insertada. */}
+      <Anunciador />
+      <SeguimientoDeRuta />
       <SessionGuard>
         <Routes>
           <Route path="/" element={<DiscoveryPage />} />

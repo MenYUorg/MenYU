@@ -58,7 +58,7 @@ export function ElegirNombrePage() {
     <div style={{ minHeight: '100vh', background: C.bg }}>
       <AppHeader />
 
-      <div style={{
+      <main style={{
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
@@ -107,7 +107,7 @@ export function ElegirNombrePage() {
             </button>
           </form>
         </div>
-      </div>
+      </main>
     </div>
   )
 }

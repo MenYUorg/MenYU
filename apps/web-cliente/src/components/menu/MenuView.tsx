@@ -204,6 +204,7 @@ export function MenuView({ modo, restauranteId }: MenuViewProps) {
               texto="Puede que ya no esté disponible. Volvé al inicio para ver los demás."
               boton="Volver al inicio"
               onBoton={() => navigate('/')}
+              nivelDelTitulo={1}
             />
           </div>
         </main>
@@ -217,14 +218,14 @@ export function MenuView({ modo, restauranteId }: MenuViewProps) {
 
   // Mientras llega (o todavía no se pidió el de este restaurante).
   if (loading || (!menu && !error)) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100svh', background: CM.bg }}>
+    <main style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100svh', background: CM.bg }}>
       <Spinner size="lg" />
-    </div>
+    </main>
   )
 
   if (error || !menu) return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100svh', gap: 12, padding: 24, background: CM.bg }}>
-      <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 14, color: CM.orange, textAlign: 'center', margin: 0 }}>No se pudo cargar el menú</p>
+    <main style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100svh', gap: 12, padding: 24, background: CM.bg }}>
+      <h1 style={{ fontFamily: 'Inter,sans-serif', fontWeight: 400, fontSize: 14, color: CM.orange, textAlign: 'center', margin: 0 }}>No se pudo cargar el menú</h1>
       <button
         onClick={() => void fetchMenu(restauranteId)}
         style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 600, fontSize: 13, color: CM.orange, background: 'none', border: 'none', cursor: 'pointer' }}
@@ -239,7 +240,7 @@ export function MenuView({ modo, restauranteId }: MenuViewProps) {
           Volver al restaurante
         </Link>
       )}
-    </div>
+    </main>
   )
 
   // En la carta no se pide: las tarjetas no se tocan.
@@ -265,6 +266,8 @@ export function MenuView({ modo, restauranteId }: MenuViewProps) {
 
       <MenuHeader nombre={menu.restaurante.nombre} logoUrl={menu.restaurante.logoUrl} modo={modo} onAbrirMenu={() => setDrawerOpen(true)} />
 
+      {/* Todo lo que no es el encabezado ni el menú lateral: el buscador, las secciones y los botones flotantes. */}
+      <main style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
       <BarraBusqueda
         buscar={buscar}
         onBuscar={setBuscar}
@@ -300,6 +303,7 @@ export function MenuView({ modo, restauranteId }: MenuViewProps) {
         habilitado={conAsistente}
         conCarrito={modo === 'mesa' && hayCarrito}
       />
+      </main>
     </div>
   )
 }

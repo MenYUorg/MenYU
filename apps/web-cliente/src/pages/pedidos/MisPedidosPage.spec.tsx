@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import type { PedidoCliente } from '../../hooks/usePedidosCliente'
 import { MisPedidosPage } from './MisPedidosPage'
+import { axe } from '../../test/axe'
 
 let estado: { pedidos: PedidoCliente[]; loading: boolean; error: string | null }
 
@@ -100,5 +101,43 @@ describe('MisPedidosPage', () => {
     expect(progreso('cccccc-list')).toBe('100%')
     expect(progreso('dddddd-entr')).toBeNull()
     expect(progreso('eeeeee-anul')).toBeNull()
+  })
+
+  describe('estructura de la pantalla (accesibilidad)', () => {
+    it('el título es el <h1> y el contenido va dentro del <main>: cargando, con error, vacío y con pedidos', () => {
+      estado.loading = true
+      let pantalla = abrir()
+      expect(screen.getByRole('heading', { level: 1, name: 'Mis pedidos' })).toBeInTheDocument()
+      expect(screen.getByRole('main')).toBeInTheDocument()
+      pantalla.unmount()
+
+      estado = { pedidos: [], loading: false, error: 'No se pudieron cargar tus pedidos' }
+      pantalla = abrir()
+      expect(screen.getByRole('main')).toHaveTextContent('No se pudieron cargar tus pedidos')
+      pantalla.unmount()
+
+      estado = { pedidos: [], loading: false, error: null }
+      pantalla = abrir()
+      expect(screen.getByRole('main')).toBeInTheDocument()
+      pantalla.unmount()
+
+      estado = { pedidos: [pedido('aaaaaa-pend', 'pendiente', '20:00')], loading: false, error: null }
+      abrir()
+      expect(screen.getByRole('main')).toHaveTextContent('Milanesa')
+    })
+
+    it('el encabezado (con el <h1>) queda fuera del <main>', () => {
+      abrir()
+
+      expect(screen.getByRole('main')).not.toContainElement(screen.getByRole('heading', { level: 1 }))
+    })
+
+    it('no tiene violaciones de accesibilidad (axe)', async () => {
+      estado.pedidos = [pedido('aaaaaa-pend', 'pendiente', '20:00'), pedido('bbbbbb-prep', 'en_preparacion', '20:30')]
+
+      const { container } = abrir()
+
+      expect(await axe(container)).toHaveNoViolations()
+    })
   })
 })

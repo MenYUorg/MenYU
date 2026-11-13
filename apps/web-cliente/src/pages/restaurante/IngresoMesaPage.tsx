@@ -115,6 +115,7 @@ export function IngresoMesaPage() {
           texto="Puede que ya no esté disponible. Volvé al inicio para ver los demás."
           boton="Volver al inicio"
           onBoton={() => navigate('/')}
+          nivelDelTitulo={1}
         />
       )
     }

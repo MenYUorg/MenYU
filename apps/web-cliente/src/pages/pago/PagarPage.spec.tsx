@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { api } from '../../services/api'
 import { PagarPage } from './PagarPage'
+import { axe } from '../../test/axe'
 
 let sesion: { jwt: string | null; sesionId: string | null; numeroMesa: string | null }
 
@@ -207,5 +208,29 @@ describe('PagarPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Volver al menú' }))
 
     expect(screen.getByText('destino /menu')).toBeInTheDocument()
+  })
+
+  describe('estructura de la pantalla (accesibilidad)', () => {
+    it('el título es el <h1> y la cuenta y las opciones de pago van dentro del <main>', async () => {
+      await abrir()
+
+      const titulo = await screen.findByRole('heading', { level: 1, name: 'Pagar la cuenta' })
+      const principal = screen.getByRole('main')
+      expect(principal).not.toContainElement(titulo)
+      expect(principal).toContainElement(await screen.findByText('Milanesa'))
+    })
+
+    it('no tiene violaciones de accesibilidad (axe)', async () => {
+      const { container } = render(
+        <MemoryRouter initialEntries={['/pagar']}>
+          <Routes>
+            <Route path="/pagar" element={<PagarPage />} />
+          </Routes>
+        </MemoryRouter>,
+      )
+      await screen.findByText('Milanesa')
+
+      expect(await axe(container)).toHaveNoViolations()
+    })
   })
 })

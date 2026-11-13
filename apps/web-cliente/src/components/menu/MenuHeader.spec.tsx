@@ -184,4 +184,20 @@ describe('MenuHeader', () => {
       expect(screen.queryByText(/^Mesa/)).not.toBeInTheDocument()
     })
   })
+
+  describe('el nombre del restaurante es el título de la pantalla', () => {
+    it('es el <h1> (en la mesa y en la carta), dentro del encabezado', () => {
+      renderHeader()
+
+      const titulo = screen.getByRole('heading', { level: 1, name: 'La Parrilla del Puerto' })
+      expect(screen.getByRole('banner')).toContainElement(titulo)
+    })
+
+    it('en la carta también es el <h1>, y no hay botón del mozo', () => {
+      renderHeader({ modo: 'carta' })
+
+      expect(screen.getByRole('heading', { level: 1, name: 'La Parrilla del Puerto' })).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /Mozo/ })).not.toBeInTheDocument()
+    })
+  })
 })

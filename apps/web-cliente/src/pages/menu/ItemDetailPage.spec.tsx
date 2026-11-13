@@ -1,11 +1,13 @@
 import type { MenuPublico, MenuPublicoItem } from '@menyu/types'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { api } from '../../services/api'
 import { useCarritoStore } from '../../store/carritoStore'
 import { usePublicMenuStore } from '../../store/publicMenuStore'
 import { useSessionStore } from '../../store/sessionStore'
 import { crearExtra, crearMenu, crearPlato, crearPlatoEnDescuento } from '../../test/fixtures'
 import { ItemDetailPage } from './ItemDetailPage'
+import { axe } from '../../test/axe'
 
 vi.mock('../../services/api', () => ({
   api: { menu: { publico: vi.fn() } },
@@ -143,5 +145,55 @@ describe('ItemDetailPage', () => {
     renderDetalle('no-existe', menuConCategoria(crearPlato()))
 
     expect(screen.getByText('Ítem no encontrado')).toBeInTheDocument()
+  })
+
+  describe('estructura de la pantalla (accesibilidad)', () => {
+    it('el nombre del plato es el <h1> y todo el contenido va dentro del <main>', () => {
+      renderDetalle('hamb', menuConCategoria(hamburguesaEnDescuento()))
+
+      expect(screen.getByRole('heading', { level: 1, name: 'Hamburguesa' })).toBeInTheDocument()
+      const principal = screen.getByRole('main')
+      expect(principal).toContainElement(botonAgregar())
+    })
+
+    it('un plato que no está en el menú tiene su <h1> y su <main>', () => {
+      renderDetalle('no-existe', menuConCategoria(crearPlato()))
+
+      expect(screen.getByRole('heading', { level: 1, name: 'Ítem no encontrado' })).toBeInTheDocument()
+      expect(screen.getByRole('main')).toBeInTheDocument()
+    })
+
+    it('si el menú no se pudo cargar, también', async () => {
+      vi.mocked(api.menu.publico).mockRejectedValue(new Error('Error 500'))
+      render(
+        <MemoryRouter initialEntries={['/menu/hamb']}>
+          <Routes>
+            <Route path="/menu/:itemId" element={<ItemDetailPage />} />
+          </Routes>
+        </MemoryRouter>,
+      )
+
+      expect(await screen.findByRole('heading', { level: 1, name: 'No se pudo cargar el menú' })).toBeInTheDocument()
+      expect(screen.getByRole('main')).toBeInTheDocument()
+    })
+
+    it('mientras carga ya hay un <main>', () => {
+      vi.mocked(api.menu.publico).mockReturnValue(new Promise(() => {}))
+      render(
+        <MemoryRouter initialEntries={['/menu/hamb']}>
+          <Routes>
+            <Route path="/menu/:itemId" element={<ItemDetailPage />} />
+          </Routes>
+        </MemoryRouter>,
+      )
+
+      expect(screen.getByRole('main')).toBeInTheDocument()
+    })
+
+    it('no tiene violaciones de accesibilidad (axe)', async () => {
+      const { container } = renderDetalle('hamb', menuConCategoria(hamburguesaEnDescuento()))
+
+      expect(await axe(container)).toHaveNoViolations()
+    })
   })
 })

@@ -1,8 +1,9 @@
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import type { Comensal, ItemEtiquetado } from '../../hooks/useEtiquetado'
 import { api } from '../../services/api'
 import { MensajePage } from './MensajePage'
+import { axe } from '../../test/axe'
 
 let sesion: { jwt: string | null; sesionId: string | null; numeroMesa: string | null }
 let etiquetado: { items: ItemEtiquetado[]; comensales: Comensal[]; loading: boolean; error: string | null }
@@ -285,5 +286,25 @@ describe('MensajePage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Volver' }))
 
     expect(screen.getByText('destino /pagar')).toBeInTheDocument()
+  })
+
+  describe('estructura de la pantalla (accesibilidad)', () => {
+    it('el título es el <h1> y el mensaje va dentro del <main>', async () => {
+      abrir('?cantidad=3')
+
+      const titulo = screen.getByRole('heading', { level: 1, name: 'Armar mensaje' })
+      const principal = screen.getByRole('main')
+      expect(principal).not.toContainElement(titulo)
+      await waitFor(() => expect(principal.querySelector('textarea[readonly]')).not.toBeNull())
+    })
+
+    it('no tiene violaciones de accesibilidad (axe)', async () => {
+      const { container } = abrir('?cantidad=3')
+      await waitFor(() => expect(container.querySelector('textarea[readonly]')).not.toBeNull())
+
+      // Sin la regla "label": el mensaje armado es un <textarea> sin etiqueta. Es un hallazgo que no estaba en el plan:
+      // queda a la espera de decisión en docs/a11y/plan-cliente.md ("Hallazgos fuera del plan"). Al resolverlo, se saca la excepción.
+      expect(await axe(container, { rules: { label: { enabled: false } } })).toHaveNoViolations()
+    })
   })
 })

@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import type { Comensal, ItemEtiquetado } from '../../hooks/useEtiquetado'
 import { EtiquetarPedidosPage } from './EtiquetarPedidosPage'
+import { axe } from '../../test/axe'
 
 const etiquetar = vi.fn()
 const desetiquetar = vi.fn()
@@ -242,6 +243,31 @@ describe('EtiquetarPedidosPage', () => {
       estado.items = [item('pi-1', 'Milanesa', 1, 1500)]
       abrir('/etiquetar?destino=mensaje')
       expect(screen.getByText('Todavía no etiquetaste ningún plato.')).toBeInTheDocument()
+    })
+  })
+
+  describe('estructura de la pantalla (accesibilidad)', () => {
+    it('el título es el <h1> y los platos y los comensales van dentro del <main>', () => {
+      abrir()
+
+      expect(screen.getByRole('heading', { level: 1, name: 'Etiquetar pedidos' })).toBeInTheDocument()
+      const principal = screen.getByRole('main')
+      expect(principal).toContainElement(tarjeta('Milanesa'))
+      expect(principal).not.toContainElement(screen.getByRole('heading', { level: 1 }))
+    })
+
+    it('también mientras carga', () => {
+      estado.loading = true
+
+      abrir()
+
+      expect(screen.getByRole('main')).toBeInTheDocument()
+    })
+
+    it('no tiene violaciones de accesibilidad (axe)', async () => {
+      const { container } = abrir()
+
+      expect(await axe(container)).toHaveNoViolations()
     })
   })
 })

@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { api } from '../../services/api'
 import { CantidadComensalesPage } from './CantidadComensalesPage'
+import { axe } from '../../test/axe'
 
 let sesion: { jwt: string | null; sesionId: string | null }
 
@@ -123,5 +124,30 @@ describe('CantidadComensalesPage', () => {
     expect(await screen.findByText('Error al cargar los datos de la sesión')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Reintentar' }))
     expect(await screen.findByText('Cantidad de comensales')).toBeInTheDocument()
+  })
+
+  describe('estructura de la pantalla (accesibilidad)', () => {
+    it('el título es el <h1> y el selector de cantidad va dentro del <main>', async () => {
+      await abrir()
+
+      const titulo = screen.getByRole('heading', { level: 1, name: '¿Cuántos son?' })
+      await screen.findByText('Cantidad de comensales')
+      const principal = screen.getByRole('main')
+      expect(principal).not.toContainElement(titulo)
+      expect(principal).toContainElement(screen.getByRole('button', { name: 'Sumar' }))
+    })
+
+    it('no tiene violaciones de accesibilidad (axe)', async () => {
+      const { container } = render(
+        <MemoryRouter initialEntries={['/dividir/cantidad']}>
+          <Routes>
+            <Route path="/dividir/cantidad" element={<CantidadComensalesPage />} />
+          </Routes>
+        </MemoryRouter>,
+      )
+      await screen.findByText('Cantidad de comensales')
+
+      expect(await axe(container)).toHaveNoViolations()
+    })
   })
 })
