@@ -143,10 +143,12 @@ describe('TarjetaOferta', () => {
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
   })
 
-  it('sin foto muestra el placeholder de la app', () => {
-    enRouter(<TarjetaOferta oferta={crearOferta({ imagenUrl: null, nombre: 'Papas rústicas' })} />)
+  it('sin foto muestra el placeholder de la app, que es decorativo (el nombre ya está escrito)', () => {
+    const { container } = enRouter(<TarjetaOferta oferta={crearOferta({ imagenUrl: null, nombre: 'Papas rústicas' })} />)
 
-    expect(screen.getByRole('img', { name: 'Papas rústicas' })).toBeInTheDocument()
+    expect(container.querySelector('img')).toHaveAttribute('alt', '')
+    expect(screen.queryByRole('img', { name: 'Papas rústicas' })).not.toBeInTheDocument()
+    expect(screen.getByText('Papas rústicas')).toBeInTheDocument()
   })
 
   it('un descuento del 99 % y uno del 1 % se ven completos', () => {

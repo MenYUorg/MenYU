@@ -24,7 +24,8 @@ export function TarjetaOferta({ oferta, sinRestaurante = false, fija = false }: 
   const contenido: ReactNode = (
     <>
       <div style={{ position: 'relative', width: '100%', paddingBottom: '80%', overflow: 'hidden', flexShrink: 0, background: C.bg }}>
-        <MenuItemImage src={oferta.imagenUrl} alt={oferta.nombre} className="absolute inset-0" />
+        {/* Decorativa: el nombre de la oferta está escrito debajo (si no, el enlace lo diría dos veces). */}
+        <MenuItemImage src={oferta.imagenUrl} alt="" className="absolute inset-0" />
         <div style={{ position: 'absolute', top: 8, right: 8 }}>
           <DescuentoBadge porcentaje={oferta.porcentajeDescuento} />
         </div>
