@@ -1,8 +1,11 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { useState } from 'react'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { compartirLaSesionDeWebAuth } from '../../test/authClient'
 import { irA } from '../../utils/navegar'
 import { MenuDrawer } from './MenuDrawer'
+import { axe } from '../../test/axe'
 
 vi.mock('../../utils/navegar', () => ({ irA: vi.fn() }))
 
@@ -340,5 +343,201 @@ describe('MenuDrawer', () => {
 
     renderDrawer({ abierto: true })
     expect(panel().style.transform).toBe('translateX(0)')
+  })
+
+  describe('como diálogo (accesibilidad)', () => {
+    const dialogo = () => screen.getByRole('dialog', { hidden: true })
+
+    it('el panel es un diálogo modal con el nombre del restaurante', () => {
+      renderDrawer()
+
+      expect(screen.getByRole('dialog', { name: 'Menú de La Parrilla del Puerto' })).toBe(dialogo())
+      expect(dialogo()).toHaveAttribute('aria-modal', 'true')
+    })
+
+    it('cerrado está inerte (fuera del árbol de accesibilidad y sin foco); abierto no', () => {
+      const { unmount } = renderDrawer({ abierto: false })
+      expect(dialogo()).toHaveAttribute('inert')
+      unmount()
+
+      renderDrawer({ abierto: true })
+      expect(dialogo()).not.toHaveAttribute('inert')
+    })
+
+    it('al abrirse el foco entra al panel', () => {
+      renderDrawer({ abierto: true })
+
+      expect(dialogo()).toHaveFocus()
+    })
+
+    it('el foco entra al panel recién cuando se abre, y no se mueve si el menú está cerrado', () => {
+      renderDrawer({ abierto: false })
+
+      expect(dialogo()).not.toHaveFocus()
+    })
+
+    describe('las opciones son botones, con el nombre de la opción (sin el emoji)', () => {
+      it.each([
+        ['mesa', 'Etiquetar pedidos'],
+        ['mesa', 'Mis pedidos'],
+        ['mesa', 'Pagar la cuenta'],
+        ['carta', 'Ingresar a una mesa'],
+        ['carta', 'Volver al inicio'],
+      ] as const)('en la %s, "%s"', (modo, nombre) => {
+        renderDrawer({ modo })
+
+        expect(screen.getByRole('button', { name: nombre })).toBeEnabled()
+      })
+
+      it('se activa con el teclado (Enter) y cierra el menú', async () => {
+        const usuario = userEvent.setup()
+        const { alCerrar } = renderDrawer({ modo: 'mesa' })
+        screen.getByRole('button', { name: 'Mis pedidos' }).focus()
+
+        await usuario.keyboard('{Enter}')
+
+        expect(screen.getByText('ahora: /pedidos')).toBeInTheDocument()
+        expect(alCerrar).toHaveBeenCalledTimes(1)
+      })
+
+      it('el ícono es decorativo: está oculto del lector', () => {
+        renderDrawer({ modo: 'mesa' })
+
+        const icono = screen.getByRole('button', { name: 'Mis pedidos' }).querySelector('span')
+        expect(icono).toHaveAttribute('aria-hidden', 'true')
+        expect(icono).toHaveTextContent('📋')
+      })
+    })
+
+    describe('"Mis puntos" (todavía no hace nada)', () => {
+      it('es un botón deshabilitado que se anuncia como no disponible, y tocarlo no cierra el menú', () => {
+        const { alCerrar } = renderDrawer({ modo: 'mesa', usuario: CON_CUENTA })
+
+        const boton = screen.getByRole('button', { name: /Mis puntos/ })
+        expect(boton).toBeDisabled()
+        fireEvent.click(boton)
+
+        expect(alCerrar).not.toHaveBeenCalled()
+      })
+
+      it('su nombre dice que es "Próximamente"', () => {
+        renderDrawer({ modo: 'mesa', usuario: CON_CUENTA })
+
+        expect(screen.getByRole('button', { name: 'Mis puntos Próximamente' })).toBeInTheDocument()
+      })
+    })
+
+    describe('Esc y "Cerrar el menú"', () => {
+      it('Esc cierra el menú abierto', async () => {
+        const usuario = userEvent.setup()
+        const { alCerrar } = renderDrawer({ abierto: true })
+
+        await usuario.keyboard('{Escape}')
+
+        expect(alCerrar).toHaveBeenCalledTimes(1)
+      })
+
+      it('con el menú cerrado, Esc no hace nada (otros diálogos también lo usan)', async () => {
+        const usuario = userEvent.setup()
+        const { alCerrar } = renderDrawer({ abierto: false })
+
+        await usuario.keyboard('{Escape}')
+
+        expect(alCerrar).not.toHaveBeenCalled()
+      })
+
+      it('otra tecla no cierra', async () => {
+        const usuario = userEvent.setup()
+        const { alCerrar } = renderDrawer({ abierto: true })
+
+        await usuario.keyboard('a{Enter}')
+
+        expect(alCerrar).not.toHaveBeenCalled()
+      })
+
+      it('hay un botón "Cerrar el menú" para quien no ve el fondo que se toca (el primero del panel)', () => {
+        const { alCerrar } = renderDrawer({ abierto: true })
+
+        const cerrar = screen.getByRole('button', { name: 'Cerrar el menú' })
+        expect(within(dialogo()).getAllByRole('button')[0]).toBe(cerrar)
+        fireEvent.click(cerrar)
+
+        expect(alCerrar).toHaveBeenCalledTimes(1)
+      })
+
+      it('"Cerrar el menú" está oculto a la vista y aparece cuando recibe el foco con el teclado', () => {
+        renderDrawer({ abierto: true })
+
+        const clases = screen.getByRole('button', { name: 'Cerrar el menú' }).className
+        expect(clases).toContain('sr-only')
+        expect(clases).toContain('focus:not-sr-only')
+      })
+
+      it('el fondo que se toca para cerrar no es parte de lo que lee el lector', () => {
+        renderDrawer({ abierto: true })
+
+        const fondo = document.body.querySelector('div[style*="rgba(45, 53, 97, 0.45)"]')
+        expect(fondo).toHaveAttribute('aria-hidden', 'true')
+      })
+    })
+
+    describe('el foco vuelve a lo que abrió el menú', () => {
+      function ConBotonQueAbre() {
+        const [abierto, setAbierto] = useState(false)
+        return (
+          <MemoryRouter>
+            <button onClick={() => setAbierto(true)}>Abrir el menú</button>
+            <MenuDrawer {...PROPS} abierto={abierto} onCerrar={() => setAbierto(false)} />
+          </MemoryRouter>
+        )
+      }
+
+      it('con Esc: entra al panel al abrir y vuelve al botón al cerrar', async () => {
+        const usuario = userEvent.setup()
+        render(<ConBotonQueAbre />)
+        const abrir = screen.getByRole('button', { name: 'Abrir el menú' })
+
+        await usuario.click(abrir)
+        expect(dialogo()).toHaveFocus()
+        expect(dialogo()).not.toHaveAttribute('inert')
+
+        await usuario.keyboard('{Escape}')
+        expect(dialogo()).toHaveAttribute('inert')
+        expect(abrir).toHaveFocus()
+      })
+
+      it('con "Cerrar el menú"', async () => {
+        const usuario = userEvent.setup()
+        render(<ConBotonQueAbre />)
+        const abrir = screen.getByRole('button', { name: 'Abrir el menú' })
+        await usuario.click(abrir)
+
+        await usuario.click(screen.getByRole('button', { name: 'Cerrar el menú' }))
+
+        expect(abrir).toHaveFocus()
+      })
+
+      it('abrirlo y cerrarlo varias veces vuelve siempre al botón', async () => {
+        const usuario = userEvent.setup()
+        render(<ConBotonQueAbre />)
+        const abrir = screen.getByRole('button', { name: 'Abrir el menú' })
+
+        for (let vez = 0; vez < 3; vez++) {
+          await usuario.click(abrir)
+          expect(dialogo()).toHaveFocus()
+          await usuario.keyboard('{Escape}')
+          expect(abrir).toHaveFocus()
+        }
+      })
+    })
+
+    it('no tiene violaciones de accesibilidad (axe), con y sin cuenta', async () => {
+      const sinCuenta = renderDrawer({ abierto: true })
+      expect(await axe(sinCuenta.container)).toHaveNoViolations()
+      sinCuenta.unmount()
+
+      const conCuenta = renderDrawer({ abierto: true, usuario: CON_CUENTA, comensalNombre: 'Ana' })
+      expect(await axe(conCuenta.container)).toHaveNoViolations()
+    })
   })
 })

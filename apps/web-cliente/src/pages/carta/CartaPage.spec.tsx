@@ -298,8 +298,8 @@ describe('CartaPage (la carta en modo vista)', () => {
       renderCarta()
       await cargada()
 
-      fireEvent.click(screen.getByRole('button', { name: /Dietas/ }))
-      fireEvent.click(screen.getByText('Vegano'))
+      fireEvent.click(screen.getByRole('button', { name: 'Filtrar por dietas' }))
+      fireEvent.click(screen.getByRole('checkbox', { name: 'Vegano, 1 plato' }))
       fireEvent.click(screen.getByRole('button', { name: 'Aplicar (1)' }))
 
       expect(screen.queryByText('Flan')).not.toBeInTheDocument()

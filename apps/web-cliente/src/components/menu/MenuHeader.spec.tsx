@@ -200,4 +200,35 @@ describe('MenuHeader', () => {
       expect(screen.queryByRole('button', { name: /Mozo/ })).not.toBeInTheDocument()
     })
   })
+
+  describe('el botón "Abrir el menú" y el menú lateral (accesibilidad)', () => {
+    it('dice que abre un diálogo y que el menú está cerrado', () => {
+      renderHeader()
+
+      expect(botonDelMenu()).toHaveAttribute('aria-haspopup', 'dialog')
+      expect(botonDelMenu()).toHaveAttribute('aria-expanded', 'false')
+    })
+
+    it('con el menú abierto dice que está expandido', () => {
+      renderHeader({ menuAbierto: true })
+
+      expect(botonDelMenu()).toHaveAttribute('aria-expanded', 'true')
+    })
+
+    it('el encabezado queda inerte mientras el menú está abierto, y no cuando está cerrado', () => {
+      const { unmount } = renderHeader({ inerte: true })
+      expect(screen.getByRole('banner')).toHaveAttribute('inert')
+      unmount()
+
+      renderHeader({ inerte: false })
+      expect(screen.getByRole('banner')).not.toHaveAttribute('inert')
+    })
+
+    it('por defecto el menú está cerrado y el encabezado no es inerte', () => {
+      renderHeader()
+
+      expect(botonDelMenu()).toHaveAttribute('aria-expanded', 'false')
+      expect(screen.getByRole('banner')).not.toHaveAttribute('inert')
+    })
+  })
 })
