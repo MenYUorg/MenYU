@@ -60,10 +60,10 @@ export function ItemDetailPage() {
 
   if (loading) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100svh', background: 'white' }}>
+      <main style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100svh', background: 'white' }}>
         <div style={{ width: 36, height: 36, borderRadius: '50%', border: `3px solid ${C.orangeSoft}`, borderTopColor: C.orange, animation: 'spin 0.8s linear infinite' }} />
         <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
-      </div>
+      </main>
     )
   }
 
@@ -74,23 +74,23 @@ export function ItemDetailPage() {
 
   if (!loading && error) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100svh', gap: 16, padding: 24, background: 'white' }}>
-        <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 14, color: C.orange, margin: 0 }}>No se pudo cargar el menú</p>
+      <main style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100svh', gap: 16, padding: 24, background: 'white' }}>
+        <h1 style={{ fontFamily: 'Inter,sans-serif', fontWeight: 400, fontSize: 14, color: C.orange, margin: 0 }}>No se pudo cargar el menú</h1>
         <button onClick={() => navigate('/menu')} style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 600, fontSize: 13, color: C.navy, background: 'none', border: 'none', cursor: 'pointer' }}>
           ← Volver al menú
         </button>
-      </div>
+      </main>
     )
   }
 
   if (!loading && menu && !item) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100svh', gap: 16, padding: 24, background: 'white' }}>
-        <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 14, color: C.orange, margin: 0 }}>Ítem no encontrado</p>
+      <main style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100svh', gap: 16, padding: 24, background: 'white' }}>
+        <h1 style={{ fontFamily: 'Inter,sans-serif', fontWeight: 400, fontSize: 14, color: C.orange, margin: 0 }}>Ítem no encontrado</h1>
         <button onClick={() => navigate('/menu')} style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 600, fontSize: 13, color: C.navy, background: 'none', border: 'none', cursor: 'pointer' }}>
           ← Volver al menú
         </button>
-      </div>
+      </main>
     )
   }
 
@@ -132,7 +132,7 @@ export function ItemDetailPage() {
 
   return (
     <div style={{ display: 'flex', justifyContent: 'center', background: C.bg, minHeight: '100svh' }}>
-      <div style={{
+      <main style={{
         width: '100%', maxWidth: 640,
         background: 'white',
         display: 'flex', flexDirection: 'column',
@@ -443,7 +443,7 @@ export function ItemDetailPage() {
           </button>
         </div>
 
-      </div>
+      </main>
     </div>
   )
 }

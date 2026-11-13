@@ -146,14 +146,15 @@ export function MenuHeader({ nombre, logoUrl, modo, onAbrirMenu }: MenuHeaderPro
         <HamburgerBadge />
       </button>
 
-      <div style={{
-        flex: 1, minWidth: 0,
+      {/* El nombre del restaurante es el título de la carta y del menú: el <h1> al que va el foco al llegar. */}
+      <h1 style={{
+        flex: 1, minWidth: 0, margin: 0,
         fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 14, lineHeight: 1.2, color: 'white',
         overflowWrap: 'anywhere',
         display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
       }}>
         {nombre}
-      </div>
+      </h1>
 
       {modo === 'mesa' && <MozoYMesa />}
     </header>

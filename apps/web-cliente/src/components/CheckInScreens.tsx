@@ -52,7 +52,7 @@ function Boton({ variante, to, onClick, children }: BotonProps) {
 /** `/check-in` mientras abre la sesión de la mesa (antes la pantalla quedaba en blanco). */
 export function AbriendoMesaScreen() {
   return (
-    <Shell>
+    <Shell subtituloEsTitulo>
       <div role="status" aria-live="polite" style={CUERPO}>
         <Girando tam={36} />
         <p style={{ margin: 0, fontFamily: 'Inter, sans-serif', fontSize: 14, lineHeight: 1.5, color: C.textSub }}>

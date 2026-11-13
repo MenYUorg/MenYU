@@ -39,6 +39,7 @@ export function RestaurantePage() {
           texto="Puede que ya no esté disponible. Volvé al inicio para ver los demás."
           boton="Volver al inicio"
           onBoton={() => navigate('/')}
+          nivelDelTitulo={1}
         />
       )
     }
@@ -51,6 +52,7 @@ export function RestaurantePage() {
           boton="Reintentar"
           onBoton={() => void cargarRestaurante(restauranteId)}
           rol="alert"
+          nivelDelTitulo={1}
         />
       )
     }

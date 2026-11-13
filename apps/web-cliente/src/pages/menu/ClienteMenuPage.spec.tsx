@@ -10,6 +10,7 @@ import { crearMenu, crearPlato, crearPlatoEnDescuento } from '../../test/fixture
 import { compartirLaSesionDeWebAuth, cuentaDePrueba, sesionDeSupabase, signOutSimulado } from '../../test/authClient'
 import { irA } from '../../utils/navegar'
 import { ClienteMenuPage } from './ClienteMenuPage'
+import { axe } from '../../test/axe'
 
 vi.mock('../../utils/navegar', () => ({ irA: vi.fn() }))
 
@@ -603,6 +604,24 @@ describe('ClienteMenuPage', () => {
       await user.type(screen.getByPlaceholderText('Buscar platos...'), 'zzz')
 
       expect(screen.getByText('No hay platos que coincidan con "zzz"')).toBeInTheDocument()
+    })
+  })
+
+  describe('estructura de la pantalla (accesibilidad)', () => {
+    it('el <h1> es el nombre del restaurante; el buscador y las secciones van dentro del <main> y el encabezado no', () => {
+      renderMenu(menuCompleto())
+
+      expect(screen.getByRole('heading', { level: 1, name: 'La Parrilla' })).toBeInTheDocument()
+      const principal = screen.getByRole('main')
+      expect(principal).toContainElement(screen.getByPlaceholderText('Buscar platos...'))
+      expect(principal).toContainElement(screen.getByText('Flan'))
+      expect(principal).not.toContainElement(screen.getByRole('banner'))
+    })
+
+    it('no tiene violaciones de accesibilidad (axe)', async () => {
+      const { container } = renderMenu(menuCompleto())
+
+      expect(await axe(container)).toHaveNoViolations()
     })
   })
 })

@@ -12,10 +12,13 @@ interface BloqueEstadoProps {
   contorno?: boolean
   /** `alert` para errores; `status` para lo demás. */
   rol?: 'alert' | 'status'
+  /** `1` cuando el bloque es toda la pantalla (un restaurante que no existe) y no hay otro título; `2` cuando va dentro de una. */
+  nivelDelTitulo?: 1 | 2
 }
 
 /** Bloque centrado para un error, un vacío o "sin resultados": ícono, título, explicación y, si hace falta, un botón. */
-export function BloqueEstado({ icono, titulo, texto, boton, onBoton, contorno = false, rol = 'status' }: BloqueEstadoProps) {
+export function BloqueEstado({ icono, titulo, texto, boton, onBoton, contorno = false, rol = 'status', nivelDelTitulo = 2 }: BloqueEstadoProps) {
+  const Titulo = nivelDelTitulo === 1 ? 'h1' : 'h2'
   return (
     <div
       role={rol}
@@ -24,9 +27,9 @@ export function BloqueEstado({ icono, titulo, texto, boton, onBoton, contorno = 
       <div style={{ width: 72, height: 72, borderRadius: '50%', background: C.orangeSoft, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
         <Icono nombre={icono} tam={32} trazo={C.orange} />
       </div>
-      <h2 style={{ margin: 0, fontFamily: 'Montserrat, sans-serif', fontWeight: 800, fontSize: 18, letterSpacing: '-0.01em', color: C.navy, overflowWrap: 'anywhere' }}>
+      <Titulo style={{ margin: 0, fontFamily: 'Montserrat, sans-serif', fontWeight: 800, fontSize: 18, letterSpacing: '-0.01em', color: C.navy, overflowWrap: 'anywhere' }}>
         {titulo}
-      </h2>
+      </Titulo>
       <p style={{ margin: 0, maxWidth: 320, fontFamily: 'Inter, sans-serif', fontSize: 14, lineHeight: 1.5, color: C.textSub, overflowWrap: 'anywhere' }}>
         {texto}
       </p>

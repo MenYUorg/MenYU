@@ -92,7 +92,7 @@ export function CarritoPage() {
     )
 
     return (
-      <div style={{
+      <main style={{
         minHeight:      '100vh',
         background:     'white',
         display:        'flex',
@@ -234,7 +234,7 @@ export function CarritoPage() {
             </button>
           </div>
         </div>
-      </div>
+      </main>
     )
   }
 
@@ -252,7 +252,7 @@ export function CarritoPage() {
           background:    'white',
         }}>
           {header}
-          <div style={{
+          <main style={{
             flex:           1,
             display:        'flex',
             flexDirection:  'column',
@@ -289,7 +289,7 @@ export function CarritoPage() {
             >
               Ver el menú
             </button>
-          </div>
+          </main>
         </div>
       </div>
     )
@@ -310,6 +310,8 @@ export function CarritoPage() {
       }}>
         {header}
 
+        {/* La lista y la barra de abajo (total y confirmar) son el contenido: las dos van dentro del <main>. */}
+        <main style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
         <div style={{
           flex:          1,
           overflowY:     'auto',
@@ -617,6 +619,7 @@ export function CarritoPage() {
             El cobro se realizará al finalizar tu visita.
           </p>
         </div>
+        </main>
       </div>
     </div>
   )
