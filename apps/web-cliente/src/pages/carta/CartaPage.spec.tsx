@@ -213,8 +213,8 @@ describe('CartaPage (la carta en modo vista)', () => {
       const descuentos = within(container.querySelector<HTMLElement>('[data-categoria-id="descuentos"]')!)
 
       expect(descuentos.getByRole('img', { name: '20% de descuento' })).toBeInTheDocument()
-      expect(descuentos.getByText('$1500.00')).toBeInTheDocument()
-      expect(descuentos.getByText('$1200.00')).toBeInTheDocument()
+      expect(descuentos.getByText('$ 1.500')).toBeInTheDocument()
+      expect(descuentos.getByText('$ 1.200')).toBeInTheDocument()
     })
   })
 

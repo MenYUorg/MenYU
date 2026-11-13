@@ -494,8 +494,8 @@ describe('ClienteMenuPage', () => {
 
       expect(descuentos.getByText('Hamburguesa')).toBeInTheDocument()
       expect(descuentos.getByRole('img', { name: '20% de descuento' })).toBeInTheDocument()
-      expect(descuentos.getByText('$1500.00')).toBeInTheDocument()
-      expect(descuentos.getByText('$1200.00')).toBeInTheDocument()
+      expect(descuentos.getByText('$ 1.500')).toBeInTheDocument()
+      expect(descuentos.getByText('$ 1.200')).toBeInTheDocument()
     })
 
     it('en la categoría, el mismo plato también se ve con su descuento', () => {
@@ -503,14 +503,14 @@ describe('ClienteMenuPage', () => {
       const principales = within(seccion(container, 'cat-1')!)
 
       expect(principales.getByRole('img', { name: '20% de descuento' })).toBeInTheDocument()
-      expect(principales.getByText('$1200.00')).toBeInTheDocument()
+      expect(principales.getByText('$ 1.200')).toBeInTheDocument()
     })
 
     it('un plato sin descuento no tiene círculo en ninguna sección', () => {
       const { container } = renderMenu(menuCompleto())
       const postres = within(seccion(container, 'cat-2')!)
 
-      expect(postres.getByText('$700.00')).toBeInTheDocument()
+      expect(postres.getByText('$ 700')).toBeInTheDocument()
       expect(postres.queryByRole('img', { name: /de descuento/ })).not.toBeInTheDocument()
     })
 

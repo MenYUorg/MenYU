@@ -71,10 +71,10 @@ describe('PagarPage', () => {
     expect(screen.getByText('Mesa 4')).toBeInTheDocument()
     expect(listar).toHaveBeenCalledWith('jwt-mesa')
     expect(saldo).toHaveBeenCalledWith('jwt-mesa', 'ses-1')
-    expect(fila('Milanesa')).toEqual(['Milanesa', '3', '$1500.00', '$4500.00'])
-    expect(fila('Agua')).toEqual(['Agua', '1', '$500.00', '$500.00'])
-    expect(screen.getByText('$5000.00')).toBeInTheDocument() // subtotal
-    expect(await screen.findByText('$3000.00')).toBeInTheDocument() // saldo pendiente (ya se pagó una parte)
+    expect(fila('Milanesa')).toEqual(['Milanesa', '3', '$\u00a01.500', '$\u00a04.500'])
+    expect(fila('Agua')).toEqual(['Agua', '1', '$\u00a0500', '$\u00a0500'])
+    expect(screen.getByText('$ 5.000')).toBeInTheDocument() // subtotal
+    expect(await screen.findByText('$ 3.000')).toBeInTheDocument() // saldo pendiente (ya se pagó una parte)
   })
 
   it('si el saldo no llega muestra un guion y deja pagar igual', async () => {

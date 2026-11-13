@@ -283,7 +283,7 @@ export function ItemDetailPage() {
                         </span>
                         {Number(ii.precioExtra) > 0 && (
                           <span style={{ background: C.orangeSoft, color: C.orange, fontSize: 11, fontWeight: 700, fontFamily: 'Inter,sans-serif', borderRadius: 999, padding: '3px 9px' }}>
-                            +${Number(ii.precioExtra).toFixed(2)}
+                            +{formatearPrecio(Number(ii.precioExtra))}
                           </span>
                         )}
                       </div>
@@ -438,7 +438,7 @@ export function ItemDetailPage() {
               {cartId ? 'Guardar cambios' : 'Agregar al pedido'}
             </span>
             <span style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 800, fontSize: 17, letterSpacing: '0.01em', flexShrink: 0 }}>
-              ${totalConCantidad.toFixed(2)}
+              {formatearPrecio(totalConCantidad)}
             </span>
           </button>
         </div>

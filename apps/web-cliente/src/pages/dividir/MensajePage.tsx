@@ -5,6 +5,7 @@ import { useSessionStore } from '../../store/sessionStore'
 import { useEtiquetado } from '../../hooks/useEtiquetado'
 import { api } from '../../services/api'
 import { C } from '../../theme'
+import { formatearPrecio } from '../../utils/precio'
 import { EncabezadoPantalla, MarcoPantalla } from '../../components/PantallaComensal'
 import { estadoCargando, estadoError, estadoVacio } from '../../components/estadosPantalla'
 
@@ -17,9 +18,7 @@ interface PorConsumoResult {
   huerfanos: { total: number }
 }
 
-function fmt(n: number) {
-  return `$${n.toFixed(2)}`
-}
+const fmt = formatearPrecio
 
 export function MensajePage() {
   const navigate = useNavigate()
@@ -228,10 +227,15 @@ export function MensajePage() {
   return wrapper(
     <div style={{ flex: 1, overflowY: 'auto', padding: '16px 16px 32px', display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{ border: `1px solid ${C.border}`, borderRadius: 12, padding: 16 }}>
-        <p style={{ fontFamily: 'Montserrat, sans-serif', fontWeight: 700, fontSize: 14, color: C.text, margin: '0 0 10px' }}>
+        {/* El título visible es la etiqueta del campo: el lector dice lo mismo que se ve (WCAG 2.5.3). */}
+        <label
+          htmlFor="mensaje-para-el-grupo"
+          style={{ display: 'block', fontFamily: 'Montserrat, sans-serif', fontWeight: 700, fontSize: 14, color: C.text, margin: '0 0 10px' }}
+        >
           Mensaje para el grupo
-        </p>
+        </label>
         <textarea
+          id="mensaje-para-el-grupo"
           readOnly
           value={mensaje}
           rows={Math.min(mensaje.split('\n').length + 1, TEXTAREA_MAX_ROWS)}
