@@ -9,7 +9,7 @@ Registro, etapa por etapa, de lo que se hizo para la accesibilidad del flujo del
 | 1. Base compartida | Hecha y revisada (13/11/2026). Quality gate de SonarCloud: passed. Con los ajustes de la revisión (etiqueta de `MensajePage`, foco del `<h1>`) |
 | 2. Formato de precios | Hecha (13/11/2026), a la espera de revisión |
 | 3. Bloqueantes (menú lateral y filtro de dietas) | Hecha (13/11/2026), a la espera de revisión |
-| 4. Menú, detalle y discovery | Pendiente |
+| 4. Menú, detalle y discovery | Hecha (13/11/2026), a la espera de revisión |
 | 5. Carrito, pedidos, PIN, nombre y pago | Pendiente |
 | 6. Contraste, foco visible y tamaños | Pendiente |
 | 7. Cierre (lint, axe de Coty, celulares C1 a C7) | Pendiente |
@@ -168,7 +168,12 @@ Las ramas y las funciones se mueven unas centésimas de una corrida a otra; no h
 
 ### Quality gate de SonarCloud
 
-Pendiente: se anota cuando corra el PR.
+**Passed** (captura del PR #468, "Feat/a11y cliente", que lleva las etapas 2 y 3 juntas; análisis del commit `15dc7f3e`, 13/11/2026):
+
+- Cobertura del código nuevo: **98,48 %** (se pide 80 % o más), sobre 154 líneas nuevas por cubrir. Estimada después del merge: 90,1 %.
+- Issues nuevos: 0. Issues aceptados: 0.
+- Líneas de código nuevo: 176.
+- La captura muestra "1 analysis warning" y no dice cuál es; la duplicación, las calificaciones y los hotspots no se ven (el gate pasó con todas sus condiciones). Si el aviso importa, falta abrir su detalle en SonarCloud.
 
 ### Verificación en el navegador
 
@@ -246,7 +251,12 @@ Con el cambio en `packages/ui/src/index.ts` se corrieron las suites de las apps 
 
 ### Quality gate de SonarCloud
 
-Pendiente: se anota cuando corra el PR.
+**Passed** (captura del PR #468, "Feat/a11y cliente", que lleva las etapas 2 y 3 juntas; análisis del commit `15dc7f3e`, 13/11/2026):
+
+- Cobertura del código nuevo: **98,48 %** (se pide 80 % o más), sobre 154 líneas nuevas por cubrir. Estimada después del merge: 90,1 %.
+- Issues nuevos: 0. Issues aceptados: 0.
+- Líneas de código nuevo: 176.
+- La captura muestra "1 analysis warning" y no dice cuál es; la duplicación, las calificaciones y los hotspots no se ven (el gate pasó con todas sus condiciones). Si el aviso importa, falta abrir su detalle en SonarCloud.
 
 ### Verificación en el navegador
 
@@ -275,3 +285,83 @@ En Edge real (390 px, API simulada, un Vite propio en el puerto 5199), recorrido
 ### Recorridos con lector (C1 a C8)
 
 Desde esta etapa: **C5 y C7 se pueden empezar** (a "Mis pedidos", "Etiquetar pedidos" y "Pagar la cuenta" se llega desde el menú lateral con lector y con teclado), y el filtro de dietas de **C1** se puede usar de punta a punta, con el anuncio de cuántos platos quedan. Siguen sin completarse por lo que falta de las etapas 4 y 5.
+
+
+---
+
+## Etapa 4: menú, detalle y discovery (13/11/2026)
+
+Estado: hecha, a la espera de revisión. Va sobre la rama con las etapas 1 a 3 ya commiteadas y pusheadas (el Sonar de la 2 y la 3 está cargado arriba).
+
+### Qué cambió
+
+**Menú** (`components/menu/`, `components/ItemCard.tsx`, `App.tsx`)
+
+- Buscador: se llama "Buscar platos" y anuncia cuántos platos quedan (600 ms después de la última letra, y solo si el texto cambió). "×" se llama "Borrar búsqueda" y devuelve el foco al campo.
+- Chips de sección: una `<nav>` con nombre, `aria-current` en el de la sección que se ve, y al tocar uno el foco va al encabezado de esa sección (`enfocarEncabezado`, sin mover la pantalla otra vez). La regla de `index.css` que quita el contorno de los títulos enfocados por código pasó de `h1` a `h1` y `h2`.
+- Tarjeta del plato: el botón se llama "Ver {plato}", la foto es decorativa y el `<div>` clickeable es `role="presentation"` (el control para teclado y lector es el botón).
+- Mozo: anuncia "Avisamos al mozo" o el error, y pasó de `disabled` a `aria-disabled` (no pierde el foco). Carrito: "Ver carrito, N ítems", sumando unidades (el número que se ve también). Menú actualizado por el restaurante: "El menú se actualizó".
+- Emojis 🔍 y 🔔 ocultos.
+
+**Detalle del plato** (`pages/menu/ItemDetailPage.tsx`, `components/SelectorDeCantidad.tsx`)
+
+- Interruptor de ingrediente ("Cebolla, incluida" / "Cebolla, quitada"), encabezados de nivel 2 y 3, alérgeno dicho con texto, "Nota para cocina" asociada al campo, "Cantidad" en vez de "Cant.", foto decorativa, "Volver", emoji del carrito oculto.
+- **Componente compartido de cantidad** `SelectorDeCantidad`: "Sumar {nombre}" / "Restar {nombre}", anuncia "{nombre}: {valor}" y no se deshabilita en el mínimo ni en el máximo (`aria-disabled`). Lo vuelve a usar el carrito en la etapa 5.
+- Al agregar: "Se agregó {plato} al carrito" (forma impersonal: no depende del género del plato; el plan decía "agregada").
+
+**Discovery** (`pages/discovery/DiscoveryPage.tsx`, `components/discovery/TarjetaOferta.tsx`, `utils/textoDeResultados.ts`)
+
+- Anuncia cuántos resultados dio la búsqueda ("2 ofertas y 3 restaurantes", "No encontramos nada para “xyz”"). "Buscando…" es una región de estado siempre montada, vacía y fuera de la vista mientras no se busca. La foto de la oferta es decorativa.
+
+### Tests
+
+119 tests nuevos (996 → 1115), en 60 archivos (56 → 60):
+
+- **Archivos nuevos:** `components/SelectorDeCantidad.spec.tsx` (17), `components/menu/ChipsSecciones.spec.tsx` (8), `components/menu/BotonCarrito.spec.tsx` (9), `utils/textoDeResultados.spec.ts` (5).
+- **Bloques de accesibilidad en specs existentes:** `ItemDetailPage.spec.tsx` (+25: encabezados, interruptor, alérgeno, extras con su tope, cantidad del plato, nota, volver, agregar y editar, foto y axe), `BarraBusqueda.spec.tsx` (+13: nombre, anuncio con pausa, sin repetir, "Borrar búsqueda" y axe), `ClienteMenuPage.spec.tsx` (+11: chips con foco, buscador, tarjetas, carrito y axe), `DiscoveryPage.spec.tsx` (+10: la región siempre montada, el anuncio de resultados, las fotos y axe), `MenuHeader.spec.tsx` (+8: el mozo), `ItemCard.spec.tsx` (+6), `App.spec.tsx` (+3: "El menú se actualizó"), `enfocarTitulo.spec.ts` (+4: `enfocarEncabezado`).
+- Se actualizaron los tests que esperaban los nombres viejos: "Agregar {plato}" → "Ver {plato}", "+" y "−" sueltos → "Sumar/Restar {nombre}", el botón del carrito por "🛒" → "Ver carrito, N ítems" (el de "no hay botón con el carrito vacío" se cambió también, porque con el nombre viejo pasaba por casualidad), el mozo `toBeDisabled()` → `aria-disabled`, la foto del placeholder de `TarjetaOferta`. `estilos.spec.ts` ahora espera `h1` y `h2`.
+
+### Cobertura
+
+| | Fin de la etapa 3 | Después |
+| --- | --- | --- |
+| web-cliente, archivos / tests | 56 / 996 | 60 / 1115 |
+| web-cliente, líneas | 92,61 % | 93,64 % |
+| web-cliente, ramas | 92,31 % | 92,97 % |
+| web-cliente, funciones | 83,18 % | 84,95 % |
+| `packages/ui`, web-admin, web-staff | sin tocar | sin tocar (esta etapa no toca `packages/ui`) |
+
+Por archivo (líneas / ramas): los nuevos (`SelectorDeCantidad`, `ChipsSecciones`, `BotonCarrito`, `textoDeResultados`) y `TarjetaOferta`, `DiscoveryPage` y `enfocarTitulo` al 100 / 100; `BarraBusqueda` 100 / 100, `MenuHeader` 100 / 95,5, `MenuView` 95,1 / 96,3, `ItemCard` 92,5 / 100, `ItemDetailPage` 79,4 → 96,4 / 87,8 (de las que había que subir; las líneas sin cubrir de `ItemCard` son los manejadores de hover). `App.tsx` 58,8 % (de 55,5 %): lo que falta es el cierre de sesión, que es de la etapa 5.
+
+### Quality gate de SonarCloud
+
+Pendiente: se anota cuando corra el PR.
+
+### Verificación en el navegador
+
+En Edge real (390 px, API simulada, un Vite propio en el puerto 5199):
+
+- **Chips:** al tocar "Postres" la zona se desplaza (564 px) y el foco queda en el `<h2>` "Postres", sin anillo; "Principales", la sección que se ve, dice `aria-current`.
+- **Buscador:** antes de la pausa no hay anuncio; 800 ms después de escribir, la región viva dice el resultado. "Borrar búsqueda" deja el campo vacío y con el foco.
+- **Detalle:** el interruptor pasa de "Cebolla, incluida" (`aria-checked="true"`) a "Cebolla, quitada" (`false`) con Espacio; sumar el extra dos veces anuncia "Queso extra: 2" y el plato dos veces, "Plato 1: 3"; los encabezados son `H2` y `H3`; el alérgeno tiene su texto. Al agregar se anuncia "Se agregó Plato 1 al carrito" y el foco queda en el `<h1>` "Carrito".
+- **Carrito:** al volver al menú, el botón dice "Ver carrito, 3 ítems" y muestra "3".
+- **Discovery:** la región de estado existe vacía y `sr-only` antes de buscar; durante la búsqueda muestra "Buscando…" y, cuando llegan los resultados, se vacía y se anuncia "2 ofertas y 1 restaurante". Las fotos de las ofertas tienen `alt=""`.
+- En las capturas, el detalle (con "CANTIDAD" en vez de "CANT.") y el botón del carrito se ven bien: el rótulo más largo entra sin apilar nada.
+
+### Problemas y cómo se resolvieron
+
+- **El nombre del botón del carrito con `getByRole('button', { name: /🛒/ })`** (que usaban dos tests) ya no existe: el emoji está oculto. El de "con el carrito vacío no hay botón" pasaba solo por eso (nunca iba a encontrarlo); se cambió por `/Ver carrito/` para que vuelva a probar algo.
+- **`getByLabelText('Nota para cocina')` no encuentra el campo** aunque el `<label>` esté bien asociado: Testing Library arma el texto de la etiqueta con todo su contenido, emoji oculto incluido ("📝 Nota para cocina"). Los tests buscan por rol y nombre accesible (`getByRole('textbox', { name: 'Nota para cocina' })`), que es lo que percibe el lector.
+- **Un archivo de tests se perdió en una corrida por el `EBUSY` de OneDrive** (la de cobertura, 59 de 60 archivos); se repitió y dio 60 de 60 y 1115 de 1115.
+- **Un `cd ../..` de más dejó a Vitest en `src/`** y no encontró los archivos de test (salió vacío, sin error): se corrió de nuevo desde `apps/web-cliente`.
+
+### Pendiente
+
+- **Hallazgo fuera del plan, previo a esta etapa:** el buscador del menú no encuentra con más de una palabra ("plato 1", "pizza muzz" dan "Ningún plato coincide" aunque el plato exista), porque compara el texto entero con el comienzo de cada palabra del nombre. No se tocó. Está en `plan-cliente.md` ("Hallazgos fuera del plan", el 5).
+- **Para decidir** (cosas hechas por criterio propio, explicadas en el plan): el número del botón del carrito pasó a contar unidades (cambio visual chico), el `role="presentation"` de la tarjeta del plato (en vez de hacer que el botón la cubra), el anuncio "Se agregó {plato}" en vez de "{plato} agregada", y el `h2` sumado a la regla que quita el contorno.
+- Los chips no anuncian al lector cuál es la sección activa cuando el desplazamiento la cambia (solo `aria-current`): anunciarlo en cada cambio de sección sería más ruido que ayuda.
+- El detalle del plato sigue usando una paleta propia en lugar del token compartido: es de la etapa 6.
+
+### Recorridos con lector (C1 a C8)
+
+Desde esta etapa: **C1 completo** (la búsqueda anuncia cuántos resultados hay y las tarjetas tienen nombres claros), **C6** (el botón del mozo anuncia el resultado y no se pierde el foco) y **C4 hasta agregar el plato** (el interruptor de cada ingrediente dice su estado, el botón de cantidad dice la cantidad, al agregar se anuncia). C4 se completa con el carrito en la etapa 5.

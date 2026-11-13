@@ -178,39 +178,39 @@ Las rutas son relativas a `apps/web-cliente/src/` salvo que digan otra cosa.
 - [x] Al aplicar o limpiar (líneas 49 y 55): se anuncia cuántos platos quedan ("12 platos", "1 plato" o "Ningún plato coincide") y el foco vuelve al botón de dietas. `MenuView` calcula `cantidadDePlatos` (los platos de las categorías con la búsqueda y las dietas aplicadas) y `BarraBusqueda` anuncia cuando cambia el conjunto de dietas, sin anunciar al montarse ni al abrir el panel o marcar casillas. El texto sale de `utils/textoDePlatos.ts`, que reusa la búsqueda en la etapa 4.
 - [x] Sumado: Esc cierra el desplegable y devuelve el foco al botón (era un panel que solo se cerraba tocando afuera). El foco queda en el botón al abrirlo (patrón de despliegue: el panel es lo que sigue en el orden de lectura).
 
-### Etapa 4. Menú, detalle y discovery
+### Etapa 4. Menú, detalle y discovery — hecha (13/11/2026), a la espera de revisión
 
 **Menú:**
 
-- [ ] `components/menu/BarraBusqueda.tsx:65`: el buscador lleva `aria-label="Buscar platos"` y anuncia "N platos" o "Ningún plato coincide". Reusar `utils/textoDePlatos.ts` y `anunciar()` (etapa 1), y la `cantidadDePlatos` que ya calcula `MenuView` (etapa 3).
-- [ ] `BarraBusqueda.tsx:80`: el botón "×" pasa a llamarse "Borrar búsqueda".
-- [ ] `components/menu/ChipsSecciones.tsx:23`: el chip de sección lleva el foco al encabezado de esa sección y expone cuál está activo.
-- [ ] `components/ItemCard.tsx:76`: el botón pasa a "Ver {plato}" (decisión 3).
-- [ ] `ItemCard.tsx:42`: la foto es decorativa (`alt=""`), porque el nombre ya está escrito al lado.
-- [ ] `ItemCard.tsx:20`: la tarjeta tiene un `onClick` en un `<div>`; con el botón alcanza para teclado, pero revisarlo.
-- [ ] `components/menu/MenuHeader.tsx:66-80`: el botón del mozo anuncia "Avisamos al mozo" o el error, sin deshabilitarse (hoy el foco se pierde).
-- [ ] `components/menu/BotonCarrito.tsx:8` y `:23`: hoy se lee "🛒 1" y el número cuenta líneas. Pasa a "Ver carrito, N ítems", sumando unidades.
-- [ ] `App.tsx:57-62`: si el menú se recarga porque el restaurante lo cambió, anunciar "El menú se actualizó".
-- [ ] Ocultar los emojis decorativos: 🔍 y 🔔. (**Ya ocultos en la etapa 3:** 🥗 y ▾ del botón de dietas, y los del menú lateral, 🏷️, 📋, 💳, ⭐, 🍽️ y 🏠.)
+- [x] `components/menu/BarraBusqueda.tsx:65`: el buscador se llama "Buscar platos" (`aria-label`) y anuncia "N platos" o "Ningún plato coincide" con `utils/textoDePlatos.ts`, la `cantidadDePlatos` que ya calculaba `MenuView` y `anunciar()`. Se anuncia **600 ms después de la última letra** (un anuncio por letra no se entiende) y **solo si el texto cambió**: seguir escribiendo sin que cambie la cantidad no lo repite, y tampoco repite lo que acaba de anunciar el filtro de dietas (el botón "Limpiar filtros" limpia las dos cosas juntas). Si el componente se desmonta durante la pausa, no anuncia.
+- [x] `BarraBusqueda.tsx:80`: el botón "×" se llama "Borrar búsqueda" (el signo es decorativo) y, al borrar, el foco vuelve al campo (el botón desaparece al quedar sin texto: sin esto el foco se perdía).
+- [x] `components/menu/ChipsSecciones.tsx:23`: los chips son una `<nav aria-label="Secciones del menú">` y el de la sección que se está viendo dice `aria-current="true"`. Al tocar uno, `MenuView` desplaza a la sección (como antes) y lleva el foco a su `<h2>` con `enfocarEncabezado` (nuevo, en `utils/enfocarTitulo.ts`: le pone `tabindex="-1"` y usa `focus({ preventScroll: true })`, para no cortar la animación del desplazamiento). La regla de `index.css` que quita el contorno de los títulos enfocados por código se amplió de `h1` a **`h1` y `h2`** con `tabindex="-1"` (misma decisión 16, mismo test que exige que sea la única regla que quita el contorno).
+- [x] `components/ItemCard.tsx:76`: el botón se llama **"Ver {plato}"** (decisión 3) y el "+" es decorativo.
+- [x] `ItemCard.tsx:42`: la foto es decorativa (`alt=""`; `MenuItemImage` de `packages/ui` ya acepta un `alt` vacío, no hizo falta tocarlo).
+- [x] `ItemCard.tsx:20`, revisado: la tarjeta tiene un `onClick` en un `<div>` para quien usa el dedo o el mouse, y para el teclado y el lector el control es el botón de adentro (con él alcanza, como decía el plan). El `<div>` pasa a `role="presentation"`: dice que no es un control (y es lo que acepta la regla de `jsx-a11y` de la etapa 7 para un clic sin teclado en un elemento así). Alternativa descartada: hacer que el botón cubra toda la tarjeta (`::after` sobre el `<div>`), que quita el `onClick` pero obliga a reescribir los tests que tocan la tarjeta.
+- [x] `components/menu/MenuHeader.tsx:66-80`: el botón del mozo anuncia "Avisamos al mozo" o "No pudimos avisar al mozo. Probá de nuevo." y **no se deshabilita**: pasó de `disabled` a `aria-disabled` mientras no se puede volver a llamar (los toques de más ya los ignoraba el manejador). Quien lo toca no pierde el foco. El nombre sigue siendo el texto que se ve ("Mozo", "Llamando…", "¡En camino!", "Error"), con la campana oculta.
+- [x] `components/menu/BotonCarrito.tsx:8` y `:23`: el botón se llama **"Ver carrito, N ítems"** ("1 ítem" en singular) y N **suma unidades** (3 hamburguesas son 3, no 1 línea). El número que se ve en el círculo también pasó a contar unidades, para que lo que se ve y lo que se dice coincidan (WCAG 2.5.3). Es un cambio visual chico: antes mostraba la cantidad de platos distintos. El círculo crece (`minWidth`) si el número tiene dos cifras.
+- [x] `App.tsx:57-62`: cuando el restaurante cambia el menú con la mesa abierta, se vuelve a pedir y, **cuando llegó**, se anuncia "El menú se actualizó". Si no se pudo traer (error, o el menú no llegó), no lo dice.
+- [x] Emojis decorativos ocultos: 🔍 y 🔔 (los de 🥗, ▾ y el menú lateral ya lo estaban desde la etapa 3).
 
 **Detalle** (`pages/menu/ItemDetailPage.tsx`):
 
-- [ ] Línea 241: el interruptor de ingrediente dice "Quitar"/"Restaurar" sin nombrar el ingrediente. Pasa a `role="switch"` con el estado ("Cebolla, incluida" / "Cebolla, quitada").
-- [ ] Líneas 292, 302, 363 y 373: los "−" y "+" usan **un componente de cantidad compartido** (se reusa en el carrito en la etapa 5), con nombre ("Sumar Cheddar", "Restar Hamburguesa doble") y que anuncia el valor nuevo ("Cheddar: 1").
-- [ ] Líneas 214, 225 y 271: "Personalizá tu plato", "Quitar ingredientes" y "Agregar extras" pasan a ser encabezados.
-- [ ] Línea 236: el alérgeno se escribe en texto ("contiene alérgeno"); hoy es solo el emoji ⚠️.
-- [ ] Línea 327: "📝 Nota para cocina" se asocia al campo, que hoy se anuncia como "(opcional)". Emoji oculto.
-- [ ] Línea 361: "Cant." pasa a "Cantidad".
-- [ ] Línea 418: al agregar, anunciar "{plato} agregado al carrito" (hoy navega al carrito en silencio).
-- [ ] Línea 436: ocultar el 🛒 del botón.
-- [ ] Línea 147: foto decorativa, porque el nombre está en el `<h1>`.
-- [ ] Línea 154: el botón "←" pasa a llamarse "Volver".
+- [x] Línea 241: el interruptor de ingrediente es un `role="switch"` con `aria-checked` (activado es "incluida") y el nombre **"Cebolla, incluida" / "Cebolla, quitada"**, como decía el plan.
+- [x] Líneas 292, 302, 363 y 373: los "−" y "+" usan el componente compartido **`components/SelectorDeCantidad.tsx`** (nuevo): botones "Sumar {nombre}" y "Restar {nombre}", y al cambiar anuncia "{nombre}: {valor nuevo}" ("Cheddar: 1", "Hamburguesa doble: 2"). En el mínimo y el máximo no usa `disabled` (le sacaría el foco a quien acaba de tocar): usa `aria-disabled`, se ve atenuado y no hace nada. Lo vuelve a usar el carrito en la etapa 5. El estilo de cada uso (el alto del botón, el ancho del número) se pasa por props, así no se movió ningún píxel.
+- [x] Líneas 214, 225 y 271: "Personalizá tu plato" es un `<h2>` y "Quitar ingredientes" y "Agregar extras" son `<h3>`.
+- [x] Línea 236: el alérgeno se dice con texto: el emoji ⚠️ queda a la vista (decorativo para el lector) y se suma "(contiene alérgeno)" solo para el lector.
+- [x] Línea 327: "Nota para cocina" es el `<label>` del campo (`htmlFor` e `id`), con el emoji oculto.
+- [x] Línea 361: "Cant." pasa a "Cantidad".
+- [x] Línea 418: al agregar, anuncia **"Se agregó {plato} al carrito"** (o "Se guardaron los cambios de {plato}" si se estaba editando uno del carrito). **Se desvió de la redacción del plan** ("Hamburguesa doble agregada al carrito"): "agregada" o "agregado" depende del género de cada plato ("Flan agregada" no se puede) y no hay forma de flexionar los nombres; la forma impersonal sirve para todos.
+- [x] Línea 436: el 🛒 del botón es decorativo.
+- [x] Línea 147: la foto es decorativa.
+- [x] Línea 154: el botón "←" se llama "Volver" (la flecha es decorativa).
 
 **Discovery:**
 
-- [ ] `pages/discovery/DiscoveryPage.tsx:115`: anunciar cuántas ofertas y restaurantes coinciden, o que no hay resultados.
-- [ ] `DiscoveryPage.tsx:138`: la región de "Buscando…" queda siempre montada y solo cambia su texto.
-- [ ] `components/discovery/TarjetaOferta.tsx:27`: foto decorativa.
+- [x] `pages/discovery/DiscoveryPage.tsx:115`: cuando llegan los resultados de lo que se escribió, se anuncia cuántos hay ("2 ofertas y 3 restaurantes", "1 oferta", "No encontramos nada para “xyz”") con `utils/textoDeResultados.ts`. Los restaurantes son los de nombre que coincide más los que tienen platos que coinciden (en pantalla se ven igual). No anuncia con menos de 2 letras ni mientras llega la respuesta, ni cuando falla (el error ya es una alerta).
+- [x] `DiscoveryPage.tsx:138`: "Buscando…" es una región de estado **siempre montada**: un único `<p role="status">` que, sin buscar, está vacío y `sr-only`, y al buscar pasa a mostrar el giro y "Buscando…" (ya no hay dos párrafos distintos según el caso).
+- [x] `components/discovery/TarjetaOferta.tsx:27`: la foto de la oferta es decorativa.
 
 ### Etapa 5. Carrito, pedidos, PIN, nombre y pago
 
@@ -218,7 +218,7 @@ Las rutas son relativas a `apps/web-cliente/src/` salvo que digan otra cosa.
 
 - [ ] Líneas 123-133: después de confirmar, el foco va al título "¡Pedido enviado a cocina!", que pasa a `<h1>`, y se oculta el "✓". Hoy el foco cae en el `<body>` y no se anuncia nada.
 - [ ] Línea 516: "Quitar" pasa a "Quitar {plato}" (hoy mide 35×18 px; ver etapa 6).
-- [ ] Líneas 457 y 485: los "−" y "+" usan el componente de cantidad de la etapa 4.
+- [ ] Líneas 457 y 485: los "−" y "+" usan el componente de cantidad de la etapa 4 (`components/SelectorDeCantidad.tsx`, con `minimo={1}`).
 - [ ] Línea 363: los extras se escriben en palabras ("Con Cheddar, 1"), no "+ Cheddar ×1".
 - [ ] Línea 324: la región de "precios actualizados" queda siempre montada.
 - [ ] Línea 386: el nombre clickeable del plato pasa a ser un botón o enlace.
@@ -327,6 +327,8 @@ Cosas que aparecieron al trabajar y que el plan no mencionaba. Los dos primeros 
 2. **Resuelto (13/11): anillo de foco en el `<h1>`.** Al llevar el foco al título en cada cambio de pantalla, el navegador dibujaba su anillo alrededor. Ahora `src/index.css` lo quita solo de los `<h1>` que reciben el foco por código: `h1[tabindex='-1']:focus { outline: none }`. Es un título, no un control, y WCAG 2.4.7 no pide indicador ahí. Botones, enlaces y campos mantienen el foco visible. Un test (`src/estilos.spec.ts`) comprueba que esa sea la **única** regla de la hoja que quita el contorno, y se verificó en Edge real: el título queda con `outline-style: none` y un botón enfocado con Tab muestra su anillo (`auto`).
 3. **Título de la pestaña sin restaurante al entrar directo a una pantalla de la mesa** (por ejemplo `/pedidos` recién abierto): dice "Mis pedidos · MenYU" hasta que se carga el menú. Hoy solo `/menu`, `/carrito` y el detalle piden el menú. No es un error de accesibilidad, solo un título menos completo.
 4. **Zona con scroll de la carta que no se puede enfocar con teclado** (la auditoría sugiere `tabIndex={0}`): no se puede comprobar en jsdom. Para verificarlo en el axe de staging (etapa 7); los navegadores recientes ya hacen enfocables los contenedores con scroll que no tienen nada enfocable adentro.
+
+5. **El buscador del menú no encuentra con más de una palabra** (hallazgo de la etapa 4, previo a ella). `matchesBusqueda` en `MenuView.tsx` compara el texto buscado entero con el comienzo de cada palabra del nombre del plato, así que "plato 1" o "pizza muzz" no coinciden con "Plato 1" ni con "Pizza muzzarella": da "Ningún plato coincide" aunque el plato exista. No es de accesibilidad y no se tocó. Afecta a todos los comensales. Hay que decidir si se arregla (por ejemplo, que cada palabra buscada coincida con el comienzo de alguna palabra del nombre) y en qué PR.
 
 ## Preguntas abiertas
 
