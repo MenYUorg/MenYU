@@ -5,6 +5,7 @@ import type { MenuPublicoItem } from '@menyu/types'
 import { useCuenta } from '../../hooks/useCuenta'
 import { usePuedeCerrarSesion } from '../../hooks/usePuedeCerrarSesion'
 import { menuEsDe, usePublicMenuStore } from '../../store/publicMenuStore'
+import { enfocarEncabezado } from '../../utils/enfocarTitulo'
 import { useCarritoStore } from '../../store/carritoStore'
 import { useComensalStore } from '../../store/comensalStore'
 import { AppHeader } from '../AppHeader'
@@ -182,7 +183,11 @@ export function MenuView({ modo, restauranteId }: MenuViewProps) {
   }, [seccionesConId])
 
   const handleCategoriaClick = (catId: string) => {
-    sectionRefs.current[catId]?.scrollIntoView({ behavior: 'smooth' })
+    const seccion = sectionRefs.current[catId]
+    seccion?.scrollIntoView({ behavior: 'smooth' })
+    // La pantalla se desplaza, pero el lector sigue en el chip: el foco va al encabezado de la sección, y el lector lo
+    // anuncia. Sin mover la pantalla otra vez (el desplazamiento ya lo hace scrollIntoView, con animación).
+    enfocarEncabezado(seccion?.querySelector('h2'))
   }
 
   const cerrarSesion = () => {

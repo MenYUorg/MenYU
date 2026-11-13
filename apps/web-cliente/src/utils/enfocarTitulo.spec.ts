@@ -1,5 +1,5 @@
 import { act } from '@testing-library/react'
-import { enfocarElTitulo, enfocarElTituloCuandoAparezca, MS_PARA_ENCONTRAR_EL_TITULO } from './enfocarTitulo'
+import { enfocarElTitulo, enfocarElTituloCuandoAparezca, enfocarEncabezado, MS_PARA_ENCONTRAR_EL_TITULO } from './enfocarTitulo'
 
 function agregarTitulo(texto = 'Carrito'): HTMLHeadingElement {
   const titulo = document.createElement('h1')
@@ -118,6 +118,44 @@ describe('enfocarElTituloCuandoAparezca', () => {
     agregarTitulo()
     await dejarCorrer()
 
+    expect(document.activeElement).toBe(document.body)
+  })
+})
+
+describe('enfocarEncabezado', () => {
+  it('le da el foco al encabezado y lo deja fuera del orden del Tab', () => {
+    const encabezado = document.createElement('h2')
+    document.body.appendChild(encabezado)
+
+    enfocarEncabezado(encabezado)
+
+    expect(document.activeElement).toBe(encabezado)
+    expect(encabezado).toHaveAttribute('tabindex', '-1')
+  })
+
+  it('no mueve la pantalla: el desplazamiento lo hace quien llama (focus con preventScroll)', () => {
+    const encabezado = document.createElement('h2')
+    document.body.appendChild(encabezado)
+    const foco = vi.spyOn(encabezado, 'focus')
+
+    enfocarEncabezado(encabezado)
+
+    expect(foco).toHaveBeenCalledWith({ preventScroll: true })
+  })
+
+  it('respeta el tabindex que el encabezado ya tenga', () => {
+    const encabezado = document.createElement('h2')
+    encabezado.setAttribute('tabindex', '0')
+    document.body.appendChild(encabezado)
+
+    enfocarEncabezado(encabezado)
+
+    expect(encabezado).toHaveAttribute('tabindex', '0')
+  })
+
+  it('sin encabezado (no hay sección, o no tiene título) no hace nada ni falla', () => {
+    expect(() => enfocarEncabezado(null)).not.toThrow()
+    expect(() => enfocarEncabezado(undefined)).not.toThrow()
     expect(document.activeElement).toBe(document.body)
   })
 })

@@ -17,31 +17,40 @@ function selectoresQueQuitanElContorno(css: string): string[] {
 }
 
 describe('index.css: el foco visible', () => {
-  it('solo quita el anillo de foco de los <h1> que reciben el foco por código (tabindex -1)', () => {
-    expect(selectoresQueQuitanElContorno(hojaDeEstilos)).toEqual(["h1[tabindex='-1']:focus"])
+  it('solo quita el anillo de foco de los <h1> y <h2> que reciben el foco por código (tabindex -1)', () => {
+    const selectores = selectoresQueQuitanElContorno(hojaDeEstilos)
+
+    expect(selectores).toHaveLength(1)
+    expect(selectores[0].split(',').map((s) => s.trim())).toEqual(["h1[tabindex='-1']:focus", "h2[tabindex='-1']:focus"])
   })
 
-  it('el selector coincide con el <h1> al que enfocarElTitulo le pone tabindex -1, y con nada más', () => {
+  it('el selector coincide con el <h1> y el <h2> a los que se les pone tabindex -1, y con nada más', () => {
     const titulo = document.createElement('h1')
-    const otroTitulo = document.createElement('h1')
+    const seccion = document.createElement('h2')
+    const tituloDelTab = document.createElement('h1')
+    const subtitulo = document.createElement('h3')
     const boton = document.createElement('button')
     titulo.setAttribute('tabindex', '-1')
-    otroTitulo.setAttribute('tabindex', '0')
+    seccion.setAttribute('tabindex', '-1')
+    tituloDelTab.setAttribute('tabindex', '0')
+    subtitulo.setAttribute('tabindex', '-1')
     boton.setAttribute('tabindex', '-1')
-    document.body.append(titulo, otroTitulo, boton)
+    const elementos = [titulo, seccion, tituloDelTab, subtitulo, boton]
+    document.body.append(...elementos)
 
     try {
-      titulo.focus()
       const [selector] = selectoresQueQuitanElContorno(hojaDeEstilos)
 
+      titulo.focus()
       expect(titulo.matches(selector)).toBe(true)
-      expect(otroTitulo.matches(selector)).toBe(false)
-      boton.focus()
-      expect(boton.matches(selector)).toBe(false)
+      seccion.focus()
+      expect(seccion.matches(selector)).toBe(true)
+      for (const otro of [tituloDelTab, subtitulo, boton]) {
+        otro.focus()
+        expect(otro.matches(selector)).toBe(false)
+      }
     } finally {
-      titulo.remove()
-      otroTitulo.remove()
-      boton.remove()
+      for (const elemento of elementos) elemento.remove()
     }
   })
 })

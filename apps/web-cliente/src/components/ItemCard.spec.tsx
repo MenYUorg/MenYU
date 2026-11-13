@@ -1,6 +1,8 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { crearPlato, crearPlatoEnDescuento } from '../test/fixtures'
 import { ItemCard } from './ItemCard'
+import userEvent from '@testing-library/user-event'
+import { axe } from '../test/axe'
 
 describe('ItemCard', () => {
   describe('con y sin "onPress" (mesa y carta)', () => {
@@ -11,7 +13,7 @@ describe('ItemCard', () => {
       fireEvent.click(container.firstElementChild as HTMLElement)
       expect(alTocar).toHaveBeenCalledTimes(1)
 
-      fireEvent.click(screen.getByRole('button', { name: 'Agregar Flan' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Ver Flan' }))
       expect(alTocar).toHaveBeenCalledTimes(2)
       expect(container.firstElementChild).toHaveStyle({ cursor: 'pointer' })
     })
@@ -132,9 +134,67 @@ describe('ItemCard', () => {
       const onPress = vi.fn()
       render(<ItemCard item={crearPlato({ nombre: 'Milanesa' })} onPress={onPress} />)
 
-      fireEvent.click(screen.getByRole('button', { name: 'Agregar Milanesa' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Ver Milanesa' }))
 
       expect(onPress).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  describe('accesibilidad', () => {
+    it('el botón se llama "Ver {plato}" (abre el detalle, no agrega) y el signo "+" es decorativo', () => {
+      render(<ItemCard item={crearPlato({ nombre: 'Hamburguesa doble' })} onPress={() => {}} />)
+
+      const boton = screen.getByRole('button', { name: 'Ver Hamburguesa doble' })
+      expect(boton.querySelector('[aria-hidden="true"]')).toHaveTextContent('+')
+      expect(screen.queryByRole('button', { name: /Agregar/ })).not.toBeInTheDocument()
+    })
+
+    it('la foto es decorativa: el nombre está escrito al lado y el lector no lo repite', () => {
+      const { container } = render(<ItemCard item={crearPlato({ nombre: 'Flan' })} onPress={() => {}} />)
+
+      expect(container.querySelector('img')).toHaveAttribute('alt', '')
+      expect(screen.queryByRole('img', { name: 'Flan' })).not.toBeInTheDocument()
+      expect(screen.getByText('Flan')).toBeInTheDocument()
+    })
+
+    it('con una foto de verdad también es decorativa', () => {
+      const { container } = render(<ItemCard item={crearPlato({ nombre: 'Flan', imagenUrl: 'https://x/flan.png' })} onPress={() => {}} />)
+
+      expect(container.querySelector('img')).toHaveAttribute('src', 'https://x/flan.png')
+      expect(container.querySelector('img')).toHaveAttribute('alt', '')
+    })
+
+    it('la tarjeta no es un control (role="presentation"): para el teclado y el lector está el botón', () => {
+      const { container } = render(<ItemCard item={crearPlato({ nombre: 'Flan' })} onPress={() => {}} />)
+
+      expect(container.firstElementChild).toHaveAttribute('role', 'presentation')
+      expect(screen.getAllByRole('button')).toHaveLength(1)
+    })
+
+    it('el botón se activa con el teclado (Enter) y abre el detalle una sola vez', async () => {
+      const usuario = userEvent.setup()
+      const alTocar = vi.fn()
+      render(<ItemCard item={crearPlato({ nombre: 'Flan' })} onPress={alTocar} />)
+      screen.getByRole('button', { name: 'Ver Flan' }).focus()
+
+      await usuario.keyboard('{Enter}')
+
+      expect(alTocar).toHaveBeenCalledTimes(1)
+    })
+
+    it('no tiene violaciones de accesibilidad (axe), con y sin onPress, y con descuento', async () => {
+      const conOnPress = render(<ItemCard item={crearPlato({ nombre: 'Flan' })} onPress={() => {}} />)
+      expect(await axe(conOnPress.container)).toHaveNoViolations()
+      conOnPress.unmount()
+
+      const sinOnPress = render(<ItemCard item={crearPlato({ nombre: 'Flan' })} />)
+      expect(await axe(sinOnPress.container)).toHaveNoViolations()
+      sinOnPress.unmount()
+
+      const conDescuento = render(
+        <ItemCard item={crearPlatoEnDescuento({ nombre: 'Hamburguesa', precioBase: 1500, precioDescuento: 1200 })} onPress={() => {}} />,
+      )
+      expect(await axe(conDescuento.container)).toHaveNoViolations()
     })
   })
 })

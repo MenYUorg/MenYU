@@ -127,7 +127,7 @@ describe('ClienteMenuPage', () => {
 
         fireEvent.click(screen.getByRole('button', { name: /Mozo/ }))
 
-        expect(await screen.findByRole('button', { name: /¡En camino!/ })).toBeDisabled()
+        expect(await screen.findByRole('button', { name: '¡En camino!' })).toHaveAttribute('aria-disabled', 'true')
         expect(api.waiterCalls.llamar).toHaveBeenCalledWith('ses-1', 'jwt')
       })
 
@@ -257,10 +257,10 @@ describe('ClienteMenuPage', () => {
     })
 
     describe('platos y carrito', () => {
-      it('cada plato tiene su botón "+" y tocarlo abre el detalle', () => {
+      it('cada plato tiene su botón "+", que se llama "Ver {plato}", y tocarlo abre el detalle', () => {
         const { container } = renderMenu(menuCompleto())
 
-        fireEvent.click(within(seccion(container, 'cat-2')!).getByRole('button', { name: 'Agregar Flan' }))
+        fireEvent.click(within(seccion(container, 'cat-2')!).getByRole('button', { name: 'Ver Flan' }))
 
         expect(screen.getByText('Detalle del plato')).toBeInTheDocument()
       })
@@ -270,7 +270,7 @@ describe('ClienteMenuPage', () => {
         useCarritoStore.getState().agregar({ itemMenuId: 'ens', nombre: 'Ensalada', precioUnitario: 900, cantidad: 1, modificaciones: [] })
         renderMenu(menuCompleto())
 
-        const carrito = screen.getByRole('button', { name: /🛒/ })
+        const carrito = screen.getByRole('button', { name: 'Ver carrito, 2 ítems' })
         expect(carrito).toHaveTextContent('2')
         fireEvent.click(carrito)
 
@@ -280,7 +280,7 @@ describe('ClienteMenuPage', () => {
       it('con el carrito vacío no hay botón flotante', () => {
         renderMenu(menuCompleto())
 
-        expect(screen.queryByRole('button', { name: /🛒/ })).not.toBeInTheDocument()
+        expect(screen.queryByRole('button', { name: /Ver carrito/ })).not.toBeInTheDocument()
       })
     })
 
@@ -739,6 +739,131 @@ describe('ClienteMenuPage', () => {
     it('no tiene violaciones de accesibilidad (axe), con el menú lateral abierto', async () => {
       const { container } = renderMenu(menuCompleto())
       abrirElMenu()
+
+      expect(await axe(container)).toHaveNoViolations()
+    })
+  })
+
+  describe('secciones, buscador y carrito (accesibilidad)', () => {
+    const buscador = () => screen.getByRole('textbox', { name: 'Buscar platos' })
+    const escribir = (texto: string) => fireEvent.change(buscador(), { target: { value: texto } })
+    const esperar = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms) })
+
+    beforeEach(() => {
+      useAnunciadorStore.setState({ mensaje: '', numero: 0 })
+      useCarritoStore.getState().vaciar()
+      localStorage.clear()
+    })
+
+    afterEach(() => {
+      vi.useRealTimers()
+      vi.restoreAllMocks()
+      localStorage.clear()
+      useCarritoStore.getState().vaciar()
+    })
+
+    describe('los chips de sección', () => {
+      it('son una navegación con nombre ("Secciones del menú") con un botón por sección', () => {
+        renderMenu(menuCompleto())
+
+        const navegacion = screen.getByRole('navigation', { name: 'Secciones del menú' })
+        expect(within(navegacion).getAllByRole('button').map((b) => b.textContent)).toEqual(['Descuentos', 'RECOMENDACIONES', 'Principales', 'Postres'])
+      })
+
+      it('tocar un chip desplaza a la sección y lleva el foco a su encabezado', () => {
+        renderMenu(menuCompleto())
+
+        fireEvent.click(within(screen.getByRole('navigation', { name: 'Secciones del menú' })).getByRole('button', { name: 'Postres' }))
+
+        const encabezado = screen.getByRole('heading', { level: 2, name: 'Postres' })
+        expect(Element.prototype.scrollIntoView).toHaveBeenCalled()
+        expect(encabezado).toHaveFocus()
+        expect(encabezado).toHaveAttribute('tabindex', '-1')
+      })
+
+      it('el foco va a la sección que se tocó, también en "Descuentos"', () => {
+        renderMenu(menuCompleto())
+
+        fireEvent.click(within(screen.getByRole('navigation', { name: 'Secciones del menú' })).getByRole('button', { name: 'Descuentos' }))
+
+        expect(screen.getByRole('heading', { level: 2, name: 'Descuentos' })).toHaveFocus()
+      })
+
+      it('no mueve la pantalla otra vez: el desplazamiento lo hace scrollIntoView, con animación', () => {
+        const foco = vi.spyOn(HTMLElement.prototype, 'focus')
+        renderMenu(menuCompleto())
+
+        fireEvent.click(within(screen.getByRole('navigation', { name: 'Secciones del menú' })).getByRole('button', { name: 'Postres' }))
+
+        expect(foco).toHaveBeenCalledWith({ preventScroll: true })
+      })
+
+      it('el chip de la sección que se está viendo dice "actual" (la primera, al abrir)', () => {
+        renderMenu(menuCompleto())
+
+        const navegacion = screen.getByRole('navigation', { name: 'Secciones del menú' })
+        expect(within(navegacion).getByRole('button', { name: 'Descuentos' })).toHaveAttribute('aria-current', 'true')
+        expect(within(navegacion).getByRole('button', { name: 'Postres' })).not.toHaveAttribute('aria-current')
+      })
+    })
+
+    describe('el buscador', () => {
+      it('se llama "Buscar platos" y al escribir anuncia cuántos platos quedan, cuando se deja de escribir', async () => {
+        vi.useFakeTimers()
+        renderMenu(menuCompleto())
+
+        escribir('ens')
+        await esperar(300)
+        expect(useAnunciadorStore.getState().mensaje).toBe('')
+        await esperar(300)
+
+        expect(useAnunciadorStore.getState().mensaje).toBe('1 plato')
+      })
+
+      it('si no hay ninguno, anuncia "Ningún plato coincide"', async () => {
+        vi.useFakeTimers()
+        renderMenu(menuCompleto())
+
+        escribir('zzz')
+        await esperar(600)
+
+        expect(useAnunciadorStore.getState().mensaje).toBe('Ningún plato coincide')
+      })
+
+      it('"Borrar búsqueda" borra el texto y devuelve el foco al campo', () => {
+        renderMenu(menuCompleto())
+        escribir('ens')
+
+        fireEvent.click(screen.getByRole('button', { name: 'Borrar búsqueda' }))
+
+        expect(buscador()).toHaveValue('')
+        expect(buscador()).toHaveFocus()
+        expect(screen.getByText('Flan')).toBeInTheDocument()
+      })
+    })
+
+    describe('las tarjetas y el carrito', () => {
+      it('cada plato tiene su botón "Ver {plato}" y su foto no repite el nombre', () => {
+        renderMenu(menuCompleto())
+
+        expect(screen.getAllByRole('button', { name: 'Ver Flan' })).toHaveLength(1)
+        expect(screen.queryByRole('img', { name: 'Flan' })).not.toBeInTheDocument()
+        expect(screen.queryByRole('button', { name: /^Agregar / })).not.toBeInTheDocument()
+      })
+
+      it('el botón del carrito cuenta unidades: 3 flanes y 2 ensaladas son "5 ítems"', () => {
+        useCarritoStore.getState().agregar({ itemMenuId: 'flan', nombre: 'Flan', precioUnitario: 700, cantidad: 3, modificaciones: [] })
+        useCarritoStore.getState().agregar({ itemMenuId: 'ens', nombre: 'Ensalada', precioUnitario: 900, cantidad: 2, modificaciones: [] })
+
+        renderMenu(menuCompleto())
+
+        expect(screen.getByRole('button', { name: 'Ver carrito, 5 ítems' })).toHaveTextContent('5')
+      })
+    })
+
+    it('no tiene violaciones de accesibilidad (axe), con las secciones, los chips y un plato en el carrito', async () => {
+      useCarritoStore.getState().agregar({ itemMenuId: 'flan', nombre: 'Flan', precioUnitario: 700, cantidad: 1, modificaciones: [] })
+      const { container } = renderMenu(menuCompleto())
 
       expect(await axe(container)).toHaveNoViolations()
     })

@@ -14,6 +14,17 @@ export function enfocarElTitulo(): boolean {
 }
 
 /**
+ * Le da el foco al encabezado de una sección (el chip del menú que lleva a una categoría) sin mover la pantalla: el
+ * desplazamiento lo hace quien llama, con animación, y un `focus()` normal lo cortaría. Como el `<h1>`, no está en el
+ * orden del Tab. No hace nada si no hay encabezado.
+ */
+export function enfocarEncabezado(encabezado: HTMLElement | null | undefined): void {
+  if (!encabezado) return
+  if (!encabezado.hasAttribute('tabindex')) encabezado.setAttribute('tabindex', '-1')
+  encabezado.focus({ preventScroll: true })
+}
+
+/**
  * Enfoca el `<h1>` apenas aparezca. Si todavía no está, espera a que la pantalla lo pinte, hasta `MS_PARA_ENCONTRAR_EL_TITULO`.
  * Si la persona toca o escribe antes de que llegue, deja de esperar: el foco ya es suyo. Devuelve cómo cancelarlo.
  */

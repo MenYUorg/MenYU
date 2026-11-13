@@ -27,6 +27,7 @@ import { usePublicMenuStore } from './store/publicMenuStore'
 import { GraciasCard } from './components/GraciasCard'
 import { Anunciador } from './components/Anunciador'
 import { SeguimientoDeRuta } from './components/SeguimientoDeRuta'
+import { anunciar } from './utils/anunciador'
 
 const WS_BASE =
   urlDelSocket(import.meta.env.VITE_WS_URL as string | undefined, import.meta.env.VITE_API_URL as string | undefined) ?? ''
@@ -61,7 +62,11 @@ function SessionGuard({ children }: { children: React.ReactNode }) {
       if (rid !== restauranteId) return
       const { clear: clearMenu, fetchMenu } = usePublicMenuStore.getState()
       clearMenu()
-      void fetchMenu(rid)
+      // Se recarga solo, sin que nadie toque nada: cuando llegó el menú nuevo se avisa (y si no llegó, no se dice que se actualizó).
+      void fetchMenu(rid).then(() => {
+        const { menu, error } = usePublicMenuStore.getState()
+        if (menu && !error) anunciar('El menú se actualizó')
+      })
     })
     return () => { socket.off('sesion:cobrada'); socket.disconnect() }
   }, [restauranteId, jwt])

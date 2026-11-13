@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../../services/api'
 import { useSessionStore } from '../../store/sessionStore'
+import { anunciar } from '../../utils/anunciador'
 import { ImagenLogo } from './ImagenLogo'
 import type { ModoMenu } from './modo'
 import { CM } from './paleta'
@@ -74,8 +75,10 @@ function MozoYMesa() {
     try {
       await api.waiterCalls.llamar(sesionId, jwt)
       setMozoStatus('ok')
+      anunciar('Avisamos al mozo')
     } catch {
       setMozoStatus('error')
+      anunciar('No pudimos avisar al mozo. Probá de nuevo.')
     }
     mozoTimer.current = setTimeout(() => setMozoStatus('idle'), 3000)
   }
@@ -89,9 +92,13 @@ function MozoYMesa() {
   return (
     <>
       {sesionId && jwt && (
+        // El botón no se deshabilita mientras llama ni después: `disabled` le sacaba el foco a quien lo tocó. Se marca
+        // `aria-disabled` (los toques de más no hacen nada: `handleCallMozo` los ignora) y lo que pasó se anuncia aparte,
+        // en la región viva ("Avisamos al mozo" o el error).
         <button
+          type="button"
           onClick={() => void handleCallMozo()}
-          disabled={mozoStatus !== 'idle'}
+          aria-disabled={mozoStatus !== 'idle'}
           style={{
             display: 'inline-flex', alignItems: 'center', gap: 5,
             padding: '7px 10px', borderRadius: 999, flexShrink: 0,
@@ -103,7 +110,7 @@ function MozoYMesa() {
             transition: 'all 0.2s',
           }}
         >
-          <span style={{ fontSize: 12 }}>🔔</span> {mozoLabel}
+          <span aria-hidden="true" style={{ fontSize: 12 }}>🔔</span> {mozoLabel}
         </button>
       )}
 

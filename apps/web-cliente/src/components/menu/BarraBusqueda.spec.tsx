@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { axe } from '../../test/axe'
 import { useAnunciadorStore } from '../../utils/anunciador'
 import { Anunciador } from '../Anunciador'
-import { BarraBusqueda, type ClasificacionConCantidad } from './BarraBusqueda'
+import { BarraBusqueda, MS_SIN_ESCRIBIR_PARA_ANUNCIAR, type ClasificacionConCantidad } from './BarraBusqueda'
 
 const CLASIFICACIONES: ClasificacionConCantidad[] = [
   { id: 'veg', nombre: 'Vegano', count: 2 },
@@ -20,7 +20,7 @@ function Barra({
   platosQueQuedan = (dietas) => (dietas.size === 0 ? 5 : 2),
 }: {
   clasificaciones?: ClasificacionConCantidad[]
-  platosQueQuedan?: (dietas: Set<string>) => number
+  platosQueQuedan?: (dietas: Set<string>, buscado: string) => number
 }) {
   const [dietas, setDietas] = useState<Set<string>>(new Set())
   const [buscar, setBuscar] = useState('')
@@ -31,7 +31,23 @@ function Barra({
       clasificaciones={clasificaciones}
       dietasActivas={dietas}
       onDietasActivas={setDietas}
-      cantidadDePlatos={platosQueQuedan(dietas)}
+      cantidadDePlatos={platosQueQuedan(dietas, buscar)}
+    />
+  )
+}
+
+/** La barra con una cantidad de platos que el test cambia desde afuera (con rerender). */
+function BarraConCantidad({ cantidad }: { cantidad: number }) {
+  const [dietas, setDietas] = useState<Set<string>>(new Set())
+  const [buscar, setBuscar] = useState('')
+  return (
+    <BarraBusqueda
+      buscar={buscar}
+      onBuscar={setBuscar}
+      clasificaciones={CLASIFICACIONES}
+      dietasActivas={dietas}
+      onDietasActivas={setDietas}
+      cantidadDePlatos={cantidad}
     />
   )
 }
@@ -335,5 +351,176 @@ describe('BarraBusqueda: el filtro de dietas', () => {
 
     fireEvent.click(screen.getByRole('checkbox', { name: 'Vegano, 2 platos' }))
     expect(await axe(container, { rules: { 'label-content-name-mismatch': { enabled: true } } })).toHaveNoViolations()
+  })
+})
+
+describe('BarraBusqueda: el buscador', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  const buscador = () => screen.getByRole('textbox', { name: 'Buscar platos' })
+  const escribir = (texto: string) => fireEvent.change(buscador(), { target: { value: texto } })
+  const esperar = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms) })
+
+  /** Cuántos platos quedan según lo que se escribió: "ens" deja 2, "a" y "ab" dejan 3, "zzz" ninguno, y sin texto, 5. */
+  const segunLoBuscado = (_dietas: Set<string>, buscado: string) => {
+    if (buscado === 'ens') return 2
+    if (buscado === 'a' || buscado === 'ab') return 3
+    if (buscado === 'zzz') return 0
+    return 5
+  }
+
+  it('se llama "Buscar platos" (el texto de ejemplo no alcanza como nombre)', () => {
+    render(<Barra />)
+
+    expect(buscador()).toHaveAttribute('placeholder', 'Buscar platos...')
+    expect(buscador()).toHaveAccessibleName('Buscar platos')
+  })
+
+  it('la lupa es decorativa', () => {
+    render(<Barra />)
+
+    const lupa = screen.getByText('🔍')
+    expect(lupa).toHaveAttribute('aria-hidden', 'true')
+  })
+
+  describe('anuncia cuántos platos quedan', () => {
+    it('recién cuando se deja de escribir, no por cada letra', async () => {
+      render(<Barra platosQueQuedan={segunLoBuscado} />)
+
+      escribir('e')
+      await esperar(300)
+      escribir('en')
+      await esperar(300)
+      escribir('ens')
+      await esperar(MS_SIN_ESCRIBIR_PARA_ANUNCIAR - 1)
+      expect(anunciado()).toBe('')
+
+      await esperar(1)
+
+      expect(anunciado()).toBe('2 platos')
+      expect(useAnunciadorStore.getState().numero).toBe(1)
+    })
+
+    it('con un plato dice "1 plato" y sin ninguno, "Ningún plato coincide"', async () => {
+      const { unmount } = render(<Barra platosQueQuedan={() => 1} />)
+      escribir('x')
+      await esperar(MS_SIN_ESCRIBIR_PARA_ANUNCIAR)
+      expect(anunciado()).toBe('1 plato')
+      unmount()
+
+      render(<Barra platosQueQuedan={segunLoBuscado} />)
+      escribir('zzz')
+      await esperar(MS_SIN_ESCRIBIR_PARA_ANUNCIAR)
+      expect(anunciado()).toBe('Ningún plato coincide')
+    })
+
+    it('si seguir escribiendo no cambia la cantidad, no repite el anuncio', async () => {
+      render(<Barra platosQueQuedan={segunLoBuscado} />)
+
+      escribir('a')
+      await esperar(MS_SIN_ESCRIBIR_PARA_ANUNCIAR)
+      expect(anunciado()).toBe('3 platos')
+
+      escribir('ab')
+      await esperar(MS_SIN_ESCRIBIR_PARA_ANUNCIAR)
+
+      expect(useAnunciadorStore.getState().numero).toBe(1)
+    })
+
+    it('cuando la cantidad cambia vuelve a anunciar', async () => {
+      render(<Barra platosQueQuedan={segunLoBuscado} />)
+      escribir('a')
+      await esperar(MS_SIN_ESCRIBIR_PARA_ANUNCIAR)
+
+      escribir('ens')
+      await esperar(MS_SIN_ESCRIBIR_PARA_ANUNCIAR)
+
+      expect(anunciado()).toBe('2 platos')
+      expect(useAnunciadorStore.getState().numero).toBe(2)
+    })
+
+    it('al borrar todo el texto anuncia cuántos platos hay en total', async () => {
+      render(<Barra platosQueQuedan={segunLoBuscado} />)
+      escribir('ens')
+      await esperar(MS_SIN_ESCRIBIR_PARA_ANUNCIAR)
+
+      escribir('')
+      await esperar(MS_SIN_ESCRIBIR_PARA_ANUNCIAR)
+
+      expect(anunciado()).toBe('5 platos')
+    })
+
+    it('no repite lo que el filtro de dietas acaba de anunciar', async () => {
+      render(<Barra platosQueQuedan={(dietas, buscado) => (dietas.size > 0 || buscado ? 2 : 5)} />)
+      abrirPanel()
+      fireEvent.click(screen.getByRole('checkbox', { name: 'Vegano, 2 platos' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Aplicar (1)' }))
+      expect(anunciado()).toBe('2 platos')
+
+      escribir('x')
+      await esperar(MS_SIN_ESCRIBIR_PARA_ANUNCIAR)
+
+      expect(useAnunciadorStore.getState().numero).toBe(1)
+    })
+
+    it('no anuncia nada al montarse, y si se desmonta antes de la pausa, tampoco después', async () => {
+      const { unmount } = render(<Barra platosQueQuedan={segunLoBuscado} />)
+      await esperar(MS_SIN_ESCRIBIR_PARA_ANUNCIAR)
+      expect(anunciado()).toBe('')
+
+      escribir('ens')
+      unmount()
+      await esperar(MS_SIN_ESCRIBIR_PARA_ANUNCIAR)
+
+      expect(anunciado()).toBe('')
+    })
+
+    it('un cambio de la cantidad que llega durante la pausa se anuncia con el valor último', async () => {
+      const { rerender } = render(<BarraConCantidad cantidad={5} />)
+      escribir('x')
+      await esperar(300)
+
+      rerender(<BarraConCantidad cantidad={4} />)
+      await esperar(MS_SIN_ESCRIBIR_PARA_ANUNCIAR)
+
+      expect(anunciado()).toBe('4 platos')
+    })
+  })
+
+  describe('"Borrar búsqueda"', () => {
+    it('no está sin texto; con texto es un botón con ese nombre y el signo es decorativo', () => {
+      render(<Barra />)
+      expect(screen.queryByRole('button', { name: 'Borrar búsqueda' })).not.toBeInTheDocument()
+
+      escribir('ens')
+
+      const borrar = screen.getByRole('button', { name: 'Borrar búsqueda' })
+      expect(borrar.querySelector('[aria-hidden="true"]')).toHaveTextContent('×')
+    })
+
+    it('borra el texto y el foco vuelve al campo (el botón desaparece al borrar)', () => {
+      render(<Barra />)
+      escribir('ens')
+
+      fireEvent.click(screen.getByRole('button', { name: 'Borrar búsqueda' }))
+
+      expect(buscador()).toHaveValue('')
+      expect(buscador()).toHaveFocus()
+      expect(screen.queryByRole('button', { name: 'Borrar búsqueda' })).not.toBeInTheDocument()
+    })
+  })
+
+  it('no tiene violaciones de accesibilidad (axe), con texto escrito', async () => {
+    vi.useRealTimers()
+    const { container } = render(<Barra />)
+    escribir('ens')
+
+    expect(await axe(container)).toHaveNoViolations()
   })
 })

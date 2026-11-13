@@ -16,8 +16,11 @@ const C = {
 export function ItemCard({ item, onPress }: { item: MenuPublicoItem; onPress?: () => void }) {
   const enDescuento = tieneDescuento(item)
 
+  // Tocar la tarjeta entera abre el detalle (para quien usa el dedo o el mouse), pero para el teclado y el lector el
+  // control es el botón de adentro, "Ver {plato}": el <div> no es un control (`role="presentation"`), solo un área que se toca.
   return (
     <div
+      role="presentation"
       onClick={onPress}
       className="group"
       style={{
@@ -37,9 +40,10 @@ export function ItemCard({ item, onPress }: { item: MenuPublicoItem; onPress?: (
       } : undefined}
     >
       <div style={{ position: 'relative', width: '100%', paddingBottom: '80%', overflow: 'hidden', flexShrink: 0 }}>
+        {/* Decorativa: el nombre del plato está escrito al lado (si no, el lector lo diría dos veces). */}
         <MenuItemImage
           src={item.imagenUrl}
-          alt={item.nombre}
+          alt=""
           className="absolute inset-0"
         />
         {enDescuento && (
@@ -72,8 +76,9 @@ export function ItemCard({ item, onPress }: { item: MenuPublicoItem; onPress?: (
           />
           {onPress && (
             <button
+              type="button"
               onClick={(e) => { e.stopPropagation(); onPress() }}
-              aria-label={`Agregar ${item.nombre}`}
+              aria-label={`Ver ${item.nombre}`}
               style={{
                 width: 28, height: 28, borderRadius: '50%',
                 background: C.orange, color: 'white', border: 'none',
@@ -82,7 +87,7 @@ export function ItemCard({ item, onPress }: { item: MenuPublicoItem; onPress?: (
                 boxShadow: '0 2px 6px rgba(232,86,58,0.35)',
                 cursor: 'pointer', flexShrink: 0,
               }}
-            >+</button>
+            ><span aria-hidden="true">+</span></button>
           )}
         </div>
       </div>

@@ -6,6 +6,8 @@ import { reiniciarDiscoveryStore } from '../../store/discoveryStore'
 import { useSessionStore } from '../../store/sessionStore'
 import { crearOferta, crearRestaurante, crearSesionAbierta } from '../../test/fixtures'
 import { DiscoveryPage } from './DiscoveryPage'
+import { axe } from '../../test/axe'
+import { useAnunciadorStore } from '../../utils/anunciador'
 
 vi.mock('../../services/api', () => ({
   api: {
@@ -439,6 +441,155 @@ describe('DiscoveryPage', () => {
       expect(Element.prototype.scrollIntoView).toHaveBeenCalled()
       const lista = screen.getByRole('heading', { name: 'Restaurantes' }).closest('section')
       expect(lista).toHaveAttribute('id', 'restaurantes')
+    })
+  })
+
+  describe('lectores de pantalla (accesibilidad)', () => {
+    const anunciado = () => useAnunciadorStore.getState().mensaje
+    /** El párrafo "Buscando…": una sola región de estado, siempre montada. */
+    const regionDeBusqueda = (contenedor: HTMLElement) => contenedor.querySelector('p[role="status"]') as HTMLElement
+
+    const PIZZA = crearOferta({ id: 'o1', nombre: 'Pizza muzzarella grande', restaurante: { id: 'vito', nombre: 'Pizzería Don Vito' } })
+    const OTRA_PIZZA = crearOferta({ id: 'o2', nombre: 'Pizza fugazzeta', restaurante: { id: 'vito', nombre: 'Pizzería Don Vito' } })
+    const VITO = crearRestaurante({ id: 'vito', nombre: 'Pizzería Don Vito' })
+
+    beforeEach(() => {
+      useAnunciadorStore.setState({ mensaje: '', numero: 0 })
+    })
+
+    describe('"Buscando…" es una región de estado siempre montada', () => {
+      it('desde el primer momento existe, vacía y fuera de la vista', async () => {
+        const { container } = renderPagina()
+        await esperar()
+
+        const region = regionDeBusqueda(container)
+        expect(region).not.toBeNull()
+        expect(region).toHaveClass('sr-only')
+        expect(region.textContent).toBe('')
+      })
+
+      it('al buscar, esa misma región pasa a decir "Buscando…" y se vacía de nuevo cuando llegan los resultados', async () => {
+        let responder!: (respuesta: DiscoveryBusquedaResponse) => void
+        buscarEnApi.mockReturnValueOnce(new Promise((resolver) => { responder = resolver }))
+        const { container } = renderPagina()
+        await esperar()
+        const region = regionDeBusqueda(container)
+
+        escribir('pizza')
+        await esperar(300)
+        expect(regionDeBusqueda(container)).toBe(region)
+        expect(region).toHaveTextContent('Buscando…')
+        expect(region).not.toHaveClass('sr-only')
+
+        await act(async () => { responder({ ofertas: [PIZZA], restaurantes: [VITO], restaurantesConPlatos: [] }) })
+
+        expect(regionDeBusqueda(container)).toBe(region)
+        expect(region.textContent).toBe('')
+        expect(region).toHaveClass('sr-only')
+      })
+
+      it('"Buscando…" aparece una sola vez (no hay otro párrafo igual en los resultados)', async () => {
+        buscarEnApi.mockReturnValue(new Promise(() => {}))
+        renderPagina()
+        await esperar()
+
+        escribir('pizza')
+        await esperar(300)
+
+        expect(screen.getAllByText('Buscando…')).toHaveLength(1)
+      })
+    })
+
+    describe('anuncia cuántos resultados dio la búsqueda', () => {
+      it('"2 ofertas y 1 restaurante" cuando llegan', async () => {
+        buscarEnApi.mockResolvedValue({ ofertas: [PIZZA, OTRA_PIZZA], restaurantes: [VITO], restaurantesConPlatos: [] })
+        renderPagina()
+        await esperar()
+
+        escribir('pizza')
+        await esperar(300)
+
+        expect(anunciado()).toBe('2 ofertas y 1 restaurante')
+        expect(useAnunciadorStore.getState().numero).toBe(1)
+      })
+
+      it('sin resultados lo dice con la palabra buscada', async () => {
+        renderPagina()
+        await esperar()
+
+        escribir('xyz')
+        await esperar(300)
+
+        expect(anunciado()).toBe('No encontramos nada para “xyz”')
+      })
+
+      it('no anuncia nada con menos de 2 letras, ni mientras llega la respuesta', async () => {
+        buscarEnApi.mockReturnValue(new Promise(() => {}))
+        renderPagina()
+        await esperar()
+
+        escribir('p')
+        await esperar(300)
+        expect(anunciado()).toBe('')
+
+        escribir('pi')
+        await esperar(300)
+        expect(anunciado()).toBe('')
+      })
+
+      it('cada búsqueda nueva anuncia lo suyo', async () => {
+        buscarEnApi
+          .mockResolvedValueOnce({ ofertas: [PIZZA], restaurantes: [], restaurantesConPlatos: [] })
+          .mockResolvedValueOnce({ ofertas: [], restaurantes: [VITO], restaurantesConPlatos: [] })
+        renderPagina()
+        await esperar()
+
+        escribir('pizza')
+        await esperar(300)
+        expect(anunciado()).toBe('1 oferta')
+
+        escribir('vito')
+        await esperar(300)
+        expect(anunciado()).toBe('1 restaurante')
+        expect(useAnunciadorStore.getState().numero).toBe(2)
+      })
+
+      it('si la búsqueda falla, el aviso de error es una alerta (no se anuncian resultados)', async () => {
+        buscarEnApi.mockRejectedValue(new Error('sin conexión'))
+        renderPagina()
+        await esperar()
+
+        escribir('pizza')
+        await esperar(300)
+
+        expect(screen.getByRole('alert')).toHaveTextContent('No pudimos buscar')
+        expect(anunciado()).toBe('')
+      })
+    })
+
+    it('las fotos de las ofertas son decorativas: el nombre ya está escrito en la tarjeta', async () => {
+      const { container } = renderPagina()
+      await esperar()
+
+      expect(screen.queryByRole('img', { name: 'Pizza muzzarella grande' })).not.toBeInTheDocument()
+      expect(screen.getByRole('link', { name: /Pizza muzzarella grande/ })).toBeInTheDocument()
+      const fotos = Array.from(container.querySelectorAll('a img'))
+      expect(fotos.length).toBeGreaterThan(0)
+      for (const foto of fotos) expect(foto).toHaveAttribute('alt', '')
+    })
+
+    it('no tiene violaciones de accesibilidad (axe), con la home y con resultados de búsqueda', async () => {
+      buscarEnApi.mockResolvedValue({ ofertas: [PIZZA], restaurantes: [VITO], restaurantesConPlatos: [] })
+      const { container } = renderPagina()
+      await esperar()
+      vi.useRealTimers()
+      expect(await axe(container)).toHaveNoViolations()
+
+      vi.useFakeTimers()
+      escribir('pizza')
+      await esperar(300)
+      vi.useRealTimers()
+      expect(await axe(container)).toHaveNoViolations()
     })
   })
 })
