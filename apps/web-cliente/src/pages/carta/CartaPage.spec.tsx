@@ -11,6 +11,7 @@ import { crearMenu, crearPlato, crearPlatoEnDescuento } from '../../test/fixture
 import { compartirLaSesionDeWebAuth, cuentaDePrueba, sesionDeSupabase, signOutSimulado } from '../../test/authClient'
 import { irA } from '../../utils/navegar'
 import { CartaPage } from './CartaPage'
+import { axe } from '../../test/axe'
 
 vi.mock('../../utils/navegar', () => ({ irA: vi.fn() }))
 
@@ -212,8 +213,8 @@ describe('CartaPage (la carta en modo vista)', () => {
       const descuentos = within(container.querySelector<HTMLElement>('[data-categoria-id="descuentos"]')!)
 
       expect(descuentos.getByRole('img', { name: '20% de descuento' })).toBeInTheDocument()
-      expect(descuentos.getByText('$1500.00')).toBeInTheDocument()
-      expect(descuentos.getByText('$1200.00')).toBeInTheDocument()
+      expect(descuentos.getByText('$ 1.500')).toBeInTheDocument()
+      expect(descuentos.getByText('$ 1.200')).toBeInTheDocument()
     })
   })
 
@@ -297,8 +298,8 @@ describe('CartaPage (la carta en modo vista)', () => {
       renderCarta()
       await cargada()
 
-      fireEvent.click(screen.getByRole('button', { name: /Dietas/ }))
-      fireEvent.click(screen.getByText('Vegano'))
+      fireEvent.click(screen.getByRole('button', { name: 'Filtrar por dietas' }))
+      fireEvent.click(screen.getByRole('checkbox', { name: 'Vegano, 1 plato' }))
       fireEvent.click(screen.getByRole('button', { name: 'Aplicar (1)' }))
 
       expect(screen.queryByText('Flan')).not.toBeInTheDocument()
@@ -536,6 +537,56 @@ describe('CartaPage (la carta en modo vista)', () => {
       expect(await screen.findByRole('banner')).toHaveTextContent('La Parrilla')
       // Y no queda pidiéndolo una y otra vez.
       expect(pedirMenu).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  describe('estructura de la pantalla (accesibilidad)', () => {
+    it('el <h1> es el nombre del restaurante; el buscador y las secciones van dentro del <main> y el encabezado no', async () => {
+      pedirMenu.mockResolvedValue(MENU_PARRILLA)
+
+      renderCarta()
+      await cargada()
+
+      expect(screen.getByRole('heading', { level: 1, name: 'La Parrilla' })).toBeInTheDocument()
+      const principal = screen.getByRole('main')
+      expect(principal).toContainElement(screen.getByPlaceholderText('Buscar platos...'))
+      expect(principal).toContainElement(screen.getByText('Flan'))
+      expect(principal).not.toContainElement(screen.getByRole('banner'))
+    })
+
+    it('un restaurante que no existe tiene su <h1> y su <main>', async () => {
+      pedirMenu.mockRejectedValue(new ApiError('Restaurante no encontrado', 404))
+
+      renderCarta()
+
+      expect(await screen.findByRole('heading', { level: 1, name: 'No encontramos este restaurante' })).toBeInTheDocument()
+      expect(screen.getByRole('main')).toBeInTheDocument()
+    })
+
+    it('si el menú no se pudo cargar, también', async () => {
+      pedirMenu.mockRejectedValue(new ApiError('Error 500', 500))
+
+      renderCarta()
+
+      expect(await screen.findByRole('heading', { level: 1, name: 'No se pudo cargar el menú' })).toBeInTheDocument()
+      expect(screen.getByRole('main')).toBeInTheDocument()
+    })
+
+    it('mientras llega el menú ya hay un <main>', () => {
+      pedirMenu.mockReturnValue(new Promise(() => {}))
+
+      renderCarta()
+
+      expect(screen.getByRole('main')).toBeInTheDocument()
+    })
+
+    it('no tiene violaciones de accesibilidad (axe)', async () => {
+      pedirMenu.mockResolvedValue(MENU_PARRILLA)
+
+      const { container } = renderCarta()
+      await cargada()
+
+      expect(await axe(container)).toHaveNoViolations()
     })
   })
 })

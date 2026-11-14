@@ -5,6 +5,7 @@ import { api, ApiError } from '../../services/api'
 import { reiniciarDiscoveryStore, useDiscoveryStore } from '../../store/discoveryStore'
 import { crearOferta, crearRestaurante } from '../../test/fixtures'
 import { RestaurantePage } from './RestaurantePage'
+import { axe } from '../../test/axe'
 
 vi.mock('../../services/api', async (importarOriginal) => ({
   ...(await importarOriginal<typeof import('../../services/api')>()),
@@ -245,6 +246,46 @@ describe('RestaurantePage', () => {
       await waitFor(() => expect(pedirRestaurante).toHaveBeenCalledTimes(2))
       expect(await screen.findByText('No pudimos cargar el restaurante')).toBeInTheDocument()
       expect(screen.queryByLabelText('Cargando el restaurante')).not.toBeInTheDocument()
+    })
+  })
+
+  describe('estructura de la pantalla (accesibilidad)', () => {
+    it('un restaurante que no existe tiene su <h1> y su <main>', async () => {
+      pedirRestaurante.mockRejectedValue(new ApiError('Restaurante no encontrado', 404))
+
+      renderPagina('no-existe')
+
+      expect(await screen.findByRole('heading', { level: 1, name: 'No encontramos este restaurante' })).toBeInTheDocument()
+      expect(screen.getByRole('main')).toBeInTheDocument()
+    })
+
+    it('si no se pudo cargar, también', async () => {
+      pedirRestaurante.mockRejectedValue(new ApiError('Error 500', 500))
+
+      renderPagina()
+
+      expect(await screen.findByRole('heading', { level: 1, name: 'No pudimos cargar el restaurante' })).toBeInTheDocument()
+      expect(screen.getByRole('main')).toBeInTheDocument()
+    })
+
+    it('con el restaurante cargado, el nombre es el <h1> dentro del <main>', async () => {
+      renderPagina()
+
+      const titulo = await screen.findByRole('heading', { level: 1, name: 'La Parrilla del Puerto' })
+
+      expect(screen.getByRole('main')).toContainElement(titulo)
+    })
+
+    it('no tiene violaciones de accesibilidad (axe), con el restaurante y con el aviso de que no existe', async () => {
+      const conRestaurante = renderPagina()
+      await screen.findByRole('heading', { level: 1, name: 'La Parrilla del Puerto' })
+      expect(await axe(conRestaurante.container)).toHaveNoViolations()
+      conRestaurante.unmount()
+
+      pedirRestaurante.mockRejectedValue(new ApiError('Restaurante no encontrado', 404))
+      const noExiste = renderPagina('no-existe')
+      await screen.findByRole('heading', { level: 1, name: 'No encontramos este restaurante' })
+      expect(await axe(noExiste.container)).toHaveNoViolations()
     })
   })
 })

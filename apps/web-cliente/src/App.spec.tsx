@@ -1,11 +1,13 @@
 import type { DiscoveryRestauranteDetalle } from '@menyu/types'
-import { act, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { App } from './App'
 import { api } from './services/api'
 import { reiniciarDiscoveryStore } from './store/discoveryStore'
 import { useSessionStore } from './store/sessionStore'
 import { crearMenu, crearPlato, crearRestaurante } from './test/fixtures'
 import { usePublicMenuStore } from './store/publicMenuStore'
+import { axe } from './test/axe'
+import { anunciar, useAnunciadorStore } from './utils/anunciador'
 
 vi.mock('./services/api', async (importarOriginal) => ({
   ...(await importarOriginal<typeof import('./services/api')>()),
@@ -172,5 +174,121 @@ describe('SessionGuard: el socket de la mesa', () => {
     expect(socketFalso.disconnect).toHaveBeenCalledTimes(1)
     expect(ioFalso).toHaveBeenCalledTimes(2)
     expect(opcionesDeLaConexion(1)).toEqual({ transports: ['websocket'], auth: { token: 'jwt-nuevo' } })
+  })
+})
+
+describe('título, foco y anuncios al navegar (accesibilidad)', () => {
+  beforeEach(() => {
+    reiniciarDiscoveryStore()
+    usePublicMenuStore.setState({ menu: null, loading: false, error: null, errorStatus: null, cargandoDe: null })
+    sessionStorage.clear()
+    useSessionStore.getState().clear()
+    vi.mocked(api.discovery.listar).mockReset().mockResolvedValue({ restaurantes: [], ofertas: [] })
+    vi.mocked(api.discovery.restaurante).mockReset().mockResolvedValue(PARRILLA)
+    document.title = ''
+  })
+
+  afterEach(() => window.history.pushState({}, '', '/'))
+
+  it('el título de la pestaña dice la pantalla y, cuando se sabe, el restaurante', async () => {
+    abrirEn('/restaurante/parrilla')
+    await screen.findByRole('heading', { level: 1, name: 'La Parrilla del Puerto' })
+
+    expect(document.title).toBe('Restaurante · La Parrilla del Puerto')
+  })
+
+  it('en el inicio, sin restaurante, termina en "MenYU"', async () => {
+    abrirEn('/')
+    await screen.findByRole('heading', { level: 1, name: 'Descubrí dónde comer' })
+
+    expect(document.title).toBe('Descubrir restaurantes · MenYU')
+  })
+
+  it('en la primera carga el foco no se mueve', async () => {
+    abrirEn('/restaurante/parrilla')
+    await screen.findByRole('heading', { level: 1, name: 'La Parrilla del Puerto' })
+
+    expect(document.activeElement).toBe(document.body)
+  })
+
+  it('al pasar a otra pantalla el foco va a su <h1>, que se anuncia', async () => {
+    abrirEn('/restaurante/parrilla')
+    fireEvent.click(await screen.findByRole('link', { name: 'Ingresar a una mesa' }))
+
+    const titulo = await screen.findByRole('heading', { level: 1, name: 'Ingresar a una mesa' })
+    await waitFor(() => expect(document.activeElement).toBe(titulo))
+    expect(document.title).toBe('Ingresar a una mesa · La Parrilla del Puerto')
+  })
+
+  it('cualquier pantalla puede anunciar algo: la región viva ya está montada', async () => {
+    abrirEn('/')
+    await screen.findByRole('heading', { level: 1, name: 'Descubrí dónde comer' })
+
+    act(() => anunciar('Hamburguesa doble agregada al carrito'))
+
+    expect(screen.getByText('Hamburguesa doble agregada al carrito')).toBeInTheDocument()
+  })
+
+  it('el inicio, con todo lo que hay en el <body> (también el anunciador), no tiene violaciones de accesibilidad (axe)', async () => {
+    abrirEn('/')
+    await screen.findByRole('heading', { level: 1, name: 'Descubrí dónde comer' })
+
+    expect(await axe(document.body)).toHaveNoViolations()
+  })
+})
+
+describe('el restaurante cambia el menú con la mesa abierta (accesibilidad)', () => {
+  beforeEach(() => {
+    reiniciarDiscoveryStore()
+    usePublicMenuStore.setState({ menu: null, loading: false, error: null, errorStatus: null, cargandoDe: null })
+    sessionStorage.clear()
+    useSessionStore.getState().clear()
+    useAnunciadorStore.setState({ mensaje: '', numero: 0 })
+    ioFalso.mockClear()
+    socketFalso.on.mockClear()
+    vi.mocked(api.discovery.listar).mockReset().mockResolvedValue({ restaurantes: [], ofertas: [] })
+    vi.mocked(api.menu.publico).mockReset()
+    useSessionStore.setState({ restauranteId: 'rest-1', jwt: 'jwt-de-mesa' })
+  })
+
+  afterEach(() => window.history.pushState({}, '', '/'))
+
+  /** El manejador del evento `menu:updated` que la app le puso al socket de la mesa. */
+  const alActualizarElMenu = () => {
+    const registro = socketFalso.on.mock.calls.find(([evento]) => evento === 'menu:updated')
+    return registro![1] as (datos: { restauranteId: string }) => void
+  }
+
+  it('se vuelve a pedir el menú y, cuando llegó, se anuncia "El menú se actualizó"', async () => {
+    vi.mocked(api.menu.publico).mockResolvedValue(crearMenu())
+    abrirEn('/')
+    await screen.findByRole('heading', { level: 1, name: 'Descubrí dónde comer' })
+
+    await act(async () => { alActualizarElMenu()({ restauranteId: 'rest-1' }) })
+
+    expect(api.menu.publico).toHaveBeenCalledWith('rest-1')
+    expect(useAnunciadorStore.getState().mensaje).toBe('El menú se actualizó')
+    expect(useAnunciadorStore.getState().numero).toBe(1)
+  })
+
+  it('si el aviso es de otro restaurante, no hace nada ni anuncia', async () => {
+    abrirEn('/')
+    await screen.findByRole('heading', { level: 1, name: 'Descubrí dónde comer' })
+
+    await act(async () => { alActualizarElMenu()({ restauranteId: 'otro-restaurante' }) })
+
+    expect(api.menu.publico).not.toHaveBeenCalled()
+    expect(useAnunciadorStore.getState().mensaje).toBe('')
+  })
+
+  it('si el menú nuevo no se pudo traer, no dice que se actualizó', async () => {
+    vi.mocked(api.menu.publico).mockRejectedValue(new Error('sin conexión'))
+    abrirEn('/')
+    await screen.findByRole('heading', { level: 1, name: 'Descubrí dónde comer' })
+
+    await act(async () => { alActualizarElMenu()({ restauranteId: 'rest-1' }) })
+
+    expect(api.menu.publico).toHaveBeenCalledWith('rest-1')
+    expect(useAnunciadorStore.getState().mensaje).toBe('')
   })
 })

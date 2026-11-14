@@ -4,6 +4,8 @@ import { usePublicMenuStore } from '../../store/publicMenuStore'
 import { useSessionStore } from '../../store/sessionStore'
 import { useCarritoStore } from '../../store/carritoStore'
 import { DescuentoBadge, MenuItemImage, PrecioConDescuento } from '@menyu/ui'
+import { SelectorDeCantidad } from '../../components/SelectorDeCantidad'
+import { anunciar } from '../../utils/anunciador'
 import { formatearPrecio, precioVigenteDe, tieneDescuento } from '../../utils/precio'
 import type { MenuPublicoItem } from '@menyu/types'
 
@@ -60,10 +62,10 @@ export function ItemDetailPage() {
 
   if (loading) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100svh', background: 'white' }}>
+      <main style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100svh', background: 'white' }}>
         <div style={{ width: 36, height: 36, borderRadius: '50%', border: `3px solid ${C.orangeSoft}`, borderTopColor: C.orange, animation: 'spin 0.8s linear infinite' }} />
         <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
-      </div>
+      </main>
     )
   }
 
@@ -74,23 +76,23 @@ export function ItemDetailPage() {
 
   if (!loading && error) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100svh', gap: 16, padding: 24, background: 'white' }}>
-        <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 14, color: C.orange, margin: 0 }}>No se pudo cargar el menú</p>
+      <main style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100svh', gap: 16, padding: 24, background: 'white' }}>
+        <h1 style={{ fontFamily: 'Inter,sans-serif', fontWeight: 400, fontSize: 14, color: C.orange, margin: 0 }}>No se pudo cargar el menú</h1>
         <button onClick={() => navigate('/menu')} style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 600, fontSize: 13, color: C.navy, background: 'none', border: 'none', cursor: 'pointer' }}>
           ← Volver al menú
         </button>
-      </div>
+      </main>
     )
   }
 
   if (!loading && menu && !item) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100svh', gap: 16, padding: 24, background: 'white' }}>
-        <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 14, color: C.orange, margin: 0 }}>Ítem no encontrado</p>
+      <main style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100svh', gap: 16, padding: 24, background: 'white' }}>
+        <h1 style={{ fontFamily: 'Inter,sans-serif', fontWeight: 400, fontSize: 14, color: C.orange, margin: 0 }}>Ítem no encontrado</h1>
         <button onClick={() => navigate('/menu')} style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 600, fontSize: 13, color: C.navy, background: 'none', border: 'none', cursor: 'pointer' }}>
           ← Volver al menú
         </button>
-      </div>
+      </main>
     )
   }
 
@@ -114,11 +116,10 @@ export function ItemDetailPage() {
     })
   }
 
-  const cambiarCantidad = (ii: { id: string; cantidadMin: number; cantidadMax: number }, delta: number) => {
+  const fijarCantidadDelExtra = (ii: { id: string; cantidadMin: number; cantidadMax: number }, pedida: number) => {
     setAgregados((prev) => {
       const next = new Map(prev)
-      const actual = next.get(ii.id) ?? 0
-      const nuevo = Math.max(ii.cantidadMin, Math.min(ii.cantidadMax, actual + delta))
+      const nuevo = Math.max(ii.cantidadMin, Math.min(ii.cantidadMax, pedida))
       if (nuevo === 0) next.delete(ii.id)
       else next.set(ii.id, nuevo)
       return next
@@ -132,7 +133,7 @@ export function ItemDetailPage() {
 
   return (
     <div style={{ display: 'flex', justifyContent: 'center', background: C.bg, minHeight: '100svh' }}>
-      <div style={{
+      <main style={{
         width: '100%', maxWidth: 640,
         background: 'white',
         display: 'flex', flexDirection: 'column',
@@ -144,7 +145,8 @@ export function ItemDetailPage() {
 
           {/* Hero image */}
           <div style={{ position: 'relative', width: '100%', aspectRatio: '16 / 9', overflow: 'hidden', flexShrink: 0 }}>
-            <MenuItemImage src={item.imagenUrl} alt={item.nombre} />
+            {/* Decorativa: el nombre del plato ya está escrito debajo, en el <h1> (si no, el lector lo diría dos veces). */}
+            <MenuItemImage src={item.imagenUrl} alt="" />
             {enDescuento && (
               <div style={{ position: 'absolute', top: 16, right: 16 }}>
                 <DescuentoBadge porcentaje={item.porcentajeDescuento} tamano={44} />
@@ -152,7 +154,9 @@ export function ItemDetailPage() {
             )}
             {/* Back button — overlaid */}
             <button
+              type="button"
               onClick={() => navigate('/menu')}
+              aria-label="Volver"
               style={{
                 position: 'absolute', top: 16, left: 16,
                 width: 38, height: 38, borderRadius: '50%',
@@ -163,7 +167,7 @@ export function ItemDetailPage() {
                 boxShadow: '0 2px 8px rgba(0,0,0,0.14)',
               }}
             >
-              ←
+              <span aria-hidden="true">←</span>
             </button>
           </div>
 
@@ -210,9 +214,9 @@ export function ItemDetailPage() {
             {(ingredientesRemovibles.length > 0 || ingredientesAgregables.length > 0) && (
               <>
                 <div style={{ height: 1, background: C.border, margin: '4px 0 20px' }} />
-                <p style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 13, color: C.navy, margin: '0 0 18px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                <h2 style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 13, color: C.navy, margin: '0 0 18px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                   Personalizá tu plato
-                </p>
+                </h2>
               </>
             )}
 
@@ -221,24 +225,34 @@ export function ItemDetailPage() {
               <div style={{ marginBottom: 24 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
                   <span style={{ width: 6, height: 6, borderRadius: '50%', background: C.orange, flexShrink: 0 }} />
-                  <span style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 12, color: C.navy, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                  <h3 style={{ margin: 0, fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 12, color: C.navy, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                     Quitar ingredientes
-                  </span>
+                  </h3>
                   <span style={{ fontFamily: 'Inter,sans-serif', fontSize: 11, color: C.textSub, marginLeft: 2 }}>Sin costo</span>
                 </div>
 
                 {ingredientesRemovibles.map((ii) => {
                   const quitado = removidos.has(ii.id)
+                  const nombreDelIngrediente = ii.ingrediente?.nombre ?? ii.ingredienteId
                   return (
                     <div key={ii.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: `1px solid ${C.border}` }}>
                       <span style={{ fontFamily: 'Inter,sans-serif', fontSize: 13, color: quitado ? C.textSub : C.text, textDecoration: quitado ? 'line-through' : 'none', transition: 'color .15s' }}>
-                        {ii.ingrediente?.nombre ?? ii.ingredienteId}
-                        {ii.ingrediente?.esAlergeno ? ' ⚠️' : ''}
+                        {nombreDelIngrediente}
+                        {/* El alérgeno se ve con el emoji y se dice con texto: el emoji solo no lo contaba. */}
+                        {ii.ingrediente?.esAlergeno && (
+                          <>
+                            <span aria-hidden="true"> ⚠️</span>
+                            <span className="sr-only"> (contiene alérgeno)</span>
+                          </>
+                        )}
                       </span>
-                      {/* Toggle */}
+                      {/* Interruptor: activado es "incluida", desactivado es "quitada". El nombre dice el ingrediente y el estado. */}
                       <button
+                        type="button"
+                        role="switch"
+                        aria-checked={!quitado}
                         onClick={() => toggleRemovido(ii.id)}
-                        aria-label={quitado ? 'Restaurar' : 'Quitar'}
+                        aria-label={`${nombreDelIngrediente}, ${quitado ? 'quitada' : 'incluida'}`}
                         style={{
                           width: 44, height: 24, borderRadius: 999, flexShrink: 0,
                           background: quitado ? '#E5E7EB' : C.orange,
@@ -267,9 +281,9 @@ export function ItemDetailPage() {
               <div style={{ marginBottom: 24 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
                   <span style={{ width: 6, height: 6, borderRadius: '50%', background: C.orange, flexShrink: 0 }} />
-                  <span style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 12, color: C.navy, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                  <h3 style={{ margin: 0, fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 12, color: C.navy, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                     Agregar extras
-                  </span>
+                  </h3>
                   <span style={{ fontFamily: 'Inter,sans-serif', fontSize: 11, color: C.textSub, marginLeft: 2 }}>Opcional</span>
                 </div>
 
@@ -283,29 +297,19 @@ export function ItemDetailPage() {
                         </span>
                         {Number(ii.precioExtra) > 0 && (
                           <span style={{ background: C.orangeSoft, color: C.orange, fontSize: 11, fontWeight: 700, fontFamily: 'Inter,sans-serif', borderRadius: 999, padding: '3px 9px' }}>
-                            +${Number(ii.precioExtra).toFixed(2)}
+                            +{formatearPrecio(Number(ii.precioExtra))}
                           </span>
                         )}
                       </div>
-                      {/* Qty stepper */}
+                      {/* Cantidad del extra: "Sumar Cheddar" / "Restar Cheddar", y anuncia "Cheddar: 1" */}
                       <div style={{ display: 'inline-flex', alignItems: 'center', border: `1px solid ${C.border}`, borderRadius: 999, overflow: 'hidden', background: 'white', flexShrink: 0 }}>
-                        <button
-                          onClick={() => cambiarCantidad(ii, -1)}
-                          disabled={qty <= 0}
-                          style={{ width: 32, height: 32, background: 'transparent', color: C.navy, fontSize: 16, fontWeight: 700, border: 'none', cursor: qty <= 0 ? 'not-allowed' : 'pointer', opacity: qty <= 0 ? 0.3 : 1 }}
-                        >
-                          −
-                        </button>
-                        <span style={{ width: 28, textAlign: 'center', fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 13, color: qty === 0 ? '#C9CCD6' : C.navy }}>
-                          {qty}
-                        </span>
-                        <button
-                          onClick={() => cambiarCantidad(ii, 1)}
-                          disabled={qty >= ii.cantidadMax}
-                          style={{ width: 32, height: 32, background: 'transparent', color: C.navy, fontSize: 16, fontWeight: 700, border: 'none', cursor: qty >= ii.cantidadMax ? 'not-allowed' : 'pointer', opacity: qty >= ii.cantidadMax ? 0.3 : 1 }}
-                        >
-                          +
-                        </button>
+                        <SelectorDeCantidad
+                          nombre={ii.ingrediente?.nombre ?? ii.ingredienteId}
+                          valor={qty}
+                          maximo={ii.cantidadMax}
+                          onCambiar={(nuevo) => fijarCantidadDelExtra(ii, nuevo)}
+                          estiloDelNumero={{ color: qty === 0 ? '#C9CCD6' : C.navy }}
+                        />
                       </div>
                     </div>
                   )
@@ -316,7 +320,7 @@ export function ItemDetailPage() {
 
           {/* ── Nota para cocina ───────────────────────────────────────────── */}
           <div style={{ padding: '0 20px 20px' }}>
-            <label style={{
+            <label htmlFor="nota-para-cocina" style={{
               display:      'block',
               fontFamily:   'Montserrat, sans-serif',
               fontWeight:   600,
@@ -324,9 +328,10 @@ export function ItemDetailPage() {
               color:        '#6B7280',
               marginBottom: 6,
             }}>
-              📝 Nota para cocina
+              <span aria-hidden="true">📝</span> Nota para cocina
             </label>
             <textarea
+              id="nota-para-cocina"
               value={nota}
               onChange={(e) => setNota(e.target.value)}
               placeholder="(opcional)"
@@ -358,24 +363,19 @@ export function ItemDetailPage() {
           {/* Dish quantity */}
           <div style={{ background: 'white', border: '1px solid #DCDEE7', borderRadius: 14, display: 'flex', alignItems: 'center', padding: '0 4px 0 12px', gap: 2, flexShrink: 0 }}>
             <span style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 10, color: C.navy, textTransform: 'uppercase', letterSpacing: '0.08em', marginRight: 2 }}>
-              Cant.
+              Cantidad
             </span>
-            <button
-              onClick={() => setCantidad((c) => Math.max(1, c - 1))}
-              disabled={cantidad <= 1}
-              style={{ width: 32, height: 44, background: 'transparent', color: C.navy, fontSize: 18, fontWeight: 700, border: 'none', cursor: cantidad <= 1 ? 'not-allowed' : 'pointer', opacity: cantidad <= 1 ? 0.3 : 1, borderRadius: 8 }}
-            >
-              −
-            </button>
-            <span style={{ minWidth: 22, textAlign: 'center', fontFamily: 'Montserrat,sans-serif', fontWeight: 800, fontSize: 15, color: C.navy }}>
-              {cantidad}
-            </span>
-            <button
-              onClick={() => setCantidad((c) => c + 1)}
-              style={{ width: 32, height: 44, background: 'transparent', color: C.navy, fontSize: 18, fontWeight: 700, border: 'none', cursor: 'pointer', borderRadius: 8 }}
-            >
-              +
-            </button>
+            {/* Cantidad del plato: "Sumar Hamburguesa doble" / "Restar Hamburguesa doble", y anuncia "Hamburguesa doble: 2" */}
+            <SelectorDeCantidad
+              nombre={item.nombre}
+              valor={cantidad}
+              minimo={1}
+              onCambiar={setCantidad}
+              altoDelBoton={44}
+              tamanoDelSimbolo={18}
+              estiloDelNumero={{ width: undefined, minWidth: 22, fontWeight: 800, fontSize: 15 }}
+              estiloDelBoton={{ borderRadius: 8 }}
+            />
           </div>
 
           {/* Add to cart button */}
@@ -415,6 +415,9 @@ export function ItemDetailPage() {
               } else {
                 agregar(payload)
               }
+              // Antes se pasaba al carrito en silencio: se avisa qué pasó (la pantalla nueva anuncia su título aparte). Forma
+              // impersonal ("Se agregó Milanesa"): "agregada" o "agregado" dependería del género de cada plato.
+              anunciar(cartId ? `Se guardaron los cambios de ${item.nombre}` : `Se agregó ${item.nombre} al carrito`)
               navigate('/carrito')
             }}
             style={{
@@ -432,18 +435,18 @@ export function ItemDetailPage() {
             onMouseUp={(e) => { (e.currentTarget as HTMLButtonElement).style.transform = 'none' }}
           >
             <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ width: 22, height: 22, background: 'rgba(255,255,255,0.18)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, flexShrink: 0 }}>
+              <span aria-hidden="true" style={{ width: 22, height: 22, background: 'rgba(255,255,255,0.18)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, flexShrink: 0 }}>
                 🛒
               </span>
               {cartId ? 'Guardar cambios' : 'Agregar al pedido'}
             </span>
             <span style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 800, fontSize: 17, letterSpacing: '0.01em', flexShrink: 0 }}>
-              ${totalConCantidad.toFixed(2)}
+              {formatearPrecio(totalConCantidad)}
             </span>
           </button>
         </div>
 
-      </div>
+      </main>
     </div>
   )
 }

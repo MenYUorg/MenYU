@@ -1,0 +1,367 @@
+# Bitácora: accesibilidad de web-cliente (WCAG 2.2 AA)
+
+Registro, etapa por etapa, de lo que se hizo para la accesibilidad del flujo del comensal: qué cambió y por qué, los tests, la cobertura antes y después, el quality gate de SonarCloud, los problemas y cómo se resolvieron, lo que quedó pendiente y qué recorridos de [`docs/calidad/accesibilidad-recorridos-lector.md`](../calidad/accesibilidad-recorridos-lector.md) deberían andar. El plan, con las decisiones y las etapas, está en [`plan-cliente.md`](plan-cliente.md).
+
+## Estado actual
+
+| Etapa | Estado |
+| --- | --- |
+| 1. Base compartida | Hecha y revisada (13/11/2026). Quality gate de SonarCloud: passed. Con los ajustes de la revisión (etiqueta de `MensajePage`, foco del `<h1>`) |
+| 2. Formato de precios | Hecha (13/11/2026), a la espera de revisión |
+| 3. Bloqueantes (menú lateral y filtro de dietas) | Hecha (13/11/2026), a la espera de revisión |
+| 4. Menú, detalle y discovery | Hecha (13/11/2026), a la espera de revisión |
+| 5. Carrito, pedidos, PIN, nombre y pago | Pendiente |
+| 6. Contraste, foco visible y tamaños | Pendiente |
+| 7. Cierre (lint, axe de Coty, celulares C1 a C7) | Pendiente |
+| 8. Asistente de la carta (C8): auditar y después arreglar | Pendiente (agregada el 13/11/2026) |
+
+Rama `feat/a11y-cliente`, desde `origin/main` en `92904e0`.
+
+## Línea base (13/11/2026)
+
+Medida sobre `92904e0`, con `pnpm --filter @menyu/web-cliente test:coverage` y `pnpm --filter @menyu/ui test:coverage`.
+
+| | Archivos | Tests | Líneas | Ramas | Funciones |
+| --- | --- | --- | --- | --- | --- |
+| web-cliente | 44 | 768 | 86,08 % | 91,23 % | 79,90 % |
+| `packages/ui` | 5 | 44 | 65,72 % | 96,90 % | 92,30 % |
+
+El plan decía 86,1 % / 91,4 % / 80,1 % para web-cliente. La diferencia (0,2 puntos) es del entorno: con Node 24.15 (el repo pide Node 22 o más), `src/utils/authClientDiferido.spec.ts` (el test que corre ESLint por dentro) deja un error no capturado de `lru-cache` ("exports is not defined in ES module scope") y Vitest pierde el reporte de `src/components/menu/MesaSinCarta.spec.tsx` en la corrida completa. Ese archivo pasa solo (8 tests): 760 + 8 = 768, que es el número del plan. Hay que tenerlo en cuenta al comparar números entre máquinas.
+
+---
+
+## Etapa 1: base compartida (13/11/2026)
+
+Estado: hecha y revisada. Los ajustes pedidos en la revisión están en "Ajustes tras la revisión", más abajo.
+
+### Qué cambió
+
+**Infraestructura de tests**
+
+- `apps/web-cliente/package.json` y `pnpm-lock.yaml`: `vitest-axe` 0.1.0 (versión exacta, como las otras librerías de test de la app). El lockfile también intercambió el sufijo de peers de `jiti` entre dos apps; no cambia ninguna versión.
+- `src/test/axe.ts`: `axe`, ya configurado sin la regla `color-contrast` (en jsdom queda incompleta y tira errores del canvas).
+- `src/test/setup.ts`: registra el matcher `toHaveNoViolations`.
+- `src/test/vitest-axe.d.ts`: los tipos del matcher para Vitest 3 (vitest-axe 0.1.0 los declara para el espacio de nombres viejo, `Vi`).
+
+**Anunciador global**
+
+- `src/utils/anunciador.ts` (store de zustand + `anunciar(mensaje)`) y `src/components/Anunciador.tsx` (la región viva). Montado en `App.tsx` desde el arranque, antes de `SessionGuard`.
+- Pintado en el `<body>` con un portal: así, en la etapa 3, el menú lateral puede volver inerte el resto de la página sin tragarse los anuncios.
+- Mensajes iguales seguidos se leen las dos veces (el texto va en un `<span key={n}>` que se reemplaza), y la región se vacía a los 6 segundos.
+
+**Título por pantalla y foco al navegar**
+
+- `src/utils/pantallas.ts`: el nombre de cada ruta y el formato "{Pantalla} · {Restaurante}" (o "· MenYU" mientras no se sepa el restaurante).
+- `src/hooks/useTituloDeLaPantalla.ts`: arma el título. El restaurante sale de la dirección o de la sesión; el nombre, del menú pedido o de Discovery; en el detalle, la pantalla es el nombre del plato.
+- `src/utils/enfocarTitulo.ts`: enfoca el `<h1>` (le pone `tabindex="-1"` por código) y, si todavía no existe, espera a que la pantalla lo pinte (hasta 4 s; deja de esperar si la persona toca o escribe).
+- `src/components/SeguimientoDeRuta.tsx`: aplica las dos cosas. Compara con la ruta anterior (y no con "la primera vez") para que StrictMode no cuente como navegación el segundo montaje de desarrollo. En la primera carga y al cambiar solo la búsqueda de la dirección, no mueve el foco.
+- `index.html`: el título inicial pasa de "MenYu" a "MenYU".
+
+**`<h1>` y `<main>`**
+
+- `PantallaComensal.tsx`: el título de la barra azul pasa de `<span>` a `<h1>` (`margin: 0`); `MarcoPantalla` envuelve el contenido en `<main>` (con `flex: 1` y `display: flex` para que lo de adentro se reparta el alto como antes).
+- `MenuHeader.tsx`: el nombre del restaurante es el `<h1>` del menú y de la carta. `MenuView.tsx`: el buscador, las secciones y los botones flotantes van dentro de un `<main>`; el encabezado queda afuera. Los estados de carga y error del menú también tienen `<main>`, y "No se pudo cargar el menú" es `<h1>`.
+- `CarritoPage.tsx`: `<main>` en los tres estados (confirmado, vacío y lista; en la lista incluye la barra de abajo con el total).
+- `ItemDetailPage.tsx`: `<main>` en el contenido y en los estados de carga, error ("No se pudo cargar el menú", ahora `<h1>`) y "Ítem no encontrado" (ahora `<h1>`).
+- `ElegirNombrePage.tsx`, `PagoExitosoPage.tsx`, `PagoFallidoPage.tsx`, `PagoPendientePage.tsx`: `<main>`.
+- `BloqueEstado.tsx`: nueva prop `nivelDelTitulo` (1 o 2; por defecto 2). Con `1` lo usan `RestaurantePage` (2 estados), `IngresoMesaPage` y `MenuView` (carta que no existe), donde el bloque es toda la pantalla.
+- `SesionSeguraModals.tsx` y `CheckInScreens.tsx`: `Shell` es un `<main>`; con la nueva prop `subtituloEsTitulo`, "Abriendo tu mesa…" de `/check-in` es el `<h1>`; "¡Sos el anfitrión de la mesa!" y "Mesa en modo seguro" pasan de `<p>` a `<h1>`.
+
+Los estilos en línea de cada título se dejaron como estaban (ya fijaban fuente, tamaño, color y margen), así que visualmente no cambia nada, salvo el anillo de foco del `<h1>` (ver "Pendiente").
+
+### Tests
+
+138 tests nuevos (768 → 906), en 54 archivos (44 → 54). Los 3 últimos (el nombre accesible del mensaje de `MensajePage` y los 2 de `estilos.spec.ts`) son de los ajustes de la revisión:
+
+- **Archivos nuevos:** `utils/anunciador.spec.ts` (5), `components/Anunciador.spec.tsx` (7), `utils/pantallas.spec.ts` (25), `utils/enfocarTitulo.spec.ts` (11), `components/SeguimientoDeRuta.spec.tsx` (15), `components/discovery/BloqueEstado.spec.tsx` (6), `components/PantallasDeEntrada.spec.tsx` (11), `pages/entrada/ElegirNombrePage.spec.tsx` (6; la pantalla no tenía spec), `pages/pago/PagoResultadoPages.spec.tsx` (8; tampoco).
+- **Bloques "estructura de la pantalla (accesibilidad)"** en los specs de: carta, menú de la mesa, detalle, carrito, mis pedidos, pagar, etiquetar, cantidad de comensales, mensaje, restaurante e ingreso a mesa, más 2 tests en `MenuHeader.spec.tsx` y 6 en `App.spec.tsx` (título, foco, anuncio y axe sobre el `<body>` entero).
+- Qué verifican: nombre y nivel del `<h1>`, que el `<main>` contenga lo que tiene que contener (y no el encabezado), el título de la pestaña, a dónde va el foco al navegar (y que no se mueve en la primera carga ni al cambiar solo la búsqueda), que un anuncio repetido vuelve a leerse y que la región se vacía, y axe (sin `color-contrast`) en cada pantalla tocada.
+
+### Cobertura
+
+| | Antes | Después |
+| --- | --- | --- |
+| web-cliente, líneas | 86,08 % | 92,43 % |
+| web-cliente, ramas | 91,23 % | 92,12 % |
+| web-cliente, funciones | 79,90 % | 82,92 % |
+| `packages/ui`, líneas | 65,72 % | 65,72 % (no se tocó) |
+| web-admin, web-staff | sin tocar | sin tocar |
+
+Por archivo (después): los archivos nuevos (`Anunciador`, `SeguimientoDeRuta`, `useTituloDeLaPantalla`, `anunciador`, `pantallas`, `enfocarTitulo`) y `PantallaComensal`, `BloqueEstado`, `CheckInScreens`, `PagoExitoso`, `PagoFallido`, `PagoPendiente`, `RestaurantePage` e `IngresoMesaPage` están al 100 % de líneas. De los archivos de poca cobertura que había que tocar: `ElegirNombrePage.tsx` 21 % → 100 %, `CarritoPage.tsx` 54 % → 91,4 %, `ItemDetailPage.tsx` 75 % → 79,4 %, `App.tsx` 54,4 % → 55,5 % (las líneas que se tocaron están cubiertas; el resto de `App.tsx` es el cierre de sesión de la etapa 5).
+
+### Quality gate de SonarCloud
+
+**Passed: «All conditions passed»** (captura del Project health dashboard, 13/11/2026). La captura no dice si es la de la rama o la del PR, y los números que muestra son del código completo, no del código nuevo:
+
+- Cobertura (código completo): 88,9 %.
+- Duplicación (código completo): 2,0 %.
+- Issues abiertos y confirmados (código completo): 93.
+- Cobertura, duplicación, calificaciones y hotspots del código nuevo: no se ven en la captura. Como el gate pasó con todas sus condiciones (80 % de cobertura o más, 5 % de duplicación o menos, calificación A y hotspots revisados), se dan por cumplidas. Falta anotar los valores exactos si interesan.
+- Los 93 issues son del proyecto entero: no se comparó con el valor de `main` para saber si el PR sumó alguno.
+
+### Verificación en el navegador
+
+Además de los tests, se miró la app en Edge real (390 × 844, API simulada, un Vite propio en el puerto 5199): la carta, el menú de la mesa, "Mis pedidos" vacío y el carrito vacío. Resultados: un solo `<main>` por pantalla, la página no se desplaza (solo la zona de secciones de la carta, 669 px visibles con 3169 de contenido), los títulos de pestaña son "Carta · Lupulus Casa Matriz", "Menú · …", "Carrito · …" y "Mis pedidos · MenYU", al abrir una pantalla por dirección el foco queda en el `<body>` y al navegar dentro de la app queda en el `<h1>`. Las capturas no cambiaron respecto de lo que se esperaba (el único cambio visual es el anillo de foco del título al navegar).
+
+### Ajustes tras la revisión (13/11/2026)
+
+Las respuestas de Margarita a las preguntas abiertas de la primera entrega:
+
+- **Auditoría renombrada y actualizada.** `docs/a11y/auditoria-general.md` es la versión del 13/11 (con la segunda parte, el flujo del comensal con lector, y la tercera, decisiones y plan), copiada desde Descargas. Se sacó la versión vieja del repo (no estaba en git y es idéntica a la que sigue en Descargas). Decisión 14.
+- **`MensajePage`: etiqueta del mensaje armado.** El título visible, "Mensaje para el grupo", era un `<p>`; ahora es un `<label htmlFor="mensaje-para-el-grupo">` (con `display: block`, para que se vea igual) asociado al `<textarea id="mensaje-para-el-grupo">`. Se usó un `<label>` y no un `aria-label` para que el lector diga lo mismo que se ve (WCAG 2.5.3). Se **sacó la excepción** de la regla `label` del test de axe y se sumó un test del nombre accesible. Ya no queda ninguna regla de axe desactivada en los tests de web-cliente, salvo `color-contrast` en el helper (decisión 15). El `id` es fijo porque hay un solo mensaje por pantalla.
+- **Foco del `<h1>`.** `src/index.css` quita el contorno solo de `h1[tabindex='-1']:focus`, que es lo que `enfocarElTitulo` le pone al título (WCAG 2.4.7 no pide indicador en un elemento con el que no se interactúa). `src/estilos.spec.ts` (2 tests) exige que esa sea la **única** regla de la hoja que quita el contorno y que el selector no alcance a un `<h1>` con otro `tabindex` ni a un botón con `tabindex="-1"`. Se verificó en Edge real (390 px): al cambiar de pantalla el `<h1>` queda enfocado con `outline-style: none`, y un botón enfocado con Tab conserva su anillo (`outline-style: auto`). La etapa 6 tiene que respetarlo si agrega un estilo global de foco visible.
+- **Etapa 8.** El asistente de la carta (C8) entra al plan como etapa 8, con una auditoría primero y los arreglos después; la prueba con celulares de la etapa 7 pasa a ser solo de C1 a C7.
+- **Números después de los ajustes:** 54 archivos y 906 tests, y la misma cobertura que antes de los ajustes: líneas 92,43 %, ramas 92,12 %, funciones 82,92 %. Typecheck y lint en verde.
+
+### Problemas y cómo se resolvieron
+
+- **`main` local 158 commits atrás de `origin/main`.** La rama se creó con `git switch -c feat/a11y-cliente --no-track origin/main` (sin seguimiento, para que un `git push` sin argumentos no apunte a `main`). Los 10 archivos borrados que tenía el árbol (el login legacy) ya no existen en `origin/main`, así que no hubo conflicto.
+- **`.git/index.lock` viejo** (vacío, del 27/10, sin ningún proceso de git corriendo): se borró para poder cambiar de rama.
+- **`pnpm add` con `--filter` dejó incompleto el almacén de `node_modules`** (faltaba `@supabase/ssr`, y el typecheck de web-cliente fallaba en `packages/auth-client`). Se arregló con `pnpm install --frozen-lockfile` en la raíz. Ojo: las notas del proyecto dicen no correr `pnpm add` con el árbol en uso; si había un Vite o el backend corriendo, hay que reiniciarlos.
+- **`packages/types/dist` viejo** (de octubre): faltaban exports del asistente. Se recompiló con `pnpm --filter @menyu/types build` (la carpeta no se versiona).
+- **Error del entorno con Node 24 y OneDrive:** además del error de `lru-cache` de la línea base, una de las corridas de cobertura falló con `EBUSY` (OneDrive bloqueó un archivo de `node_modules`) y perdió el reporte de un spec. Se repitió y dio 53 de 53 archivos y 903 de 903 tests.
+- **vitest-axe y `document.documentElement`:** `axe(document.documentElement)` falla ("The node to be removed is not a child of this node") porque vitest-axe vuelve a insertar el HTML como texto. Se usa `axe(document.body)` (cubre también el anunciador, que está en el `<body>`) y `axe(container)` en las pantallas. Las reglas que solo corren sobre la página entera (`landmark-one-main`, `page-has-heading-one`) se comprueban con los tests por rol (`getByRole('main')`, `getByRole('heading', { level: 1 })`).
+- **Un `<textarea>` que se cuela entre tests:** el respaldo de "copiar" de `MensajePage` agrega un `<textarea>` fuera de pantalla y lo saca después de `document.execCommand('copy')`, que jsdom no tiene: ahí lanza y el `<textarea>` queda en el `<body>` para los tests siguientes. Los tests nuevos de esa pantalla buscan el `<textarea readonly>` dentro del `<main>` y no `getByRole('textbox')`.
+- **Hallazgo real de axe en `MensajePage`:** el `<textarea>` del mensaje armado no tenía etiqueta (`label`). No estaba en el plan; en la primera entrega el test de axe de esa pantalla desactivaba solo esa regla, a la espera de decisión. **Resuelto en la revisión** (ver "Ajustes tras la revisión"): se arregló la pantalla y se sacó la excepción.
+
+### Pendiente
+
+- Si interesa, anotar los valores del código nuevo del PR y comparar los 93 issues con los de `main` (ver «Quality gate»).
+- Los dos hallazgos fuera del plan que quedan abiertos (título de la pestaña sin restaurante al entrar directo a una pantalla de la mesa, y la zona con scroll de la carta) están en `plan-cliente.md`.
+- **Sin `<h1>` todavía** (etapa 5): `/pago/exitoso`, `/pago/fallido`, `/pago/pendiente` y la confirmación del carrito ("¡Pedido enviado a cocina!"). En esas pantallas el foco no se mueve al navegar hasta que lo tengan.
+- El spec nuevo de `ElegirNombrePage` busca el campo por su placeholder ("Ej: Juan"): hay que ajustarlo en la etapa 5, cuando el label se asocie al campo.
+
+### Recorridos con lector (C1 a C8)
+
+Ninguno completo todavía. Desde esta etapa debería cumplirse el punto 1 de "En cada pantalla" (al llegar se anuncia el título o el encabezado principal) en las pantallas de C1 a C7, salvo las que figuran arriba como sin `<h1>` (resultado del pago de C7 y confirmación de C4). El anunciador de la región viva ya existe, pero todavía nadie lo usa: los anuncios de C1, C4, C5 y C6 llegan en las etapas 3 a 5.
+
+
+---
+
+## Etapa 2: formato de precios (13/11/2026)
+
+Estado: hecha, a la espera de revisión. Va sobre la rama de la etapa 1, con sus ajustes de la revisión todavía sin commitear (el archivo `MensajePage` tiene los dos cambios).
+
+### Qué cambió
+
+- `src/utils/precio.ts`: `formatearPrecio` usa `Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' })`. Entero: "$ 9.000". Con centavos: "$ 1.234,50" (no se puede cortar siempre en 0 decimales: los precios son `Decimal(10,2)` y dividir una cuenta genera centavos). Antes de decidir se redondea a centavos, así el ruido de la coma flotante no agrega ",00", y el cero negativo se normaliza. Hay dos formateadores creados una vez a nivel del módulo.
+- Los 13 `toFixed(2)` sueltos pasan a `formatearPrecio`: `CarritoPage` (4), `ItemDetailPage` (2), `MensajePage` (1, el helper `fmt` del mensaje para el grupo), `CantidadComensalesPage` (1), `EtiquetarPedidosPage` (1) y `PagarPage` (4). Con la tarjeta del plato, el descuento y la oferta de Discovery, que ya recibían `formatearPrecio` por prop (`PrecioConDescuento`), todo el precio que muestra web-cliente sale de una sola función. Admin y staff no cambian: pasan su propio formateador.
+- Las 57 cadenas "$9000.00" de los tests, en 10 specs, al formato nuevo (ver el plan, etapa 2, para cuándo lleva espacio común y cuándo `\u00a0`). `precio.spec.ts` se reescribió.
+
+### Tests
+
+21 tests nuevos (906 → 927; 18 en `precio.spec.ts` y 3 en pantallas), en los mismos 54 archivos:
+
+- `utils/precio.spec.ts`: de 1 test de `formatearPrecio` a 19 (enteros, cero, montos grandes de hasta mil millones, centavos, 6500 entre 3, que 1.234,50 no pase a "$ 1.235", el redondeo a centavos, negativos, el cero negativo y el espacio no separable). Es el spec que fija el formato con los caracteres exactos.
+- Una prueba con centavos en tres pantallas: `CantidadComensalesPage` (6000 entre 7 = "$ 857,14"), `MensajePage` (el mensaje con "$ 2.166,67 cada uno") y `ItemDetailPage` (un extra de 150,50: la etiqueta "+$ 150,50" y el total del botón "$ 1.150,50").
+### Cobertura
+
+| | Fin de la etapa 1 | Después |
+| --- | --- | --- |
+| web-cliente, archivos / tests | 54 / 906 | 54 / 927 |
+| web-cliente, líneas | 92,43 % | 92,44 % |
+| web-cliente, ramas | 92,12 % | 92,08 % |
+| web-cliente, funciones | 82,92 % | 82,88 % |
+| `packages/ui`, web-admin, web-staff | sin tocar | sin tocar |
+
+Las ramas y las funciones se mueven unas centésimas de una corrida a otra; no hay un archivo que haya bajado. Por archivo: `utils/precio.ts` 100 % en líneas y ramas, `CantidadComensalesPage`, `MensajePage`, `EtiquetarPedidosPage` y `PagarPage` al 100 % de líneas, `CarritoPage` 91,4 % (las líneas que se tocaron son las de los totales, que ejecutan los tests de la lista y de la confirmación) e `ItemDetailPage` 79,4 % (las líneas del extra y del total las cubren los tests de los extras).
+
+### Quality gate de SonarCloud
+
+**Passed** (captura del PR #468, "Feat/a11y cliente", que lleva las etapas 2 y 3 juntas; análisis del commit `15dc7f3e`, 13/11/2026):
+
+- Cobertura del código nuevo: **98,48 %** (se pide 80 % o más), sobre 154 líneas nuevas por cubrir. Estimada después del merge: 90,1 %.
+- Issues nuevos: 0. Issues aceptados: 0.
+- Líneas de código nuevo: 176.
+- La captura muestra "1 analysis warning" y no dice cuál es; la duplicación, las calificaciones y los hotspots no se ven (el gate pasó con todas sus condiciones). Si el aviso importa, falta abrir su detalle en SonarCloud.
+
+### Verificación en el navegador
+
+Se miró la carta en Edge real (390 px): "$ 1.000", "$ 1.010"… con el espacio no separable, sin cortes de línea ni cambios de alto en las tarjetas.
+
+### Ajustes tras la revisión (13/11/2026)
+
+- **El mensaje que copia «Copiar mensaje» lleva espacios comunes, no el no separable.** En `MensajePage`, el helper `fmt` que arma el texto pasó de `formatearPrecio` a `formatearPrecio(n).replace(/\xa0/g, ' ')`, sin tocar `formatearPrecio`. Así el texto que se pega en WhatsApp, un SMS u otra app no lleva un carácter que no se ve (U+00A0). El resto de los precios en pantalla sigue con el no separable. El `<textarea>` muestra el mismo texto que se copia, así que ahí también es un espacio común.
+- **Tests (+2, 927 → 929):** `copiar el mensaje` suma uno por modo. El de partes iguales (6500 entre 3: miles y centavos, los dos casos en los que `formatearPrecio` pone el U+00A0) comprueba que el texto del campo no lleva U+00A0, que contiene «$ 6.500» y «$ 2.166,67 cada uno» con espacio común, y que lo que se manda al portapapeles es exactamente ese texto, también sin U+00A0. El de por consumo comprueba lo mismo con los platos y con lo que falta asignar. Los 18 importes que los tests del mensaje esperaban con el escape `\u00a0` pasaron a espacio común.
+- **Se comprobó que los tests detectan el problema:** sin el reemplazo, fallan 7 tests de `MensajePage`, los 2 nuevos entre ellos. Con el reemplazo, pasan los 25 del archivo.
+
+### Problemas y cómo se resolvieron
+
+- **Corrida completa con 565 tests rotos ("Invalid hook call", "Cannot read properties of null (reading 'useState')"), sin que tuviera que ver con los precios.** La causa fue la letra de la unidad: las corridas que fallaron arrancaron con el directorio actual como `c:/Users/…` (minúscula; la línea `RUN` de Vitest lo muestra) y las que pasaron como `C:/Users/…`. Con la letra en minúscula, Vite carga `react` por dos rutas distintas (la real de `node_modules`, que sale en mayúscula, y la de la raíz del proyecto) y hay dos copias de React. Los subconjuntos de tests pasaban, la corrida completa no, y de forma determinista. **Se corre con la ruta en mayúscula:** `cd "C:/Users/…/apps/web-cliente"` en Git Bash, o `Set-Location 'C:\Users\…'` en PowerShell.
+- **`EBUSY` de OneDrive:** sigue bloqueando archivos de `node_modules` en la corrida completa, y a veces tira abajo la corrida entera o pierde el reporte de un archivo (en la cobertura: 53 de 54 archivos). Ayuda bajar los workers (`--maxWorkers=3`); si pasa, se repite hasta una corrida sin `EBUSY`. La de este cierre salió limpia a la tercera.
+- **El editor convirtió `\u00a0` en el carácter real:** al escribir tests con el escape `\u00a0` dentro de un string, el carácter quedó como un espacio no separable de verdad (invisible en el código, y uno cayó en un comentario, donde el lint lo rechazó). Se pasaron los 26 a escape con un script. Hoy no queda ningún U+00A0 suelto en `apps/web-cliente/src`.
+
+### Pendiente
+
+- Cómo lee cada lector los precios nuevos ("$ 9.000"): pendiente de la prueba en celulares (etapa 7). La auditoría lo dejó como "verificar en dispositivo".
+
+### Recorridos con lector (C1 a C8)
+
+Desde esta etapa los precios de todos los recorridos tienen formato de importe ("$ 9.000" en vez de "$9000.00"). Qué dice el lector con eso depende del dispositivo y se mide en la etapa 7.
+
+
+---
+
+## Etapa 3: bloqueantes, menú lateral y filtro de dietas (13/11/2026)
+
+Estado: hecha, a la espera de revisión. Va sobre la rama de las etapas anteriores, que siguen sin commitear en el árbol (los ajustes de la etapa 1, la etapa 2 y su ajuste del mensaje).
+
+### Qué cambió
+
+**Menú lateral** (`components/menu/MenuDrawer.tsx`, `MenuHeader.tsx`, `MenuView.tsx`)
+
+- Las filas pasan de `<div onClick>` a botones de verdad, con el ícono oculto del lector: el nombre es "Mis pedidos", no "📋 Mis pedidos". "Mis puntos" (que dice "Próximamente" y no hace nada) queda como botón deshabilitado.
+- Cerrado, el panel está `inert`; abierto, es un `role="dialog"` modal con el nombre "Menú de {restaurante}": el foco entra al panel, `MenuView` vuelve inertes el encabezado y el `<main>`, Esc cierra (`useCerrarConEscape`) y el foco vuelve a "Abrir el menú", que ahora dice `aria-expanded` y `aria-haspopup="dialog"`.
+- **Fuera del plan:** un botón "Cerrar el menú", el primero del panel, invisible hasta que recibe el foco con teclado. Esc no existe en el celular con lector, y el fondo oscuro que cerraba el menú es un `<div>`: sin este botón, una persona con TalkBack o VoiceOver no podía cerrar el menú sin elegir una opción. El fondo pasó a `aria-hidden`.
+- `packages/ui/src/index.ts`: exporta `useCerrarConEscape` (una línea), para reusarlo sin duplicarlo.
+
+**Filtro de dietas** (`components/menu/BarraBusqueda.tsx`, `utils/textoDePlatos.ts`)
+
+- Las opciones son casillas de verdad dentro de un `<label>` que ocupa toda la fila, con el nombre "Vegano, 2 platos"; el recuadro que se ve es decorativo y muestra el foco con teclado.
+- El botón se llama "Filtrar por dietas" (o "…, 1 filtro activo"), con `aria-expanded` y `aria-controls`; el emoji, la flecha y el número visibles están ocultos del lector. Se usó "dietas" (plural) y no "dieta" como decía el plan, para que el nombre contenga el texto que se ve, "Dietas" (WCAG 2.5.3).
+- Al aplicar o limpiar: se anuncia cuántos platos quedan y el foco vuelve al botón. Esc cierra el panel y devuelve el foco.
+- `utils/textoDePlatos.ts` arma el texto del anuncio ("12 platos", "1 plato", "Ningún plato coincide") y lo va a reusar el buscador en la etapa 4.
+
+### Tests
+
+67 tests nuevos (929 → 996), en 56 archivos (54 → 56):
+
+- `components/menu/BarraBusqueda.spec.tsx` (nuevo, 26): el nombre del botón y que contenga "Dietas", el emoji y la flecha ocultos, "1 filtro activo" y "2 filtros activos", `aria-expanded` y `aria-controls`, las casillas con su nombre y estado (con un toque en la casilla, en el nombre y con Espacio), que partan de lo aplicado, el foco visible del recuadro, "Aplicar" y "Limpiar" (cierran, devuelven el foco y anuncian "2 platos", "1 plato", "Ningún plato coincide"), que no anuncien al montarse ni al marcar casillas, Esc (con el panel abierto y con el cerrado), tocar afuera y adentro, el anuncio en la región viva y axe (con la regla de "nombre contiene el texto visible" encendida).
+- `components/menu/MenuDrawer.spec.tsx` (+23): el diálogo y su nombre, inerte cerrado y no abierto, el foco al abrir, las filas como botones (con Enter), el ícono oculto, "Mis puntos" deshabilitado, Esc (abierto, cerrado y con otra tecla), "Cerrar el menú" (primero, solo visible con foco), el fondo `aria-hidden`, el foco que vuelve (con Esc, con el botón y abriendo y cerrando tres veces) y axe con y sin cuenta.
+- `components/menu/MenuHeader.spec.tsx` (+4): `aria-expanded`, `aria-haspopup` e `inerte`.
+- `pages/menu/ClienteMenuPage.spec.tsx` (+9): el menú abierto y cerrado sobre la pantalla entera (encabezado y contenido inertes, foco que entra y vuelve con Esc y con "Cerrar el menú"), "Mis pedidos" con Enter, el anuncio al aplicar y limpiar dietas (incluida la búsqueda) y axe con el menú abierto.
+- `utils/textoDePlatos.spec.ts` (nuevo, 5).
+- Se actualizaron 3 tests del filtro de dietas (de `CartaPage` y `ClienteMenuPage`) a las casillas y al nombre nuevo.
+
+### Cobertura
+
+| | Fin de la etapa 2 | Después |
+| --- | --- | --- |
+| web-cliente, archivos / tests | 54 / 927 (929 con el ajuste del mensaje) | 56 / 996 |
+| web-cliente, líneas | 92,44 % | 92,61 % |
+| web-cliente, ramas | 92,08 % | 92,31 % |
+| web-cliente, funciones | 82,88 % | 83,18 % |
+| `packages/ui` | 5 archivos, 44 tests | igual (se sumó solo una línea de re-exportación) |
+
+Por archivo (líneas / ramas): `BarraBusqueda.tsx` 100 / 100, `MenuDrawer.tsx` 100 / 98, `MenuHeader.tsx` 100 / 92,5, `MenuView.tsx` 95 / 96, `textoDePlatos.ts` 100 / 100. Lo que no se ejecuta en `BarraBusqueda` son los manejadores de hover y el botón "×" de borrar la búsqueda (etapa 4).
+
+### Suites que exige tocar `packages/ui`
+
+Con el cambio en `packages/ui/src/index.ts` se corrieron las suites de las apps que usan el paquete: `@menyu/ui` 5 archivos y 44 tests, `@menyu/web-admin` 49 archivos y 860 tests, `@menyu/web-staff` 14 archivos y 211 tests. Todas en verde.
+
+### Quality gate de SonarCloud
+
+**Passed** (captura del PR #468, "Feat/a11y cliente", que lleva las etapas 2 y 3 juntas; análisis del commit `15dc7f3e`, 13/11/2026):
+
+- Cobertura del código nuevo: **98,48 %** (se pide 80 % o más), sobre 154 líneas nuevas por cubrir. Estimada después del merge: 90,1 %.
+- Issues nuevos: 0. Issues aceptados: 0.
+- Líneas de código nuevo: 176.
+- La captura muestra "1 analysis warning" y no dice cuál es; la duplicación, las calificaciones y los hotspots no se ven (el gate pasó con todas sus condiciones). Si el aviso importa, falta abrir su detalle en SonarCloud.
+
+### Verificación en el navegador
+
+En Edge real (390 px, API simulada, un Vite propio en el puerto 5199), recorrido con teclado:
+
+- Menú cerrado: el primer Tab cae en "Abrir el menú" y después en "Mozo", el buscador y "Filtrar por dietas"; el panel está `inert` y no recibe foco.
+- Menú abierto con Enter: el foco queda en el panel ("Menú de Lupulus Casa Matriz"), "Abrir el menú" dice `aria-expanded="true"`, el encabezado y el contenido están inertes, y Tab recorre "Cerrar el menú", "Iniciar sesión", "Crear cuenta gratis", "Etiquetar pedidos", "Mis pedidos" y "Pagar la cuenta" y vuelve a empezar sin salir del menú.
+- Esc: se cierra, se saca la inercia y el foco vuelve a "Abrir el menú". "Mis pedidos" con Enter lleva a la pantalla y el foco queda en su `<h1>`.
+- Dietas: Enter abre el panel (`aria-expanded="true"`), Tab llega a "Vegano, 2 platos" (casilla, con un contorno visible en el recuadro), Espacio la marca, "Aplicar" cierra, devuelve el foco al botón ("Filtrar por dietas, 1 filtro activo") y la región viva dice "2 platos". Esc con el panel abierto lo cierra y devuelve el foco.
+- En las capturas, el menú y el panel se ven como antes. Solo cambió el botón "Cerrar el menú" (visible únicamente con el foco del teclado): se movió de arriba, donde tapaba el nombre del restaurante, a abajo, sobre el pie.
+
+### Problemas y cómo se resolvieron
+
+- **El nombre de la casilla salía "Vegano , 1 plato".** La primera versión armaba el nombre con un `<span class="sr-only">` dentro del `<label>`; el motor de nombres (dom-accessibility-api, el de Testing Library) pone un espacio entre los dos `<span>`, y otros navegadores podrían concatenarlos distinto. Se fijó con `aria-label` en la casilla, que empieza con el texto visible.
+- **`useCerrarConEscape` no estaba exportado desde `@menyu/ui`.** Se agregó el re-export (y por eso se corrieron las suites de ui, admin y staff). El hook no tiene un parámetro "activo": escucha siempre, así que los dos usos (menú y dietas) comprueban que estén abiertos antes de actuar.
+- **El script que inserta bloques de tests duplicó un import** (`@testing-library/react` con otros nombres). Se unificó a mano y el spec quedó con un solo import.
+- **`pnpm typecheck` del monorepo falla en `@menyu/api`** ("Property 'turno' does not exist on type 'PrismaService'", en `src/test/fixture-de-caja.ts`): el cliente de Prisma generado en esta máquina es anterior a las tablas de caja que entraron con `main` (hace falta `prisma generate`). No tiene que ver con estos cambios: los otros 9 proyectos pasan, y web-cliente, web-admin, web-staff, web-auth, auth-client, ui y types, también por separado. No se corrió `prisma generate` (falla con EPERM si el backend está corriendo).
+- **Un heredoc de Bash se comió una barra invertida** de un script de cobertura (`/\\/g` llegó como `/\/g`) y la carpeta `coverage/` se borró antes de leerla; se repitió la medición de los archivos tocados con un script escrito sin pasar por Bash.
+
+### Pendiente
+
+- **Para decidir** (cosas hechas por criterio propio, explicadas en el plan): el botón "Cerrar el menú" (no estaba en el plan), las filas como botones y no enlaces, "Mis puntos" deshabilitado, y "dietas" en plural en el nombre del botón.
+- Las casillas del panel de dietas no tienen botón "Cerrar" propio: se cierra con Esc, tocando afuera, "Aplicar" o "Limpiar". Con lector en el celular el panel se cierra con "Aplicar" o "Limpiar" (no hay otro modo sin elegir): si no se quiere cambiar nada, "Aplicar" sin marcar casillas equivale a limpiar.
+- El buscador, el botón "×", los chips de sección, el 🔍 y el 🔔 siguen para la etapa 4.
+
+### Recorridos con lector (C1 a C8)
+
+Desde esta etapa: **C5 y C7 se pueden empezar** (a "Mis pedidos", "Etiquetar pedidos" y "Pagar la cuenta" se llega desde el menú lateral con lector y con teclado), y el filtro de dietas de **C1** se puede usar de punta a punta, con el anuncio de cuántos platos quedan. Siguen sin completarse por lo que falta de las etapas 4 y 5.
+
+
+---
+
+## Etapa 4: menú, detalle y discovery (13/11/2026)
+
+Estado: hecha, a la espera de revisión. Va sobre la rama con las etapas 1 a 3 ya commiteadas y pusheadas (el Sonar de la 2 y la 3 está cargado arriba).
+
+### Qué cambió
+
+**Menú** (`components/menu/`, `components/ItemCard.tsx`, `App.tsx`)
+
+- Buscador: se llama "Buscar platos" y anuncia cuántos platos quedan (600 ms después de la última letra, y solo si el texto cambió). "×" se llama "Borrar búsqueda" y devuelve el foco al campo.
+- Chips de sección: una `<nav>` con nombre, `aria-current` en el de la sección que se ve, y al tocar uno el foco va al encabezado de esa sección (`enfocarEncabezado`, sin mover la pantalla otra vez). La regla de `index.css` que quita el contorno de los títulos enfocados por código pasó de `h1` a `h1` y `h2`.
+- Tarjeta del plato: el botón se llama "Ver {plato}", la foto es decorativa y el `<div>` clickeable es `role="presentation"` (el control para teclado y lector es el botón).
+- Mozo: anuncia "Avisamos al mozo" o el error, y pasó de `disabled` a `aria-disabled` (no pierde el foco). Carrito: "Ver carrito, N ítems", sumando unidades (el número que se ve también). Menú actualizado por el restaurante: "El menú se actualizó".
+- Emojis 🔍 y 🔔 ocultos.
+
+**Detalle del plato** (`pages/menu/ItemDetailPage.tsx`, `components/SelectorDeCantidad.tsx`)
+
+- Interruptor de ingrediente ("Cebolla, incluida" / "Cebolla, quitada"), encabezados de nivel 2 y 3, alérgeno dicho con texto, "Nota para cocina" asociada al campo, "Cantidad" en vez de "Cant.", foto decorativa, "Volver", emoji del carrito oculto.
+- **Componente compartido de cantidad** `SelectorDeCantidad`: "Sumar {nombre}" / "Restar {nombre}", anuncia "{nombre}: {valor}" y no se deshabilita en el mínimo ni en el máximo (`aria-disabled`). Lo vuelve a usar el carrito en la etapa 5.
+- Al agregar: "Se agregó {plato} al carrito" (forma impersonal: no depende del género del plato; el plan decía "agregada").
+
+**Discovery** (`pages/discovery/DiscoveryPage.tsx`, `components/discovery/TarjetaOferta.tsx`, `utils/textoDeResultados.ts`)
+
+- Anuncia cuántos resultados dio la búsqueda ("2 ofertas y 3 restaurantes", "No encontramos nada para “xyz”"). "Buscando…" es una región de estado siempre montada, vacía y fuera de la vista mientras no se busca. La foto de la oferta es decorativa.
+
+### Tests
+
+119 tests nuevos (996 → 1115), en 60 archivos (56 → 60):
+
+- **Archivos nuevos:** `components/SelectorDeCantidad.spec.tsx` (17), `components/menu/ChipsSecciones.spec.tsx` (8), `components/menu/BotonCarrito.spec.tsx` (9), `utils/textoDeResultados.spec.ts` (5).
+- **Bloques de accesibilidad en specs existentes:** `ItemDetailPage.spec.tsx` (+25: encabezados, interruptor, alérgeno, extras con su tope, cantidad del plato, nota, volver, agregar y editar, foto y axe), `BarraBusqueda.spec.tsx` (+13: nombre, anuncio con pausa, sin repetir, "Borrar búsqueda" y axe), `ClienteMenuPage.spec.tsx` (+11: chips con foco, buscador, tarjetas, carrito y axe), `DiscoveryPage.spec.tsx` (+10: la región siempre montada, el anuncio de resultados, las fotos y axe), `MenuHeader.spec.tsx` (+8: el mozo), `ItemCard.spec.tsx` (+6), `App.spec.tsx` (+3: "El menú se actualizó"), `enfocarTitulo.spec.ts` (+4: `enfocarEncabezado`).
+- Se actualizaron los tests que esperaban los nombres viejos: "Agregar {plato}" → "Ver {plato}", "+" y "−" sueltos → "Sumar/Restar {nombre}", el botón del carrito por "🛒" → "Ver carrito, N ítems" (el de "no hay botón con el carrito vacío" se cambió también, porque con el nombre viejo pasaba por casualidad), el mozo `toBeDisabled()` → `aria-disabled`, la foto del placeholder de `TarjetaOferta`. `estilos.spec.ts` ahora espera `h1` y `h2`.
+
+### Cobertura
+
+| | Fin de la etapa 3 | Después |
+| --- | --- | --- |
+| web-cliente, archivos / tests | 56 / 996 | 60 / 1115 |
+| web-cliente, líneas | 92,61 % | 93,64 % |
+| web-cliente, ramas | 92,31 % | 92,97 % |
+| web-cliente, funciones | 83,18 % | 84,95 % |
+| `packages/ui`, web-admin, web-staff | sin tocar | sin tocar (esta etapa no toca `packages/ui`) |
+
+Por archivo (líneas / ramas): los nuevos (`SelectorDeCantidad`, `ChipsSecciones`, `BotonCarrito`, `textoDeResultados`) y `TarjetaOferta`, `DiscoveryPage` y `enfocarTitulo` al 100 / 100; `BarraBusqueda` 100 / 100, `MenuHeader` 100 / 95,5, `MenuView` 95,1 / 96,3, `ItemCard` 92,5 / 100, `ItemDetailPage` 79,4 → 96,4 / 87,8 (de las que había que subir; las líneas sin cubrir de `ItemCard` son los manejadores de hover). `App.tsx` 58,8 % (de 55,5 %): lo que falta es el cierre de sesión, que es de la etapa 5.
+
+### Quality gate de SonarCloud
+
+Pendiente: se anota cuando corra el PR.
+
+### Verificación en el navegador
+
+En Edge real (390 px, API simulada, un Vite propio en el puerto 5199):
+
+- **Chips:** al tocar "Postres" la zona se desplaza (564 px) y el foco queda en el `<h2>` "Postres", sin anillo; "Principales", la sección que se ve, dice `aria-current`.
+- **Buscador:** antes de la pausa no hay anuncio; 800 ms después de escribir, la región viva dice el resultado. "Borrar búsqueda" deja el campo vacío y con el foco.
+- **Detalle:** el interruptor pasa de "Cebolla, incluida" (`aria-checked="true"`) a "Cebolla, quitada" (`false`) con Espacio; sumar el extra dos veces anuncia "Queso extra: 2" y el plato dos veces, "Plato 1: 3"; los encabezados son `H2` y `H3`; el alérgeno tiene su texto. Al agregar se anuncia "Se agregó Plato 1 al carrito" y el foco queda en el `<h1>` "Carrito".
+- **Carrito:** al volver al menú, el botón dice "Ver carrito, 3 ítems" y muestra "3".
+- **Discovery:** la región de estado existe vacía y `sr-only` antes de buscar; durante la búsqueda muestra "Buscando…" y, cuando llegan los resultados, se vacía y se anuncia "2 ofertas y 1 restaurante". Las fotos de las ofertas tienen `alt=""`.
+- En las capturas, el detalle (con "CANTIDAD" en vez de "CANT.") y el botón del carrito se ven bien: el rótulo más largo entra sin apilar nada.
+
+### Problemas y cómo se resolvieron
+
+- **El nombre del botón del carrito con `getByRole('button', { name: /🛒/ })`** (que usaban dos tests) ya no existe: el emoji está oculto. El de "con el carrito vacío no hay botón" pasaba solo por eso (nunca iba a encontrarlo); se cambió por `/Ver carrito/` para que vuelva a probar algo.
+- **`getByLabelText('Nota para cocina')` no encuentra el campo** aunque el `<label>` esté bien asociado: Testing Library arma el texto de la etiqueta con todo su contenido, emoji oculto incluido ("📝 Nota para cocina"). Los tests buscan por rol y nombre accesible (`getByRole('textbox', { name: 'Nota para cocina' })`), que es lo que percibe el lector.
+- **Un archivo de tests se perdió en una corrida por el `EBUSY` de OneDrive** (la de cobertura, 59 de 60 archivos); se repitió y dio 60 de 60 y 1115 de 1115.
+- **Un `cd ../..` de más dejó a Vitest en `src/`** y no encontró los archivos de test (salió vacío, sin error): se corrió de nuevo desde `apps/web-cliente`.
+
+### Pendiente
+
+- **Hallazgo fuera del plan, previo a esta etapa:** el buscador del menú no encuentra con más de una palabra ("plato 1", "pizza muzz" dan "Ningún plato coincide" aunque el plato exista), porque compara el texto entero con el comienzo de cada palabra del nombre. No se tocó. Está en `plan-cliente.md` ("Hallazgos fuera del plan", el 5).
+- **Para decidir** (cosas hechas por criterio propio, explicadas en el plan): el número del botón del carrito pasó a contar unidades (cambio visual chico), el `role="presentation"` de la tarjeta del plato (en vez de hacer que el botón la cubra), el anuncio "Se agregó {plato}" en vez de "{plato} agregada", y el `h2` sumado a la regla que quita el contorno.
+- Los chips no anuncian al lector cuál es la sección activa cuando el desplazamiento la cambia (solo `aria-current`): anunciarlo en cada cambio de sección sería más ruido que ayuda.
+- El detalle del plato sigue usando una paleta propia en lugar del token compartido: es de la etapa 6.
+
+### Recorridos con lector (C1 a C8)
+
+Desde esta etapa: **C1 completo** (la búsqueda anuncia cuántos resultados hay y las tarjetas tienen nombres claros), **C6** (el botón del mozo anuncia el resultado y no se pierde el foco) y **C4 hasta agregar el plato** (el interruptor de cada ingrediente dice su estado, el botón de cantidad dice la cantidad, al agregar se anuncia). C4 se completa con el carrito en la etapa 5.

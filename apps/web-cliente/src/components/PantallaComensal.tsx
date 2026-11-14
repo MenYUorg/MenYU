@@ -45,8 +45,10 @@ export function EncabezadoPantalla({
       >
         ←
       </button>
-      <span style={{
+      {/* El título de la pantalla: el <h1>, al que va el foco al llegar (components/SeguimientoDeRuta.tsx). */}
+      <h1 style={{
         flex:       1,
+        margin:     0,
         fontFamily: 'Montserrat, sans-serif',
         fontWeight: 700,
         fontSize:   17,
@@ -54,7 +56,7 @@ export function EncabezadoPantalla({
         textAlign:  'center',
       }}>
         {titulo}
-      </span>
+      </h1>
       {derecha ?? <div style={{ width: 38 }} />}
     </header>
   )
@@ -101,7 +103,10 @@ export function MarcoPantalla({
         flexDirection: 'column',
       }}>
         {encabezado}
-        {children}
+        {/* `display: flex` y `flex: 1`: lo de adentro (cargando, error, vacío) se reparte el alto como antes de que hubiera <main>. */}
+        <main style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+          {children}
+        </main>
       </div>
     </div>
   )

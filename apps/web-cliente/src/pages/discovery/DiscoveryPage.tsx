@@ -12,7 +12,9 @@ import { TarjetaRestaurante } from '../../components/discovery/TarjetaRestaurant
 import { useEntrarAMesa } from '../../hooks/useEntrarAMesa'
 import { cantidadDeCaracteres, MIN_CARACTERES_BUSQUEDA, useDiscoveryStore } from '../../store/discoveryStore'
 import { C } from '../../theme'
+import { anunciar } from '../../utils/anunciador'
 import { leerQrDeMesa } from '../../utils/qr'
+import { textoDeResultados } from '../../utils/textoDeResultados'
 
 // Lo que se espera después de la última letra antes de buscar.
 const ESPERA_BUSQUEDA_MS = 300
@@ -45,6 +47,7 @@ export function DiscoveryPage() {
   const [escaneando, setEscaneando] = useState(false)
   const [falloElQr, setFalloElQr] = useState(false)
   const { entrar, cargando: abriendo, pantalla } = useEntrarAMesa({ alFallar: () => setFalloElQr(true) })
+  const q = texto.trim()
 
   useEffect(() => {
     limpiarBusqueda()
@@ -57,12 +60,21 @@ export function DiscoveryPage() {
     return () => clearTimeout(espera)
   }, [texto, buscar])
 
+  // La lista cambia sola mientras el foco sigue en el campo: cuando llegan los resultados de lo que se escribió, se anuncia
+  // cuántos hay ("2 ofertas y 3 restaurantes") o que no hay ninguno. Solo cuando la respuesta es la de lo que está escrito.
+  useEffect(() => {
+    if (cantidadDeCaracteres(q) < MIN_CARACTERES_BUSQUEDA) return
+    if (estadoBusqueda !== 'listo' || q !== textoBuscado || !resultados) return
+    anunciar(textoDeResultados(resultados, q))
+  }, [q, resultados, estadoBusqueda, textoBuscado])
+
   if (pantalla) return pantalla
 
-  const q = texto.trim()
   const modoBusqueda = cantidadDeCaracteres(q) >= MIN_CARACTERES_BUSQUEDA
   // Mientras llega la respuesta (o la próxima, si se sigue escribiendo) los resultados anteriores se atenúan.
   const buscando = estadoBusqueda === 'buscando' || q !== textoBuscado
+  // Con un error se ve el aviso del error (no "Buscando…"), aunque se haya seguido escribiendo.
+  const buscandoAhora = modoBusqueda && buscando && estadoBusqueda !== 'error'
 
   const borrarBusqueda = () => setTexto('')
 
@@ -94,7 +106,8 @@ export function DiscoveryPage() {
     const total = dePlatos.length + dePorNombre.length + restaurantesConPlatos.length
 
     if (total === 0) {
-      if (buscando) return <p style={estiloBuscando}><Girando /> Buscando…</p>
+      // Mientras llega la primera respuesta solo se ve "Buscando…" (la región de arriba).
+      if (buscando) return null
       return (
         <BloqueEstado
           icono="lupa"
@@ -133,12 +146,7 @@ export function DiscoveryPage() {
     )
 
     if (!buscando) return grupos
-    return (
-      <>
-        <p style={estiloBuscando} role="status"><Girando /> Buscando…</p>
-        <div data-testid="resultados-atenuados" style={{ opacity: 0.45, pointerEvents: 'none' }}>{grupos}</div>
-      </>
-    )
+    return <div data-testid="resultados-atenuados" style={{ opacity: 0.45, pointerEvents: 'none' }}>{grupos}</div>
   }
 
   const cuerpoHome = () => {
@@ -261,6 +269,12 @@ export function DiscoveryPage() {
                 </div>
               )}
             </section>
+
+            {/* "Buscando…" es una región de estado que está siempre montada y solo cambia su texto: muchos lectores no leen una
+                región que aparece junto con el mensaje. Sin buscar queda vacía y fuera de la vista. */}
+            <p role="status" className={buscandoAhora ? undefined : 'sr-only'} style={buscandoAhora ? estiloBuscando : undefined}>
+              {buscandoAhora && <><Girando /> Buscando…</>}
+            </p>
 
             {modoBusqueda ? cuerpoBusqueda() : cuerpoHome()}
           </div>

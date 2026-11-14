@@ -500,4 +500,15 @@ describe('IngresoMesaPage', () => {
       expect(within(aviso).getByText(/Ese QR no es de este restaurante\./)).toBeInTheDocument()
     })
   })
+
+  describe('estructura de la pantalla (accesibilidad)', () => {
+    it('un restaurante que no existe tiene su <h1> y su <main>', async () => {
+      pedirRestaurante.mockRejectedValue(new ApiError('Restaurante no encontrado', 404))
+
+      renderPagina('/restaurante/no-existe/mesa')
+
+      expect(await screen.findByRole('heading', { level: 1, name: 'No encontramos este restaurante' })).toBeInTheDocument()
+      expect(screen.getByRole('main')).toBeInTheDocument()
+    })
+  })
 })

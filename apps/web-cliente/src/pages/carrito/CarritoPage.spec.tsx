@@ -7,6 +7,7 @@ import { usePublicMenuStore } from '../../store/publicMenuStore'
 import { useSessionStore } from '../../store/sessionStore'
 import { crearMenu, crearPlato, crearPlatoEnDescuento } from '../../test/fixtures'
 import { CarritoPage } from './CarritoPage'
+import { axe } from '../../test/axe'
 
 vi.mock('../../services/api', () => ({
   api: {
@@ -78,8 +79,8 @@ describe('CarritoPage', () => {
 
       await waitFor(() => expect(useCarritoStore.getState().items[0].precioUnitario).toBe(800))
       // 2 × $800 aparece en la línea del plato y en el total
-      expect(await screen.findAllByText('$1600.00')).not.toHaveLength(0)
-      expect(screen.queryByText('$2000.00')).not.toBeInTheDocument()
+      expect(await screen.findAllByText('$ 1.600')).not.toHaveLength(0)
+      expect(screen.queryByText('$ 2.000')).not.toBeInTheDocument()
     })
 
     it('avisa que se actualizaron los precios', async () => {
@@ -132,5 +133,58 @@ describe('CarritoPage', () => {
 
     expect(useCarritoStore.getState().items[0].precioUnitario).toBe(1000)
     expect(aviso()).not.toBeInTheDocument()
+  })
+
+  describe('estructura de la pantalla (accesibilidad)', () => {
+    it('con platos: el título es el <h1>; la lista y la barra del total van dentro del <main> y el encabezado no', async () => {
+      publico.mockResolvedValue(menuCon(crearPlato()))
+      agregarMilanesaAlCarrito(1000)
+
+      renderCarrito()
+
+      expect(screen.getByRole('heading', { level: 1, name: 'Carrito' })).toBeInTheDocument()
+      const principal = screen.getByRole('main')
+      expect(principal).toContainElement(screen.getByRole('button', { name: 'Confirmar pedido' }))
+      expect(principal).toContainElement(screen.getByText('Milanesa'))
+      expect(principal).not.toContainElement(screen.getByRole('banner'))
+      await waitFor(() => expect(publico).toHaveBeenCalled())
+    })
+
+    it('vacío: el título es el <h1> y el aviso va dentro del <main>', async () => {
+      publico.mockResolvedValue(menuCon(crearPlato()))
+
+      renderCarrito()
+
+      expect(screen.getByRole('heading', { level: 1, name: 'Carrito' })).toBeInTheDocument()
+      expect(screen.getByRole('main')).toContainElement(screen.getByText('Tu carrito está vacío'))
+      await waitFor(() => expect(publico).toHaveBeenCalled())
+    })
+
+    it('con el pedido enviado, la confirmación va dentro del <main>', async () => {
+      publico.mockResolvedValue(menuCon(crearPlato()))
+      vi.mocked(api.orders.create).mockResolvedValue({
+        id: 'abcdef-123',
+        items: [{ id: 'i1', cantidad: 2, precioUnitario: 1000, item: { nombre: 'Milanesa' } }],
+      } as never)
+      agregarMilanesaAlCarrito(1000)
+      renderCarrito()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Confirmar pedido' }))
+
+      const confirmacion = await screen.findByText('¡Pedido enviado a cocina!')
+      expect(screen.getByRole('main')).toContainElement(confirmacion)
+    })
+
+    it('no tiene violaciones de accesibilidad (axe), con platos y vacío', async () => {
+      publico.mockResolvedValue(menuCon(crearPlato()))
+      agregarMilanesaAlCarrito(1000)
+      const conPlatos = renderCarrito()
+      expect(await axe(conPlatos.container)).toHaveNoViolations()
+      conPlatos.unmount()
+
+      useCarritoStore.getState().vaciar()
+      const vacio = renderCarrito()
+      expect(await axe(vacio.container)).toHaveNoViolations()
+    })
   })
 })

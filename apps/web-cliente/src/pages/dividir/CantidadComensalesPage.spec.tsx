@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { api } from '../../services/api'
 import { CantidadComensalesPage } from './CantidadComensalesPage'
+import { axe } from '../../test/axe'
 
 let sesion: { jwt: string | null; sesionId: string | null }
 
@@ -53,8 +54,18 @@ describe('CantidadComensalesPage', () => {
     expect(await screen.findByText('Cantidad de comensales')).toBeInTheDocument()
     expect(saldo).toHaveBeenCalledWith('jwt-mesa', 'ses-1')
     expect(cantidad()).toBe('1')
-    expect(porPersona()).toBe('$6000.00')
+    expect(porPersona()).toBe('$\u00a06.000')
     expect(screen.getByRole('button', { name: 'Restar' })).toBeDisabled()
+  })
+
+  it('si la cuenta no se divide justo, el monto por persona lleva los centavos con coma (6000 entre 7)', async () => {
+    await abrir()
+    await screen.findByText('Cantidad de comensales')
+
+    for (let i = 0; i < 6; i++) fireEvent.click(screen.getByRole('button', { name: 'Sumar' }))
+
+    expect(cantidad()).toBe('7')
+    expect(porPersona()).toBe('$\u00a0857,14')
   })
 
   it('sumar y restar recalculan el monto por persona', async () => {
@@ -65,11 +76,11 @@ describe('CantidadComensalesPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Sumar' }))
     fireEvent.click(screen.getByRole('button', { name: 'Sumar' }))
     expect(cantidad()).toBe('4')
-    expect(porPersona()).toBe('$1500.00')
+    expect(porPersona()).toBe('$\u00a01.500')
 
     fireEvent.click(screen.getByRole('button', { name: 'Restar' }))
     expect(cantidad()).toBe('3')
-    expect(porPersona()).toBe('$2000.00')
+    expect(porPersona()).toBe('$\u00a02.000')
   })
 
   it('tocar el número deja escribirlo; Enter o salir del campo lo confirma, dentro de 1 a 99', async () => {
@@ -123,5 +134,30 @@ describe('CantidadComensalesPage', () => {
     expect(await screen.findByText('Error al cargar los datos de la sesión')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Reintentar' }))
     expect(await screen.findByText('Cantidad de comensales')).toBeInTheDocument()
+  })
+
+  describe('estructura de la pantalla (accesibilidad)', () => {
+    it('el título es el <h1> y el selector de cantidad va dentro del <main>', async () => {
+      await abrir()
+
+      const titulo = screen.getByRole('heading', { level: 1, name: '¿Cuántos son?' })
+      await screen.findByText('Cantidad de comensales')
+      const principal = screen.getByRole('main')
+      expect(principal).not.toContainElement(titulo)
+      expect(principal).toContainElement(screen.getByRole('button', { name: 'Sumar' }))
+    })
+
+    it('no tiene violaciones de accesibilidad (axe)', async () => {
+      const { container } = render(
+        <MemoryRouter initialEntries={['/dividir/cantidad']}>
+          <Routes>
+            <Route path="/dividir/cantidad" element={<CantidadComensalesPage />} />
+          </Routes>
+        </MemoryRouter>,
+      )
+      await screen.findByText('Cantidad de comensales')
+
+      expect(await axe(container)).toHaveNoViolations()
+    })
   })
 })

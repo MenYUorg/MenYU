@@ -5,6 +5,7 @@ import { estadoCargando, estadoError } from '../../components/estadosPantalla'
 import { useSessionStore } from '../../store/sessionStore'
 import { api } from '../../services/api'
 import { C } from '../../theme'
+import { formatearPrecio } from '../../utils/precio'
 
 const CANTIDAD_MIN = 1
 const CANTIDAD_MAX = 99
@@ -159,7 +160,7 @@ export function CantidadComensalesPage() {
             Cada persona paga
           </span>
           <span style={{ fontFamily: 'Montserrat, sans-serif', fontWeight: 800, fontSize: 22, color: C.navy }}>
-            {montoPorPersona !== null ? `$${montoPorPersona.toFixed(2)}` : '—'}
+            {montoPorPersona !== null ? formatearPrecio(montoPorPersona) : '—'}
           </span>
         </div>
       </div>

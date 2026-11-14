@@ -1,6 +1,10 @@
 import '@testing-library/jest-dom/vitest'
-import { afterEach, beforeEach, vi } from 'vitest'
+import { afterEach, beforeEach, expect, vi } from 'vitest'
+import * as matchersDeAxe from 'vitest-axe/matchers'
 import { compartirLaSesionDeWebAuth, reiniciarCuentaDePrueba } from './authClient'
+
+// `expect(await axe(container)).toHaveNoViolations()`: el helper está en src/test/axe.ts.
+expect.extend(matchersDeAxe)
 
 // La cuenta de Supabase del cliente (Fase 4b): ningún spec habla con Supabase. Ver src/test/authClient.ts.
 vi.mock('@menyu/auth-client', async () => (await import('./authClient')).moduloSimulado())

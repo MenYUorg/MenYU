@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { api } from '../../services/api'
 import { PagarPage } from './PagarPage'
+import { axe } from '../../test/axe'
 
 let sesion: { jwt: string | null; sesionId: string | null; numeroMesa: string | null }
 
@@ -70,10 +71,10 @@ describe('PagarPage', () => {
     expect(screen.getByText('Mesa 4')).toBeInTheDocument()
     expect(listar).toHaveBeenCalledWith('jwt-mesa')
     expect(saldo).toHaveBeenCalledWith('jwt-mesa', 'ses-1')
-    expect(fila('Milanesa')).toEqual(['Milanesa', '3', '$1500.00', '$4500.00'])
-    expect(fila('Agua')).toEqual(['Agua', '1', '$500.00', '$500.00'])
-    expect(screen.getByText('$5000.00')).toBeInTheDocument() // subtotal
-    expect(await screen.findByText('$3000.00')).toBeInTheDocument() // saldo pendiente (ya se pagó una parte)
+    expect(fila('Milanesa')).toEqual(['Milanesa', '3', '$\u00a01.500', '$\u00a04.500'])
+    expect(fila('Agua')).toEqual(['Agua', '1', '$\u00a0500', '$\u00a0500'])
+    expect(screen.getByText('$ 5.000')).toBeInTheDocument() // subtotal
+    expect(await screen.findByText('$ 3.000')).toBeInTheDocument() // saldo pendiente (ya se pagó una parte)
   })
 
   it('si el saldo no llega muestra un guion y deja pagar igual', async () => {
@@ -207,5 +208,29 @@ describe('PagarPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Volver al menú' }))
 
     expect(screen.getByText('destino /menu')).toBeInTheDocument()
+  })
+
+  describe('estructura de la pantalla (accesibilidad)', () => {
+    it('el título es el <h1> y la cuenta y las opciones de pago van dentro del <main>', async () => {
+      await abrir()
+
+      const titulo = await screen.findByRole('heading', { level: 1, name: 'Pagar la cuenta' })
+      const principal = screen.getByRole('main')
+      expect(principal).not.toContainElement(titulo)
+      expect(principal).toContainElement(await screen.findByText('Milanesa'))
+    })
+
+    it('no tiene violaciones de accesibilidad (axe)', async () => {
+      const { container } = render(
+        <MemoryRouter initialEntries={['/pagar']}>
+          <Routes>
+            <Route path="/pagar" element={<PagarPage />} />
+          </Routes>
+        </MemoryRouter>,
+      )
+      await screen.findByText('Milanesa')
+
+      expect(await axe(container)).toHaveNoViolations()
+    })
   })
 })

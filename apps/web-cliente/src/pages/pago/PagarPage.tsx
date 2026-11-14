@@ -4,6 +4,7 @@ import { Spinner } from '@menyu/ui'
 import { useSessionStore } from '../../store/sessionStore'
 import { api } from '../../services/api'
 import { C } from '../../theme'
+import { formatearPrecio } from '../../utils/precio'
 import { EncabezadoPantalla, InsigniaMesa, MarcoPantalla } from '../../components/PantallaComensal'
 import { estadoCargando, estadoError, estadoVacio } from '../../components/estadosPantalla'
 
@@ -219,7 +220,7 @@ export function PagarPage() {
     <>
       <div style={{ textAlign: 'right' }}>
         <span style={{ fontFamily: 'Montserrat, sans-serif', fontWeight: 800, fontSize: 26, color: C.navy }}>
-          {saldoPendiente !== null ? `$${saldoPendiente.toFixed(2)}` : '—'}
+          {saldoPendiente !== null ? formatearPrecio(saldoPendiente) : '—'}
         </span>
       </div>
       <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, color: C.gray, margin: '10px 0 0' }}>
@@ -342,13 +343,13 @@ export function PagarPage() {
                   fontFamily: 'Inter, sans-serif', fontSize: 13,
                   color: C.gray, textAlign: 'right',
                 }}>
-                  ${item.precioUnitario.toFixed(2)}
+                  {formatearPrecio(item.precioUnitario)}
                 </span>
                 <span style={{
                   fontFamily: 'Montserrat, sans-serif', fontWeight: 700,
                   fontSize: 13, color: C.text, textAlign: 'right',
                 }}>
-                  ${(item.precioUnitario * item.cantidad).toFixed(2)}
+                  {formatearPrecio(item.precioUnitario * item.cantidad)}
                 </span>
               </div>
             </div>
@@ -373,7 +374,7 @@ export function PagarPage() {
               fontFamily: 'Montserrat, sans-serif', fontWeight: 800,
               fontSize: 15, color: C.navy, textAlign: 'right',
             }}>
-              ${total.toFixed(2)}
+              {formatearPrecio(total)}
             </span>
           </div>
         </div>

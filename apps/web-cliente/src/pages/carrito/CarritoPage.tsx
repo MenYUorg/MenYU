@@ -4,6 +4,7 @@ import { useCarritoStore } from '../../store/carritoStore'
 import { useSessionStore } from '../../store/sessionStore'
 import { usePublicMenuStore } from '../../store/publicMenuStore'
 import { api } from '../../services/api'
+import { formatearPrecio } from '../../utils/precio'
 import { MenuItemImage } from '@menyu/ui'
 import { EncabezadoPantalla, InsigniaMesa } from '../../components/PantallaComensal'
 
@@ -92,7 +93,7 @@ export function CarritoPage() {
     )
 
     return (
-      <div style={{
+      <main style={{
         minHeight:      '100vh',
         background:     'white',
         display:        'flex',
@@ -182,7 +183,7 @@ export function CarritoPage() {
                   flexShrink: 0,
                   marginLeft: 12,
                 }}>
-                  ${(Number(item.precioUnitario) * item.cantidad).toFixed(2)}
+                  {formatearPrecio(Number(item.precioUnitario) * item.cantidad)}
                 </span>
               </div>
             ))}
@@ -194,7 +195,7 @@ export function CarritoPage() {
                 Subtotal
               </span>
               <span style={{ fontFamily: 'Montserrat, sans-serif', fontWeight: 800, fontSize: 16, color: C.navy }}>
-                ${subtotal.toFixed(2)}
+                {formatearPrecio(subtotal)}
               </span>
             </div>
           </div>
@@ -234,7 +235,7 @@ export function CarritoPage() {
             </button>
           </div>
         </div>
-      </div>
+      </main>
     )
   }
 
@@ -252,7 +253,7 @@ export function CarritoPage() {
           background:    'white',
         }}>
           {header}
-          <div style={{
+          <main style={{
             flex:           1,
             display:        'flex',
             flexDirection:  'column',
@@ -289,7 +290,7 @@ export function CarritoPage() {
             >
               Ver el menú
             </button>
-          </div>
+          </main>
         </div>
       </div>
     )
@@ -310,6 +311,8 @@ export function CarritoPage() {
       }}>
         {header}
 
+        {/* La lista y la barra de abajo (total y confirmar) son el contenido: las dos van dentro del <main>. */}
+        <main style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
         <div style={{
           flex:          1,
           overflowY:     'auto',
@@ -437,7 +440,7 @@ export function CarritoPage() {
                     margin:     0,
                     flexShrink: 0,
                   }}>
-                    ${(item.precioUnitario * item.cantidad).toFixed(2)}
+                    {formatearPrecio(item.precioUnitario * item.cantidad)}
                   </p>
                 </div>
 
@@ -548,7 +551,7 @@ export function CarritoPage() {
               fontSize:   20,
               color:      C.navy,
             }}>
-              ${total().toFixed(2)}
+              {formatearPrecio(total())}
             </span>
           </div>
 
@@ -617,6 +620,7 @@ export function CarritoPage() {
             El cobro se realizará al finalizar tu visita.
           </p>
         </div>
+        </main>
       </div>
     </div>
   )

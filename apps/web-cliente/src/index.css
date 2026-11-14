@@ -1,3 +1,14 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/*
+ * Los títulos a los que se lleva el foco por código (`tabindex="-1"`) no son controles: no se interactúa con ellos, y WCAG
+ * 2.4.7 no pide un indicador de foco ahí. Son el <h1> de la pantalla nueva (SeguimientoDeRuta) y el <h2> de la sección del
+ * menú a la que lleva su chip. Sin esta regla el navegador dibuja su anillo alrededor del título en cada cambio. Botones,
+ * enlaces y campos conservan el suyo: esta regla no toca a nadie más.
+ */
+h1[tabindex='-1']:focus,
+h2[tabindex='-1']:focus {
+  outline: none;
+}

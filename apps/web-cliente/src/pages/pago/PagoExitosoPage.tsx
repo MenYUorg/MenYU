@@ -9,7 +9,7 @@ export function PagoExitosoPage() {
   const clear = useSessionStore((s) => s.clear)
 
   return (
-    <div style={{
+    <main style={{
       display: 'flex', flexDirection: 'column',
       alignItems: 'center', justifyContent: 'center',
       minHeight: '100vh', background: C.bg, padding: 24,
@@ -18,6 +18,6 @@ export function PagoExitosoPage() {
         subtitulo="Tu pago fue acreditado con éxito. ¡Gracias por tu visita!"
         onSalir={() => { clear(); navigate('/') }}
       />
-    </div>
+    </main>
   )
 }

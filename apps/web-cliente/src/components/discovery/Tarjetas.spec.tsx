@@ -109,8 +109,8 @@ describe('TarjetaOferta', () => {
     expect(screen.getByText('Pizza muzzarella')).toBeInTheDocument()
     expect(screen.getByText('Pizzería Don Vito')).toBeInTheDocument()
     expect(screen.getByRole('img', { name: '30% de descuento' })).toHaveTextContent('-30%')
-    expect(container.querySelector('s')).toHaveTextContent('$6800.00')
-    expect(screen.getByText('$4760.00')).toBeInTheDocument()
+    expect(container.querySelector('s')).toHaveTextContent('$ 6.800')
+    expect(screen.getByText('$ 4.760')).toBeInTheDocument()
   })
 
   it('tocarla abre la pantalla de su restaurante (no la de otro)', () => {
@@ -134,7 +134,7 @@ describe('TarjetaOferta', () => {
     expect(screen.queryByRole('link')).not.toBeInTheDocument()
     expect(screen.getByText('Pizza muzzarella')).toBeInTheDocument()
     expect(screen.getByRole('img', { name: '30% de descuento' })).toBeInTheDocument()
-    expect(screen.getByText('$4760.00')).toBeInTheDocument()
+    expect(screen.getByText('$ 4.760')).toBeInTheDocument()
   })
 
   it('no tiene botón "+" (no se pide desde acá)', () => {
@@ -143,10 +143,12 @@ describe('TarjetaOferta', () => {
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
   })
 
-  it('sin foto muestra el placeholder de la app', () => {
-    enRouter(<TarjetaOferta oferta={crearOferta({ imagenUrl: null, nombre: 'Papas rústicas' })} />)
+  it('sin foto muestra el placeholder de la app, que es decorativo (el nombre ya está escrito)', () => {
+    const { container } = enRouter(<TarjetaOferta oferta={crearOferta({ imagenUrl: null, nombre: 'Papas rústicas' })} />)
 
-    expect(screen.getByRole('img', { name: 'Papas rústicas' })).toBeInTheDocument()
+    expect(container.querySelector('img')).toHaveAttribute('alt', '')
+    expect(screen.queryByRole('img', { name: 'Papas rústicas' })).not.toBeInTheDocument()
+    expect(screen.getByText('Papas rústicas')).toBeInTheDocument()
   })
 
   it('un descuento del 99 % y uno del 1 % se ven completos', () => {

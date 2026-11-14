@@ -5,6 +5,7 @@ import type { MenuPublicoItem } from '@menyu/types'
 import { useCuenta } from '../../hooks/useCuenta'
 import { usePuedeCerrarSesion } from '../../hooks/usePuedeCerrarSesion'
 import { menuEsDe, usePublicMenuStore } from '../../store/publicMenuStore'
+import { enfocarEncabezado } from '../../utils/enfocarTitulo'
 import { useCarritoStore } from '../../store/carritoStore'
 import { useComensalStore } from '../../store/comensalStore'
 import { AppHeader } from '../AppHeader'
@@ -111,6 +112,9 @@ export function MenuView({ modo, restauranteId }: MenuViewProps) {
     })).filter((cat) => cat.itemsDirectos.length > 0)
   }, [menu, buscar, activeDiets])
 
+  // Cuántos platos quedan con los filtros: lo que se anuncia al aplicar o limpiar las dietas.
+  const cantidadDePlatos = categoriasFiltradas.reduce((total, categoria) => total + categoria.itemsDirectos.length, 0)
+
   // Chef's recommendations with the same filters applied
   const recomendadosFiltrados = useMemo(() => {
     return (menu?.recomendados ?? []).filter((item) => itemPasaFiltros(item, buscar, activeDiets))
@@ -179,7 +183,11 @@ export function MenuView({ modo, restauranteId }: MenuViewProps) {
   }, [seccionesConId])
 
   const handleCategoriaClick = (catId: string) => {
-    sectionRefs.current[catId]?.scrollIntoView({ behavior: 'smooth' })
+    const seccion = sectionRefs.current[catId]
+    seccion?.scrollIntoView({ behavior: 'smooth' })
+    // La pantalla se desplaza, pero el lector sigue en el chip: el foco va al encabezado de la sección, y el lector lo
+    // anuncia. Sin mover la pantalla otra vez (el desplazamiento ya lo hace scrollIntoView, con animación).
+    enfocarEncabezado(seccion?.querySelector('h2'))
   }
 
   const cerrarSesion = () => {
@@ -204,6 +212,7 @@ export function MenuView({ modo, restauranteId }: MenuViewProps) {
               texto="Puede que ya no esté disponible. Volvé al inicio para ver los demás."
               boton="Volver al inicio"
               onBoton={() => navigate('/')}
+              nivelDelTitulo={1}
             />
           </div>
         </main>
@@ -217,14 +226,14 @@ export function MenuView({ modo, restauranteId }: MenuViewProps) {
 
   // Mientras llega (o todavía no se pidió el de este restaurante).
   if (loading || (!menu && !error)) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100svh', background: CM.bg }}>
+    <main style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100svh', background: CM.bg }}>
       <Spinner size="lg" />
-    </div>
+    </main>
   )
 
   if (error || !menu) return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100svh', gap: 12, padding: 24, background: CM.bg }}>
-      <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 14, color: CM.orange, textAlign: 'center', margin: 0 }}>No se pudo cargar el menú</p>
+    <main style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100svh', gap: 12, padding: 24, background: CM.bg }}>
+      <h1 style={{ fontFamily: 'Inter,sans-serif', fontWeight: 400, fontSize: 14, color: CM.orange, textAlign: 'center', margin: 0 }}>No se pudo cargar el menú</h1>
       <button
         onClick={() => void fetchMenu(restauranteId)}
         style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 600, fontSize: 13, color: CM.orange, background: 'none', border: 'none', cursor: 'pointer' }}
@@ -239,7 +248,7 @@ export function MenuView({ modo, restauranteId }: MenuViewProps) {
           Volver al restaurante
         </Link>
       )}
-    </div>
+    </main>
   )
 
   // En la carta no se pide: las tarjetas no se tocan.
@@ -263,14 +272,25 @@ export function MenuView({ modo, restauranteId }: MenuViewProps) {
         onCerrarSesion={cerrarSesion}
       />
 
-      <MenuHeader nombre={menu.restaurante.nombre} logoUrl={menu.restaurante.logoUrl} modo={modo} onAbrirMenu={() => setDrawerOpen(true)} />
+      {/* Con el menú lateral abierto (un diálogo), el encabezado y el contenido quedan inertes: sin foco ni lectura. */}
+      <MenuHeader
+        nombre={menu.restaurante.nombre}
+        logoUrl={menu.restaurante.logoUrl}
+        modo={modo}
+        onAbrirMenu={() => setDrawerOpen(true)}
+        menuAbierto={drawerOpen}
+        inerte={drawerOpen}
+      />
 
+      {/* Todo lo que no es el encabezado ni el menú lateral: el buscador, las secciones y los botones flotantes. */}
+      <main inert={drawerOpen} style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
       <BarraBusqueda
         buscar={buscar}
         onBuscar={setBuscar}
         clasificaciones={allClasifs}
         dietasActivas={activeDiets}
         onDietasActivas={setActiveDiets}
+        cantidadDePlatos={cantidadDePlatos}
       />
 
       <ChipsSecciones secciones={seccionesConId} activa={categoriaActiva} onElegir={handleCategoriaClick} />
@@ -300,6 +320,7 @@ export function MenuView({ modo, restauranteId }: MenuViewProps) {
         habilitado={conAsistente}
         conCarrito={modo === 'mesa' && hayCarrito}
       />
+      </main>
     </div>
   )
 }

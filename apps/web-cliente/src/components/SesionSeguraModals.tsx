@@ -13,12 +13,15 @@ interface ShellProps {
   children: React.ReactNode
   /** Lo que va debajo del logo. Sin texto (`null`), queda solo el logo. */
   subtitulo?: string | null
+  /** El subtítulo es lo único que dice qué pantalla es (sin un título más abajo): se escribe como `<h1>` en vez de `<p>`. */
+  subtituloEsTitulo?: boolean
 }
 
 /** La tarjeta azul con el logo arriba de las pantallas de entrada a una mesa (modo seguro y `/check-in`). */
-export function Shell({ children, subtitulo = 'Abriendo tu mesa…' }: ShellProps) {
+export function Shell({ children, subtitulo = 'Abriendo tu mesa…', subtituloEsTitulo = false }: ShellProps) {
+  const Subtitulo = subtituloEsTitulo ? 'h1' : 'p'
   return (
-    <div style={{
+    <main style={{
       minHeight: '100svh', display: 'flex', alignItems: 'center', justifyContent: 'center',
       padding: 16, background: `linear-gradient(135deg, ${C.navy} 0%, #1e254a 100%)`,
     }}>
@@ -26,14 +29,14 @@ export function Shell({ children, subtitulo = 'Abriendo tu mesa…' }: ShellProp
         <div style={{ background: C.navy, padding: '28px 32px 20px', textAlign: 'center' }}>
           <LogoMenYuOscuro alto={24} style={{ display: 'block', margin: subtitulo ? '0 auto 8px' : '0 auto' }} />
           {subtitulo && (
-            <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 13, color: 'rgba(255,255,255,0.55)', margin: 0 }}>
+            <Subtitulo style={{ fontFamily: 'Inter,sans-serif', fontWeight: 400, fontSize: 13, color: 'rgba(255,255,255,0.55)', margin: 0 }}>
               {subtitulo}
-            </p>
+            </Subtitulo>
           )}
         </div>
         {children}
       </div>
-    </div>
+    </main>
   )
 }
 
@@ -45,9 +48,9 @@ export function AnfitrionScreen({ codigo, onContinuar }: { codigo: string | null
           <span style={{ fontSize: 24, color: 'white', fontWeight: 'bold' }}>✓</span>
         </div>
         <div style={{ textAlign: 'center' }}>
-          <p style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 800, fontSize: 18, color: C.navy, margin: '0 0 8px' }}>
+          <h1 style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 800, fontSize: 18, color: C.navy, margin: '0 0 8px' }}>
             ¡Sos el anfitrión de la mesa!
-          </p>
+          </h1>
           <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 13, color: C.textSub, margin: 0 }}>
             Compartí este código con tus acompañantes para que puedan unirse:
           </p>
@@ -94,9 +97,9 @@ export function CodigoSesionScreen({ loading, error, onSubmit, onVolver }: Codig
       >
         <span style={{ fontSize: 48 }}>🔒</span>
         <div style={{ textAlign: 'center' }}>
-          <p style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 800, fontSize: 20, color: C.navy, margin: '0 0 8px' }}>
+          <h1 style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 800, fontSize: 20, color: C.navy, margin: '0 0 8px' }}>
             Mesa en modo seguro
-          </p>
+          </h1>
           <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 13, color: C.textSub, margin: 0 }}>
             El anfitrión de la mesa tiene un código de 3 dígitos. Pedíselo para unirte.
           </p>

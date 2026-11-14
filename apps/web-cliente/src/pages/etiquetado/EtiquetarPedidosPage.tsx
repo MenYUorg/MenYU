@@ -7,6 +7,7 @@ import type { Comensal, ItemEtiquetado } from '../../hooks/useEtiquetado'
 import { useSessionStore } from '../../store/sessionStore'
 import { useComensalStore } from '../../store/comensalStore'
 import { C } from '../../theme'
+import { formatearPrecio } from '../../utils/precio'
 
 function chipKey(pedidoItemId: string, comensalId: string) {
   return `${pedidoItemId}:${comensalId}`
@@ -48,7 +49,7 @@ function ItemCard({
           fontSize:   13,
           color:      C.text,
         }}>
-          ${(item.precioUnitario * item.cantidad).toFixed(2)}
+          {formatearPrecio(item.precioUnitario * item.cantidad)}
         </span>
       </div>
 
