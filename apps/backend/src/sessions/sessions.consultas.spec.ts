@@ -7,12 +7,14 @@ import { DivisionService } from '../comensales/division.service'
 import { MenyuGateway } from '../gateway/menyu.gateway'
 import { PrismaService } from '../prisma/prisma.service'
 import { SessionsService } from './sessions.service'
+import { ASIGNADA, dondeMesaVisible } from '../caja/visibilidad-de-mesas'
 
 import { CUENTAS } from '../test/acceso-de-test'
 
 // Cierre de sesiones y las consultas del salón (mesa activa, sesiones activas, pagadas e historial). El rol lo decide
-// AccesoService (con sus propios tests): acá es un doble. En las consultas por restaurante lo exige la ruta.
-const acceso = { exigirRol: jest.fn() }
+// AccesoService (con sus propios tests): acá es un doble. En las consultas por restaurante lo exige la ruta; los roles
+// y el mozo que pide `getSessionesActivas` para el filtro por mozo también salen del doble.
+const acceso = { exigirRol: jest.fn(), rolesEnRestaurante: jest.fn(), mozoDe: jest.fn() }
 
 const prisma = {
   sesionMesa: { findFirst: jest.fn(), findMany: jest.fn(), updateMany: jest.fn() },
@@ -42,6 +44,8 @@ describe('SessionsService: cierre y consultas del staff', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     acceso.exigirRol.mockResolvedValue(['MOZO'])
+    acceso.rolesEnRestaurante.mockResolvedValue(['GERENTE'])
+    acceso.mozoDe.mockResolvedValue(null)
     // cerrarMesaAdmin abre una transacción con un callback: recibe este mismo doble como tx.
     prisma.$transaction.mockImplementation((fn: (tx: typeof prisma) => unknown) => fn(prisma))
     prisma.sesionMesa.updateMany.mockResolvedValue({ count: 1 })
@@ -215,39 +219,114 @@ describe('SessionsService: cierre y consultas del staff', () => {
   })
 
   describe('getSessionesActivas (las mesas abiertas del restaurante)', () => {
+    const SESIONES = () => [
+      {
+        id: 'ses-1',
+        iniciadaEn: fecha('2026-10-18T20:15:30Z'),
+        mesa: { id: 'mesa-1', numero: '4' },
+        participantes: [{ id: 'c1' }, { id: 'c2' }],
+        pedidos: [{ items: [item(1000, 3, 1), item(500, 2)] }, { items: [item(200, 1)] }],
+        pagos: [{ metodo: 'efectivo', estado: 'pendiente', fechaCobro: null }],
+      },
+      {
+        id: 'ses-2',
+        iniciadaEn: fecha('2026-10-18T20:59:59Z'),
+        mesa: { id: 'mesa-2', numero: '7' },
+        participantes: [],
+        pedidos: [],
+        pagos: [{ metodo: 'efectivo', estado: 'aprobado', fechaCobro: fecha('2026-10-18T20:59:00Z') }],
+      },
+    ]
+    const RESPUESTA = [
+      { id: 'ses-1', mesaId: 'mesa-1', mesaNumero: '4', tiempoTranscurrido: 44, cantidadItems: 4, cantidadPersonas: 2, totalAcumulado: 2200, quierePagar: true },
+      { id: 'ses-2', mesaId: 'mesa-2', mesaNumero: '7', tiempoTranscurrido: 0, cantidadItems: 0, cantidadPersonas: 0, totalAcumulado: 0, quierePagar: false },
+    ]
+    const MOZO_ACTIVO = { id: 'mozo-7', nombre: 'Ana', esJefeSalon: false }
+    const argsDeLaConsulta = () => prisma.sesionMesa.findMany.mock.calls[0][0]
+
     it('por sesión: minutos abierta, ítems y total con las cantidades editadas, personas y si pidió pagar en efectivo', async () => {
       // Arrange
       jest.useFakeTimers({ now: fecha('2026-10-18T21:00:00Z') })
-      prisma.sesionMesa.findMany.mockResolvedValue([
-        {
-          id: 'ses-1',
-          iniciadaEn: fecha('2026-10-18T20:15:30Z'),
-          mesa: { id: 'mesa-1', numero: '4' },
-          participantes: [{ id: 'c1' }, { id: 'c2' }],
-          pedidos: [{ items: [item(1000, 3, 1), item(500, 2)] }, { items: [item(200, 1)] }],
-          pagos: [{ metodo: 'efectivo', estado: 'pendiente', fechaCobro: null }],
-        },
-        {
-          id: 'ses-2',
-          iniciadaEn: fecha('2026-10-18T20:59:59Z'),
-          mesa: { id: 'mesa-2', numero: '7' },
-          participantes: [],
-          pedidos: [],
-          pagos: [{ metodo: 'efectivo', estado: 'aprobado', fechaCobro: fecha('2026-10-18T20:59:00Z') }],
-        },
-      ])
+      prisma.sesionMesa.findMany.mockResolvedValue(SESIONES())
 
       // Act
-      const sesiones = await service.getSessionesActivas('rest-1')
+      const sesiones = await service.getSessionesActivas('rest-1', CUENTAS.GERENTE)
 
       // Assert
       expect(prisma.sesionMesa.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ where: { mesa: { restauranteId: 'rest-1' }, estado: 'activa' }, orderBy: { iniciadaEn: 'asc' } }),
       )
-      expect(sesiones).toEqual([
-        { id: 'ses-1', mesaId: 'mesa-1', mesaNumero: '4', tiempoTranscurrido: 44, cantidadItems: 4, cantidadPersonas: 2, totalAcumulado: 2200, quierePagar: true },
-        { id: 'ses-2', mesaId: 'mesa-2', mesaNumero: '7', tiempoTranscurrido: 0, cantidadItems: 0, cantidadPersonas: 0, totalAcumulado: 0, quierePagar: false },
-      ])
+      expect(sesiones).toEqual(RESPUESTA)
+    })
+
+    describe('qué sesiones ve cada rol (el filtro por mozo es de vista)', () => {
+      beforeEach(() => prisma.sesionMesa.findMany.mockResolvedValue([]))
+
+      it.each([['OWNER'], ['GERENTE'], ['JEFE_SALON']] as const)('%s: el where de siempre, sin pedir el mozo', async (rol) => {
+        acceso.rolesEnRestaurante.mockResolvedValue([rol])
+        acceso.mozoDe.mockResolvedValue(MOZO_ACTIVO)
+
+        await service.getSessionesActivas('rest-1', CUENTAS.GERENTE)
+
+        expect(argsDeLaConsulta().where).toEqual({ mesa: { restauranteId: 'rest-1' }, estado: 'activa' })
+        expect(acceso.mozoDe).not.toHaveBeenCalled()
+      })
+
+      it('el MOZO: las de sus mesas del turno abierto más las sin asignar, con el filtro dentro de `mesa`', async () => {
+        acceso.rolesEnRestaurante.mockResolvedValue(['MOZO'])
+        acceso.mozoDe.mockResolvedValue(MOZO_ACTIVO)
+
+        await service.getSessionesActivas('rest-1', MOZO)
+
+        expect(argsDeLaConsulta().where).toEqual({
+          mesa: { restauranteId: 'rest-1', ...dondeMesaVisible({ tipo: 'del-mozo', mozoId: 'mozo-7' }) },
+          estado: 'activa',
+        })
+      })
+
+      it('el MOZO sin perfil activo: solo las de mesas sin asignar', async () => {
+        acceso.rolesEnRestaurante.mockResolvedValue(['MOZO'])
+
+        await service.getSessionesActivas('rest-1', MOZO)
+
+        expect(argsDeLaConsulta().where).toEqual({
+          mesa: { restauranteId: 'rest-1', asignacionesTurno: { none: ASIGNADA } },
+          estado: 'activa',
+        })
+      })
+
+      it('OWNER de la marca y MOZO a la vez: sin filtro', async () => {
+        acceso.rolesEnRestaurante.mockResolvedValue(['OWNER', 'MOZO'])
+        acceso.mozoDe.mockResolvedValue(MOZO_ACTIVO)
+
+        await service.getSessionesActivas('rest-1', MOZO)
+
+        expect(argsDeLaConsulta().where).toEqual({ mesa: { restauranteId: 'rest-1' }, estado: 'activa' })
+      })
+
+      it('pide los roles y el mozo con el usuario y el restaurante de la llamada', async () => {
+        acceso.rolesEnRestaurante.mockResolvedValue(['MOZO'])
+        acceso.mozoDe.mockResolvedValue(MOZO_ACTIVO)
+
+        await service.getSessionesActivas('rest-1', MOZO)
+
+        expect(acceso.rolesEnRestaurante).toHaveBeenCalledTimes(1)
+        expect(acceso.rolesEnRestaurante).toHaveBeenCalledWith(MOZO.id, 'rest-1')
+        expect(acceso.mozoDe).toHaveBeenCalledTimes(1)
+        expect(acceso.mozoDe).toHaveBeenCalledWith(MOZO.id, 'rest-1')
+      })
+    })
+
+    it('con el filtro, las sesiones salen iguales (totales, flags y orden)', async () => {
+      jest.useFakeTimers({ now: fecha('2026-10-18T21:00:00Z') })
+      prisma.sesionMesa.findMany.mockResolvedValue(SESIONES())
+      acceso.rolesEnRestaurante.mockResolvedValue(['MOZO'])
+      acceso.mozoDe.mockResolvedValue(MOZO_ACTIVO)
+
+      const sesiones = await service.getSessionesActivas('rest-1', MOZO)
+
+      expect(argsDeLaConsulta().orderBy).toEqual({ iniciadaEn: 'asc' })
+      expect(sesiones).toEqual(RESPUESTA)
     })
   })
 

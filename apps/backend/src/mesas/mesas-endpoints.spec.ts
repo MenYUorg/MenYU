@@ -79,7 +79,7 @@ describe('endpoints de mesas', () => {
 
       // Assert
       expect(res.status).toBe(200)
-      expect(mesas.findAll).toHaveBeenCalledWith(REST_ID)
+      expect(mesas.findAll).toHaveBeenCalledWith(REST_ID, cuenta)
     })
 
     it.each([

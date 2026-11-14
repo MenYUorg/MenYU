@@ -58,6 +58,22 @@ export class FixtureDeCaja {
     return (await this.prisma.mozo.create({ data: { restauranteId, nombre, activo, usuarioId } })).id
   }
 
+  /**
+   * Alguien del salón como lo deja una invitación: en la misma cuenta, el `Usuario`, su membresía en el restaurante y su
+   * perfil `Mozo` (jefe de salón si el rol es JEFE_SALON).
+   */
+  async personalConPerfil(
+    rol: Rol,
+    restauranteId: string,
+    { nombre = 'Mozo', activo = true }: { nombre?: string; activo?: boolean } = {},
+  ): Promise<{ usuarioId: string; mozoId: string }> {
+    const usuarioId = await this.usuario(rol, { restauranteId })
+    const mozo = await this.prisma.mozo.create({
+      data: { restauranteId, nombre, activo, usuarioId, esJefeSalon: rol === 'JEFE_SALON' },
+    })
+    return { usuarioId, mozoId: mozo.id }
+  }
+
   /** Una mesa con número y PIN de un contador de la corrida: nunca chocan en el restaurante. */
   async mesa(restauranteId: string, { activo = true } = {}): Promise<{ id: string; numero: string }> {
     this.mesas += 1

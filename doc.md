@@ -452,7 +452,7 @@ Auth required: the Supabase access token. Administration (`OWNER`, `GERENTE`) of
 | Method | Path | Description |
 |---|---|---|
 | `POST` | `/api/mesas` | Create table |
-| `GET` | `/api/mesas?restauranteId=` | List tables for a restaurant |
+| `GET` | `/api/mesas?restauranteId=` | List tables for a restaurant (a `MOZO` only sees theirs and the unassigned ones) |
 | `GET` | `/api/mesas/:id` | Get table |
 | `PATCH` | `/api/mesas/:id` | Update table |
 | `DELETE` | `/api/mesas/:id` | Delete table |
@@ -490,6 +490,8 @@ Auth required: the Supabase access token. Administration (`OWNER`, `GERENTE`) of
 | Param | Type | Required |
 |---|---|---|
 | `restauranteId` | UUID | yes |
+
+A `MOZO` only sees the tables assigned to them in the open shift plus the unassigned ones (a table assigned to a deactivated waiter counts as unassigned); with no open shift, every table is unassigned. `OWNER`, `GERENTE` and `JEFE_SALON` see every table. This filter is about what each person sees, not a security boundary. `GET /api/sessions/activas` applies the same filter to the open sessions.
 
 **Responses:** 200
 

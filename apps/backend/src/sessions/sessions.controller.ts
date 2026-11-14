@@ -71,10 +71,13 @@ export class SessionsController {
 
   @Get('activas')
   @RequiereRolEn({ query: 'restauranteId' }, ...SALON)
-  @ApiOperation({ summary: 'Listar sesiones activas de un restaurante' })
+  @ApiOperation({
+    summary: 'Listar sesiones activas de un restaurante',
+    description: 'Un MOZO ve solo las de las mesas que tiene asignadas en el turno abierto más las sin asignar.',
+  })
   @ApiResponse({ status: 200, description: 'Lista de sesiones activas con totales y flags' })
-  getSessionesActivas(@Query('restauranteId') restauranteId: string) {
-    return this.sessions.getSessionesActivas(restauranteId)
+  getSessionesActivas(@Query('restauranteId') restauranteId: string, @UsuarioActual() usuario: UsuarioAutenticado) {
+    return this.sessions.getSessionesActivas(restauranteId, usuario)
   }
 
   @Get('pagadas')

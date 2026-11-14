@@ -41,7 +41,7 @@ describe('endpoints de sesiones del salón', () => {
       })
 
       expect([activas.status, pagadas.status, historial.status]).toEqual([200, 200, 200])
-      expect(sesiones.getSessionesActivas).toHaveBeenCalledWith(REST)
+      expect(sesiones.getSessionesActivas).toHaveBeenCalledWith(REST, CUENTAS.MOZO)
       expect(sesiones.getSessionesPagadas).toHaveBeenCalledWith(REST, 'hoy')
       expect(sesiones.getHistorialSesiones).toHaveBeenCalledWith(REST, '2026-10-01', '2026-10-18')
     })

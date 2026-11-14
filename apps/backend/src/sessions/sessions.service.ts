@@ -15,6 +15,7 @@ import { SALON } from '../auth/roles-del-personal'
 import { AccesoService } from '../auth/supabase/acceso.service'
 import { CuentaDeClienteService } from '../auth/supabase/cuenta-de-cliente.service'
 import { UsuarioAutenticado } from '../auth/supabase/usuario-autenticado'
+import { dondeMesaVisible, visibilidadDeMesas } from '../caja/visibilidad-de-mesas'
 import { OpenSessionDto } from './dto/open-session.dto'
 import { RegistrarCobroDto } from './dto/registrar-cobro.dto'
 import { DivisionService } from '../comensales/division.service'
@@ -363,10 +364,14 @@ export class SessionsService {
     }
   }
 
-  /** El rol en el restaurante lo exige la ruta (`@RequiereRolEn`). */
-  async getSessionesActivas(restauranteId: string) {
+  /**
+   * El rol en el restaurante lo exige la ruta (`@RequiereRolEn`). El filtro por mozo es de vista, no de seguridad: un
+   * MOZO ve las sesiones de las mesas que tiene asignadas en el turno abierto más las sin asignar (`visibilidadDeMesas`).
+   */
+  async getSessionesActivas(restauranteId: string, usuario: UsuarioAutenticado) {
+    const visibilidad = await visibilidadDeMesas(this.acceso, usuario.id, restauranteId)
     const sesiones = await this.prisma.sesionMesa.findMany({
-      where: { mesa: { restauranteId }, estado: 'activa' },
+      where: { mesa: { restauranteId, ...dondeMesaVisible(visibilidad) }, estado: 'activa' },
       include: {
         mesa: { select: { id: true, numero: true } },
         participantes: { select: { id: true } },
