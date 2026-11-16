@@ -1,3 +1,5 @@
+import { Prisma } from '@prisma/client'
+
 /** Una mesa del restaurante con los mozos que la tienen en su plantilla (`MozoMesa`). */
 export interface MesaParaPrecarga {
   id: string
@@ -36,6 +38,25 @@ export function precargarAsignaciones(mesas: MesaParaPrecarga[]): PrecargaDeAsig
     else precarga.asignaciones.push({ mesaId: mesa.id, mozoId: mesa.mozoMesas[0].mozo.id })
   }
   return precarga
+}
+
+/**
+ * La precarga del restaurante desde la base: sus mesas, con la plantilla de `MozoMesa`, pasadas por precargarAsignaciones.
+ * La única consulta de la precarga: la usan la apertura sin `asignaciones` (con el `tx` de su transacción) y GET
+ * /turnos/preparacion (con el cliente de Prisma), así las dos proponen siempre lo mismo.
+ */
+export async function precargar(db: Pick<Prisma.TransactionClient, 'mesa'>, restauranteId: string): Promise<PrecargaDeAsignaciones> {
+  const mesas = await db.mesa.findMany({
+    where: { restauranteId },
+    orderBy: { numero: 'asc' },
+    select: {
+      id: true,
+      numero: true,
+      activo: true,
+      mozoMesas: { select: { mozo: { select: { id: true, activo: true, usuarioId: true } } } },
+    },
+  })
+  return precargarAsignaciones(mesas)
 }
 
 function motivoSinAsignar(mesa: MesaParaPrecarga): MotivoSinAsignar | null {

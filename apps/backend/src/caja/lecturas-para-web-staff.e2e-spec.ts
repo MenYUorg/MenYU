@@ -120,4 +120,85 @@ describe('Lecturas de la caja para web-staff contra Postgres (e2e, #359)', () =>
       expect((await abiertas(rest, mozo.usuarioId)).body).toEqual({ cajas: [] })
     })
   })
+
+  describe('GET /turnos/preparacion', () => {
+    const preparacion = (restauranteId: string, usuarioId = owner) =>
+      api.pedir('get', '/turnos/preparacion', { usuarioId, query: { restauranteId } })
+
+    it('4. mozos asignables, mesas activas y la misma precarga que POST /turnos sin asignaciones; igual con el turno abierto', async () => {
+      const rest = await fx.restaurante(marcaId)
+      const caja = await fx.caja(rest, { nombre: 'Principal' })
+      const zoe = await fx.mozo(rest, { nombre: 'Zoe' })
+      const ana = await fx.mozo(rest, { nombre: 'Ana' })
+      const leo = await fx.mozo(rest, { nombre: 'Leo', activo: false })
+      const eva = await fx.mozo(rest, { nombre: 'Eva', conCuenta: false })
+      // Un mozo de otro restaurante, válido: no aparece.
+      await fx.mozo(await fx.restaurante(marcaId, 'E2E Caja otro restaurante'), { nombre: 'Ajeno' })
+
+      const conUnMozo = await fx.mesa(rest)
+      const conDos = await fx.mesa(rest)
+      const conInactivo = await fx.mesa(rest)
+      const sinCuenta = await fx.mesa(rest)
+      const sinMozos = await fx.mesa(rest)
+      const deBaja = await fx.mesa(rest, { activo: false })
+      await fx.mozoMesa(conUnMozo.id, ana)
+      await fx.mozoMesa(conDos.id, ana)
+      await fx.mozoMesa(conDos.id, zoe)
+      await fx.mozoMesa(conInactivo.id, leo)
+      await fx.mozoMesa(sinCuenta.id, eva)
+      await fx.mozoMesa(deBaja.id, zoe)
+
+      const antes = await preparacion(rest)
+
+      expect(antes.status).toBe(200)
+      const activas = [conUnMozo, conDos, conInactivo, sinCuenta, sinMozos].sort((a, b) => (a.numero < b.numero ? -1 : 1))
+      expect(antes.body).toEqual({
+        mozos: [
+          { id: ana, nombre: 'Ana' },
+          { id: zoe, nombre: 'Zoe' },
+        ],
+        mesas: activas.map(({ id, numero }) => ({ id, numero })),
+        precarga: {
+          asignaciones: [{ mesaId: conUnMozo.id, mozoId: ana }],
+          avisos: [
+            { mesaId: conDos.id, mesaNumero: conDos.numero, motivo: 'varios-mozos' },
+            { mesaId: conInactivo.id, mesaNumero: conInactivo.numero, motivo: 'mozo-inactivo' },
+            { mesaId: sinCuenta.id, mesaNumero: sinCuenta.numero, motivo: 'mozo-sin-cuenta' },
+          ],
+        },
+      })
+
+      // POST /turnos sin asignaciones, sobre el mismo estado: asigna y avisa exactamente lo mismo.
+      const apertura = await api.pedir('post', '/turnos', { usuarioId: owner, body: { restauranteId: rest, cajas: [{ cajaId: caja, fondoInicial: 0 }] } })
+      expect(apertura.status).toBe(201)
+      expect(apertura.body.avisos).toEqual(antes.body.precarga.avisos)
+      expect(apertura.body.turno.asignaciones.map(({ mesaId, mozoId }: { mesaId: string; mozoId: string }) => ({ mesaId, mozoId }))).toEqual(
+        antes.body.precarga.asignaciones,
+      )
+
+      const conTurno = await preparacion(rest)
+      expect(conTurno.status).toBe(200)
+      expect(conTurno.body).toEqual(antes.body)
+    })
+
+    it('5. no cae en GET /turnos/:id, que sigue respondiendo por un turno real', async () => {
+      const rest = await fx.restaurante(marcaId)
+      const caja = await fx.caja(rest)
+      const turnoId = await abrirTurno(rest, [{ cajaId: caja, fondoInicial: 0 }])
+
+      const res = await preparacion(rest)
+      expect(res.status).toBe(200)
+      expect(Object.keys(res.body).sort()).toEqual(['mesas', 'mozos', 'precarga'])
+
+      const detalle = await api.pedir('get', `/turnos/${turnoId}`, { usuarioId: owner })
+      expect([detalle.status, detalle.body.id]).toEqual([200, turnoId])
+    })
+
+    it('6. un MOZO del restaurante recibe 403', async () => {
+      const rest = await fx.restaurante(marcaId)
+      const mozo = await fx.personalConPerfil('MOZO', rest)
+
+      expect((await preparacion(rest, mozo.usuarioId)).status).toBe(403)
+    })
+  })
 })
