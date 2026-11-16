@@ -137,6 +137,47 @@ describe('endpoints de pagos', () => {
       expect(payments.confirmarEfectivo).not.toHaveBeenCalled()
     })
 
+    describe('la caja y la propina (#358)', () => {
+      const CAJA_ID = '6f1c2a40-7777-4a1b-9c3d-000000000001'
+
+      it('pasan al service con el resto del body', async () => {
+        payments.confirmarEfectivo.mockResolvedValue({ ok: true })
+
+        const res = await api.pedir('post', '/payments/confirmar-efectivo', {
+          cuenta: CUENTAS.MOZO,
+          body: { pagoId: PAGO_ID, cajaId: CAJA_ID, propina: 150.5 },
+        })
+
+        expect(res.status).toBe(200)
+        expect(payments.confirmarEfectivo).toHaveBeenCalledWith({ pagoId: PAGO_ID, cajaId: CAJA_ID, propina: 150.5 }, CUENTAS.MOZO)
+      })
+
+      it('null en las dos pasa la validación (el service los trata como ausentes)', async () => {
+        payments.confirmarEfectivo.mockResolvedValue({ ok: true })
+
+        const res = await api.pedir('post', '/payments/confirmar-efectivo', {
+          cuenta: CUENTAS.MOZO,
+          body: { pagoId: PAGO_ID, cajaId: null, propina: null },
+        })
+
+        expect(res.status).toBe(200)
+        expect(payments.confirmarEfectivo).toHaveBeenCalledWith({ pagoId: PAGO_ID, cajaId: null, propina: null }, CUENTAS.MOZO)
+      })
+
+      it.each([
+        ['un cajaId que no es UUID', { cajaId: 'caja-1' }],
+        ['una propina negativa', { propina: -1 }],
+        ['una propina con 3 decimales', { propina: 1.005 }],
+        ['una propina sobre el tope de Decimal(10,2)', { propina: 100_000_000 }],
+        ['una propina como texto', { propina: '100' }],
+      ])('%s: 400 y no llega al service', async (_caso, extra) => {
+        const res = await api.pedir('post', '/payments/confirmar-efectivo', { cuenta: CUENTAS.MOZO, body: { pagoId: PAGO_ID, ...extra } })
+
+        expect(res.status).toBe(400)
+        expect(payments.confirmarEfectivo).not.toHaveBeenCalled()
+      })
+    })
+
     it('con el token de la sesión de mesa o sin token no se confirman pagos (401), y sin Usuario 403', async () => {
       // Act
       const comensal = await api.pedir('post', '/payments/confirmar-efectivo', { sesion: SESION_CLIENTE, body: { pagoId: PAGO_ID } })

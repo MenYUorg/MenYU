@@ -1,4 +1,5 @@
-import { IsBoolean, IsIn, IsOptional, IsString } from 'class-validator'
+import { IsBoolean, IsIn, IsNumber, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator'
+import { MAX_MONTO } from '../../caja/dto/abrir-turno.dto'
 
 export const METODOS_PAGO_STAFF = ['efectivo', 'debito', 'credito', 'transferencia', 'mercadopago'] as const
 
@@ -23,4 +24,17 @@ export class RegistrarCobroDto {
   @IsOptional()
   @IsBoolean()
   confirmarCancelacionPagosPendientes?: boolean
+
+  // La caja abierta del turno a la que va el cobro (#358): sin ella, la única abierta; con dos, es obligatoria.
+  // Un null cuenta como ausente.
+  @IsOptional()
+  @IsUUID()
+  cajaId?: string | null
+
+  // Aparte del monto: no cambia el total de la sesión (#358). Un null cuenta como 0.
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @Max(MAX_MONTO)
+  propina?: number | null
 }

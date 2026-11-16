@@ -109,6 +109,43 @@ export class FixtureDeCaja {
     return turno.id
   }
 
+  /**
+   * Un turno con sus aperturas, insertado directo: abierto o cerrado, y cada `TurnoCaja` abierta o cerrada por su cuenta.
+   * Permite los dos estados que el cierre real nunca deja (turno cerrado con una caja abierta y turno abierto con una
+   * caja cerrada), para probar cada filtro de cajaDelCobro por separado. Devuelve la apertura de cada caja.
+   */
+  async turno(
+    restauranteId: string,
+    usuarioId: string,
+    { cerrado = false, cajas }: { cerrado?: boolean; cajas: { cajaId: string; cerrada?: boolean; fondoInicial?: number }[] },
+  ): Promise<{ turnoId: string; aperturas: Record<string, string> }> {
+    const cierre = new Date()
+    const turno = await this.prisma.turno.create({
+      data: { restauranteId, abiertoPorUsuarioId: usuarioId, ...(cerrado ? { cerradoEn: cierre, cerradoPorUsuarioId: usuarioId } : {}) },
+    })
+    const aperturas: Record<string, string> = {}
+    for (const { cajaId, cerrada = false, fondoInicial = 0 } of cajas) {
+      const apertura = await this.prisma.turnoCaja.create({
+        data: { turnoId: turno.id, cajaId, fondoInicial, cerradoEn: cerrada ? cierre : null },
+      })
+      aperturas[cajaId] = apertura.id
+    }
+    return { turnoId: turno.id, aperturas }
+  }
+
+  /** Un turno abierto con esas cajas abiertas, como lo deja la apertura (sin asignaciones). */
+  turnoAbierto(restauranteId: string, usuarioId: string, cajaIds: string[], { fondoInicial = 0 } = {}) {
+    return this.turno(restauranteId, usuarioId, { cajas: cajaIds.map((cajaId) => ({ cajaId, fondoInicial })) })
+  }
+
+  /** Un pedido de la sesión por `total`: un plato nuevo del restaurante, una unidad a ese precio. */
+  async consumo(sesionId: string, mesaId: string, restauranteId: string, total: number): Promise<void> {
+    const item = await this.prisma.itemMenu.create({ data: { restauranteId, nombre: 'Plato e2e', precioBase: total } })
+    await this.prisma.pedido.create({
+      data: { sesionId, mesaId, items: { create: [{ itemId: item.id, cantidad: 1, precioUnitario: total }] } },
+    })
+  }
+
   /** Un pago de una sesión, en la caja que se indique (o en ninguna). */
   async pago(datos: {
     sesionId: string
@@ -133,6 +170,8 @@ export class FixtureDeCaja {
     const deLaCorrida = { restaurante: { marca: { slug: { startsWith: this.marcador } } } }
     const deSusTurnos = { turnoCaja: { turno: deLaCorrida } }
     await this.prisma.pago.deleteMany({ where: { OR: [{ sesion: { mesa: deLaCorrida } }, deSusTurnos] } })
+    await this.prisma.pedidoItem.deleteMany({ where: { pedido: { mesa: deLaCorrida } } })
+    await this.prisma.pedido.deleteMany({ where: { mesa: deLaCorrida } })
     await this.prisma.sesionMesa.deleteMany({ where: { mesa: deLaCorrida } })
     await this.prisma.arqueoMetodo.deleteMany({ where: deSusTurnos })
     await this.prisma.movimientoCaja.deleteMany({ where: deSusTurnos })
@@ -143,6 +182,7 @@ export class FixtureDeCaja {
     await this.prisma.mozoMesa.deleteMany({ where: { mesa: deLaCorrida } })
     await this.prisma.mozo.deleteMany({ where: deLaCorrida })
     await this.prisma.mesa.deleteMany({ where: deLaCorrida })
+    await this.prisma.itemMenu.deleteMany({ where: deLaCorrida })
     const deSusUsuarios = { email: { startsWith: this.marcador } }
     await this.prisma.membresia.deleteMany({ where: { usuario: deSusUsuarios } })
     await this.prisma.usuario.deleteMany({ where: deSusUsuarios })

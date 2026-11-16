@@ -331,6 +331,15 @@ Decisiones de la planificación de la 4.3:
 3. **Ninguna respuesta devuelve las columnas `mp_*` ni `passwordHash`**, tampoco los detalles (`GET /marcas/:id`, `GET /restaurantes/:id`) ni las respuestas de `PATCH` y de mozos.
 4. **`PATCH /mozos/:id` queda con nombre y teléfono.** `email` y la contraseña los quita la decisión 5, `esJefeSalon` lo define la membresía y `activo`, quitar el acceso.
 5. **Cobros (#356):** `Pago.usuarioId` guarda siempre quién cobró. Un MOZO o JEFE_SALON cobra con su propio `Mozo` (se ignora el `mozoId` del body); un OWNER o GERENTE puede atribuirle el cobro a un mozo de ese restaurante.
+   - **Desde #358**, el body de `PATCH /sessions/:id/cobro` y de `POST /payments/confirmar-efectivo` suma dos campos opcionales.
+     - `cajaId` (UUID): la caja abierta del turno a la que va el cobro. Con una sola caja abierta no hace falta.
+     - `propina`: de 0 al tope de `Decimal(10,2)`, con hasta 2 decimales. Va aparte del monto.
+     - Un `null` en cualquiera de los dos cuenta como ausente.
+   - Responden 400 en tres casos:
+     - sin turno abierto en el restaurante ("No hay un turno abierto");
+     - con dos cajas abiertas y sin `cajaId`;
+     - con un `cajaId` que no está abierto en el turno actual.
+   - El permiso se sigue exigiendo antes que todo eso.
 
 **4.3, cómo quedó (2026-10-21).** En el PR draft #416. Ninguna ruta fuera de `/root` usa el JWT legacy: `PENDIENTES_4_3` y `PENDIENTES_A_MANO` del test del enrutador quedaron vacías.
 - **Controllers:** carta, mesas, marcas, restaurantes, mozos, sesiones, pagos (con el OAuth de Mercado Pago), pedidos, llamados al mozo y reportes. Con el restaurante en la ruta, la query o el body, `@RequiereRolEn`; en las de un recurso, `@Personal()` y el service. `GET` y `PATCH /restaurantes/:id` y su logo usan `@RequiereRolEn({ param: 'id' })`. Los grupos de roles de la matriz están en `auth/roles-del-personal.ts` (`ADMINISTRACION`, `SALON`, `TODO_EL_PERSONAL`).

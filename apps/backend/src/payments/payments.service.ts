@@ -18,6 +18,8 @@ import { runSerializableTransaction } from '../common/run-serializable-transacti
 import { SELECT_DISPONIBILIDAD, restauranteDisponible } from '../common/restaurante-disponible'
 import { atribucionDelCobro } from '../common/atribucion-del-cobro'
 import { cerrarSesionDeMesa } from '../common/cerrar-sesion-de-mesa'
+import { cajaDelCobro } from '../caja/caja-del-cobro'
+import { traducirOperacionSimultanea } from '../caja/conflictos'
 import { AccesoService } from '../auth/supabase/acceso.service'
 import { UsuarioAutenticado } from '../auth/supabase/usuario-autenticado'
 import { ConfirmarEfectivoDto } from './dto/confirmar-efectivo.dto'
@@ -264,6 +266,7 @@ export class PaymentsService {
   async confirmarEfectivo(dto: ConfirmarEfectivoDto, usuario: UsuarioAutenticado) {
     const { pagoId } = dto
     const fechaCobro = new Date()
+    const propina = new Prisma.Decimal(dto.propina ?? 0)
 
     const pago = await this.prisma.pago.findUnique({
       where: { id: pagoId },
@@ -291,11 +294,15 @@ export class PaymentsService {
       const sesion = await tx.sesionMesa.findUnique({ where: { id: pago.sesionId }, select: { estado: true } })
       if (sesion?.estado !== 'activa') throw sesionNoActiva
 
+      // La caja del cobro (#358), antes de aprobar: un cierre del turno al mismo tiempo choca con este cobro (P2034) y el
+      // pago no queda fuera del arqueo.
+      const turnoCajaId = await cajaDelCobro(tx, pago.sesion.mesa.restauranteId, dto.cajaId)
+
       // El estado se vuelve a mirar al escribir: otro cobro, el webhook o el reintento de esta transacción pueden haberlo
       // cambiado después de la lectura de arriba.
       const { count } = await tx.pago.updateMany({
         where: { id: pagoId, estado: ESTADO_PAGO_PENDIENTE },
-        data: { estado: ESTADO_PAGO_APROBADO, fechaCobro, mozoId, usuarioId },
+        data: { estado: ESTADO_PAGO_APROBADO, fechaCobro, mozoId, usuarioId, turnoCajaId, propina },
       })
       if (count === 0) throw yaNoPendiente
 
@@ -313,7 +320,9 @@ export class PaymentsService {
       }
 
       return { sesionId: pago.sesionId, estado: sesionCubierta ? 'cerrada' : 'activa' }
-    }, 'confirmarEfectivo')
+    }, 'confirmarEfectivo').catch((err: unknown) => {
+      throw traducirOperacionSimultanea(err)
+    })
   }
 
   async crearPreferenciaMercadoPago(sesionId: string, origin?: string) {
