@@ -4,7 +4,7 @@
 > - los endpoints actuales son `POST /api/payments/mercadopago/crear-preferencia`, `POST /api/payments/webhook/mercadopago/restaurante/:restauranteId/pago/:pagoId` y `GET /api/payments/mercadopago/oauth/conectar` y `/callback`, no `/initiate`, `/webhook`, `/connect` ni `/callback`;
 > - el webhook ya no busca el pago por `referenciaExterna`: usa el `pagoId` de la ruta.
 >
-> Las variables de entorno (sección 7), el caso de Mercado Pago caído y los pagos para revisión (sección 13) y el log del webhook (sección 14) están al día con el PR B de la deuda de pagos (05/11/2026).
+> Las variables de entorno (sección 7), el caso de Mercado Pago caído y los pagos para revisión (sección 13) y el log del webhook (sección 14) están al día con el PR B de la deuda de pagos (05/11/2026). La sección 13 también está al día con #358: los pagos de Mercado Pago van a una caja del turno (16/11/2026).
 
 ## Índice
 
@@ -478,19 +478,44 @@ Desde el PR B de la deuda de pagos (05/11/2026), que resolvió DT-11 (el webhook
 - **Un cobro ya registrado nunca termina en `500`:** después del commit, el aviso a las pantallas (el `emit` de Socket.io y la lectura de la mesa) va protegido. Si falla, queda un `logger.error` y el webhook responde `200`. Si respondiera `500`, Mercado Pago reintentaría una notificación ya aplicada.
 - **Dos notificaciones iguales al mismo tiempo:** la transacción es serializable. Una de las dos choca (`P2034`), se reintenta una vez y ya ve el pago aprobado. Lo prueba el e2e `apps/backend/src/payments/webhook.e2e-spec.ts` (caso 8).
 
+### La caja de los pagos de Mercado Pago (#358)
+
+Desde #358, todo pago aprobado va a una caja del turno abierto (`Pago.turnoCajaId`). Los que registra el personal van a la caja que elige, o a la única abierta. Los de Mercado Pago del comensal no eligen caja:
+
+- **La puerta del turno, en la preferencia.** `crearPreferenciaMercadoPago` busca, en su transacción serializable, una caja abierta del turno abierto del restaurante. Lo hace después de calcular el saldo y antes de cancelar los pendientes.
+  - **Sin turno abierto**, responde `400` con "El restaurante no está recibiendo pagos por Mercado Pago en este momento" (`MENSAJE_MP_NO_DISPONIBLE`, `apps/backend/src/caja/conflictos.ts`). No cancela el pendiente anterior, no crea el pago ni llama a Mercado Pago. Una mesa ya pagada sigue respondiendo su `400` de antes.
+  - **Qué lee el comensal:** web-cliente arma el error con el `message` de la respuesta (`apps/web-cliente/src/services/api.ts`) y lo muestra tal cual en el recuadro rojo de `PagarPage` y `MensajePage`.
+  - **Si la transacción choca dos veces** con otra (`P2034`), responde el `409` genérico: "Otra operación modificó esto al mismo tiempo; probá de nuevo".
+- **La caja se decide al aprobarse, no al crear la preferencia.** El webhook busca la caja con `cajaDeMercadoPago` (`apps/backend/src/caja/caja-del-cobro.ts`), dentro de su transacción y solo cuando el pago pasa a `aprobado`. Guarda `turnoCajaId` en el mismo `update` que lo aprueba. Si entre la preferencia y la aprobación se cerró un turno y se abrió otro, el pago va a una caja del nuevo.
+- **Qué caja:** entre las abiertas del turno abierto, la de `Caja.createdAt` más antigua; si empatan, la de menor `id`. No cuenta cuándo se abrió en el turno. Reactivar una caja vieja no le cambia el `createdAt`: si se abre en el turno, es la más antigua y recibe los pagos de Mercado Pago.
+- **Sin turno abierto al aprobarse:** la plata ya entró, así que el pago se aprueba igual y la sesión se cierra si queda cubierta. Queda sin caja (`turnoCajaId = null`), marcado para revisión con el motivo `aprobado-sin-turno` (el caso (c) de la tabla de abajo) y con un warn en el log.
+- **Un webhook y el cierre del turno a la vez:** las dos transacciones son serializables. Si el webhook leyó la caja abierta y el cierre termina antes de que escriba, el webhook choca (`P2034`), se reintenta una vez y ya ve el turno cerrado: queda sin caja y marcado. Nunca queda en una caja de un turno ya cerrado. Lo prueban los casos 8 y 9 de `apps/backend/src/payments/mercadopago-a-la-caja.e2e-spec.ts`.
+- **El arqueo no cambia:** el esperado de cada caja no cuenta Mercado Pago, esté o no en la caja.
+- **El resumen del turno** (`GET /api/turnos/:id/resumen`) muestra aparte los pagos de Mercado Pago aprobados:
+  - los de las cajas del turno, sin mirar la fecha;
+  - los sin caja cobrados dentro de la franja del turno (los de antes de #358).
+
+  Cada uno trae `cajaId` y `cajaNombre` (`null` si no tiene caja). Un pago "sin turno" no aparece en el resumen de ningún turno: se cobró cuando no había ninguno abierto, fuera de toda franja. Solo se ve en `requieren-revision`.
+
 ### Riesgo de doble cobro y pagos para revisión
 
-Hay dos casos en que Mercado Pago aprueba un pago y la plata entra, pero la mesa ya se cobró o se cerró por otro lado. El webhook no los deshace: los **marca para revisión** en la tabla `pago`.
+Hay tres casos en que Mercado Pago aprueba un pago y la plata entra, pero algo queda para que lo revise una persona: la mesa ya se cobró o se cerró por otro lado, o no había un turno abierto. El webhook no los deshace: los **marca para revisión** en la tabla `pago`.
 
 | Caso | Qué pasó | Cómo queda el pago |
 |---|---|---|
 | **(a)** `aprobado-sobre-cancelado` | El personal cobró la mesa (o la cerró a mano), eso canceló el pago de MP, y después Mercado Pago lo aprobó | Sigue `cancelado`. `requiereRevision = true`, `motivoRevision = 'aprobado-sobre-cancelado'` y `referenciaExterna` con la orden de MP, solo si estaba vacía. Es la única excepción a "el webhook no toca un pago en estado final", y no cambia nada más |
 | **(b)** `aprobado-sobre-sesion-cerrada` | Mercado Pago aprueba un pago de una sesión que ya no está activa, cubra o no el total | Queda `aprobado`, con la marca y ese motivo. La sesión y la mesa no se tocan: la mesa puede tener otra sesión abierta. Tampoco se avisa a las pantallas |
+| **(c)** `aprobado-sin-turno` (#358) | Mercado Pago aprueba un pago cuando el restaurante no tiene un turno abierto, por ejemplo un pendiente que se aprueba después del cierre del turno | Queda `aprobado`, sin caja (`turnoCajaId = null`), con la marca y ese motivo. La sesión se cierra si queda cubierta, como con cualquier aprobado. No aparece en el resumen de ningún turno |
 
-- **El motivo es el primero:** si el pago ya tenía la marca, no se pisa.
+- **El motivo es el primero:** si el pago ya tenía la marca, no se pisa. Tampoco entre dos marcas de la misma notificación: un pago aprobado sin turno sobre una sesión ya cerrada queda con `aprobado-sin-turno`.
 - **Una notificación repetida** sobre un pago ya marcado y con referencia no escribe nada; solo vuelve a dejar el warn.
 - **Dónde verlos:** `GET /api/payments/requieren-revision?restauranteId=…`, para OWNER y GERENTE del restaurante. Devuelve hasta 200 pagos, más nuevos primero, con `pagoId`, `sesionId`, `mesaNumero`, `monto`, `metodo`, `estado`, `motivo`, `referenciaExterna`, `fechaCobro` y `creadoEn`. No trae datos de comensales ni de quién cobró.
 - **Cómo se resuelve hoy:** a mano. Con la `referenciaExterna` (la orden de Mercado Pago), se busca el pago en el panel de Mercado Pago de la cuenta del restaurante y se devuelve desde ahí.
+- **Cómo se resuelve un `aprobado-sin-turno`:** por SQL, no hay endpoint ni pantalla.
+  1. Se elige la apertura (`turno_caja.id`) a la que corresponde el pago.
+  2. Se corre `UPDATE pago SET turno_caja_id = '<turnoCajaId>' WHERE id = '<pagoId>' AND turno_caja_id IS NULL;`.
+
+  Desde ahí el pago aparece en el resumen de ese turno, pero no en el arqueo, que no cuenta Mercado Pago. La marca queda.
 
 > **Limitación conocida:** no hay forma de marcar un pago como revisado o resuelto, ni una pantalla en el frontend. El endpoint es de solo lectura y la lista solo crece (por eso tiene tope de 200).
 
@@ -499,6 +524,7 @@ Hay dos casos en que Mercado Pago aprueba un pago y la plata entra, pero la mesa
 1. **El mensaje que ve el comensal** no distingue una falla de Mercado Pago de cualquier otro error del servidor.
 2. **El panel de administración (web-admin)** no maneja el 409 del pago reciente pendiente: solo lo hace el panel de mozo (web-staff).
 3. **Los pagos para revisión** no se pueden marcar como resueltos ni tienen pantalla, y no hay conciliación automática con Mercado Pago (la sección anterior).
+4. **Un Mercado Pago pendiente al cerrar el turno** se aprueba después sin caja y marcado `aprobado-sin-turno`, salvo que para entonces ya haya otro turno abierto: en ese caso va a una caja del nuevo. El cierre del turno no avisa de los pendientes de Mercado Pago (#358).
 
 Lo que decía la versión anterior de esta sección, que un webhook cuya consulta a Mercado Pago falla deja el pago pendiente sin reintento, ya no vale: ahora responde `500` y Mercado Pago reintenta.
 
