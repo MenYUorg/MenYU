@@ -81,7 +81,9 @@ Revisado el 26/10/2026 contra el código real de `main` (commit `8b98247`). No s
 - **Sin turno abierto, el comensal no puede iniciar el pago.** Responde 400 con "El restaurante no está recibiendo pagos por Mercado Pago en este momento", y web-cliente muestra ese texto tal cual. No se crea el pago ni se llama a Mercado Pago.
 - **A qué caja va:** la decide el webhook al aprobar el pago. Es la caja abierta del turno con la fecha de creación más antigua; reactivar una caja vieja no cambia esa fecha, así que pasa a ser la elegida.
 - **Si al aprobarse ya no hay turno abierto**, por ejemplo un pago que quedó pendiente al cerrar el turno: el pago se aprueba igual, pero sin caja y marcado para revisión con el motivo `aprobado-sin-turno`. No aparece en el resumen de ningún turno, solo en `GET /payments/requieren-revision`, y se asigna a una caja por SQL. El cierre del turno no avisa de los Mercado Pago pendientes.
-- **Si el webhook y el cierre del turno coinciden:** la transacción serializable hace que el webhook choque y se reintente una vez, y el pago queda sin caja y marcado, nunca en una caja de un turno ya cerrado. Lo prueba el e2e `mercadopago-a-la-caja.e2e-spec.ts` contra Postgres, con una carrera libre y con un entrelazado forzado.
+- **Si el webhook y el cierre del turno coinciden:** lo prueba el e2e `mercadopago-a-la-caja.e2e-spec.ts` contra Postgres.
+  - **Entrelazado forzado:** si el webhook leyó la caja abierta y el cierre termina antes de que escriba, el webhook choca (P2034) y se reintenta una vez, y el pago queda sin caja y marcado `aprobado-sin-turno`.
+  - **Carrera libre:** el estado final es siempre uno de los dos válidos: en la caja y sin marca, o sin caja y con `aprobado-sin-turno`.
 
 **El comensal tiene una salida que no depende de que Mercado Pago esté arriba:** puede pedir pagar en efectivo, aunque tenga un pago de Mercado Pago pendiente. La excepción es un restaurante (o su marca) dado de baja: ahí pedir efectivo (`solicitarEfectivo`) responde 403, y a esa mesa solo le queda Mercado Pago.
 

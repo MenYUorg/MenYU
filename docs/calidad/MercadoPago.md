@@ -491,7 +491,9 @@ Desde #358, todo pago aprobado va a una caja del turno abierto (`Pago.turnoCajaI
 - **La caja se decide al aprobarse, no al crear la preferencia.** El webhook busca la caja con `cajaDeMercadoPago` (`apps/backend/src/caja/caja-del-cobro.ts`), dentro de su transacción y solo cuando el pago pasa a `aprobado`. Guarda `turnoCajaId` en el mismo `update` que lo aprueba. Si entre la preferencia y la aprobación se cerró un turno y se abrió otro, el pago va a una caja del nuevo.
 - **Qué caja:** entre las abiertas del turno abierto, la de `Caja.createdAt` más antigua; si empatan, la de menor `id`. No cuenta cuándo se abrió en el turno. Reactivar una caja vieja no le cambia el `createdAt`: si se abre en el turno, es la más antigua y recibe los pagos de Mercado Pago.
 - **Sin turno abierto al aprobarse:** la plata ya entró, así que el pago se aprueba igual y la sesión se cierra si queda cubierta. Queda sin caja (`turnoCajaId = null`), marcado para revisión con el motivo `aprobado-sin-turno` (el caso (c) de la tabla de abajo) y con un warn en el log.
-- **Un webhook y el cierre del turno a la vez:** las dos transacciones son serializables. Si el webhook leyó la caja abierta y el cierre termina antes de que escriba, el webhook choca (`P2034`), se reintenta una vez y ya ve el turno cerrado: queda sin caja y marcado. Nunca queda en una caja de un turno ya cerrado. Lo prueban los casos 8 y 9 de `apps/backend/src/payments/mercadopago-a-la-caja.e2e-spec.ts`.
+- **Un webhook y el cierre del turno a la vez:** las dos transacciones son serializables. Lo prueba `apps/backend/src/payments/mercadopago-a-la-caja.e2e-spec.ts`:
+  - **Entrelazado forzado (caso 9):** si el webhook leyó la caja abierta y el cierre termina antes de que escriba, el webhook choca (`P2034`) y se reintenta una vez. En el reintento ya ve el turno cerrado: el pago queda sin caja y marcado `aprobado-sin-turno`.
+  - **Carrera libre (caso 8):** el estado final es siempre uno de dos: en la caja y sin marca, o sin caja y con `aprobado-sin-turno`.
 - **El arqueo no cambia:** el esperado de cada caja no cuenta Mercado Pago, esté o no en la caja.
 - **El resumen del turno** (`GET /api/turnos/:id/resumen`) muestra aparte los pagos de Mercado Pago aprobados:
   - los de las cajas del turno, sin mirar la fecha;
@@ -512,9 +514,9 @@ Hay tres casos en que Mercado Pago aprueba un pago y la plata entra, pero algo q
 - **El motivo es el primero:** si el pago ya tenía la marca, no se pisa. Tampoco entre dos marcas de la misma notificación: un pago aprobado sin turno sobre una sesión ya cerrada queda con `aprobado-sin-turno`.
 - **Una notificación repetida** sobre un pago ya marcado y con referencia no escribe nada; solo vuelve a dejar el warn.
 - **Dónde verlos:** `GET /api/payments/requieren-revision?restauranteId=…`, para OWNER y GERENTE del restaurante. Devuelve hasta 200 pagos, más nuevos primero, con `pagoId`, `sesionId`, `mesaNumero`, `monto`, `metodo`, `estado`, `motivo`, `referenciaExterna`, `fechaCobro` y `creadoEn`. No trae datos de comensales ni de quién cobró.
-- **Cómo se resuelve hoy:** a mano. Con la `referenciaExterna` (la orden de Mercado Pago), se busca el pago en el panel de Mercado Pago de la cuenta del restaurante y se devuelve desde ahí.
-- **Cómo se resuelve un `aprobado-sin-turno`:** por SQL, no hay endpoint ni pantalla.
-  1. Se elige la apertura (`turno_caja.id`) a la que corresponde el pago.
+- **Cómo se resuelven hoy los casos (a) y (b):** a mano, devolviendo la plata. Con la `referenciaExterna` (la orden de Mercado Pago), se busca el pago en el panel de Mercado Pago de la cuenta del restaurante y se devuelve desde ahí.
+- **Cómo se resuelve el caso (c), `aprobado-sin-turno`:** no se devuelve nada, porque la plata entró bien: solo falta asignarla a una caja. Es por SQL; no hay endpoint ni pantalla.
+  1. Se elige la apertura (`turno_caja.id`) a la que corresponde el pago. Normalmente es la del turno que cerró justo antes del cobro.
   2. Se corre `UPDATE pago SET turno_caja_id = '<turnoCajaId>' WHERE id = '<pagoId>' AND turno_caja_id IS NULL;`.
 
   Desde ahí el pago aparece en el resumen de ese turno, pero no en el arqueo, que no cuenta Mercado Pago. La marca queda.
