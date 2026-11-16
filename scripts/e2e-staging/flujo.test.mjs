@@ -14,9 +14,18 @@ function respuesta(status, body) {
   return { status, ok: status >= 200 && status < 300, json: async () => body }
 }
 
-/** Un staging en memoria. `fallas` cambia el comportamiento de un endpoint o de la base para un test. */
-function staging(fallas = {}) {
-  const db = { mesa: new Map(), sesion: new Map(), smc: [], pedido: new Map(), item: [], pago: new Map(), cliente: new Map() }
+/**
+ * Un staging en memoria. `fallas` cambia el comportamiento de un endpoint o de la base para un test. `cajas` y
+ * `turnos` son lo que ya había en el restaurante de prueba (de corridas anteriores). Con `backendViejo`, la
+ * confirmación no le pone caja al pago (el backend de antes de #358); con `cajaDelPago`, se la pone a otra.
+ */
+function staging(fallas = {}, { cajas = [], turnos = [], backendViejo = false, cajaDelPago = null } = {}) {
+  const db = {
+    mesa: new Map(), sesion: new Map(), smc: [], pedido: new Map(), item: [], pago: new Map(), cliente: new Map(),
+    cajas: cajas.map((c) => ({ ...c })), turnos: turnos.map((t) => ({ ...t, cajas: t.cajas.map((x) => ({ ...x })) })), cierres: [],
+  }
+  const turnoAbierto = () => db.turnos.find((t) => !t.cerrado) ?? null
+  const comoTurno = (t) => ({ id: t.id, cajas: t.cajas.map((x) => ({ id: x.id, cajaId: x.cajaId })) })
   const llamadas = []
   let n = 0
   const id = (p) => `${p}-${++n}`
@@ -31,7 +40,7 @@ function staging(fallas = {}) {
       const r = await f({ db, body })
       if (r) return r
     }
-    if (url.startsWith(SUPABASE)) return respuesta(200, { access_token: 'token-mozo' })
+    if (url.startsWith(SUPABASE)) return respuesta(200, { access_token: body.email === 'owner@x' ? 'token-owner' : 'token-mozo' })
     if (metodo === 'GET' && ruta === '/health') return respuesta(200, { status: 'ok', db: 'ok', sha: 'abc' })
     if (metodo === 'POST' && ruta === '/sessions/open') {
       const mesa = [...db.mesa.values()].find((m) => m.qr_token === body.tableCode)
@@ -57,13 +66,57 @@ function staging(fallas = {}) {
     }
     if (metodo === 'POST' && ruta === '/payments/confirmar-efectivo') {
       const pago = db.pago.get(body.pagoId)
+      const turno = turnoAbierto()
+      if (!turno && !backendViejo) return respuesta(400, { message: 'No hay un turno abierto' })
       pago.estado = 'aprobado'
       pago.fecha_cobro = new Date()
+      pago.turno_caja_id = backendViejo ? null : (cajaDelPago ?? turno.cajas[0].id)
       const sesion = db.sesion.get(pago.sesion_id)
       sesion.estado = 'cerrada'
       sesion.cerrada_en = new Date()
       db.mesa.get(sesion.mesa_id).estado = 'libre'
       return respuesta(200, { sesionId: sesion.id, estado: 'cerrada' })
+    }
+    if (metodo === 'GET' && ruta.startsWith('/cajas?')) return respuesta(200, db.cajas)
+    if (metodo === 'POST' && ruta === '/cajas') {
+      const caja = { id: id('caja'), nombre: body.nombre, activa: true }
+      db.cajas.push(caja)
+      return respuesta(201, caja)
+    }
+    if (metodo === 'PATCH' && ruta.startsWith('/cajas/')) {
+      const caja = db.cajas.find((c) => c.id === ruta.split('/')[2])
+      Object.assign(caja, body)
+      return respuesta(200, caja)
+    }
+    if (metodo === 'GET' && ruta.startsWith('/turnos/actual?')) {
+      const turno = turnoAbierto()
+      return respuesta(200, { turno: turno ? comoTurno(turno) : null })
+    }
+    if (metodo === 'POST' && ruta === '/turnos') {
+      if (turnoAbierto()) return respuesta(409, { message: 'Ya hay un turno abierto en este restaurante' })
+      const turno = { id: id('turno'), cerrado: false, cajas: body.cajas.map((x) => ({ id: id('apertura'), cajaId: x.cajaId })) }
+      db.turnos.push(turno)
+      return respuesta(201, { turno: comoTurno(turno) })
+    }
+    const cierre = /^\/turnos\/([^/]+)\/cierre$/.exec(ruta)
+    if (metodo === 'POST' && cierre) {
+      const turno = db.turnos.find((t) => t.id === cierre[1])
+      if (turno.cerrado) return respuesta(409, { message: 'El turno está cerrado' })
+      turno.cerrado = true
+      db.cierres.push({ turnoId: turno.id, cajas: body.cajas })
+      // El esperado de efectivo: los pagos en efectivo aprobados de la apertura (el fondo es 0 y no hay movimientos).
+      const arqueos = turno.cajas.map((apertura) => {
+        const declarado = body.cajas.find((x) => x.cajaId === apertura.cajaId).declarado
+        const cobrado = [...db.pago.values()]
+          .filter((p) => p.turno_caja_id === apertura.id && p.estado === 'aprobado' && p.metodo === 'efectivo')
+          .reduce((acc, p) => acc + Number(p.monto), 0)
+        const metodos = ['efectivo', 'debito', 'credito', 'transferencia'].map((metodo) => {
+          const esperado = (metodo === 'efectivo' ? cobrado : 0) + (fallas.arqueoDesfasado && metodo === 'efectivo' ? 1 : 0)
+          return { metodo, esperado, declarado: declarado[metodo], diferencia: declarado[metodo] - esperado }
+        })
+        return { cajaId: apertura.cajaId, metodos }
+      })
+      return respuesta(200, { turno: { id: turno.id }, arqueos })
     }
     return respuesta(404, {})
   }
@@ -135,7 +188,7 @@ function staging(fallas = {}) {
       return filas([...db.pago.values()].filter((x) => x.sesion_id === p1 && x.estado === 'pendiente'))
     if (sql.startsWith("SELECT id FROM pago WHERE id = $1 AND estado = 'aprobado'"))
       return filas(db.pago.get(p1)?.estado === 'aprobado' ? [db.pago.get(p1)] : [])
-    if (sql.startsWith('SELECT sesion_id, metodo, estado, monto FROM pago') || sql.startsWith('SELECT estado, fecha_cobro FROM pago'))
+    if (sql.startsWith('SELECT sesion_id, metodo, estado, monto FROM pago') || sql.startsWith('SELECT estado, fecha_cobro, turno_caja_id FROM pago'))
       return filas(db.pago.has(p1) ? [db.pago.get(p1)] : [])
     if (sql.startsWith('SELECT 1 FROM pago')) return filas(db.pago.has(p1) ? [{}] : [])
     if (sql.startsWith('SELECT 1 FROM cliente')) return filas(db.cliente.has(p1) ? [{}] : [])
@@ -149,21 +202,27 @@ function correr(s, extra = {}) {
   const esperas = []
   return correrFlujo({
     apiUrl: API, supabaseUrl: SUPABASE, publishableKey: 'pk', mozoEmail: 'mozo@x', mozoPassword: 'pw',
+    ownerEmail: 'owner@x', ownerPassword: 'pw-owner',
     restauranteId: RESTAURANTE, itemId: ITEM, marcador: MARCADOR, sha: 'abc',
     db: { query: s.query }, fetchFn: s.fetchFn, dormir: async (ms) => esperas.push(ms), log: () => {}, ...extra,
   }).then((reporte) => ({ reporte, esperas }))
 }
 
-test('camino feliz: los 7 pasos en ok, la limpieza borra lo que creó y no queda nada', async () => {
+test('camino feliz: los 9 pasos en ok, el cobro en la caja del turno, el turno cerrado y no queda nada', async () => {
   const s = staging()
   const { reporte } = await correr(s)
   assert.equal(reporte.categoria, 'ok')
   assert.equal(reporte.sha, 'abc', 'el SHA probado sale de /health')
   assert.deepEqual(reporte.pasos.map((p) => [p.paso, p.categoria]), [
     ['0. preparación', 'ok'], ['1. QR: abrir la sesión', 'ok'], ['2. pedido', 'ok'], ['3. pedido de efectivo', 'ok'],
-    ['4. el mozo confirma el efectivo', 'ok'], ['5. cierre', 'ok'], ['6. limpieza', 'ok'],
+    ['3b. abrir el turno', 'ok'], ['4. el mozo confirma el efectivo', 'ok'], ['5. cierre', 'ok'], ['5b. cerrar el turno', 'ok'],
+    ['6. limpieza', 'ok'],
   ])
-  assert.ok(reporte.pasos.every((p) => p.base === true))
+  // El turno y su cierre se miran por la API: e2e_staging no ve las tablas de caja.
+  for (const p of reporte.pasos) assert.equal(p.base, ['3b. abrir el turno', '5b. cerrar el turno'].includes(p.paso) ? null : true, p.paso)
+  assert.equal(s.db.turnos.length, 1)
+  assert.equal(s.db.turnos[0].cerrado, true)
+  assert.deepEqual(s.db.cierres[0].cajas[0].declarado, { efectivo: 1000, debito: 0, credito: 0, transferencia: 0 })
   assert.equal(reporte.limpieza.coincide, true)
   assert.deepEqual(reporte.limpieza.creadas, { mesa: 1, sesion_mesa: 1, sesion_mesa_cliente: 1, pedido: 1, pedido_item: 1, pago: 1 })
   assert.equal(s.db.mesa.size + s.db.sesion.size + s.db.pedido.size + s.db.pago.size + s.db.cliente.size, 0)
@@ -179,6 +238,8 @@ test('las llamadas a la API: QR sin token, pedido y efectivo con el token de ses
   assert.equal(por('/pedidos'), 'Bearer jwt-sesion')
   assert.equal(por('/payments/solicitar-efectivo'), 'Bearer jwt-sesion')
   assert.equal(por('/payments/confirmar-efectivo'), 'Bearer token-mozo')
+  assert.equal(por('/turnos'), 'Bearer token-owner')
+  assert.equal(vistas.find(([u]) => u.endsWith('/cierre'))?.[1], 'Bearer token-owner')
   assert.ok(vistas.some(([u]) => u === 'https://api.staging.test/health'), '/health se pide sin el /api')
 })
 
@@ -256,13 +317,16 @@ test('sin SHA esperado (a mano) no se compara, y el reporte guarda el que muestr
   assert.equal(reporte.shaEsperado, null)
 })
 
-test('el login del mozo rechazado es de configuración, y la limpieza corre igual', async () => {
-  const s = staging({ 'POST https://refstaging.supabase.co/auth/v1/token': () => respuesta(400, { error_code: 'invalid_credentials' }) })
-  const fetchFn = async (url, init) =>
-    url.startsWith(SUPABASE) ? respuesta(400, { error_code: 'invalid_credentials' }) : s.fetchFn(url, init)
-  const { reporte } = await correr(s, { fetchFn })
+/** Supabase rechaza el login de esa cuenta; las demás pasan. */
+const rechazarLogin = (s, email) => async (url, init) =>
+  url.startsWith(SUPABASE) && JSON.parse(init.body).email === email ? respuesta(400, { error_code: 'invalid_credentials' }) : s.fetchFn(url, init)
+
+test('el login del mozo rechazado es de configuración, y el turno se cierra y la limpieza corre igual', async () => {
+  const s = staging()
+  const { reporte } = await correr(s, { fetchFn: rechazarLogin(s, 'mozo@x') })
   assert.equal(reporte.categoria, 'configuracion')
-  assert.equal(reporte.pasos.at(-1).categoria, 'ok')
+  assert.match(reporte.pasos.find((p) => p.paso === '4. el mozo confirma el efectivo').detalle, /login del mozo/)
+  assert.deepEqual(reporte.pasos.slice(-2).map((p) => [p.paso, p.categoria]), [['5b. cerrar el turno', 'ok'], ['6. limpieza', 'ok']])
   assert.equal(s.db.mesa.size, 0)
 })
 
@@ -277,5 +341,119 @@ test('si la limpieza deja filas, el paso 6 es de producto y lo dice', async () =
 test('el reporte no lleva tokens, contraseñas ni la clave pública', async () => {
   const { reporte } = await correr(staging())
   const texto = JSON.stringify(reporte)
-  for (const secreto of ['jwt-sesion', 'token-mozo', '"pw"', '"pk"']) assert.ok(!texto.includes(secreto), secreto)
+  for (const secreto of ['jwt-sesion', 'token-mozo', 'token-owner', '"pw"', 'pw-owner', '"pk"']) assert.ok(!texto.includes(secreto), secreto)
+})
+
+// ── El turno de la caja (#358) ────────────────────────────────────────────
+
+const CAJA_ACTIVA = { id: 'caja-vieja', nombre: 'Caja E2E', activa: true }
+const nombresDe = (reporte) => reporte.pasos.map((p) => p.paso)
+
+test('sin "Caja E2E" en el restaurante: la crea, abre el turno con ella y no toca ninguna otra caja', async () => {
+  const s = staging({}, { cajas: [{ id: 'caja-otra', nombre: 'Barra', activa: true }] })
+  const { reporte } = await correr(s)
+  assert.equal(reporte.categoria, 'ok')
+  const creada = s.db.cajas.find((c) => c.nombre === 'Caja E2E')
+  assert.ok(creada?.activa)
+  assert.deepEqual(s.db.turnos[0].cajas.map((x) => x.cajaId), [creada.id])
+  assert.ok(s.llamadas.includes('POST /cajas'))
+})
+
+test('con "Caja E2E" activa: la reutiliza, sin crear ni modificar cajas', async () => {
+  const s = staging({}, { cajas: [CAJA_ACTIVA] })
+  const { reporte } = await correr(s)
+  assert.equal(reporte.categoria, 'ok')
+  assert.equal(s.db.cajas.length, 1)
+  assert.ok(!s.llamadas.some((l) => l.startsWith('POST /cajas') || l.startsWith('PATCH /cajas')))
+  assert.equal(s.db.turnos[0].cajas[0].cajaId, 'caja-vieja')
+})
+
+test('con "Caja E2E" inactiva: la reactiva (PATCH activa: true) y la usa', async () => {
+  const s = staging({}, { cajas: [{ ...CAJA_ACTIVA, activa: false }] })
+  const { reporte } = await correr(s)
+  assert.equal(reporte.categoria, 'ok')
+  assert.ok(s.llamadas.includes('PATCH /cajas/caja-vieja'))
+  assert.equal(s.db.cajas[0].activa, true)
+  assert.equal(s.db.turnos.at(-1).cajas[0].cajaId, 'caja-vieja')
+})
+
+test('un turno abierto de una corrida anterior: primero lo cierra en cero, después abre uno nuevo y lo usa', async () => {
+  const previo = { id: 'turno-previo', cerrado: false, cajas: [{ id: 'apertura-previa', cajaId: 'caja-vieja' }] }
+  const s = staging({}, { cajas: [CAJA_ACTIVA], turnos: [previo] })
+  const { reporte } = await correr(s)
+  assert.equal(reporte.categoria, 'ok')
+  const [cierrePrevio, cierreNuevo] = s.db.cierres
+  assert.deepEqual(cierrePrevio, {
+    turnoId: 'turno-previo',
+    cajas: [{ cajaId: 'caja-vieja', declarado: { efectivo: 0, debito: 0, credito: 0, transferencia: 0 } }],
+  })
+  const nuevo = s.db.turnos.at(-1)
+  assert.notEqual(nuevo.id, 'turno-previo')
+  assert.equal(cierreNuevo.turnoId, nuevo.id)
+  assert.ok(s.db.turnos.every((t) => t.cerrado))
+  assert.ok(s.llamadas.indexOf('POST /turnos/turno-previo/cierre') < s.llamadas.indexOf('POST /turnos'))
+  assert.match(reporte.pasos.find((p) => p.paso === '3b. abrir el turno').detalle, /había quedado abierto/)
+})
+
+test('si falla el paso 4, el turno se cierra igual (en cero) y antes de la limpieza', async () => {
+  const s = staging({ 'POST /payments/confirmar-efectivo': () => respuesta(400, { message: 'No hay un turno abierto' }) })
+  const { reporte } = await correr(s)
+  assert.equal(reporte.categoria, 'producto')
+  assert.deepEqual(nombresDe(reporte).slice(-3), ['4. el mozo confirma el efectivo', '5b. cerrar el turno', '6. limpieza'])
+  assert.equal(reporte.pasos.find((p) => p.paso === '5b. cerrar el turno').categoria, 'ok')
+  assert.equal(s.db.cierres[0].cajas[0].declarado.efectivo, 0)
+  assert.ok(s.db.turnos.every((t) => t.cerrado))
+  assert.ok(s.llamadas.findIndex((l) => l.endsWith('/cierre')) < s.llamadas.findIndex((l) => l.includes('e2e.e2e_limpiar')))
+})
+
+test('el login del OWNER rechazado es de configuración: no se abre turno ni se cobra, y la limpieza corre', async () => {
+  const s = staging()
+  const { reporte } = await correr(s, { fetchFn: rechazarLogin(s, 'owner@x') })
+  assert.equal(reporte.categoria, 'configuracion')
+  assert.deepEqual(nombresDe(reporte).slice(-2), ['3b. abrir el turno', '6. limpieza'])
+  assert.match(reporte.pasos.find((p) => p.paso === '3b. abrir el turno').detalle, /login del OWNER/)
+  assert.equal(s.db.turnos.length, 0)
+  assert.equal(reporte.pasos.at(-1).categoria, 'ok')
+})
+
+test('con SHA, el pago en otra caja es de producto (y el turno se cierra igual)', async () => {
+  const s = staging({}, { cajaDelPago: 'apertura-ajena' })
+  const { reporte } = await correr(s)
+  assert.equal(reporte.categoria, 'producto')
+  const paso4 = reporte.pasos.find((p) => p.paso === '4. el mozo confirma el efectivo')
+  assert.equal(paso4.categoria, 'producto')
+  assert.match(paso4.detalle, /caja apertura-ajena/)
+  assert.ok(s.db.turnos.every((t) => t.cerrado))
+})
+
+test('con SHA, el pago sin caja (turno_caja_id null) es de producto', async () => {
+  const s = staging({}, { backendViejo: true })
+  const { reporte } = await correr(s)
+  assert.equal(reporte.categoria, 'producto')
+  assert.match(reporte.pasos.find((p) => p.paso === '4. el mozo confirma el efectivo').detalle, /caja ninguna/)
+})
+
+test('sin SHA (a mano), el pago sin caja de un backend anterior se acepta y se anota; el turno se cierra en cero', async () => {
+  const s = staging({}, { backendViejo: true })
+  const { reporte } = await correr(s, { sha: null })
+  assert.equal(reporte.categoria, 'ok')
+  assert.match(reporte.pasos.find((p) => p.paso === '4. el mozo confirma el efectivo').detalle, /turno_caja_id null/)
+  assert.equal(s.db.cierres[0].cajas[0].declarado.efectivo, 0)
+})
+
+test('sin SHA, un pago en otra caja sigue siendo de producto', async () => {
+  const s = staging({}, { cajaDelPago: 'apertura-ajena' })
+  const { reporte } = await correr(s, { sha: null })
+  assert.equal(reporte.categoria, 'producto')
+})
+
+test('con SHA, un cierre cuyo esperado de efectivo no es el total (o con diferencia) es de producto, y la limpieza corre', async () => {
+  const s = staging({ arqueoDesfasado: true })
+  const { reporte } = await correr(s)
+  assert.equal(reporte.categoria, 'producto')
+  const paso5b = reporte.pasos.find((p) => p.paso === '5b. cerrar el turno')
+  assert.equal(paso5b.categoria, 'producto')
+  assert.match(paso5b.detalle, /esperaba 1001 en efectivo con diferencia -1/)
+  assert.equal(reporte.pasos.at(-1).paso, '6. limpieza')
+  assert.equal(reporte.pasos.at(-1).categoria, 'ok')
 })

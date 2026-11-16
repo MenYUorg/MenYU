@@ -1,7 +1,8 @@
 name: E2E — staging (Supabase)
 
-# E2E del comensal y el mozo contra STAGING: QR → pedido → efectivo → el mozo confirma → cierre, verificando cada paso en
-# la base de staging con el usuario e2e_staging, y la limpieza siempre al final. Diseño: docs/calidad/e2e-supabase.md.
+# E2E del comensal y el mozo contra STAGING: QR → pedido → efectivo → el OWNER abre un turno → el mozo confirma → cierre,
+# verificando cada paso en la base de staging con el usuario e2e_staging; el cierre del turno y la limpieza, siempre al
+# final. Diseño: docs/calidad/e2e-supabase.md.
 # Nunca contra producción: scripts/e2e-staging/lib.mjs (erroresDeDestino) corta antes de tocar nada.
 #
 # Corre solo en cada deploy a staging, como job de deploy-staging.yml después del smoke (que ya confirmó que /health
@@ -79,6 +80,8 @@ jobs:
           E2E_STAGING_DB_URL_LECTURA: ${{ secrets.E2E_STAGING_DB_URL_LECTURA }}
           E2E_STAGING_MOZO_EMAIL: ${{ secrets.E2E_STAGING_MOZO_EMAIL }}
           E2E_STAGING_MOZO_PASSWORD: ${{ secrets.E2E_STAGING_MOZO_PASSWORD }}
+          E2E_STAGING_OWNER_EMAIL: ${{ secrets.E2E_STAGING_OWNER_EMAIL }}
+          E2E_STAGING_OWNER_PASSWORD: ${{ secrets.E2E_STAGING_OWNER_PASSWORD }}
           E2E_STAGING_RESTAURANTE_ID: ${{ vars.E2E_STAGING_RESTAURANTE_ID }}
           E2E_STAGING_ITEM_ID: ${{ vars.E2E_STAGING_ITEM_ID }}
           PROD_HOSTS: ${{ vars.PROD_WEB_ADMIN_URL }},${{ vars.PROD_WEB_CLIENTE_URL }},${{ vars.PROD_WEB_STAFF_URL }},${{ vars.PROD_WEB_AUTH_URL }}
