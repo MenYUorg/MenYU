@@ -172,11 +172,11 @@ describe('ResumenService', () => {
         monto: 2100,
         propina: 35,
         pagos: [
-          { id: 'mp-desde', mesaNumero: '1', monto: 100, propina: 0, fechaCobro: T('2026-11-10T20:00:00.000Z'), requiereRevision: false },
-          { id: 'mp-dentro', mesaNumero: '1', monto: 1200, propina: 0, fechaCobro: T('2026-11-10T21:00:00.000Z'), requiereRevision: false },
-          { id: 'mp-staff', mesaNumero: '1', monto: 300, propina: 30, fechaCobro: T('2026-11-10T22:00:00.000Z'), requiereRevision: false },
-          { id: 'mp-revision', mesaNumero: '1', monto: 450, propina: 0, fechaCobro: T('2026-11-10T23:00:00.000Z'), requiereRevision: true },
-          { id: 'mp-hasta', mesaNumero: '2', monto: 50, propina: 5, fechaCobro: T('2026-11-11T02:00:00.000Z'), requiereRevision: false },
+          { id: 'mp-desde', mesaNumero: '1', cajaId: null, cajaNombre: null, monto: 100, propina: 0, fechaCobro: T('2026-11-10T20:00:00.000Z'), requiereRevision: false },
+          { id: 'mp-dentro', mesaNumero: '1', cajaId: null, cajaNombre: null, monto: 1200, propina: 0, fechaCobro: T('2026-11-10T21:00:00.000Z'), requiereRevision: false },
+          { id: 'mp-staff', mesaNumero: '1', cajaId: null, cajaNombre: null, monto: 300, propina: 30, fechaCobro: T('2026-11-10T22:00:00.000Z'), requiereRevision: false },
+          { id: 'mp-revision', mesaNumero: '1', cajaId: null, cajaNombre: null, monto: 450, propina: 0, fechaCobro: T('2026-11-10T23:00:00.000Z'), requiereRevision: true },
+          { id: 'mp-hasta', mesaNumero: '2', cajaId: null, cajaNombre: null, monto: 50, propina: 5, fechaCobro: T('2026-11-11T02:00:00.000Z'), requiereRevision: false },
         ],
       })
     })
@@ -209,6 +209,48 @@ describe('ResumenService', () => {
       for (const n of [r.total.monto, r.total.propina, r.mercadoPago.monto, r.mercadoPago.pagos[0].monto, r.mercadoPago.pagos[0].propina]) {
         expect(typeof n).toBe('number')
       }
+    })
+
+    describe('los de las cajas del turno (#358)', () => {
+      beforeEach(() => {
+        base.cajas.push(
+          { id: 'caja-1', restauranteId: REST, nombre: 'Barra', activa: true },
+          { id: 'caja-2', restauranteId: REST, nombre: 'Salón', activa: true },
+        )
+      })
+
+      it('entran por la caja, sin mirar la franja, con cajaId y cajaNombre; los sin caja, por la franja y con null', async () => {
+        // En una caja del turno, aunque se haya cobrado fuera de su franja: la caja dice de qué turno es.
+        mp('mp-caja-2', '2026-11-10T21:00:00.000Z', 200, { turnoCajaId: 'ap-2' })
+        mp('mp-caja-1-fuera', '2026-11-11T05:00:00.000Z', 400, { turnoCajaId: 'ap-1' })
+        // Sin caja, en la franja (de antes de #358).
+        mp('mp-sin-caja', '2026-11-10T22:00:00.000Z', 800)
+        // Los que no entran: la caja de otro turno (aunque la fecha caiga en la franja) y los sin caja fuera de la franja
+        // o de otro restaurante.
+        mp('mp-otro-turno', '2026-11-10T21:30:00.000Z', 1, { turnoCajaId: 'ap-otro' })
+        mp('mp-sin-caja-fuera', '2026-11-11T05:00:00.000Z', 2)
+        mp('mp-sin-caja-ajeno', '2026-11-10T21:30:00.000Z', 4, { sesionId: 's-ajena' })
+
+        const r = await resumen()
+
+        expect(r.mercadoPago).toMatchObject({ cantidad: 3, monto: 1400, propina: 0 })
+        expect(r.mercadoPago.pagos.map((p) => [p.id, p.cajaId, p.cajaNombre])).toEqual([
+          ['mp-caja-2', 'caja-2', 'Salón'],
+          ['mp-sin-caja', null, null],
+          ['mp-caja-1-fuera', 'caja-1', 'Barra'],
+        ])
+      })
+
+      it('siguen sin sumar a porMetodo, a porMozo ni al total, aunque estén en una caja del turno', async () => {
+        enCaja('ap-1', 'efectivo', 100, 0, 'm-ana')
+        mp('mp-en-caja', '2026-11-10T21:00:00.000Z', 999, { turnoCajaId: 'ap-1', mozoId: 'm-ana' })
+
+        const r = await resumen()
+
+        expect(r.total).toEqual({ cantidad: 1, monto: 100, propina: 0 })
+        expect(r.porMozo).toEqual([{ mozoId: 'm-ana', mozoNombre: 'Ana', cantidad: 1, monto: 100, propina: 0 }])
+        expect(r.mercadoPago).toMatchObject({ cantidad: 1, monto: 999 })
+      })
     })
   })
 

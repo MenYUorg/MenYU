@@ -9,8 +9,9 @@ import { Acumulado, resumenDeTurno } from './resumen-de-turno'
 
 /**
  * El resumen de un turno (#357), abierto o cerrado: lo cobrado en sus cajas por método y por quién cobró, y aparte, como
- * informativo, los pagos de Mercado Pago aprobados en la franja del turno (que nunca van a una caja). No incluye el
- * esperado ni el arqueo. El rol (el grupo CAJA del restaurante del turno) lo exige el service antes de leer ningún pago.
+ * informativo, los pagos de Mercado Pago aprobados: los de las cajas del turno (#358) y los sin caja de la franja del
+ * turno (los de antes de #358). No incluye el esperado ni el arqueo, que no cuentan Mercado Pago. El rol (el grupo CAJA
+ * del restaurante del turno) lo exige el service antes de leer ningún pago.
  */
 @Injectable()
 export class ResumenService {
@@ -40,12 +41,16 @@ export class ResumenService {
 
     const desde = turno.abiertoEn
     const hasta = turno.cerradoEn ?? ahora
+    // Los de una caja del turno, sin mirar la fecha: la caja dice de qué turno son. Los sin caja, por la franja y el
+    // restaurante.
     const mercadoPago = await this.prisma.pago.findMany({
       where: {
         metodo: 'mercadopago',
         estado: ESTADO_PAGO_APROBADO,
-        fechaCobro: { gte: desde, lte: hasta },
-        sesion: { mesa: { restauranteId: turno.restauranteId } },
+        OR: [
+          { turnoCaja: { turnoId } },
+          { turnoCajaId: null, fechaCobro: { gte: desde, lte: hasta }, sesion: { mesa: { restauranteId: turno.restauranteId } } },
+        ],
       },
       select: {
         id: true,
@@ -54,6 +59,7 @@ export class ResumenService {
         fechaCobro: true,
         requiereRevision: true,
         sesion: { select: { mesa: { select: { numero: true } } } },
+        turnoCaja: { select: { cajaId: true, caja: { select: { nombre: true } } } },
       },
       orderBy: { fechaCobro: 'asc' },
     })
@@ -78,6 +84,8 @@ export class ResumenService {
         pagos: mercadoPago.map((p) => ({
           id: p.id,
           mesaNumero: p.sesion.mesa.numero,
+          cajaId: p.turnoCaja?.cajaId ?? null,
+          cajaNombre: p.turnoCaja?.caja.nombre ?? null,
           monto: p.monto.toNumber(),
           propina: p.propina.toNumber(),
           fechaCobro: p.fechaCobro,

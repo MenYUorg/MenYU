@@ -89,23 +89,26 @@ function cumple(fila: { id: string; restauranteId?: string; cerradoEn?: Date | n
 
 type RangoDeFechas = { gte?: Date; gt?: Date; lte?: Date; lt?: Date }
 type DondePago = {
-  turnoCajaId?: string
+  turnoCajaId?: string | null
   turnoCaja?: { turnoId: string }
   metodo?: string
   estado?: string
   fechaCobro?: RangoDeFechas
   sesion?: { mesa: { restauranteId: string } }
+  OR?: DondePago[]
 }
-const FILTROS_DE_PAGO = new Set(['turnoCajaId', 'turnoCaja', 'metodo', 'estado', 'fechaCobro', 'sesion'])
+const FILTROS_DE_PAGO = new Set(['turnoCajaId', 'turnoCaja', 'metodo', 'estado', 'fechaCobro', 'sesion', 'OR'])
 
 /**
- * Si el pago cumple el `where` de la caja: su apertura o el turno de su apertura, el método, el estado, el rango de
- * `fechaCobro` (un pago sin fecha no entra en ningún rango) y el restaurante de la mesa de su sesión. Un filtro que no
- * conoce corta el test: así un service no filtra por algo que la base en memoria ignora en silencio.
+ * Si el pago cumple el `where` de la caja: su apertura (o ninguna, con `turnoCajaId: null`) o el turno de su apertura, el
+ * método, el estado, el rango de `fechaCobro` (un pago sin fecha no entra en ningún rango), el restaurante de la mesa de
+ * su sesión y un `OR` de esas mismas condiciones. Un filtro que no conoce corta el test: así un service no filtra por algo
+ * que la base en memoria ignora en silencio.
  */
 function cumplePago(base: BaseDeCaja, pago: BaseDeCaja['pagos'][number], where: DondePago = {}): boolean {
   const desconocido = Object.keys(where).find((k) => !FILTROS_DE_PAGO.has(k))
   if (desconocido) throw new Error(`caja-en-memoria: pago.findMany no sabe filtrar por ${desconocido}`)
+  if (where.OR && !where.OR.some((rama) => cumplePago(base, pago, rama))) return false
   if (where.turnoCajaId !== undefined && pago.turnoCajaId !== where.turnoCajaId) return false
   if (where.turnoCaja && base.turnoCajas.find((tc) => tc.id === pago.turnoCajaId)?.turnoId !== where.turnoCaja.turnoId) return false
   if (where.metodo !== undefined && pago.metodo !== where.metodo) return false
@@ -266,6 +269,7 @@ export function conectarBaseDeCaja(prisma: PrismaMock, base: BaseDeCaja): void {
     return filas.map((p) => {
       const sesion = base.sesiones.find((s) => s.id === p.sesionId)
       const mozo = base.mozos.find((m) => m.id === p.mozoId)
+      const apertura = base.turnoCajas.find((tc) => tc.id === p.turnoCajaId)
       return {
         id: p.id,
         metodo: p.metodo,
@@ -277,6 +281,10 @@ export function conectarBaseDeCaja(prisma: PrismaMock, base: BaseDeCaja): void {
         fechaCobro: p.fechaCobro ?? null,
         requiereRevision: p.requiereRevision ?? false,
         sesion: { mesa: { numero: base.mesas.find((m) => m.id === sesion?.mesaId)?.numero ?? '' } },
+        // La apertura con el id y el nombre de su caja, o null sin caja (el select del resumen de Mercado Pago).
+        turnoCaja: apertura
+          ? { cajaId: apertura.cajaId, caja: { nombre: base.cajas.find((c) => c.id === apertura.cajaId)?.nombre ?? '' } }
+          : null,
       }
     })
   })
