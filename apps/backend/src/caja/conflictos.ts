@@ -44,6 +44,11 @@ export function traducirConflictoDeApertura(err: unknown): unknown {
   return traducirOperacionSimultanea(err)
 }
 
+/** Un cobro sin turno abierto en el restaurante (#358). */
+export const MENSAJE_SIN_TURNO = 'No hay un turno abierto'
+/** Un cobro sin `cajaId` con más de una caja abierta en el turno (#358). */
+export const MENSAJE_ELEGIR_CAJA = 'Hay más de una caja abierta: indicá en cuál se cobra'
+
 /** Un turno cerrado no admite cambios. */
 export const MENSAJE_TURNO_CERRADO = 'El turno está cerrado'
 
