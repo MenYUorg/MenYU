@@ -18,8 +18,8 @@ import { runSerializableTransaction } from '../common/run-serializable-transacti
 import { SELECT_DISPONIBILIDAD, restauranteDisponible } from '../common/restaurante-disponible'
 import { atribucionDelCobro } from '../common/atribucion-del-cobro'
 import { cerrarSesionDeMesa } from '../common/cerrar-sesion-de-mesa'
-import { cajaDelCobro } from '../caja/caja-del-cobro'
-import { traducirOperacionSimultanea } from '../caja/conflictos'
+import { cajaDeMercadoPago, cajaDelCobro } from '../caja/caja-del-cobro'
+import { MENSAJE_MP_NO_DISPONIBLE, traducirOperacionSimultanea } from '../caja/conflictos'
 import { AccesoService } from '../auth/supabase/acceso.service'
 import { UsuarioAutenticado } from '../auth/supabase/usuario-autenticado'
 import { ConfirmarEfectivoDto } from './dto/confirmar-efectivo.dto'
@@ -30,6 +30,7 @@ import {
   ESTADO_PAGO_CANCELADO,
 } from '../common/estado-pago.constant'
 import {
+  MOTIVO_REVISION_APROBADO_SIN_TURNO,
   MOTIVO_REVISION_APROBADO_SOBRE_CANCELADO,
   MOTIVO_REVISION_APROBADO_SOBRE_SESION_CERRADA,
   MotivoRevision,
@@ -344,6 +345,9 @@ export class PaymentsService {
       this.prisma,
       async (tx) => {
         const { saldo: monto } = await this.saldoPendienteSesion(sesionId, tx)
+        // Sin turno abierto no se cobra (#358): ni se cancelan los pendientes ni se crea el pago. La caja no se guarda
+        // acá: el pago va a la caja que esté abierta cuando MP lo apruebe (el webhook).
+        if (!(await cajaDeMercadoPago(tx, restauranteId))) throw new BadRequestException(MENSAJE_MP_NO_DISPONIBLE)
         await tx.pago.updateMany({
           where: { sesionId, metodo: 'mercadopago', estado: ESTADO_PAGO_PENDIENTE },
           data: { estado: ESTADO_PAGO_CANCELADO },
@@ -354,7 +358,9 @@ export class PaymentsService {
         return { pago, monto }
       },
       'crearPreferenciaMercadoPago',
-    )
+    ).catch((err: unknown) => {
+      throw traducirOperacionSimultanea(err)
+    })
 
     // Fase 2: I/O externa (Mercado Pago), fuera de la transacción. Si falla, la fila nueva
     // quedaría pendiente sin preferencia: se cancela para no dejar un MP fantasma.
@@ -493,9 +499,15 @@ export class PaymentsService {
         where: { id: pagoId },
         select: { estado: true, referenciaExterna: true, requiereRevision: true },
       })
-      // Si ya tenía una marca, no se pisa el motivo: queda el primero.
-      const marcar = (motivo: MotivoRevision) =>
-        actual?.requiereRevision ? { requiereRevision: true } : { requiereRevision: true, motivoRevision: motivo }
+      // Si ya tenía una marca, no se pisa el motivo: queda el primero, también entre dos marcas de esta misma
+      // notificación (sin turno y después sesión cerrada). Vive dentro del callback: el reintento por P2034 arranca de
+      // nuevo desde la foto de `actual`.
+      let yaMarcado = actual?.requiereRevision ?? false
+      const marcar = (motivo: MotivoRevision) => {
+        if (yaMarcado) return { requiereRevision: true }
+        yaMarcado = true
+        return { requiereRevision: true, motivoRevision: motivo }
+      }
 
       if (
         actual &&
@@ -524,16 +536,26 @@ export class PaymentsService {
         return false
       }
 
+      // La caja del pago (#358), antes de aprobarlo y solo si se aprueba: la abierta más antigua del turno abierto. Sin
+      // turno, el pago se aprueba igual (la plata entró), sin caja y marcado. Un cierre del turno al mismo tiempo choca
+      // acá (P2034), y el reintento ya lo ve cerrado.
+      const aprueba = estadoInterno === 'aprobado'
+      const turnoCajaId = aprueba ? await cajaDeMercadoPago(tx, restauranteId) : null
       await tx.pago.update({
         where: { id: pagoId },
         data: {
           estado: estadoInterno,
           referenciaExterna: resultado.externalId,
-          ...(estadoInterno === 'aprobado' ? { fechaCobro: new Date() } : {}),
+          ...(aprueba
+            ? { fechaCobro: new Date(), turnoCajaId, ...(turnoCajaId ? {} : marcar(MOTIVO_REVISION_APROBADO_SIN_TURNO)) }
+            : {}),
         },
       })
 
-      if (estadoInterno !== 'aprobado') return false
+      if (!aprueba) return false
+      if (!turnoCajaId) {
+        this.logger.warn(`procesarWebhookMercadoPago: MP aprobado sin turno abierto; queda sin caja, revisar (${detalle})`)
+      }
 
       // La plata entró por una sesión que ya no está activa (la cerraron a mano o la cobró el mozo): el pago queda
       // aprobado y marcado, cubra o no el total, y la sesión y la mesa no se tocan (la mesa puede tener otra sesión).

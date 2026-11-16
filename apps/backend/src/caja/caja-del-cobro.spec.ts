@@ -1,6 +1,6 @@
 import { BadRequestException } from '@nestjs/common'
 import { Prisma } from '@prisma/client'
-import { cajaDelCobro } from './caja-del-cobro'
+import { cajaDeMercadoPago, cajaDelCobro } from './caja-del-cobro'
 import { MENSAJE_ELEGIR_CAJA, MENSAJE_SIN_TURNO } from './conflictos'
 import { MENSAJE_CAJA_NO_ABIERTA } from './movimientos.service'
 
@@ -131,5 +131,149 @@ describe('cajaDelCobro (#358)', () => {
     await cajaDelCobro(tx, R1, 'c1')
 
     expect(findMany).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('cajaDeMercadoPago (#358)', () => {
+  const R1 = 'rest-1'
+  const R2 = 'rest-2'
+  type Caja = { id: string; createdAt: Date }
+  type AperturaConFecha = Apertura & { abiertoEn: Date }
+  const dia = (n: number) => new Date(`2026-11-${String(n).padStart(2, '0')}T12:00:00Z`)
+
+  // Como txCon, pero para findFirst: resuelve el where igual, ordena según el `orderBy` que recibe (por la fecha y el id
+  // de la caja, o por abiertoEn; otra clave corta el test) y devuelve la primera. Sin orderBy, el orden de la lista.
+  function txMp(turnos: Turno[], cajas: Caja[], aperturas: AperturaConFecha[]) {
+    const findFirst = jest.fn(
+      async ({ where, orderBy, select }: { where: Record<string, any>; orderBy?: Record<string, any>[]; select: object }) => {
+        expect(select).toEqual({ id: true })
+        const desconocido = Object.keys(where).find((k) => !['cerradoEn', 'turno'].includes(k))
+        if (desconocido) throw new Error(`el test no sabe filtrar por ${desconocido}`)
+        const filas = aperturas
+          .filter((a) => !('cerradoEn' in where) || a.cerradoEn === null)
+          .filter((a) => {
+            const turno = turnos.find((t) => t.id === a.turnoId)
+            if (!turno) return false
+            if (where.turno?.restauranteId !== undefined && turno.restauranteId !== where.turno.restauranteId) return false
+            if (where.turno && 'cerradoEn' in where.turno && turno.cerradoEn !== null) return false
+            return true
+          })
+        const valor = (a: AperturaConFecha, clave: Record<string, any>): [number | string, 'asc' | 'desc'] => {
+          if (clave.caja?.createdAt) return [cajas.find((c) => c.id === a.cajaId)!.createdAt.getTime(), clave.caja.createdAt]
+          if (clave.caja?.id) return [a.cajaId, clave.caja.id]
+          if (clave.abiertoEn) return [a.abiertoEn.getTime(), clave.abiertoEn]
+          throw new Error(`el test no sabe ordenar por ${JSON.stringify(clave)}`)
+        }
+        const ordenadas = [...filas].sort((x, y) => {
+          for (const clave of orderBy ?? []) {
+            const [vx, sentido] = valor(x, clave)
+            const [vy] = valor(y, clave)
+            if (vx !== vy) return (vx < vy ? -1 : 1) * (sentido === 'desc' ? -1 : 1)
+          }
+          return 0
+        })
+        return ordenadas[0] ? { id: ordenadas[0].id } : null
+      },
+    )
+    return { tx: { turnoCaja: { findFirst } } as unknown as Prisma.TransactionClient, findFirst }
+  }
+
+  const turnoAbierto: Turno = { id: 't1', restauranteId: R1, cerradoEn: null }
+
+  it('dos cajas abiertas: la de Caja.createdAt más antigua, aunque esté segunda en la lista y se haya abierto después', async () => {
+    const { tx } = txMp(
+      [turnoAbierto],
+      [
+        { id: 'c-nueva', createdAt: dia(10) },
+        { id: 'c-vieja', createdAt: dia(1) },
+      ],
+      [
+        { id: 'a-nueva', turnoId: 't1', cajaId: 'c-nueva', cerradoEn: null, abiertoEn: dia(15) },
+        { id: 'a-vieja', turnoId: 't1', cajaId: 'c-vieja', cerradoEn: null, abiertoEn: dia(16) },
+      ],
+    )
+
+    await expect(cajaDeMercadoPago(tx, R1)).resolves.toBe('a-vieja')
+  })
+
+  it('con la misma Caja.createdAt, la de menor id (aunque esté segunda en la lista)', async () => {
+    const { tx } = txMp(
+      [turnoAbierto],
+      [
+        { id: 'c-b', createdAt: dia(1) },
+        { id: 'c-a', createdAt: dia(1) },
+      ],
+      [
+        { id: 'a-b', turnoId: 't1', cajaId: 'c-b', cerradoEn: null, abiertoEn: dia(15) },
+        { id: 'a-a', turnoId: 't1', cajaId: 'c-a', cerradoEn: null, abiertoEn: dia(15) },
+      ],
+    )
+
+    await expect(cajaDeMercadoPago(tx, R1)).resolves.toBe('a-a')
+  })
+
+  it('una TurnoCaja cerrada no cuenta, aunque su caja sea la más antigua', async () => {
+    const { tx } = txMp(
+      [turnoAbierto],
+      [
+        { id: 'c-vieja', createdAt: dia(1) },
+        { id: 'c-nueva', createdAt: dia(10) },
+      ],
+      [
+        { id: 'a-vieja', turnoId: 't1', cajaId: 'c-vieja', cerradoEn: dia(15), abiertoEn: dia(15) },
+        { id: 'a-nueva', turnoId: 't1', cajaId: 'c-nueva', cerradoEn: null, abiertoEn: dia(15) },
+      ],
+    )
+
+    await expect(cajaDeMercadoPago(tx, R1)).resolves.toBe('a-nueva')
+  })
+
+  it('la caja más antigua de otro restaurante (con su turno abierto) no cuenta', async () => {
+    const { tx } = txMp(
+      [{ id: 't2', restauranteId: R2, cerradoEn: null }, turnoAbierto],
+      [
+        { id: 'c-ajena', createdAt: dia(1) },
+        { id: 'c-propia', createdAt: dia(10) },
+      ],
+      [
+        { id: 'a-ajena', turnoId: 't2', cajaId: 'c-ajena', cerradoEn: null, abiertoEn: dia(15) },
+        { id: 'a-propia', turnoId: 't1', cajaId: 'c-propia', cerradoEn: null, abiertoEn: dia(15) },
+      ],
+    )
+
+    await expect(cajaDeMercadoPago(tx, R1)).resolves.toBe('a-propia')
+  })
+
+  it('una TurnoCaja abierta de un turno cerrado no cuenta: sin turno abierto, null', async () => {
+    const { tx } = txMp(
+      [{ id: 't0', restauranteId: R1, cerradoEn: dia(14) }],
+      [{ id: 'c1', createdAt: dia(1) }],
+      [{ id: 'a0', turnoId: 't0', cajaId: 'c1', cerradoEn: null, abiertoEn: dia(13) }],
+    )
+
+    await expect(cajaDeMercadoPago(tx, R1)).resolves.toBeNull()
+  })
+
+  it('sin ningún turno: null, sin lanzar', async () => {
+    const { tx } = txMp([], [], [])
+
+    await expect(cajaDeMercadoPago(tx, R1)).resolves.toBeNull()
+  })
+
+  it('una sola consulta, con el cliente que recibe, el where de las aperturas abiertas y el orden de la caja', async () => {
+    const { tx, findFirst } = txMp(
+      [turnoAbierto],
+      [{ id: 'c1', createdAt: dia(1) }],
+      [{ id: 'a1', turnoId: 't1', cajaId: 'c1', cerradoEn: null, abiertoEn: dia(15) }],
+    )
+
+    await cajaDeMercadoPago(tx, R1)
+
+    expect(findFirst).toHaveBeenCalledTimes(1)
+    expect(findFirst).toHaveBeenCalledWith({
+      where: { cerradoEn: null, turno: { restauranteId: R1, cerradoEn: null } },
+      orderBy: [{ caja: { createdAt: 'asc' } }, { caja: { id: 'asc' } }],
+      select: { id: true },
+    })
   })
 })

@@ -69,7 +69,7 @@ describe('endpoints del resumen del turno', () => {
           cantidad: 1,
           monto: 800,
           propina: 0,
-          pagos: [{ id: 'mp-1', mesaNumero: '4', monto: 800, propina: 0, fechaCobro: '2026-11-10T22:00:00.000Z', requiereRevision: true }],
+          pagos: [{ id: 'mp-1', mesaNumero: '4', cajaId: null, cajaNombre: null, monto: 800, propina: 0, fechaCobro: '2026-11-10T22:00:00.000Z', requiereRevision: true }],
         },
       })
     })

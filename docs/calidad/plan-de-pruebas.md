@@ -7,6 +7,7 @@
 | 0.3 | 24/10/2026 | Cierra R4: el E2E contra Supabase de staging quedó implementado y corre en cada deploy (PR #433). Corrige el alcance: el soak de k6 sí se ejecutó contra staging, además del stress. |
 | 0.4 | 26/10/2026 | Agrega el plan de contingencia de Mercado Pago (qué pasa si está caído), revisado contra el código real de `main` (commit `8b98247`), sin pruebas en vivo contra la sandbox ni producción. |
 | 0.5 | 05/11/2026 | Actualiza el plan de contingencia de Mercado Pago tras el PR B de la deuda de pagos: el webhook responde después de procesar y los pagos aprobados sobre un pago cancelado o una sesión cerrada quedan marcados para revisión. |
+| 0.6 | 16/11/2026 | Actualiza el plan de contingencia de Mercado Pago con #358: sin turno abierto el comensal no puede iniciar el pago, los pagos aprobados van a una caja del turno y los aprobados sin turno quedan marcados para revisión. |
 
 ## 1. Alcance
 
@@ -76,9 +77,17 @@ Revisado el 26/10/2026 contra el código real de `main` (commit `8b98247`). No s
 
 **Si el webhook llega justo cuando Mercado Pago no responde:** desde el PR B de la deuda de pagos (05/11/2026), que resolvió DT-11 (el webhook respondía 200 antes de procesar), el backend responde después de procesar la notificación. Si la consulta a Mercado Pago falla por algo transitorio (un 5xx, un 429, un error de red o un timeout de 4 s por intento) o el restaurante tiene que reconectar Mercado Pago, responde 500 y Mercado Pago la vuelve a mandar durante unos 4 días. Mientras tanto el pago queda pendiente y el personal puede cobrar la mesa igual. Lo que no se puede procesar nunca (por ejemplo, un pago que no existe) responde 200. La tabla completa está en `Documentacion/MercadoPago.md`, sección 13.
 
+**Los pagos de Mercado Pago y el turno (#358):** cada pago aprobado va a una caja del turno abierto, como los que cobra el personal.
+- **Sin turno abierto, el comensal no puede iniciar el pago.** Responde 400 con "El restaurante no está recibiendo pagos por Mercado Pago en este momento", y web-cliente muestra ese texto tal cual. No se crea el pago ni se llama a Mercado Pago.
+- **A qué caja va:** la decide el webhook al aprobar el pago. Es la caja abierta del turno con la fecha de creación más antigua; reactivar una caja vieja no cambia esa fecha, así que pasa a ser la elegida.
+- **Si al aprobarse ya no hay turno abierto**, por ejemplo un pago que quedó pendiente al cerrar el turno: el pago se aprueba igual, pero sin caja y marcado para revisión con el motivo `aprobado-sin-turno`. No aparece en el resumen de ningún turno, solo en `GET /payments/requieren-revision`, y se asigna a una caja por SQL. El cierre del turno no avisa de los Mercado Pago pendientes.
+- **Si el webhook y el cierre del turno coinciden:** lo prueba el e2e `mercadopago-a-la-caja.e2e-spec.ts` contra Postgres.
+  - **Entrelazado forzado:** si el webhook leyó la caja abierta y el cierre termina antes de que escriba, el webhook choca (P2034) y se reintenta una vez, y el pago queda sin caja y marcado `aprobado-sin-turno`.
+  - **Carrera libre:** el estado final es siempre uno de los dos válidos: en la caja y sin marca, o sin caja y con `aprobado-sin-turno`.
+
 **El comensal tiene una salida que no depende de que Mercado Pago esté arriba:** puede pedir pagar en efectivo, aunque tenga un pago de Mercado Pago pendiente. La excepción es un restaurante (o su marca) dado de baja: ahí pedir efectivo (`solicitarEfectivo`) responde 403, y a esa mesa solo le queda Mercado Pago.
 
-**Limitaciones conocidas, declaradas y no corregidas en este TP** (quedan para la tesis, el mismo criterio que se usó con el escenario de la base caída en la sección de Pruebas de resiliencia del informe): el mensaje de error que ve el comensal no distingue una falla de Mercado Pago de cualquier otro error del servidor; el panel de administración no maneja el caso del pago reciente pendiente (solo el panel de mozo); y los pagos que Mercado Pago aprueba después de que el personal los canceló, o sobre una sesión ya cerrada, quedan marcados para revisión (`GET /payments/requieren-revision`, desde el 05/11/2026), pero no hay pantalla, no se pueden marcar como resueltos ni hay conciliación automática: la devolución se hace a mano desde Mercado Pago.
+**Limitaciones conocidas, declaradas y no corregidas en este TP** (quedan para la tesis, el mismo criterio que se usó con el escenario de la base caída en la sección de Pruebas de resiliencia del informe): el mensaje de error que ve el comensal no distingue una falla de Mercado Pago de cualquier otro error del servidor; el panel de administración no maneja el caso del pago reciente pendiente (solo el panel de mozo); y los pagos que Mercado Pago aprueba después de que el personal los canceló, sobre una sesión ya cerrada o sin un turno abierto (#358) quedan marcados para revisión (`GET /payments/requieren-revision`, desde el 05/11/2026), pero no hay pantalla, no se pueden marcar como resueltos ni hay conciliación automática: la devolución se hace a mano desde Mercado Pago.
 
 ## 9. Referencias
 
