@@ -1,5 +1,5 @@
 import { irAlLogin, renovarSesion, tokenDeAcceso, urlDeLaApi } from '@menyu/auth-client'
-import type { Mesa, EstadoPedido, SesionHistorial } from '@menyu/types'
+import type { CajasAbiertas, Mesa, EstadoPedido, SesionHistorial } from '@menyu/types'
 
 // ── Base fetch ────────────────────────────────────────────────────────────────
 
@@ -217,6 +217,12 @@ export interface EditarItemBody {
 // ── API ───────────────────────────────────────────────────────────────────────
 
 export const api = {
+  cajas: {
+    /** Las cajas abiertas del turno abierto (#359), para elegir en cuál se cobra. Vacío = no hay un turno abierto. */
+    abiertas: (restauranteId: string) =>
+      authFetch<CajasAbiertas>(`/cajas/abiertas?restauranteId=${encodeURIComponent(restauranteId)}`),
+  },
+
   mesas: {
     getAll: (restauranteId: string) =>
       authFetch<Mesa[]>(`/mesas?restauranteId=${encodeURIComponent(restauranteId)}`),
@@ -285,9 +291,19 @@ export const api = {
     /**
      * Quién cobró lo deduce el backend de la cuenta (`common/atribucion-del-cobro.ts`): desde la entrega 4.3 el
      * `mozoId` del body se ignora para un MOZO o JEFE_SALON, y `cobradoPorNombre` le ganaría al nombre del mozo en las
-     * sesiones pagadas. Por eso no se mandan desde staff.
+     * sesiones pagadas. Por eso no se mandan desde staff. `cajaId` (el id de la Caja) va solo con dos o más cajas
+     * abiertas; con una, el backend la elige (#358). La propina no suma al total de la mesa.
      */
-    registrarCobro: (sesionId: string, body: { metodoPago: string; referenciaExterna?: string; confirmarCancelacionPagosPendientes?: boolean }) =>
+    registrarCobro: (
+      sesionId: string,
+      body: {
+        metodoPago: string
+        referenciaExterna?: string
+        confirmarCancelacionPagosPendientes?: boolean
+        cajaId?: string
+        propina?: number
+      },
+    ) =>
       authFetch<{ ok: boolean }>(`/sessions/${sesionId}/cobro`, {
         method: 'PATCH',
         body: JSON.stringify(body),

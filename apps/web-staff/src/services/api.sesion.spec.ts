@@ -121,4 +121,18 @@ describe('el cliente de la API usa la sesión de Supabase', () => {
     expect(opciones.method).toBe('PATCH')
     expect(JSON.parse(opciones.body as string)).toEqual({ metodoPago: 'efectivo' })
   })
+
+  it('el cobro manda la caja y la propina cuando las hay (#358)', async () => {
+    await api.sesiones.registrarCobro('sesion-1', { metodoPago: 'debito', cajaId: 'caja-2', propina: 150.5 })
+
+    const [, opciones] = fetchFalso.mock.calls[0] as [string, RequestInit]
+    expect(JSON.parse(opciones.body as string)).toEqual({ metodoPago: 'debito', cajaId: 'caja-2', propina: 150.5 })
+  })
+
+  it('las cajas abiertas se piden por restaurante (#359)', async () => {
+    fetchFalso.mockResolvedValue(respuesta({ cajas: [{ cajaId: 'caja-1', nombre: 'Principal' }] }))
+
+    await expect(api.cajas.abiertas('rest 1')).resolves.toEqual({ cajas: [{ cajaId: 'caja-1', nombre: 'Principal' }] })
+    expect(llamadas()[0]?.url).toBe('/cajas/abiertas?restauranteId=rest%201')
+  })
 })
