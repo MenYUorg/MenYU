@@ -1,5 +1,8 @@
 import { Test } from '@nestjs/testing'
 import { BadRequestException, ConflictException, ForbiddenException, Logger, NotFoundException } from '@nestjs/common'
+import { Prisma } from '@prisma/client'
+import { MENSAJE_ELEGIR_CAJA, MENSAJE_OPERACION_SIMULTANEA, MENSAJE_SIN_TURNO } from '../caja/conflictos'
+import { MENSAJE_CAJA_NO_ABIERTA } from '../caja/movimientos.service'
 import { PaymentsService } from './payments.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { MenyuGateway } from '../gateway/menyu.gateway'
@@ -56,6 +59,7 @@ function createTxMock() {
       updateMany: jest.fn(),
     },
     sesionMesa: { findUnique: jest.fn(), updateMany: jest.fn() },
+    turnoCaja: { findMany: jest.fn() },
     mesa: { update: jest.fn() },
     llamadoMozo: { deleteMany: jest.fn(), create: jest.fn() },
   }
@@ -339,6 +343,8 @@ describe('PaymentsService', () => {
     // El cierre (cerrarSesionDeMesa) es un updateMany condicionado a que la sesión siga activa.
     const CIERRE = { where: { id: 'sesion-1', estado: 'activa' }, data: { estado: 'cerrada', cerradaEn: expect.any(Date) } }
     const sesionNoActiva = new ConflictException('La sesión ya no está activa')
+    // La única caja abierta del turno abierto (#358), como la lee cajaDelCobro.
+    const UNA_CAJA_ABIERTA = { id: 'apertura-1', cajaId: 'caja-1' }
 
     beforeEach(() => {
       tx = createTxMock()
@@ -346,6 +352,8 @@ describe('PaymentsService', () => {
       tx.sesionMesa.findUnique.mockResolvedValue({ estado: 'activa' })
       tx.sesionMesa.updateMany.mockResolvedValue({ count: 1 })
       tx.pago.updateMany.mockResolvedValue({ count: 1 })
+      // Por defecto hay un turno abierto con una sola caja (#358): el cobro va ahí.
+      tx.turnoCaja.findMany.mockResolvedValue([UNA_CAJA_ABIERTA])
       mockPrisma.pago.findUnique.mockResolvedValue({
         id: 'pago-ef',
         sesionId: 'sesion-1',
@@ -464,7 +472,14 @@ describe('PaymentsService', () => {
 
         expect(tx.pago.updateMany).toHaveBeenCalledWith({
           where: APROBACION,
-          data: { estado: 'aprobado', fechaCobro: expect.any(Date), mozoId: MOZOS.DEL_MOZO.id, usuarioId: CUENTAS.MOZO.id },
+          data: {
+            estado: 'aprobado',
+            fechaCobro: expect.any(Date),
+            mozoId: MOZOS.DEL_MOZO.id,
+            usuarioId: CUENTAS.MOZO.id,
+            turnoCajaId: 'apertura-1',
+            propina: new Prisma.Decimal(0),
+          },
         })
       })
 
@@ -494,6 +509,101 @@ describe('PaymentsService', () => {
         mockPrisma.pago.findUnique.mockResolvedValue(fila)
 
         await expect(service.confirmarEfectivo({ pagoId: 'pago-x' }, CUENTAS.MOZO)).rejects.toThrow(NotFoundException)
+      })
+    })
+
+    describe('la caja del cobro (#358)', () => {
+      const CAJA_2 = { id: 'apertura-2', cajaId: 'caja-2' }
+      const orden = (fn: jest.Mock) => fn.mock.invocationCallOrder[0]
+      const cubreElTotal = () => {
+        mockDivision.calcularTotalSesion.mockResolvedValue(1000)
+        tx.pago.findMany.mockResolvedValue([{ monto: 1000 }])
+      }
+
+      it('la caja se lee con el tx, del restaurante de la mesa, antes de aprobar, y queda en el pago con la propina', async () => {
+        cubreElTotal()
+
+        await service.confirmarEfectivo({ pagoId: 'pago-ef', propina: 99.99 }, CUENTAS.MOZO)
+
+        expect(tx.turnoCaja.findMany).toHaveBeenCalledWith({
+          where: { cerradoEn: null, turno: { restauranteId: MUNDO.REST_1, cerradoEn: null } },
+          select: { id: true, cajaId: true },
+        })
+        expect(orden(tx.sesionMesa.findUnique)).toBeLessThan(orden(tx.turnoCaja.findMany))
+        expect(orden(tx.turnoCaja.findMany)).toBeLessThan(orden(tx.pago.updateMany))
+        expect(tx.pago.updateMany).toHaveBeenNthCalledWith(1, {
+          where: APROBACION,
+          data: expect.objectContaining({ turnoCajaId: 'apertura-1', propina: new Prisma.Decimal('99.99') }),
+        })
+      })
+
+      it('sin turno abierto: 400 y el pago sigue pendiente', async () => {
+        tx.turnoCaja.findMany.mockResolvedValue([])
+
+        await expect(service.confirmarEfectivo({ pagoId: 'pago-ef' }, CUENTAS.MOZO)).rejects.toThrow(
+          new BadRequestException(MENSAJE_SIN_TURNO),
+        )
+        expect(tx.pago.updateMany).not.toHaveBeenCalled()
+        expect(tx.sesionMesa.updateMany).not.toHaveBeenCalled()
+      })
+
+      it('"sesión no activa" conserva su prioridad: no se lee la caja', async () => {
+        tx.sesionMesa.findUnique.mockResolvedValue({ estado: 'cerrada' })
+        tx.turnoCaja.findMany.mockResolvedValue([])
+
+        await expect(service.confirmarEfectivo({ pagoId: 'pago-ef' }, CUENTAS.MOZO)).rejects.toThrow(sesionNoActiva)
+        expect(tx.turnoCaja.findMany).not.toHaveBeenCalled()
+      })
+
+      it('dos cajas: sin cajaId 400 sin aprobar; con cajaId va a la indicada', async () => {
+        tx.turnoCaja.findMany.mockResolvedValue([UNA_CAJA_ABIERTA, CAJA_2])
+        cubreElTotal()
+
+        await expect(service.confirmarEfectivo({ pagoId: 'pago-ef' }, CUENTAS.MOZO)).rejects.toThrow(
+          new BadRequestException(MENSAJE_ELEGIR_CAJA),
+        )
+        expect(tx.pago.updateMany).not.toHaveBeenCalled()
+
+        await service.confirmarEfectivo({ pagoId: 'pago-ef', cajaId: 'caja-2' }, CUENTAS.MOZO)
+        expect(tx.pago.updateMany).toHaveBeenNthCalledWith(1, {
+          where: APROBACION,
+          data: expect.objectContaining({ turnoCajaId: 'apertura-2' }),
+        })
+      })
+
+      it('un cajaId que no está abierto en el turno: 400 sin aprobar', async () => {
+        await expect(service.confirmarEfectivo({ pagoId: 'pago-ef', cajaId: 'caja-ajena' }, CUENTAS.MOZO)).rejects.toThrow(
+          new BadRequestException(MENSAJE_CAJA_NO_ABIERTA),
+        )
+        expect(tx.pago.updateMany).not.toHaveBeenCalled()
+      })
+
+      it('cajaId: null y propina: null cuentan como ausentes: la única caja y propina 0', async () => {
+        cubreElTotal()
+
+        await service.confirmarEfectivo({ pagoId: 'pago-ef', cajaId: null, propina: null }, CUENTAS.MOZO)
+
+        expect(tx.pago.updateMany).toHaveBeenNthCalledWith(1, {
+          where: APROBACION,
+          data: expect.objectContaining({ turnoCajaId: 'apertura-1', propina: new Prisma.Decimal(0) }),
+        })
+      })
+
+      it('un P2034 que sobrevive al reintento: 409 genérico', async () => {
+        const p2034 = new Prisma.PrismaClientKnownRequestError('conflicto', { code: 'P2034', clientVersion: 'test' })
+        mockPrisma.$transaction.mockRejectedValue(p2034)
+
+        await expect(service.confirmarEfectivo({ pagoId: 'pago-ef' }, CUENTAS.MOZO)).rejects.toThrow(
+          new ConflictException(MENSAJE_OPERACION_SIMULTANEA),
+        )
+        expect(mockPrisma.$transaction).toHaveBeenCalledTimes(2)
+      })
+
+      it('otro error de Prisma pasa tal cual', async () => {
+        const p2002 = new Prisma.PrismaClientKnownRequestError('único', { code: 'P2002', clientVersion: 'test' })
+        mockPrisma.$transaction.mockRejectedValue(p2002)
+
+        await expect(service.confirmarEfectivo({ pagoId: 'pago-ef' }, CUENTAS.MOZO)).rejects.toBe(p2002)
       })
     })
   })
