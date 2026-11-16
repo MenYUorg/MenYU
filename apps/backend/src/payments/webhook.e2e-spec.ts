@@ -47,6 +47,8 @@ describe('Webhook de Mercado Pago (e2e)', () => {
   let marcaId = ''
   let owner: UsuarioAutenticado
   let mesas = 0
+  /** La apertura de la caja del turno abierto de A: ahí van los pagos aprobados de A (#358). */
+  let aperturaDeA = ''
 
   async function crearRestaurante(nombre: string) {
     const restauranteId = (await prisma.restaurante.create({ data: { nombre, marcaId } })).id
@@ -116,6 +118,10 @@ describe('Webhook de Mercado Pago (e2e)', () => {
       (m) => m.id,
     )
     const restaurantes = { restaurante: { marcaId: { in: marcaIds } } }
+    // Lo de la caja, después de los pagos (pago.turno_caja_id es Restrict) y antes de los usuarios y los restaurantes.
+    await prisma.turnoCaja.deleteMany({ where: { caja: restaurantes } })
+    await prisma.turno.deleteMany({ where: restaurantes })
+    await prisma.caja.deleteMany({ where: restaurantes })
     await prisma.mesa.deleteMany({ where: restaurantes })
     await prisma.itemMenu.deleteMany({ where: restaurantes })
     await prisma.membresia.deleteMany({ where: { usuario: { email: { startsWith: E2E_MARCADOR } } } })
@@ -149,6 +155,11 @@ describe('Webhook de Mercado Pago (e2e)', () => {
     })
     await prisma.membresia.create({ data: { usuarioId: usuario.id, rol: 'OWNER', marcaId } })
     owner = { id: usuario.id, supabaseUserId: usuario.supabaseUserId, email: usuario.email, nombre: usuario.nombre, esRoot: false }
+    // Un turno abierto en A con una caja: sin él, todo aprobado de A quedaría sin caja y marcado "aprobado-sin-turno"
+    // (eso lo prueba mercadopago-a-la-caja.e2e-spec.ts).
+    const caja = await prisma.caja.create({ data: { restauranteId: A.restauranteId, nombre: 'Caja E2E' } })
+    const turno = await prisma.turno.create({ data: { restauranteId: A.restauranteId, abiertoPorUsuarioId: usuario.id } })
+    aperturaDeA = (await prisma.turnoCaja.create({ data: { turnoId: turno.id, cajaId: caja.id, fondoInicial: 0 } })).id
   })
 
   beforeEach(() => {
@@ -170,7 +181,7 @@ describe('Webhook de Mercado Pago (e2e)', () => {
     if (app) await app.close()
   })
 
-  it('1) aprobado sobre una sesión activa que cubre el total: 200, pago aprobado, sesión cerrada y mesa libre', async () => {
+  it('1) aprobado sobre una sesión activa que cubre el total: 200, pago aprobado en la caja del turno, sesión cerrada y mesa libre', async () => {
     const { m, s, p } = await mesaConPagoPendiente()
     const orden = mpInforma(p.id, 'APROBADO')
     const emit = jest.spyOn(gateway, 'emitSesionCobrada')
@@ -179,7 +190,13 @@ describe('Webhook de Mercado Pago (e2e)', () => {
 
     expect([res.status, res.text]).toEqual([200, 'OK'])
     const aprobado = await pago(p.id)
-    expect(aprobado).toMatchObject({ estado: ESTADO_PAGO_APROBADO, referenciaExterna: orden, requiereRevision: false, motivoRevision: null })
+    expect(aprobado).toMatchObject({
+      estado: ESTADO_PAGO_APROBADO,
+      referenciaExterna: orden,
+      turnoCajaId: aperturaDeA,
+      requiereRevision: false,
+      motivoRevision: null,
+    })
     expect(aprobado.fechaCobro).not.toBeNull()
     expect(await sesion(s.id)).toMatchObject({ estado: 'cerrada' })
     expect((await sesion(s.id)).cerradaEn).not.toBeNull()
@@ -233,6 +250,7 @@ describe('Webhook de Mercado Pago (e2e)', () => {
     expect(await pago(rechazado.id)).toMatchObject({
       estado: ESTADO_PAGO_APROBADO,
       referenciaExterna: orden,
+      turnoCajaId: aperturaDeA, // la sesión cerrada no le quita la caja
       requiereRevision: true,
       motivoRevision: MOTIVO_REVISION_APROBADO_SOBRE_SESION_CERRADA,
     })
@@ -336,7 +354,13 @@ describe('Webhook de Mercado Pago (e2e)', () => {
     ])
     const pagos = await prisma.pago.findMany({ where: { sesionId: s.id } })
     expect(pagos).toHaveLength(1)
-    expect(pagos[0]).toMatchObject({ id: p.id, estado: ESTADO_PAGO_APROBADO, referenciaExterna: orden, requiereRevision: false })
+    expect(pagos[0]).toMatchObject({
+      id: p.id,
+      estado: ESTADO_PAGO_APROBADO,
+      referenciaExterna: orden,
+      turnoCajaId: aperturaDeA,
+      requiereRevision: false,
+    })
     expect((await sesion(s.id)).estado).toBe('cerrada')
     expect((await mesa(m.id)).estado).toBe('libre')
     expect(emit).toHaveBeenCalledTimes(1)
