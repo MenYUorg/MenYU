@@ -47,7 +47,15 @@ export class TurnosController {
     return this.apertura.actual(restauranteId)
   }
 
-  // Después de `actual`: si no, `/turnos/actual` llegaría acá con id "actual".
+  @Get('preparacion')
+  @RequiereRolEn({ query: 'restauranteId' }, ...CAJA)
+  @ApiOperation({ summary: 'Los mozos asignables, las mesas activas y la precarga de asignaciones, para abrir un turno o reasignar mesas' })
+  @ApiResponse({ status: 200, description: 'Igual con o sin turno abierto; la precarga es la que haría POST /turnos sin asignaciones' })
+  preparacion(@Query('restauranteId') restauranteId: string) {
+    return this.apertura.preparacion(restauranteId)
+  }
+
+  // Después de `actual` y `preparacion`: si no, `/turnos/actual` llegaría acá con id "actual".
   @Get(':id')
   @Personal()
   @ApiOperation({ summary: 'Un turno con el arqueo, los movimientos de cada caja y las mesas asignadas (OWNER, GERENTE y JEFE_SALON)' })

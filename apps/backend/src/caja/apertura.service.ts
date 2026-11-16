@@ -6,12 +6,19 @@ import { PrismaService } from '../prisma/prisma.service'
 import { MENSAJE_TURNO_ABIERTO, traducirConflictoDeApertura } from './conflictos'
 import { exigirAsignacionesValidas } from './asignaciones-validas'
 import { AbrirTurnoDto } from './dto/abrir-turno.dto'
-import { AvisoDePrecarga, precargarAsignaciones } from './precarga-de-asignaciones'
+import { AvisoDePrecarga, PrecargaDeAsignaciones, precargar } from './precarga-de-asignaciones'
 import { TURNO_SELECT, TurnoDeLaApi, turnoParaLaApi } from './turno.select'
 
 export interface AperturaDeTurno {
   turno: TurnoDeLaApi
   avisos: AvisoDePrecarga[]
+}
+
+/** Lo que necesita la pantalla de apertura y la de reasignación de mesas (#359). */
+export interface PreparacionDeTurno {
+  mozos: { id: string; nombre: string }[]
+  mesas: { id: string; numero: string }[]
+  precarga: PrecargaDeAsignaciones
 }
 
 /**
@@ -68,6 +75,25 @@ export class AperturaService {
     const turno = await this.prisma.turno.findFirst({ where: { restauranteId, cerradoEn: null }, select: TURNO_SELECT })
     return { turno: turno ? turnoParaLaApi(turno) : null }
   }
+
+  /**
+   * Para armar las asignaciones de un turno (#359): los mozos que se pueden asignar (activos y con cuenta, los que acepta
+   * exigirAsignacionesValidas), por nombre; las mesas activas, por número, y la precarga que haría POST /turnos sin
+   * `asignaciones`, con la misma función (precargar). Responde igual con o sin turno abierto: la precarga es solo una
+   * propuesta. Solo lectura, sin transacción. El rol lo exige la ruta.
+   */
+  async preparacion(restauranteId: string): Promise<PreparacionDeTurno> {
+    const [mozos, mesas, precarga] = await Promise.all([
+      this.prisma.mozo.findMany({
+        where: { restauranteId, activo: true, usuarioId: { not: null } },
+        orderBy: [{ nombre: 'asc' }, { id: 'asc' }],
+        select: { id: true, nombre: true },
+      }),
+      this.prisma.mesa.findMany({ where: { restauranteId, activo: true }, orderBy: { numero: 'asc' }, select: { id: true, numero: true } }),
+      precargar(this.prisma, restauranteId),
+    ])
+    return { mozos, mesas, precarga }
+  }
 }
 
 /** 400 si alguna caja no existe, es de otro restaurante o está inactiva. Las repetidas ya las rechaza el DTO. */
@@ -79,19 +105,4 @@ async function exigirCajasAbribles(tx: Prisma.TransactionClient, restauranteId: 
   if (cajas.length !== cajaIds.length) throw new BadRequestException('Alguna de las cajas no existe o no es de este restaurante')
   const inactiva = cajas.find((c) => !c.activa)
   if (inactiva) throw new BadRequestException(`La caja «${inactiva.nombre}» está inactiva`)
-}
-
-/** La precarga desde la plantilla de `MozoMesa` (precarga-de-asignaciones.ts). */
-async function precargar(tx: Prisma.TransactionClient, restauranteId: string) {
-  const mesas = await tx.mesa.findMany({
-    where: { restauranteId },
-    orderBy: { numero: 'asc' },
-    select: {
-      id: true,
-      numero: true,
-      activo: true,
-      mozoMesas: { select: { mozo: { select: { id: true, activo: true, usuarioId: true } } } },
-    },
-  })
-  return precargarAsignaciones(mesas)
 }

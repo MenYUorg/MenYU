@@ -299,10 +299,12 @@ Entregas (ver Decisiones de la planificación de la Fase 4):
 | `GET /payments/requieren-revision?restauranteId=` (solo lectura) | OWNER, GERENTE. Los pagos de Mercado Pago que el webhook marcó para revisión, hasta 200 y más nuevos primero |
 | `GET /payments/mercadopago/oauth/conectar` | OWNER, GERENTE. El `state` lleva el `usuarioId` |
 | `GET /cajas?restauranteId=` (activas e inactivas) | OWNER, GERENTE, JEFE_SALON (`CAJA`) |
+| `GET /cajas/abiertas?restauranteId=` (las cajas abiertas del turno abierto, para elegir a cuál cobrar: el `cajaId` que acepta el cobro y el nombre, por nombre; vacío sin turno abierto. No expone el fondo, quién abrió ni el turno) | OWNER, GERENTE, JEFE_SALON, MOZO (`SALON`) |
 | `POST /cajas` | OWNER, GERENTE |
 | `PATCH /cajas/:id` (nombre y activa; no se desactiva una caja abierta) | OWNER, GERENTE, con el restaurante de la caja |
 | `POST /turnos` (abrir un turno con 1 o 2 cajas y las mesas asignadas; quién abre sale de la cuenta) | OWNER, GERENTE, JEFE_SALON (`CAJA`) |
 | `GET /turnos/actual?restauranteId=` | OWNER, GERENTE, JEFE_SALON (`CAJA`) |
+| `GET /turnos/preparacion?restauranteId=` (para abrir un turno o reasignar mesas: los mozos activos y con cuenta, solo id y nombre; las mesas activas, y la precarga de asignaciones con sus avisos, la misma que haría `POST /turnos` sin `asignaciones`. Igual con o sin turno abierto) | OWNER, GERENTE, JEFE_SALON (`CAJA`) |
 | `GET /turnos?restauranteId=&limite=&cursor=` (historial, del más nuevo al más viejo: 30 por página, hasta 100; arqueo y totales de movimientos por caja) | OWNER, GERENTE, JEFE_SALON (`CAJA`) |
 | `GET /turnos/:id` (un turno con el arqueo, los movimientos de cada caja y las mesas asignadas) | OWNER, GERENTE, JEFE_SALON (`CAJA`), con el restaurante del turno |
 | `PUT /turnos/:id/asignaciones` (reemplaza la lista entera; un turno cerrado no se modifica) | OWNER, GERENTE, JEFE_SALON (`CAJA`), con el restaurante del turno |
