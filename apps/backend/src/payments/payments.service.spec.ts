@@ -1,7 +1,7 @@
 import { Test } from '@nestjs/testing'
 import { BadRequestException, ConflictException, ForbiddenException, Logger, NotFoundException } from '@nestjs/common'
 import { Prisma } from '@prisma/client'
-import { MENSAJE_ELEGIR_CAJA, MENSAJE_OPERACION_SIMULTANEA, MENSAJE_SIN_TURNO } from '../caja/conflictos'
+import { MENSAJE_ELEGIR_CAJA, MENSAJE_MP_NO_DISPONIBLE, MENSAJE_OPERACION_SIMULTANEA, MENSAJE_SIN_TURNO } from '../caja/conflictos'
 import { MENSAJE_CAJA_NO_ABIERTA } from '../caja/movimientos.service'
 import { PaymentsService } from './payments.service'
 import { PrismaService } from '../prisma/prisma.service'
@@ -18,6 +18,7 @@ import {
 } from '../common/estado-pago.constant'
 import { MercadoPagoNoConectadoError } from './clasificar-error-del-webhook'
 import {
+  MOTIVO_REVISION_APROBADO_SIN_TURNO,
   MOTIVO_REVISION_APROBADO_SOBRE_CANCELADO,
   MOTIVO_REVISION_APROBADO_SOBRE_SESION_CERRADA,
 } from '../common/motivo-revision.constant'
@@ -59,7 +60,7 @@ function createTxMock() {
       updateMany: jest.fn(),
     },
     sesionMesa: { findUnique: jest.fn(), updateMany: jest.fn() },
-    turnoCaja: { findMany: jest.fn() },
+    turnoCaja: { findMany: jest.fn(), findFirst: jest.fn() },
     mesa: { update: jest.fn() },
     llamadoMozo: { deleteMany: jest.fn(), create: jest.fn() },
   }
@@ -245,6 +246,8 @@ describe('PaymentsService', () => {
       tx.pago.findMany.mockResolvedValue([])
       tx.pago.updateMany.mockResolvedValue({ count: 0 })
       tx.pago.create.mockResolvedValue({ id: 'pago-nuevo' })
+      // Por defecto hay un turno abierto con una caja (#358).
+      tx.turnoCaja.findFirst.mockResolvedValue({ id: 'apertura-1' })
     })
 
     it('cancela los MP pendientes previos y crea una fila nueva con el saldo y external_reference = su id', async () => {
@@ -330,6 +333,68 @@ describe('PaymentsService', () => {
       expect(tx.pago.updateMany).not.toHaveBeenCalled()
       expect(tx.pago.create).not.toHaveBeenCalled()
       expect(mockMpProvider.createPreference).not.toHaveBeenCalled()
+    })
+
+    describe('la puerta del turno (#358)', () => {
+      const orden = (fn: jest.Mock, vez = 0) => fn.mock.invocationCallOrder[vez]
+
+      it('lee la caja con el tx, del restaurante de la sesión, después del saldo y antes de cancelar y crear', async () => {
+        await service.crearPreferenciaMercadoPago('sesion-1')
+
+        expect(tx.turnoCaja.findFirst).toHaveBeenCalledWith({
+          where: { cerradoEn: null, turno: { restauranteId: 'rest-1', cerradoEn: null } },
+          orderBy: [{ caja: { createdAt: 'asc' } }, { caja: { id: 'asc' } }],
+          select: { id: true },
+        })
+        expect(orden(tx.pago.findMany)).toBeLessThan(orden(tx.turnoCaja.findFirst)) // los aprobados (el saldo)
+        expect(orden(tx.turnoCaja.findFirst)).toBeLessThan(orden(tx.pago.updateMany))
+        expect(orden(tx.turnoCaja.findFirst)).toBeLessThan(orden(tx.pago.create))
+        // El pago pendiente no lleva caja: la pone el webhook al aprobarlo.
+        expect(tx.pago.create).toHaveBeenCalledWith({
+          data: { sesionId: 'sesion-1', monto: 1000, metodo: 'mercadopago', estado: ESTADO_PAGO_PENDIENTE },
+        })
+      })
+
+      it('sin turno abierto: 400 con el mensaje para el comensal, sin cancelar ni crear nada y sin llamar a MP', async () => {
+        tx.turnoCaja.findFirst.mockResolvedValue(null)
+
+        await expect(service.crearPreferenciaMercadoPago('sesion-1')).rejects.toThrow(
+          new BadRequestException(MENSAJE_MP_NO_DISPONIBLE),
+        )
+
+        expect(tx.pago.updateMany).not.toHaveBeenCalled()
+        expect(tx.pago.create).not.toHaveBeenCalled()
+        expect(mockMpProvider.createPreference).not.toHaveBeenCalled()
+        expect(mockPrisma.pago.updateMany).not.toHaveBeenCalled() // tampoco la compensación
+      })
+
+      it('"ya está pagada" conserva su prioridad: no se lee la caja', async () => {
+        tx.turnoCaja.findFirst.mockResolvedValue(null)
+        tx.pago.findMany.mockResolvedValue([{ monto: 1000 }])
+
+        await expect(service.crearPreferenciaMercadoPago('sesion-1')).rejects.toThrow(
+          new BadRequestException('Esta sesión ya está completamente pagada'),
+        )
+        expect(tx.turnoCaja.findFirst).not.toHaveBeenCalled()
+      })
+
+      it('un P2034 que sobrevive al reintento de la fase 1: 409 genérico, sin llamar a MP', async () => {
+        const p2034 = new Prisma.PrismaClientKnownRequestError('conflicto', { code: 'P2034', clientVersion: 'test' })
+        mockPrisma.$transaction.mockRejectedValue(p2034)
+
+        await expect(service.crearPreferenciaMercadoPago('sesion-1')).rejects.toThrow(
+          new ConflictException(MENSAJE_OPERACION_SIMULTANEA),
+        )
+        expect(mockPrisma.$transaction).toHaveBeenCalledTimes(2)
+        expect(mockMpProvider.createPreference).not.toHaveBeenCalled()
+      })
+
+      it('otro error de Prisma en la fase 1 pasa tal cual', async () => {
+        const p2002 = new Prisma.PrismaClientKnownRequestError('único', { code: 'P2002', clientVersion: 'test' })
+        mockPrisma.$transaction.mockRejectedValue(p2002)
+
+        await expect(service.crearPreferenciaMercadoPago('sesion-1')).rejects.toBe(p2002)
+      })
     })
   })
 
@@ -623,6 +688,8 @@ describe('PaymentsService', () => {
       tx.sesionMesa.updateMany.mockResolvedValue({ count: 1 })
       tx.sesionMesa.findUnique.mockResolvedValue({ estado: 'activa' })
       mockMpOAuth.getAccessTokenDecrypted.mockResolvedValue('token')
+      // Por defecto hay un turno abierto con una caja (#358): la aprobación va ahí.
+      tx.turnoCaja.findFirst.mockResolvedValue({ id: 'apertura-1' })
     })
 
     afterEach(() => {
@@ -1163,6 +1230,151 @@ describe('PaymentsService', () => {
       expect(mockGateway.emitSesionCobrada).not.toHaveBeenCalled()
       expect(warnSpy).toHaveBeenCalledTimes(1)
       expect(String(warnSpy.mock.calls[0][0])).toContain('pago pago-1 no encontrado, ignorando notificación')
+    })
+
+    describe('la caja del pago (#358)', () => {
+      const orden = (fn: jest.Mock, vez = 0) => fn.mock.invocationCallOrder[vez]
+      const updates = () => tx.pago.update.mock.calls.map(([arg]) => arg)
+      const cubreElTotal = () => {
+        mockDivision.calcularTotalSesion.mockResolvedValue(1000)
+        tx.pago.findMany.mockResolvedValue([{ monto: 1000 }])
+        mockPrisma.sesionMesa.findUnique.mockResolvedValue({ mesa: { id: 'mesa-1', numero: '5' } })
+      }
+
+      it('al aprobar, lee la caja con el tx (del restaurante de la URL) antes de escribir y la guarda en el mismo update, sin marca', async () => {
+        pagoEnBase('pendiente')
+        cubreElTotal()
+
+        await webhook('APROBADO')
+
+        expect(tx.turnoCaja.findFirst).toHaveBeenCalledWith({
+          where: { cerradoEn: null, turno: { restauranteId: 'rest-1', cerradoEn: null } },
+          orderBy: [{ caja: { createdAt: 'asc' } }, { caja: { id: 'asc' } }],
+          select: { id: true },
+        })
+        expect(orden(tx.pago.findUnique)).toBeLessThan(orden(tx.turnoCaja.findFirst))
+        expect(orden(tx.turnoCaja.findFirst)).toBeLessThan(orden(tx.pago.update))
+        expect(updates()).toEqual([
+          {
+            where: { id: PAGO_ID },
+            data: { estado: ESTADO_PAGO_APROBADO, referenciaExterna: 'mo-123', fechaCobro: expect.any(Date), turnoCajaId: 'apertura-1' },
+          },
+        ])
+        expect(mockGateway.emitSesionCobrada).toHaveBeenCalled()
+      })
+
+      it('sin turno abierto: lo aprueba igual (la plata entró), sin caja y marcado "aprobado-sin-turno", en el mismo update', async () => {
+        pagoEnBase('pendiente')
+        cubreElTotal()
+        tx.turnoCaja.findFirst.mockResolvedValue(null)
+
+        await webhook('APROBADO')
+
+        expect(updates()).toEqual([
+          {
+            where: { id: PAGO_ID },
+            data: {
+              estado: ESTADO_PAGO_APROBADO,
+              referenciaExterna: 'mo-123',
+              fechaCobro: expect.any(Date),
+              turnoCajaId: null,
+              requiereRevision: true,
+              motivoRevision: MOTIVO_REVISION_APROBADO_SIN_TURNO,
+            },
+          },
+        ])
+        // La mesa se cobra igual: cubre el total.
+        expect(tx.sesionMesa.updateMany).toHaveBeenCalled()
+        expect(mockGateway.emitSesionCobrada).toHaveBeenCalled()
+        expect(warnSpy.mock.calls.map(([m]) => String(m)).some((m) => m.includes('MP aprobado sin turno abierto'))).toBe(true)
+      })
+
+      it('sin turno y con la sesión ya cerrada: queda el primer motivo ("sin turno"); la segunda marca no lo pisa', async () => {
+        pagoEnBase('pendiente')
+        tx.turnoCaja.findFirst.mockResolvedValue(null)
+        tx.sesionMesa.findUnique.mockResolvedValue({ estado: 'cerrada' })
+
+        await webhook('APROBADO')
+
+        expect(updates()).toEqual([
+          {
+            where: { id: PAGO_ID },
+            data: expect.objectContaining({ turnoCajaId: null, requiereRevision: true, motivoRevision: MOTIVO_REVISION_APROBADO_SIN_TURNO }),
+          },
+          { where: { id: PAGO_ID }, data: { requiereRevision: true } },
+        ])
+      })
+
+      it('con turno y con la sesión ya cerrada: queda en la caja y marcado "sesión cerrada"', async () => {
+        pagoEnBase('pendiente')
+        tx.sesionMesa.findUnique.mockResolvedValue({ estado: 'cerrada' })
+
+        await webhook('APROBADO')
+
+        expect(updates()).toEqual([
+          { where: { id: PAGO_ID }, data: expect.objectContaining({ estado: ESTADO_PAGO_APROBADO, turnoCajaId: 'apertura-1' }) },
+          { where: { id: PAGO_ID }, data: { requiereRevision: true, motivoRevision: MOTIVO_REVISION_APROBADO_SOBRE_SESION_CERRADA } },
+        ])
+        expect(updates()[0].data).not.toHaveProperty('requiereRevision')
+      })
+
+      it('sin turno y con una marca anterior: no pisa el motivo', async () => {
+        pagoEnBase('rechazado', 'mercadopago', 'rechazado', { requiereRevision: true })
+        cubreElTotal()
+        tx.turnoCaja.findFirst.mockResolvedValue(null)
+
+        await webhook('APROBADO')
+
+        expect(updates()[0].data).toEqual(expect.objectContaining({ turnoCajaId: null, requiereRevision: true }))
+        expect(updates()[0].data).not.toHaveProperty('motivoRevision')
+      })
+
+      it('aprobado sobre un pago cancelado: no lee la caja ni la guarda (la plata hay que devolverla)', async () => {
+        pagoEnBase('pendiente', 'mercadopago', 'cancelado')
+
+        await webhook('APROBADO')
+
+        expect(tx.turnoCaja.findFirst).not.toHaveBeenCalled()
+        expect(updates()).toEqual([
+          {
+            where: { id: PAGO_ID },
+            data: { requiereRevision: true, motivoRevision: MOTIVO_REVISION_APROBADO_SOBRE_CANCELADO, referenciaExterna: 'mo-123' },
+          },
+        ])
+      })
+
+      it.each(['PENDIENTE', 'RECHAZADO'])('un %s no lee la caja ni la guarda', async (status) => {
+        pagoEnBase('pendiente', 'mercadopago', 'pendiente', { referenciaExterna: 'otra' })
+
+        await webhook(status)
+
+        expect(tx.turnoCaja.findFirst).not.toHaveBeenCalled()
+        expect(updates()).toHaveLength(1)
+        expect(updates()[0].data).not.toHaveProperty('turnoCajaId')
+        expect(updates()[0].data).not.toHaveProperty('requiereRevision')
+      })
+
+      it('el reintento por P2034 arranca la marca de cero: si el primer intento marcó y chocó, el segundo marca otra vez', async () => {
+        pagoEnBase('pendiente')
+        cubreElTotal()
+        tx.turnoCaja.findFirst.mockResolvedValue(null)
+        const p2034 = new Prisma.PrismaClientKnownRequestError('conflicto', { code: 'P2034', clientVersion: 'test' })
+        // El primer intento corre entero y choca al commitear; el segundo, el reintento, commitea.
+        mockPrisma.$transaction
+          .mockImplementationOnce(async (fn: any) => {
+            await fn(tx)
+            throw p2034
+          })
+          .mockImplementationOnce((fn: any) => fn(tx))
+
+        await webhook('APROBADO')
+
+        const aprobaciones = updates().filter((u) => u.data.estado === ESTADO_PAGO_APROBADO)
+        expect(aprobaciones).toHaveLength(2)
+        expect(aprobaciones[1].data).toEqual(
+          expect.objectContaining({ turnoCajaId: null, requiereRevision: true, motivoRevision: MOTIVO_REVISION_APROBADO_SIN_TURNO }),
+        )
+      })
     })
   })
 })
