@@ -78,6 +78,45 @@ describe('endpoints de las cajas', () => {
     })
   })
 
+  describe('GET /cajas/abiertas (el grupo SALON del restaurante de la query)', () => {
+    beforeEach(() => {
+      prisma.turnoCaja.findMany.mockImplementation(async ({ where }) =>
+        where.turno.restauranteId === REST ? [{ cajaId: 'caja-1', caja: { nombre: 'Principal' } }] : [{ cajaId: 'caja-b', caja: { nombre: 'Principal' } }],
+      )
+    })
+
+    it.each([
+      ['el OWNER de la marca', CUENTAS.OWNER_A],
+      ['el GERENTE', CUENTAS.GERENTE],
+      ['el JEFE_SALON', CUENTAS.JEFE_SALON],
+      ['el MOZO', CUENTAS.MOZO],
+    ])('%s lee las cajas abiertas del restaurante', async (_caso, cuenta) => {
+      const res = await api.pedir('get', '/cajas/abiertas', { cuenta, query: { restauranteId: REST } })
+
+      expect(res.status).toBe(200)
+      expect(res.body).toEqual({ cajas: [{ cajaId: 'caja-1', nombre: 'Principal' }] })
+    })
+
+    it.each([
+      ['COCINA', CUENTAS.COCINA, REST],
+      ['el OWNER de otra marca', CUENTAS.OWNER_B, REST],
+      ['ROOT', CUENTAS.ROOT, REST],
+      ['el MOZO, en un restaurante que no es el suyo', CUENTAS.MOZO, MUNDO.REST_B],
+    ])('%s recibe 403', async (_caso, cuenta, restauranteId) => {
+      const res = await api.pedir('get', '/cajas/abiertas', { cuenta, query: { restauranteId } })
+
+      expect(res.status).toBe(403)
+      expect(prisma.turnoCaja.findMany).not.toHaveBeenCalled()
+    })
+
+    it('sin token, 401; sin restauranteId, 400; con un restaurante que no existe, 403', async () => {
+      expect((await api.pedir('get', '/cajas/abiertas', { query: { restauranteId: REST } })).status).toBe(401)
+      expect((await api.pedir('get', '/cajas/abiertas', { cuenta: CUENTAS.MOZO })).status).toBe(400)
+      expect((await api.pedir('get', '/cajas/abiertas', { cuenta: CUENTAS.MOZO, query: { restauranteId: 'no-existe' } })).status).toBe(403)
+      expect(prisma.turnoCaja.findMany).not.toHaveBeenCalled()
+    })
+  })
+
   describe('POST /cajas (OWNER y GERENTE del restaurante del body)', () => {
     it.each([
       ['el OWNER de la marca', CUENTAS.OWNER_A],
