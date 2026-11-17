@@ -318,6 +318,16 @@ describe('CobroModal', () => {
       expect(registrarCobro).toHaveBeenCalledWith('sesion-1', { metodoPago: 'efectivo', cajaId: 'caja-2' })
     })
 
+    it('sin caja recordada, guarda la que se usó al cobrar (no la primera)', async () => {
+      abrir([CAJA_1, CAJA_2])
+      fireEvent.click(screen.getByRole('radio', { name: 'Caja 2' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Efectivo' }))
+      fireEvent.click(confirmar())
+
+      await vi.waitFor(() => expect(onDone).toHaveBeenCalled())
+      expect(localStorage.getItem('menyu-staff-caja-id:rest-1')).toBe('caja-2')
+    })
+
     it('las cajas son radios nativos del mismo grupo, para que anden las flechas del teclado', () => {
       abrir([CAJA_1, CAJA_2])
 
@@ -383,6 +393,30 @@ describe('CobroModal', () => {
       expect(grupo()).not.toBeInTheDocument()
       expect(confirmar()).toBeDisabled()
     })
+  })
+
+  it('un error que no es un Error muestra un mensaje genérico', async () => {
+    registrarCobro.mockRejectedValue('caído')
+    abrir()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Efectivo' }))
+    fireEvent.click(confirmar())
+
+    expect(await screen.findByText('Error al registrar pago')).toBeInTheDocument()
+    expect(onTurnoCambio).not.toHaveBeenCalled()
+  })
+
+  it('sin restaurante en el contexto cobra igual, sin recordar la caja', async () => {
+    useContextoStore.setState({ restauranteId: null })
+    abrir([CAJA_1, CAJA_2])
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Caja 2' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Efectivo' }))
+    fireEvent.click(confirmar())
+
+    await vi.waitFor(() => expect(onDone).toHaveBeenCalled())
+    expect(registrarCobro).toHaveBeenCalledWith('sesion-1', { metodoPago: 'efectivo', cajaId: 'caja-2' })
+    expect(localStorage.length).toBe(0)
   })
 
   it('"Cancelar" cierra el modal', () => {
