@@ -318,6 +318,16 @@ describe('CobroModal', () => {
       expect(registrarCobro).toHaveBeenCalledWith('sesion-1', { metodoPago: 'efectivo', cajaId: 'caja-2' })
     })
 
+    it('las cajas son radios nativos del mismo grupo, para que anden las flechas del teclado', () => {
+      abrir([CAJA_1, CAJA_2])
+
+      const radios = screen.getAllByRole('radio') as HTMLInputElement[]
+      expect(radios).toHaveLength(2)
+      expect(radios.every((r) => r.tagName === 'INPUT' && r.type === 'radio')).toBe(true)
+      expect(radios[0].name).not.toBe('')
+      expect(radios[0].name).toBe(radios[1].name)
+    })
+
     it('arranca en la caja recordada y guarda la que se usó al cobrar bien', async () => {
       localStorage.setItem('menyu-staff-caja-id:rest-1', 'caja-2')
       abrir([CAJA_1, CAJA_2])

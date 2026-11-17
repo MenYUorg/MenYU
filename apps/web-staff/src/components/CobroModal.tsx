@@ -187,23 +187,28 @@ export function CobroModal({ sesion, onClose, onDone, cajas, onTurnoCambio }: Co
               {(cajas ?? []).map((c) => {
                 const sel = caja.cajaId === c.cajaId
                 return (
-                  <button
+                  <label
                     key={c.cajaId}
-                    type="button"
-                    role="radio"
-                    aria-checked={sel}
-                    onClick={() => setCajaElegida(c.cajaId)}
                     style={{
+                      display: 'flex', alignItems: 'center', gap: 8,
                       padding: '10px 14px', borderRadius: 8,
                       border: `1.5px solid ${sel ? C.orange : C.border}`,
                       background: sel ? C.orangeBg : C.white,
                       color: sel ? C.orange : '#374151',
                       fontFamily: 'Inter,sans-serif', fontSize: 13, fontWeight: sel ? 600 : 400,
-                      cursor: 'pointer', textAlign: 'left',
+                      cursor: 'pointer',
                     }}
                   >
+                    <input
+                      type="radio"
+                      name={idCaja}
+                      value={c.cajaId}
+                      checked={sel}
+                      onChange={() => setCajaElegida(c.cajaId)}
+                      style={{ accentColor: C.orange, margin: 0 }}
+                    />
                     {c.nombre}
-                  </button>
+                  </label>
                 )
               })}
             </div>

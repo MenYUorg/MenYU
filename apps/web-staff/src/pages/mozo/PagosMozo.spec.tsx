@@ -241,7 +241,8 @@ describe('PagosMozo', () => {
 
     it('con una caja abierta no hay aviso y se puede registrar', async () => {
       await abrirCon([sesion('ses-1', '4')])
-      await vi.waitFor(() => expect(cajasApi).toHaveBeenCalled())
+      // Se espera a que las cajas estén en el store: si no, lo negativo de abajo pasaría sin haber leído la respuesta.
+      await vi.waitFor(() => expect(useCajasStore.getState().cajas).toHaveLength(1))
 
       expect(screen.queryByText(/No hay un turno abierto/)).not.toBeInTheDocument()
       expect(within(tarjeta('4')).getByRole('button', { name: 'Registrar pago' })).toBeEnabled()
@@ -251,6 +252,9 @@ describe('PagosMozo', () => {
       cajasApi.mockRejectedValue(new Error('404'))
       await abrirCon([sesion('ses-1', '4')])
       await vi.waitFor(() => expect(cajasApi).toHaveBeenCalled())
+      // El error deja las cajas en null (que no se distingue de "todavía no llegó"): se vacían las promesas pendientes.
+      await act(async () => {})
+      expect(useCajasStore.getState().cajas).toBeNull()
 
       expect(screen.queryByText(/No hay un turno abierto/)).not.toBeInTheDocument()
       expect(within(tarjeta('4')).getByRole('button', { name: 'Registrar pago' })).toBeEnabled()
