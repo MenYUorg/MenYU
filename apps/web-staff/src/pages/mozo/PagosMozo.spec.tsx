@@ -299,4 +299,32 @@ describe('PagosMozo', () => {
       expect(screen.getByRole('button', { name: /Confirmar pago/ })).toBeDisabled()
     })
   })
+
+  describe('aviso de mesas filtradas', () => {
+    const TEXTO = 'Con el turno abierto ves tus mesas y las que no tienen mozo asignado.'
+
+    it('un MOZO con turno abierto lo ve, con las cajas que ya leyó la pantalla (sin pedirlas de nuevo)', async () => {
+      await abrirCon([sesion('ses-1', '4')])
+
+      expect(await screen.findByText(TEXTO)).toBeInTheDocument()
+      expect(cajasApi).toHaveBeenCalledTimes(1)
+    })
+
+    it('sin turno abierto no aparece', async () => {
+      cajasApi.mockResolvedValue({ cajas: [] })
+      await abrirCon([sesion('ses-1', '4')])
+      await vi.waitFor(() => expect(useCajasStore.getState().cajas).toEqual([]))
+
+      expect(screen.queryByText(TEXTO)).not.toBeInTheDocument()
+    })
+
+    it('un JEFE_SALON con turno abierto no lo ve', async () => {
+      reiniciarContexto()
+      montarContexto(perfilDeJefeSalon('rest-1'))
+      await abrirCon([sesion('ses-1', '4')])
+      await vi.waitFor(() => expect(useCajasStore.getState().cajas).toHaveLength(1))
+
+      expect(screen.queryByText(TEXTO)).not.toBeInTheDocument()
+    })
+  })
 })

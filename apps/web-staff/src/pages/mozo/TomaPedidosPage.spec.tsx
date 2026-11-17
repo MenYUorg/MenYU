@@ -1,8 +1,9 @@
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { api } from '../../services/api'
+import { useCajasStore } from '../../store/cajasStore'
 import type { MenuIngrediente, MenuItem, MenuResponse } from '../../services/api'
-import { perfilDePrueba, membresiaDeRestaurante, reiniciarSesionDePrueba } from '../../test/authClient'
+import { perfilDeJefeSalon, perfilDePrueba, membresiaDeRestaurante, reiniciarSesionDePrueba } from '../../test/authClient'
 import { montarContexto, reiniciarContexto } from '../../test/contexto'
 import { TomaPedidosPage } from './TomaPedidosPage'
 
@@ -20,8 +21,11 @@ vi.mock('../../services/api', () => ({
     sesiones: { abrir: vi.fn(), getActiva: vi.fn() },
     menu: { getByRestaurante: vi.fn() },
     pedidos: { crear: vi.fn() },
+    cajas: { abiertas: vi.fn() },
   },
 }))
+
+const cajasApi = vi.mocked(api.cajas.abiertas)
 
 // ── Datos de prueba ──────────────────────────────────────────────────────────
 
@@ -69,6 +73,8 @@ beforeEach(() => {
   reiniciarSesionDePrueba()
   reiniciarContexto()
   montarContexto(MARTA)
+  useCajasStore.setState({ restauranteId: null, cajas: null })
+  cajasApi.mockResolvedValue({ cajas: [] })
 })
 
 
@@ -238,6 +244,41 @@ describe('TomaPedidosPage (mozo)', () => {
       expect(await screen.findByText('Comanda · Mesa 5')).toBeInTheDocument()
       expect(screen.getAllByText('$950.00')).toHaveLength(2) // la línea de la hamburguesa y el total
       expect(screen.getByText('Hamburguesa')).toBeInTheDocument()
+    })
+  })
+
+  describe('aviso de mesas filtradas', () => {
+    const aviso = () => screen.queryByText('Con el turno abierto ves tus mesas y las que no tienen mozo asignado.')
+
+    it('un MOZO con turno abierto lo ve', async () => {
+      cajasApi.mockResolvedValue({ cajas: [{ cajaId: 'caja-1', nombre: 'Caja 1' }] })
+      vi.mocked(api.mesas.getAll).mockResolvedValue([])
+      render(<MemoryRouter initialEntries={['/mozo/tomar-pedido']}><TomaPedidosPage /></MemoryRouter>)
+
+      expect(await screen.findByText('Con el turno abierto ves tus mesas y las que no tienen mozo asignado.')).toBeInTheDocument()
+    })
+
+    it('sin turno abierto no aparece', async () => {
+      cajasApi.mockResolvedValue({ cajas: [] })
+      vi.mocked(api.mesas.getAll).mockResolvedValue([])
+      render(<MemoryRouter initialEntries={['/mozo/tomar-pedido']}><TomaPedidosPage /></MemoryRouter>)
+      await vi.waitFor(() => expect(cajasApi).toHaveBeenCalled())
+      await act(async () => {})
+
+      expect(useCajasStore.getState().cajas).toEqual([])
+      expect(aviso()).not.toBeInTheDocument()
+    })
+
+    it('un JEFE_SALON con turno abierto no lo ve', async () => {
+      reiniciarContexto()
+      montarContexto(perfilDeJefeSalon('rest-1'))
+      cajasApi.mockResolvedValue({ cajas: [{ cajaId: 'caja-1', nombre: 'Caja 1' }] })
+      vi.mocked(api.mesas.getAll).mockResolvedValue([])
+      render(<MemoryRouter initialEntries={['/mozo/tomar-pedido']}><TomaPedidosPage /></MemoryRouter>)
+      await vi.waitFor(() => expect(useCajasStore.getState().cajas).toHaveLength(1))
+      await act(async () => {})
+
+      expect(aviso()).not.toBeInTheDocument()
     })
   })
 })

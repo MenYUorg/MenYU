@@ -9,6 +9,7 @@ import { useCajasAbiertas, useCajasStore } from '../../store/cajasStore'
 import * as socketService from '../../services/socket'
 import { PageHeader } from '../../components/PageHeader'
 import { CobroModal } from '../../components/CobroModal'
+import { AvisoDeMesasFiltradas } from '../../components/AvisoDeMesasFiltradas'
 
 function getInitials(name?: string): string {
   if (!name) return '?'
@@ -222,6 +223,8 @@ export function PagosMozo() {
             </span>
           )}
         </div>
+
+        <AvisoDeMesasFiltradas cajas={cajas} />
 
         {sinTurno && (
           <div
