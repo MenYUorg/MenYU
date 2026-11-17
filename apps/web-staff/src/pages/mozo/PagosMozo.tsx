@@ -5,6 +5,7 @@ import { Bell, CreditCard, RefreshCw } from 'lucide-react'
 import { api } from '../../services/api'
 import type { SesionActivaItem } from '../../services/api'
 import { useNombreDelRol, useRestauranteId } from '../../store/contextoStore'
+import { useCajasAbiertas, useCajasStore } from '../../store/cajasStore'
 import * as socketService from '../../services/socket'
 import { PageHeader } from '../../components/PageHeader'
 import { CobroModal } from '../../components/CobroModal'
@@ -40,10 +41,13 @@ function SesionActivaCard({
   sesion,
   onRegistrar,
   onVerPedidos,
+  sinTurno,
 }: {
   sesion: SesionActivaItem
   onRegistrar: () => void
   onVerPedidos: () => void
+  /** No hay un turno abierto: el cobro no se puede registrar. */
+  sinTurno: boolean
 }) {
   const { quierePagar } = sesion
   return (
@@ -91,11 +95,12 @@ function SesionActivaCard({
       <div style={{ display: 'flex', gap: 8 }}>
         <button
           onClick={onRegistrar}
+          disabled={sinTurno}
           style={{
             flex: 1, padding: '9px 0', borderRadius: 8, border: 'none',
-            background: C.orange, color: C.white,
+            background: sinTurno ? '#d1d5db' : C.orange, color: sinTurno ? '#9ca3af' : C.white,
             fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 13,
-            cursor: 'pointer',
+            cursor: sinTurno ? 'not-allowed' : 'pointer',
           }}
         >
           Registrar pago
@@ -129,6 +134,11 @@ export function PagosMozo() {
   const [toast, setToast]                     = useState<string | null>(null)
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // Las cajas abiertas las lee solo esta pantalla (al montar y al cambiar de restaurante); el modal las recibe.
+  const cajas = useCajasAbiertas(restauranteId)
+  const cargarCajas = useCajasStore((st) => st.cargar)
+  const sinTurno = cajas !== null && cajas.length === 0
+
   const fetchActivas = useCallback(async () => {
     if (!restauranteId) return
     setLoadingActivas(true)
@@ -143,9 +153,12 @@ export function PagosMozo() {
 
   useEffect(() => {
     if (!restauranteId) return
-    const id = setInterval(() => { void fetchActivas() }, 30000)
+    const id = setInterval(() => {
+      void fetchActivas()
+      void cargarCajas(restauranteId)
+    }, 30000)
     return () => clearInterval(id)
-  }, [restauranteId, fetchActivas])
+  }, [restauranteId, fetchActivas, cargarCajas])
 
   useEffect(() => {
     if (!restauranteId) return
@@ -168,6 +181,11 @@ export function PagosMozo() {
       unsubCobrada()
     }
   }, [restauranteId])
+
+  function abrirModal(sesion: SesionActivaItem) {
+    if (restauranteId) void cargarCajas(restauranteId)
+    setModalSesion(sesion)
+  }
 
   function handleCobroDone(mesaNumero: string) {
     setModalSesion(null)
@@ -205,6 +223,18 @@ export function PagosMozo() {
           )}
         </div>
 
+        {sinTurno && (
+          <div
+            role="alert"
+            style={{
+              background: C.orangeBg, border: `1px solid ${C.orange}`, borderRadius: 10,
+              padding: '12px 16px', fontFamily: 'Inter,sans-serif', fontSize: 13, color: C.navy,
+            }}
+          >
+            No hay un turno abierto: no se pueden registrar pagos hasta que se abra uno.
+          </div>
+        )}
+
         {loadingActivas && sesionesActivas.length === 0 ? (
           <div style={{ display: 'flex', justifyContent: 'center', padding: 28 }}>
             <RefreshCw size={18} color={C.textMut} style={{ animation: 'spin 0.8s linear infinite' }} />
@@ -222,7 +252,8 @@ export function PagosMozo() {
             <SesionActivaCard
               key={s.id}
               sesion={s}
-              onRegistrar={() => setModalSesion(s)}
+              onRegistrar={() => abrirModal(s)}
+              sinTurno={sinTurno}
               onVerPedidos={() => navigate(`/mozo/mesas?mesaId=${s.mesaId}`)}
             />
           ))
@@ -234,6 +265,8 @@ export function PagosMozo() {
           sesion={modalSesion}
           onClose={() => setModalSesion(null)}
           onDone={handleCobroDone}
+          cajas={cajas}
+          onTurnoCambio={() => { if (restauranteId) void cargarCajas(restauranteId) }}
         />
       )}
 

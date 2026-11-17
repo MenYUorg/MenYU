@@ -1,6 +1,8 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
-import { api, type SesionActivaItem } from '../../services/api'
+import { api, ApiError, type SesionActivaItem } from '../../services/api'
+import { useCajasStore } from '../../store/cajasStore'
+import { useContextoStore } from '../../store/contextoStore'
 import * as socketService from '../../services/socket'
 import { perfilDeJefeSalon, perfilDeMozo, reiniciarSesionDePrueba } from '../../test/authClient'
 import { montarContexto, reiniciarContexto } from '../../test/contexto'
@@ -8,8 +10,12 @@ import { PagosMozo } from './PagosMozo'
 
 vi.mock('@menyu/auth-client', async () => (await import('../../test/authClient')).moduloSimulado())
 vi.mock('../../services/api', () => ({
-  api: { sesiones: { getActivas: vi.fn(), registrarCobro: vi.fn() } },
-  ApiError: class extends Error {},
+  api: { sesiones: { getActivas: vi.fn(), registrarCobro: vi.fn() }, cajas: { abiertas: vi.fn() } },
+  ApiError: class extends Error {
+    constructor(message: string, public readonly status: number) {
+      super(message)
+    }
+  },
 }))
 
 const oyentes: { quierePagar?: (d: { sesionId: string }) => void; cobrada?: (d: { sesionId: string }) => void } = {}
@@ -22,6 +28,9 @@ vi.mock('../../services/socket', () => ({
 
 const activasApi = vi.mocked(api.sesiones.getActivas)
 const cobroApi = vi.mocked(api.sesiones.registrarCobro)
+const cajasApi = vi.mocked(api.cajas.abiertas)
+
+const UNA_CAJA = { cajas: [{ cajaId: 'caja-1', nombre: 'Caja 1' }] }
 
 const sesion = (id: string, mesaNumero: string, extra: Partial<SesionActivaItem> = {}): SesionActivaItem => ({
   id,
@@ -63,8 +72,10 @@ beforeEach(() => {
   vi.clearAllMocks()
   reiniciarSesionDePrueba()
   reiniciarContexto()
+  useCajasStore.setState({ restauranteId: null, cajas: null })
   montarContexto(perfilDeMozo('rest-1'))
   activasApi.mockResolvedValue([])
+  cajasApi.mockResolvedValue(UNA_CAJA)
   cobroApi.mockResolvedValue({ ok: true })
 })
 
@@ -169,5 +180,119 @@ describe('PagosMozo', () => {
     await act(async () => { vi.advanceTimersByTime(30_000) })
 
     expect(activasApi).toHaveBeenCalledTimes(2)
+  })
+
+  describe('cajas abiertas', () => {
+    it('sin restaurante elegido no las pide', () => {
+      reiniciarContexto()
+
+      abrir()
+
+      expect(cajasApi).not.toHaveBeenCalled()
+    })
+
+    it('las pide al montar y otra vez al cambiar de restaurante', async () => {
+      await abrirCon([sesion('ses-1', '4')])
+      expect(cajasApi).toHaveBeenCalledTimes(1)
+      expect(cajasApi).toHaveBeenLastCalledWith('rest-1')
+
+      await act(async () => { useContextoStore.setState({ restauranteId: 'rest-2' }) })
+
+      expect(cajasApi).toHaveBeenLastCalledWith('rest-2')
+    })
+
+    it('las recarga cada 30 segundos junto con las mesas y deja de hacerlo al salir', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true })
+      activasApi.mockResolvedValue([sesion('ses-1', '4')])
+      const { unmount } = abrir()
+      await screen.findByText('Mesa 4')
+      expect(cajasApi).toHaveBeenCalledTimes(1)
+
+      await act(async () => { vi.advanceTimersByTime(30_000) })
+      expect(cajasApi).toHaveBeenCalledTimes(2)
+      expect(activasApi).toHaveBeenCalledTimes(2)
+
+      unmount()
+      await act(async () => { vi.advanceTimersByTime(90_000) })
+
+      expect(cajasApi).toHaveBeenCalledTimes(2)
+      expect(activasApi).toHaveBeenCalledTimes(2)
+    })
+
+    it('las vuelve a pedir al abrir el modal', async () => {
+      await abrirCon([sesion('ses-1', '4')])
+      expect(cajasApi).toHaveBeenCalledTimes(1)
+
+      await act(async () => {
+        fireEvent.click(within(tarjeta('4')).getByRole('button', { name: 'Registrar pago' }))
+      })
+
+      expect(cajasApi).toHaveBeenCalledTimes(2)
+    })
+
+    it('sin turno abierto avisa y no deja registrar pagos', async () => {
+      cajasApi.mockResolvedValue({ cajas: [] })
+      await abrirCon([sesion('ses-1', '4')])
+
+      expect(await screen.findByText(/No hay un turno abierto/)).toBeInTheDocument()
+      expect(within(tarjeta('4')).getByRole('button', { name: 'Registrar pago' })).toBeDisabled()
+      expect(within(tarjeta('4')).getByRole('button', { name: 'Ver pedidos' })).toBeEnabled()
+    })
+
+    it('con una caja abierta no hay aviso y se puede registrar', async () => {
+      await abrirCon([sesion('ses-1', '4')])
+      await vi.waitFor(() => expect(cajasApi).toHaveBeenCalled())
+
+      expect(screen.queryByText(/No hay un turno abierto/)).not.toBeInTheDocument()
+      expect(within(tarjeta('4')).getByRole('button', { name: 'Registrar pago' })).toBeEnabled()
+    })
+
+    it('si no se pueden leer (error) no bloquea nada', async () => {
+      cajasApi.mockRejectedValue(new Error('404'))
+      await abrirCon([sesion('ses-1', '4')])
+      await vi.waitFor(() => expect(cajasApi).toHaveBeenCalled())
+
+      expect(screen.queryByText(/No hay un turno abierto/)).not.toBeInTheDocument()
+      expect(within(tarjeta('4')).getByRole('button', { name: 'Registrar pago' })).toBeEnabled()
+    })
+
+    it('con dos cajas el modal las recibe y manda la elegida', async () => {
+      cajasApi.mockResolvedValue({
+        cajas: [{ cajaId: 'caja-1', nombre: 'Caja 1' }, { cajaId: 'caja-2', nombre: 'Caja 2' }],
+      })
+      await abrirCon([sesion('ses-1', '4')])
+      await vi.waitFor(() => expect(cajasApi).toHaveBeenCalled())
+
+      await act(async () => {
+        fireEvent.click(within(tarjeta('4')).getByRole('button', { name: 'Registrar pago' }))
+      })
+      fireEvent.click(screen.getByRole('radio', { name: 'Caja 2' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Efectivo' }))
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /Confirmar pago/ }))
+      })
+
+      expect(cobroApi).toHaveBeenCalledWith('ses-1', { metodoPago: 'efectivo', cajaId: 'caja-2' })
+    })
+
+    it('si el cobro dice que el turno cambió, vuelve a leer las cajas y bloquea', async () => {
+      await abrirCon([sesion('ses-1', '4')])
+      await vi.waitFor(() => expect(cajasApi).toHaveBeenCalled())
+      await act(async () => {
+        fireEvent.click(within(tarjeta('4')).getByRole('button', { name: 'Registrar pago' }))
+      })
+      expect(cajasApi).toHaveBeenCalledTimes(2)
+
+      cobroApi.mockRejectedValue(new ApiError('No hay un turno abierto', 400))
+      cajasApi.mockResolvedValue({ cajas: [] })
+      fireEvent.click(screen.getByRole('button', { name: 'Efectivo' }))
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /Confirmar pago/ }))
+      })
+
+      expect(cajasApi).toHaveBeenCalledTimes(3)
+      expect(screen.getAllByText(/No hay un turno abierto/).length).toBeGreaterThan(0)
+      expect(screen.getByRole('button', { name: /Confirmar pago/ })).toBeDisabled()
+    })
   })
 })
