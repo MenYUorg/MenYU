@@ -28,6 +28,7 @@ import type {
   DatosDelPlatoParaElAsistente,
   InformacionLocal,
   PreguntaFrecuente,
+  CajasAbiertas,
 } from '@menyu/types'
 
 export class ApiError extends Error {
@@ -386,6 +387,12 @@ export const api = {
       req<void>('DELETE', `/mozos/${mozoId}/mesas/${mesaId}`),
     llamadosHoy: (mozoId: string) =>
       req<{ total: number }>('GET', `/mozos/${mozoId}/llamados-hoy`),
+  },
+
+  cajas: {
+    /** Las cajas abiertas del turno abierto (#360), para elegir en cuál se cobra. Vacío = no hay un turno abierto. */
+    abiertas: (restauranteId: string) =>
+      req<CajasAbiertas>('GET', `/cajas/abiertas?restauranteId=${encodeURIComponent(restauranteId)}`),
   },
 
   /** Quién tiene acceso al restaurante y cómo quitárselo. El alta es la invitación (`api.invitaciones.crear`). */
