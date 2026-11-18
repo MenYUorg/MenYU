@@ -1,5 +1,17 @@
 import { irAlLogin, renovarSesion, tokenDeAcceso, urlDeLaApi } from '@menyu/auth-client'
-import type { CajasAbiertas, Mesa, EstadoPedido, SesionHistorial } from '@menyu/types'
+import type {
+  AbrirTurnoBody,
+  AperturaDeTurno,
+  AsignacionDeMesa,
+  CajaDelRestaurante,
+  CajasAbiertas,
+  EstadoPedido,
+  Mesa,
+  PreparacionDeTurno,
+  SesionHistorial,
+  TurnoActual,
+  TurnoReasignado,
+} from '@menyu/types'
 
 // ── Base fetch ────────────────────────────────────────────────────────────────
 
@@ -221,6 +233,34 @@ export const api = {
     /** Las cajas abiertas del turno abierto (#359), para elegir en cuál se cobra. Vacío = no hay un turno abierto. */
     abiertas: (restauranteId: string) =>
       authFetch<CajasAbiertas>(`/cajas/abiertas?restauranteId=${encodeURIComponent(restauranteId)}`),
+
+    /** Todas las cajas del restaurante, activas y dadas de baja, por nombre: para elegir con cuáles se abre el turno. */
+    todas: (restauranteId: string) =>
+      authFetch<CajaDelRestaurante[]>(`/cajas?restauranteId=${encodeURIComponent(restauranteId)}`),
+  },
+
+  turnos: {
+    /** El turno abierto del restaurante; `turno` en `null` si no hay uno (#359). */
+    actual: (restauranteId: string) =>
+      authFetch<TurnoActual>(`/turnos/actual?restauranteId=${encodeURIComponent(restauranteId)}`),
+
+    /** Los mozos, las mesas y la precarga de asignaciones: para abrir el turno o reasignar sus mesas. */
+    preparacion: (restauranteId: string) =>
+      authFetch<PreparacionDeTurno>(`/turnos/preparacion?restauranteId=${encodeURIComponent(restauranteId)}`),
+
+    /** Abre el turno. Desde staff `asignaciones` va siempre: es la lista que se ve en pantalla ([] = ninguna). */
+    abrir: (body: AbrirTurnoBody) =>
+      authFetch<AperturaDeTurno>('/turnos', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+
+    /** Reemplaza la lista entera de asignaciones de mesas del turno. */
+    reasignar: (turnoId: string, asignaciones: AsignacionDeMesa[]) =>
+      authFetch<TurnoReasignado>(`/turnos/${encodeURIComponent(turnoId)}/asignaciones`, {
+        method: 'PUT',
+        body: JSON.stringify({ asignaciones }),
+      }),
   },
 
   mesas: {
