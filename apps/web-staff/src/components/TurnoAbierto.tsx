@@ -2,8 +2,10 @@ import { useState } from 'react'
 import type { PreparacionDeTurno, TurnoDeCaja } from '@menyu/types'
 import { api, ApiError } from '../services/api'
 import { AsignacionDeMesas } from './AsignacionDeMesas'
+import { MovimientosDelTurno } from './MovimientosDelTurno'
 import { formatearFechaHora, formatearMonto } from '../utils/formato'
 import { ordenarMesas } from '../utils/mesas'
+import { MENSAJE_TURNO_CERRADO } from '../utils/conflictosDeCaja'
 import {
   asignacionesAEnviar,
   asignacionesIniciales,
@@ -11,9 +13,6 @@ import {
   textoDeAsignacionQueNoSigue,
   type ValoresDeAsignacion,
 } from '../utils/asignaciones'
-
-/** El 409 de PUT /turnos/:id/asignaciones con el turno cerrado: apps/backend/src/caja/conflictos.ts (MENSAJE_TURNO_CERRADO). */
-export const MENSAJE_TURNO_CERRADO = 'El turno está cerrado'
 
 const C = {
   orange:   '#E8563A',
@@ -57,8 +56,9 @@ const estiloBoton = (principal: boolean, deshabilitado = false) => ({
 
 /**
  * El turno abierto del restaurante (#359): desde cuándo y quién lo abrió, sus cajas con el fondo, las observaciones y
- * las mesas por mozo. "Reasignar mesas" pide la preparación cada vez (los mozos y las mesas pueden haber cambiado) y
- * arranca desde las asignaciones actuales del turno, no desde la precarga. Cerrar el turno llega con el PR 3.
+ * las mesas por mozo, y los movimientos de caja. "Reasignar mesas" pide la preparación cada vez (los mozos y las mesas
+ * pueden haber cambiado) y arranca desde las asignaciones actuales del turno, no desde la precarga. Cerrar el turno llega
+ * con el PR 4.
  */
 export function TurnoAbierto({ turno, restauranteId, onReasignado, onTurnoCambio }: TurnoAbiertoProps) {
   const [reasignacion, setReasignacion] = useState<Reasignacion>({ estado: 'cerrada' })
@@ -172,6 +172,8 @@ export function TurnoAbierto({ turno, restauranteId, onReasignado, onTurnoCambio
           </table>
         )}
       </section>
+
+      <MovimientosDelTurno turno={turno} onTurnoCambio={onTurnoCambio} />
     </div>
   )
 }
