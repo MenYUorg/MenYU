@@ -9,8 +9,7 @@ import { PageHeader } from '../../components/PageHeader'
 import { FormularioDeApertura } from '../../components/FormularioDeApertura'
 import { TurnoAbierto } from '../../components/TurnoAbierto'
 
-function getInitials(name?: string): string {
-  if (!name) return '?'
+function getInitials(name: string): string {
   return name.split(' ').slice(0, 2).map((w) => w[0]).join('').toUpperCase()
 }
 
@@ -127,7 +126,14 @@ export function CajaPage() {
 
         {estado.tipo === 'listo' && restauranteId && (
           estado.turno
-            ? <TurnoAbierto turno={estado.turno} />
+            ? (
+              <TurnoAbierto
+                turno={estado.turno}
+                restauranteId={restauranteId}
+                onReasignado={mostrarTurno}
+                onTurnoCambio={alCambiarElTurno}
+              />
+            )
             : (
               <FormularioDeApertura
                 key={restauranteId}

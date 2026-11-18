@@ -1,4 +1,10 @@
-import { asignacionesAEnviar, asignacionesIniciales, textoDelAviso } from './asignaciones'
+import {
+  asignacionesAEnviar,
+  asignacionesIniciales,
+  asignacionesQueNoSiguen,
+  textoDeAsignacionQueNoSigue,
+  textoDelAviso,
+} from './asignaciones'
 
 const mesas = [{ id: 'mesa-1' }, { id: 'mesa-2' }, { id: 'mesa-3' }]
 const mozos = [{ id: 'ana' }, { id: 'beto' }]
@@ -47,5 +53,24 @@ describe('textoDelAviso', () => {
     ['mozo-sin-cuenta', 'Mesa 4: su mozo todavía no tiene cuenta; elegí otro.'],
   ] as const)('%s', (motivo, texto) => {
     expect(textoDelAviso({ mesaId: 'mesa-4', mesaNumero: '4', motivo })).toBe(texto)
+  })
+})
+
+describe('asignacionesQueNoSiguen', () => {
+  const delTurno = (mesaId: string, mozoId: string) => ({ mesaId, mesaNumero: mesaId.slice(5), mozoId, mozoNombre: mozoId })
+
+  it('devuelve las de una mesa que ya no está o de un mozo que ya no se puede asignar', () => {
+    const asignaciones = [delTurno('mesa-1', 'ana'), delTurno('mesa-2', 'baja'), delTurno('mesa-9', 'beto')]
+
+    expect(asignacionesQueNoSiguen(asignaciones, mesas, mozos)).toEqual([delTurno('mesa-2', 'baja'), delTurno('mesa-9', 'beto')])
+  })
+
+  it('si todas siguen, ninguna', () => {
+    expect(asignacionesQueNoSiguen([delTurno('mesa-1', 'ana')], mesas, mozos)).toEqual([])
+  })
+
+  it('el aviso nombra la mesa y el mozo', () => {
+    expect(textoDeAsignacionQueNoSigue({ mesaId: 'mesa-4', mesaNumero: '4', mozoId: 'x', mozoNombre: 'Carla' }))
+      .toBe('Mesa 4: Carla ya no se puede asignar; queda sin asignar.')
   })
 })

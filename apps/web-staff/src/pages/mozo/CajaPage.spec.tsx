@@ -527,4 +527,242 @@ describe('CajaPage', () => {
       })
     })
   })
+
+  describe('con turno: verlo y reasignar sus mesas', () => {
+    const asignacion = (mesaId: string, mesaNumero: string, mozoId: string, mozoNombre: string) => ({ mesaId, mesaNumero, mozoId, mozoNombre })
+
+    const TURNO_COMPLETO: TurnoDeCaja = {
+      ...TURNO,
+      observaciones: 'Falta cambio chico',
+      cajas: [
+        { id: 'tc-1', cajaId: 'c-barra', nombre: 'Barra', fondoInicial: 0, abiertoEn: TURNO.abiertoEn },
+        { id: 'tc-2', cajaId: 'c-terraza', nombre: 'Terraza', fondoInicial: 2500.5, abiertoEn: TURNO.abiertoEn },
+      ],
+      // Como las manda la API: ordenadas como texto.
+      asignaciones: [asignacion('m1', '1', 'ana', 'Ana'), asignacion('m10', '10', 'ana', 'Ana'), asignacion('m2', '2', 'beto', 'Beto')],
+    }
+
+    async function abrirConTurno(turno: TurnoDeCaja = TURNO_COMPLETO) {
+      turnosApi.actual.mockResolvedValue({ turno })
+      abrir()
+      await screen.findByText('Turno abierto')
+    }
+
+    async function abrirEditor() {
+      fireEvent.click(screen.getByRole('button', { name: 'Reasignar mesas' }))
+      await screen.findByRole('button', { name: 'Guardar' })
+    }
+
+    const filas = () => screen.getAllByRole('row').slice(1).map((f) => within(f).getAllByRole('cell').map((c) => c.textContent))
+
+    it('muestra las cajas con su fondo, las observaciones y no ofrece cerrar el turno', async () => {
+      await abrirConTurno()
+
+      const cajas = within(screen.getByRole('list', { name: 'Cajas del turno' })).getAllByRole('listitem')
+      expect(cajas.map((c) => c.textContent)).toEqual(['Barra · fondo $0', 'Terraza · fondo $2.500,5'])
+      expect(screen.getByText('Observaciones: Falta cambio chico')).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /cerrar/i })).not.toBeInTheDocument()
+    })
+
+    it('sin observaciones no las muestra', async () => {
+      await abrirConTurno({ ...TURNO_COMPLETO, observaciones: null })
+
+      expect(screen.queryByText(/Observaciones/)).not.toBeInTheDocument()
+    })
+
+    it('la tabla de mesas por mozo va en orden natural', async () => {
+      await abrirConTurno()
+
+      expect(screen.getByRole('heading', { name: 'Mesas por mozo' })).toBeInTheDocument()
+      expect(filas()).toEqual([['1', 'Ana'], ['2', 'Beto'], ['10', 'Ana']])
+    })
+
+    it('sin asignaciones explica que los mozos ven todas las mesas', async () => {
+      await abrirConTurno({ ...TURNO_COMPLETO, asignaciones: [] })
+
+      expect(screen.getByText('Sin mesas asignadas: los mozos ven todas las mesas.')).toBeInTheDocument()
+      expect(screen.queryByRole('table')).not.toBeInTheDocument()
+    })
+
+    it('"Reasignar mesas" arranca desde las asignaciones del turno, no desde la precarga', async () => {
+      // La precarga dice mesa 2 → Beto y nada más; el turno tiene la 2 con Beto y además la 1 y la 10 con Ana.
+      await abrirConTurno({ ...TURNO_COMPLETO, asignaciones: [asignacion('m10', '10', 'ana', 'Ana')] })
+
+      await abrirEditor()
+
+      expect(turnosApi.preparacion).toHaveBeenCalledWith('rest-1')
+      expect(mozoDeLaMesa('10').value).toBe('ana')
+      expect(mozoDeLaMesa('2').value).toBe('')
+      expect(mozoDeLaMesa('1').value).toBe('')
+      // Los avisos de la precarga son de la apertura, no de la reasignación.
+      expect(screen.queryByRole('list', { name: 'Avisos de la precarga' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('table')).not.toBeInTheDocument()
+    })
+
+    it('mientras lee las mesas y los mozos muestra que está cargando', async () => {
+      const preparacion = pendiente<PreparacionDeTurno>()
+      turnosApi.preparacion.mockReturnValueOnce(preparacion.promesa)
+      await abrirConTurno()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Reasignar mesas' }))
+
+      expect(screen.getByRole('status')).toHaveTextContent('Cargando las mesas y los mozos…')
+      expect(screen.queryByRole('button', { name: 'Reasignar mesas' })).not.toBeInTheDocument()
+      await act(async () => { preparacion.resolver(PREPARACION) })
+      expect(screen.getByRole('button', { name: 'Guardar' })).toBeInTheDocument()
+    })
+
+    it('pide la preparación cada vez que se abre el editor', async () => {
+      await abrirConTurno()
+      await abrirEditor()
+      fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }))
+      turnosApi.preparacion.mockResolvedValue({ ...PREPARACION, mozos: [...PREPARACION.mozos, { id: 'caro', nombre: 'Caro' }] })
+
+      await abrirEditor()
+
+      expect(turnosApi.preparacion).toHaveBeenCalledTimes(2)
+      expect(within(mozoDeLaMesa('1')).getByRole('option', { name: 'Caro' })).toBeInTheDocument()
+    })
+
+    it('avisa de las asignaciones del turno cuyo mozo ya no se puede asignar, y esa mesa arranca sin asignar', async () => {
+      await abrirConTurno({ ...TURNO_COMPLETO, asignaciones: [asignacion('m1', '1', 'baja', 'Dora'), asignacion('m2', '2', 'beto', 'Beto')] })
+
+      await abrirEditor()
+
+      expect(within(screen.getByRole('list', { name: 'Asignaciones que no siguen' })).getByRole('listitem'))
+        .toHaveTextContent('Mesa 1: Dora ya no se puede asignar; queda sin asignar.')
+      expect(mozoDeLaMesa('1').value).toBe('')
+      expect(mozoDeLaMesa('2').value).toBe('beto')
+    })
+
+    it('"Cancelar" descarta los cambios y no guarda nada', async () => {
+      await abrirConTurno()
+      await abrirEditor()
+      fireEvent.change(mozoDeLaMesa('1'), { target: { value: 'beto' } })
+
+      fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }))
+
+      expect(filas()).toEqual([['1', 'Ana'], ['2', 'Beto'], ['10', 'Ana']])
+      expect(turnosApi.reasignar).not.toHaveBeenCalled()
+      await abrirEditor()
+      expect(mozoDeLaMesa('1').value).toBe('ana')
+    })
+
+    it('"Guardar" manda la lista completa con un PUT y muestra el turno de la respuesta', async () => {
+      const respuesta = { ...TURNO_COMPLETO, asignaciones: [asignacion('m1', '1', 'beto', 'Beto')] }
+      turnosApi.reasignar.mockResolvedValue({ turno: respuesta })
+      await abrirConTurno()
+      await abrirEditor()
+      fireEvent.change(mozoDeLaMesa('1'), { target: { value: 'beto' } })
+      fireEvent.change(mozoDeLaMesa('10'), { target: { value: '' } })
+
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar' }))
+
+      await waitFor(() => expect(filas()).toEqual([['1', 'Beto']]))
+      expect(turnosApi.reasignar).toHaveBeenCalledWith('turno-1', expect.arrayContaining([
+        { mesaId: 'm1', mozoId: 'beto' },
+        { mesaId: 'm2', mozoId: 'beto' },
+      ]))
+      expect(turnosApi.reasignar.mock.calls[0]?.[1]).toHaveLength(2)
+      expect(turnosApi.actual).toHaveBeenCalledTimes(1)
+    })
+
+    it('sin ninguna mesa asignada manda la lista vacía', async () => {
+      turnosApi.reasignar.mockResolvedValue({ turno: { ...TURNO_COMPLETO, asignaciones: [] } })
+      await abrirConTurno({ ...TURNO_COMPLETO, asignaciones: [asignacion('m2', '2', 'beto', 'Beto')] })
+      await abrirEditor()
+      fireEvent.change(mozoDeLaMesa('2'), { target: { value: '' } })
+
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar' }))
+
+      expect(await screen.findByText('Sin mesas asignadas: los mozos ven todas las mesas.')).toBeInTheDocument()
+      expect(turnosApi.reasignar).toHaveBeenCalledWith('turno-1', [])
+    })
+
+    it('mientras guarda, "Guardando…" y todo deshabilitado', async () => {
+      const guardado = pendiente<{ turno: TurnoDeCaja }>()
+      turnosApi.reasignar.mockReturnValueOnce(guardado.promesa)
+      await abrirConTurno()
+      await abrirEditor()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar' }))
+
+      expect(await screen.findByRole('button', { name: 'Guardando…' })).toBeDisabled()
+      expect(screen.getByRole('button', { name: 'Cancelar' })).toBeDisabled()
+      expect(mozoDeLaMesa('1')).toBeDisabled()
+      await act(async () => { guardado.resolver({ turno: TURNO_COMPLETO }) })
+    })
+
+    it('un 409 "El turno está cerrado" lo avisa y vuelve a leer el turno', async () => {
+      turnosApi.reasignar.mockRejectedValueOnce(new ApiError('El turno está cerrado', 409))
+      await abrirConTurno()
+      await abrirEditor()
+      turnosApi.actual.mockResolvedValue({ turno: null })
+
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar' }))
+
+      expect(await screen.findByRole('button', { name: 'Abrir turno' })).toBeInTheDocument()
+      expect(screen.getAllByRole('alert')[0]).toHaveTextContent('El turno está cerrado')
+      expect(turnosApi.actual).toHaveBeenCalledTimes(2)
+    })
+
+    it('otro error se muestra, no recarga y se puede volver a guardar', async () => {
+      turnosApi.reasignar
+        .mockRejectedValueOnce(new ApiError('Otra operación modificó esto al mismo tiempo; probá de nuevo', 409))
+        .mockResolvedValueOnce({ turno: TURNO_COMPLETO })
+      await abrirConTurno()
+      await abrirEditor()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar' }))
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('Otra operación modificó esto al mismo tiempo; probá de nuevo')
+      expect(turnosApi.actual).toHaveBeenCalledTimes(1)
+
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar' }))
+
+      await waitFor(() => expect(screen.queryByRole('button', { name: 'Guardar' })).not.toBeInTheDocument())
+      expect(turnosApi.reasignar).toHaveBeenCalledTimes(2)
+    })
+
+    it('un "El turno está cerrado" que no es 409 no recarga', async () => {
+      turnosApi.reasignar.mockRejectedValueOnce(new ApiError('El turno está cerrado', 400))
+      await abrirConTurno()
+      await abrirEditor()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar' }))
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('El turno está cerrado')
+      expect(turnosApi.actual).toHaveBeenCalledTimes(1)
+    })
+
+    it('un error que no es de la API al guardar muestra uno genérico', async () => {
+      turnosApi.reasignar.mockRejectedValueOnce('se cortó')
+      await abrirConTurno()
+      await abrirEditor()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar' }))
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('No se pudieron guardar las mesas')
+    })
+
+    it('si no se puede leer la preparación lo avisa y "Reasignar mesas" vuelve a intentar', async () => {
+      turnosApi.preparacion.mockRejectedValueOnce(new Error('Sin conexión'))
+      await abrirConTurno()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Reasignar mesas' }))
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('Sin conexión')
+      await abrirEditor()
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    })
+
+    it('un error sin mensaje al leer la preparación muestra uno genérico', async () => {
+      turnosApi.preparacion.mockRejectedValueOnce(undefined)
+      await abrirConTurno()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Reasignar mesas' }))
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('No se pudieron cargar las mesas y los mozos')
+    })
+  })
 })
