@@ -474,3 +474,134 @@ describe('PagosPage: las cajas abiertas del turno (#360)', () => {
     expect(screen.getByRole('alert')).toHaveTextContent(TEXTO_SIN_TURNO)
   })
 })
+
+describe('PagosPage: el cobro con caja y propina (#360)', () => {
+  const PRINCIPAL = { cajaId: 'caja-1', nombre: 'Principal' }
+  const BARRA = { cajaId: 'caja-2', nombre: 'Barra' }
+
+  /** Abre la pantalla con esas cajas abiertas, espera las lecturas y abre el cobro de la mesa 4. */
+  async function abrirCobroCon(cajas: (typeof PRINCIPAL)[] | 'falla') {
+    if (cajas === 'falla') cajasAbiertas.mockRejectedValue(new Error('Sin conexión'))
+    else cajasAbiertas.mockResolvedValue({ cajas })
+    render(
+      <MemoryRouter initialEntries={['/admin/pagos']}>
+        <Routes>
+          <Route path="/admin/pagos" element={<PagosPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+    await screen.findByText('Mesa 4')
+    await act(async () => {})
+    fireEvent.click(within(tarjeta('4')).getByRole('button', { name: 'Registrar pago' }))
+    const modal = screen.getByText('Registrar pago · Mesa 4').closest('div[style*="position: fixed"]') as HTMLElement
+    await act(async () => {})
+    return modal
+  }
+
+  const confirmar = (modal: HTMLElement) => within(modal).getByRole('button', { name: 'Confirmar pago' })
+  const enviado = () => {
+    const [, opciones] = fetchMock.mock.calls.find(([url]) => url.includes('/sessions/ses-4/cobro'))!
+    return JSON.parse(opciones?.body as string)
+  }
+  const cobrar = (modal: HTMLElement) => act(async () => { fireEvent.click(confirmar(modal)) })
+
+  beforeEach(() => {
+    // reset y no clear: una respuesta `mockReturnValueOnce` que un test no usó no pasa al siguiente.
+    vi.resetAllMocks()
+    listarMozos.mockResolvedValue([] as never)
+    respuestas['/sessions/ses-4/cobro'] = json({ ok: true })
+  })
+
+  describe('la caja', () => {
+    it('con dos cajas abiertas se elige con radios, sin ninguna elegida, y sin elegir no deja confirmar', async () => {
+      const modal = await abrirCobroCon([PRINCIPAL, BARRA])
+      fireEvent.click(within(modal).getByRole('button', { name: 'Efectivo' }))
+
+      const grupo = within(modal).getByRole('radiogroup', { name: 'Caja' })
+      const radios = within(grupo).getAllByRole('radio') as HTMLInputElement[]
+      expect(radios.map((r) => [r.value, r.checked])).toEqual([['caja-1', false], ['caja-2', false]])
+      expect(within(modal).getByText('Elegí en qué caja se cobra')).toBeInTheDocument()
+      expect(confirmar(modal)).toBeDisabled()
+    })
+
+    it('con dos cajas manda la elegida', async () => {
+      const modal = await abrirCobroCon([PRINCIPAL, BARRA])
+      fireEvent.click(within(modal).getByRole('button', { name: 'Efectivo' }))
+
+      fireEvent.click(within(modal).getByRole('radio', { name: 'Barra' }))
+      expect(within(modal).queryByText('Elegí en qué caja se cobra')).not.toBeInTheDocument()
+      expect(within(modal).getByRole('radio', { name: 'Barra' })).toBeChecked()
+      await cobrar(modal)
+
+      expect(enviado()).toEqual({ metodoPago: 'efectivo', mozoId: null, cajaId: 'caja-2' })
+    })
+
+    it('con una sola caja no hay selector ni se manda cajaId: la elige el backend', async () => {
+      const modal = await abrirCobroCon([PRINCIPAL])
+      fireEvent.click(within(modal).getByRole('button', { name: 'Efectivo' }))
+
+      expect(within(modal).queryByRole('radiogroup')).not.toBeInTheDocument()
+      await cobrar(modal)
+
+      expect(enviado()).toEqual({ metodoPago: 'efectivo', mozoId: null })
+    })
+
+    it('sin turno abierto lo dice y no deja confirmar', async () => {
+      const modal = await abrirCobroCon([])
+      fireEvent.click(within(modal).getByRole('button', { name: 'Efectivo' }))
+
+      expect(within(modal).getByRole('alert')).toHaveTextContent('No hay un turno abierto: no se puede registrar el cobro.')
+      expect(confirmar(modal)).toBeDisabled()
+    })
+
+    it('si no se pudieron leer las cajas no bloquea nada ni manda cajaId (decide el backend)', async () => {
+      const modal = await abrirCobroCon('falla')
+      fireEvent.click(within(modal).getByRole('button', { name: 'Efectivo' }))
+
+      expect(within(modal).queryByRole('alert')).not.toBeInTheDocument()
+      expect(within(modal).queryByRole('radiogroup')).not.toBeInTheDocument()
+      await cobrar(modal)
+
+      expect(enviado()).toEqual({ metodoPago: 'efectivo', mozoId: null })
+    })
+  })
+
+  describe('la propina', () => {
+    const propina = (modal: HTMLElement) => within(modal).getByLabelText('Propina (opcional)') as HTMLInputElement
+
+    it('es opcional, con teclado decimal, y viaja aparte sin cambiar el total de la mesa', async () => {
+      const modal = await abrirCobroCon([PRINCIPAL])
+      fireEvent.click(within(modal).getByRole('button', { name: 'Efectivo' }))
+
+      expect(propina(modal)).toHaveAttribute('inputmode', 'decimal')
+      fireEvent.change(propina(modal), { target: { value: '500,5' } })
+      expect(within(modal).getByText('$12.500')).toBeInTheDocument()
+      await cobrar(modal)
+
+      expect(enviado()).toEqual({ metodoPago: 'efectivo', mozoId: null, propina: 500.5 })
+    })
+
+    it.each([['vacía', ''], ['en 0', '0']])('%s no se manda', async (_caso, texto) => {
+      const modal = await abrirCobroCon([PRINCIPAL])
+      fireEvent.click(within(modal).getByRole('button', { name: 'Efectivo' }))
+
+      fireEvent.change(propina(modal), { target: { value: texto } })
+      await cobrar(modal)
+
+      expect(enviado()).toEqual({ metodoPago: 'efectivo', mozoId: null })
+    })
+
+    it('mal escrita avisa junto al campo y no deja confirmar', async () => {
+      const modal = await abrirCobroCon([PRINCIPAL])
+      fireEvent.click(within(modal).getByRole('button', { name: 'Efectivo' }))
+      expect(propina(modal)).toHaveAttribute('aria-invalid', 'false')
+
+      fireEvent.change(propina(modal), { target: { value: '-1' } })
+
+      expect(propina(modal)).toHaveAttribute('aria-invalid', 'true')
+      expect(propina(modal)).toHaveAccessibleDescription('La propina no puede ser negativa')
+      expect(within(modal).getByRole('alert')).toHaveTextContent('La propina no puede ser negativa')
+      expect(confirmar(modal)).toBeDisabled()
+    })
+  })
+})

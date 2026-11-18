@@ -5,9 +5,12 @@ import { authDelSocket } from '@menyu/auth-client'
 import { urlDelSocket } from '@menyu/ui/socket'
 import { io, type Socket } from 'socket.io-client'
 import type { CajaAbierta } from '@menyu/types'
+import { cajaDelCobro, parsearPropina } from '@menyu/ui/caja'
 import { useContextStore, useRolActual } from '../../../store/contextStore'
 import { api, pedirJson } from '../../../services/api'
 import { AvisoSinTurno } from './AvisoSinTurno'
+import { CampoDePropina } from './CampoDePropina'
+import { SelectorDeCaja } from './SelectorDeCaja'
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 const C = {
@@ -94,13 +97,18 @@ function CobroModal({
   restauranteId,
   onClose,
   onDone,
+  cajas,
 }: {
   sesion: SesionActiva
   restauranteId: string
   onClose: () => void
   onDone: () => void
+  /** Las cajas abiertas del turno, que lee la pantalla (null: no se pudieron leer, no se bloquea nada). */
+  cajas: CajaAbierta[] | null
 }) {
   const [metodo,  setMetodo]  = useState<MetodoPago | null>(null)
+  const [cajaElegida, setCajaElegida] = useState<string | null>(null)
+  const [propinaTxt,  setPropinaTxt]  = useState('')
   const [mozoId,  setMozoId]  = useState('')
   const [loading, setLoading] = useState(false)
   const [error,   setError]   = useState<string | null>(null)
@@ -112,14 +120,22 @@ function CobroModal({
       .catch(() => { /* silencioso — el select queda vacío */ })
   }, [restauranteId])
 
-  const canConfirm = !!metodo
+  // Como en web-staff (#358): cajaId solo con dos o más cajas, y la propina vacía o en 0 no viaja.
+  const caja = cajaDelCobro(cajas, cajaElegida)
+  const propina = parsearPropina(propinaTxt)
+  const canConfirm = !!metodo && !caja.sinTurno && !caja.falta && propina.ok
 
   async function handleConfirmar() {
     if (!canConfirm) return
     setLoading(true)
     setError(null)
     try {
-      const body = { metodoPago: metodo, mozoId: mozoId || null }
+      const body = {
+        metodoPago: metodo,
+        mozoId: mozoId || null,
+        ...(caja.cajaId ? { cajaId: caja.cajaId } : {}),
+        ...(propina.ok && propina.valor !== undefined ? { propina: propina.valor } : {}),
+      }
       await apiFetch(`/sessions/${sesion.id}/cobro`, {
         method: 'PATCH',
         body: JSON.stringify(body),
@@ -190,6 +206,18 @@ function CobroModal({
             )
           })}
         </div>
+
+        {caja.sinTurno && (
+          <p role="alert" style={{ fontFamily: 'Inter,sans-serif', fontSize: 12, color: '#dc2626', marginBottom: 14 }}>
+            No hay un turno abierto: no se puede registrar el cobro.
+          </p>
+        )}
+
+        {caja.mostrarSelector && (
+          <SelectorDeCaja cajas={cajas ?? []} elegida={caja.cajaId} falta={caja.falta} onElegir={setCajaElegida} />
+        )}
+
+        <CampoDePropina valor={propinaTxt} propina={propina} onChange={setPropinaTxt} />
 
         <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 12, fontWeight: 600, color: C.text, marginBottom: 8 }}>
           Mozo que cobró
@@ -705,6 +733,7 @@ export function PagosPage() {
           restauranteId={selectedRestauranteId ?? ''}
           onClose={() => setModalSesion(null)}
           onDone={handleCobroDone}
+          cajas={cajas}
         />
       )}
 
