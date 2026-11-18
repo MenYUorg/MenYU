@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { usePerfil } from '@menyu/auth-client'
 import { Bell, CreditCard, RefreshCw } from 'lucide-react'
 import { api } from '../../services/api'
 import type { SesionActivaItem } from '../../services/api'
-import { useNombreDelRol, useRestauranteId } from '../../store/contextoStore'
+import { puedeVerCaja, useNombreDelRol, useRestauranteId, useRolesActuales } from '../../store/contextoStore'
 import { useCajasAbiertas, useCajasStore } from '../../store/cajasStore'
 import * as socketService from '../../services/socket'
 import { PageHeader } from '../../components/PageHeader'
@@ -128,6 +128,8 @@ export function PagosMozo() {
   const restauranteId      = useRestauranteId()
   const nombreUsuario      = perfil.nombre || perfil.email
   const rolMostrado        = useNombreDelRol()
+  // Abrir el turno es del grupo CAJA (#359): el MOZO ve el aviso pero no el enlace.
+  const abreTurnos         = puedeVerCaja(useRolesActuales())
 
   const [sesionesActivas, setSesionesActivas] = useState<SesionActivaItem[]>([])
   const [loadingActivas, setLoadingActivas]   = useState(false)
@@ -235,6 +237,12 @@ export function PagosMozo() {
             }}
           >
             No hay un turno abierto: no se pueden registrar pagos hasta que se abra uno.
+            {abreTurnos && (
+              <>
+                {' '}
+                <Link to="/mozo/caja" style={{ color: C.orange, fontWeight: 700 }}>Abrir turno</Link>
+              </>
+            )}
           </div>
         )}
 

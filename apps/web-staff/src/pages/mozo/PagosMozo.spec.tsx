@@ -239,6 +239,24 @@ describe('PagosMozo', () => {
       expect(within(tarjeta('4')).getByRole('button', { name: 'Ver pedidos' })).toBeEnabled()
     })
 
+    it('sin turno, un JEFE_SALON ve el enlace "Abrir turno" que lleva a la caja (#359)', async () => {
+      montarContexto(perfilDeJefeSalon('rest-1'))
+      cajasApi.mockResolvedValue({ cajas: [] })
+      await abrirCon([sesion('ses-1', '4')])
+
+      fireEvent.click(await screen.findByRole('link', { name: 'Abrir turno' }))
+
+      expect(screen.getByText('destino /mozo/caja')).toBeInTheDocument()
+    })
+
+    it('sin turno, un MOZO ve el aviso pero no el enlace (#359)', async () => {
+      cajasApi.mockResolvedValue({ cajas: [] })
+      await abrirCon([sesion('ses-1', '4')])
+
+      expect(await screen.findByText(/No hay un turno abierto/)).toBeInTheDocument()
+      expect(screen.queryByRole('link', { name: 'Abrir turno' })).not.toBeInTheDocument()
+    })
+
     it('con una caja abierta no hay aviso y se puede registrar', async () => {
       await abrirCon([sesion('ses-1', '4')])
       // Se espera a que las cajas estén en el store: si no, lo negativo de abajo pasaría sin haber leído la respuesta.
