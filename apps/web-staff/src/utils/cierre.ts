@@ -68,6 +68,21 @@ export function leerCierre(cajas: TurnoCajaApi[], valores: PorCajaYMetodo, obser
   return { ok: true, body: { cajas: cajasDelBody, ...(texto ? { observaciones: texto } : {}) } }
 }
 
+/** Un campo del formulario de cierre: el método de una caja (por el `cajaId` de la Caja). */
+export interface CampoDelCierre {
+  cajaId: string
+  metodo: MetodoDeArqueo
+}
+
+/** El primer campo con error en el orden del formulario: las cajas del turno y, en cada una, los métodos. */
+export function primerCampoConError(cajas: TurnoCajaApi[], errores: PorCajaYMetodo): CampoDelCierre | null {
+  for (const { cajaId } of cajas) {
+    const metodo = METODOS_DE_ARQUEO.find((m) => errores[cajaId]?.[m.metodo])
+    if (metodo) return { cajaId, metodo: metodo.metodo }
+  }
+  return null
+}
+
 export type ClaseDeDiferencia = 'sin-diferencia' | 'sobra' | 'falta'
 
 /** Declarado menos esperado, comparado en centavos: positivo sobra, negativo falta. */

@@ -6,6 +6,7 @@ import {
   mesasAbiertasDeSesiones,
   METODOS_DE_ARQUEO,
   parsearMontoDeclarado,
+  primerCampoConError,
   resultadoDesdeElCierre,
   resultadoDesdeElDetalle,
   textoDeDiferencia,
@@ -107,6 +108,20 @@ describe('leerCierre', () => {
         },
       },
     })
+  })
+})
+
+describe('primerCampoConError', () => {
+  it('es el primero en el orden del formulario: las cajas del turno y, en cada una, los métodos', () => {
+    const errores = { 'c-terraza': { efectivo: 'x' }, 'c-barra': { transferencia: 'x', credito: 'x' } }
+
+    expect(primerCampoConError([BARRA, TERRAZA], errores)).toEqual({ cajaId: 'c-barra', metodo: 'credito' })
+    expect(primerCampoConError([TERRAZA, BARRA], errores)).toEqual({ cajaId: 'c-terraza', metodo: 'efectivo' })
+  })
+
+  it('sin errores no hay ninguno', () => {
+    expect(primerCampoConError([BARRA], {})).toBeNull()
+    expect(primerCampoConError([BARRA], { 'c-barra': {} })).toBeNull()
   })
 })
 
