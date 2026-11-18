@@ -1,8 +1,9 @@
 import { useId, useState, type FormEvent } from 'react'
-import { Button, Input } from '@menyu/ui'
+import { Button } from '@menyu/ui'
 import { api } from '../../../services/api'
 import { errorDeCaja } from './errores'
-import { leerNombreDeCaja, MAXIMO_NOMBRE_DE_CAJA } from './nombre'
+import { CampoDeNombre } from './CampoDeNombre'
+import { leerNombreDeCaja } from './nombre'
 
 interface FormularioDeAltaProps {
   restauranteId: string
@@ -44,24 +45,20 @@ export function FormularioDeAlta({ restauranteId, onCreada }: FormularioDeAltaPr
   return (
     <form noValidate onSubmit={(e) => void crear(e)} className="flex flex-col gap-2 mb-6">
       <div className="flex items-end gap-3">
-        <Input
-          id={`${id}-nombre`}
-          label="Nombre de la caja"
-          value={texto}
-          maxLength={MAXIMO_NOMBRE_DE_CAJA}
+        <CampoDeNombre
+          id={id}
+          valor={texto}
+          error={errorDelNombre}
           placeholder="Ej: Caja principal"
           className="w-64"
-          onChange={(e) => {
-            setTexto(e.target.value)
+          onChange={(valor) => {
+            setTexto(valor)
             setErrorDelNombre(null)
             setError(null)
           }}
-          aria-invalid={errorDelNombre !== null}
-          aria-describedby={errorDelNombre === null ? undefined : `${id}-error`}
         />
         <Button type="submit" loading={enviando}>Agregar caja</Button>
       </div>
-      {errorDelNombre !== null && <p id={`${id}-error`} role="alert" className="text-xs text-red-600">{errorDelNombre}</p>}
       {error !== null && <p role="alert" className="text-sm text-red-600">{error}</p>}
     </form>
   )

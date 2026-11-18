@@ -1,9 +1,10 @@
 import { useId, useState, type FormEvent } from 'react'
 import type { CajaDelRestaurante } from '@menyu/types'
-import { Badge, Button, Input } from '@menyu/ui'
+import { Badge, Button } from '@menyu/ui'
 import { api } from '../../../services/api'
 import { errorDeCaja } from './errores'
-import { leerNombreDeCaja, MAXIMO_NOMBRE_DE_CAJA } from './nombre'
+import { CampoDeNombre } from './CampoDeNombre'
+import { leerNombreDeCaja } from './nombre'
 
 interface FilaDeCajaProps {
   caja: CajaDelRestaurante
@@ -83,20 +84,17 @@ export function FilaDeCaja({ caja, abierta, onCambio }: FilaDeCajaProps) {
     <li className="border border-gray-200 rounded-lg bg-white px-4 py-3 flex flex-col gap-2">
       {modo === 'renombrando' ? (
         <form noValidate onSubmit={guardar} className="flex items-end gap-2">
-          <Input
-            id={`${id}-nombre`}
+          <CampoDeNombre
+            id={id}
             autoFocus
-            label="Nombre de la caja"
-            value={texto}
-            maxLength={MAXIMO_NOMBRE_DE_CAJA}
+            valor={texto}
+            error={errorDelNombre}
             className="py-1 text-sm w-56"
-            onChange={(e) => {
-              setTexto(e.target.value)
+            onChange={(valor) => {
+              setTexto(valor)
               setErrorDelNombre(null)
               setError(null)
             }}
-            aria-invalid={errorDelNombre !== null}
-            aria-describedby={errorDelNombre === null ? undefined : `${id}-error`}
           />
           <Button type="submit" size="sm" loading={enviando}>Guardar</Button>
           <Button type="button" variant="ghost" size="sm" disabled={enviando} onClick={() => { setError(null); cerrar() }}>
@@ -161,7 +159,6 @@ export function FilaDeCaja({ caja, abierta, onCambio }: FilaDeCajaProps) {
         </div>
       )}
 
-      {errorDelNombre !== null && <p id={`${id}-error`} role="alert" className="text-xs text-red-600">{errorDelNombre}</p>}
       {error !== null && <p role="alert" className="text-sm text-red-600">{error}</p>}
     </li>
   )
