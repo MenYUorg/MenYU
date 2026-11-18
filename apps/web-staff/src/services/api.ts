@@ -5,11 +5,14 @@ import type {
   AsignacionDeMesa,
   CajaDelRestaurante,
   CajasAbiertas,
+  CerrarTurnoBody,
+  CierreDeTurno,
   EstadoPedido,
   Mesa,
   MovimientoRegistrado,
   PreparacionDeTurno,
   RegistrarMovimientoBody,
+  ResumenDeTurno,
   SesionHistorial,
   TurnoActual,
   TurnoDetalle,
@@ -275,6 +278,17 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(body),
       }),
+
+    /** Cierra el turno y todas sus cajas con lo declarado en cada una. No se deshace. */
+    cerrar: (turnoId: string, body: CerrarTurnoBody) =>
+      authFetch<CierreDeTurno>(`/turnos/${encodeURIComponent(turnoId)}/cierre`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+
+    /** Lo cobrado en las cajas del turno por método y por mozo, y Mercado Pago aparte (que no entra al arqueo). */
+    resumen: (turnoId: string) =>
+      authFetch<ResumenDeTurno>(`/turnos/${encodeURIComponent(turnoId)}/resumen`),
   },
 
   mesas: {
