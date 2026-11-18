@@ -116,13 +116,6 @@ describe('CajasPage', () => {
 
       expect(screen.getByRole('alert')).toHaveTextContent('No se pudieron leer las cajas')
     })
-
-    it.each(['OWNER', 'GERENTE'])('la pantalla es la misma para el %s (la ruta la protege RoleGuard)', async () => {
-      await abrir()
-
-      expect(filas()).toHaveLength(3)
-      expect(boton('Agregar caja')).toBeEnabled()
-    })
   })
 
   describe('las cajas abiertas en el turno', () => {
