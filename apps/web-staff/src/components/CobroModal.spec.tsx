@@ -2,7 +2,8 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import type { CajaAbierta } from '@menyu/types'
 import { api, ApiError, type SesionActivaItem } from '../services/api'
 import { useContextoStore } from '../store/contextoStore'
-import { CobroModal, MENSAJE_OPERACION_SIMULTANEA } from './CobroModal'
+import { MENSAJE_OPERACION_SIMULTANEA } from '@menyu/ui/caja'
+import { CobroModal } from './CobroModal'
 
 vi.mock('../services/api', async () => {
   class ApiErrorFalso extends Error {

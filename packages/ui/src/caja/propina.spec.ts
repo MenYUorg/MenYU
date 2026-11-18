@@ -1,3 +1,4 @@
+import { describe, expect, it } from 'vitest'
 import { parsearPropina, PROPINA_MAXIMA } from './propina'
 
 describe('parsearPropina', () => {

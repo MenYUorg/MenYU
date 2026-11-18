@@ -1,3 +1,4 @@
+import { describe, expect, it } from 'vitest'
 import { leerMonto, MONTO_MAXIMO } from './monto'
 
 describe('leerMonto', () => {

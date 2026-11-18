@@ -187,6 +187,18 @@ describe('el cliente de la API usa la sesión de Supabase', () => {
     })
   })
 
+  describe('cajas', () => {
+    it('las cajas abiertas se piden por restaurante, con GET (#360)', async () => {
+      fetchFalso.mockResolvedValue(respuesta({ cajas: [{ cajaId: 'caja-1', nombre: 'Principal' }] }))
+
+      await expect(api.cajas.abiertas('rest 1')).resolves.toEqual({ cajas: [{ cajaId: 'caja-1', nombre: 'Principal' }] })
+
+      const [url, opciones] = fetchFalso.mock.calls[0] as [string, RequestInit]
+      expect(url).toBe('/cajas/abiertas?restauranteId=rest%201')
+      expect(opciones.method).toBe('GET')
+    })
+  })
+
   describe('pedirJson', () => {
     it('lo usan las pantallas que arman su propio pedido, con el mismo token y el mismo 401', async () => {
       sesionDePrueba.token = 'token-de-supabase'

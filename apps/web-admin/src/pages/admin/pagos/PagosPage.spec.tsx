@@ -16,7 +16,8 @@ vi.mock('../../../store/contextStore', () => ({
 // `pedirJson` queda el real (pone el token de la sesión y maneja el 401); solo se simula el objeto `api`.
 vi.mock('../../../services/api', async () => ({
   ...(await vi.importActual<typeof import('../../../services/api')>('../../../services/api')),
-  api: { mozos: { list: vi.fn() } },
+  // Las cajas abiertas no responden por defecto: para los tests de antes de #360 quedan sin saberse (null), como antes.
+  api: { mozos: { list: vi.fn() }, cajas: { abiertas: vi.fn(() => new Promise(() => {})) } },
 }))
 
 /** Socket falso: guarda los handlers para poder "recibir" eventos del servidor. */
@@ -29,6 +30,7 @@ const socket = {
 vi.mock('socket.io-client', () => ({ io: vi.fn(() => socket) }))
 
 const listarMozos = vi.mocked(api.mozos.list)
+const cajasAbiertas = vi.mocked(api.cajas.abiertas)
 
 const ACTIVA_4 = { id: 'ses-4', mesaId: 'm4', mesaNumero: '4', tiempoTranscurrido: 75, cantidadItems: 3, cantidadPersonas: 2, totalAcumulado: 12500, quierePagar: true }
 const ACTIVA_7 = { id: 'ses-7', mesaId: 'm7', mesaNumero: '7', tiempoTranscurrido: 5, cantidadItems: 1, cantidadPersonas: 1, totalAcumulado: 900, quierePagar: false }
@@ -313,7 +315,7 @@ describe('PagosPage (caja)', () => {
     })
 
     it('si el servidor rechaza muestra el error y deja reintentar', async () => {
-      respuestas['/sessions/ses-4/cobro'] = json({ message: 'La mesa ya fue cobrada' }, 409)
+      respuestas['/sessions/ses-4/cobro'] = json({ message: 'La mesa ya fue cobrada' }, 400)
       const modal = await abrirCobro()
 
       fireEvent.click(within(modal).getByRole('button', { name: 'Efectivo' }))
@@ -348,6 +350,436 @@ describe('PagosPage (caja)', () => {
       fireEvent.click(within(tarjeta('4')).getByRole('button', { name: 'Registrar pago' }))
       fireEvent.click(screen.getByText('Registrar pago · Mesa 4').closest('div[style*="position: fixed"]') as HTMLElement)
       expect(screen.queryByText('Registrar pago · Mesa 4')).not.toBeInTheDocument()
+    })
+  })
+})
+
+describe('PagosPage: las cajas abiertas del turno (#360)', () => {
+  const PRINCIPAL = { cajaId: 'caja-1', nombre: 'Principal' }
+  const TEXTO_SIN_TURNO =
+    'No hay un turno abierto. Mientras no haya uno no se pueden registrar cobros: el turno se abre desde la app del personal, en Caja.'
+
+  function pendiente<T>() {
+    let resolver!: (valor: T) => void
+    let rechazar!: (error: unknown) => void
+    const promesa = new Promise<T>((res, rej) => { resolver = res; rechazar = rej })
+    return { promesa, resolver, rechazar }
+  }
+
+  const pagina = () => (
+    <MemoryRouter initialEntries={['/admin/pagos']}>
+      <Routes>
+        <Route path="/admin/pagos" element={<PagosPage />} />
+      </Routes>
+    </MemoryRouter>
+  )
+
+  /** Abre la pantalla y espera, dentro de act, a que terminen las lecturas del montaje. */
+  async function abrirYCargar() {
+    render(pagina())
+    await screen.findByText('Mesa 4')
+    await act(async () => {})
+  }
+
+  beforeEach(() => {
+    // reset y no clear: una respuesta `mockReturnValueOnce` que un test no usó no pasa al siguiente.
+    vi.resetAllMocks()
+    listarMozos.mockResolvedValue([] as never)
+    cajasAbiertas.mockResolvedValue({ cajas: [] })
+  })
+
+  it('el GERENTE las pide por restaurante y, sin turno abierto, ve el aviso arriba de la caja', async () => {
+    await abrirYCargar()
+
+    const aviso = await screen.findByRole('alert')
+    expect(aviso).toHaveTextContent(TEXTO_SIN_TURNO)
+    expect(cajasAbiertas).toHaveBeenCalledWith('rest-1')
+    const pendientes = screen.getByRole('heading', { name: 'Pendientes de cobro' })
+    expect(aviso.compareDocumentPosition(pendientes) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(within(aviso).queryByRole('link')).not.toBeInTheDocument()
+  })
+
+  it('con una caja abierta no hay aviso', async () => {
+    cajasAbiertas.mockResolvedValue({ cajas: [PRINCIPAL] })
+    await abrirYCargar()
+
+    expect(cajasAbiertas).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('si no se pueden leer (falla abierta) no hay aviso, y no toca el error ni las mesas activas', async () => {
+    cajasAbiertas.mockRejectedValue(new Error('Sin conexión'))
+    await abrirYCargar()
+
+    expect(cajasAbiertas).toHaveBeenCalledTimes(1)
+    expect(screen.getByText('Mesa 4')).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.queryByText('Sin conexión')).not.toBeInTheDocument()
+  })
+
+  it('el OWNER no las pide ni ve el aviso', async () => {
+    rolActual = 'OWNER'
+    await abrirYCargar()
+
+    expect(cajasAbiertas).not.toHaveBeenCalled()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('se vuelven a pedir con el polling de 30 s: el aviso aparece si el turno se cerró', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    cajasAbiertas.mockResolvedValueOnce({ cajas: [PRINCIPAL] })
+    await abrirYCargar()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(30000) })
+
+    expect(cajasAbiertas).toHaveBeenCalledTimes(2)
+    expect(screen.getByRole('alert')).toHaveTextContent(TEXTO_SIN_TURNO)
+  })
+
+  it('una lectura vieja que llega tarde no pisa a la nueva', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const vieja = pendiente<{ cajas: (typeof PRINCIPAL)[] }>()
+    cajasAbiertas.mockReturnValueOnce(vieja.promesa).mockResolvedValueOnce({ cajas: [] })
+    await abrirYCargar()
+    await act(async () => { await vi.advanceTimersByTimeAsync(30000) })
+    expect(screen.getByRole('alert')).toHaveTextContent(TEXTO_SIN_TURNO)
+
+    await act(async () => { vieja.resolver({ cajas: [PRINCIPAL] }) })
+
+    expect(screen.getByRole('alert')).toHaveTextContent(TEXTO_SIN_TURNO)
+  })
+
+  it('si deja de ser GERENTE (pasa a OWNER), el aviso se va', async () => {
+    const { rerender } = render(pagina())
+    expect(await screen.findByRole('alert')).toHaveTextContent(TEXTO_SIN_TURNO)
+
+    rolActual = 'OWNER'
+    rerender(pagina())
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    await act(async () => {})
+  })
+
+  it('una lectura que estaba en vuelo cuando pasó a OWNER no vale al volver a GERENTE', async () => {
+    const vieja = pendiente<{ cajas: (typeof PRINCIPAL)[] }>()
+    const nueva = pendiente<{ cajas: (typeof PRINCIPAL)[] }>()
+    cajasAbiertas.mockReturnValueOnce(vieja.promesa).mockReturnValueOnce(nueva.promesa)
+    const { rerender } = render(pagina())
+
+    rolActual = 'OWNER'
+    rerender(pagina())
+    await act(async () => { vieja.resolver({ cajas: [] }) })
+    rolActual = 'GERENTE'
+    rerender(pagina())
+
+    // Hasta que llegue la lectura nueva, las cajas no se saben: la vieja no cuenta.
+    expect(cajasAbiertas).toHaveBeenCalledTimes(2)
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    await act(async () => { nueva.resolver({ cajas: [] }) })
+    expect(screen.getByRole('alert')).toHaveTextContent(TEXTO_SIN_TURNO)
+  })
+
+  it('al cambiar de restaurante, las del anterior no valen: se piden las del nuevo y la respuesta del anterior no pisa', async () => {
+    const delAnterior = pendiente<{ cajas: (typeof PRINCIPAL)[] }>()
+    const delNuevo = pendiente<{ cajas: (typeof PRINCIPAL)[] }>()
+    cajasAbiertas.mockResolvedValueOnce({ cajas: [] }).mockReturnValueOnce(delAnterior.promesa).mockReturnValueOnce(delNuevo.promesa)
+    const { rerender } = render(pagina())
+    expect(await screen.findByRole('alert')).toHaveTextContent(TEXTO_SIN_TURNO)
+
+    // Una segunda lectura del mismo restaurante queda en vuelo (otro rol y de vuelta) y se cambia de restaurante.
+    rolActual = 'OWNER'
+    rerender(pagina())
+    rolActual = 'GERENTE'
+    rerender(pagina())
+    restauranteActual = 'rest-2'
+    rerender(pagina())
+
+    expect(cajasAbiertas).toHaveBeenLastCalledWith('rest-2')
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    await act(async () => { delAnterior.resolver({ cajas: [] }) })
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+
+    await act(async () => { delNuevo.resolver({ cajas: [] }) })
+    expect(screen.getByRole('alert')).toHaveTextContent(TEXTO_SIN_TURNO)
+  })
+})
+
+describe('PagosPage: el cobro con caja y propina (#360)', () => {
+  const PRINCIPAL = { cajaId: 'caja-1', nombre: 'Principal' }
+  const BARRA = { cajaId: 'caja-2', nombre: 'Barra' }
+
+  /** Abre la pantalla con esas cajas abiertas, espera las lecturas y abre el cobro de la mesa 4. */
+  async function abrirCobroCon(cajas: (typeof PRINCIPAL)[] | 'falla') {
+    if (cajas === 'falla') cajasAbiertas.mockRejectedValue(new Error('Sin conexión'))
+    else cajasAbiertas.mockResolvedValue({ cajas })
+    render(
+      <MemoryRouter initialEntries={['/admin/pagos']}>
+        <Routes>
+          <Route path="/admin/pagos" element={<PagosPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+    await screen.findByText('Mesa 4')
+    await act(async () => {})
+    fireEvent.click(within(tarjeta('4')).getByRole('button', { name: 'Registrar pago' }))
+    const modal = screen.getByText('Registrar pago · Mesa 4').closest('div[style*="position: fixed"]') as HTMLElement
+    await act(async () => {})
+    return modal
+  }
+
+  const confirmar = (modal: HTMLElement) => within(modal).getByRole('button', { name: 'Confirmar pago' })
+  const enviado = () => {
+    const [, opciones] = fetchMock.mock.calls.find(([url]) => url.includes('/sessions/ses-4/cobro'))!
+    return JSON.parse(opciones?.body as string)
+  }
+  const cobrar = (modal: HTMLElement) => act(async () => { fireEvent.click(confirmar(modal)) })
+
+  beforeEach(() => {
+    // reset y no clear: una respuesta `mockReturnValueOnce` que un test no usó no pasa al siguiente.
+    vi.resetAllMocks()
+    listarMozos.mockResolvedValue([] as never)
+    respuestas['/sessions/ses-4/cobro'] = json({ ok: true })
+  })
+
+  describe('la caja', () => {
+    it('abrir el cobro vuelve a pedir las cajas del restaurante', async () => {
+      await abrirCobroCon([PRINCIPAL])
+
+      expect(cajasAbiertas).toHaveBeenCalledTimes(2)
+      expect(cajasAbiertas).toHaveBeenNthCalledWith(2, 'rest-1')
+    })
+
+    it('lo que trae la lectura al abrir vale en el cobro: si el turno se cerró, lo dice y no deja confirmar', async () => {
+      // La lectura del montaje trae dos cajas; la de abrir el cobro, ninguna.
+      cajasAbiertas.mockResolvedValueOnce({ cajas: [PRINCIPAL, BARRA] })
+      const modal = await abrirCobroCon([])
+      fireEvent.click(within(modal).getByRole('button', { name: 'Efectivo' }))
+
+      expect(within(modal).queryByRole('radiogroup')).not.toBeInTheDocument()
+      expect(within(modal).getByRole('alert')).toHaveTextContent('No hay un turno abierto: no se puede registrar el cobro.')
+      expect(confirmar(modal)).toBeDisabled()
+    })
+
+    it('con dos cajas abiertas se elige con radios, sin ninguna elegida, y sin elegir no deja confirmar', async () => {
+      const modal = await abrirCobroCon([PRINCIPAL, BARRA])
+      fireEvent.click(within(modal).getByRole('button', { name: 'Efectivo' }))
+
+      const grupo = within(modal).getByRole('radiogroup', { name: 'Caja' })
+      const radios = within(grupo).getAllByRole('radio') as HTMLInputElement[]
+      expect(radios.map((r) => [r.value, r.checked])).toEqual([['caja-1', false], ['caja-2', false]])
+      expect(within(modal).getByText('Elegí en qué caja se cobra')).toBeInTheDocument()
+      expect(confirmar(modal)).toBeDisabled()
+    })
+
+    it('con dos cajas manda la elegida', async () => {
+      const modal = await abrirCobroCon([PRINCIPAL, BARRA])
+      fireEvent.click(within(modal).getByRole('button', { name: 'Efectivo' }))
+
+      fireEvent.click(within(modal).getByRole('radio', { name: 'Barra' }))
+      expect(within(modal).queryByText('Elegí en qué caja se cobra')).not.toBeInTheDocument()
+      expect(within(modal).getByRole('radio', { name: 'Barra' })).toBeChecked()
+      await cobrar(modal)
+
+      expect(enviado()).toEqual({ metodoPago: 'efectivo', mozoId: null, cajaId: 'caja-2' })
+    })
+
+    it('con una sola caja no hay selector ni se manda cajaId: la elige el backend', async () => {
+      const modal = await abrirCobroCon([PRINCIPAL])
+      fireEvent.click(within(modal).getByRole('button', { name: 'Efectivo' }))
+
+      expect(within(modal).queryByRole('radiogroup')).not.toBeInTheDocument()
+      await cobrar(modal)
+
+      expect(enviado()).toEqual({ metodoPago: 'efectivo', mozoId: null })
+    })
+
+    it('sin turno abierto lo dice y no deja confirmar', async () => {
+      const modal = await abrirCobroCon([])
+      fireEvent.click(within(modal).getByRole('button', { name: 'Efectivo' }))
+
+      expect(within(modal).getByRole('alert')).toHaveTextContent('No hay un turno abierto: no se puede registrar el cobro.')
+      expect(confirmar(modal)).toBeDisabled()
+    })
+
+    it('si no se pudieron leer las cajas no bloquea nada ni manda cajaId (decide el backend)', async () => {
+      const modal = await abrirCobroCon('falla')
+      fireEvent.click(within(modal).getByRole('button', { name: 'Efectivo' }))
+
+      expect(within(modal).queryByRole('alert')).not.toBeInTheDocument()
+      expect(within(modal).queryByRole('radiogroup')).not.toBeInTheDocument()
+      await cobrar(modal)
+
+      expect(enviado()).toEqual({ metodoPago: 'efectivo', mozoId: null })
+    })
+  })
+
+  describe('la advertencia de Mercado Pago y los errores', () => {
+    const AVISO_MP = 'La mesa tiene pagos de Mercado Pago de hace 2 minutos: si cobrás la mesa completa se cancelan'
+    const cobros = () => fetchMock.mock.calls.filter(([url]) => url.includes('/sessions/ses-4/cobro')).map(([, o]) => JSON.parse(o?.body as string))
+    /** El primer cobro responde `primera`; el siguiente, ok. */
+    function responder(primera: () => Response) {
+      let veces = 0
+      respuestas['/sessions/ses-4/cobro'] = () => (veces++ === 0 ? primera() : json({ ok: true })())
+    }
+
+    it('un 409 que no es el de operación simultánea muestra la advertencia en lugar de los botones', async () => {
+      responder(json({ message: AVISO_MP }, 409))
+      const modal = await abrirCobroCon([PRINCIPAL, BARRA])
+      fireEvent.click(within(modal).getByRole('button', { name: 'Efectivo' }))
+      fireEvent.click(within(modal).getByRole('radio', { name: 'Barra' }))
+
+      await cobrar(modal)
+
+      expect(within(modal).getByText(AVISO_MP)).toBeInTheDocument()
+      expect(within(modal).getByRole('button', { name: 'Confirmar y cobrar mesa completa' })).toBeEnabled()
+      expect(within(modal).queryByRole('button', { name: 'Confirmar pago' })).not.toBeInTheDocument()
+      expect(cobros()).toEqual([{ metodoPago: 'efectivo', mozoId: null, cajaId: 'caja-2' }])
+    })
+
+    it('confirmarla repite el mismo cobro con confirmarCancelacionPagosPendientes y cierra', async () => {
+      responder(json({ message: AVISO_MP }, 409))
+      const modal = await abrirCobroCon([PRINCIPAL, BARRA])
+      fireEvent.click(within(modal).getByRole('button', { name: 'Efectivo' }))
+      fireEvent.click(within(modal).getByRole('radio', { name: 'Barra' }))
+      fireEvent.change(within(modal).getByLabelText('Propina (opcional)'), { target: { value: '300' } })
+      await cobrar(modal)
+
+      await act(async () => { fireEvent.click(within(modal).getByRole('button', { name: 'Confirmar y cobrar mesa completa' })) })
+
+      expect(cobros()).toEqual([
+        { metodoPago: 'efectivo', mozoId: null, cajaId: 'caja-2', propina: 300 },
+        { metodoPago: 'efectivo', mozoId: null, confirmarCancelacionPagosPendientes: true, cajaId: 'caja-2', propina: 300 },
+      ])
+      expect(screen.getByText('Pago registrado correctamente')).toBeInTheDocument()
+      expect(screen.queryByText('Registrar pago · Mesa 4')).not.toBeInTheDocument()
+    })
+
+    it('al confirmarla la advertencia se cierra y, mientras envía, el modal dice "Registrando…" y no deja tocar nada', async () => {
+      let liberar!: () => void
+      let veces = 0
+      respuestas['/sessions/ses-4/cobro'] = () => (veces++ === 0 ? json({ message: AVISO_MP }, 409)() : json({ ok: true })())
+      const modal = await abrirCobroCon([PRINCIPAL])
+      fireEvent.click(within(modal).getByRole('button', { name: 'Efectivo' }))
+      await cobrar(modal)
+      fetchMock.mockImplementationOnce(() => new Promise((res) => { liberar = () => res(json({ ok: true })()) }))
+
+      fireEvent.click(within(modal).getByRole('button', { name: 'Confirmar y cobrar mesa completa' }))
+      await vi.waitFor(() => expect(liberar).toBeTypeOf('function'))
+
+      expect(within(modal).queryByText(AVISO_MP)).not.toBeInTheDocument()
+      expect(within(modal).getByRole('button', { name: 'Registrando…' })).toBeDisabled()
+      expect(within(modal).getByRole('button', { name: 'Cancelar' })).toBeDisabled()
+      await act(async () => { liberar() })
+      expect(screen.getByText('Pago registrado correctamente')).toBeInTheDocument()
+    })
+
+    it('"Cancelar" la descarta sin cobrar; cambiar el método o la propina también', async () => {
+      respuestas['/sessions/ses-4/cobro'] = json({ message: AVISO_MP }, 409)
+      const modal = await abrirCobroCon([PRINCIPAL])
+      fireEvent.click(within(modal).getByRole('button', { name: 'Efectivo' }))
+
+      await cobrar(modal)
+      fireEvent.click(within(modal).getByRole('button', { name: 'Cancelar' }))
+      expect(within(modal).queryByText(AVISO_MP)).not.toBeInTheDocument()
+      expect(confirmar(modal)).toBeEnabled()
+
+      await cobrar(modal)
+      fireEvent.click(within(modal).getByRole('button', { name: 'Débito' }))
+      expect(within(modal).queryByText(AVISO_MP)).not.toBeInTheDocument()
+
+      await cobrar(modal)
+      fireEvent.change(within(modal).getByLabelText('Propina (opcional)'), { target: { value: '10' } })
+      expect(within(modal).queryByText(AVISO_MP)).not.toBeInTheDocument()
+
+      expect(cobros().every((c) => !('confirmarCancelacionPagosPendientes' in c))).toBe(true)
+      expect(screen.queryByText('Pago registrado correctamente')).not.toBeInTheDocument()
+    })
+
+    it('el 409 de operación simultánea es un error común: se muestra y se puede reintentar', async () => {
+      responder(json({ message: 'Otra operación modificó esto al mismo tiempo; probá de nuevo' }, 409))
+      const modal = await abrirCobroCon([PRINCIPAL])
+      fireEvent.click(within(modal).getByRole('button', { name: 'Efectivo' }))
+
+      await cobrar(modal)
+
+      expect(within(modal).getByText('Otra operación modificó esto al mismo tiempo; probá de nuevo')).toBeInTheDocument()
+      expect(within(modal).queryByRole('button', { name: 'Confirmar y cobrar mesa completa' })).not.toBeInTheDocument()
+      expect(confirmar(modal)).toBeEnabled()
+      expect(cajasAbiertas).toHaveBeenCalledTimes(2)
+
+      await cobrar(modal)
+      expect(cobros()).toHaveLength(2)
+      expect(cobros()[1]).toEqual({ metodoPago: 'efectivo', mozoId: null })
+      expect(screen.getByText('Pago registrado correctamente')).toBeInTheDocument()
+    })
+
+    it.each([
+      ['No hay un turno abierto'],
+      ['La caja no está abierta en este turno'],
+      ['Hay más de una caja abierta: indicá en cuál se cobra'],
+    ])('un 400 "%s" muestra el error y vuelve a leer las cajas', async (mensaje) => {
+      respuestas['/sessions/ses-4/cobro'] = json({ message: mensaje }, 400)
+      const modal = await abrirCobroCon([PRINCIPAL])
+      fireEvent.click(within(modal).getByRole('button', { name: 'Efectivo' }))
+
+      await cobrar(modal)
+
+      expect(within(modal).getByText(mensaje)).toBeInTheDocument()
+      expect(cajasAbiertas).toHaveBeenCalledTimes(3)
+      expect(cajasAbiertas).toHaveBeenLastCalledWith('rest-1')
+    })
+
+    it('otro 400 no vuelve a leer las cajas, y un 409 con ese texto tampoco', async () => {
+      respuestas['/sessions/ses-4/cobro'] = json({ message: 'La sesión ya fue cerrada' }, 400)
+      const modal = await abrirCobroCon([PRINCIPAL])
+      fireEvent.click(within(modal).getByRole('button', { name: 'Efectivo' }))
+      await cobrar(modal)
+      expect(within(modal).getByText('La sesión ya fue cerrada')).toBeInTheDocument()
+
+      respuestas['/sessions/ses-4/cobro'] = json({ message: 'No hay un turno abierto' }, 409)
+      await cobrar(modal)
+
+      expect(cajasAbiertas).toHaveBeenCalledTimes(2)
+    })
+  })
+
+  describe('la propina', () => {
+    const propina = (modal: HTMLElement) => within(modal).getByLabelText('Propina (opcional)') as HTMLInputElement
+
+    it('es opcional, con teclado decimal, y viaja aparte sin cambiar el total de la mesa', async () => {
+      const modal = await abrirCobroCon([PRINCIPAL])
+      fireEvent.click(within(modal).getByRole('button', { name: 'Efectivo' }))
+
+      expect(propina(modal)).toHaveAttribute('inputmode', 'decimal')
+      fireEvent.change(propina(modal), { target: { value: '500,5' } })
+      expect(within(modal).getByText('$12.500')).toBeInTheDocument()
+      await cobrar(modal)
+
+      expect(enviado()).toEqual({ metodoPago: 'efectivo', mozoId: null, propina: 500.5 })
+    })
+
+    it.each([['vacía', ''], ['en 0', '0']])('%s no se manda', async (_caso, texto) => {
+      const modal = await abrirCobroCon([PRINCIPAL])
+      fireEvent.click(within(modal).getByRole('button', { name: 'Efectivo' }))
+
+      fireEvent.change(propina(modal), { target: { value: texto } })
+      await cobrar(modal)
+
+      expect(enviado()).toEqual({ metodoPago: 'efectivo', mozoId: null })
+    })
+
+    it('mal escrita avisa junto al campo y no deja confirmar', async () => {
+      const modal = await abrirCobroCon([PRINCIPAL])
+      fireEvent.click(within(modal).getByRole('button', { name: 'Efectivo' }))
+      expect(propina(modal)).toHaveAttribute('aria-invalid', 'false')
+
+      fireEvent.change(propina(modal), { target: { value: '-1' } })
+
+      expect(propina(modal)).toHaveAttribute('aria-invalid', 'true')
+      expect(propina(modal)).toHaveAccessibleDescription('La propina no puede ser negativa')
+      expect(within(modal).getByRole('alert')).toHaveTextContent('La propina no puede ser negativa')
+      expect(confirmar(modal)).toBeDisabled()
     })
   })
 })

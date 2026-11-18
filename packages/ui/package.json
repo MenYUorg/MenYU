@@ -8,6 +8,7 @@
     "./historial": "./src/historial/index.ts",
     "./editar-pedido": "./src/editar-pedido/index.ts",
     "./socket": "./src/socket/index.ts",
+    "./caja": "./src/caja/index.ts",
     "./tailwind-preset": "./tailwind-preset.cjs"
   },
   "scripts": {

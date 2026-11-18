@@ -11,7 +11,7 @@ import type {
 import type { SesionActivaItem } from '../services/api'
 import { formatearMonto } from './formato'
 import { ordenarMesas } from './mesas'
-import { leerMonto, MONTO_MAXIMO, type ErrorDeMonto } from './monto'
+import { leerMonto, MONTO_MAXIMO, type ErrorDeMonto } from '@menyu/ui/caja'
 
 /** Los métodos del arqueo con su etiqueta, en el orden en que los devuelve el backend (METODOS_ARQUEO). */
 export const METODOS_DE_ARQUEO: readonly { metodo: MetodoDeArqueo; etiqueta: string }[] = [

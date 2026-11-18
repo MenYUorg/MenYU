@@ -1,4 +1,4 @@
-import { leerMonto, MONTO_MAXIMO, type ErrorDeMonto } from './monto'
+import { leerMonto, MONTO_MAXIMO, type ErrorDeMonto } from '@menyu/ui/caja'
 
 export type FondoLeido = { ok: true; valor: number } | { ok: false; mensaje: string }
 
