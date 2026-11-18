@@ -1,10 +1,14 @@
 /**
  * Un monto en pesos para mostrar: `$` y el número en es-AR, sin decimales si es entero y con 2 si tiene centavos
- * ($5.000, $1.500,50). Se decide sobre el monto redondeado a centavos: 4,999 se muestra $5.
+ * ($5.000, $1.500,50). Un negativo lleva el signo antes del `$` (-$50). Se decide sobre el monto redondeado a centavos:
+ * 4,999 se muestra $5 y -0,004, $0.
  */
 export function formatearMonto(valor: number): string {
-  const decimales = Math.round(valor * 100) % 100 === 0 ? 0 : 2
-  return '$' + valor.toLocaleString('es-AR', { minimumFractionDigits: decimales, maximumFractionDigits: decimales })
+  const centavos = Math.round(valor * 100)
+  const decimales = centavos % 100 === 0 ? 0 : 2
+  const signo = centavos < 0 ? '-' : ''
+  const numero = Math.abs(centavos / 100).toLocaleString('es-AR', { minimumFractionDigits: decimales, maximumFractionDigits: decimales })
+  return `${signo}$${numero}`
 }
 
 const dosCifras = (n: number) => String(n).padStart(2, '0')
