@@ -142,7 +142,7 @@ describe('las diferencias', () => {
     [-100, 'falta', 'Faltan $100'],
     [-0.01, 'falta', 'Faltan $0,01'],
     [-1500.5, 'falta', 'Faltan $1.500,50'],
-  ])('%s es %s: "%s"', (diferencia, clase, texto) => {
+  ])('%s es %s', (diferencia, clase, texto) => {
     expect(clasificarDiferencia(diferencia)).toBe(clase)
     expect(textoDeDiferencia(diferencia)).toBe(texto)
   })

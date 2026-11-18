@@ -16,7 +16,7 @@ describe('formatearMonto', () => {
     [-0.01, '-$0,01'],
     [-0.004, '$0'],
     [-0, '$0'],
-  ])('%s se muestra como %s', (valor, texto) => {
+  ])('formatea %s', (valor, texto) => {
     expect(formatearMonto(valor)).toBe(texto)
   })
 })
