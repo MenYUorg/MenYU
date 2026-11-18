@@ -315,7 +315,7 @@ describe('PagosPage (caja)', () => {
     })
 
     it('si el servidor rechaza muestra el error y deja reintentar', async () => {
-      respuestas['/sessions/ses-4/cobro'] = json({ message: 'La mesa ya fue cobrada' }, 409)
+      respuestas['/sessions/ses-4/cobro'] = json({ message: 'La mesa ya fue cobrada' }, 400)
       const modal = await abrirCobro()
 
       fireEvent.click(within(modal).getByRole('button', { name: 'Efectivo' }))
@@ -563,6 +563,136 @@ describe('PagosPage: el cobro con caja y propina (#360)', () => {
       await cobrar(modal)
 
       expect(enviado()).toEqual({ metodoPago: 'efectivo', mozoId: null })
+    })
+  })
+
+  describe('la advertencia de Mercado Pago y los errores', () => {
+    const AVISO_MP = 'La mesa tiene pagos de Mercado Pago de hace 2 minutos: si cobrás la mesa completa se cancelan'
+    const cobros = () => fetchMock.mock.calls.filter(([url]) => url.includes('/sessions/ses-4/cobro')).map(([, o]) => JSON.parse(o?.body as string))
+    /** El primer cobro responde `primera`; el siguiente, ok. */
+    function responder(primera: () => Response) {
+      let veces = 0
+      respuestas['/sessions/ses-4/cobro'] = () => (veces++ === 0 ? primera() : json({ ok: true })())
+    }
+
+    it('un 409 que no es el de operación simultánea muestra la advertencia en lugar de los botones', async () => {
+      responder(json({ message: AVISO_MP }, 409))
+      const modal = await abrirCobroCon([PRINCIPAL, BARRA])
+      fireEvent.click(within(modal).getByRole('button', { name: 'Efectivo' }))
+      fireEvent.click(within(modal).getByRole('radio', { name: 'Barra' }))
+
+      await cobrar(modal)
+
+      expect(within(modal).getByText(AVISO_MP)).toBeInTheDocument()
+      expect(within(modal).getByRole('button', { name: 'Confirmar y cobrar mesa completa' })).toBeEnabled()
+      expect(within(modal).queryByRole('button', { name: 'Confirmar pago' })).not.toBeInTheDocument()
+      expect(cobros()).toEqual([{ metodoPago: 'efectivo', mozoId: null, cajaId: 'caja-2' }])
+    })
+
+    it('confirmarla repite el mismo cobro con confirmarCancelacionPagosPendientes y cierra', async () => {
+      responder(json({ message: AVISO_MP }, 409))
+      const modal = await abrirCobroCon([PRINCIPAL, BARRA])
+      fireEvent.click(within(modal).getByRole('button', { name: 'Efectivo' }))
+      fireEvent.click(within(modal).getByRole('radio', { name: 'Barra' }))
+      fireEvent.change(within(modal).getByLabelText('Propina (opcional)'), { target: { value: '300' } })
+      await cobrar(modal)
+
+      await act(async () => { fireEvent.click(within(modal).getByRole('button', { name: 'Confirmar y cobrar mesa completa' })) })
+
+      expect(cobros()).toEqual([
+        { metodoPago: 'efectivo', mozoId: null, cajaId: 'caja-2', propina: 300 },
+        { metodoPago: 'efectivo', mozoId: null, confirmarCancelacionPagosPendientes: true, cajaId: 'caja-2', propina: 300 },
+      ])
+      expect(screen.getByText('Pago registrado correctamente')).toBeInTheDocument()
+      expect(screen.queryByText('Registrar pago · Mesa 4')).not.toBeInTheDocument()
+    })
+
+    it('al confirmarla la advertencia se cierra y, mientras envía, el modal dice "Registrando…" y no deja tocar nada', async () => {
+      let liberar!: () => void
+      let veces = 0
+      respuestas['/sessions/ses-4/cobro'] = () => (veces++ === 0 ? json({ message: AVISO_MP }, 409)() : json({ ok: true })())
+      const modal = await abrirCobroCon([PRINCIPAL])
+      fireEvent.click(within(modal).getByRole('button', { name: 'Efectivo' }))
+      await cobrar(modal)
+      fetchMock.mockImplementationOnce(() => new Promise((res) => { liberar = () => res(json({ ok: true })()) }))
+
+      fireEvent.click(within(modal).getByRole('button', { name: 'Confirmar y cobrar mesa completa' }))
+      await vi.waitFor(() => expect(liberar).toBeTypeOf('function'))
+
+      expect(within(modal).queryByText(AVISO_MP)).not.toBeInTheDocument()
+      expect(within(modal).getByRole('button', { name: 'Registrando…' })).toBeDisabled()
+      expect(within(modal).getByRole('button', { name: 'Cancelar' })).toBeDisabled()
+      await act(async () => { liberar() })
+      expect(screen.getByText('Pago registrado correctamente')).toBeInTheDocument()
+    })
+
+    it('"Cancelar" la descarta sin cobrar; cambiar el método o la propina también', async () => {
+      respuestas['/sessions/ses-4/cobro'] = json({ message: AVISO_MP }, 409)
+      const modal = await abrirCobroCon([PRINCIPAL])
+      fireEvent.click(within(modal).getByRole('button', { name: 'Efectivo' }))
+
+      await cobrar(modal)
+      fireEvent.click(within(modal).getByRole('button', { name: 'Cancelar' }))
+      expect(within(modal).queryByText(AVISO_MP)).not.toBeInTheDocument()
+      expect(confirmar(modal)).toBeEnabled()
+
+      await cobrar(modal)
+      fireEvent.click(within(modal).getByRole('button', { name: 'Débito' }))
+      expect(within(modal).queryByText(AVISO_MP)).not.toBeInTheDocument()
+
+      await cobrar(modal)
+      fireEvent.change(within(modal).getByLabelText('Propina (opcional)'), { target: { value: '10' } })
+      expect(within(modal).queryByText(AVISO_MP)).not.toBeInTheDocument()
+
+      expect(cobros().every((c) => !('confirmarCancelacionPagosPendientes' in c))).toBe(true)
+      expect(screen.queryByText('Pago registrado correctamente')).not.toBeInTheDocument()
+    })
+
+    it('el 409 de operación simultánea es un error común: se muestra y se puede reintentar', async () => {
+      responder(json({ message: 'Otra operación modificó esto al mismo tiempo; probá de nuevo' }, 409))
+      const modal = await abrirCobroCon([PRINCIPAL])
+      fireEvent.click(within(modal).getByRole('button', { name: 'Efectivo' }))
+
+      await cobrar(modal)
+
+      expect(within(modal).getByText('Otra operación modificó esto al mismo tiempo; probá de nuevo')).toBeInTheDocument()
+      expect(within(modal).queryByRole('button', { name: 'Confirmar y cobrar mesa completa' })).not.toBeInTheDocument()
+      expect(confirmar(modal)).toBeEnabled()
+      expect(cajasAbiertas).toHaveBeenCalledTimes(1)
+
+      await cobrar(modal)
+      expect(cobros()).toHaveLength(2)
+      expect(cobros()[1]).toEqual({ metodoPago: 'efectivo', mozoId: null })
+      expect(screen.getByText('Pago registrado correctamente')).toBeInTheDocument()
+    })
+
+    it.each([
+      ['No hay un turno abierto'],
+      ['La caja no está abierta en este turno'],
+      ['Hay más de una caja abierta: indicá en cuál se cobra'],
+    ])('un 400 "%s" muestra el error y vuelve a leer las cajas', async (mensaje) => {
+      respuestas['/sessions/ses-4/cobro'] = json({ message: mensaje }, 400)
+      const modal = await abrirCobroCon([PRINCIPAL])
+      fireEvent.click(within(modal).getByRole('button', { name: 'Efectivo' }))
+
+      await cobrar(modal)
+
+      expect(within(modal).getByText(mensaje)).toBeInTheDocument()
+      expect(cajasAbiertas).toHaveBeenCalledTimes(2)
+      expect(cajasAbiertas).toHaveBeenLastCalledWith('rest-1')
+    })
+
+    it('otro 400 no vuelve a leer las cajas, y un 409 con ese texto tampoco', async () => {
+      respuestas['/sessions/ses-4/cobro'] = json({ message: 'La sesión ya fue cerrada' }, 400)
+      const modal = await abrirCobroCon([PRINCIPAL])
+      fireEvent.click(within(modal).getByRole('button', { name: 'Efectivo' }))
+      await cobrar(modal)
+      expect(within(modal).getByText('La sesión ya fue cerrada')).toBeInTheDocument()
+
+      respuestas['/sessions/ses-4/cobro'] = json({ message: 'No hay un turno abierto' }, 409)
+      await cobrar(modal)
+
+      expect(cajasAbiertas).toHaveBeenCalledTimes(1)
     })
   })
 

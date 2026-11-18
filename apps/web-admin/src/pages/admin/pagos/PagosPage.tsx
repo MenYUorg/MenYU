@@ -5,9 +5,10 @@ import { authDelSocket } from '@menyu/auth-client'
 import { urlDelSocket } from '@menyu/ui/socket'
 import { io, type Socket } from 'socket.io-client'
 import type { CajaAbierta } from '@menyu/types'
-import { cajaDelCobro, parsearPropina } from '@menyu/ui/caja'
+import { cajaDelCobro, MENSAJE_OPERACION_SIMULTANEA, MENSAJES_DE_TURNO_CAMBIADO, parsearPropina } from '@menyu/ui/caja'
 import { useContextStore, useRolActual } from '../../../store/contextStore'
-import { api, pedirJson } from '../../../services/api'
+import { api, ApiError, pedirJson } from '../../../services/api'
+import { AdvertenciaDePagosPendientes } from './AdvertenciaDePagosPendientes'
 import { AvisoSinTurno } from './AvisoSinTurno'
 import { CampoDePropina } from './CampoDePropina'
 import { SelectorDeCaja } from './SelectorDeCaja'
@@ -98,6 +99,7 @@ function CobroModal({
   onClose,
   onDone,
   cajas,
+  onTurnoCambio,
 }: {
   sesion: SesionActiva
   restauranteId: string
@@ -105,6 +107,8 @@ function CobroModal({
   onDone: () => void
   /** Las cajas abiertas del turno, que lee la pantalla (null: no se pudieron leer, no se bloquea nada). */
   cajas: CajaAbierta[] | null
+  /** El backend dijo que las cajas cambiaron: la pantalla las vuelve a leer. */
+  onTurnoCambio: () => void
 }) {
   const [metodo,  setMetodo]  = useState<MetodoPago | null>(null)
   const [cajaElegida, setCajaElegida] = useState<string | null>(null)
@@ -112,6 +116,7 @@ function CobroModal({
   const [mozoId,  setMozoId]  = useState('')
   const [loading, setLoading] = useState(false)
   const [error,   setError]   = useState<string | null>(null)
+  const [advertencia, setAdvertencia] = useState<string | null>(null)
   const [mozos,   setMozos]   = useState<{ id: string; nombre: string }[]>([])
 
   useEffect(() => {
@@ -125,14 +130,16 @@ function CobroModal({
   const propina = parsearPropina(propinaTxt)
   const canConfirm = !!metodo && !caja.sinTurno && !caja.falta && propina.ok
 
-  async function handleConfirmar() {
+  async function handleConfirmar(confirmarCancelacion = false) {
     if (!canConfirm) return
     setLoading(true)
     setError(null)
+    setAdvertencia(null)
     try {
       const body = {
         metodoPago: metodo,
         mozoId: mozoId || null,
+        ...(confirmarCancelacion ? { confirmarCancelacionPagosPendientes: true } : {}),
         ...(caja.cajaId ? { cajaId: caja.cajaId } : {}),
         ...(propina.ok && propina.valor !== undefined ? { propina: propina.valor } : {}),
       }
@@ -142,7 +149,14 @@ function CobroModal({
       })
       onDone()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Error al registrar pago')
+      // Como en web-staff: un 409 que no es el de operación simultánea es la advertencia de pagos de Mercado Pago
+      // pendientes; un 400 de cajas que cambiaron hace releer las cajas.
+      if (e instanceof ApiError && e.status === 409 && e.message !== MENSAJE_OPERACION_SIMULTANEA) {
+        setAdvertencia(e.message)
+      } else {
+        setError(e instanceof Error ? e.message : 'Error al registrar pago')
+        if (e instanceof ApiError && e.status === 400 && MENSAJES_DE_TURNO_CAMBIADO.includes(e.message)) onTurnoCambio()
+      }
       setLoading(false)
     }
   }
@@ -191,7 +205,7 @@ function CobroModal({
             return (
               <button
                 key={key}
-                onClick={() => setMetodo(key)}
+                onClick={() => { setMetodo(key); setAdvertencia(null) }}
                 style={{
                   padding: '10px 14px', borderRadius: 8,
                   border: `1.5px solid ${sel ? C.orange : C.border}`,
@@ -213,11 +227,11 @@ function CobroModal({
           </p>
         )}
 
-        {caja.mostrarSelector && (
-          <SelectorDeCaja cajas={cajas ?? []} elegida={caja.cajaId} falta={caja.falta} onElegir={setCajaElegida} />
+        {cajas !== null && caja.mostrarSelector && (
+          <SelectorDeCaja cajas={cajas} elegida={caja.cajaId} falta={caja.falta} onElegir={setCajaElegida} />
         )}
 
-        <CampoDePropina valor={propinaTxt} propina={propina} onChange={setPropinaTxt} />
+        <CampoDePropina valor={propinaTxt} propina={propina} onChange={(texto) => { setPropinaTxt(texto); setAdvertencia(null) }} />
 
         <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 12, fontWeight: 600, color: C.text, marginBottom: 8 }}>
           Mozo que cobró
@@ -245,6 +259,13 @@ function CobroModal({
           </p>
         )}
 
+        {advertencia ? (
+          <AdvertenciaDePagosPendientes
+            mensaje={advertencia}
+            onCancelar={() => setAdvertencia(null)}
+            onConfirmar={() => void handleConfirmar(true)}
+          />
+        ) : (
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
           <button
             onClick={onClose}
@@ -274,6 +295,7 @@ function CobroModal({
             {loading ? 'Registrando…' : 'Confirmar pago'}
           </button>
         </div>
+        )}
       </div>
     </div>
   )
@@ -734,6 +756,7 @@ export function PagosPage() {
           onClose={() => setModalSesion(null)}
           onDone={handleCobroDone}
           cajas={cajas}
+          onTurnoCambio={() => { void leerCajas() }}
         />
       )}
 
