@@ -86,7 +86,8 @@ async function confirmarEgresoEnTerraza() {
 }
 
 beforeEach(() => {
-  vi.clearAllMocks()
+  // reset y no clear: una respuesta `mockReturnValueOnce` que un test no usó no pasa al siguiente.
+  vi.resetAllMocks()
   turnosApi.detalle.mockResolvedValue(SIN_MOVIMIENTOS)
   turnosApi.registrarMovimiento.mockResolvedValue(REGISTRADO)
 })
