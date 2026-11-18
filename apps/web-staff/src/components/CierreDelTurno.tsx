@@ -9,6 +9,7 @@ import {
   METODOS_DE_ARQUEO,
   primerCampoConError,
   resultadoDesdeElCierre,
+  resultadoDesdeElDetalle,
   textoDeMesaAbiertaPrevia,
   type CampoDelCierre,
   type MesaAbiertaPrevia,
@@ -106,9 +107,9 @@ export function CierreDelTurno({ turno, restauranteId, onCerrado, onTurnoCambio 
   async function cerrar(confirmacion: Confirmacion) {
     setPaso({ ...confirmacion, enviando: true, error: null })
     try {
+      // El mapeo va en el mismo try: una respuesta 200 que no se puede leer cae en el camino ambiguo, no en un 4xx.
       const resultado = resultadoDesdeElCierre(await api.turnos.cerrar(turno.id, confirmacion.body))
-      // El cobro no espera al polling para dejar de ofrecer las cajas que se cerraron.
-      void useCajasStore.getState().cargar(restauranteId)
+      refrescarCajas()
       onCerrado(resultado)
     } catch (e) {
       if (e instanceof ApiError && e.status >= 400 && e.status < 500) {
@@ -121,8 +122,43 @@ export function CierreDelTurno({ turno, restauranteId, onCerrado, onTurnoCambio 
         setPaso({ ...confirmacion, enviando: false, error: e.message || 'No se pudo cerrar el turno' })
         return
       }
-      setPaso({ ...confirmacion, enviando: false, error: 'No se pudo cerrar el turno' })
+      await resolverAmbiguo(confirmacion)
     }
+  }
+
+  /** El cobro no espera al polling para dejar de ofrecer las cajas que se cerraron. */
+  function refrescarCajas() {
+    void useCajasStore.getState().cargar(restauranteId)
+  }
+
+  /**
+   * Un 5xx, un error de red o una respuesta 200 ilegible: el cierre pudo haberse hecho (los avisos se leen después del
+   * commit). No se reintenta: se relee el turno actual. Si sigue el mismo abierto, no se cerró; si no, se arma el
+   * resultado desde el detalle del turno, ya cerrado.
+   */
+  async function resolverAmbiguo(confirmacion: Confirmacion) {
+    const quedarse = (error: string) => setPaso({ ...confirmacion, enviando: false, error })
+    let abierto: TurnoDeCaja | null
+    try {
+      abierto = (await api.turnos.actual(restauranteId)).turno
+    } catch {
+      quedarse('No se pudo confirmar si el turno se cerró. Tocá «Actualizar» para ver su estado.')
+      return
+    }
+    if (abierto?.id === turno.id) {
+      quedarse('No se pudo cerrar el turno; sigue abierto. Probá de nuevo.')
+      return
+    }
+
+    refrescarCajas()
+    let resultado: ResultadoDelCierre
+    try {
+      resultado = resultadoDesdeElDetalle(await api.turnos.detalle(turno.id))
+    } catch {
+      onTurnoCambio('El turno se cerró, pero no se pudo leer el resultado del arqueo.')
+      return
+    }
+    onCerrado(resultado)
   }
 
   const errores = intentado ? erroresDe(leerCierre(turno.cajas, valores, observaciones)) : {}

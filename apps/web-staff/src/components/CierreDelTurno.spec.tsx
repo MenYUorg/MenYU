@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import type { CierreDeTurno, TurnoCajaApi, TurnoDeCaja } from '@menyu/types'
+import type { CierreDeTurno, TurnoCajaApi, TurnoDeCaja, TurnoDetalle } from '@menyu/types'
 import { api, ApiError, type SesionActivaItem } from '../services/api'
 import { useCajasStore } from '../store/cajasStore'
 import { CierreDelTurno } from './CierreDelTurno'
@@ -42,6 +42,16 @@ const RESPUESTA: CierreDeTurno = {
   ],
   avisos: { mesasAbiertas: [{ mesaId: 'm7', mesaNumero: '7', iniciadaEn: ABIERTO }] },
 }
+
+// El detalle del mismo turno, ya cerrado: las cajas por nombre, con el arqueo de la respuesta.
+const DETALLE_CERRADO: TurnoDetalle = {
+  id: 'turno-1', abiertoEn: ABIERTO, abiertoPor: { id: 'u-1', nombre: 'Julia' }, cerradoEn: CERRADO,
+  cerradoPor: { id: 'u-1', nombre: 'Julia' }, observaciones: null, asignaciones: [],
+  cajas: RESPUESTA.arqueos.map((a, i) => ({
+    id: `tc-${i}`, cajaId: a.cajaId, nombre: a.cajaNombre, fondoInicial: a.fondoInicial, arqueo: a.metodos, movimientos: [],
+  })),
+}
+const RESULTADO_DEL_DETALLE = { turnoId: 'turno-1', cerradoEn: CERRADO, arqueos: RESPUESTA.arqueos, mesasAbiertas: null }
 
 const sesion = (mesaId: string, mesaNumero: string, tiempoTranscurrido: number, quierePagar = false): SesionActivaItem => ({
   id: `s-${mesaId}-${tiempoTranscurrido}`, mesaId, mesaNumero, tiempoTranscurrido, cantidadItems: 1, cantidadPersonas: 2,
@@ -384,6 +394,88 @@ describe('CierreDelTurno', () => {
       expect(onTurnoCambio).not.toHaveBeenCalled()
       expect(onCerrado).not.toHaveBeenCalled()
       expect(turnosApi.actual).not.toHaveBeenCalled()
+    })
+
+    describe('sin saber si se cerró (5xx, sin respuesta o una respuesta ilegible)', () => {
+      it.each([
+        ['un 500', new ApiError('Error interno', 500)],
+        ['un error de red', new TypeError('Failed to fetch')],
+      ])('con %s relee el turno: si sigue abierto, lo dice y deja reintentar', async (_caso, error) => {
+        turnosApi.cerrar.mockRejectedValueOnce(error)
+        turnosApi.actual.mockResolvedValueOnce({ turno: turnoCon([BARRA, TERRAZA]) })
+        await confirmar()
+
+        await enviar()
+
+        expect(turnosApi.actual).toHaveBeenCalledWith('rest-1')
+        expect(screen.getByRole('alert')).toHaveTextContent('No se pudo cerrar el turno; sigue abierto. Probá de nuevo.')
+        expect(botonCerrar()).toBeEnabled()
+        expect(turnosApi.cerrar).toHaveBeenCalledTimes(1)
+        expect(turnosApi.detalle).not.toHaveBeenCalled()
+        expect(onCerrado).not.toHaveBeenCalled()
+        expect(cajasApi.abiertas).not.toHaveBeenCalled()
+      })
+
+      it.each([
+        ['no hay turno abierto', null],
+        ['hay otro turno abierto', { ...turnoCon([BARRA]), id: 'turno-2' }],
+      ])('si %s, el turno se cerró: arma el resultado desde el detalle, sin las mesas abiertas', async (_caso, abierto) => {
+        turnosApi.cerrar.mockRejectedValueOnce(new ApiError('Error interno', 502))
+        turnosApi.actual.mockResolvedValueOnce({ turno: abierto })
+        turnosApi.detalle.mockResolvedValueOnce(DETALLE_CERRADO)
+        await confirmar()
+
+        await enviar()
+
+        expect(turnosApi.detalle).toHaveBeenCalledWith('turno-1')
+        expect(onCerrado).toHaveBeenCalledWith(RESULTADO_DEL_DETALLE)
+        expect(turnosApi.cerrar).toHaveBeenCalledTimes(1)
+        await waitFor(() => expect(cajasApi.abiertas).toHaveBeenCalledWith('rest-1'))
+      })
+
+      it.each([
+        ['sin avisos', { turno: RESPUESTA.turno, arqueos: RESPUESTA.arqueos }],
+        ['con el turno abierto', { ...RESPUESTA, turno: { ...RESPUESTA.turno, cerradoEn: null } }],
+      ])('una respuesta 200 %s va por el mismo camino, nunca como un error del servidor', async (_caso, respuesta) => {
+        turnosApi.cerrar.mockResolvedValueOnce(respuesta as CierreDeTurno)
+        turnosApi.actual.mockResolvedValueOnce({ turno: null })
+        turnosApi.detalle.mockResolvedValueOnce(DETALLE_CERRADO)
+        await confirmar()
+
+        await enviar()
+
+        expect(onCerrado).toHaveBeenCalledWith(RESULTADO_DEL_DETALLE)
+        expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+      })
+
+      it('si no puede releer el turno, se queda y pide tocar «Actualizar»', async () => {
+        turnosApi.cerrar.mockRejectedValueOnce(new TypeError('Failed to fetch'))
+        turnosApi.actual.mockRejectedValueOnce(new TypeError('Failed to fetch'))
+        await confirmar()
+
+        await enviar()
+
+        expect(screen.getByRole('alert')).toHaveTextContent('No se pudo confirmar si el turno se cerró. Tocá «Actualizar» para ver su estado.')
+        expect(botonCerrar()).toBeEnabled()
+        expect(turnosApi.cerrar).toHaveBeenCalledTimes(1)
+        expect(onCerrado).not.toHaveBeenCalled()
+        expect(onTurnoCambio).not.toHaveBeenCalled()
+      })
+
+      it.each([
+        ['falla', () => turnosApi.detalle.mockRejectedValueOnce(new ApiError('Error interno', 500))],
+        ['trae una caja sin arqueo', () => turnosApi.detalle.mockResolvedValueOnce({ ...DETALLE_CERRADO, cajas: [{ ...DETALLE_CERRADO.cajas[0], arqueo: null }] })],
+      ])('si se cerró pero el detalle %s, se lo pasa a la pantalla con un aviso', async (_caso, preparar) => {
+        turnosApi.cerrar.mockRejectedValueOnce(new ApiError('Error interno', 500))
+        turnosApi.actual.mockResolvedValueOnce({ turno: null })
+        preparar()
+        await confirmar()
+
+        await enviar()
+
+        expect(onTurnoCambio).toHaveBeenCalledWith('El turno se cerró, pero no se pudo leer el resultado del arqueo.')
+        expect(onCerrado).not.toHaveBeenCalled()
+      })
     })
 
     it('reintentar después de un error manda de nuevo y, si sale bien, cierra', async () => {
