@@ -7,9 +7,12 @@ import type {
   CajasAbiertas,
   EstadoPedido,
   Mesa,
+  MovimientoRegistrado,
   PreparacionDeTurno,
+  RegistrarMovimientoBody,
   SesionHistorial,
   TurnoActual,
+  TurnoDetalle,
   TurnoReasignado,
 } from '@menyu/types'
 
@@ -260,6 +263,17 @@ export const api = {
       authFetch<TurnoReasignado>(`/turnos/${encodeURIComponent(turnoId)}/asignaciones`, {
         method: 'PUT',
         body: JSON.stringify({ asignaciones }),
+      }),
+
+    /** El turno, abierto o cerrado, con los movimientos de cada caja (del más viejo al más nuevo). */
+    detalle: (turnoId: string) =>
+      authFetch<TurnoDetalle>(`/turnos/${encodeURIComponent(turnoId)}`),
+
+    /** Registra un ingreso o un egreso en una caja del turno. Quién lo carga lo deduce el backend de la cuenta. */
+    registrarMovimiento: (turnoId: string, body: RegistrarMovimientoBody) =>
+      authFetch<MovimientoRegistrado>(`/turnos/${encodeURIComponent(turnoId)}/movimientos`, {
+        method: 'POST',
+        body: JSON.stringify(body),
       }),
   },
 
