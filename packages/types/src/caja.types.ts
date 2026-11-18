@@ -103,3 +103,63 @@ export interface ReasignarMesasBody {
 export interface TurnoReasignado {
   turno: TurnoDeCaja
 }
+
+// El tipo de un movimiento de caja: entra o sale efectivo.
+export type TipoDeMovimiento = 'INGRESO' | 'EGRESO'
+
+// Un ingreso o un egreso de efectivo de una caja del turno (#357). Es inmutable: no se edita ni se borra. `cajaId` es
+// el id de la Caja; `usuario`, la cuenta que lo cargó.
+export interface MovimientoDeCaja {
+  id: string
+  cajaId: string
+  cajaNombre: string
+  tipo: TipoDeMovimiento
+  monto: number
+  motivo: string
+  usuario: { id: string; nombre: string }
+  createdAt: string
+}
+
+// El body de POST /turnos/:id/movimientos. `monto`: mayor a 0, hasta 2 decimales; `motivo`: obligatorio, hasta 200.
+export interface RegistrarMovimientoBody {
+  cajaId: string
+  tipo: TipoDeMovimiento
+  monto: number
+  motivo: string
+}
+
+// La respuesta de POST /turnos/:id/movimientos.
+export interface MovimientoRegistrado {
+  movimiento: MovimientoDeCaja
+}
+
+// Una fila del arqueo de una caja al cerrar el turno, por método de pago.
+export interface FilaDeArqueo {
+  metodo: 'efectivo' | 'debito' | 'credito' | 'transferencia'
+  esperado: number
+  declarado: number
+  diferencia: number
+}
+
+// Una caja en el detalle del turno: `arqueo` es null mientras el turno está abierto; `movimientos`, del más viejo al
+// más nuevo.
+export interface CajaDelDetalle {
+  id: string
+  cajaId: string
+  nombre: string
+  fondoInicial: number
+  arqueo: FilaDeArqueo[] | null
+  movimientos: MovimientoDeCaja[]
+}
+
+// La respuesta de GET /turnos/:id: el turno, abierto o cerrado, con sus cajas y las mesas asignadas.
+export interface TurnoDetalle {
+  id: string
+  abiertoEn: string
+  abiertoPor: { id: string; nombre: string }
+  cerradoEn: string | null
+  cerradoPor: { id: string; nombre: string } | null
+  observaciones: string | null
+  cajas: CajaDelDetalle[]
+  asignaciones: AsignacionDelTurno[]
+}

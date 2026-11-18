@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import type { AperturaDeTurno, CajaDelRestaurante, PreparacionDeTurno, TurnoDeCaja } from '@menyu/types'
+import type { AperturaDeTurno, CajaDelRestaurante, PreparacionDeTurno, TurnoDeCaja, TurnoDetalle } from '@menyu/types'
 import { api, ApiError } from '../../services/api'
 import { useCajasStore } from '../../store/cajasStore'
 import { perfilDeJefeSalon, reiniciarSesionDePrueba } from '../../test/authClient'
@@ -16,7 +16,7 @@ vi.mock('../../services/api', async () => {
     ApiError,
     api: {
       cajas: { todas: vi.fn(), abiertas: vi.fn() },
-      turnos: { actual: vi.fn(), preparacion: vi.fn(), abrir: vi.fn(), reasignar: vi.fn() },
+      turnos: { actual: vi.fn(), preparacion: vi.fn(), abrir: vi.fn(), reasignar: vi.fn(), detalle: vi.fn(), registrarMovimiento: vi.fn() },
     },
   }
 })
@@ -48,6 +48,18 @@ const TURNO: TurnoDeCaja = {
   cerradoEn: null,
   observaciones: null,
   cajas: [{ id: 'tc-1', cajaId: 'c-barra', nombre: 'Barra', fondoInicial: 0, abiertoEn: new Date(2026, 10, 18, 9, 5).toISOString() }],
+  asignaciones: [],
+}
+
+/** El detalle de un turno sin movimientos: lo lee la sección de movimientos al mostrar el turno. */
+const DETALLE_SIN_MOVIMIENTOS: TurnoDetalle = {
+  id: 'turno-1',
+  abiertoEn: TURNO.abiertoEn,
+  abiertoPor: TURNO.abiertoPor,
+  cerradoEn: null,
+  cerradoPor: null,
+  observaciones: null,
+  cajas: [],
   asignaciones: [],
 }
 
@@ -98,6 +110,7 @@ beforeEach(() => {
   cajasApi.abiertas.mockResolvedValue({ cajas: [{ cajaId: 'c-barra', nombre: 'Barra' }] })
   turnosApi.preparacion.mockResolvedValue(PREPARACION)
   turnosApi.abrir.mockResolvedValue({ turno: TURNO, avisos: [] })
+  turnosApi.detalle.mockResolvedValue(DETALLE_SIN_MOVIMIENTOS)
 })
 
 describe('CajaPage', () => {
@@ -559,7 +572,7 @@ describe('CajaPage', () => {
       await abrirConTurno()
 
       const cajas = within(screen.getByRole('list', { name: 'Cajas del turno' })).getAllByRole('listitem')
-      expect(cajas.map((c) => c.textContent)).toEqual(['Barra · fondo $0', 'Terraza · fondo $2.500,5'])
+      expect(cajas.map((c) => c.textContent)).toEqual(['Barra · fondo $0', 'Terraza · fondo $2.500,50'])
       expect(screen.getByText('Observaciones: Falta cambio chico')).toBeInTheDocument()
       expect(screen.queryByRole('button', { name: /cerrar/i })).not.toBeInTheDocument()
     })
@@ -763,6 +776,51 @@ describe('CajaPage', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Reasignar mesas' }))
 
       expect(await screen.findByRole('alert')).toHaveTextContent('No se pudieron cargar las mesas y los mozos')
+    })
+  })
+
+  describe('con turno: los movimientos de caja', () => {
+    async function abrirConTurno() {
+      turnosApi.actual.mockResolvedValue({ turno: TURNO })
+      abrir()
+      expect(await screen.findByText('Todavía no hay movimientos en este turno.')).toBeInTheDocument()
+    }
+
+    it('van debajo de las mesas por mozo y se leen del detalle del turno', async () => {
+      await abrirConTurno()
+
+      const titulos = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)
+      expect(titulos).toEqual(['Mesas por mozo', 'Movimientos de caja'])
+      expect(turnosApi.detalle).toHaveBeenCalledWith('turno-1')
+    })
+
+    it('"Actualizar" vuelve a leer el turno y también los movimientos', async () => {
+      await abrirConTurno()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Actualizar' }))
+
+      // La sección de movimientos se desmonta mientras se lee el turno, y al volver lee la lista de nuevo.
+      expect(screen.getByText('Cargando el turno…')).toBeInTheDocument()
+      expect(screen.queryByRole('heading', { name: 'Movimientos de caja' })).not.toBeInTheDocument()
+      expect(await screen.findByText('Todavía no hay movimientos en este turno.')).toBeInTheDocument()
+      expect(turnosApi.actual).toHaveBeenCalledTimes(2)
+      expect(turnosApi.detalle).toHaveBeenCalledTimes(2)
+    })
+
+    it('un 409 "El turno está cerrado" al registrar lo avisa y vuelve a leer el turno', async () => {
+      turnosApi.registrarMovimiento.mockRejectedValueOnce(new ApiError('El turno está cerrado', 409))
+      await abrirConTurno()
+      turnosApi.actual.mockResolvedValue({ turno: null })
+      fireEvent.click(screen.getByRole('radio', { name: 'Ingreso' }))
+      fireEvent.change(screen.getByLabelText('Monto'), { target: { value: '100' } })
+      fireEvent.change(screen.getByLabelText('Motivo'), { target: { value: 'Cambio' } })
+      fireEvent.click(screen.getByRole('button', { name: 'Registrar movimiento' }))
+
+      fireEvent.click(screen.getByRole('button', { name: 'Confirmar' }))
+
+      expect(await screen.findByRole('button', { name: 'Abrir turno' })).toBeInTheDocument()
+      expect(screen.getAllByRole('alert')[0]).toHaveTextContent('El turno está cerrado')
+      expect(turnosApi.actual).toHaveBeenCalledTimes(2)
     })
   })
 })

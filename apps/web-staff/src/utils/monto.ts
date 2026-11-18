@@ -1,4 +1,4 @@
-/** El tope del backend para los montos de caja (`Decimal(10, 2)`: propina, fondo inicial). */
+/** El tope del backend para los montos de caja (`Decimal(10, 2)`: propina, fondo inicial, movimientos). */
 export const MONTO_MAXIMO = 99_999_999.99
 
 /** Por qué un texto no es un monto válido. */
@@ -9,7 +9,8 @@ export type MontoLeido = { ok: true; valor: number | null } | { ok: false; error
 
 /**
  * Lee un monto que escribe el personal: dígitos con coma o punto decimal y hasta 2 decimales, sin separador de miles ni
- * signos, hasta `maximo`. Los mensajes los arma cada campo (`parsearPropina`, `parsearFondo`).
+ * signos, hasta `maximo`. Los mensajes los arma cada campo (`parsearPropina`, `parsearFondo`,
+ * `parsearMontoDeMovimiento`).
  */
 export function leerMonto(texto: string, maximo: number = MONTO_MAXIMO): MontoLeido {
   const limpio = texto.trim()
