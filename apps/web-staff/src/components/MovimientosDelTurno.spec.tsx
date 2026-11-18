@@ -148,7 +148,7 @@ describe('MovimientosDelTurno', () => {
       expect(screen.queryByRole('heading', { level: 3 })).not.toBeInTheDocument()
     })
 
-    it('si falla muestra el error con "Reintentar", que la vuelve a leer; el formulario sigue usable', async () => {
+    it('si falla muestra el error con "Reintentar", que muestra "Cargando…" y después la lista; el formulario sigue usable', async () => {
       turnosApi.detalle.mockRejectedValueOnce(new ApiError('Turno no encontrado', 404))
       await montar()
 
@@ -160,8 +160,40 @@ describe('MovimientosDelTurno', () => {
 
       fireEvent.click(within(alerta).getByRole('button', { name: 'Reintentar' }))
 
+      expect(screen.getByText('Cargando los movimientos…')).toBeInTheDocument()
+      expect(screen.queryByText('Turno no encontrado')).not.toBeInTheDocument()
       expect(await screen.findByText('Todavía no hay movimientos en este turno.')).toBeInTheDocument()
       expect(turnosApi.detalle).toHaveBeenCalledTimes(2)
+    })
+
+    it('al releer después de registrar, la lista anterior sigue a la vista y no aparece "Cargando…"', async () => {
+      turnosApi.detalle.mockResolvedValueOnce(detalleCon([BARRA, [movimiento('m-1', BARRA, 'EGRESO', 100, 'Hielo', 1)]]))
+      await montar()
+      const relectura = pendiente<TurnoDetalle>()
+      turnosApi.detalle.mockReturnValueOnce(relectura.promesa)
+
+      await confirmarEgresoEnTerraza()
+
+      expect(turnosApi.detalle).toHaveBeenCalledTimes(2)
+      expect(filas('Barra')).toEqual(['18/11 10:01 · Egreso · $100 · Hielo · cargó Ana'])
+      expect(screen.queryByText('Cargando los movimientos…')).not.toBeInTheDocument()
+
+      await act(async () => { relectura.resolver(detalleCon([BARRA, [movimiento('m-1', BARRA, 'EGRESO', 100, 'Hielo', 1)]], [TERRAZA, [REGISTRADO.movimiento]])) })
+
+      expect(filas('Terraza')).toEqual(['18/11 10:30 · Egreso · $1.500,50 · Compra de hielo · cargó Ana'])
+    })
+
+    it('si esa relectura falla, el error reemplaza a la lista', async () => {
+      turnosApi.detalle
+        .mockResolvedValueOnce(detalleCon([BARRA, [movimiento('m-1', BARRA, 'EGRESO', 100, 'Hielo', 1)]]))
+        .mockRejectedValueOnce(new ApiError('Sin conexión', 503))
+      await montar()
+
+      await confirmarEgresoEnTerraza()
+
+      expect(await screen.findByText('Sin conexión')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument()
+      expect(screen.queryByRole('list', { name: 'Movimientos de Barra' })).not.toBeInTheDocument()
     })
 
     it('un error sin mensaje muestra uno genérico', async () => {

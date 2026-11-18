@@ -30,7 +30,8 @@ const estiloTexto = { fontFamily: 'Inter,sans-serif', fontSize: 13, color: C.nav
  * Los ingresos y egresos de efectivo de las cajas del turno abierto (#359): la lista y el formulario para registrar uno.
  * Arqueo ciego: no muestra saldos, esperados ni sumas. La lista sale de GET /turnos/:id y se vuelve a leer al montar,
  * después de registrar y después de un registro sin respuesta; "Actualizar" de la pantalla desmonta el turno, así que
- * también la vuelve a leer. Una lectura vieja que llega tarde no pisa a la nueva.
+ * también la vuelve a leer. Mientras se relee, la lista anterior sigue a la vista. Una lectura vieja que llega tarde no
+ * pisa a la nueva.
  */
 export function MovimientosDelTurno({ turno, onTurnoCambio }: MovimientosDelTurnoProps) {
   const id = useId()
@@ -40,7 +41,8 @@ export function MovimientosDelTurno({ turno, onTurnoCambio }: MovimientosDelTurn
 
   const leer = useCallback(async () => {
     const lectura = ++ultimaLectura.current
-    setLista({ estado: 'cargando' })
+    // Con una lista ya leída, sigue a la vista mientras se relee: "Cargando…" es solo para cuando no hay ninguna.
+    setLista((actual) => (actual.estado === 'listo' ? actual : { estado: 'cargando' }))
     try {
       const detalle = await api.turnos.detalle(turnoId)
       if (lectura === ultimaLectura.current) setLista({ estado: 'listo', detalle })
