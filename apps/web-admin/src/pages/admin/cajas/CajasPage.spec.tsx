@@ -412,6 +412,33 @@ describe('CajasPage', () => {
     })
   })
 
+  describe('el diseño del campo del nombre', () => {
+    // jsdom no tiene layout: esto fija la estructura. El botón va en la fila del campo y el error del nombre debajo de
+    // esa fila, así el botón no se mueve cuando aparece el error.
+    it('en el alta, "Agregar caja" comparte la fila con el campo y el error queda fuera de esa fila', async () => {
+      await abrir()
+      fireEvent.change(campoDeAlta(), { target: { value: '' } })
+      await tocar(boton('Agregar caja'))
+
+      const fila = boton('Agregar caja').parentElement as HTMLElement
+      expect(fila).toContainElement(campoDeAlta())
+      expect(fila).not.toContainElement(screen.getByRole('alert'))
+    })
+
+    it('al renombrar, "Guardar" y "Cancelar" comparten la fila con el campo y el error queda fuera de esa fila', async () => {
+      await abrir()
+      fireEvent.click(boton('Renombrar «Barra»'))
+      fireEvent.change(within(fila('Barra')).getByLabelText('Nombre de la caja'), { target: { value: '' } })
+      await tocar(within(fila('Barra')).getByRole('button', { name: 'Guardar' }))
+
+      const guardar = within(fila('Barra')).getByRole('button', { name: 'Guardar' })
+      const filaDelCampo = guardar.parentElement as HTMLElement
+      expect(filaDelCampo).toContainElement(within(fila('Barra')).getByLabelText('Nombre de la caja'))
+      expect(filaDelCampo).toContainElement(within(fila('Barra')).getByRole('button', { name: 'Cancelar' }))
+      expect(filaDelCampo).not.toContainElement(within(fila('Barra')).getByRole('alert'))
+    })
+  })
+
   describe('lecturas que se cruzan', () => {
     it('una lectura vieja que llega tarde no pisa a la nueva', async () => {
       const vieja = pendiente<CajaDelRestaurante[]>()

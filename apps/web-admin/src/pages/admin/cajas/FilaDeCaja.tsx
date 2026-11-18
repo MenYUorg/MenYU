@@ -83,7 +83,7 @@ export function FilaDeCaja({ caja, abierta, onCambio }: FilaDeCajaProps) {
   return (
     <li className="border border-gray-200 rounded-lg bg-white px-4 py-3 flex flex-col gap-2">
       {modo === 'renombrando' ? (
-        <form noValidate onSubmit={guardar} className="flex items-end gap-2">
+        <form noValidate onSubmit={guardar}>
           <CampoDeNombre
             id={id}
             autoFocus
@@ -95,11 +95,12 @@ export function FilaDeCaja({ caja, abierta, onCambio }: FilaDeCajaProps) {
               setErrorDelNombre(null)
               setError(null)
             }}
-          />
-          <Button type="submit" size="sm" loading={enviando}>Guardar</Button>
-          <Button type="button" variant="ghost" size="sm" disabled={enviando} onClick={() => { setError(null); cerrar() }}>
-            Cancelar
-          </Button>
+          >
+            <Button type="submit" size="sm" loading={enviando}>Guardar</Button>
+            <Button type="button" variant="ghost" size="sm" disabled={enviando} onClick={() => { setError(null); cerrar() }}>
+              Cancelar
+            </Button>
+          </CampoDeNombre>
         </form>
       ) : (
         <div className="flex items-center gap-2">

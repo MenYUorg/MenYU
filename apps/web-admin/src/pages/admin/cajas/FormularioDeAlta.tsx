@@ -44,21 +44,20 @@ export function FormularioDeAlta({ restauranteId, onCreada }: FormularioDeAltaPr
 
   return (
     <form noValidate onSubmit={(e) => void crear(e)} className="flex flex-col gap-2 mb-6">
-      <div className="flex items-end gap-3">
-        <CampoDeNombre
-          id={id}
-          valor={texto}
-          error={errorDelNombre}
-          placeholder="Ej: Caja principal"
-          className="w-64"
-          onChange={(valor) => {
-            setTexto(valor)
-            setErrorDelNombre(null)
-            setError(null)
-          }}
-        />
+      <CampoDeNombre
+        id={id}
+        valor={texto}
+        error={errorDelNombre}
+        placeholder="Ej: Caja principal"
+        className="w-64"
+        onChange={(valor) => {
+          setTexto(valor)
+          setErrorDelNombre(null)
+          setError(null)
+        }}
+      >
         <Button type="submit" loading={enviando}>Agregar caja</Button>
-      </div>
+      </CampoDeNombre>
       {error !== null && <p role="alert" className="text-sm text-red-600">{error}</p>}
     </form>
   )
