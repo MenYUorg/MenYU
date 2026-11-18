@@ -1,9 +1,26 @@
-import { fireEvent, render, screen, within } from '@testing-library/react'
-import type { FilaDeArqueo } from '@menyu/types'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import type { FilaDeArqueo, ResumenDeTurno } from '@menyu/types'
+import { api, ApiError } from '../services/api'
 import type { ResultadoDelCierre as Resultado } from '../utils/cierre'
 import { ResultadoDelCierre } from './ResultadoDelCierre'
 
+vi.mock('../services/api', async () => {
+  const { ApiError } = await vi.importActual<typeof import('../services/api')>('../services/api')
+  return { ApiError, api: { turnos: { resumen: vi.fn() } } }
+})
+
+const turnosApi = vi.mocked(api.turnos)
+
 const CERRADO = new Date(2026, 10, 18, 23, 30).toISOString()
+const ABIERTO = new Date(2026, 10, 18, 12, 0).toISOString()
+
+const SIN_COBROS: ResumenDeTurno = {
+  turno: { id: 'turno-1', abiertoEn: ABIERTO, cerradoEn: CERRADO },
+  porMetodo: (['efectivo', 'debito', 'credito', 'transferencia'] as const).map((metodo) => ({ metodo, cantidad: 0, monto: 0, propina: 0 })),
+  porMozo: [],
+  total: { cantidad: 0, monto: 0, propina: 0 },
+  mercadoPago: { desde: ABIERTO, hasta: CERRADO, cantidad: 0, monto: 0, propina: 0, pagos: [] },
+}
 
 const fila = (metodo: FilaDeArqueo['metodo'], esperado: number, declarado: number, diferencia: number): FilaDeArqueo => ({
   metodo, esperado, declarado, diferencia,
@@ -30,7 +47,11 @@ const RESULTADO: Resultado = {
 
 const onNuevoTurno = vi.fn()
 
-const montar = (resultado: Resultado = RESULTADO) => render(<ResultadoDelCierre resultado={resultado} onNuevoTurno={onNuevoTurno} />)
+/** Monta y espera la lectura del resumen. */
+async function montar(resultado: Resultado = RESULTADO) {
+  render(<ResultadoDelCierre resultado={resultado} onNuevoTurno={onNuevoTurno} />)
+  await act(async () => {})
+}
 
 const filas = (caja: string) =>
   within(screen.getByRole('table', { name: `Arqueo de la caja «${caja}»` })).getAllByRole('row').map((f) =>
@@ -38,23 +59,22 @@ const filas = (caja: string) =>
 
 beforeEach(() => {
   vi.resetAllMocks()
+  turnosApi.resumen.mockResolvedValue(SIN_COBROS)
 })
 
 describe('ResultadoDelCierre', () => {
-  it('dice que el turno se cerró y cuándo, con el foco en el encabezado', () => {
-    montar()
+  it('dice que el turno se cerró y cuándo, con el foco en el encabezado', async () => {
+    await montar()
 
     expect(screen.getByRole('heading', { name: 'Turno cerrado' })).toHaveFocus()
     expect(screen.getByText('Cerrado el 18/11 23:30')).toBeInTheDocument()
   })
 
-  it('una tabla por caja, en el orden del resultado, con el esperado, lo declarado y la diferencia con palabras', () => {
-    montar()
+  it('una tabla por caja, en el orden del resultado, con el esperado, lo declarado y la diferencia con palabras', async () => {
+    await montar()
 
-    expect(screen.getAllByRole('table').map((t) => t.querySelector('caption')?.textContent)).toEqual([
-      'Arqueo de la caja «Barra»',
-      'Arqueo de la caja «Terraza»',
-    ])
+    const arqueos = screen.getAllByRole('table').map((t) => t.querySelector('caption')?.textContent).filter((c) => c?.startsWith('Arqueo'))
+    expect(arqueos).toEqual(['Arqueo de la caja «Barra»', 'Arqueo de la caja «Terraza»'])
     expect(filas('Barra')).toEqual([
       ['Método', 'Esperado', 'Declarado', 'Diferencia'],
       ['Efectivo', '$6.350', '$6.300', 'Faltan $50'],
@@ -62,41 +82,66 @@ describe('ResultadoDelCierre', () => {
       ['Crédito', '$2.500', '$2.500,50', 'Sobran $0,50'],
       ['Transferencia', '$0', '$0', 'Sin diferencia'],
     ])
-    expect(screen.getAllByRole('columnheader').every((th) => th.getAttribute('scope') === 'col')).toBe(true)
-    expect(screen.getAllByRole('rowheader').every((th) => th.getAttribute('scope') === 'row')).toBe(true)
+    const tabla = screen.getByRole('table', { name: 'Arqueo de la caja «Barra»' })
+    expect(within(tabla).getAllByRole('columnheader').every((th) => th.getAttribute('scope') === 'col')).toBe(true)
+    expect(within(tabla).getAllByRole('rowheader').every((th) => th.getAttribute('scope') === 'row')).toBe(true)
     expect(screen.getByText('Fondo inicial: $5.000')).toBeInTheDocument()
   })
 
-  it('un esperado de efectivo negativo se muestra con su signo, y la diferencia sin signo', () => {
-    montar()
+  it('un esperado de efectivo negativo se muestra con su signo, y la diferencia sin signo', async () => {
+    await montar()
 
     expect(filas('Terraza')[1]).toEqual(['Efectivo', '-$200', '$0', 'Sobran $200'])
     expect(screen.getByText('Fondo inicial: $0')).toBeInTheDocument()
   })
 
-  it('avisa las mesas que quedaron abiertas y desde cuándo, en el orden del resultado', () => {
-    montar()
+  it('avisa las mesas que quedaron abiertas y desde cuándo, en el orden del resultado', async () => {
+    await montar()
 
     expect(screen.getByRole('alert')).toHaveTextContent('Quedaron mesas abiertas. Sin un turno abierto no se pueden cobrar hasta que se abra uno nuevo.')
     const mesas = within(screen.getByRole('list', { name: 'Mesas que quedaron abiertas' })).getAllByRole('listitem').map((m) => m.textContent)
     expect(mesas).toEqual(['Mesa 7 · desde 18/11 21:05', 'Mesa 2 · desde 18/11 22:40'])
   })
 
-  it('sin mesas abiertas no avisa nada', () => {
-    montar({ ...RESULTADO, mesasAbiertas: [] })
+  it('sin mesas abiertas no avisa nada', async () => {
+    await montar({ ...RESULTADO, mesasAbiertas: [] })
 
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
-  it('si no se supo de las mesas abiertas, lo dice', () => {
-    montar({ ...RESULTADO, mesasAbiertas: null })
+  it('si no se supo de las mesas abiertas, lo dice', async () => {
+    await montar({ ...RESULTADO, mesasAbiertas: null })
 
     expect(screen.getByRole('alert')).toHaveTextContent('No se pudo comprobar si quedaron mesas abiertas.')
-    expect(screen.queryByRole('list')).not.toBeInTheDocument()
+    expect(screen.queryByRole('list', { name: 'Mesas que quedaron abiertas' })).not.toBeInTheDocument()
   })
 
-  it('"Abrir un turno nuevo" avisa a la pantalla', () => {
-    montar()
+  it('muestra el resumen del turno cerrado, debajo del arqueo', async () => {
+    await montar()
+
+    expect(turnosApi.resumen).toHaveBeenCalledWith('turno-1')
+    const resumen = screen.getByRole('heading', { name: 'Resumen del turno' })
+    const arqueo = screen.getByRole('table', { name: 'Arqueo de la caja «Terraza»' })
+    expect(arqueo.compareDocumentPosition(resumen) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(screen.getByRole('table', { name: 'Cobrado por método' })).toBeInTheDocument()
+  })
+
+  it('si falla el resumen, el arqueo y el aviso de mesas siguen a la vista, con el error y "Reintentar"', async () => {
+    turnosApi.resumen.mockRejectedValueOnce(new ApiError('Error interno', 500))
+    await montar()
+
+    const alertas = screen.getAllByRole('alert')
+    expect(alertas.map((a) => a.textContent)).toEqual([
+      expect.stringContaining('Quedaron mesas abiertas'),
+      'Error internoReintentar',
+    ])
+    expect(screen.getByRole('table', { name: 'Arqueo de la caja «Barra»' })).toBeInTheDocument()
+    expect(screen.getByRole('table', { name: 'Arqueo de la caja «Terraza»' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Turno cerrado' })).toBeInTheDocument()
+  })
+
+  it('"Abrir un turno nuevo" avisa a la pantalla', async () => {
+    await montar()
 
     fireEvent.click(screen.getByRole('button', { name: 'Abrir un turno nuevo' }))
 

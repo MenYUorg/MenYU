@@ -7,6 +7,7 @@ import {
   type ResultadoDelCierre as Resultado,
 } from '../utils/cierre'
 import { formatearFechaHora, formatearMonto } from '../utils/formato'
+import { ResumenDelTurno } from './ResumenDelTurno'
 
 const C = {
   orange:   '#E8563A',
@@ -32,8 +33,8 @@ const enfocarAlMontar = (el: HTMLElement | null) => el?.focus()
 
 /**
  * Lo que queda en pantalla después de cerrar el turno (#359): el arqueo de cada caja (esperado, declarado y la
- * diferencia con palabras) y las mesas que quedaron abiertas. Recién acá se ve el esperado: mientras el turno está
- * abierto, el arqueo es ciego.
+ * diferencia con palabras), las mesas que quedaron abiertas y el resumen de lo cobrado. Recién acá se ven el esperado y
+ * el resumen: mientras el turno está abierto, el arqueo es ciego.
  */
 export function ResultadoDelCierre({ resultado, onNuevoTurno }: ResultadoDelCierreProps) {
   const id = useId()
@@ -50,6 +51,8 @@ export function ResultadoDelCierre({ resultado, onNuevoTurno }: ResultadoDelCier
       <AvisoDeMesasAbiertas mesas={resultado.mesasAbiertas} />
 
       {resultado.arqueos.map((arqueo) => <TablaDeArqueo key={arqueo.cajaId} arqueo={arqueo} />)}
+
+      <ResumenDelTurno turnoId={resultado.turnoId} />
 
       <div>
         <button

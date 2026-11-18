@@ -1,6 +1,8 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import type { AperturaDeTurno, CajaDelRestaurante, CierreDeTurno, PreparacionDeTurno, TurnoDeCaja, TurnoDetalle } from '@menyu/types'
+import type {
+  AperturaDeTurno, CajaDelRestaurante, CierreDeTurno, PreparacionDeTurno, ResumenDeTurno, TurnoDeCaja, TurnoDetalle,
+} from '@menyu/types'
 import { api, ApiError } from '../../services/api'
 import { useCajasStore } from '../../store/cajasStore'
 import { useContextoStore } from '../../store/contextoStore'
@@ -19,7 +21,7 @@ vi.mock('../../services/api', async () => {
       cajas: { todas: vi.fn(), abiertas: vi.fn() },
       turnos: {
         actual: vi.fn(), preparacion: vi.fn(), abrir: vi.fn(), reasignar: vi.fn(), detalle: vi.fn(), registrarMovimiento: vi.fn(),
-        cerrar: vi.fn(),
+        cerrar: vi.fn(), resumen: vi.fn(),
       },
       sesiones: { getActivas: vi.fn() },
     },
@@ -66,6 +68,15 @@ const CIERRE: CierreDeTurno = {
     metodos: (['efectivo', 'debito', 'credito', 'transferencia'] as const).map((metodo) => ({ metodo, esperado: 0, declarado: 0, diferencia: 0 })),
   }],
   avisos: { mesasAbiertas: [] },
+}
+
+/** El resumen de TURNO, sin cobros. */
+const RESUMEN: ResumenDeTurno = {
+  turno: { id: 'turno-1', abiertoEn: TURNO.abiertoEn, cerradoEn: CERRADO_EN },
+  porMetodo: (['efectivo', 'debito', 'credito', 'transferencia'] as const).map((metodo) => ({ metodo, cantidad: 0, monto: 0, propina: 0 })),
+  porMozo: [],
+  total: { cantidad: 0, monto: 0, propina: 0 },
+  mercadoPago: { desde: TURNO.abiertoEn, hasta: CERRADO_EN, cantidad: 0, monto: 0, propina: 0, pagos: [] },
 }
 
 /** El detalle de un turno sin movimientos: lo lee la sección de movimientos al mostrar el turno. */
@@ -130,6 +141,7 @@ beforeEach(() => {
   turnosApi.detalle.mockResolvedValue(DETALLE_SIN_MOVIMIENTOS)
   // Los del cierre van con mockResolvedValue acá: con clearAllMocks, un valor Once que un test no usó pasaría al siguiente.
   turnosApi.cerrar.mockResolvedValue(CIERRE)
+  turnosApi.resumen.mockResolvedValue(RESUMEN)
   vi.mocked(api.sesiones.getActivas).mockResolvedValue([])
 })
 
@@ -863,6 +875,24 @@ describe('CajaPage', () => {
 
     const confirmar = () => act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Cerrar turno' })) })
 
+    it('un resumen que llega después de "Abrir un turno nuevo" no deja nada colgado ni pisa la pantalla', async () => {
+      const resumen = pendiente<ResumenDeTurno>()
+      turnosApi.resumen.mockReturnValueOnce(resumen.promesa)
+      await abrirConTurno()
+      await hastaConfirmar()
+      await confirmar()
+      expect(screen.getByText('Cargando el resumen del turno…')).toBeInTheDocument()
+      turnosApi.actual.mockResolvedValue({ turno: null })
+      fireEvent.click(screen.getByRole('button', { name: 'Abrir un turno nuevo' }))
+      await screen.findByRole('button', { name: 'Abrir turno' })
+
+      await act(async () => { resumen.resolver(RESUMEN) })
+
+      expect(screen.queryByRole('heading', { name: 'Resumen del turno' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('table', { name: 'Cobrado por método' })).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Abrir turno' })).toBeInTheDocument()
+    })
+
     it('al cerrar muestra el resultado en lugar del turno, sin "Actualizar", y refresca las cajas abiertas', async () => {
       await abrirConTurno()
       await hastaConfirmar()
@@ -942,6 +972,23 @@ describe('CajaPage', () => {
         expect(turnosApi.actual).toHaveBeenLastCalledWith('rest-2')
         expect(screen.queryByRole('heading', { name: 'Turno cerrado' })).not.toBeInTheDocument()
         expect(screen.getByRole('button', { name: 'Actualizar' })).toBeInTheDocument()
+      })
+
+      it('un resumen que llega después de cambiar de restaurante no pisa la pantalla del nuevo', async () => {
+        const resumen = pendiente<ResumenDeTurno>()
+        turnosApi.resumen.mockReturnValueOnce(resumen.promesa)
+        await abrirConTurno()
+        await hastaConfirmar()
+        await confirmar()
+        turnosApi.actual.mockResolvedValue({ turno: null })
+        act(() => useContextoStore.getState().setRestaurante('rest-2'))
+        await screen.findByRole('button', { name: 'Abrir turno' })
+
+        await act(async () => { resumen.rechazar(new ApiError('Error interno', 500)) })
+
+        expect(screen.queryByRole('heading', { name: 'Resumen del turno' })).not.toBeInTheDocument()
+        expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+        expect(screen.getByRole('button', { name: 'Abrir turno' })).toBeInTheDocument()
       })
 
       it('un cierre que termina después de cambiar de restaurante no muestra su resultado', async () => {
