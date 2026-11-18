@@ -228,6 +228,7 @@ export function CierreDelTurno({ turno, restauranteId, onCerrado, onTurnoCambio 
         <ConfirmacionDelCierre
           turno={turno}
           confirmacion={paso}
+          mesasPrevias={mesasPrevias}
           onCerrar={() => void cerrar(paso)}
           onVolver={() => setPaso({ paso: 'declarando' })}
         />
@@ -286,9 +287,10 @@ function CampoDeMonto({ id, etiqueta, valor, error, onChange }: {
   )
 }
 
-function ConfirmacionDelCierre({ turno, confirmacion, onCerrar, onVolver }: {
+function ConfirmacionDelCierre({ turno, confirmacion, mesasPrevias, onCerrar, onVolver }: {
   turno: TurnoDeCaja
   confirmacion: Confirmacion
+  mesasPrevias: MesaAbiertaPrevia[] | null
   onCerrar: () => void
   onVolver: () => void
 }) {
@@ -314,6 +316,8 @@ function ConfirmacionDelCierre({ turno, confirmacion, onCerrar, onVolver }: {
       ))}
       {body.observaciones && <p style={estiloTexto}>Observaciones: {body.observaciones}</p>}
       <p style={{ ...estiloTexto, fontWeight: 600 }}>Vas a cerrar el turno y todas sus cajas. No se puede deshacer.</p>
+      {/* Las mesas abiertas se repiten antes de cerrar; la nota de que no se pudo revisar ya se vio en el formulario. */}
+      <AvisoDeMesasPrevias mesas={mesasPrevias ?? []} />
       {error && <p role="alert" style={{ ...estiloTexto, color: C.red }}>{error}</p>}
       <div style={{ display: 'flex', gap: 8 }}>
         <button type="button" onClick={onCerrar} disabled={enviando} style={estiloBoton(true, enviando)}>

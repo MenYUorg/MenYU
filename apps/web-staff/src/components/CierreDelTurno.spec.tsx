@@ -297,6 +297,38 @@ describe('CierreDelTurno', () => {
       expect(screen.getByText('Observaciones: Faltó cambio')).toBeInTheDocument()
     })
 
+    it('repite el aviso de las mesas abiertas antes del botón, también después de volver a corregir', async () => {
+      sesionesApi.getActivas.mockResolvedValueOnce([sesion('m7', '7', 12, true)])
+      await confirmar()
+
+      const aviso = screen.getByRole('list', { name: 'Mesas abiertas' })
+      expect(aviso).toHaveTextContent('Mesa 7 (hace 12 min, pidió pagar)')
+      expect(screen.getByText(/^Hay 1 mesa abierta\./)).toBeInTheDocument()
+      expect(aviso.compareDocumentPosition(botonCerrar()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Volver a corregir' }))
+      expect(screen.getByRole('list', { name: 'Mesas abiertas' })).toBeInTheDocument()
+      fireEvent.click(screen.getByRole('button', { name: 'Continuar' }))
+
+      expect(within(screen.getByRole('list', { name: 'Mesas abiertas' })).getAllByRole('listitem')).toHaveLength(1)
+      expect(screen.getByRole('heading', { name: 'Confirmá el cierre' })).toBeInTheDocument()
+      expect(sesionesApi.getActivas).toHaveBeenCalledTimes(1)
+    })
+
+    it('sin mesas abiertas no avisa nada en la confirmación', async () => {
+      await confirmar()
+
+      expect(screen.queryByText(/mesas? abiertas?/)).not.toBeInTheDocument()
+    })
+
+    it('si no se pudo revisar, la confirmación no repite la nota', async () => {
+      sesionesApi.getActivas.mockRejectedValueOnce(new Error('Sin conexión'))
+      await confirmar()
+
+      expect(screen.queryByText('No se pudo revisar si hay mesas abiertas. Podés cerrar igual.')).not.toBeInTheDocument()
+      expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    })
+
     it('"Volver a corregir" vuelve al formulario con lo escrito', async () => {
       await confirmar('Faltó cambio')
 
