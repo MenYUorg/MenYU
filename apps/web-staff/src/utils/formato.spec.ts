@@ -11,7 +11,12 @@ describe('formatearMonto', () => {
     [99_999_999.99, '$99.999.999,99'],
     [10.006, '$10,01'],
     [4.999, '$5'],
-  ])('%s se muestra como %s', (valor, texto) => {
+    [-50, '-$50'],
+    [-1500.5, '-$1.500,50'],
+    [-0.01, '-$0,01'],
+    [-0.004, '$0'],
+    [-0, '$0'],
+  ])('formatea %s', (valor, texto) => {
     expect(formatearMonto(valor)).toBe(texto)
   })
 })

@@ -195,5 +195,22 @@ describe('el cliente de la API usa la sesión de Supabase', () => {
 
       expect(pedido()).toEqual({ url: '/turnos/turno%2F1/movimientos', metodo: 'POST', body })
     })
+
+    it('cerrar el turno es un POST al turno con lo declarado de cada caja y las observaciones', async () => {
+      const body = {
+        cajas: [{ cajaId: 'caja-1', declarado: { efectivo: 1500.5, debito: 0, credito: 0, transferencia: 200 } }],
+        observaciones: 'Faltó cambio',
+      }
+
+      await api.turnos.cerrar('turno/1', body)
+
+      expect(pedido()).toEqual({ url: '/turnos/turno%2F1/cierre', metodo: 'POST', body })
+    })
+
+    it('el resumen del turno se pide por su id, con GET', async () => {
+      await api.turnos.resumen('turno/1')
+
+      expect(pedido()).toEqual({ url: '/turnos/turno%2F1/resumen', metodo: 'GET', body: undefined })
+    })
   })
 })

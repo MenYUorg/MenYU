@@ -163,3 +163,79 @@ export interface TurnoDetalle {
   cajas: CajaDelDetalle[]
   asignaciones: AsignacionDelTurno[]
 }
+
+// Un método de pago que entra al arqueo. Mercado Pago no: se acredita en la cuenta, no en la caja.
+export type MetodoDeArqueo = FilaDeArqueo['metodo']
+
+// Lo que se contó en una caja al cerrar, por método. Los 4 son obligatorios; 0 si no hubo.
+export type DeclaradoPorMetodo = Record<MetodoDeArqueo, number>
+
+// El body de POST /turnos/:id/cierre: una entrada por cada caja abierta del turno. `cajaId` es el id de la Caja
+// (TurnoCajaApi.cajaId), no el de la caja del turno. `observaciones` se suman a las del turno.
+export interface CerrarTurnoBody {
+  cajas: { cajaId: string; declarado: DeclaradoPorMetodo }[]
+  observaciones?: string
+}
+
+// El arqueo de una caja al cerrar: los 4 métodos en el orden efectivo, debito, credito, transferencia. El esperado y
+// la diferencia los calcula el backend; el esperado de efectivo puede ser negativo.
+export interface ArqueoDeCaja {
+  cajaId: string
+  cajaNombre: string
+  fondoInicial: number
+  metodos: FilaDeArqueo[]
+}
+
+// Lo que el cierre avisa sin bloquear: las mesas que quedaron con una sesión abierta (una vez cada una).
+export interface AvisosDelCierre {
+  mesasAbiertas: { mesaId: string; mesaNumero: string; iniciadaEn: string }[]
+}
+
+// La respuesta de POST /turnos/:id/cierre: el turno cerrado, el arqueo de cada caja (por nombre) y los avisos.
+export interface CierreDeTurno {
+  turno: TurnoDeCaja
+  arqueos: ArqueoDeCaja[]
+  avisos: AvisosDelCierre
+}
+
+// Cuántos cobros y cuánto suman. La propina va siempre aparte: nunca se suma al monto.
+export interface FilaDeResumen {
+  cantidad: number
+  monto: number
+  propina: number
+}
+
+// Lo cobrado por quien cobró. `mozoId` y `mozoNombre` en null: los cobros sin mozo (van al final).
+export interface ResumenPorMozo extends FilaDeResumen {
+  mozoId: string | null
+  mozoNombre: string | null
+}
+
+// Un pago aprobado de Mercado Pago. `cajaId` y `cajaNombre` en null: un pago sin caja de la franja del turno.
+export interface PagoMercadoPago {
+  id: string
+  mesaNumero: string
+  cajaId: string | null
+  cajaNombre: string | null
+  monto: number
+  propina: number
+  fechaCobro: string
+  requiereRevision: boolean
+}
+
+// Mercado Pago del turno: informativo, no entra al arqueo. `hasta` es el cierre, o el momento de la consulta.
+export interface ResumenMercadoPago extends FilaDeResumen {
+  desde: string
+  hasta: string
+  pagos: PagoMercadoPago[]
+}
+
+// La respuesta de GET /turnos/:id/resumen: lo cobrado en las cajas del turno (siempre los 4 métodos del arqueo) y
+// Mercado Pago aparte.
+export interface ResumenDeTurno {
+  turno: { id: string; abiertoEn: string; cerradoEn: string | null }
+  porMetodo: (FilaDeResumen & { metodo: MetodoDeArqueo })[]
+  porMozo: ResumenPorMozo[]
+  total: FilaDeResumen
+  mercadoPago: ResumenMercadoPago
+}

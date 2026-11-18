@@ -4,6 +4,7 @@ import { api, ApiError } from '../services/api'
 import { useCajasStore } from '../store/cajasStore'
 import { AsignacionDeMesas } from './AsignacionDeMesas'
 import { parsearFondo } from '../utils/fondo'
+import { MAXIMO_DE_OBSERVACIONES } from '../utils/observaciones'
 import { asignacionesAEnviar, asignacionesIniciales, type ValoresDeAsignacion } from '../utils/asignaciones'
 
 /**
@@ -14,7 +15,6 @@ export const MENSAJE_TURNO_ABIERTO = 'Ya hay un turno abierto en este restaurant
 export const MENSAJE_CAJA_YA_ABIERTA = 'La caja ya está abierta'
 
 const MAXIMO_DE_CAJAS = 2
-const MAXIMO_DE_OBSERVACIONES = 500
 
 const C = {
   orange:  '#E8563A',

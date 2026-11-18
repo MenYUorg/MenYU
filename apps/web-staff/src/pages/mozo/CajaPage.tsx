@@ -8,6 +8,8 @@ import { useNombreDelRol, useRestauranteId } from '../../store/contextoStore'
 import { PageHeader } from '../../components/PageHeader'
 import { FormularioDeApertura } from '../../components/FormularioDeApertura'
 import { TurnoAbierto } from '../../components/TurnoAbierto'
+import { ResultadoDelCierre } from '../../components/ResultadoDelCierre'
+import type { ResultadoDelCierre as Resultado } from '../../utils/cierre'
 
 function getInitials(name: string): string {
   return name.split(' ').slice(0, 2).map((w) => w[0]).join('').toUpperCase()
@@ -28,10 +30,14 @@ type Estado =
   | { tipo: 'cargando' }
   | { tipo: 'error'; mensaje: string }
   | { tipo: 'listo'; turno: TurnoDeCaja | null }
+  // El turno se acaba de cerrar desde acá: el resultado queda en pantalla hasta "Abrir un turno nuevo".
+  | { tipo: 'cerrado'; resultado: Resultado }
 
 /**
- * La caja del restaurante (#359): abrir el turno, verlo y reasignar sus mesas. OWNER, GERENTE y JEFE_SALON. Lee el turno
- * al entrar, al cambiar de restaurante y con "Actualizar"; no hay polling.
+ * La caja del restaurante (#359): abrir el turno, verlo, reasignar sus mesas, cargar movimientos y cerrarlo. OWNER,
+ * GERENTE y JEFE_SALON. Lee el turno al entrar, al cambiar de restaurante y con "Actualizar"; no hay polling. Después de
+ * cerrar, el resultado queda en pantalla (sin "Actualizar", para no descartarlo) hasta "Abrir un turno nuevo" o hasta
+ * que cambie el restaurante.
  */
 export function CajaPage() {
   const navigate = useNavigate()
@@ -45,6 +51,9 @@ export function CajaPage() {
   const [aviso, setAviso] = useState<string | null>(null)
   // La respuesta de una lectura anterior (otro restaurante, un "Actualizar" que se cruzó) no pisa la más nueva.
   const ultimaLectura = useRef(0)
+  // El restaurante de ahora: un cierre que termina después de cambiar de restaurante no muestra su resultado.
+  const restauranteActual = useRef(restauranteId)
+  restauranteActual.current = restauranteId
 
   const cargarTurno = useCallback(async () => {
     if (!restauranteId) return
@@ -73,6 +82,14 @@ export function CajaPage() {
     setEstado({ tipo: 'listo', turno })
   }
 
+  function alCerrar(resultado: Resultado) {
+    if (restauranteId !== restauranteActual.current) return
+    // Una lectura en vuelo (un "Actualizar" mientras se cerraba) no pisa el resultado.
+    ultimaLectura.current++
+    setAviso(null)
+    setEstado({ tipo: 'cerrado', resultado })
+  }
+
   function alCambiarElTurno(mensaje: string) {
     setAviso(mensaje)
     void cargarTurno()
@@ -85,7 +102,7 @@ export function CajaPage() {
         breadcrumb="PANEL › CAJA"
         icon={<Wallet size={18} />}
         onBack={() => navigate('/mozo')}
-        onRefresh={actualizar}
+        onRefresh={estado.tipo === 'cerrado' ? undefined : actualizar}
         userName={nombreUsuario}
         userRole={rolMostrado}
         userInitials={getInitials(nombreUsuario)}
@@ -132,6 +149,7 @@ export function CajaPage() {
                 restauranteId={restauranteId}
                 onReasignado={mostrarTurno}
                 onTurnoCambio={alCambiarElTurno}
+                onCerrado={alCerrar}
               />
             )
             : (
@@ -143,6 +161,8 @@ export function CajaPage() {
               />
             )
         )}
+
+        {estado.tipo === 'cerrado' && <ResultadoDelCierre resultado={estado.resultado} onNuevoTurno={actualizar} />}
       </main>
     </div>
   )
