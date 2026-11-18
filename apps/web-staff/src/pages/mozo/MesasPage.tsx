@@ -9,6 +9,8 @@ import { useNombreDelRol, useRestauranteId } from '../../store/contextoStore'
 import { api } from '../../services/api'
 import type { SesionActivaRico, WaiterCallRico } from '../../services/api'
 import { PageHeader } from '../../components/PageHeader'
+import { AvisoDeMesasFiltradas } from '../../components/AvisoDeMesasFiltradas'
+import { useCajasAbiertas } from '../../store/cajasStore'
 
 function getInitials(name?: string): string {
   if (!name) return '?'
@@ -207,6 +209,7 @@ export function MesasPage() {
   const [searchParams] = useSearchParams()
   const perfil = usePerfil()
   const restauranteId = useRestauranteId()
+  const cajas = useCajasAbiertas(restauranteId)
   const nombreMozo = perfil.nombre || perfil.email
   const rolMostrado = useNombreDelRol()
 
@@ -476,6 +479,7 @@ export function MesasPage() {
       />
 
       <main style={{ padding: 20 }}>
+        <AvisoDeMesasFiltradas cajas={cajas} />
         {error && (
           <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 13, color: C.red, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '10px 14px', marginBottom: 16 }}>
             {error}
