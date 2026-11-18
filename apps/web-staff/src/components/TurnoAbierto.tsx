@@ -3,6 +3,8 @@ import type { PreparacionDeTurno, TurnoDeCaja } from '@menyu/types'
 import { api, ApiError } from '../services/api'
 import { AsignacionDeMesas } from './AsignacionDeMesas'
 import { MovimientosDelTurno } from './MovimientosDelTurno'
+import { CierreDelTurno } from './CierreDelTurno'
+import type { ResultadoDelCierre } from '../utils/cierre'
 import { formatearFechaHora, formatearMonto } from '../utils/formato'
 import { ordenarMesas } from '../utils/mesas'
 import { MENSAJE_TURNO_CERRADO } from '../utils/conflictosDeCaja'
@@ -39,6 +41,8 @@ interface TurnoAbiertoProps {
   onReasignado: (turno: TurnoDeCaja) => void
   /** El turno se cerró mientras se editaba: la pantalla vuelve a leer el turno actual y muestra `mensaje`. */
   onTurnoCambio: (mensaje: string) => void
+  /** El turno se cerró desde acá: la pantalla muestra el resultado. */
+  onCerrado: (resultado: ResultadoDelCierre) => void
 }
 
 const mensajeDe = (e: unknown, porDefecto: string) => (e instanceof Error && e.message ? e.message : porDefecto)
@@ -56,11 +60,10 @@ const estiloBoton = (principal: boolean, deshabilitado = false) => ({
 
 /**
  * El turno abierto del restaurante (#359): desde cuándo y quién lo abrió, sus cajas con el fondo, las observaciones y
- * las mesas por mozo, y los movimientos de caja. "Reasignar mesas" pide la preparación cada vez (los mozos y las mesas
- * pueden haber cambiado) y arranca desde las asignaciones actuales del turno, no desde la precarga. Cerrar el turno llega
- * con el PR 4.
+ * las mesas por mozo, los movimientos de caja y el cierre. "Reasignar mesas" pide la preparación cada vez (los mozos y
+ * las mesas pueden haber cambiado) y arranca desde las asignaciones actuales del turno, no desde la precarga.
  */
-export function TurnoAbierto({ turno, restauranteId, onReasignado, onTurnoCambio }: TurnoAbiertoProps) {
+export function TurnoAbierto({ turno, restauranteId, onReasignado, onTurnoCambio, onCerrado }: TurnoAbiertoProps) {
   const [reasignacion, setReasignacion] = useState<Reasignacion>({ estado: 'cerrada' })
 
   async function abrirEditor() {
@@ -174,6 +177,8 @@ export function TurnoAbierto({ turno, restauranteId, onReasignado, onTurnoCambio
       </section>
 
       <MovimientosDelTurno turno={turno} onTurnoCambio={onTurnoCambio} />
+
+      <CierreDelTurno turno={turno} restauranteId={restauranteId} onCerrado={onCerrado} onTurnoCambio={onTurnoCambio} />
     </div>
   )
 }
