@@ -4,8 +4,10 @@ import { Bell, CheckCircle, RefreshCw, X } from 'lucide-react'
 import { authDelSocket } from '@menyu/auth-client'
 import { urlDelSocket } from '@menyu/ui/socket'
 import { io, type Socket } from 'socket.io-client'
+import type { CajaAbierta } from '@menyu/types'
 import { useContextStore, useRolActual } from '../../../store/contextStore'
 import { api, pedirJson } from '../../../services/api'
+import { AvisoSinTurno } from './AvisoSinTurno'
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 const C = {
@@ -394,6 +396,10 @@ export function PagosPage() {
   const [error,          setError]          = useState<string | null>(null)
   const [modalSesion,    setModalSesion]    = useState<SesionActiva | null>(null)
   const [toast,          setToast]          = useState<string | null>(null)
+  // Las cajas abiertas del turno, de un restaurante. Solo las lee el GERENTE, que es quien cobra (#360).
+  const [lecturaDeCajas, setLecturaDeCajas] = useState<{ restauranteId: string; cajas: CajaAbierta[] | null } | null>(null)
+  // La respuesta de una lectura anterior (otro restaurante, un polling que se cruzó) no pisa la más nueva.
+  const ultimaLecturaDeCajas = useRef(0)
 
   const socketRef   = useRef<Socket | null>(null)
   const toastTimer  = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -424,6 +430,23 @@ export function PagosPage() {
     }
   }, [selectedRestauranteId])
 
+  // ── Cajas abiertas (solo GERENTE) ───────────────────────────────────────────
+  // Como en web-staff: un error deja las cajas en null (no se bloquea nada, decide el backend) y no toca las sesiones.
+  const leerCajas = useCallback(async () => {
+    const lectura = ++ultimaLecturaDeCajas.current
+    if (!selectedRestauranteId || !esGerente) return
+    let abiertas: CajaAbierta[] | null
+    try {
+      abiertas = (await api.cajas.abiertas(selectedRestauranteId)).cajas
+    } catch {
+      abiertas = null
+    }
+    if (lectura === ultimaLecturaDeCajas.current) setLecturaDeCajas({ restauranteId: selectedRestauranteId, cajas: abiertas })
+  }, [selectedRestauranteId, esGerente])
+
+  // Las de otro restaurante no valen: hasta que llegue la lectura del elegido, no se saben (null).
+  const cajas = esGerente && lecturaDeCajas?.restauranteId === selectedRestauranteId ? lecturaDeCajas.cajas : null
+
   // ── Fetch pagadas ──────────────────────────────────────────────────────────
   const fetchPagadas = useCallback(async (fechaTab?: TabHistorial) => {
     if (!selectedRestauranteId) return
@@ -443,12 +466,17 @@ export function PagosPage() {
     void fetchPagadas(tab)
   }, [fetchActivas, fetchPagadas, tab, esGerente])
 
+  useEffect(() => { void leerCajas() }, [leerCajas])
+
   // ── Polling 30s ───────────────────────────────────────────────────────────
   useEffect(() => {
     if (!selectedRestauranteId) return
-    const id = setInterval(() => { void fetchActivas() }, 30_000)
+    const id = setInterval(() => {
+      void fetchActivas()
+      void leerCajas()
+    }, 30_000)
     return () => clearInterval(id)
-  }, [selectedRestauranteId, fetchActivas])
+  }, [selectedRestauranteId, fetchActivas, leerCajas])
 
   // ── Mozos para select ──────────────────────────────────────────────────────
 
@@ -535,6 +563,8 @@ export function PagosPage() {
           Actualización automática cada 30s
         </p>
       </div>
+
+      {esGerente && cajas !== null && cajas.length === 0 && <AvisoSinTurno />}
 
       {error && (
         <div style={{

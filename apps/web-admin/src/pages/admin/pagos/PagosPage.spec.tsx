@@ -16,7 +16,8 @@ vi.mock('../../../store/contextStore', () => ({
 // `pedirJson` queda el real (pone el token de la sesión y maneja el 401); solo se simula el objeto `api`.
 vi.mock('../../../services/api', async () => ({
   ...(await vi.importActual<typeof import('../../../services/api')>('../../../services/api')),
-  api: { mozos: { list: vi.fn() } },
+  // Las cajas abiertas no responden por defecto: para los tests de antes de #360 quedan sin saberse (null), como antes.
+  api: { mozos: { list: vi.fn() }, cajas: { abiertas: vi.fn(() => new Promise(() => {})) } },
 }))
 
 /** Socket falso: guarda los handlers para poder "recibir" eventos del servidor. */
@@ -29,6 +30,7 @@ const socket = {
 vi.mock('socket.io-client', () => ({ io: vi.fn(() => socket) }))
 
 const listarMozos = vi.mocked(api.mozos.list)
+const cajasAbiertas = vi.mocked(api.cajas.abiertas)
 
 const ACTIVA_4 = { id: 'ses-4', mesaId: 'm4', mesaNumero: '4', tiempoTranscurrido: 75, cantidadItems: 3, cantidadPersonas: 2, totalAcumulado: 12500, quierePagar: true }
 const ACTIVA_7 = { id: 'ses-7', mesaId: 'm7', mesaNumero: '7', tiempoTranscurrido: 5, cantidadItems: 1, cantidadPersonas: 1, totalAcumulado: 900, quierePagar: false }
@@ -349,5 +351,126 @@ describe('PagosPage (caja)', () => {
       fireEvent.click(screen.getByText('Registrar pago · Mesa 4').closest('div[style*="position: fixed"]') as HTMLElement)
       expect(screen.queryByText('Registrar pago · Mesa 4')).not.toBeInTheDocument()
     })
+  })
+})
+
+describe('PagosPage: las cajas abiertas del turno (#360)', () => {
+  const PRINCIPAL = { cajaId: 'caja-1', nombre: 'Principal' }
+  const TEXTO_SIN_TURNO =
+    'No hay un turno abierto. Mientras no haya uno no se pueden registrar cobros: el turno se abre desde la app del personal, en Caja.'
+
+  function pendiente<T>() {
+    let resolver!: (valor: T) => void
+    let rechazar!: (error: unknown) => void
+    const promesa = new Promise<T>((res, rej) => { resolver = res; rechazar = rej })
+    return { promesa, resolver, rechazar }
+  }
+
+  const pagina = () => (
+    <MemoryRouter initialEntries={['/admin/pagos']}>
+      <Routes>
+        <Route path="/admin/pagos" element={<PagosPage />} />
+      </Routes>
+    </MemoryRouter>
+  )
+
+  /** Abre la pantalla y espera, dentro de act, a que terminen las lecturas del montaje. */
+  async function abrirYCargar() {
+    render(pagina())
+    await screen.findByText('Mesa 4')
+    await act(async () => {})
+  }
+
+  beforeEach(() => {
+    // reset y no clear: una respuesta `mockReturnValueOnce` que un test no usó no pasa al siguiente.
+    vi.resetAllMocks()
+    listarMozos.mockResolvedValue([] as never)
+    cajasAbiertas.mockResolvedValue({ cajas: [] })
+  })
+
+  it('el GERENTE las pide por restaurante y, sin turno abierto, ve el aviso arriba de la caja', async () => {
+    await abrirYCargar()
+
+    const aviso = await screen.findByRole('alert')
+    expect(aviso).toHaveTextContent(TEXTO_SIN_TURNO)
+    expect(cajasAbiertas).toHaveBeenCalledWith('rest-1')
+    const pendientes = screen.getByRole('heading', { name: 'Pendientes de cobro' })
+    expect(aviso.compareDocumentPosition(pendientes) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(within(aviso).queryByRole('link')).not.toBeInTheDocument()
+  })
+
+  it('con una caja abierta no hay aviso', async () => {
+    cajasAbiertas.mockResolvedValue({ cajas: [PRINCIPAL] })
+    await abrirYCargar()
+
+    expect(cajasAbiertas).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('si no se pueden leer (falla abierta) no hay aviso, y no toca el error ni las mesas activas', async () => {
+    cajasAbiertas.mockRejectedValue(new Error('Sin conexión'))
+    await abrirYCargar()
+
+    expect(cajasAbiertas).toHaveBeenCalledTimes(1)
+    expect(screen.getByText('Mesa 4')).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.queryByText('Sin conexión')).not.toBeInTheDocument()
+  })
+
+  it('el OWNER no las pide ni ve el aviso', async () => {
+    rolActual = 'OWNER'
+    await abrirYCargar()
+
+    expect(cajasAbiertas).not.toHaveBeenCalled()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('se vuelven a pedir con el polling de 30 s: el aviso aparece si el turno se cerró', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    cajasAbiertas.mockResolvedValueOnce({ cajas: [PRINCIPAL] })
+    await abrirYCargar()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(30000) })
+
+    expect(cajasAbiertas).toHaveBeenCalledTimes(2)
+    expect(screen.getByRole('alert')).toHaveTextContent(TEXTO_SIN_TURNO)
+  })
+
+  it('una lectura vieja que llega tarde no pisa a la nueva', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const vieja = pendiente<{ cajas: (typeof PRINCIPAL)[] }>()
+    cajasAbiertas.mockReturnValueOnce(vieja.promesa).mockResolvedValueOnce({ cajas: [] })
+    await abrirYCargar()
+    await act(async () => { await vi.advanceTimersByTimeAsync(30000) })
+    expect(screen.getByRole('alert')).toHaveTextContent(TEXTO_SIN_TURNO)
+
+    await act(async () => { vieja.resolver({ cajas: [PRINCIPAL] }) })
+
+    expect(screen.getByRole('alert')).toHaveTextContent(TEXTO_SIN_TURNO)
+  })
+
+  it('al cambiar de restaurante, las del anterior no valen: se piden las del nuevo y la respuesta del anterior no pisa', async () => {
+    const delAnterior = pendiente<{ cajas: (typeof PRINCIPAL)[] }>()
+    const delNuevo = pendiente<{ cajas: (typeof PRINCIPAL)[] }>()
+    cajasAbiertas.mockResolvedValueOnce({ cajas: [] }).mockReturnValueOnce(delAnterior.promesa).mockReturnValueOnce(delNuevo.promesa)
+    const { rerender } = render(pagina())
+    expect(await screen.findByRole('alert')).toHaveTextContent(TEXTO_SIN_TURNO)
+
+    // Una segunda lectura del mismo restaurante queda en vuelo (otro rol y de vuelta) y se cambia de restaurante.
+    rolActual = 'OWNER'
+    rerender(pagina())
+    rolActual = 'GERENTE'
+    rerender(pagina())
+    restauranteActual = 'rest-2'
+    rerender(pagina())
+
+    expect(cajasAbiertas).toHaveBeenLastCalledWith('rest-2')
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    await act(async () => { delAnterior.resolver({ cajas: [] }) })
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+
+    await act(async () => { delNuevo.resolver({ cajas: [] }) })
+    expect(screen.getByRole('alert')).toHaveTextContent(TEXTO_SIN_TURNO)
   })
 })
