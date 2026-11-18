@@ -664,7 +664,11 @@ export function PagosPage() {
                 key={s.id}
                 sesion={s}
                 esGerente={esGerente}
-                onRegistrar={() => setModalSesion(s)}
+                onRegistrar={() => {
+                  // Como en web-staff: el cobro arranca con las cajas recién leídas (alguien pudo abrir o cerrar el turno).
+                  void leerCajas()
+                  setModalSesion(s)
+                }}
               />
             ))
           )}

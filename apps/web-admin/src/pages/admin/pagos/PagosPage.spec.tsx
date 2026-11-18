@@ -513,6 +513,24 @@ describe('PagosPage: el cobro con caja y propina (#360)', () => {
   })
 
   describe('la caja', () => {
+    it('abrir el cobro vuelve a pedir las cajas del restaurante', async () => {
+      await abrirCobroCon([PRINCIPAL])
+
+      expect(cajasAbiertas).toHaveBeenCalledTimes(2)
+      expect(cajasAbiertas).toHaveBeenNthCalledWith(2, 'rest-1')
+    })
+
+    it('lo que trae la lectura al abrir vale en el cobro: si el turno se cerró, lo dice y no deja confirmar', async () => {
+      // La lectura del montaje trae dos cajas; la de abrir el cobro, ninguna.
+      cajasAbiertas.mockResolvedValueOnce({ cajas: [PRINCIPAL, BARRA] })
+      const modal = await abrirCobroCon([])
+      fireEvent.click(within(modal).getByRole('button', { name: 'Efectivo' }))
+
+      expect(within(modal).queryByRole('radiogroup')).not.toBeInTheDocument()
+      expect(within(modal).getByRole('alert')).toHaveTextContent('No hay un turno abierto: no se puede registrar el cobro.')
+      expect(confirmar(modal)).toBeDisabled()
+    })
+
     it('con dos cajas abiertas se elige con radios, sin ninguna elegida, y sin elegir no deja confirmar', async () => {
       const modal = await abrirCobroCon([PRINCIPAL, BARRA])
       fireEvent.click(within(modal).getByRole('button', { name: 'Efectivo' }))
@@ -658,7 +676,7 @@ describe('PagosPage: el cobro con caja y propina (#360)', () => {
       expect(within(modal).getByText('Otra operación modificó esto al mismo tiempo; probá de nuevo')).toBeInTheDocument()
       expect(within(modal).queryByRole('button', { name: 'Confirmar y cobrar mesa completa' })).not.toBeInTheDocument()
       expect(confirmar(modal)).toBeEnabled()
-      expect(cajasAbiertas).toHaveBeenCalledTimes(1)
+      expect(cajasAbiertas).toHaveBeenCalledTimes(2)
 
       await cobrar(modal)
       expect(cobros()).toHaveLength(2)
@@ -678,7 +696,7 @@ describe('PagosPage: el cobro con caja y propina (#360)', () => {
       await cobrar(modal)
 
       expect(within(modal).getByText(mensaje)).toBeInTheDocument()
-      expect(cajasAbiertas).toHaveBeenCalledTimes(2)
+      expect(cajasAbiertas).toHaveBeenCalledTimes(3)
       expect(cajasAbiertas).toHaveBeenLastCalledWith('rest-1')
     })
 
@@ -692,7 +710,7 @@ describe('PagosPage: el cobro con caja y propina (#360)', () => {
       respuestas['/sessions/ses-4/cobro'] = json({ message: 'No hay un turno abierto' }, 409)
       await cobrar(modal)
 
-      expect(cajasAbiertas).toHaveBeenCalledTimes(1)
+      expect(cajasAbiertas).toHaveBeenCalledTimes(2)
     })
   })
 
