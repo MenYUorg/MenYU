@@ -450,6 +450,36 @@ describe('PagosPage: las cajas abiertas del turno (#360)', () => {
     expect(screen.getByRole('alert')).toHaveTextContent(TEXTO_SIN_TURNO)
   })
 
+  it('si deja de ser GERENTE (pasa a OWNER), el aviso se va', async () => {
+    const { rerender } = render(pagina())
+    expect(await screen.findByRole('alert')).toHaveTextContent(TEXTO_SIN_TURNO)
+
+    rolActual = 'OWNER'
+    rerender(pagina())
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    await act(async () => {})
+  })
+
+  it('una lectura que estaba en vuelo cuando pasó a OWNER no vale al volver a GERENTE', async () => {
+    const vieja = pendiente<{ cajas: (typeof PRINCIPAL)[] }>()
+    const nueva = pendiente<{ cajas: (typeof PRINCIPAL)[] }>()
+    cajasAbiertas.mockReturnValueOnce(vieja.promesa).mockReturnValueOnce(nueva.promesa)
+    const { rerender } = render(pagina())
+
+    rolActual = 'OWNER'
+    rerender(pagina())
+    await act(async () => { vieja.resolver({ cajas: [] }) })
+    rolActual = 'GERENTE'
+    rerender(pagina())
+
+    // Hasta que llegue la lectura nueva, las cajas no se saben: la vieja no cuenta.
+    expect(cajasAbiertas).toHaveBeenCalledTimes(2)
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    await act(async () => { nueva.resolver({ cajas: [] }) })
+    expect(screen.getByRole('alert')).toHaveTextContent(TEXTO_SIN_TURNO)
+  })
+
   it('al cambiar de restaurante, las del anterior no valen: se piden las del nuevo y la respuesta del anterior no pisa', async () => {
     const delAnterior = pendiente<{ cajas: (typeof PRINCIPAL)[] }>()
     const delNuevo = pendiente<{ cajas: (typeof PRINCIPAL)[] }>()
