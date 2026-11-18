@@ -572,7 +572,7 @@ describe('CajaPage', () => {
       await abrirConTurno()
 
       const cajas = within(screen.getByRole('list', { name: 'Cajas del turno' })).getAllByRole('listitem')
-      expect(cajas.map((c) => c.textContent)).toEqual(['Barra · fondo $0', 'Terraza · fondo $2.500,5'])
+      expect(cajas.map((c) => c.textContent)).toEqual(['Barra · fondo $0', 'Terraza · fondo $2.500,50'])
       expect(screen.getByText('Observaciones: Falta cambio chico')).toBeInTheDocument()
       expect(screen.queryByRole('button', { name: /cerrar/i })).not.toBeInTheDocument()
     })

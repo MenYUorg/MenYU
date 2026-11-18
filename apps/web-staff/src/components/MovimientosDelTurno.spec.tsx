@@ -112,7 +112,7 @@ describe('MovimientosDelTurno', () => {
 
       expect(filas('Barra')).toEqual([
         '18/11 10:05 · Ingreso · $5.000 · Cambio del banco · cargó Ana',
-        '18/11 10:01 · Egreso · $1.200,5 · Compra de hielo · cargó Beto',
+        '18/11 10:01 · Egreso · $1.200,50 · Compra de hielo · cargó Beto',
       ])
       expect(screen.queryByRole('heading', { name: 'Barra' })).not.toBeInTheDocument()
       // Arqueo ciego: ni saldos ni totales.
@@ -291,7 +291,7 @@ describe('MovimientosDelTurno', () => {
       registrar()
 
       expect(textoDeConfirmacion()).toHaveTextContent(
-        'Vas a registrar un egreso de $1.500,5 en Terraza: «Compra de hielo». No se puede editar ni borrar.',
+        'Vas a registrar un egreso de $1.500,50 en Terraza: «Compra de hielo». No se puede editar ni borrar.',
       )
       expect(textoDeConfirmacion()).toHaveFocus()
       expect(screen.queryByRole('group', { name: 'Registrar movimiento' })).not.toBeInTheDocument()
