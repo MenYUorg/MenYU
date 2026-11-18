@@ -21,6 +21,11 @@ export const METODOS_DE_ARQUEO: readonly { metodo: MetodoDeArqueo; etiqueta: str
   { metodo: 'transferencia', etiqueta: 'Transferencia' },
 ]
 
+/** La etiqueta de cada método del arqueo, para mostrar lo que devuelve el backend. */
+export const ETIQUETA_DEL_METODO = Object.fromEntries(
+  METODOS_DE_ARQUEO.map((m) => [m.metodo, m.etiqueta]),
+) as Record<MetodoDeArqueo, string>
+
 export type MontoDeclarado = { ok: true; valor: number } | { ok: false; mensaje: string }
 
 const MENSAJES: Record<ErrorDeMonto, string> = {

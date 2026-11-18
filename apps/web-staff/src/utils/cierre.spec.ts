@@ -2,6 +2,7 @@ import type { ArqueoDeCaja, CierreDeTurno, TurnoCajaApi, TurnoDetalle } from '@m
 import type { SesionActivaItem } from '../services/api'
 import {
   clasificarDiferencia,
+  ETIQUETA_DEL_METODO,
   leerCierre,
   mesasAbiertasDeSesiones,
   METODOS_DE_ARQUEO,
@@ -31,6 +32,12 @@ describe('METODOS_DE_ARQUEO', () => {
       { metodo: 'credito', etiqueta: 'Crédito' },
       { metodo: 'transferencia', etiqueta: 'Transferencia' },
     ])
+  })
+})
+
+describe('ETIQUETA_DEL_METODO', () => {
+  it('da la etiqueta de cada método', () => {
+    expect(ETIQUETA_DEL_METODO).toEqual({ efectivo: 'Efectivo', debito: 'Débito', credito: 'Crédito', transferencia: 'Transferencia' })
   })
 })
 
