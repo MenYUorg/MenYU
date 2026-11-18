@@ -494,8 +494,9 @@ export function PagosPage() {
     if (lectura === ultimaLecturaDeCajas.current) setLecturaDeCajas({ restauranteId: selectedRestauranteId, cajas: abiertas })
   }, [selectedRestauranteId, esGerente])
 
-  // Las de otro restaurante no valen: hasta que llegue la lectura del elegido, no se saben (null).
-  const cajas = esGerente && lecturaDeCajas?.restauranteId === selectedRestauranteId ? lecturaDeCajas.cajas : null
+  // Las de otro restaurante no valen: hasta que llegue la lectura del elegido, no se saben (null). Solo las lee el
+  // GERENTE, y el aviso y el cobro también son solo suyos.
+  const cajas = lecturaDeCajas?.restauranteId === selectedRestauranteId ? lecturaDeCajas.cajas : null
 
   // ── Fetch pagadas ──────────────────────────────────────────────────────────
   const fetchPagadas = useCallback(async (fechaTab?: TabHistorial) => {
