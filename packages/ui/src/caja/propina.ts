@@ -1,4 +1,4 @@
-import { leerMonto, MONTO_MAXIMO, type ErrorDeMonto } from '@menyu/ui/caja'
+import { leerMonto, MONTO_MAXIMO, type ErrorDeMonto } from './monto'
 
 /** El tope del backend para la propina de un cobro (`Pago.propina` es Decimal(10, 2)). */
 export const PROPINA_MAXIMA = MONTO_MAXIMO

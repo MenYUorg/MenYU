@@ -5,7 +5,7 @@ import { api, ApiError } from '../services/api'
 import type { SesionActivaItem } from '../services/api'
 import { useRestauranteId } from '../store/contextoStore'
 import { cajaDelCobro, cajaRecordada, recordarCaja } from '../utils/cajaDelCobro'
-import { parsearPropina } from '../utils/propina'
+import { parsearPropina } from '@menyu/ui/caja'
 
 /**
  * El 409 del backend cuando dos operaciones chocan: se reintenta, no es la advertencia de pagos pendientes. El texto
