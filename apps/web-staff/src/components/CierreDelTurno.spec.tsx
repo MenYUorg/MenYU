@@ -353,6 +353,50 @@ describe('CierreDelTurno', () => {
   })
 
   describe('si el cierre falla', () => {
+    it('el 409 "El turno está cerrado" se lo pasa a la pantalla, sin mostrar el error acá', async () => {
+      turnosApi.cerrar.mockRejectedValueOnce(new ApiError('El turno está cerrado', 409))
+      await confirmar()
+
+      await enviar()
+
+      expect(onTurnoCambio).toHaveBeenCalledWith('El turno está cerrado')
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+      expect(onCerrado).not.toHaveBeenCalled()
+      expect(turnosApi.actual).not.toHaveBeenCalled()
+    })
+
+    it.each([
+      ['el 409 de operación simultánea', new ApiError('Otra operación modificó esto al mismo tiempo; probá de nuevo', 409), 'Otra operación modificó esto al mismo tiempo; probá de nuevo'],
+      ['un 409 que solo empieza como el de turno cerrado', new ApiError('El turno está cerrado por otra persona', 409), 'El turno está cerrado por otra persona'],
+      ['"El turno está cerrado" que no es 409', new ApiError('El turno está cerrado', 400), 'El turno está cerrado'],
+      ['el 400 de una caja que no está abierta', new ApiError('La caja no está abierta en este turno', 400), 'La caja no está abierta en este turno'],
+      ['el 400 del máximo, tal cual lo manda el backend', new ApiError('El arqueo de efectivo de la caja «Barra» supera el máximo que se puede registrar', 400), 'El arqueo de efectivo de la caja «Barra» supera el máximo que se puede registrar'],
+      ['un 403', new ApiError('No tenés permiso', 403), 'No tenés permiso'],
+      ['un 4xx sin mensaje', new ApiError('', 404), 'No se pudo cerrar el turno'],
+    ])('%s se queda en la confirmación con el mensaje, sin releer nada', async (_caso, error, mensaje) => {
+      turnosApi.cerrar.mockRejectedValueOnce(error)
+      await confirmar()
+
+      await enviar()
+
+      expect(screen.getByRole('alert')).toHaveTextContent(mensaje)
+      expect(botonCerrar()).toBeEnabled()
+      expect(onTurnoCambio).not.toHaveBeenCalled()
+      expect(onCerrado).not.toHaveBeenCalled()
+      expect(turnosApi.actual).not.toHaveBeenCalled()
+    })
+
+    it('reintentar después de un error manda de nuevo y, si sale bien, cierra', async () => {
+      turnosApi.cerrar.mockRejectedValueOnce(new ApiError('Otra operación modificó esto al mismo tiempo; probá de nuevo', 409))
+      await confirmar()
+      await enviar()
+
+      await enviar()
+
+      expect(turnosApi.cerrar).toHaveBeenCalledTimes(2)
+      expect(onCerrado).toHaveBeenCalledTimes(1)
+    })
+
     it('un 400 se queda en la confirmación con el mensaje y los botones habilitados para reintentar', async () => {
       turnosApi.cerrar.mockRejectedValueOnce(new ApiError('Falta el arqueo de la caja «Terraza»', 400))
       await confirmar()

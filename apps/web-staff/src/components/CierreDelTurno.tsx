@@ -1,7 +1,8 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import type { CerrarTurnoBody, TurnoDeCaja } from '@menyu/types'
-import { api } from '../services/api'
+import { api, ApiError } from '../services/api'
 import { useCajasStore } from '../store/cajasStore'
+import { MENSAJE_TURNO_CERRADO } from '../utils/conflictosDeCaja'
 import {
   leerCierre,
   mesasAbiertasDeSesiones,
@@ -54,7 +55,7 @@ const idDelCampo = (base: string, cajaId: string, metodo: string) => `${base}-${
  * mostrar el esperado (arqueo ciego) y, después de una confirmación, cierra todas las cajas juntas. El esperado y la
  * diferencia los calcula el backend y se ven recién en el resultado.
  */
-export function CierreDelTurno({ turno, restauranteId, onCerrado }: CierreDelTurnoProps) {
+export function CierreDelTurno({ turno, restauranteId, onCerrado, onTurnoCambio }: CierreDelTurnoProps) {
   const id = useId()
   const [paso, setPaso] = useState<Paso>({ paso: 'cerrado' })
   // null: no se pudo revisar; []: se revisó y no hay.
@@ -110,7 +111,17 @@ export function CierreDelTurno({ turno, restauranteId, onCerrado }: CierreDelTur
       void useCajasStore.getState().cargar(restauranteId)
       onCerrado(resultado)
     } catch (e) {
-      setPaso({ ...confirmacion, enviando: false, error: e instanceof Error && e.message ? e.message : 'No se pudo cerrar el turno' })
+      if (e instanceof ApiError && e.status >= 400 && e.status < 500) {
+        // El turno ya estaba cerrado (otro lo cerró, o un intento anterior sí llegó): la pantalla lo vuelve a leer.
+        if (e.status === 409 && e.message === MENSAJE_TURNO_CERRADO) {
+          onTurnoCambio(e.message)
+          return
+        }
+        // Cualquier otro 4xx (el 409 de operación simultánea, los 400) no cerró nada: reintentar es seguro.
+        setPaso({ ...confirmacion, enviando: false, error: e.message || 'No se pudo cerrar el turno' })
+        return
+      }
+      setPaso({ ...confirmacion, enviando: false, error: 'No se pudo cerrar el turno' })
     }
   }
 
