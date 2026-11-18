@@ -1,4 +1,4 @@
-import { leerMonto, MONTO_MAXIMO, type ErrorDeMonto } from './monto'
+import { leerMonto, MONTO_MAXIMO, type ErrorDeMonto } from '@menyu/ui/caja'
 
 /** El largo máximo del motivo: `MAX_MOTIVO_MOVIMIENTO` de apps/backend/src/caja/dto/registrar-movimiento.dto.ts. */
 export const MOTIVO_MAXIMO = 200
