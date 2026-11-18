@@ -4,24 +4,8 @@ import type { CajaAbierta } from '@menyu/types'
 import { api, ApiError } from '../services/api'
 import type { SesionActivaItem } from '../services/api'
 import { useRestauranteId } from '../store/contextoStore'
-import { cajaDelCobro, cajaRecordada, recordarCaja } from '../utils/cajaDelCobro'
-import { parsearPropina } from '@menyu/ui/caja'
-
-/**
- * El 409 del backend cuando dos operaciones chocan: se reintenta, no es la advertencia de pagos pendientes. El texto
- * es el de apps/backend/src/caja/conflictos.ts (MENSAJE_OPERACION_SIMULTANEA); si cambia allá, cambia acá.
- */
-export const MENSAJE_OPERACION_SIMULTANEA = 'Otra operación modificó esto al mismo tiempo; probá de nuevo'
-
-/**
- * Los 400 que dicen que las cajas del turno cambiaron: apps/backend/src/caja/conflictos.ts (MENSAJE_SIN_TURNO y
- * MENSAJE_ELEGIR_CAJA) y apps/backend/src/caja/movimientos.service.ts (MENSAJE_CAJA_NO_ABIERTA).
- */
-const MENSAJES_DE_TURNO_CAMBIADO = [
-  'No hay un turno abierto',
-  'La caja no está abierta en este turno',
-  'Hay más de una caja abierta: indicá en cuál se cobra',
-]
+import { cajaDelCobro, MENSAJE_OPERACION_SIMULTANEA, MENSAJES_DE_TURNO_CAMBIADO, parsearPropina } from '@menyu/ui/caja'
+import { cajaRecordada, recordarCaja } from '../utils/cajaRecordada'
 
 type MetodoPago = 'efectivo' | 'debito' | 'credito' | 'transferencia' | 'mercadopago'
 
