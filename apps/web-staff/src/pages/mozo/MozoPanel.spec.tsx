@@ -71,6 +71,7 @@ function abrir() {
     <MemoryRouter initialEntries={['/mozo']}>
       <Routes>
         <Route path="/mozo" element={<MozoPanel />} />
+        <Route path="/mozo/caja" element={<p>pantalla de la caja</p>} />
         <Route path="/mozo/:pantalla" element={<p>pantalla de destino</p>} />
         <Route path="*" element={<p>fuera del panel</p>} />
       </Routes>
@@ -320,5 +321,36 @@ describe('MozoPanel', () => {
     fireEvent.click(tarjetaNav)
 
     expect(screen.getByText('pantalla de destino')).toBeInTheDocument()
+  })
+
+  describe('la tarjeta de la caja (#359)', () => {
+    it('la ve un JEFE_SALON, con su descripción, y lleva a /mozo/caja', async () => {
+      montarContexto(perfilEnLaParrilla('JEFE_SALON'))
+      abrir()
+      await screen.findByText('Sin alertas pendientes')
+
+      expect(screen.getByText('Turno, cajas y mesas por mozo')).toBeInTheDocument()
+      fireEvent.click(screen.getByText('Caja').closest('div[style*="cursor: pointer"]') as HTMLElement)
+
+      expect(screen.getByText('pantalla de la caja')).toBeInTheDocument()
+    })
+
+    it('va después de Pagos', async () => {
+      montarContexto(perfilEnLaParrilla('GERENTE'))
+      abrir()
+      await screen.findByText('Sin alertas pendientes')
+
+      const titulos = screen.getAllByRole('button').map((b) => b.textContent)
+      const pagos = titulos.findIndex((t) => t?.startsWith('Pagos'))
+      expect(titulos[pagos + 1]?.startsWith('Caja')).toBe(true)
+    })
+
+    it('no la ve un MOZO', async () => {
+      abrir()
+      await screen.findByText('Sin alertas pendientes')
+
+      expect(screen.queryByText('Caja')).not.toBeInTheDocument()
+      expect(screen.queryByText('Turno, cajas y mesas por mozo')).not.toBeInTheDocument()
+    })
   })
 })

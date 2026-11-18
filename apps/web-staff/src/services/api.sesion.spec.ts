@@ -135,4 +135,51 @@ describe('el cliente de la API usa la sesión de Supabase', () => {
     await expect(api.cajas.abiertas('rest 1')).resolves.toEqual({ cajas: [{ cajaId: 'caja-1', nombre: 'Principal' }] })
     expect(llamadas()[0]?.url).toBe('/cajas/abiertas?restauranteId=rest%201')
   })
+
+  describe('el turno de caja (#359)', () => {
+    const pedido = () => {
+      const [url, opciones] = fetchFalso.mock.calls[0] as [string, RequestInit]
+      return { url, metodo: opciones.method ?? 'GET', body: opciones.body === undefined ? undefined : JSON.parse(opciones.body as string) }
+    }
+
+    it('todas las cajas del restaurante se piden por restaurante, con GET', async () => {
+      await api.cajas.todas('rest 1')
+
+      expect(pedido()).toEqual({ url: '/cajas?restauranteId=rest%201', metodo: 'GET', body: undefined })
+    })
+
+    it('el turno actual se pide por restaurante, con GET', async () => {
+      fetchFalso.mockResolvedValue(respuesta({ turno: null }))
+
+      await expect(api.turnos.actual('rest 1')).resolves.toEqual({ turno: null })
+      expect(pedido()).toEqual({ url: '/turnos/actual?restauranteId=rest%201', metodo: 'GET', body: undefined })
+    })
+
+    it('la preparación del turno se pide por restaurante, con GET', async () => {
+      await api.turnos.preparacion('rest 1')
+
+      expect(pedido()).toEqual({ url: '/turnos/preparacion?restauranteId=rest%201', metodo: 'GET', body: undefined })
+    })
+
+    it('abrir el turno es un POST con el body tal cual, fondo 0 y asignaciones vacías incluidos', async () => {
+      const body = {
+        restauranteId: 'rest-1',
+        cajas: [{ cajaId: 'caja-1', fondoInicial: 0 }],
+        asignaciones: [],
+        observaciones: 'Turno noche',
+      }
+
+      await api.turnos.abrir(body)
+
+      expect(pedido()).toEqual({ url: '/turnos', metodo: 'POST', body })
+    })
+
+    it('reasignar las mesas es un PUT con la lista entera', async () => {
+      const asignaciones = [{ mesaId: 'mesa-1', mozoId: 'mozo-1' }]
+
+      await api.turnos.reasignar('turno/1', asignaciones)
+
+      expect(pedido()).toEqual({ url: '/turnos/turno%2F1/asignaciones', metodo: 'PUT', body: { asignaciones } })
+    })
+  })
 })

@@ -4,10 +4,11 @@ import { usePerfil } from '@menyu/auth-client'
 import { LogoMenYuOscuro } from '@menyu/ui'
 import {
   ArrowRight, Bell, ChefHat, CheckCircle, ClipboardList, CreditCard,
-  History, LayoutGrid, LogOut,
+  History, LayoutGrid, LogOut, Wallet,
 } from 'lucide-react'
 import {
   puedeAtenderLlamados,
+  puedeVerCaja,
   useContextoStore,
   useNombreDelRol,
   useRestauranteActual,
@@ -337,7 +338,8 @@ export function MozoPanel() {
   const restaurante       = useRestauranteActual()
   const restauranteNombre = restaurante?.nombre ?? null
   const marcaNombre       = restaurante?.marcaNombre ?? null
-  const puedeAtender      = puedeAtenderLlamados(useRolesActuales())
+  const roles             = useRolesActuales()
+  const puedeAtender      = puedeAtenderLlamados(roles)
   const rolMostrado       = useNombreDelRol()
   const trabajaEnVarios   = useContextoStore((s) => s.restaurantes.length > 1)
 
@@ -678,6 +680,16 @@ export function MozoPanel() {
             description="Registrá cobros de mesa"
             to="/mozo/pagos"
           />
+          {puedeVerCaja(roles) && (
+            <NavCard
+              icon={<Wallet size={24} />}
+              chipBg="#FDF0ED"
+              iconColor="#E8563A"
+              title="Caja"
+              description="Turno, cajas y mesas por mozo"
+              to="/mozo/caja"
+            />
+          )}
           <NavCard
             icon={<LayoutGrid size={24} />}
             chipBg="#EEF0F8"
