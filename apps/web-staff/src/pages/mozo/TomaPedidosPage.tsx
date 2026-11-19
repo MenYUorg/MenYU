@@ -7,6 +7,8 @@ import { useNombreDelRol, useRestauranteId } from '../../store/contextoStore'
 import { api } from '../../services/api'
 import type { MenuItem, MenuCategoria, SesionActivaRico } from '../../services/api'
 import { PageHeader } from '../../components/PageHeader'
+import { AvisoDeMesasFiltradas } from '../../components/AvisoDeMesasFiltradas'
+import { useCajasAbiertas } from '../../store/cajasStore'
 import { DescuentoBadge, ItemMenuFila, PrecioConDescuento, precioVigenteDe, tieneDescuento } from '@menyu/ui'
 
 function getInitials(name?: string): string {
@@ -378,6 +380,7 @@ export function TomaPedidosPage() {
   const [searchParams] = useSearchParams()
   const mesaIdFromUrl = searchParams.get('mesaId')
   const restauranteId = useRestauranteId()
+  const cajas = useCajasAbiertas(restauranteId)
   const nombreMozo = perfil.nombre || perfil.email
   const rolMostrado = useNombreDelRol()
 
@@ -761,6 +764,7 @@ export function TomaPedidosPage() {
       />
 
       <main style={{ padding: 20 }}>
+        <AvisoDeMesasFiltradas cajas={cajas} />
         {error && (
           <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 13, color: C.red, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '10px 14px', marginBottom: 16 }}>{error}</p>
         )}

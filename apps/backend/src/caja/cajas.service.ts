@@ -4,6 +4,7 @@ import { AccesoService } from '../auth/supabase/acceso.service'
 import { UsuarioAutenticado } from '../auth/supabase/usuario-autenticado'
 import { runSerializableTransaction } from '../common/run-serializable-transaction'
 import { PrismaService } from '../prisma/prisma.service'
+import { aperturasAbiertas } from './caja-del-cobro'
 import { CAJA_SELECT } from './caja.select'
 import { esUnicoViolado, traducirOperacionSimultanea } from './conflictos'
 import { ActualizarCajaDto } from './dto/actualizar-caja.dto'
@@ -26,6 +27,20 @@ export class CajasService {
   /** Activas e inactivas, por nombre. El rol en el restaurante lo exige la ruta (`@RequiereRolEn`). */
   listar(restauranteId: string) {
     return this.prisma.caja.findMany({ where: { restauranteId }, orderBy: { nombre: 'asc' }, select: CAJA_SELECT })
+  }
+
+  /**
+   * Las cajas abiertas del turno abierto del restaurante (#359), para que el salón elija a cuál cobra: el `Caja.id` (lo
+   * que acepta `cajaId` en el cobro) y el nombre, por nombre y después por id. Vacío si no hay turno abierto. No expone el
+   * fondo, quién abrió ni el turno: lo lee un MOZO. El rol en el restaurante lo exige la ruta.
+   */
+  async abiertas(restauranteId: string): Promise<{ cajas: { cajaId: string; nombre: string }[] }> {
+    const aperturas = await this.prisma.turnoCaja.findMany({
+      where: aperturasAbiertas(restauranteId),
+      orderBy: [{ caja: { nombre: 'asc' } }, { cajaId: 'asc' }],
+      select: { cajaId: true, caja: { select: { nombre: true } } },
+    })
+    return { cajas: aperturas.map((a) => ({ cajaId: a.cajaId, nombre: a.caja.nombre })) }
   }
 
   /** El rol en el restaurante del body lo exige la ruta. */

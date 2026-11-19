@@ -187,6 +187,47 @@ describe('el cliente de la API usa la sesión de Supabase', () => {
     })
   })
 
+  describe('cajas', () => {
+    it('las cajas abiertas se piden por restaurante, con GET (#360)', async () => {
+      fetchFalso.mockResolvedValue(respuesta({ cajas: [{ cajaId: 'caja-1', nombre: 'Principal' }] }))
+
+      await expect(api.cajas.abiertas('rest 1')).resolves.toEqual({ cajas: [{ cajaId: 'caja-1', nombre: 'Principal' }] })
+
+      const [url, opciones] = fetchFalso.mock.calls[0] as [string, RequestInit]
+      expect(url).toBe('/cajas/abiertas?restauranteId=rest%201')
+      expect(opciones.method).toBe('GET')
+    })
+
+    const pedido = () => {
+      const [url, opciones] = fetchFalso.mock.calls[0] as [string, RequestInit]
+      return { url, metodo: opciones.method, body: opciones.body === undefined ? undefined : JSON.parse(opciones.body as string) }
+    }
+
+    it('todas las cajas del restaurante se piden por restaurante, con GET', async () => {
+      const CAJA = { id: 'c-1', restauranteId: 'rest 1', nombre: 'Barra', activa: false, createdAt: '2026-11-01T10:00:00.000Z' }
+      fetchFalso.mockResolvedValue(respuesta([CAJA]))
+
+      await expect(api.cajas.listar('rest 1')).resolves.toEqual([CAJA])
+
+      expect(pedido()).toEqual({ url: '/cajas?restauranteId=rest%201', metodo: 'GET', body: undefined })
+    })
+
+    it('crear una caja es un POST con el restaurante y el nombre', async () => {
+      await api.cajas.crear('rest-1', 'Caja principal')
+
+      expect(pedido()).toEqual({ url: '/cajas', metodo: 'POST', body: { restauranteId: 'rest-1', nombre: 'Caja principal' } })
+    })
+
+    it('actualizar es un PATCH a la caja que manda solo lo que se pasó', async () => {
+      await api.cajas.actualizar('c/1', { activa: false })
+      expect(pedido()).toEqual({ url: '/cajas/c%2F1', metodo: 'PATCH', body: { activa: false } })
+
+      fetchFalso.mockClear()
+      await api.cajas.actualizar('c-1', { nombre: 'Barra' })
+      expect(pedido()).toEqual({ url: '/cajas/c-1', metodo: 'PATCH', body: { nombre: 'Barra' } })
+    })
+  })
+
   describe('pedirJson', () => {
     it('lo usan las pantallas que arman su propio pedido, con el mismo token y el mismo 401', async () => {
       sesionDePrueba.token = 'token-de-supabase'

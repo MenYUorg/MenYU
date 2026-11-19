@@ -45,6 +45,8 @@ test('variablesFaltantes: nombra las que faltan o están vacías, nunca los valo
   const todas = Object.fromEntries(VARIABLES.map((v) => [v, 'valor']))
   assert.deepEqual(variablesFaltantes(todas), [])
   assert.deepEqual(variablesFaltantes({ ...todas, E2E_STAGING_MOZO_PASSWORD: '  ' }), ['E2E_STAGING_MOZO_PASSWORD'])
+  const { E2E_STAGING_OWNER_EMAIL: _email, ...sinOwner } = todas
+  assert.deepEqual(variablesFaltantes({ ...sinOwner, E2E_STAGING_OWNER_PASSWORD: '' }), ['E2E_STAGING_OWNER_EMAIL', 'E2E_STAGING_OWNER_PASSWORD'])
 })
 
 test('refDeSupabase', () => {

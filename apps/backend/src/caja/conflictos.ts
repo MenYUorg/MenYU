@@ -44,6 +44,13 @@ export function traducirConflictoDeApertura(err: unknown): unknown {
   return traducirOperacionSimultanea(err)
 }
 
+/** Un cobro sin turno abierto en el restaurante (#358). */
+export const MENSAJE_SIN_TURNO = 'No hay un turno abierto'
+/** Un cobro sin `cajaId` con más de una caja abierta en el turno (#358). */
+export const MENSAJE_ELEGIR_CAJA = 'Hay más de una caja abierta: indicá en cuál se cobra'
+/** Para el comensal, no para el personal: pagar con Mercado Pago sin turno abierto en el restaurante (#358). */
+export const MENSAJE_MP_NO_DISPONIBLE = 'El restaurante no está recibiendo pagos por Mercado Pago en este momento'
+
 /** Un turno cerrado no admite cambios. */
 export const MENSAJE_TURNO_CERRADO = 'El turno está cerrado'
 

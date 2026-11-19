@@ -504,8 +504,9 @@ model Pago {
   // cancelado (hay que devolver la plata) o sobre una sesión ya cerrada. Lo marca el webhook; el motivo es el primero.
   requiereRevision  Boolean   @default(false) @map("requiere_revision")
   motivoRevision    String?   @map("motivo_revision")
-  // La caja del turno en que se cobró (#355). Null en los pagos de antes y en los de Mercado Pago, que nunca van a
-  // una caja.
+  // La caja del turno en que se cobró (#355, #358). Todo pago aprobado va a una caja: el cobro del personal, a la que
+  // elige (o la única abierta); el de Mercado Pago del comensal, a la abierta más antigua al aprobarse. Null en los pagos
+  // de antes de #358, en los no aprobados y en los de Mercado Pago aprobados sin turno abierto (quedan para revisión).
   turnoCajaId       String?   @map("turno_caja_id")
   // Solo en cobros manuales del personal. Va aparte de `monto` para no alterar el total de la sesión. Mayor o igual a
   // 0 (CHECK en la migración).

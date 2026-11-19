@@ -24,6 +24,8 @@ const division = { calcularTotalSesion: jest.fn() }
 function crearTx() {
   return {
     pago: { findMany: jest.fn().mockResolvedValue([]), updateMany: jest.fn(), create: jest.fn().mockResolvedValue({ id: 'pago-mp' }) },
+    // Un turno abierto con una caja (#358): sin él, la preferencia responde 400.
+    turnoCaja: { findFirst: jest.fn().mockResolvedValue({ id: 'apertura-1' }) },
   }
 }
 

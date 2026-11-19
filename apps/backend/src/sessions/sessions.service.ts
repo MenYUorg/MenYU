@@ -7,7 +7,7 @@ import {
   NotFoundException,
 } from '@nestjs/common'
 import { JwtService } from '@nestjs/jwt'
-import { Pago } from '@prisma/client'
+import { Pago, Prisma } from '@prisma/client'
 import { PrismaService } from '../prisma/prisma.service'
 import { MenyuGateway } from '../gateway/menyu.gateway'
 import { SessionJwtPayload } from '../auth/guards/session-auth.guard'
@@ -15,6 +15,9 @@ import { SALON } from '../auth/roles-del-personal'
 import { AccesoService } from '../auth/supabase/acceso.service'
 import { CuentaDeClienteService } from '../auth/supabase/cuenta-de-cliente.service'
 import { UsuarioAutenticado } from '../auth/supabase/usuario-autenticado'
+import { cajaDelCobro } from '../caja/caja-del-cobro'
+import { traducirOperacionSimultanea } from '../caja/conflictos'
+import { dondeMesaVisible, visibilidadDeMesas } from '../caja/visibilidad-de-mesas'
 import { OpenSessionDto } from './dto/open-session.dto'
 import { RegistrarCobroDto } from './dto/registrar-cobro.dto'
 import { DivisionService } from '../comensales/division.service'
@@ -363,10 +366,14 @@ export class SessionsService {
     }
   }
 
-  /** El rol en el restaurante lo exige la ruta (`@RequiereRolEn`). */
-  async getSessionesActivas(restauranteId: string) {
+  /**
+   * El rol en el restaurante lo exige la ruta (`@RequiereRolEn`). El filtro por mozo es de vista, no de seguridad: un
+   * MOZO ve las sesiones de las mesas que tiene asignadas en el turno abierto más las sin asignar (`visibilidadDeMesas`).
+   */
+  async getSessionesActivas(restauranteId: string, usuario: UsuarioAutenticado) {
+    const visibilidad = await visibilidadDeMesas(this.acceso, usuario.id, restauranteId)
     const sesiones = await this.prisma.sesionMesa.findMany({
-      where: { mesa: { restauranteId }, estado: 'activa' },
+      where: { mesa: { restauranteId, ...dondeMesaVisible(visibilidad) }, estado: 'activa' },
       include: {
         mesa: { select: { id: true, numero: true } },
         participantes: { select: { id: true } },
@@ -626,6 +633,7 @@ export class SessionsService {
 
     const fechaCobro = new Date()
     const ahora = fechaCobro.getTime()
+    const propina = new Prisma.Decimal(dto.propina ?? 0)
 
     const sesionCerrada = await runSerializableTransaction(this.prisma, async (tx) => {
       // Se vuelve a mirar dentro de la transacción: la mesa se puede haber cerrado (a mano o con otro cobro) después de
@@ -643,6 +651,10 @@ export class SessionsService {
       if (saldoPendiente <= 0) {
         throw new BadRequestException('Esta sesión ya está completamente pagada')
       }
+
+      // La caja del cobro (#358), antes de cualquier escritura: un cierre del turno al mismo tiempo choca con este cobro
+      // (P2034) y el pago no queda fuera del arqueo.
+      const turnoCajaId = await cajaDelCobro(tx, sesion.mesa.restauranteId, dto.cajaId)
 
       // Pagos de Mercado Pago iniciados por un comensal y sin resolver. Cobrar la mesa los
       // cancela. Los recientes pueden estar en pleno checkout: piden confirmación.
@@ -679,6 +691,8 @@ export class SessionsService {
             cobradoPorNombre: dto.cobradoPorNombre,
             referenciaExterna: dto.referenciaExterna,
             fechaCobro,
+            turnoCajaId,
+            propina,
           },
         })
       } else {
@@ -693,6 +707,8 @@ export class SessionsService {
             cobradoPorNombre: dto.cobradoPorNombre,
             referenciaExterna: dto.referenciaExterna,
             fechaCobro,
+            turnoCajaId,
+            propina,
           },
         })
       }
@@ -712,7 +728,9 @@ export class SessionsService {
         `registrarCobro: saldo cubierto (${totalCubierto}) no alcanza el total de la sesión ${sesionId} (${totalSesion}), no se cierra la sesión`,
       )
       return false
-    }, 'registrarCobro')
+    }, 'registrarCobro').catch((err: unknown) => {
+      throw traducirOperacionSimultanea(err)
+    })
 
     if (sesionCerrada) {
       this.gateway.emitSesionCobrada(sesion.mesa.restauranteId, {

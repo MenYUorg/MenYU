@@ -1,5 +1,23 @@
 import { irAlLogin, renovarSesion, tokenDeAcceso, urlDeLaApi } from '@menyu/auth-client'
-import type { Mesa, EstadoPedido, SesionHistorial } from '@menyu/types'
+import type {
+  AbrirTurnoBody,
+  AperturaDeTurno,
+  AsignacionDeMesa,
+  CajaDelRestaurante,
+  CajasAbiertas,
+  CerrarTurnoBody,
+  CierreDeTurno,
+  EstadoPedido,
+  Mesa,
+  MovimientoRegistrado,
+  PreparacionDeTurno,
+  RegistrarMovimientoBody,
+  ResumenDeTurno,
+  SesionHistorial,
+  TurnoActual,
+  TurnoDetalle,
+  TurnoReasignado,
+} from '@menyu/types'
 
 // ── Base fetch ────────────────────────────────────────────────────────────────
 
@@ -217,6 +235,62 @@ export interface EditarItemBody {
 // ── API ───────────────────────────────────────────────────────────────────────
 
 export const api = {
+  cajas: {
+    /** Las cajas abiertas del turno abierto (#359), para elegir en cuál se cobra. Vacío = no hay un turno abierto. */
+    abiertas: (restauranteId: string) =>
+      authFetch<CajasAbiertas>(`/cajas/abiertas?restauranteId=${encodeURIComponent(restauranteId)}`),
+
+    /** Todas las cajas del restaurante, activas y dadas de baja, por nombre: para elegir con cuáles se abre el turno. */
+    todas: (restauranteId: string) =>
+      authFetch<CajaDelRestaurante[]>(`/cajas?restauranteId=${encodeURIComponent(restauranteId)}`),
+  },
+
+  turnos: {
+    /** El turno abierto del restaurante; `turno` en `null` si no hay uno (#359). */
+    actual: (restauranteId: string) =>
+      authFetch<TurnoActual>(`/turnos/actual?restauranteId=${encodeURIComponent(restauranteId)}`),
+
+    /** Los mozos, las mesas y la precarga de asignaciones: para abrir el turno o reasignar sus mesas. */
+    preparacion: (restauranteId: string) =>
+      authFetch<PreparacionDeTurno>(`/turnos/preparacion?restauranteId=${encodeURIComponent(restauranteId)}`),
+
+    /** Abre el turno. Desde staff `asignaciones` va siempre: es la lista que se ve en pantalla ([] = ninguna). */
+    abrir: (body: AbrirTurnoBody) =>
+      authFetch<AperturaDeTurno>('/turnos', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+
+    /** Reemplaza la lista entera de asignaciones de mesas del turno. */
+    reasignar: (turnoId: string, asignaciones: AsignacionDeMesa[]) =>
+      authFetch<TurnoReasignado>(`/turnos/${encodeURIComponent(turnoId)}/asignaciones`, {
+        method: 'PUT',
+        body: JSON.stringify({ asignaciones }),
+      }),
+
+    /** El turno, abierto o cerrado, con los movimientos de cada caja (del más viejo al más nuevo). */
+    detalle: (turnoId: string) =>
+      authFetch<TurnoDetalle>(`/turnos/${encodeURIComponent(turnoId)}`),
+
+    /** Registra un ingreso o un egreso en una caja del turno. Quién lo carga lo deduce el backend de la cuenta. */
+    registrarMovimiento: (turnoId: string, body: RegistrarMovimientoBody) =>
+      authFetch<MovimientoRegistrado>(`/turnos/${encodeURIComponent(turnoId)}/movimientos`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+
+    /** Cierra el turno y todas sus cajas con lo declarado en cada una. No se deshace. */
+    cerrar: (turnoId: string, body: CerrarTurnoBody) =>
+      authFetch<CierreDeTurno>(`/turnos/${encodeURIComponent(turnoId)}/cierre`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+
+    /** Lo cobrado en las cajas del turno por método y por mozo, y Mercado Pago aparte (que no entra al arqueo). */
+    resumen: (turnoId: string) =>
+      authFetch<ResumenDeTurno>(`/turnos/${encodeURIComponent(turnoId)}/resumen`),
+  },
+
   mesas: {
     getAll: (restauranteId: string) =>
       authFetch<Mesa[]>(`/mesas?restauranteId=${encodeURIComponent(restauranteId)}`),
@@ -285,9 +359,19 @@ export const api = {
     /**
      * Quién cobró lo deduce el backend de la cuenta (`common/atribucion-del-cobro.ts`): desde la entrega 4.3 el
      * `mozoId` del body se ignora para un MOZO o JEFE_SALON, y `cobradoPorNombre` le ganaría al nombre del mozo en las
-     * sesiones pagadas. Por eso no se mandan desde staff.
+     * sesiones pagadas. Por eso no se mandan desde staff. `cajaId` (el id de la Caja) va solo con dos o más cajas
+     * abiertas; con una, el backend la elige (#358). La propina no suma al total de la mesa.
      */
-    registrarCobro: (sesionId: string, body: { metodoPago: string; referenciaExterna?: string; confirmarCancelacionPagosPendientes?: boolean }) =>
+    registrarCobro: (
+      sesionId: string,
+      body: {
+        metodoPago: string
+        referenciaExterna?: string
+        confirmarCancelacionPagosPendientes?: boolean
+        cajaId?: string
+        propina?: number
+      },
+    ) =>
       authFetch<{ ok: boolean }>(`/sessions/${sesionId}/cobro`, {
         method: 'PATCH',
         body: JSON.stringify(body),

@@ -38,6 +38,40 @@ describe('CajasService', () => {
     expect(prisma.caja.findMany).toHaveBeenCalledWith({ where: { restauranteId: REST }, orderBy: { nombre: 'asc' }, select: CAJA_SELECT })
   })
 
+  describe('abiertas', () => {
+    it('las aperturas abiertas del turno abierto del restaurante, por nombre de la caja y por cajaId, sin pedir nada más', async () => {
+      prisma.turnoCaja.findMany.mockResolvedValue([])
+
+      await service.abiertas(REST)
+
+      expect(prisma.turnoCaja.findMany).toHaveBeenCalledWith({
+        where: { cerradoEn: null, turno: { restauranteId: REST, cerradoEn: null } },
+        orderBy: [{ caja: { nombre: 'asc' } }, { cajaId: 'asc' }],
+        select: { cajaId: true, caja: { select: { nombre: true } } },
+      })
+    })
+
+    it('devuelve el id de la Caja y su nombre, en el orden de la consulta, sin el id de la apertura, el fondo ni el turno', async () => {
+      prisma.turnoCaja.findMany.mockResolvedValue([
+        { id: 'apertura-2', cajaId: 'caja-2', fondoInicial: new Prisma.Decimal(500), turnoId: 'turno-1', caja: { nombre: 'Barra' } },
+        { id: 'apertura-1', cajaId: 'caja-1', fondoInicial: new Prisma.Decimal(1000), turnoId: 'turno-1', caja: { nombre: 'Principal' } },
+      ])
+
+      await expect(service.abiertas(REST)).resolves.toEqual({
+        cajas: [
+          { cajaId: 'caja-2', nombre: 'Barra' },
+          { cajaId: 'caja-1', nombre: 'Principal' },
+        ],
+      })
+    })
+
+    it('sin turno abierto: { cajas: [] }', async () => {
+      prisma.turnoCaja.findMany.mockResolvedValue([])
+
+      await expect(service.abiertas(REST)).resolves.toEqual({ cajas: [] })
+    })
+  })
+
   describe('crear', () => {
     it('crea la caja en el restaurante del body', async () => {
       prisma.caja.create.mockResolvedValue(CAJA)

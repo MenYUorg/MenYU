@@ -41,7 +41,7 @@ describe('endpoints de sesiones del salón', () => {
       })
 
       expect([activas.status, pagadas.status, historial.status]).toEqual([200, 200, 200])
-      expect(sesiones.getSessionesActivas).toHaveBeenCalledWith(REST)
+      expect(sesiones.getSessionesActivas).toHaveBeenCalledWith(REST, CUENTAS.MOZO)
       expect(sesiones.getSessionesPagadas).toHaveBeenCalledWith(REST, 'hoy')
       expect(sesiones.getHistorialSesiones).toHaveBeenCalledWith(REST, '2026-10-01', '2026-10-18')
     })
@@ -86,6 +86,43 @@ describe('endpoints de sesiones del salón', () => {
 
       expect(res.status).toBe(200)
       expect(sesiones.registrarCobro).toHaveBeenCalledWith('sesion-1', { metodoPago: 'efectivo', mozoId: 'mozo-7' }, CUENTAS.GERENTE)
+    })
+
+    describe('PATCH /sessions/:id/cobro: la caja y la propina (#358)', () => {
+      const CAJA_ID = '6f1c2a40-7777-4a1b-9c3d-000000000001'
+
+      it('pasan al service con el resto del body', async () => {
+        const res = await api.pedir('patch', '/sessions/sesion-1/cobro', {
+          cuenta: CUENTAS.MOZO,
+          body: { metodoPago: 'debito', cajaId: CAJA_ID, propina: 150.5 },
+        })
+
+        expect(res.status).toBe(200)
+        expect(sesiones.registrarCobro).toHaveBeenCalledWith('sesion-1', { metodoPago: 'debito', cajaId: CAJA_ID, propina: 150.5 }, CUENTAS.MOZO)
+      })
+
+      it('null en las dos pasa la validación (el service los trata como ausentes)', async () => {
+        const res = await api.pedir('patch', '/sessions/sesion-1/cobro', {
+          cuenta: CUENTAS.MOZO,
+          body: { metodoPago: 'efectivo', cajaId: null, propina: null },
+        })
+
+        expect(res.status).toBe(200)
+        expect(sesiones.registrarCobro).toHaveBeenCalledWith('sesion-1', { metodoPago: 'efectivo', cajaId: null, propina: null }, CUENTAS.MOZO)
+      })
+
+      it.each([
+        ['un cajaId que no es UUID', { cajaId: 'caja-1' }],
+        ['una propina negativa', { propina: -1 }],
+        ['una propina con 3 decimales', { propina: 1.005 }],
+        ['una propina sobre el tope de Decimal(10,2)', { propina: 100_000_000 }],
+        ['una propina como texto', { propina: '100' }],
+      ])('%s: 400 y no llega al service', async (_caso, extra) => {
+        const res = await api.pedir('patch', '/sessions/sesion-1/cobro', { cuenta: CUENTAS.MOZO, body: { metodoPago: 'efectivo', ...extra } })
+
+        expect(res.status).toBe(400)
+        expect(sesiones.registrarCobro).not.toHaveBeenCalled()
+      })
     })
 
     it.each([

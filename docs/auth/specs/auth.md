@@ -287,22 +287,24 @@ Entregas (ver Decisiones de la planificación de la Fase 4):
 | `GET` y `PATCH /restaurantes/:id` | OWNER, GERENTE. `direccion` y `nombreSeccionRecomendados`: solo OWNER |
 | Logo del restaurante | OWNER |
 | `POST /mesas`, `GET`/`PATCH /mesas/:id`, `regenerar-qr`, `pin` | OWNER, GERENTE |
-| `GET /mesas` | OWNER, GERENTE, JEFE_SALON, MOZO |
+| `GET /mesas` | OWNER, GERENTE, JEFE_SALON, MOZO. Filtro por mozo (#357, solo de vista, no de seguridad): un MOZO ve las mesas que tiene asignadas en el turno abierto más las sin asignar; OWNER, GERENTE y JEFE_SALON ven todas |
 | `DELETE /mesas/:id` | OWNER |
 | Ítems, categorías, ingredientes (con la imagen, los ingredientes de un ítem, el descuento, las clasificaciones y los datos del plato para el asistente) | OWNER, GERENTE. `DELETE /items/:id` y `DELETE /categorias/:id`: OWNER |
 | `POST`, `PATCH` y `DELETE /clasificaciones` (catálogo global) | OWNER o GERENTE de algún restaurante. Deuda: es un catálogo global |
 | `GET /mozos`, `GET /mozos/:id`, mesas asignadas (listar, asignar y quitar), llamados de hoy | OWNER, GERENTE |
 | `PATCH /mozos/:id` (solo nombre y teléfono) | OWNER |
 | ~~`DELETE /mozos/:id` (solo un mozo sin cuenta: 409 si tiene `usuarioId`)~~ | ~~OWNER~~. La Fase 5 la borró (decisión 6): un perfil de mozo no se borra desde la app |
-| `GET /sessions/activas`, `pagadas` e `historial`, `POST /sessions/open-staff`, `mesa/:mesaId/cerrar` y `mesa/:mesaId/activa`, `PATCH /sessions/:id/cobro` | OWNER, GERENTE, JEFE_SALON, MOZO |
+| `GET /sessions/activas`, `pagadas` e `historial`, `POST /sessions/open-staff`, `mesa/:mesaId/cerrar` y `mesa/:mesaId/activa`, `PATCH /sessions/:id/cobro` | OWNER, GERENTE, JEFE_SALON, MOZO. En `GET /sessions/activas`, el mismo filtro por mozo que en `GET /mesas` (#357, solo de vista): un MOZO ve las sesiones de las mesas que tiene asignadas en el turno abierto más las sin asignar; OWNER, GERENTE y JEFE_SALON ven todas |
 | `GET /payments/sesiones`, `POST /payments/confirmar-efectivo` | OWNER, GERENTE, JEFE_SALON, MOZO |
 | `GET /payments/requieren-revision?restauranteId=` (solo lectura) | OWNER, GERENTE. Los pagos de Mercado Pago que el webhook marcó para revisión, hasta 200 y más nuevos primero |
 | `GET /payments/mercadopago/oauth/conectar` | OWNER, GERENTE. El `state` lleva el `usuarioId` |
 | `GET /cajas?restauranteId=` (activas e inactivas) | OWNER, GERENTE, JEFE_SALON (`CAJA`) |
+| `GET /cajas/abiertas?restauranteId=` (las cajas abiertas del turno abierto, para elegir a cuál cobrar: el `cajaId` que acepta el cobro y el nombre, por nombre; vacío sin turno abierto. No expone el fondo, quién abrió ni el turno) | OWNER, GERENTE, JEFE_SALON, MOZO (`SALON`) |
 | `POST /cajas` | OWNER, GERENTE |
 | `PATCH /cajas/:id` (nombre y activa; no se desactiva una caja abierta) | OWNER, GERENTE, con el restaurante de la caja |
 | `POST /turnos` (abrir un turno con 1 o 2 cajas y las mesas asignadas; quién abre sale de la cuenta) | OWNER, GERENTE, JEFE_SALON (`CAJA`) |
 | `GET /turnos/actual?restauranteId=` | OWNER, GERENTE, JEFE_SALON (`CAJA`) |
+| `GET /turnos/preparacion?restauranteId=` (para abrir un turno o reasignar mesas: los mozos activos y con cuenta, solo id y nombre; las mesas activas, y la precarga de asignaciones con sus avisos, la misma que haría `POST /turnos` sin `asignaciones`. Igual con o sin turno abierto) | OWNER, GERENTE, JEFE_SALON (`CAJA`) |
 | `GET /turnos?restauranteId=&limite=&cursor=` (historial, del más nuevo al más viejo: 30 por página, hasta 100; arqueo y totales de movimientos por caja) | OWNER, GERENTE, JEFE_SALON (`CAJA`) |
 | `GET /turnos/:id` (un turno con el arqueo, los movimientos de cada caja y las mesas asignadas) | OWNER, GERENTE, JEFE_SALON (`CAJA`), con el restaurante del turno |
 | `PUT /turnos/:id/asignaciones` (reemplaza la lista entera; un turno cerrado no se modifica) | OWNER, GERENTE, JEFE_SALON (`CAJA`), con el restaurante del turno |
@@ -331,6 +333,15 @@ Decisiones de la planificación de la 4.3:
 3. **Ninguna respuesta devuelve las columnas `mp_*` ni `passwordHash`**, tampoco los detalles (`GET /marcas/:id`, `GET /restaurantes/:id`) ni las respuestas de `PATCH` y de mozos.
 4. **`PATCH /mozos/:id` queda con nombre y teléfono.** `email` y la contraseña los quita la decisión 5, `esJefeSalon` lo define la membresía y `activo`, quitar el acceso.
 5. **Cobros (#356):** `Pago.usuarioId` guarda siempre quién cobró. Un MOZO o JEFE_SALON cobra con su propio `Mozo` (se ignora el `mozoId` del body); un OWNER o GERENTE puede atribuirle el cobro a un mozo de ese restaurante.
+   - **Desde #358**, el body de `PATCH /sessions/:id/cobro` y de `POST /payments/confirmar-efectivo` suma dos campos opcionales.
+     - `cajaId` (UUID): la caja abierta del turno a la que va el cobro. Con una sola caja abierta no hace falta.
+     - `propina`: de 0 al tope de `Decimal(10,2)`, con hasta 2 decimales. Va aparte del monto.
+     - Un `null` en cualquiera de los dos cuenta como ausente.
+   - Responden 400 en tres casos:
+     - sin turno abierto en el restaurante ("No hay un turno abierto");
+     - con dos cajas abiertas y sin `cajaId`;
+     - con un `cajaId` que no está abierto en el turno actual.
+   - El permiso se sigue exigiendo antes que todo eso.
 
 **4.3, cómo quedó (2026-10-21).** En el PR draft #416. Ninguna ruta fuera de `/root` usa el JWT legacy: `PENDIENTES_4_3` y `PENDIENTES_A_MANO` del test del enrutador quedaron vacías.
 - **Controllers:** carta, mesas, marcas, restaurantes, mozos, sesiones, pagos (con el OAuth de Mercado Pago), pedidos, llamados al mozo y reportes. Con el restaurante en la ruta, la query o el body, `@RequiereRolEn`; en las de un recurso, `@Personal()` y el service. `GET` y `PATCH /restaurantes/:id` y su logo usan `@RequiereRolEn({ param: 'id' })`. Los grupos de roles de la matriz están en `auth/roles-del-personal.ts` (`ADMINISTRACION`, `SALON`, `TODO_EL_PERSONAL`).

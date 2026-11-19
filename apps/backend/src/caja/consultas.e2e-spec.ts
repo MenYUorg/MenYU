@@ -123,8 +123,8 @@ describe('Resumen, historial y detalle del turno contra Postgres (e2e)', () => {
       total: { cantidad: 5, monto: 12200, propina: 970 },
     }
     const pagosDeMercadoPago = [
-      { id: mpDentro, mesaNumero: mesa2.numero, monto: 800, propina: 0, fechaCobro: ms(abiertoEn, 1).toISOString(), requiereRevision: false },
-      { id: mpRevision, mesaNumero: mesa1.numero, monto: 450, propina: 0, fechaCobro: ms(abiertoEn, 2).toISOString(), requiereRevision: true },
+      { id: mpDentro, mesaNumero: mesa2.numero, cajaId: null, cajaNombre: null, monto: 800, propina: 0, fechaCobro: ms(abiertoEn, 1).toISOString(), requiereRevision: false },
+      { id: mpRevision, mesaNumero: mesa1.numero, cajaId: null, cajaNombre: null, monto: 450, propina: 0, fechaCobro: ms(abiertoEn, 2).toISOString(), requiereRevision: true },
     ]
 
     const antes = Date.now()

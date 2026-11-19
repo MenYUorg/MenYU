@@ -1,5 +1,6 @@
-// El flujo del E2E contra staging (docs/calidad/e2e-supabase.md, sección 1): QR → pedido → efectivo → el mozo confirma →
-// cierre, verificando cada paso en la base con el usuario e2e_staging, y la limpieza siempre al final.
+// El flujo del E2E contra staging (docs/calidad/e2e-supabase.md, sección 1): QR → pedido → efectivo → el OWNER abre un
+// turno → el mozo confirma (el cobro va a la caja del turno, #358) → cierre, verificando cada paso en la base con el
+// usuario e2e_staging; el cierre del turno y la limpieza, siempre al final.
 // Recibe la red, la base y el reloj como dependencias: flujo.test.mjs lo corre entero con dobles.
 import {
   ESPERA_ESCRITURA_MS,
@@ -12,6 +13,8 @@ import {
 } from './lib.mjs'
 
 const TIMEOUT_MS = 15_000
+/** La caja del restaurante de prueba donde cobra el E2E (#358). */
+export const NOMBRE_CAJA = 'Caja E2E'
 
 /**
  * @param {object} c
@@ -20,6 +23,8 @@ const TIMEOUT_MS = 15_000
  * @param {string} c.publishableKey
  * @param {string} c.mozoEmail
  * @param {string} c.mozoPassword
+ * @param {string} c.ownerEmail    el OWNER de la marca de prueba: abre y cierra el turno de la caja
+ * @param {string} c.ownerPassword
  * @param {string} c.restauranteId el restaurante de prueba (marca e2e-staging-*)
  * @param {string} c.itemId        el plato de prueba, de ese restaurante
  * @param {string} c.marcador      el de la corrida (lib.marcadorDeCorrida)
@@ -31,6 +36,7 @@ export async function correrFlujo(c) {
   const inicio = ahora()
   const pasos = []
   const estado = {} // ids que devuelve la API y la base: mesaId, qr, sesionId, jwt, clienteId, pedidoId, pagoId, total…
+  let tokenOwner = null // fuera de `estado`: nunca llega al reporte
 
   // ── Ayudas ────────────────────────────────────────────────────────────────
   async function api(metodo, ruta, { token, body, url } = {}) {
@@ -55,6 +61,36 @@ export async function correrFlujo(c) {
   function exigir(condicion, mensaje) {
     if (!condicion) throw new FallaE2E('producto', mensaje)
   }
+
+  /** El access token de una cuenta de Supabase. Rechazada es configuración; 502, 503 o 504, infraestructura. */
+  async function login(email, password, quien) {
+    const res = await fetchFn(`${c.supabaseUrl.replace(/\/$/, '')}/auth/v1/token?grant_type=password`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', apikey: c.publishableKey },
+      body: JSON.stringify({ email, password }),
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    })
+    const sesion = await res.json().catch(() => null)
+    if (!res.ok || typeof sesion?.access_token !== 'string') {
+      const categoria = [502, 503, 504].includes(res.status) ? 'infraestructura' : 'configuracion'
+      throw new FallaE2E(categoria, `El login ${quien} en Supabase respondió ${res.status}`)
+    }
+    return sesion.access_token
+  }
+
+  /** Una lectura de la API con el token del OWNER: 200, con reintentos por infraestructura como las de la base. */
+  async function consultar(registro, ruta) {
+    const { valor, reintentos } = await conReintentos(async () => {
+      const res = await api('GET', ruta, { token: tokenOwner })
+      exigirHttp(res, [200], `GET ${ruta.split('?')[0]}`)
+      return res.body
+    }, { dormir })
+    registro.reintentos += reintentos
+    return valor
+  }
+
+  const turnoActual = (registro) => consultar(registro, `/turnos/actual?restauranteId=${encodeURIComponent(c.restauranteId)}`)
+  const DECLARADO_EN_CERO = { efectivo: 0, debito: 0, credito: 0, transferencia: 0 }
 
   /** Lectura de la base con reintentos por infraestructura (e2e-supabase.md:110). */
   async function leer(registro, sql, params) {
@@ -197,21 +233,77 @@ export async function correrFlujo(c) {
       r.base = true
     })
 
-    await paso('4. el mozo confirma el efectivo', async (r) => {
-      const login = await fetchFn(`${c.supabaseUrl.replace(/\/$/, '')}/auth/v1/token?grant_type=password`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', apikey: c.publishableKey },
-        body: JSON.stringify({ email: c.mozoEmail, password: c.mozoPassword }),
-        signal: AbortSignal.timeout(TIMEOUT_MS),
-      })
-      const sesionMozo = await login.json().catch(() => null)
-      if (!login.ok || typeof sesionMozo?.access_token !== 'string') {
-        const categoria = [502, 503, 504].includes(login.status) ? 'infraestructura' : 'configuracion'
-        throw new FallaE2E(categoria, `El login del mozo en Supabase respondió ${login.status}`)
+    // Sin turno abierto no se cobra (#358). El turno lo abre el OWNER de la marca de prueba, con la "Caja E2E" sola:
+    // el cobro del paso 4 va a esa caja sin indicarla. e2e_staging no ve las tablas de caja: todo se mira por la API.
+    await paso('3b. abrir el turno', async (r) => {
+      tokenOwner = await login(c.ownerEmail, c.ownerPassword, 'del OWNER')
+
+      // La caja: se crea la primera vez y después se reutiliza (no se borra: la caja y sus turnos son historial).
+      const cajasDeRuta = `/cajas?restauranteId=${encodeURIComponent(c.restauranteId)}`
+      const cajaE2E = async () => (await consultar(r, cajasDeRuta)).find((x) => x?.nombre === NOMBRE_CAJA)
+      let caja = await cajaE2E()
+      if (!caja) {
+        const res = await escribir(r, async () => {
+          const out = await api('POST', '/cajas', { token: tokenOwner, body: { restauranteId: c.restauranteId, nombre: NOMBRE_CAJA } })
+          exigirHttp(out, [201], 'POST /cajas')
+          return out
+        }, async () => {
+          const ya = await cajaE2E()
+          return ya ? { status: null, body: ya, ms: null } : null
+        })
+        caja = res.body
+      } else if (caja.activa === false) {
+        const res = await escribir(r, async () => {
+          const out = await api('PATCH', `/cajas/${caja.id}`, { token: tokenOwner, body: { activa: true } })
+          exigirHttp(out, [200], 'PATCH /cajas/:id')
+          return out
+        }, async () => {
+          const ya = await cajaE2E()
+          return ya?.activa ? { status: null, body: ya, ms: null } : null
+        })
+        caja = res.body
+      }
+      exigir(typeof caja?.id === 'string' && caja.activa !== false, `La "${NOMBRE_CAJA}" no quedó activa`)
+
+      // Un turno abierto que quedó de una corrida anterior (cortada antes de cerrarlo) se cierra en cero: si no, la
+      // apertura da 409.
+      const previo = (await turnoActual(r))?.turno
+      if (previo) {
+        await escribir(r, async () => {
+          const cajas = (previo.cajas ?? []).map((x) => ({ cajaId: x.cajaId, declarado: DECLARADO_EN_CERO }))
+          const out = await api('POST', `/turnos/${previo.id}/cierre`, { token: tokenOwner, body: { cajas } })
+          exigirHttp(out, [200], 'POST /turnos/:id/cierre (turno anterior)')
+          return out
+        }, async () => ((await turnoActual(r))?.turno?.id === previo.id ? null : { status: 200, body: null, ms: null }))
+        r.detalle = 'Cerró un turno que había quedado abierto'
       }
 
       const res = await escribir(r, async () => {
-        const out = await api('POST', '/payments/confirmar-efectivo', { token: sesionMozo.access_token, body: { pagoId: estado.pagoId } })
+        const out = await api('POST', '/turnos', {
+          token: tokenOwner,
+          body: { restauranteId: c.restauranteId, cajas: [{ cajaId: caja.id, fondoInicial: 0 }], asignaciones: [] },
+        })
+        exigirHttp(out, [201], 'POST /turnos')
+        return out
+      }, async () => {
+        const turno = (await turnoActual(r))?.turno
+        return turno ? { status: null, body: { turno }, ms: null } : null
+      })
+      r.http = res.status
+      r.msApi = res.ms
+      const turno = res.body?.turno
+      exigir(typeof turno?.id === 'string' && turno.cajas?.length === 1 && turno.cajas[0].cajaId === caja.id,
+        `POST /turnos no devolvió un turno con la "${NOMBRE_CAJA}" sola`)
+      estado.turnoId = turno.id
+      estado.cajaId = caja.id
+      estado.turnoCajaId = turno.cajas[0].id
+    })
+
+    await paso('4. el mozo confirma el efectivo', async (r) => {
+      const tokenMozo = await login(c.mozoEmail, c.mozoPassword, 'del mozo')
+
+      const res = await escribir(r, async () => {
+        const out = await api('POST', '/payments/confirmar-efectivo', { token: tokenMozo, body: { pagoId: estado.pagoId } })
         exigirHttp(out, [200, 201], 'POST /payments/confirmar-efectivo')
         return out
       }, async () => {
@@ -222,8 +314,17 @@ export async function correrFlujo(c) {
       r.msApi = res.ms
       exigir(res.body?.estado === 'cerrada', `confirmar-efectivo devolvió estado ${res.body?.estado ?? 'vacío'}, no cerrada`)
 
-      const [pago] = await leer(r, 'SELECT estado, fecha_cobro FROM pago WHERE id = $1', [estado.pagoId])
+      const [pago] = await leer(r, 'SELECT estado, fecha_cobro, turno_caja_id FROM pago WHERE id = $1', [estado.pagoId])
       exigir(pago?.estado === 'aprobado' && pago.fecha_cobro != null, 'El pago no quedó aprobado con fecha de cobro')
+      // Con SHA (un deploy), el backend es el de este commit: el cobro tiene que ir a la caja del turno. A mano puede ser
+      // un backend anterior a #358, que no le pone caja: se acepta null y se anota.
+      if (pago.turno_caja_id == null && !c.sha) {
+        r.detalle = 'Sin SHA: el pago quedó sin caja (turno_caja_id null; backend anterior a #358)'
+      } else {
+        exigir(pago.turno_caja_id === estado.turnoCajaId,
+          `El pago quedó en la caja ${pago.turno_caja_id ?? 'ninguna'}, no en la del turno de la corrida`)
+        estado.pagoEnLaCaja = true
+      }
       r.base = true
     })
 
@@ -237,7 +338,36 @@ export async function correrFlujo(c) {
   } catch {
     // El paso que falló ya quedó en `pasos`; los siguientes no corren y la limpieza corre igual (e2e-supabase.md:35).
   } finally {
+    // El turno que abrió la corrida se cierra aunque haya fallado un paso, y antes de la limpieza: e2e_limpiar borra el
+    // pago, y el arqueo tiene que contarlo. Si el cierre falla, la limpieza corre igual.
+    if (estado.turnoId) await cerrarElTurno()
     if (estado.mesaId) limpieza = await limpiar()
+  }
+
+  async function cerrarElTurno() {
+    await paso('5b. cerrar el turno', async (r) => {
+      // Lo que tiene que haber en la caja: el pedido, si el pago quedó en ella. El fondo es 0 y no hay movimientos.
+      const efectivo = estado.pagoEnLaCaja ? estado.total : 0
+      const res = await escribir(r, async () => {
+        const out = await api('POST', `/turnos/${estado.turnoId}/cierre`, {
+          token: tokenOwner,
+          body: { cajas: [{ cajaId: estado.cajaId, declarado: { ...DECLARADO_EN_CERO, efectivo } }] },
+        })
+        exigirHttp(out, [200], 'POST /turnos/:id/cierre')
+        return out
+      }, async () => ((await turnoActual(r))?.turno?.id === estado.turnoId ? null : { status: null, body: null, ms: null }))
+      r.http = res.status
+      r.msApi = res.ms
+
+      // Con SHA, el cierre tiene que haber contado el cobro: el efectivo esperado es el total del pedido y la diferencia,
+      // 0. Si la escritura se resolvió mirando el turno (sin respuesta), no hay arqueo para comparar.
+      if (c.sha && res.body) {
+        const fila = res.body.arqueos?.[0]?.metodos?.find((m) => m.metodo === 'efectivo')
+        exigir(fila && Number(fila.esperado) === efectivo && Number(fila.diferencia) === 0,
+          `El cierre esperaba ${fila?.esperado ?? '—'} en efectivo con diferencia ${fila?.diferencia ?? '—'}; ` +
+            `se declaró ${efectivo}`)
+      }
+    }).catch(() => {})
   }
 
   async function limpiar() {

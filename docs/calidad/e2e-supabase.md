@@ -20,9 +20,9 @@ Lo que ya había y no cambia:
 
 ## 1. Flujo
 
-Siete pasos, en orden (`flujo.mjs`). Cada uno verifica dos cosas:
+Nueve pasos, en orden (`flujo.mjs`). Cada uno verifica dos cosas:
 - **La API:** el código HTTP y el cuerpo.
-- **La base:** una consulta de solo lectura con `e2e_staging`, por los ids que devolvió la API, nunca por "la última fila".
+- **La base:** una consulta de solo lectura con `e2e_staging`, por los ids que devolvió la API, nunca por "la última fila". Los pasos 3b y 5b (el turno de la caja, #358) se verifican solo por la API: `e2e_staging` no ve las tablas de caja, y su columna "Base ok" queda en "—".
 
 | # | Paso | Llamada | Qué verifica la API | Qué verifica la base |
 |---|---|---|---|---|
@@ -30,14 +30,17 @@ Siete pasos, en orden (`flujo.mjs`). Cada uno verifica dos cosas:
 | 1 | **QR**: abrir la sesión | `POST /api/sessions/open` con `tableCode` y `restauranteId`, sin token | 200, `esAnfitrion: true`, `sesionId`, `jwt` y la mesa de la corrida | `sesion_mesa` `activa` en esa mesa, la mesa `ocupada` y un único participante |
 | 2 | **Pedido** | `POST /api/pedidos` con el token de sesión, `sesionId`, `mesaId` y el plato de prueba | 200 o 201 con el id del pedido | El `pedido` en esa sesión y mesa, con el ítem de prueba, cantidad 1 y su precio |
 | 3 | **Pedido de efectivo** | `POST /api/payments/solicitar-efectivo` con el token de sesión | `efectivo_solicitado` y `pagoId` | El `pago` `efectivo` `pendiente` en esa sesión, por el total del pedido |
-| 4 | **El mozo confirma** | Login del mozo en Supabase (`/auth/v1/token?grant_type=password`) y `POST /api/payments/confirmar-efectivo` con su token | Estado `cerrada` | El `pago` `aprobado`, con `fecha_cobro` |
+| 3b | **Abrir el turno** | Login del OWNER en Supabase; `GET /api/cajas` (activas e inactivas): si "Caja E2E" no existe, `POST /api/cajas`; si está inactiva, `PATCH /api/cajas/:id` con `activa: true`. `GET /api/turnos/actual`: si quedó un turno abierto de una corrida anterior, `POST /api/turnos/:id/cierre` declarando 0 en cada caja. Después `POST /api/turnos` con la "Caja E2E", fondo 0 y `asignaciones: []` | 201 con un turno que tiene solo la "Caja E2E"; se guardan el turno y su apertura (`turnoCajaId`) | — (por la API) |
+| 4 | **El mozo confirma** | Login del mozo en Supabase (`/auth/v1/token?grant_type=password`) y `POST /api/payments/confirmar-efectivo` con su token, sin `cajaId` (hay una sola caja abierta) | Estado `cerrada` | El `pago` `aprobado`, con `fecha_cobro` y, en un deploy (con SHA), `turno_caja_id` = la apertura del paso 3b. A mano (sin SHA) se acepta `turno_caja_id` null, el de un backend anterior a #358, y queda anotado en el detalle |
 | 5 | **Cierre** | Lo hace el paso 4 cuando el total queda cubierto (`payments.service.ts`, `confirmarEfectivo`) | — | La `sesion_mesa` `cerrada` con `cerrada_en`, y la mesa de nuevo `libre` |
+| 5b | **Cerrar el turno** | `POST /api/turnos/:id/cierre` con el token del OWNER: efectivo = el total del pedido si el pago quedó en la caja (0 si no), y 0 en los otros tres métodos | 200 y, con SHA, el efectivo esperado igual a lo declarado (el total) con diferencia 0 | — (por la API) |
 | 6 | Limpieza | `e2e.e2e_limpiar(marcador)` | — | Que borró lo mismo que creó la corrida y que no queda ninguna fila con los ids de la corrida |
 
 **Reglas del flujo:**
 - **Se entra solo por QR.** El PIN tiene un límite de fallos por restaurante que lo bloquea (`apps/backend/src/sessions/sessions.service.ts`, `LIMITE_PIN`), y un E2E no debería poder bloquear un restaurante.
-- **Si un paso falla, los siguientes no corren**, pero la limpieza (paso 6) corre siempre que se haya creado la mesa.
+- **Si un paso falla, los siguientes no corren**, pero el cierre del turno (paso 5b) corre siempre que la corrida haya abierto uno, y la limpieza (paso 6), siempre que se haya creado la mesa. El 5b va antes de la limpieza: `e2e_limpiar` borra el pago y el arqueo tiene que contarlo. Si el 5b falla, la limpieza corre igual.
 - **El mozo es MOZO, no OWNER ni GERENTE:** cobra con su propio `Mozo` (`apps/backend/src/common/atribucion-del-cobro.ts`), así que el paso 4 también prueba que el cobro quede a su nombre.
+- **Sin turno abierto no se cobra (#358):** el turno lo abre y lo cierra el OWNER (el grupo `CAJA`), no el mozo.
 
 ## 2. Datos
 
@@ -57,6 +60,7 @@ Se crearon una vez, el 24/10/2026, por la API (consola de ROOT y cuenta OWNER). 
 | Restaurante | "Restaurante E2E", activo, modo de sesión abierto: es `E2E_STAGING_RESTAURANTE_ID` |
 | Plato | "Plato E2E", $1.000, categoría "E2E": es `E2E_STAGING_ITEM_ID` |
 | Cuentas de Supabase Auth (creadas a mano, con *Auto Confirm*) | `root-e2e.pruebas-auth@menyu-app.com` (ROOT, `usuario.es_root` por SQL), `owner-e2e.pruebas-auth@menyu-app.com` (OWNER de la marca) y `mozo-e2e.pruebas-auth@menyu-app.com` (MOZO del restaurante, con su `Mozo`) |
+| Caja (#358) | "Caja E2E", del restaurante de prueba. No hay que crearla a mano: el paso 3b la crea en la primera corrida (o la reactiva si alguien la desactivó) con `owner-e2e`, que ya es OWNER de la marca, y después la reutiliza |
 
 El restaurante aparece en el Discovery público de staging.
 
@@ -74,6 +78,8 @@ En PL/pgSQL, en un schema propio, `e2e`, y no en `public`: Supabase da `EXECUTE`
   - la mesa.
 
   Devuelve cuántas filas borró de cada tabla. Si al final queda algo de la corrida, falla y no borra nada. Si no encuentra la mesa, no borra nada. Un cliente con cuenta que haya entrado a la mesa no se borra.
+
+Las funciones no tocan las tablas de caja (#358): el turno que abre cada corrida se cierra por la API y queda (sección 5).
 
 El SQL lo corre a mano un administrador del proyecto en el SQL Editor del Supabase de **staging**, que queda como dueño de las funciones. No es una migración de Prisma: no tiene que llegar a producción. Se probó antes contra un Postgres 17.6 local con las 35 migraciones (aislamiento entre dos corridas, datos reales intactos, todo o nada).
 
@@ -109,7 +115,7 @@ El SQL lo corre a mano un administrador del proyecto en el SQL Editor del Supaba
 | `ok` | El paso pasó | — |
 | `infraestructura` | 502, 503 o 504; error de red; timeout; `/health` `degraded` (`apps/backend/src/health/health.service.ts`); el SHA que no llega; la base que no conecta | Staging, Railway o Supabase no estaban disponibles. Se puede re-ejecutar |
 | `producto` | Respuesta 2xx con datos que no coinciden; 4xx inesperado; la base sin la fila esperada; la limpieza que no borró lo que creó | Posible defecto del producto. No se re-ejecuta hasta revisarlo |
-| `configuracion` | Faltan variables, una guarda contra producción cortó, la conexión a la base no es `e2e_staging` o Supabase rechazó el login del mozo | El job está mal configurado. No es ni infraestructura ni producto |
+| `configuracion` | Faltan variables, una guarda contra producción cortó, la conexión a la base no es `e2e_staging` o Supabase rechazó el login del mozo o del OWNER | El job está mal configurado. No es ni infraestructura ni producto |
 
 El job termina en rojo en cualquier categoría que no sea `ok`, y el título del resumen la dice.
 
@@ -126,6 +132,8 @@ El job termina en rojo en cualquier categoría que no sea `ok`, y el título del
 | `E2E_STAGING_DB_URL_LECTURA` | Conexión a la base de staging con el usuario `e2e_staging` (por el pooler de Supabase) |
 | `E2E_STAGING_MOZO_EMAIL` | `mozo-e2e.pruebas-auth@menyu-app.com`, para el paso 4 |
 | `E2E_STAGING_MOZO_PASSWORD` | Su contraseña |
+| `E2E_STAGING_OWNER_EMAIL` | `owner-e2e.pruebas-auth@menyu-app.com`, para abrir y cerrar el turno (pasos 3b y 5b) |
+| `E2E_STAGING_OWNER_PASSWORD` | Su contraseña |
 | `E2E_STAGING_DB_CA` (opcional, no cargado) | El certificado de Supabase: con él, la conexión verifica el servidor. Sin él, va cifrada sin verificar el certificado |
 
 **Variables del repo** (no son secretas):
@@ -165,6 +173,8 @@ A `PUBLIC`, `anon`, `authenticated` y `service_role` se les saca `EXECUTE` sobre
 | El deploy en rojo por una falla del E2E | Es la consecuencia elegida (sección 3); el reporte separa infraestructura de producto |
 | Las credenciales en un log | No se imprimen: los secrets se enmascaran (la clave pública no es secreta y tampoco se imprime), y el reporte no lleva tokens, URLs ni la conexión a la base (lo cubre un test de `flujo.test.mjs`) |
 | Cambian el login o los permisos del mozo | El paso 4 falla en `configuracion` (login) o en `producto` (403 del cobro) y lo dice |
+| **Cada corrida deja un turno cerrado** en el restaurante de E2E (#358): el `turno`, su `turno_caja` y las 4 filas de `arqueo_metodo` | `e2e_limpiar` no puede borrarlos: las FKs de la caja son `Restrict` (el historial financiero no se borra) y `e2e_staging` no tiene permisos sobre esas tablas. Quedan como historial del restaurante de prueba, que no tiene datos reales. El arqueo cuenta un pago que la limpieza borra después: es ruido de prueba, no una inconsistencia que importe |
+| Una corrida cortada antes del 5b deja el turno abierto | La próxima corrida lo cierra en cero en el paso 3b antes de abrir el suyo (si no, la apertura daría 409). Una corrida a la vez (`concurrency`), así que nunca cierra el turno de otra corrida en curso |
 
 ## 6. Qué se mide y cómo se reporta
 
@@ -194,3 +204,4 @@ Las dos se dispararon con un push temporal a la rama `e2e-staging-prueba`, que s
 - [x] Crear el usuario `e2e_staging` y las dos funciones en el Supabase de staging (sección 4).
 - [x] Cargar los secrets y las variables (sección 4).
 - [x] Mergear el PR #420 (mergeado el 22/10/2026).
+- [ ] **#358:** cargar los secrets `E2E_STAGING_OWNER_EMAIL` y `E2E_STAGING_OWNER_PASSWORD` (sección 4) antes de mergear: sin ellos, cada corrida termina en `configuracion`. La membresía no hace falta: `owner-e2e` ya es OWNER de la marca (sección 2.2).

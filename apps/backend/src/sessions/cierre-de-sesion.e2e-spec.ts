@@ -33,6 +33,8 @@ describe('Cierre de una sesión de mesa (e2e)', () => {
   let restauranteId = ''
   let itemId = ''
   let owner: UsuarioAutenticado
+  // La caja abierta del turno del restaurante (#358): sin turno abierto no se cobra.
+  let turnoCajaId = ''
   let mesas = 0
 
   async function crearMesa(estado: 'libre' | 'ocupada' = 'ocupada') {
@@ -76,6 +78,9 @@ describe('Cierre de una sesión de mesa (e2e)', () => {
       (m) => m.id,
     )
     const restaurantes = { restaurante: { marcaId: { in: marcaIds } } }
+    await prisma.turnoCaja.deleteMany({ where: { turno: restaurantes } })
+    await prisma.turno.deleteMany({ where: restaurantes })
+    await prisma.caja.deleteMany({ where: restaurantes })
     await prisma.mesa.deleteMany({ where: restaurantes })
     await prisma.itemMenu.deleteMany({ where: restaurantes })
     await prisma.membresia.deleteMany({ where: { usuario: { email: { startsWith: E2E_MARCADOR } } } })
@@ -101,6 +106,10 @@ describe('Cierre de una sesión de mesa (e2e)', () => {
     })
     await prisma.membresia.create({ data: { usuarioId: usuario.id, rol: 'OWNER', marcaId: marca.id } })
     owner = { id: usuario.id, supabaseUserId: usuario.supabaseUserId, email: usuario.email, nombre: usuario.nombre, esRoot: false }
+
+    const caja = await prisma.caja.create({ data: { restauranteId, nombre: 'Caja E2E' } })
+    const turno = await prisma.turno.create({ data: { restauranteId, abiertoPorUsuarioId: usuario.id } })
+    turnoCajaId = (await prisma.turnoCaja.create({ data: { turnoId: turno.id, cajaId: caja.id, fondoInicial: 0 } })).id
   })
 
   afterAll(async () => {
@@ -237,7 +246,7 @@ describe('Cierre de una sesión de mesa (e2e)', () => {
     expect(aprobados).toHaveLength(1)
     expect(cancelados).toHaveLength(1)
     expect(efectivos.map((p) => p.id)).toEqual(expect.arrayContaining([aprobados[0].id, cancelados[0].id]))
-    expect(aprobados[0]).toMatchObject({ usuarioId: owner.id, mozoId: null })
+    expect(aprobados[0]).toMatchObject({ usuarioId: owner.id, mozoId: null, turnoCajaId })
     expect(Number(aprobados[0].monto)).toBe(1000)
 
     const cerrada = await sesion(s.id)

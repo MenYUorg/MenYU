@@ -6,6 +6,7 @@ import { PrismaService } from '../prisma/prisma.service'
 import { ADMINISTRACION } from '../auth/roles-del-personal'
 import { AccesoService } from '../auth/supabase/acceso.service'
 import { UsuarioAutenticado } from '../auth/supabase/usuario-autenticado'
+import { dondeMesaVisible, visibilidadDeMesas } from '../caja/visibilidad-de-mesas'
 import { CreateMesaDto } from './dto/create-mesa.dto'
 import { UpdateMesaDto } from './dto/update-mesa.dto'
 
@@ -32,10 +33,14 @@ export class MesasService {
     return { ...mesa, qrImage: await this.generateQr(qrToken, dto.restauranteId) }
   }
 
-  /** El rol en el restaurante lo exige la ruta (`@RequiereRolEn`). */
-  async findAll(restauranteId: string) {
+  /**
+   * El rol en el restaurante lo exige la ruta (`@RequiereRolEn`). El filtro por mozo es de vista, no de seguridad: un
+   * MOZO ve las mesas que tiene asignadas en el turno abierto más las sin asignar (`visibilidadDeMesas`).
+   */
+  async findAll(restauranteId: string, usuario: UsuarioAutenticado) {
+    const visibilidad = await visibilidadDeMesas(this.acceso, usuario.id, restauranteId)
     const mesas = await this.prisma.mesa.findMany({
-      where: { restauranteId, activo: true },
+      where: { restauranteId, activo: true, ...dondeMesaVisible(visibilidad) },
       orderBy: { numero: 'asc' },
       include: {
         mozoMesas: { include: { mozo: { select: { id: true, nombre: true } } } },

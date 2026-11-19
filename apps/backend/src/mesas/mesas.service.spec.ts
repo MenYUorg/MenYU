@@ -5,7 +5,8 @@ import { MesasService } from './mesas.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { AccesoService } from '../auth/supabase/acceso.service'
 import { UsuarioAutenticado } from '../auth/supabase/usuario-autenticado'
-import { accesoDeTest, CUENTAS, MUNDO } from '../test/acceso-de-test'
+import { accesoDeTest, CUENTAS, MOZOS, MUNDO } from '../test/acceso-de-test'
+import { ASIGNADA, dondeMesaVisible } from '../caja/visibilidad-de-mesas'
 
 jest.mock('qrcode', () => ({
   toDataURL: jest.fn().mockResolvedValue('data:image/png;base64,mock_qr_image'),
@@ -35,6 +36,7 @@ const mockPrisma = {
 
 describe('MesasService', () => {
   let service: MesasService
+  let acceso: AccesoService
 
   beforeEach(async () => {
     const module = await Test.createTestingModule({
@@ -46,6 +48,7 @@ describe('MesasService', () => {
     }).compile()
 
     service = module.get(MesasService)
+    acceso = module.get(AccesoService)
     jest.clearAllMocks()
   })
 
@@ -80,12 +83,74 @@ describe('MesasService', () => {
     it('lista las mesas activas del restaurante con su QR', async () => {
       mockPrisma.mesa.findMany.mockResolvedValue([MESA])
 
-      const result = await service.findAll(REST)
+      const result = await service.findAll(REST, OWNER)
 
       expect(mockPrisma.mesa.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ where: { restauranteId: REST, activo: true } }),
       )
       expect(result[0]).toHaveProperty('qrImage')
+    })
+  })
+
+  describe('findAll: qué mesas ve cada rol (el filtro por mozo es de vista)', () => {
+    const SIN_FILTRO = { restauranteId: REST, activo: true }
+    const whereDeLaConsulta = () => mockPrisma.mesa.findMany.mock.calls[0][0].where
+
+    beforeEach(() => mockPrisma.mesa.findMany.mockResolvedValue([MESA]))
+
+    it.each([
+      ['el OWNER de la marca', CUENTAS.OWNER_A],
+      ['el GERENTE', CUENTAS.GERENTE],
+      ['el JEFE_SALON (que tiene perfil de mozo)', CUENTAS.JEFE_SALON],
+    ])('%s: el where de siempre, sin pedir el mozo', async (_caso, usuario) => {
+      const mozoDe = jest.spyOn(acceso, 'mozoDe')
+
+      await service.findAll(REST, usuario)
+
+      expect(whereDeLaConsulta()).toEqual(SIN_FILTRO)
+      expect(mozoDe).not.toHaveBeenCalled()
+    })
+
+    it('el MOZO: las sin asignar más las suyas del turno abierto, al nivel de la mesa', async () => {
+      await service.findAll(REST, CUENTAS.MOZO)
+
+      expect(whereDeLaConsulta()).toEqual({ ...SIN_FILTRO, ...dondeMesaVisible({ tipo: 'del-mozo', mozoId: MOZOS.DEL_MOZO.id }) })
+    })
+
+    it('el MOZO sin perfil activo: solo las sin asignar', async () => {
+      jest.spyOn(acceso, 'mozoDe').mockResolvedValue(null)
+
+      await service.findAll(REST, CUENTAS.MOZO)
+
+      expect(whereDeLaConsulta()).toEqual({ ...SIN_FILTRO, asignacionesTurno: { none: ASIGNADA } })
+    })
+
+    it('OWNER de la marca y MOZO a la vez: sin filtro', async () => {
+      jest.spyOn(acceso, 'rolesEnRestaurante').mockResolvedValue(['OWNER', 'MOZO'])
+
+      await service.findAll(REST, CUENTAS.MOZO)
+
+      expect(whereDeLaConsulta()).toEqual(SIN_FILTRO)
+    })
+
+    it('pide los roles y el mozo con el usuario y el restaurante de la llamada', async () => {
+      const roles = jest.spyOn(acceso, 'rolesEnRestaurante')
+      const mozoDe = jest.spyOn(acceso, 'mozoDe')
+
+      await service.findAll(REST, CUENTAS.MOZO)
+
+      expect(roles).toHaveBeenCalledTimes(1)
+      expect(roles).toHaveBeenCalledWith(CUENTAS.MOZO.id, REST)
+      expect(mozoDe).toHaveBeenCalledTimes(1)
+      expect(mozoDe).toHaveBeenCalledWith(CUENTAS.MOZO.id, REST)
+    })
+
+    it('con el filtro, cada mesa sale igual (con su QR)', async () => {
+      const deUnGerente = await service.findAll(REST, CUENTAS.GERENTE)
+      const deUnMozo = await service.findAll(REST, CUENTAS.MOZO)
+
+      expect(deUnMozo).toEqual([{ ...MESA, qrImage: 'data:image/png;base64,mock_qr_image' }])
+      expect(deUnMozo).toEqual(deUnGerente)
     })
   })
 

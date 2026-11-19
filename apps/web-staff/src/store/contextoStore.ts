@@ -72,6 +72,9 @@ export const puedeVerMozo = (roles: Rol[]) => alguno(roles, ['MOZO', 'JEFE_SALON
 /** Atender un llamado necesita el `Mozo` de la cuenta: un OWNER o GERENTE recibe 403 (matriz de la 4.3). */
 export const puedeAtenderLlamados = (roles: Rol[]) => alguno(roles, ['MOZO', 'JEFE_SALON'])
 
+/** Abrir el turno y reasignar sus mesas es del grupo CAJA del backend (#359): OWNER, GERENTE y JEFE_SALON, no el MOZO. */
+export const puedeVerCaja = (roles: Rol[]) => alguno(roles, ['OWNER', 'GERENTE', 'JEFE_SALON'])
+
 /** Editar un pedido es de GERENTE, JEFE_SALON y MOZO: el OWNER no edita, como antes de la migración. */
 export const puedeEditarPedidos = (roles: Rol[]) => alguno(roles, ['GERENTE', 'JEFE_SALON', 'MOZO'])
 
