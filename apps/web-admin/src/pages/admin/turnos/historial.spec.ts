@@ -46,6 +46,15 @@ describe('totalesDeMovimientos', () => {
     expect(totales.egresos).toBe(0.3)
   })
 
+  it('suma en centavos aunque el monto por 100 no dé entero en flotante: 4,35 + 0,01 + 0,01 son exactamente 4,37', () => {
+    const totales = totalesDeMovimientos([
+      movimiento('INGRESO', 4.35), movimiento('INGRESO', 0.01), movimiento('INGRESO', 0.01),
+      movimiento('EGRESO', 4.35), movimiento('EGRESO', 0.01), movimiento('EGRESO', 0.01),
+    ])
+
+    expect(totales).toEqual({ ingresos: 4.37, egresos: 4.37 })
+  })
+
   it('sin movimientos, los dos son cero', () => {
     expect(totalesDeMovimientos([])).toEqual({ ingresos: 0, egresos: 0 })
   })
