@@ -237,6 +237,73 @@ describe('título, foco y anuncios al navegar (accesibilidad)', () => {
   })
 })
 
+describe('el local cierra o cobra la sesión de la mesa (accesibilidad)', () => {
+  beforeEach(() => {
+    reiniciarDiscoveryStore()
+    sessionStorage.clear()
+    useSessionStore.getState().clear()
+    ioFalso.mockClear()
+    socketFalso.on.mockClear()
+    vi.mocked(api.discovery.listar).mockReset().mockResolvedValue({ restaurantes: [], ofertas: [] })
+    useSessionStore.setState({ restauranteId: 'rest-1', jwt: 'jwt-de-mesa', sesionId: 'ses-1' })
+  })
+
+  afterEach(() => window.history.pushState({}, '', '/'))
+
+  /** El manejador de un evento de sesión que la app le puso al socket de la mesa. */
+  const alLlegar = (evento: 'sesion:cerrada' | 'sesion:cobrada') => {
+    const registro = socketFalso.on.mock.calls.find(([nombre]) => nombre === evento)
+    return registro![1] as (datos: { sesionId: string }) => void
+  }
+  const abrirLaApp = async () => {
+    abrirEn('/')
+    await screen.findByRole('heading', { level: 1, name: 'Descubrí dónde comer' })
+  }
+  const pantallaDeAbajo = () => screen.getByRole('heading', { level: 1, name: 'Descubrí dónde comer' })
+
+  it.each(['sesion:cerrada', 'sesion:cobrada'] as const)(
+    'con "%s" aparece un diálogo de alerta con el foco en su mensaje, y la pantalla de abajo queda inerte',
+    async (evento) => {
+      await abrirLaApp()
+      expect(pantallaDeAbajo().closest('[inert]')).toBeNull()
+
+      act(() => alLlegar(evento)({ sesionId: 'ses-1' }))
+
+      const dialogo = screen.getByRole('alertdialog', { name: '¡Gracias por su visita!' })
+      expect(dialogo).toHaveAccessibleDescription('Su sesión ha sido cerrada. Esperamos verle pronto.')
+      expect(screen.getByRole('heading', { level: 2, name: '¡Gracias por su visita!' })).toHaveFocus()
+      expect(pantallaDeAbajo().closest('[inert]')).not.toBeNull()
+    },
+  )
+
+  it('un aviso de otra sesión no abre nada', async () => {
+    await abrirLaApp()
+
+    act(() => alLlegar('sesion:cerrada')({ sesionId: 'otra-sesion' }))
+
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    expect(pantallaDeAbajo().closest('[inert]')).toBeNull()
+  })
+
+  it('"Salir" cierra el diálogo, borra la sesión y vuelve a quedar toda la pantalla activa', async () => {
+    await abrirLaApp()
+    act(() => alLlegar('sesion:cerrada')({ sesionId: 'ses-1' }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Salir' }))
+
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    expect(useSessionStore.getState().sesionId).toBeNull()
+    expect(pantallaDeAbajo().closest('[inert]')).toBeNull()
+  })
+
+  it('con el diálogo abierto no tiene violaciones de accesibilidad (axe)', async () => {
+    await abrirLaApp()
+    act(() => alLlegar('sesion:cerrada')({ sesionId: 'ses-1' }))
+
+    expect(await axe(document.body)).toHaveNoViolations()
+  })
+})
+
 describe('el restaurante cambia el menú con la mesa abierta (accesibilidad)', () => {
   beforeEach(() => {
     reiniciarDiscoveryStore()

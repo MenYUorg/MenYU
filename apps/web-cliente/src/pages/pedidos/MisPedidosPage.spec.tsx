@@ -19,6 +19,9 @@ const pedido = (id: string, estadoPedido: PedidoCliente['estado'], hora: string)
   ],
 })
 
+/** El número de pedido de una tarjeta ("Pedido #ABCDEF": el texto propio es el código; el "#" y "Pedido" son hijos). */
+const codigoDe = (id: string) => screen.getByText(id.slice(0, 6).toUpperCase())
+
 function abrir() {
   return render(
     <MemoryRouter initialEntries={['/pedidos']}>
@@ -32,7 +35,7 @@ function abrir() {
 
 /** La barra de progreso de una tarjeta: el ancho del relleno, o null si no tiene. */
 const progreso = (id: string) => {
-  const tarjeta = screen.getByText(`#${id.slice(0, 6).toUpperCase()}`).parentElement!.parentElement!
+  const tarjeta = codigoDe(id).parentElement!.parentElement!
   const relleno = tarjeta.querySelector('div > div[style*="width:"]') as HTMLElement | null
   return relleno?.style.width ?? null
 }
@@ -84,11 +87,12 @@ describe('MisPedidosPage', () => {
 
     abrir()
 
-    expect(screen.getAllByText(/^#[A-Z]{6}$/).map((e) => e.textContent)).toEqual(['#CCCCCC', '#BBBBBB', '#AAAAAA', '#DDDDDD', '#EEEEEE'])
-    expect(screen.getByText('Enviado')).toBeInTheDocument()
-    expect(screen.getAllByText('En preparación')).toHaveLength(2)
+    expect(screen.getAllByText(/^[A-Z]{6}$/).map((e) => e.textContent)).toEqual(['Pedido #CCCCCC', 'Pedido #BBBBBB', 'Pedido #AAAAAA', 'Pedido #DDDDDD', 'Pedido #EEEEEE'])
+    expect(screen.getByText('Enviado a cocina')).toBeInTheDocument()
+    expect(screen.getByText('En preparación')).toBeInTheDocument()
+    expect(screen.getByText('Listo para servir')).toBeInTheDocument()
     expect(screen.getByText('Entregado')).toBeInTheDocument()
-    expect(screen.getByText('Anulado')).toBeInTheDocument()
+    expect(screen.getByText('Cancelado')).toBeInTheDocument()
     // `toLocaleTimeString` separa "p. m." con un espacio fino (U+202F) según el ICU de la máquina. Testing Library
     // normaliza el texto del DOM pero no el del matcher, así que comparar el string pelado falla en Windows y pasa en
     // el CI. Se normalizan los dos lados.
@@ -138,6 +142,64 @@ describe('MisPedidosPage', () => {
       const { container } = abrir()
 
       expect(await axe(container)).toHaveNoViolations()
+    })
+  })
+
+  describe('estado de cada pedido (accesibilidad)', () => {
+    const TODOS = [
+      pedido('aaaaaa-pend', 'pendiente', '20:00'),
+      pedido('bbbbbb-prep', 'en_preparacion', '20:10'),
+      pedido('cccccc-list', 'listo', '20:20'),
+      pedido('dddddd-entr', 'entregado', '20:30'),
+      pedido('eeeeee-anul', 'anulado', '20:40'),
+    ]
+
+    it('cada estado tiene su propio texto: el que se ve y el que se escucha es el mismo', () => {
+      estado.pedidos = TODOS
+
+      abrir()
+
+      const textoDeLaTarjeta = (id: string) => codigoDe(id).nextElementSibling
+      expect(textoDeLaTarjeta('aaaaaa-pend')).toHaveTextContent('Enviado a cocina')
+      expect(textoDeLaTarjeta('bbbbbb-prep')).toHaveTextContent('En preparación')
+      expect(textoDeLaTarjeta('cccccc-list')).toHaveTextContent('Listo para servir')
+      expect(textoDeLaTarjeta('dddddd-entr')).toHaveTextContent('Entregado')
+      expect(textoDeLaTarjeta('eeeeee-anul')).toHaveTextContent('Cancelado')
+    })
+
+    it('todos los distintivos tienen los mismos colores: el estado no depende del color', () => {
+      estado.pedidos = TODOS
+
+      abrir()
+
+      const colores = TODOS.map((p) => {
+        const distintivo = codigoDe(p.id).nextElementSibling as HTMLElement
+        return `${distintivo.style.backgroundColor} / ${distintivo.style.color}`
+      })
+      expect(new Set(colores)).toEqual(new Set(['rgb(253, 229, 223) / rgb(184, 67, 44)']))
+    })
+
+    it('la barra de progreso es decorativa (oculta del lector) en los estados que la tienen', () => {
+      estado.pedidos = TODOS
+
+      abrir()
+
+      for (const id of ['aaaaaa-pend', 'bbbbbb-prep', 'cccccc-list']) {
+        const tarjeta = codigoDe(id).parentElement!.parentElement!
+        const barra = tarjeta.querySelector('div > div[style*="width:"]')!.parentElement!
+        expect(barra).toHaveAttribute('aria-hidden', 'true')
+      }
+    })
+
+    it('el número se lee "Pedido ABCDEF": "Pedido" solo para el lector y el "#" solo para la vista', () => {
+      estado.pedidos = [pedido('abcdef-123', 'pendiente', '20:00')]
+
+      abrir()
+
+      const codigo = codigoDe('abcdef-123')
+      expect(codigo.querySelector('.sr-only')).toHaveTextContent('Pedido')
+      expect(codigo.querySelector('[aria-hidden="true"]')).toHaveTextContent('#')
+      expect(codigo).toHaveTextContent('Pedido #ABCDEF')
     })
   })
 })
