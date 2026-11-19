@@ -2,7 +2,7 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import type { MovimientoDeCaja, TurnoCajaApi, TurnoDeCaja, TurnoDetalle } from '@menyu/types'
 import { api } from '../services/api'
 import { FormularioDeMovimiento } from './FormularioDeMovimiento'
-import { formatearFechaHora, formatearMonto } from '../utils/formato'
+import { formatearFechaHora, formatearMonto } from '@menyu/ui/caja'
 
 const C = {
   navy:    '#2D3561',

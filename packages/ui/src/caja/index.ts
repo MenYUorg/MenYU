@@ -3,3 +3,12 @@ export { leerMonto, MONTO_MAXIMO, type ErrorDeMonto, type MontoLeido } from './m
 export { parsearPropina, PROPINA_MAXIMA, type PropinaLeida } from './propina'
 export { cajaDelCobro, type CajaParaElCobro } from './cajaDelCobro'
 export { MENSAJE_OPERACION_SIMULTANEA, MENSAJES_DE_TURNO_CAMBIADO } from './mensajes'
+export { formatearFechaHora, formatearMonto } from './formato'
+export {
+  clasificarDiferencia,
+  ETIQUETA_DEL_METODO,
+  METODOS_DE_ARQUEO,
+  textoDeDiferencia,
+  type ClaseDeDiferencia,
+} from './arqueo'
+export { ordenarMesas } from './mesas'

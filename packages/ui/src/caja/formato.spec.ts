@@ -1,3 +1,4 @@
+import { describe, expect, it } from 'vitest'
 import { formatearFechaHora, formatearMonto } from './formato'
 
 describe('formatearMonto', () => {

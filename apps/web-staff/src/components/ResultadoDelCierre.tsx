@@ -1,12 +1,7 @@
 import { useId } from 'react'
 import type { ArqueoDeCaja } from '@menyu/types'
-import {
-  clasificarDiferencia,
-  ETIQUETA_DEL_METODO,
-  textoDeDiferencia,
-  type ResultadoDelCierre as Resultado,
-} from '../utils/cierre'
-import { formatearFechaHora, formatearMonto } from '../utils/formato'
+import { clasificarDiferencia, ETIQUETA_DEL_METODO, formatearFechaHora, formatearMonto, textoDeDiferencia } from '@menyu/ui/caja'
+import type { ResultadoDelCierre as Resultado } from '../utils/cierre'
 import { ResumenDelTurno } from './ResumenDelTurno'
 
 const C = {

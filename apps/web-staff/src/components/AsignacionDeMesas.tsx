@@ -1,6 +1,6 @@
 import { useId } from 'react'
 import type { AvisoDePrecarga, PreparacionDeTurno } from '@menyu/types'
-import { ordenarMesas } from '../utils/mesas'
+import { ordenarMesas } from '@menyu/ui/caja'
 import { textoDelAviso, type ValoresDeAsignacion } from '../utils/asignaciones'
 
 const C = {
