@@ -5,8 +5,7 @@ import { AsignacionDeMesas } from './AsignacionDeMesas'
 import { MovimientosDelTurno } from './MovimientosDelTurno'
 import { CierreDelTurno } from './CierreDelTurno'
 import type { ResultadoDelCierre } from '../utils/cierre'
-import { formatearFechaHora, formatearMonto } from '../utils/formato'
-import { ordenarMesas } from '../utils/mesas'
+import { formatearFechaHora, formatearMonto, ordenarMesas } from '@menyu/ui/caja'
 import { MENSAJE_TURNO_CERRADO } from '../utils/conflictosDeCaja'
 import {
   asignacionesAEnviar,

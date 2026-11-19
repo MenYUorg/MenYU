@@ -1,3 +1,4 @@
+import { describe, expect, it } from 'vitest'
 import { ordenarMesas } from './mesas'
 
 const numeros = (mesas: { numero: string }[]) => mesas.map((m) => m.numero)

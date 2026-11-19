@@ -23,6 +23,7 @@ import {
   Store,
   MessageCircleQuestion,
   Wallet,
+  ReceiptText,
 } from 'lucide-react'
 
 /* ── nav structure ─────────────────────────────────────────────────────────── */
@@ -32,9 +33,10 @@ const NAV_BY_ROL: Record<RolDeAdmin, NavSection[]> = {
     {
       label: 'OPERACIÓN',
       items: [
-        { to: '/admin/dashboard', label: 'Dashboard', Icon: LayoutDashboard },
-        { to: '/admin/tables',    label: 'Mesas',     Icon: Grid2x2 },
-        { to: '/admin/pagos',     label: 'Caja',      Icon: CreditCard },
+        { to: '/admin/dashboard', label: 'Dashboard',      Icon: LayoutDashboard },
+        { to: '/admin/tables',    label: 'Mesas',          Icon: Grid2x2 },
+        { to: '/admin/pagos',     label: 'Caja',           Icon: CreditCard },
+        { to: '/admin/turnos',    label: 'Turnos de caja', Icon: ReceiptText },
       ],
     },
     {
@@ -71,6 +73,7 @@ const NAV_BY_ROL: Record<RolDeAdmin, NavSection[]> = {
       items: [
         { to: '/admin/tables',        label: 'Mesas',            Icon: Grid2x2 },
         { to: '/admin/pagos',         label: 'Caja',             Icon: CreditCard },
+        { to: '/admin/turnos',        label: 'Turnos de caja',   Icon: ReceiptText },
         { to: '/admin/toma-pedidos',  label: 'Toma de pedidos',  Icon: ShoppingBag },
         { to: '/admin/pedidos',       label: 'Pedidos',          Icon: ClipboardList },
         { to: '/admin/historial',     label: 'Historial',        Icon: History },
@@ -112,6 +115,8 @@ const SECTION_TITLES: Record<string, string> = {
   '/admin/marca':         'Marca y sucursales',
   '/admin/asistente':     'Asistente',
   '/admin/cajas':         'Cajas',
+  // También el detalle (/admin/turnos/:id): el título se busca por prefijo.
+  '/admin/turnos':        'Turnos de caja',
 }
 
 /* ── marca y restaurante elegido (bloque debajo del logo) ──────────────────── */

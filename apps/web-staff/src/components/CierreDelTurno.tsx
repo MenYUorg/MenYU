@@ -6,7 +6,6 @@ import { MENSAJE_TURNO_CERRADO } from '../utils/conflictosDeCaja'
 import {
   leerCierre,
   mesasAbiertasDeSesiones,
-  METODOS_DE_ARQUEO,
   primerCampoConError,
   resultadoDesdeElCierre,
   resultadoDesdeElDetalle,
@@ -16,7 +15,7 @@ import {
   type PorCajaYMetodo,
   type ResultadoDelCierre,
 } from '../utils/cierre'
-import { formatearMonto } from '../utils/formato'
+import { formatearMonto, METODOS_DE_ARQUEO } from '@menyu/ui/caja'
 import { MAXIMO_DE_OBSERVACIONES } from '../utils/observaciones'
 
 const C = {

@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import type { FilaDeResumen, PagoMercadoPago, ResumenDeTurno } from '@menyu/types'
 import { api } from '../services/api'
-import { ETIQUETA_DEL_METODO } from '../utils/cierre'
-import { formatearFechaHora, formatearMonto } from '../utils/formato'
+import { ETIQUETA_DEL_METODO, formatearFechaHora, formatearMonto } from '@menyu/ui/caja'
 
 const C = {
   navy:    '#2D3561',
