@@ -18,3 +18,9 @@ export function formatearFechaHora(iso: string): string {
   const fecha = new Date(iso)
   return `${dosCifras(fecha.getDate())}/${dosCifras(fecha.getMonth() + 1)} ${dosCifras(fecha.getHours())}:${dosCifras(fecha.getMinutes())}`
 }
+
+/** Una fecha y hora en la zona del navegador, con el año: `dd/mm/aaaa hh:mm` (el historial de turnos cruza años). */
+export function formatearFechaHoraCompleta(iso: string): string {
+  const fecha = new Date(iso)
+  return `${dosCifras(fecha.getDate())}/${dosCifras(fecha.getMonth() + 1)}/${fecha.getFullYear()} ${dosCifras(fecha.getHours())}:${dosCifras(fecha.getMinutes())}`
+}

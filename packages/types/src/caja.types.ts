@@ -239,3 +239,39 @@ export interface ResumenDeTurno {
   total: FilaDeResumen
   mercadoPago: ResumenMercadoPago
 }
+
+// Cuántos movimientos tuvo una caja del turno y cuánto suman los ingresos y los egresos, por separado.
+export interface TotalesDeMovimientos {
+  cantidad: number
+  ingresos: number
+  egresos: number
+}
+
+// Una caja de un turno del historial: como en el detalle, pero con los totales de sus movimientos en lugar de la lista.
+// `arqueo` es null mientras el turno está abierto.
+export interface CajaDelHistorial {
+  id: string
+  cajaId: string
+  nombre: string
+  fondoInicial: number
+  arqueo: FilaDeArqueo[] | null
+  movimientos: TotalesDeMovimientos
+}
+
+// Un turno del historial (GET /turnos), abierto o cerrado, con sus cajas por nombre. Sin las mesas asignadas.
+export interface TurnoDelHistorial {
+  id: string
+  abiertoEn: string
+  abiertoPor: { id: string; nombre: string }
+  cerradoEn: string | null
+  cerradoPor: { id: string; nombre: string } | null
+  observaciones: string | null
+  cajas: CajaDelHistorial[]
+}
+
+// La respuesta de GET /turnos: del más nuevo al más viejo. `siguiente` es el id del primer turno de la página que sigue
+// (el cursor es inclusivo); null = no hay más.
+export interface PaginaDeTurnos {
+  items: TurnoDelHistorial[]
+  siguiente: string | null
+}
