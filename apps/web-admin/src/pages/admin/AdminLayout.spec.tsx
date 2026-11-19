@@ -40,6 +40,7 @@ function renderLayout(ruta = '/admin/menu') {
           <Route path="/admin/tables" element={<div>Contenido de mesas</div>} />
           <Route path="/admin/marca" element={<div>Contenido de marca</div>} />
           <Route path="/admin/cajas" element={<div>Contenido de cajas</div>} />
+          <Route path="/admin/turnos" element={<div>Contenido de turnos de caja</div>} />
         </Route>
       </Routes>
     </MemoryRouter>,
@@ -242,6 +243,27 @@ describe('AdminLayout', () => {
 
       expect(screen.getByText('Contenido de cajas')).toBeInTheDocument()
       expect(screen.getByRole('heading', { name: 'Cajas' })).toBeInTheDocument()
+    })
+  })
+
+  describe('Turnos de caja (#360)', () => {
+    it.each(['OWNER', 'GERENTE'] as const)('el %s ve el acceso justo después de "Caja" y lo puede abrir, con el título "Turnos de caja"', async (rol) => {
+      rolActual = rol
+      simularPantalla(ESCRITORIO)
+      const user = userEvent.setup()
+      renderLayout()
+
+      const nombres = screen.getAllByRole('link').map((enlace) => enlace.textContent)
+      expect(nombres[nombres.indexOf('Caja') + 1]).toBe('Turnos de caja')
+      const enlace = screen.getByRole('link', { name: 'Turnos de caja' })
+      expect(enlace).toHaveAttribute('href', '/admin/turnos')
+
+      await user.click(enlace)
+
+      expect(screen.getByText('Contenido de turnos de caja')).toBeInTheDocument()
+      expect(screen.getByRole('heading', { name: 'Turnos de caja' })).toBeInTheDocument()
+      expect(enlace).toHaveAttribute('aria-current', 'page')
+      expect(screen.getByRole('link', { name: 'Caja' })).not.toHaveAttribute('aria-current')
     })
   })
 
