@@ -263,27 +263,29 @@ Las rutas son relativas a `apps/web-cliente/src/` salvo que digan otra cosa.
 - `utils/estadoDelPedido.ts`: los textos de cada estado y la frase del anuncio.
 - `EncabezadoPantalla` acepta `inerte` y `Banner` acepta `id`.
 
-### Etapa 6. Contraste, foco visible y tamaños
+### Etapa 6. Contraste, foco visible y tamaños — web-cliente y `packages/ui` hechos (19/11/2026), a la espera de revisión; admin y staff, propuesta abajo
 
 **web-cliente:**
 
-- [ ] Un solo token de coral en `theme.ts` (decisión 9). Las demás paletas lo importan en vez de redefinirlo.
-- [ ] Test unitario de contraste sobre los pares de colores de `theme.ts`.
-- [ ] El gris de texto `#9CA3AF` pasa a `#6B7280`.
-- [ ] **Foco visible** (WCAG 2.4.7): reemplazar los `outline: 'none'` en línea por un indicador de foco visible, como hace web-auth con `focus-visible:ring`. Por ejemplo, el buscador del menú hoy no tiene ninguno. **Ojo con el `<h1>`:** desde la etapa 1, `src/index.css` quita el contorno de `h1[tabindex='-1']:focus` a propósito (decisión 16) y `src/estilos.spec.ts` exige que esa sea la única regla de la hoja que lo quita. Un estilo global de `:focus-visible` que se agregue acá no tiene que volver a dibujárselo a ese título.
-- [ ] **Tamaños táctiles** (WCAG 2.5.8, mínimo 24×24 px, ideal 44×44):
-  - "Quitar" del carrito (35×18) es el único debajo del mínimo: obligatorio.
-  - Llevar a 44 si se puede: los "+" de las tarjetas (28×28), los "−"/"+" del detalle y del carrito (32×32), el interruptor (44×24), los chips de sección y de comensal (32-34 de alto), las flechas de volver (29×26) y los botones del encabezado (28-30 de alto).
+- [x] **Un solo coral y un solo gris de texto** (decisiones 9 y 10). Los valores viven en `packages/ui/src/colores.ts` (`CORAL` `#CC4A31`, `CORAL_OSCURO` `#B8432C`, `CORAL_SUAVE` `#FDE5DF` y `GRIS_TEXTO` `#6B7280`) y `src/theme.ts` los toma de ahí: ni una pantalla ni un componente define el suyo. Las 9 paletas sueltas (`AppHeader`, `GraciasCard`, `ItemCard`, `SesionSeguraModals`, `CarritoPage`, `ItemDetailPage`, `MisPedidosPage`, `components/menu/paleta.ts` y los literales de `App.tsx`) importan el tema. Las clases de Tailwind que escribían el coral a mano (`focus:border-[#E8563A]`, `hover:!bg-[#d34a30]`, `bg-orange-500` en las pantallas de pago, que era el naranja de Tailwind `#f97316` y no el de la marca) pasaron a `coral`, `coral-oscuro` y `navy`, definidos en `tailwind.config.js` con los mismos valores. Las sombras con `rgba(232,86,58,…)` pasaron al coral nuevo. Se sumó el token **`orangeText`** (`#B8432C`): el coral como texto sobre el rosado (3,8:1 con el coral solo) o sobre el gris de la página (4,3:1).
+- [x] **Test unitario de contraste** (`src/theme.spec.ts`, 26 tests): 15 pares de colores del tema (texto blanco sobre coral, precio coral sobre blanco, coral oscuro sobre rosado y sobre el gris de la página, gris sobre blanco y sobre el gris de la página, error sobre blanco y sobre rosado, etc.) tienen que llegar a 4,5:1 con `razonDeContraste` (nuevo en `@menyu/ui`, con su propio spec); el test comprueba también que el tema salga de `@menyu/ui`, que `tailwind.config.js` tenga los mismos valores, y **que ningún archivo de `src` vuelva a escribir `#E8563A`, `#d34a30`, `#9CA3AF`, `rgba(232, 86, 58, …)`, `orange-500` ni `text-gray-400`** (una lista de patrones prohibidos que recorre el código).
+- [x] **Gris de texto** `#9CA3AF` → `#6B7280` (2,5:1 → 4,8:1) en todos los textos (hora y resumen de Mis pedidos, "P. UNIT." y precios de la cuenta, "Total" y modificaciones del carrito, "Ingresando a", rótulos, "×" del buscador, el precio tachado). El rojo de "Quitar" (`#EF4444`, 3,8:1) pasa a `#DC2626` (4,8:1).
+- [x] **Foco visible** (WCAG 2.4.7). `src/index.css` tiene una regla global (`@layer base`) para todo control (enlace con `href`, botón, campo, interruptor, casilla y lo que tenga `tabindex` distinto de -1): contorno azul marino de 2 px separado 2 px, con un **aro blanco** entre el control y el contorno, para que se vea igual sobre blanco, sobre el azul de los encabezados y sobre una foto (los estilos en línea, como la sombra del "+" de la tarjeta, lo pisan: en ese caso queda el contorno). **No toca a los elementos con `tabindex="-1"`** (los títulos y los contenedores de los diálogos): el `<h1>` y el `<h2>` siguen sin anillo (decisión 16) y `src/estilos.spec.ts` sigue exigiendo que la regla de los títulos sea la **única** que quita el contorno. Los campos dejaron de tener `outline: 'none'` en línea (buscador del menú, nombre, PIN, nota del plato, código de la mesa, buscador de Discovery y pregunta del asistente): antes mostraban solo un cambio de borde, o nada (el buscador del menú). Quedan cuatro `outline: none`, todos en contenedores que reciben el foco por código (menú lateral, diálogo del mensaje, escáner y panel del asistente).
+- [x] **Tamaños táctiles** (WCAG 2.5.8): sin cambiar lo que se ve ni mover nada (se midió la posición de todos los controles de 11 pantallas antes y después: solo cambiaron las cajas de estos cuatro).
+  - "Quitar" del carrito, de 35 × 18 a 51 × 44 (**era el único debajo del mínimo**, y el botón "Editar {plato}", que sumé en la etapa 5, tenía 21 de alto: ahora 33). Se logra con relleno y márgenes negativos que se compensan.
+  - La flecha de volver de las pantallas con encabezado azul (27 × 26) se toca como una de 44 × 44.
+  - El "+" de la tarjeta del plato (28 × 28) se toca como uno de 44 × 44 con un `::after` invisible (el mismo recurso que ya usan los botones del header).
+  - **Quedan debajo de 44 y arriba de 24** (cumplen el mínimo de AA): los "−" y "+" del carrito y del detalle (32 × 32), el interruptor de ingredientes (44 × 24), los chips de sección y de comensal (34 de alto), los botones del encabezado del menú ("Mozo", "Dietas", 34 a 40 de alto) y "Ingresar" y "Registrarme" (30, que ya tienen un `::after` de 44). Hacerlos de 44 cambia cómo se ven o se pisaría el área de los vecinos; no se tocaron.
 
 **`packages/ui`:**
 
-- [ ] `DescuentoBadge.tsx:21` y `PrecioConDescuento.tsx:55` y `:71`, con specs nuevos en `packages/ui` (hoy tienen 0 % de cobertura en esa suite).
+- [x] `DescuentoBadge.tsx` (fondo y sombra) y `PrecioConDescuento.tsx` (el precio con descuento y el tachado) usan `CORAL` y `GRIS_TEXTO`, con specs nuevos (`DescuentoBadge.spec.tsx`, `PrecioConDescuento.spec.tsx`: de 0 % a 100 % de cobertura). Se suman `colores.ts` y `contraste.ts` (con los suyos) y salen de `@menyu/ui`. Las suites de web-admin (943 tests) y web-staff (590) pasan sin cambios.
 
-**Admin y staff:**
+**Admin y staff** (propuesta, **no se tocó**):
 
-- [ ] Coral y gris de texto.
-- [ ] Hoy el coral aparece 50 veces en 19 archivos de admin y 24 en 11 de staff; el gris como texto, 53 en 17 y 11 en 7.
-- [ ] Ningún test compara colores, pero Sonar cuenta cada línea cambiada como código nuevo. **Al empezar la etapa, medir la cobertura de esos archivos y proponer cómo seguir.** Por defecto, va en un PR aparte. Si la cobertura de esas líneas pasa el 80 % y el diff queda prolijo, puede ir en el mismo.
+- [ ] El coral o el gris de antes aparece en **105 líneas de 23 archivos de web-admin**, en **52 líneas de 20 archivos de web-staff** y en 22 líneas más de `packages/ui` (`HistorialSesiones`, `EditarPedidoModal` y `ItemMenuFila`, que usan los dos). Los tests ya cubren esas líneas: **83 % en web-admin** (87 de 105; el punto flojo es `AdminMenuPage.tsx`, con 7 de 22), **100 % en web-staff** y 21 de 22 en `packages/ui`. Es decir, Sonar pasaría el 80 % en un PR que solo reemplaza los literales por `CORAL`, `CORAL_OSCURO` y `GRIS_TEXTO` (con los mismos tests).
+- [ ] **Propuesta: un PR aparte** ("contraste de admin y staff"), porque son ~180 líneas en ~45 archivos de dos apps que revisa otra persona, y no cambia nada de lo del comensal. Mientras tanto, admin y staff usan el coral nuevo solo en los distintivos y precios con descuento de `packages/ui`; el resto sigue con el de antes.
+- [ ] Hay que decidir si el PR aparte se hace en esta etapa o después.
 
 ### Etapa 7. Cierre
 
@@ -339,7 +341,9 @@ Cosas que aparecieron al trabajar y que el plan no mencionaba. Los dos primeros 
 
 6. **Resuelto (19/11, en la etapa 5): el Enter que confirma la cantidad de comensales volvía a abrir el campo** (`CantidadComensalesPage`). Al devolverle el foco al botón con el número durante el `keydown` de Enter, el navegador le mandaba también el "keypress" al botón, que se activaba. Se cancela el `keydown` (`preventDefault`). Solo se vio en Edge real: en jsdom no pasa, y el test comprueba que el evento se cancela.
 7. **`SessionGuard` (`App.tsx`) tiene un modal "Sesión finalizada" que nunca se muestra:** `sesionCerrada` empieza en `false` y nada la pone en `true` (solo se llama a `setSesionCerrada(false)`). Es código muerto: lo que se ve cuando el local cierra la sesión es la tarjeta de gracias. No se tocó. Hay que decidir si se borra.
-8. **Ajustes de color y tamaño que quedan para la etapa 6** en las pantallas de esta etapa: el gris `#9CA3AF` de los textos chicos (hora y resumen de Mis pedidos, "P. UNIT." y precios unitarios de la cuenta, "Total" del carrito), el coral `#E8563A` de los precios y de la barra de progreso, el rojo de "Quitar" (`#EF4444`) y el tamaño de los botones "Quitar", "Entendido" y los de las tarjetas.
+8. **Resuelto (19/11, en la etapa 6): ajustes de color y tamaño de las pantallas de la etapa 5**, que habían quedado para esta etapa: el gris `#9CA3AF` de los textos chicos (hora y resumen de Mis pedidos, "P. UNIT." y precios unitarios de la cuenta, "Total" del carrito), el coral `#E8563A` de los precios y de la barra de progreso, el rojo de "Quitar" (`#EF4444`) y el tamaño de los botones "Quitar", "Entendido" y los de las tarjetas.
+
+9. **Los bordes de los campos de web-cliente no llegan al 3:1 de WCAG 1.4.11** (`#DDDDE0` sobre blanco da 1,4:1; el 3,2:1 que cuenta la auditoría es el `#8A8FA5` del preset de web-auth). Sale del trabajo de la etapa 6, que no lo tocó: oscurecer los bordes cambia cómo se ve cada campo (nombre, PIN, buscadores, nota del plato). Hay que decidir si se hace, y con qué color.
 
 ## Preguntas abiertas
 

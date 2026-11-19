@@ -10,8 +10,8 @@ Registro, etapa por etapa, de lo que se hizo para la accesibilidad del flujo del
 | 2. Formato de precios | Hecha (13/11/2026) y mergeada (PR #468, junto con la 3). Quality gate de SonarCloud: passed |
 | 3. Bloqueantes (menú lateral y filtro de dietas) | Hecha (13/11/2026) y mergeada (PR #468, junto con la 2). Quality gate de SonarCloud: passed |
 | 4. Menú, detalle y discovery | Hecha (13/11/2026) y mergeada (PR #469). Quality gate de SonarCloud: passed. Con el arreglo del buscador del menú (19/11/2026) |
-| 5. Carrito, pedidos, PIN, nombre y pago | Hecha (19/11/2026), a la espera de revisión |
-| 6. Contraste, foco visible y tamaños | Pendiente |
+| 5. Carrito, pedidos, PIN, nombre y pago | Hecha (19/11/2026) y en el PR #479. Quality gate de SonarCloud: passed. El PIN se dejó como estaba (decisión de Margarita) |
+| 6. Contraste, foco visible y tamaños | Hecha en web-cliente y `packages/ui` (19/11/2026), a la espera de revisión. Admin y staff: propuesta de un PR aparte |
 | 7. Cierre (lint, axe de Coty, celulares C1 a C7) | Pendiente |
 | 8. Asistente de la carta (C8): auditar y después arreglar | Pendiente (agregada el 13/11/2026) |
 
@@ -431,7 +431,13 @@ Por archivo (líneas / ramas): `CarritoPage` 100 / 98,3 (de 53,6 % de líneas), 
 
 ### Quality gate de SonarCloud
 
-Pendiente: se anota cuando corra el PR.
+**Passed** (captura del PR #479, "Feat/a11y cliente"; análisis del commit `a5abf88b`):
+
+- Cobertura del código nuevo: **99,78 %** (se pide 80 % o más), sobre 339 líneas nuevas por cubrir. Estimada después del merge: 91,5 %.
+- Duplicación del código nuevo: **0,0 %** (se pide 5 % o menos), sobre 1,7 k líneas nuevas. Estimada después del merge: 1,9 %.
+- Issues nuevos: 0. Issues aceptados: 0. Security hotspots: 0.
+- Líneas de código nuevo: 361.
+- Sigue el "1 analysis warning" sin detalle de las etapas anteriores.
 
 ### Verificación en el navegador
 
@@ -468,3 +474,73 @@ En Edge real (390 px, API simulada, un Vite propio en el puerto 5199):
 ### Recorridos con lector (C1 a C8)
 
 Desde esta etapa: **C3** (un PIN incorrecto se anuncia y el foco vuelve al campo; el PIN sigue detrás del texto chico, que es un botón con nombre: en el celular hay que medir si se encuentra sin ayuda), **C2** (el campo del nombre tiene etiqueta y no roba el foco), **C4 completo** (el carrito lee cada ítem con sus extras en palabras y la confirmación tiene foco y título), **C5** (el cambio de estado de un pedido se anuncia: falta medirlo con un pedido real) y **C7** (la cuenta es una tabla, las opciones de pago son botones con nombre y los resultados de Mercado Pago tienen título; falta el flujo de volver de Mercado Pago, que se prueba en el celular). **C6** ya estaba. Falta medirlos en el celular (etapa 7).
+
+---
+
+## Etapa 6: contraste, foco visible y tamaños (19/11/2026)
+
+Estado: hecha en web-cliente y en `packages/ui`, a la espera de revisión. Admin y staff **no se tocaron**: hay una propuesta en el plan (y abajo). Va sobre la rama `feat/a11y-cliente`, al día con `origin/main`.
+
+### Qué cambió
+
+El detalle de cada punto está en [`plan-cliente.md`](plan-cliente.md) (Etapa 6). Resumen:
+
+- **Un solo coral y un solo gris de texto.** `packages/ui/src/colores.ts` define `CORAL` (`#CC4A31`, antes `#E8563A`: de 3,6:1 a 4,6:1 con blanco), `CORAL_OSCURO` (`#B8432C`), `CORAL_SUAVE` y `GRIS_TEXTO` (`#6B7280`, antes `#9CA3AF`: de 2,5:1 a 4,8:1). `theme.ts` los toma de ahí y las 9 paletas sueltas lo importan. Las clases de Tailwind usan `coral`, `coral-oscuro` y `navy` (`tailwind.config.js`). El texto coral sobre el rosado o sobre el gris de la página usa un token nuevo, `orangeText` (`#B8432C`).
+- **Foco visible.** Un anillo global (navy, 2 px, con un aro blanco) para todo control con teclado; los campos ya no apagan el contorno. Los títulos y los diálogos que reciben el foco por código siguen sin anillo.
+- **Tamaños táctiles.** "Quitar" (18 px de alto) y "Editar" (21), la flecha de volver y el "+" de la tarjeta, sin cambiar nada de lo que se ve.
+- **`packages/ui`.** `DescuentoBadge` y `PrecioConDescuento` con el coral y el gris nuevos, y `razonDeContraste` (nuevo) para los tests de contraste.
+
+**Lo único que se ve distinto es el color:** el coral queda un poco más profundo (ΔE 9, decisión 9: se nota con los dos al lado, no cuando se ve uno solo), los textos grises un poco más oscuros y el rojo de "Quitar" también. El PIN, la tabla y todo lo de la etapa 5 siguen igual.
+
+### Tests
+
+47 tests nuevos en web-cliente (1223 → 1270, 64 → 66 archivos) y 24 en `packages/ui` (4 archivos nuevos):
+
+- **web-cliente:** `theme.spec.ts` (26: los 15 pares de colores a 4,5:1, el tema contra `@menyu/ui`, `tailwind.config.js` contra el tema, y que ningún archivo vuelva a escribir los colores de antes), `components/PantallaComensal.spec.tsx` (12: el encabezado, el área de toque de la flecha, `inerte`, la insignia de mesa y el marco; el componente no tenía spec), `estilos.spec.ts` (+3: la regla del anillo de foco, a qué elementos alcanza y que está en `@layer base`), `CarritoPage.spec.tsx` (+4: el área de toque de "Quitar" y del nombre) e `ItemCard.spec.tsx` (+1: el del "+").
+- **`packages/ui`:** `colores.spec.ts` (8), `contraste.spec.ts` (4), `DescuentoBadge.spec.tsx` (4) y `PrecioConDescuento.spec.tsx` (8), con `renderToStaticMarkup` (la suite corre en Node, sin jsdom).
+- **Se actualizaron** 7 tests que comparaban el coral de antes (`rgb(232, 86, 58)`, `#d34a30`, `#E8563A`): ahora comparan con `C.orange` y `C.orangeHover` del tema (`GraciasCard`, `ItemCard`, `MenuHeader`, `CheckInRedirectPage` ×3 y `RestaurantePage`).
+- Admin (943 tests, 52 archivos) y staff (590, 29) pasan sin cambios.
+
+### Cobertura
+
+| | Fin de la etapa 5 | Después |
+| --- | --- | --- |
+| web-cliente, archivos / tests | 64 / 1223 | 66 / 1270 |
+| web-cliente, líneas | 94,61 % | 94,62 % |
+| web-cliente, ramas | 93,81 % | 93,81 % |
+| web-cliente, funciones | 87,11 % | 87,11 % |
+| `packages/ui`, archivos / tests | (13 / 94) | 13 / 118 |
+| `DescuentoBadge.tsx` y `PrecioConDescuento.tsx` | 0 % | 100 % |
+| web-admin, web-staff | sin tocar | sin tocar |
+
+### Quality gate de SonarCloud
+
+Pendiente: se anota cuando corra el PR.
+
+### Verificación en el navegador
+
+En Edge real (390 px, API simulada, un Vite propio en el puerto 5199), con las pantallas de la mesa, las de Discovery y los resultados de pago:
+
+- **Contraste, con la regla `color-contrast` de axe** (en jsdom no se calcula, por eso los tests usan la cuenta del contraste): **71 textos con poco contraste en las 16 pantallas antes, 0 después.** Los de antes: texto blanco sobre el coral (3,6:1: "Mesa 5", "Ingresar", "Registrarme", distintivo "-20%", "Confirmar pedido", "Agregar al pedido", "Continuar", "Salir"), precios coral sobre blanco (3,6:1), el gris claro (2,5:1: precios tachados, hora y resumen de cada pedido —10 de los 71—, la cuenta, "Total", "Ingresando a"), el coral sobre el rosado (3,0:1: "1 oferta", "+$150", iniciales "LC" y "PD"), "Quitar" (3,8:1) y, en los resultados de pago, texto blanco sobre `#f97316` (2,8:1). También 0 en 12 estados que el recorrido no alcanza (menú lateral, filtro de dietas, búsqueda sin resultados, el diálogo del mensaje, los dos campos de ingreso con error, `/check-in`, etiquetar con el campo del nombre y la confirmación del carrito) y en el panel del asistente abierto.
+- **Dos hallazgos que los tests no veían:** "Mis pedidos" (la fila principal del menú lateral) y "Limpiar filtros" (la búsqueda sin resultados) usaban el coral sobre el rosado y sobre el gris de la página. Se corrigieron con `orangeText` (y de ahí salió el token, y que sirva para los dos fondos).
+- **Foco:** se recorrieron con Tab las 16 pantallas (**75 controles**, desde el primer Tab): todos muestran un indicador. Capturas del anillo sobre el encabezado azul (la flecha), sobre el campo del nombre y sobre "Dietas". Un `<h1>` enfocado por código no dibuja nada (`outline-style: none`, sin sombra).
+- **Tamaños:** se midieron los controles de 11 pantallas antes y después: solo cambiaron las cajas de "Quitar", "Editar" y la flecha de volver (en 4 pantallas); la altura de ninguna página ni la posición de ningún otro control. Con `elementFromPoint` se comprobó que el `::after` del "+" de la tarjeta recibe el toque hasta 22 px del centro y no más allá.
+
+### Problemas y cómo se resolvieron
+
+- **El Vite propio se cayó solo al cambiar `tailwind.config.js`** (lo vuelve a leer y salió): se reinició.
+- **7 tests comparaban el coral de antes** con `rgb(232, 86, 58)`: se pasaron al tema, para que el próximo cambio de color no los rompa.
+- **`tailwind.config.js` no puede importar `theme.ts`** (un archivo de configuración en Node no carga TypeScript, y el build de Vercel usa Node 22): los tres valores se repiten ahí y `theme.spec.ts` los compara con el tema.
+- **`orange-500` de Tailwind no es el naranja de la marca** (`#f97316`): lo usaban los botones de `/pago/fallido` y `/pago/pendiente` (2,8:1 con texto blanco). Se pasaron a `bg-coral`.
+- **`EBUSY` de OneDrive** en una corrida con cobertura (se perdió un archivo): se repitió y dio 66 de 66.
+
+### Pendiente
+
+- **Admin y staff** (propuesta en el plan): 105 líneas de 23 archivos en admin y 52 de 20 en staff (más 22 de `packages/ui`) con el coral o el gris de antes; los tests ya cubren el 83 % de las de admin y el 100 % de las de staff. Se propone un **PR aparte**. Mientras tanto admin y staff mezclan el coral nuevo (distintivos y precios con descuento) con el de antes: hay que decidir si se acepta así hasta ese PR.
+- **Para decidir** (cosas hechas por criterio propio): el rojo de "Quitar" (`#EF4444` → `#DC2626`, apenas más oscuro); el aro blanco del anillo de foco (en el encabezado azul se ve como un marco blanco; sobre fondo claro no se ve); que los campos muestren ahora el anillo además del cambio de borde (lo pedía el plan: "reemplazar los `outline: 'none'`"); y que los controles de 32 a 34 px (los "−" y "+", los chips) sigan como están.
+- **Los bordes de los campos** (`#DDDDE0` sobre blanco, 1,4:1) no llegan al 3:1 de WCAG 1.4.11. La auditoría contó `#8A8FA5`, que es del preset de web-auth. No se tocó: cambiarlos cambia cómo se ve cada campo (hallazgo 9 del plan).
+- El panel del asistente conserva su `outline-none` (es un contenedor al que se lleva el foco por código): la etapa 8 lo revisa.
+
+### Recorridos con lector (C1 a C8)
+
+Esta etapa no cambia lo que dice un lector, pero cambia lo que ve quien usa baja visión o teclado: **todos los recorridos con teclado** (C1 a C7) muestran dónde está el foco, y los textos que antes no llegaban a 4,5:1 (precios, estados, cuenta, hora de los pedidos) se leen sin esfuerzo. Los recorridos con lector no se vuelven a medir por esto. Falta C8 (etapa 8) y los celulares (etapa 7).
