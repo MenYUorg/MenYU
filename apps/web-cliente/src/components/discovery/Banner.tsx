@@ -4,14 +4,17 @@ import { C } from '../../theme'
 interface BannerProps {
   /** `error`: fondo naranja suave y texto rojo (algo salió mal). `info`: aviso neutro (por ejemplo, "usá el PIN"). */
   tipo: 'error' | 'info'
+  /** Para que un campo lo señale con `aria-describedby` (el lector lo lee al volver al campo). */
+  id?: string
   children: ReactNode
 }
 
 /** Aviso dentro de una pantalla: el banner de error de siempre y uno neutro. */
-export function Banner({ tipo, children }: BannerProps) {
+export function Banner({ tipo, id, children }: BannerProps) {
   const error = tipo === 'error'
   return (
     <div
+      id={id}
       role={error ? 'alert' : 'status'}
       style={{
         background: error ? C.orangeSoft : C.white,

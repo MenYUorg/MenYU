@@ -1,8 +1,9 @@
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { api } from '../../services/api'
 import { PagarPage } from './PagarPage'
 import { axe } from '../../test/axe'
+import { useAnunciadorStore } from '../../utils/anunciador'
 
 let sesion: { jwt: string | null; sesionId: string | null; numeroMesa: string | null }
 
@@ -208,6 +209,147 @@ describe('PagarPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Volver al menú' }))
 
     expect(screen.getByText('destino /menu')).toBeInTheDocument()
+  })
+
+  describe('la cuenta es una tabla (accesibilidad)', () => {
+    it('tiene el nombre "Cuenta de la mesa" y encabezados de columna que el lector dice enteros', async () => {
+      await abrir()
+
+      const tabla = await screen.findByRole('table', { name: 'Cuenta de la mesa' })
+
+      const encabezados = within(tabla).getAllByRole('columnheader')
+      expect(encabezados.map((e) => e.textContent)).toEqual(['ÍTEMÍtem', 'CANT.Cantidad', 'P. UNIT.Precio unitario', 'TOTALTotal'])
+      expect(encabezados.map((e) => e.querySelector('[aria-hidden="true"]')?.textContent)).toEqual(['ÍTEM', 'CANT.', 'P. UNIT.', 'TOTAL'])
+      expect(encabezados.map((e) => e.querySelector('.sr-only')?.textContent)).toEqual(['Ítem', 'Cantidad', 'Precio unitario', 'Total'])
+    })
+
+    it('cada plato es una fila: el nombre es el encabezado de la fila y después van cantidad, precio unitario y total', async () => {
+      await abrir()
+      const tabla = await screen.findByRole('table', { name: 'Cuenta de la mesa' })
+
+      const filas = within(tabla).getAllByRole('row')
+
+      // Encabezados, Milanesa, Agua y el subtotal.
+      expect(filas).toHaveLength(4)
+      const milanesa = filas[1]
+      expect(within(milanesa).getByRole('rowheader')).toHaveTextContent('Milanesa')
+      expect(within(milanesa).getAllByRole('cell').map((c) => c.textContent)).toEqual(['3', '$\u00a01.500', '$\u00a04.500'])
+    })
+
+    it('el subtotal es la última fila de la tabla', async () => {
+      await abrir()
+      const tabla = await screen.findByRole('table', { name: 'Cuenta de la mesa' })
+
+      const filas = within(tabla).getAllByRole('row')
+      const ultima = filas[filas.length - 1]
+
+      expect(within(ultima).getByRole('rowheader')).toHaveTextContent('Subtotal')
+      expect(within(ultima).getByRole('cell')).toHaveTextContent('$ 5.000')
+    })
+
+    it('"Cuenta de la mesa" y "Total a pagar" son encabezados de nivel 2', async () => {
+      await abrir()
+
+      expect(await screen.findByRole('heading', { level: 2, name: 'Cuenta de la mesa' })).toBeInTheDocument()
+      expect(screen.getByRole('heading', { level: 2, name: 'Total a pagar' })).toBeInTheDocument()
+    })
+  })
+
+  describe('el generador de mensaje es un diálogo (accesibilidad)', () => {
+    const abrirElDialogo = async () => {
+      await abrir()
+      await screen.findByRole('table', { name: 'Cuenta de la mesa' })
+      const armar = screen.getByRole('button', { name: 'Armar mensaje' })
+      armar.focus()
+      fireEvent.click(armar)
+      return armar
+    }
+    const inerte = (elemento: HTMLElement) => elemento.closest('[inert]') !== null
+
+    it('es un diálogo modal con nombre y el foco entra a él', async () => {
+      await abrirElDialogo()
+
+      const dialogo = screen.getByRole('dialog', { name: 'Generador de mensaje' })
+      expect(dialogo).toHaveAttribute('aria-modal', 'true')
+      expect(dialogo).toHaveFocus()
+      expect(screen.getByRole('heading', { level: 2, name: 'Generador de mensaje' })).toBeInTheDocument()
+    })
+
+    it('el fondo tocable es solo para el mouse (role="presentation") y no es un control', async () => {
+      await abrirElDialogo()
+
+      const fondo = screen.getByRole('dialog').parentElement!
+      expect(fondo).toHaveAttribute('role', 'presentation')
+    })
+
+    it('con el diálogo abierto, el encabezado, la cuenta y las opciones de pago quedan inertes; el diálogo no', async () => {
+      await abrirElDialogo()
+
+      expect(inerte(screen.getByRole('heading', { level: 1, name: 'Pagar la cuenta', hidden: true }))).toBe(true)
+      expect(inerte(screen.getByRole('table', { name: 'Cuenta de la mesa', hidden: true }))).toBe(true)
+      expect(inerte(screen.getByRole('button', { name: 'Pagar toda la cuenta en efectivo', hidden: true }))).toBe(true)
+      expect(inerte(screen.getByRole('dialog'))).toBe(false)
+      expect(inerte(screen.getByRole('button', { name: 'Cancelar' }))).toBe(false)
+    })
+
+    it('Esc lo cierra, devuelve el foco a "Armar mensaje" y la pantalla vuelve a estar activa', async () => {
+      const armar = await abrirElDialogo()
+
+      fireEvent.keyDown(document, { key: 'Escape' })
+
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+      expect(armar).toHaveFocus()
+      expect(inerte(screen.getByRole('table', { name: 'Cuenta de la mesa' }))).toBe(false)
+      expect(inerte(screen.getByRole('heading', { level: 1, name: 'Pagar la cuenta' }))).toBe(false)
+    })
+
+    it('"Cancelar" también devuelve el foco a "Armar mensaje"', async () => {
+      const armar = await abrirElDialogo()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }))
+
+      expect(armar).toHaveFocus()
+    })
+
+    it('Esc sin el diálogo abierto no hace nada', async () => {
+      await abrir()
+      await screen.findByRole('table', { name: 'Cuenta de la mesa' })
+
+      fireEvent.keyDown(document, { key: 'Escape' })
+
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+      expect(screen.getByRole('table', { name: 'Cuenta de la mesa' })).toBeInTheDocument()
+    })
+
+    it('con el diálogo abierto no tiene violaciones de accesibilidad (axe)', async () => {
+      await abrirElDialogo()
+
+      expect(await axe(document.body)).toHaveNoViolations()
+    })
+  })
+
+  describe('pagar toda la cuenta: avisos (accesibilidad)', () => {
+    it('un error al pagar se anuncia como alerta', async () => {
+      efectivo.mockRejectedValue(new Error('Esta sesión ya está completamente pagada'))
+      await abrir()
+      await screen.findByRole('table', { name: 'Cuenta de la mesa' })
+
+      fireEvent.click(screen.getByRole('button', { name: 'Pagar toda la cuenta en efectivo' }))
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('Esta sesión ya está completamente pagada')
+    })
+
+    it('al pedir el cobro en efectivo se anuncia que el mozo va a venir (los botones desaparecen y el foco se pierde) y el ✅ queda oculto', async () => {
+      useAnunciadorStore.setState({ mensaje: '', numero: 0 })
+      efectivo.mockResolvedValue(undefined as never)
+      await abrir()
+      await screen.findByRole('table', { name: 'Cuenta de la mesa' })
+
+      fireEvent.click(screen.getByRole('button', { name: 'Pagar toda la cuenta en efectivo' }))
+
+      expect(await screen.findByText('✅')).toHaveAttribute('aria-hidden', 'true')
+      expect(useAnunciadorStore.getState().mensaje).toBe('El mozo se va a acercar a la mesa a cobrar el total.')
+    })
   })
 
   describe('estructura de la pantalla (accesibilidad)', () => {

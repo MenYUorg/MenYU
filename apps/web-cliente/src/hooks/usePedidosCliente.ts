@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { io } from 'socket.io-client'
 import { urlDelSocket } from '@menyu/ui/socket'
 import { api } from '../services/api'
 import { useSessionStore } from '../store/sessionStore'
+import { anunciar } from '../utils/anunciador'
+import { anuncioDelCambioDeEstado } from '../utils/estadoDelPedido'
 
 export interface PedidoCliente {
   id: string
@@ -27,6 +29,10 @@ export function usePedidosCliente() {
   const [pedidos, setPedidos] = useState<PedidoCliente[]>([])
   const [loading, setLoading] = useState(true)
   const [error,   setError]   = useState<string | null>(null)
+
+  // Lo último que se mostró, para saber si el pedido que llega por el socket cambió de estado (y no anunciar lo que ya se vio).
+  const pedidosMostrados = useRef<PedidoCliente[]>([])
+  useEffect(() => { pedidosMostrados.current = pedidos }, [pedidos])
 
   useEffect(() => {
     if (!jwt) {
@@ -60,6 +66,11 @@ export function usePedidosCliente() {
 
     socket.on('order:updated', (pedido: PedidoCliente) => {
       if (pedido.sesionId !== sesionId) return
+      // El pedido se actualiza solo, sin que nadie toque nada: si cambió de estado, se dice en voz alta.
+      const anterior = pedidosMostrados.current.find((p) => p.id === pedido.id)
+      if (anterior && anterior.estado !== pedido.estado) {
+        anunciar(anuncioDelCambioDeEstado(pedido.items, pedido.estado))
+      }
       setPedidos((prev) => prev.map((p) => (p.id === pedido.id ? pedido : p)))
     })
 

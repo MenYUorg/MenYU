@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Spinner } from '@menyu/ui'
+import { Spinner, useCerrarConEscape } from '@menyu/ui'
+import { useFocoDelDialogo } from '../../hooks/useFocoDelDialogo'
 import { useSessionStore } from '../../store/sessionStore'
 import { api } from '../../services/api'
 import { C } from '../../theme'
+import { anunciar } from '../../utils/anunciador'
 import { formatearPrecio } from '../../utils/precio'
 import { EncabezadoPantalla, InsigniaMesa, MarcoPantalla } from '../../components/PantallaComensal'
 import { estadoCargando, estadoError, estadoVacio } from '../../components/estadosPantalla'
@@ -18,6 +20,14 @@ interface PedidoSesion {
   }>
 }
 
+/** Las columnas de la cuenta: lo que se ve (corto, para que entre) y lo que dice el lector (entero). */
+const COLUMNAS_DE_LA_CUENTA = [
+  { visible: 'ÍTEM', lector: 'Ítem' },
+  { visible: 'CANT.', lector: 'Cantidad' },
+  { visible: 'P. UNIT.', lector: 'Precio unitario' },
+  { visible: 'TOTAL', lector: 'Total' },
+]
+
 export function PagarPage() {
   const navigate       = useNavigate()
   const jwt           = useSessionStore((s) => s.jwt)
@@ -31,6 +41,13 @@ export function PagarPage() {
   const [saldoPendiente, setSaldoPendiente] = useState<number | null>(null)
 
   const [modalMensajeAbierto, setModalMensajeAbierto] = useState(false)
+  // El "Generador de mensaje" es un diálogo: el foco entra a él al abrirlo y vuelve a "Armar mensaje" al cerrarlo, Esc lo
+  // cierra (el hook escucha siempre: solo se actúa si está abierto) y el resto de la pantalla queda inerte mientras tanto.
+  const dialogoDelMensaje = useRef<HTMLDivElement>(null)
+  const idDelTituloDelDialogo = useId()
+  const idDeLaCuenta = useId()
+  useCerrarConEscape(() => { if (modalMensajeAbierto) setModalMensajeAbierto(false) })
+  useFocoDelDialogo(modalMensajeAbierto, dialogoDelMensaje)
 
   const [pagandoTotal, setPagandoTotal] = useState<'efectivo' | 'mercadopago' | null>(null)
   const [pagoTotalConfirmado, setPagoTotalConfirmado] = useState(false)
@@ -87,6 +104,8 @@ export function PagarPage() {
     try {
       await api.payments.solicitarEfectivo(jwt, sesionId)
       setPagoTotalConfirmado(true)
+      // Los botones que se tocaron desaparecen y el foco se pierde: se dice qué pasó.
+      anunciar('El mozo se va a acercar a la mesa a cobrar el total.')
     } catch (e) {
       // Por ejemplo, "ya está completamente pagada" (400) llega acá con su mensaje.
       setErrorPagoTotal(e instanceof Error ? e.message : 'Error al registrar el pago en efectivo')
@@ -114,6 +133,7 @@ export function PagarPage() {
       onVolver={() => navigate('/menu')}
       etiquetaVolver="Volver al menú"
       derecha={<InsigniaMesa numero={numeroMesa} />}
+      inerte={modalMensajeAbierto}
     />
   )
 
@@ -122,7 +142,7 @@ export function PagarPage() {
   if (pagoTotalConfirmado) {
     bottomContent = (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-        <span style={{ fontSize: 32 }}>✅</span>
+        <span aria-hidden="true" style={{ fontSize: 32 }}>✅</span>
         <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: C.text, margin: 0, textAlign: 'center' }}>
           El mozo se va a acercar a la mesa a cobrar el total.
         </p>
@@ -139,7 +159,7 @@ export function PagarPage() {
     bottomContent = (
       <>
         {errorPagoTotal && (
-          <p style={{
+          <p role="alert" style={{
             fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#DC2626',
             background: '#FEF2F2', border: '1px solid #FECACA',
             borderRadius: 10, padding: '10px 12px', textAlign: 'center', margin: 0,
@@ -182,7 +202,7 @@ export function PagarPage() {
   }
 
   const bottomPanel = (
-    <div style={{
+    <div inert={modalMensajeAbierto} style={{
       position:      'fixed',
       bottom:        0,
       left:          '50%',
@@ -248,8 +268,10 @@ export function PagarPage() {
     cursor: 'pointer',
   }
 
+  // El fondo se puede tocar para cerrar (con el mouse o el dedo); para teclado y lector, el cierre es Esc o "Cancelar".
   const modal = modalMensajeAbierto && (
     <div
+      role="presentation"
       onClick={() => setModalMensajeAbierto(false)}
       style={{
         position: 'fixed', inset: 0, zIndex: 1000,
@@ -259,15 +281,22 @@ export function PagarPage() {
       }}
     >
       <div
+        ref={dialogoDelMensaje}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={idDelTituloDelDialogo}
+        tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
         style={{
           background: 'white', borderRadius: 16, padding: 24,
           width: 320, maxWidth: '90vw', display: 'flex', flexDirection: 'column', gap: 10,
+          // Un contenedor al que se le da el foco por código, no un control: sin anillo (los botones de adentro conservan el suyo).
+          outline: 'none',
         }}
       >
-        <p style={{ fontFamily: 'Montserrat, sans-serif', fontWeight: 700, fontSize: 15, color: C.text, margin: '0 0 4px' }}>
+        <h2 id={idDelTituloDelDialogo} style={{ fontFamily: 'Montserrat, sans-serif', fontWeight: 700, fontSize: 15, color: C.text, margin: '0 0 4px' }}>
           Generador de mensaje
-        </p>
+        </h2>
         <button type="button" onClick={() => navigate('/dividir/cantidad')} style={modalBtnStyle}>
           Partes iguales
         </button>
@@ -289,105 +318,104 @@ export function PagarPage() {
   /* ── cuenta ── */
   return wrapper(
     <>
-      <div style={{ flex: 1, overflowY: 'auto', padding: '16px 16px 180px' }}>
+      <div inert={modalMensajeAbierto} style={{ flex: 1, overflowY: 'auto', padding: '16px 16px 180px' }}>
         <div style={{
           border: `1px solid ${C.border}`, borderRadius: 12, padding: 16,
         }}>
-          <p style={{
+          <h2 id={idDeLaCuenta} style={{
             fontFamily: 'Montserrat, sans-serif', fontWeight: 700,
             fontSize: 15, color: C.text, margin: '0 0 14px',
           }}>
             Cuenta de la mesa
-          </p>
+          </h2>
 
-          {/* Header de tabla */}
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: '1fr 44px 72px 72px',
-            gap: '0 8px',
-            marginBottom: 8,
-          }}>
-            {['ÍTEM', 'CANT.', 'P. UNIT.', 'TOTAL'].map((col, i) => (
-              <span key={col} style={{
-                fontFamily: 'Montserrat, sans-serif', fontWeight: 700,
-                fontSize: 11, color: C.gray,
-                letterSpacing: '0.08em',
-                textAlign: i === 0 ? 'left' : 'right',
-              }}>
-                {col}
-              </span>
-            ))}
-          </div>
-
-          {/* Filas */}
-          {itemsAgrupados.map((item, idx) => (
-            <div key={item.nombre}>
-              {idx > 0 && <div style={{ borderTop: `1px solid #F3F4F6`, margin: '6px 0' }} />}
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: '1fr 44px 72px 72px',
-                gap: '0 8px',
-                alignItems: 'center',
-                padding: '4px 0',
-              }}>
-                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: C.text }}>
-                  {item.nombre}
-                </span>
-                <span style={{
-                  fontFamily: 'Inter, sans-serif', fontSize: 13,
-                  color: C.text, textAlign: 'right',
+          {/* La cuenta es una tabla de verdad: con encabezados de columna, el lector dice "Hamburguesa, cantidad 2, precio
+              unitario $ 9.000, total $ 18.000". Las columnas con nombre corto tienen el entero solo para el lector. */}
+          <table aria-labelledby={idDeLaCuenta} style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+            <colgroup>
+              <col />
+              <col style={{ width: 52 }} />
+              <col style={{ width: 80 }} />
+              <col style={{ width: 80 }} />
+            </colgroup>
+            <thead>
+              <tr>
+                {COLUMNAS_DE_LA_CUENTA.map((col, i) => (
+                  <th key={col.visible} scope="col" style={{
+                    fontFamily: 'Montserrat, sans-serif', fontWeight: 700,
+                    fontSize: 11, color: C.gray,
+                    letterSpacing: '0.08em',
+                    textAlign: i === 0 ? 'left' : 'right',
+                    padding: i === 0 ? '0 0 8px' : '0 0 8px 8px',
+                  }}>
+                    <span aria-hidden="true">{col.visible}</span>
+                    <span className="sr-only">{col.lector}</span>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {itemsAgrupados.map((item, idx) => {
+                const separador = idx > 0 ? '1px solid #F3F4F6' : undefined
+                return (
+                  <tr key={item.nombre}>
+                    <th scope="row" style={{
+                      fontFamily: 'Inter, sans-serif', fontWeight: 400, fontSize: 13, color: C.text,
+                      textAlign: 'left', padding: '10px 0 4px', borderTop: separador,
+                      overflowWrap: 'anywhere', verticalAlign: 'top',
+                    }}>
+                      {item.nombre}
+                    </th>
+                    <td style={{
+                      fontFamily: 'Inter, sans-serif', fontSize: 13, color: C.text,
+                      textAlign: 'right', padding: '10px 0 4px 8px', borderTop: separador, verticalAlign: 'top',
+                    }}>
+                      {item.cantidad}
+                    </td>
+                    <td style={{
+                      fontFamily: 'Inter, sans-serif', fontSize: 13, color: C.gray,
+                      textAlign: 'right', padding: '10px 0 4px 8px', borderTop: separador, verticalAlign: 'top',
+                    }}>
+                      {formatearPrecio(item.precioUnitario)}
+                    </td>
+                    <td style={{
+                      fontFamily: 'Montserrat, sans-serif', fontWeight: 700, fontSize: 13, color: C.text,
+                      textAlign: 'right', padding: '10px 0 4px 8px', borderTop: separador, verticalAlign: 'top',
+                    }}>
+                      {formatearPrecio(item.precioUnitario * item.cantidad)}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+            <tfoot>
+              <tr>
+                <th scope="row" colSpan={3} style={{
+                  fontFamily: 'Montserrat, sans-serif', fontWeight: 700, fontSize: 14, color: C.text,
+                  textAlign: 'left', padding: '16px 0 0', borderTop: `1px solid ${C.border}`,
                 }}>
-                  {item.cantidad}
-                </span>
-                <span style={{
-                  fontFamily: 'Inter, sans-serif', fontSize: 13,
-                  color: C.gray, textAlign: 'right',
+                  Subtotal
+                </th>
+                <td style={{
+                  fontFamily: 'Montserrat, sans-serif', fontWeight: 800, fontSize: 15, color: C.navy,
+                  textAlign: 'right', padding: '16px 0 0 8px', borderTop: `1px solid ${C.border}`,
                 }}>
-                  {formatearPrecio(item.precioUnitario)}
-                </span>
-                <span style={{
-                  fontFamily: 'Montserrat, sans-serif', fontWeight: 700,
-                  fontSize: 13, color: C.text, textAlign: 'right',
-                }}>
-                  {formatearPrecio(item.precioUnitario * item.cantidad)}
-                </span>
-              </div>
-            </div>
-          ))}
-
-          {/* Separador + subtotal */}
-          <div style={{ borderTop: `1px solid ${C.border}`, margin: '12px 0 10px' }} />
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: '1fr 44px 72px 72px',
-            gap: '0 8px',
-          }}>
-            <span style={{
-              fontFamily: 'Montserrat, sans-serif', fontWeight: 700,
-              fontSize: 14, color: C.text,
-            }}>
-              Subtotal
-            </span>
-            <span />
-            <span />
-            <span style={{
-              fontFamily: 'Montserrat, sans-serif', fontWeight: 800,
-              fontSize: 15, color: C.navy, textAlign: 'right',
-            }}>
-              {formatearPrecio(total)}
-            </span>
-          </div>
+                  {formatearPrecio(total)}
+                </td>
+              </tr>
+            </tfoot>
+          </table>
         </div>
 
         <div style={{
           border: `1px solid ${C.border}`, borderRadius: 12, padding: 16, marginTop: 16,
         }}>
-          <p style={{
+          <h2 style={{
             fontFamily: 'Montserrat, sans-serif', fontWeight: 700,
             fontSize: 15, color: C.text, margin: '0 0 14px',
           }}>
             Total a pagar
-          </p>
+          </h2>
           {totalAPagarContent}
         </div>
       </div>

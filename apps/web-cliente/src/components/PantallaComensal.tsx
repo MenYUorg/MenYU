@@ -11,6 +11,7 @@ export function EncabezadoPantalla({
   onVolver,
   etiquetaVolver,
   derecha,
+  inerte = false,
 }: {
   titulo: string
   onVolver: () => void
@@ -18,9 +19,11 @@ export function EncabezadoPantalla({
   etiquetaVolver: string
   /** Lo que va a la derecha del título; sin valor, un espacio del ancho de la flecha para centrarlo. */
   derecha?: ReactNode
+  /** El encabezado queda inerte (sin foco ni lectura) mientras la pantalla tiene un diálogo abierto. */
+  inerte?: boolean
 }) {
   return (
-    <header style={{
+    <header inert={inerte} style={{
       background: C.navy,
       display:    'flex',
       alignItems: 'center',

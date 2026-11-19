@@ -1,6 +1,7 @@
-import { useEffect, useRef } from 'react'
+import { useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useCerrarConEscape } from '@menyu/ui'
+import { useFocoDelDialogo } from '../../hooks/useFocoDelDialogo'
 import { useIrAlIngreso } from '../../hooks/useIrAlIngreso'
 import type { AccionDeIngreso } from '../../utils/cuenta'
 import { Icono } from '../discovery/Icono'
@@ -93,16 +94,7 @@ export function MenuDrawer({
   // mientras tanto (lo hace MenuView).
   useCerrarConEscape(() => { if (abierto) onCerrar() })
   const panelRef = useRef<HTMLDivElement>(null)
-  const quienLoAbrio = useRef<HTMLElement | null>(null)
-  useEffect(() => {
-    if (abierto) {
-      quienLoAbrio.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
-      panelRef.current?.focus()
-    } else if (quienLoAbrio.current) {
-      quienLoAbrio.current.focus()
-      quienLoAbrio.current = null
-    }
-  }, [abierto])
+  useFocoDelDialogo(abierto, panelRef)
 
   const irAlIngreso = useIrAlIngreso()
   const irAWebAuth = (accion: AccionDeIngreso) => { onCerrar(); irAlIngreso(accion) }

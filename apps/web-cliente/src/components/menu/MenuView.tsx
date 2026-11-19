@@ -5,6 +5,7 @@ import type { MenuPublicoItem } from '@menyu/types'
 import { useCuenta } from '../../hooks/useCuenta'
 import { usePuedeCerrarSesion } from '../../hooks/usePuedeCerrarSesion'
 import { menuEsDe, usePublicMenuStore } from '../../store/publicMenuStore'
+import { coincideConLaBusqueda } from '../../utils/coincideConLaBusqueda'
 import { enfocarEncabezado } from '../../utils/enfocarTitulo'
 import { useCarritoStore } from '../../store/carritoStore'
 import { useComensalStore } from '../../store/comensalStore'
@@ -24,14 +25,8 @@ import { SeccionesMenu } from './SeccionesMenu'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function matchesBusqueda(nombre: string, buscar: string): boolean {
-  if (!buscar.trim()) return true
-  const query = buscar.toLowerCase().trim()
-  return nombre.toLowerCase().split(/\s+/).some((palabra) => palabra.startsWith(query))
-}
-
 function itemPasaFiltros(item: MenuPublicoItem, buscar: string, activeDiets: Set<string>): boolean {
-  if (!matchesBusqueda(item.nombre, buscar)) return false
+  if (!coincideConLaBusqueda(item.nombre, buscar)) return false
   if (activeDiets.size > 0) {
     const ids = new Set(item.clasificaciones.map((c) => c.id))
     for (const d of activeDiets) if (!ids.has(d)) return false

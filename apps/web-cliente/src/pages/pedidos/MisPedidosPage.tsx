@@ -4,6 +4,7 @@ import { EncabezadoPantalla, MarcoPantalla } from '../../components/PantallaCome
 import { estadoCargando, estadoError, estadoVacio } from '../../components/estadosPantalla'
 import { usePedidosCliente } from '../../hooks/usePedidosCliente'
 import type { PedidoCliente } from '../../hooks/usePedidosCliente'
+import { TEXTO_DEL_ESTADO } from '../../utils/estadoDelPedido'
 
 const C = {
   orange:     '#E8563A',
@@ -15,13 +16,9 @@ const C = {
   border:     '#E5E7EB',
 }
 
-const BADGE: Record<PedidoCliente['estado'], { label: string; bg: string; color: string }> = {
-  pendiente:      { label: 'Enviado',            bg: '#F3F4F6', color: '#6B7280' },
-  en_preparacion: { label: 'En preparación',     bg: '#FDE5DF', color: C.orange  },
-  listo:          { label: 'En preparación',     bg: '#FDE5DF', color: C.orange  },
-  entregado:      { label: 'Entregado',          bg: '#EFF6FF', color: '#2563EB' },
-  anulado:        { label: 'Anulado',            bg: '#FEF2F2', color: '#DC2626' },
-}
+// El estado se distingue por el texto, no por el color: todos los distintivos son iguales (decisión 2 del plan de accesibilidad).
+const BADGE_FONDO = '#FDE5DF'
+const BADGE_TEXTO = '#B8432C'
 
 const PROGRESS: Record<PedidoCliente['estado'], number | null> = {
   pendiente:      25,
@@ -40,7 +37,6 @@ const PROGRESS_COLOR: Record<PedidoCliente['estado'], string> = {
 }
 
 function PedidoCard({ pedido }: { pedido: PedidoCliente }) {
-  const badge    = BADGE[pedido.estado]
   const progress = PROGRESS[pedido.estado]
   const progColor = PROGRESS_COLOR[pedido.estado]
 
@@ -68,18 +64,21 @@ function PedidoCard({ pedido }: { pedido: PedidoCliente }) {
           fontSize:   13,
           color:      C.text,
         }}>
-          #{pedido.id.slice(0, 6).toUpperCase()}
+          {/* El lector dice "Pedido ABC123" y no "numeral…": el "#" es solo para la vista. */}
+          <span className="sr-only">Pedido </span>
+          <span aria-hidden="true">#</span>
+          {pedido.id.slice(0, 6).toUpperCase()}
         </span>
         <span style={{
-          background:   badge.bg,
-          color:        badge.color,
+          background:   BADGE_FONDO,
+          color:        BADGE_TEXTO,
           fontFamily:   'Inter, sans-serif',
           fontWeight:   600,
           fontSize:     11,
           padding:      '3px 10px',
           borderRadius: 20,
         }}>
-          {badge.label}
+          {TEXTO_DEL_ESTADO[pedido.estado]}
         </span>
       </div>
 
@@ -106,9 +105,9 @@ function PedidoCard({ pedido }: { pedido: PedidoCliente }) {
         {resumen}
       </p>
 
-      {/* Barra de progreso */}
+      {/* Barra de progreso: decorativa, el estado ya lo dice el distintivo de arriba. */}
       {progress !== null && (
-        <div style={{
+        <div aria-hidden="true" style={{
           height:       4,
           background:   '#F3F4F6',
           borderRadius: 999,

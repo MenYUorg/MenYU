@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AppHeader } from '../../components/AppHeader'
 import { useSessionStore } from '../../store/sessionStore'
@@ -7,9 +7,9 @@ import { C } from '../../theme'
 
 // ── Shared sub-components ─────────────────────────────────────────────────────
 
-function ErrorBanner({ message }: { message: string }) {
+function ErrorBanner({ id, message }: { id: string; message: string }) {
   return (
-    <div style={{
+    <div id={id} role="alert" style={{
       background: '#FDE5DF',
       border: `1px solid ${C.orange}`,
       borderRadius: 10,
@@ -32,12 +32,23 @@ export function ElegirNombrePage() {
   const [nombre, setNombre] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
-  const puedeContinuar = nombre.trim().length > 0 && !isSubmitting
+  // El error es porque falta el nombre (y no, por ejemplo, porque el servidor lo rechazó): el campo queda inválido.
+  const [faltaElNombre, setFaltaElNombre] = useState(false)
+  const idDelCampo = useId()
+  const idDelError = useId()
+  const campo = useRef<HTMLInputElement>(null)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (nombre.trim().length === 0 || isSubmitting || !sesionId) return
+    if (isSubmitting) return
+    // "Continuar" no se apaga con el campo vacío (no diría por qué): al tocarlo se anuncia qué falta y el foco vuelve al campo.
+    if (nombre.trim().length === 0) {
+      setError('Escribí tu nombre para continuar.')
+      setFaltaElNombre(true)
+      campo.current?.focus()
+      return
+    }
+    if (!sesionId) return
 
     setError(null)
     setIsSubmitting(true)
@@ -88,21 +99,27 @@ export function ElegirNombrePage() {
 
           <form onSubmit={(e) => void handleSubmit(e)} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div>
-              <label style={labelStyle}>Tu nombre</label>
+              <label htmlFor={idDelCampo} style={labelStyle}>Tu nombre</label>
+              {/* Sin `autoFocus`: al llegar el foco va al título (components/SeguimientoDeRuta.tsx) y el lector lo lee con la
+                  explicación antes del campo; con el foco en el campo, el teclado del celular se abre y tapa todo. */}
               <input
+                ref={campo}
+                id={idDelCampo}
                 type='text'
                 autoComplete='name'
-                autoFocus
                 placeholder='Ej: Juan'
                 value={nombre}
-                onChange={(e) => { setNombre(e.target.value); setError(null) }}
+                aria-invalid={faltaElNombre ? true : undefined}
+                aria-describedby={error ? idDelError : undefined}
+                onChange={(e) => { setNombre(e.target.value); setError(null); setFaltaElNombre(false) }}
                 style={inputStyle}
               />
             </div>
 
-            {error && <ErrorBanner message={error} />}
+            {error && <ErrorBanner id={idDelError} message={error} />}
 
-            <button type='submit' disabled={!puedeContinuar} style={submitBtnStyle(!puedeContinuar)}>
+            {/* Mientras se envía no se deshabilita (perdería el foco): se marca `aria-disabled` y no hace nada. */}
+            <button type='submit' aria-disabled={isSubmitting} style={submitBtnStyle(isSubmitting)}>
               {isSubmitting ? 'Ingresando...' : 'Continuar'}
             </button>
           </form>

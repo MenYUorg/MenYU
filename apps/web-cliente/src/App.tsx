@@ -91,12 +91,14 @@ function SessionGuard({ children }: { children: React.ReactNode }) {
           padding: 24,
         }}>
           <GraciasCard
+            comoDialogo
             subtitulo="Su sesión ha sido cerrada. Esperamos verle pronto."
             onSalir={() => { setShowGracias(false); clear(); navigate('/') }}
           />
         </div>
       )}
-      {children}
+      {/* Con la tarjeta de gracias abierta (un diálogo de alerta), la pantalla de abajo queda inerte: sin foco ni lectura. */}
+      <div inert={showGracias}>{children}</div>
       {sesionCerrada && (
         <div
           style={{

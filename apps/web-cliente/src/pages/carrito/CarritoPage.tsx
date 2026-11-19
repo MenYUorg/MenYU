@@ -4,9 +4,11 @@ import { useCarritoStore } from '../../store/carritoStore'
 import { useSessionStore } from '../../store/sessionStore'
 import { usePublicMenuStore } from '../../store/publicMenuStore'
 import { api } from '../../services/api'
+import { enfocarElTitulo } from '../../utils/enfocarTitulo'
 import { formatearPrecio } from '../../utils/precio'
 import { MenuItemImage } from '@menyu/ui'
 import { EncabezadoPantalla, InsigniaMesa } from '../../components/PantallaComensal'
+import { SelectorDeCantidad } from '../../components/SelectorDeCantidad'
 
 interface PedidoConfirmado {
   id: string
@@ -48,6 +50,11 @@ export function CarritoPage() {
   useEffect(() => {
     if (restauranteId) void fetchMenu(restauranteId)
   }, [restauranteId, fetchMenu])
+
+  // Al confirmar cambia toda la pantalla sin cambiar de ruta: el foco va al título de la confirmación, y el lector lo dice.
+  useEffect(() => {
+    if (exito) enfocarElTitulo()
+  }, [exito])
 
   async function confirmarPedido() {
     if (!jwt) {
@@ -111,7 +118,8 @@ export function CarritoPage() {
           textAlign:     'center',
           gap:           16,
         }}>
-          <div style={{
+          {/* El tilde es solo para la vista: el título ya dice que se envió. */}
+          <div aria-hidden="true" style={{
             width:          80,
             height:         80,
             borderRadius:   '50%',
@@ -124,7 +132,7 @@ export function CarritoPage() {
             <span style={{ color: 'white', fontSize: 36, lineHeight: 1 }}>✓</span>
           </div>
 
-          <p style={{
+          <h1 style={{
             fontFamily: 'Montserrat, sans-serif',
             fontWeight: 800,
             fontSize:   22,
@@ -132,7 +140,7 @@ export function CarritoPage() {
             margin:     0,
           }}>
             ¡Pedido enviado a cocina!
-          </p>
+          </h1>
 
           <p style={{
             fontFamily: 'Inter, sans-serif',
@@ -142,7 +150,8 @@ export function CarritoPage() {
           }}>
             Pedido{' '}
             <span style={{ fontWeight: 700, color: C.navy }}>
-              #{pedidoConfirmado.id.slice(0, 6).toUpperCase()}
+              <span aria-hidden="true">#</span>
+              {pedidoConfirmado.id.slice(0, 6).toUpperCase()}
             </span>
           </p>
 
@@ -322,22 +331,25 @@ export function CarritoPage() {
           flexDirection: 'column',
           gap:           10,
         }}>
-          {avisoPrecios && (
-            <div
-              role="status"
-              style={{
-                background:   C.orangeSoft,
-                border:       `1px solid ${C.orange}`,
-                borderRadius: 12,
-                padding:      '10px 12px',
-                display:      'flex',
-                alignItems:   'center',
-                gap:          10,
-              }}
-            >
-              <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: C.text, flex: 1 }}>
-                Actualizamos los precios de tu pedido: algunos platos cambiaron de precio o de descuento.
-              </span>
+          {/* El aviso de precios es una región de estado que está siempre montada y solo cambia su texto: muchos lectores no
+              leen una región que aparece junto con el mensaje. Sin aviso queda vacía y fuera de la vista (y sin sumar el
+              espacio de la lista). El botón queda fuera de la región, para que no se lea como parte del aviso. */}
+          <div
+            className={avisoPrecios ? undefined : 'sr-only'}
+            style={avisoPrecios ? {
+              background:   C.orangeSoft,
+              border:       `1px solid ${C.orange}`,
+              borderRadius: 12,
+              padding:      '10px 12px',
+              display:      'flex',
+              alignItems:   'center',
+              gap:          10,
+            } : undefined}
+          >
+            <span role="status" style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: C.text, flex: 1 }}>
+              {avisoPrecios && 'Actualizamos los precios de tu pedido: algunos platos cambiaron de precio o de descuento.'}
+            </span>
+            {avisoPrecios && (
               <button
                 onClick={descartarAvisoPrecios}
                 style={{
@@ -355,15 +367,16 @@ export function CarritoPage() {
               >
                 Entendido
               </button>
-            </div>
-          )}
+            )}
+          </div>
           {items.map((item) => {
+            // Los extras se escriben en palabras ("Con Cheddar, 1"): el lector lee "+" y "×" como símbolos.
             const modsText = item.modificaciones.length > 0
               ? item.modificaciones
                   .map((m) =>
                     m.accion === 'quitar'
                       ? `Sin ${m.nombre ?? 'ingrediente'}`
-                      : `+ ${m.nombre ?? 'extra'} ×${m.cantidad}`,
+                      : `Con ${m.nombre ?? 'extra'}, ${m.cantidad}`,
                   )
                   .join(' · ')
               : null
@@ -386,11 +399,19 @@ export function CarritoPage() {
                   />
 
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <p
+                    {/* El nombre lleva al detalle del plato para cambiarlo: es un botón, con su nombre en el del botón. */}
+                    <button
+                      type="button"
+                      aria-label={`Editar ${item.nombre}`}
                       onClick={() => navigate(`/menu/${item.itemMenuId}`, { state: { cartId: item.cartId } })}
                       onMouseEnter={(e) => { e.currentTarget.style.textDecoration = 'underline' }}
                       onMouseLeave={(e) => { e.currentTarget.style.textDecoration = 'none' }}
                       style={{
+                        display:      'block',
+                        background:   'none',
+                        border:       'none',
+                        padding:      0,
+                        textAlign:    'left',
                         fontFamily:   'Montserrat, sans-serif',
                         fontWeight:   700,
                         fontSize:     14,
@@ -401,7 +422,7 @@ export function CarritoPage() {
                       }}
                     >
                       {item.nombre}
-                    </p>
+                    </button>
                     {modsText && (
                       <p style={{
                         fontFamily:   'Inter, sans-serif',
@@ -427,7 +448,9 @@ export function CarritoPage() {
                         margin:     0,
                         display:    'inline-block',
                       }}>
-                        📝 {item.nota}
+                        <span aria-hidden="true">📝</span>
+                        <span className="sr-only">Nota para cocina: </span>
+                        {' '}{item.nota}
                       </p>
                     )}
                   </div>
@@ -457,54 +480,18 @@ export function CarritoPage() {
                     borderRadius: 20,
                     overflow:     'hidden',
                   }}>
-                    <button
-                      onClick={() => cambiarCantidad(item.cartId, item.cantidad - 1)}
-                      disabled={item.cantidad <= 1}
-                      style={{
-                        width:          32,
-                        height:         32,
-                        background:     'none',
-                        border:         'none',
-                        cursor:         item.cantidad <= 1 ? 'not-allowed' : 'pointer',
-                        fontSize:       18,
-                        color:          item.cantidad <= 1 ? '#D1D5DB' : C.navy,
-                        display:        'flex',
-                        alignItems:     'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      −
-                    </button>
-                    <span style={{
-                      minWidth:   28,
-                      textAlign:  'center',
-                      fontFamily: 'Montserrat, sans-serif',
-                      fontWeight: 700,
-                      fontSize:   14,
-                      color:      C.navy,
-                    }}>
-                      {item.cantidad}
-                    </span>
-                    <button
-                      onClick={() => cambiarCantidad(item.cartId, item.cantidad + 1)}
-                      style={{
-                        width:          32,
-                        height:         32,
-                        background:     'none',
-                        border:         'none',
-                        cursor:         'pointer',
-                        fontSize:       18,
-                        color:          C.navy,
-                        display:        'flex',
-                        alignItems:     'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      +
-                    </button>
+                    <SelectorDeCantidad
+                      nombre={item.nombre}
+                      valor={item.cantidad}
+                      onCambiar={(nueva) => cambiarCantidad(item.cartId, nueva)}
+                      minimo={1}
+                      tamanoDelSimbolo={18}
+                      estiloDelNumero={{ fontSize: 14 }}
+                    />
                   </div>
 
                   <button
+                    aria-label={`Quitar ${item.nombre}`}
                     onClick={() => quitar(item.cartId)}
                     style={{
                       background: 'none',
@@ -556,7 +543,7 @@ export function CarritoPage() {
           </div>
 
           {error && (
-            <p style={{
+            <p role="alert" style={{
               background:   C.errorBg,
               border:       `1px solid ${C.errorBorder}`,
               color:        C.errorText,

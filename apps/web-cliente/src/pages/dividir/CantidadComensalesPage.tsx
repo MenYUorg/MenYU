@@ -5,10 +5,13 @@ import { estadoCargando, estadoError } from '../../components/estadosPantalla'
 import { useSessionStore } from '../../store/sessionStore'
 import { api } from '../../services/api'
 import { C } from '../../theme'
+import { anunciar } from '../../utils/anunciador'
 import { formatearPrecio } from '../../utils/precio'
 
 const CANTIDAD_MIN = 1
 const CANTIDAD_MAX = 99
+
+const textoDeComensales = (n: number) => `${n} ${n === 1 ? 'comensal' : 'comensales'}`
 
 export function CantidadComensalesPage() {
   const navigate = useNavigate()
@@ -24,6 +27,10 @@ export function CantidadComensalesPage() {
   const [editando, setEditando] = useState(false)
   const [inputValue, setInputValue] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
+  const botonDeLaCantidad = useRef<HTMLButtonElement>(null)
+  // Al confirmar con Enter el campo desaparece y, con él, el foco: se devuelve al botón con el número. Al salir con Tab o
+  // tocando afuera no se hace, porque el foco ya se fue a otro lado por decisión de la persona.
+  const devolverElFoco = useRef(false)
 
   const cargar = useCallback(() => {
     if (!sesionId || !jwt) { setLoading(false); setError('No hay sesión activa'); return }
@@ -44,14 +51,25 @@ export function CantidadComensalesPage() {
   useEffect(() => { cargar() }, [cargar])
 
   useEffect(() => {
-    if (editando) inputRef.current?.focus()
+    if (editando) {
+      inputRef.current?.focus()
+    } else if (devolverElFoco.current) {
+      devolverElFoco.current = false
+      botonDeLaCantidad.current?.focus()
+    }
   }, [editando])
 
   // No se persiste nada: el mensaje es total/N puro con el N que el usuario eligió.
   const montoPorPersona = totalSesion !== null ? totalSesion / cantidad : null
 
-  function ajustar(delta: number) {
-    setCantidad((c) => Math.max(CANTIDAD_MIN, Math.min(CANTIDAD_MAX, c + delta)))
+  /** Cambia la cantidad (dentro de 1 a 99) y, si cambió, dice cuántos son y cuánto paga cada uno: el monto se actualiza solo. */
+  function cambiarA(nueva: number) {
+    const limitada = Math.max(CANTIDAD_MIN, Math.min(CANTIDAD_MAX, nueva))
+    if (limitada === cantidad) return
+    setCantidad(limitada)
+    if (totalSesion !== null) {
+      anunciar(`${textoDeComensales(limitada)}: cada persona paga ${formatearPrecio(totalSesion / limitada)}`)
+    }
   }
 
   function abrirEdicion() {
@@ -59,9 +77,10 @@ export function CantidadComensalesPage() {
     setEditando(true)
   }
 
-  function commitEdicion() {
+  function commitEdicion(conTeclado = false) {
     const n = parseInt(inputValue, 10)
-    if (!Number.isNaN(n)) setCantidad(Math.max(CANTIDAD_MIN, Math.min(CANTIDAD_MAX, n)))
+    if (!Number.isNaN(n)) cambiarA(n)
+    if (conTeclado) devolverElFoco.current = true
     setEditando(false)
   }
 
@@ -93,28 +112,38 @@ export function CantidadComensalesPage() {
           </p>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+            {/* En el mínimo y el máximo los botones no se deshabilitan (perderían el foco): quedan `aria-disabled` y no hacen nada. */}
             <button
-              onClick={() => ajustar(-1)}
-              disabled={cantidad <= CANTIDAD_MIN}
-              aria-label="Restar"
+              type="button"
+              onClick={() => cambiarA(cantidad - 1)}
+              aria-disabled={cantidad <= CANTIDAD_MIN}
+              aria-label="Restar comensal"
               style={{
                 width: 44, height: 44, borderRadius: '50%',
                 border: `1.5px solid ${C.border}`, background: 'white',
-                fontSize: 20, color: C.navy, cursor: 'pointer',
+                fontSize: 20, color: C.navy,
+                cursor: cantidad <= CANTIDAD_MIN ? 'not-allowed' : 'pointer',
                 opacity: cantidad <= CANTIDAD_MIN ? 0.4 : 1,
               }}
             >
-              −
+              <span aria-hidden="true">−</span>
             </button>
 
             {editando ? (
               <input
                 ref={inputRef}
                 type="number"
+                aria-label="Cantidad de comensales"
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
-                onBlur={commitEdicion}
-                onKeyDown={(e) => { if (e.key === 'Enter') commitEdicion() }}
+                onBlur={() => commitEdicion()}
+                onKeyDown={(e) => {
+                  if (e.key !== 'Enter') return
+                  // Sin esto, el Enter que confirma le llegaría también al botón al que se le devuelve el foco, y lo activaría
+                  // (volvería a abrir el campo): el navegador manda el "keypress" al elemento que tiene el foco en ese momento.
+                  e.preventDefault()
+                  commitEdicion(true)
+                }}
                 style={{
                   width: 64, textAlign: 'center',
                   fontFamily: 'Montserrat, sans-serif', fontWeight: 800, fontSize: 32,
@@ -124,8 +153,11 @@ export function CantidadComensalesPage() {
               />
             ) : (
               <button
+                ref={botonDeLaCantidad}
+                type="button"
                 onClick={abrirEdicion}
-                aria-label="Editar cantidad"
+                // El nombre arranca con lo que se ve (el número) y dice qué es y qué hace.
+                aria-label={`${textoDeComensales(cantidad)}, editar cantidad`}
                 style={{
                   minWidth: 64, background: 'none', border: 'none',
                   fontFamily: 'Montserrat, sans-serif', fontWeight: 800, fontSize: 32,
@@ -137,17 +169,19 @@ export function CantidadComensalesPage() {
             )}
 
             <button
-              onClick={() => ajustar(1)}
-              disabled={cantidad >= CANTIDAD_MAX}
-              aria-label="Sumar"
+              type="button"
+              onClick={() => cambiarA(cantidad + 1)}
+              aria-disabled={cantidad >= CANTIDAD_MAX}
+              aria-label="Sumar comensal"
               style={{
                 width: 44, height: 44, borderRadius: '50%',
                 border: `1.5px solid ${C.border}`, background: 'white',
-                fontSize: 20, color: C.navy, cursor: 'pointer',
+                fontSize: 20, color: C.navy,
+                cursor: cantidad >= CANTIDAD_MAX ? 'not-allowed' : 'pointer',
                 opacity: cantidad >= CANTIDAD_MAX ? 0.4 : 1,
               }}
             >
-              +
+              <span aria-hidden="true">+</span>
             </button>
           </div>
         </div>
