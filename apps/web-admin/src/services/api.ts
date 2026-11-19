@@ -30,6 +30,9 @@ import type {
   PreguntaFrecuente,
   CajasAbiertas,
   CajaDelRestaurante,
+  PaginaDeTurnos,
+  ResumenDeTurno,
+  TurnoDetalle,
 } from '@menyu/types'
 
 export class ApiError extends Error {
@@ -403,6 +406,22 @@ export const api = {
     /** Renombra, activa o desactiva una caja. Lo que no se pasa no viaja y no cambia. */
     actualizar: (id: string, cambios: { nombre?: string; activa?: boolean }) =>
       req<CajaDelRestaurante>('PATCH', `/cajas/${encodeURIComponent(id)}`, cambios),
+  },
+
+  /** El historial de turnos de caja (#360), de solo lectura. */
+  turnos: {
+    /**
+     * Una página del historial, del más nuevo al más viejo, de a 30 (el límite por defecto del backend). `cursor` es el
+     * `siguiente` de la página anterior: el cursor es inclusivo, así que la página que llega se agrega sin repetir.
+     */
+    listar: (restauranteId: string, cursor?: string) => {
+      const pagina = cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''
+      return req<PaginaDeTurnos>('GET', `/turnos?restauranteId=${encodeURIComponent(restauranteId)}${pagina}`)
+    },
+    /** Un turno, abierto o cerrado, con la lista entera de los movimientos de cada caja y las mesas asignadas. */
+    detalle: (id: string) => req<TurnoDetalle>('GET', `/turnos/${encodeURIComponent(id)}`),
+    /** Lo cobrado en el turno, por método y por mozo, y Mercado Pago aparte. */
+    resumen: (id: string) => req<ResumenDeTurno>('GET', `/turnos/${encodeURIComponent(id)}/resumen`),
   },
 
   /** Quién tiene acceso al restaurante y cómo quitárselo. El alta es la invitación (`api.invitaciones.crear`). */

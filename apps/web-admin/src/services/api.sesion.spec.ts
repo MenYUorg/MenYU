@@ -228,6 +228,36 @@ describe('el cliente de la API usa la sesión de Supabase', () => {
     })
   })
 
+  describe('turnos', () => {
+    const pedido = (n = 0) => {
+      const [url, opciones] = fetchFalso.mock.calls[n] as [string, RequestInit]
+      return { url, metodo: opciones.method, body: opciones.body }
+    }
+
+    it('la primera página del historial se pide por restaurante, con GET y sin límite ni cursor', async () => {
+      const PAGINA = { items: [], siguiente: null }
+      fetchFalso.mockResolvedValue(respuesta(PAGINA))
+
+      await expect(api.turnos.listar('rest 1')).resolves.toEqual(PAGINA)
+
+      expect(pedido()).toEqual({ url: '/turnos?restauranteId=rest%201', metodo: 'GET', body: undefined })
+    })
+
+    it('la página siguiente manda el cursor codificado', async () => {
+      await api.turnos.listar('rest/1', 'turno&2')
+
+      expect(pedido()).toEqual({ url: '/turnos?restauranteId=rest%2F1&cursor=turno%262', metodo: 'GET', body: undefined })
+    })
+
+    it('el detalle y el resumen de un turno se piden por su id codificado, con GET', async () => {
+      await api.turnos.detalle('t/1')
+      await api.turnos.resumen('t/1')
+
+      expect(pedido(0)).toEqual({ url: '/turnos/t%2F1', metodo: 'GET', body: undefined })
+      expect(pedido(1)).toEqual({ url: '/turnos/t%2F1/resumen', metodo: 'GET', body: undefined })
+    })
+  })
+
   describe('pedirJson', () => {
     it('lo usan las pantallas que arman su propio pedido, con el mismo token y el mismo 401', async () => {
       sesionDePrueba.token = 'token-de-supabase'
