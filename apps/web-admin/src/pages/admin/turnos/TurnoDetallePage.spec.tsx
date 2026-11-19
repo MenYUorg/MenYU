@@ -266,6 +266,31 @@ describe('TurnoDetallePage', () => {
 
       expect(filasDe(tabla('Cobrado por método')).pop()).toEqual(['Total', '1', '$99', '$0'])
     })
+
+    it('mientras se lee otro turno, lo leído del anterior no se muestra: se está cargando', async () => {
+      const delNuevo = pendiente<TurnoDetalle>()
+      turnosApi.detalle.mockResolvedValueOnce(CERRADO).mockReturnValueOnce(delNuevo.promesa)
+      await abrir()
+      expect(screen.getByRole('article')).toBeInTheDocument()
+
+      await tocar(screen.getByRole('link', { name: 'Ir a otro turno' }))
+
+      expect(screen.getByRole('status', { name: 'Cargando el turno' })).toBeInTheDocument()
+      expect(screen.queryByRole('article')).not.toBeInTheDocument()
+    })
+
+    it('mientras se lee el resumen de otro turno, el del anterior no se muestra: se está cargando', async () => {
+      const resumenNuevo = pendiente<ResumenDeTurno>()
+      turnosApi.detalle.mockResolvedValueOnce(CERRADO).mockResolvedValueOnce({ ...CERRADO, id: 't2' })
+      turnosApi.resumen.mockResolvedValueOnce(RESUMEN).mockReturnValueOnce(resumenNuevo.promesa)
+      await abrir()
+      expect(tabla('Cobrado por método')).toBeInTheDocument()
+
+      await tocar(screen.getByRole('link', { name: 'Ir a otro turno' }))
+
+      expect(within(seccion('Resumen de cobros')).getByRole('status', { name: 'Cargando el resumen de cobros' })).toBeInTheDocument()
+      expect(screen.queryByRole('table', { name: 'Cobrado por método' })).not.toBeInTheDocument()
+    })
   })
 
   describe('el cambio de restaurante', () => {
