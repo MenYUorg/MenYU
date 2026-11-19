@@ -75,7 +75,7 @@ function ItemCard({
                 borderRadius: 999,
                 border:       `1.5px solid ${activo ? C.orange : C.border}`,
                 background:   activo ? C.orangeSoft : 'white',
-                color:        activo ? C.orange : C.text,
+                color:        activo ? C.orangeText : C.text,
                 fontFamily:   'Inter, sans-serif',
                 fontWeight:   600,
                 fontSize:     12,

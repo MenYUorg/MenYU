@@ -3,6 +3,24 @@
 @tailwind utilities;
 
 /*
+ * Foco visible (WCAG 2.4.7). Todo control (enlace, botón, campo, interruptor y lo que se le pone `tabindex` positivo o 0)
+ * muestra un anillo cuando se lo alcanza con el teclado: azul marino, separado 2 px, con un aro blanco entre el control y
+ * el anillo, para que se vea igual sobre un fondo claro, sobre el azul de los encabezados y sobre una foto. Va en `base`
+ * para que una clase de Tailwind lo pueda pisar, y los estilos en línea lo pisan siempre: por eso los campos ya no tienen
+ * `outline: 'none'` en línea (antes el buscador del menú no mostraba nada al recibir el foco).
+ *
+ * No toca a los elementos con `tabindex="-1"` (los títulos y los contenedores de los diálogos a los que se lleva el foco por
+ * código): no son controles. El de los títulos lo quita la regla de abajo.
+ */
+@layer base {
+  :is(a[href], button, input, select, textarea, summary, [role='button'], [role='switch'], [role='checkbox'], [tabindex]:not([tabindex='-1'])):focus-visible {
+    outline: 2px solid theme('colors.navy');
+    outline-offset: 2px;
+    box-shadow: 0 0 0 2px #ffffff;
+  }
+}
+
+/*
  * Los títulos a los que se lleva el foco por código (`tabindex="-1"`) no son controles: no se interactúa con ellos, y WCAG
  * 2.4.7 no pide un indicador de foco ahí. Son el <h1> de la pantalla nueva (SeguimientoDeRuta) y el <h2> de la sección del
  * menú a la que lleva su chip. Sin esta regla el navegador dibuja su anillo alrededor del título en cada cambio. Botones,

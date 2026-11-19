@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react'
+import { CORAL, GRIS_TEXTO } from './colores'
 
 type Variante = 'tarjeta' | 'fila' | 'detalle'
 
@@ -52,7 +53,7 @@ export function PrecioConDescuento({
   formatear,
   estilo,
   variante = 'fila',
-  colorDescuento = '#E8563A',
+  colorDescuento = CORAL,
 }: PrecioConDescuentoProps) {
   const conDescuento = precioVigente < precioBase
 
@@ -68,7 +69,7 @@ export function PrecioConDescuento({
           fontFamily:     'Inter, sans-serif',
           fontWeight:     400,
           fontSize:       TAMANO_ORIGINAL[variante],
-          color:          '#9CA3AF',
+          color:          GRIS_TEXTO,
           textDecoration: 'line-through',
         }}
       >

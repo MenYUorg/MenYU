@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import { LogoMenYuOscuro } from '@menyu/ui'
+import { C as TEMA } from '../theme'
 
 const C = {
-  orange: '#E8563A',
-  orangeSoft: '#FDE5DF',
-  navy: '#2D3561',
-  textSub: '#6B7280',
+  orange: TEMA.orange,
+  orangeText: TEMA.orangeText,
+  orangeSoft: TEMA.orangeSoft,
+  navy: TEMA.navy,
+  textSub: TEMA.textSub,
   border: '#ECECEE',
 } as const
 
@@ -114,13 +116,13 @@ export function CodigoSesionScreen({ loading, error, onSubmit, onVolver }: Codig
           style={{
             width: 120, height: 64, textAlign: 'center',
             fontFamily: 'Montserrat,sans-serif', fontWeight: 800, fontSize: 32, letterSpacing: '0.3em',
-            border: `2px solid ${C.border}`, borderRadius: 12, outline: 'none', color: C.navy, boxSizing: 'border-box',
+            border: `2px solid ${C.border}`, borderRadius: 12, color: C.navy, boxSizing: 'border-box',
           }}
           onFocus={(e) => { e.target.style.borderColor = C.orange }}
           onBlur={(e) => { e.target.style.borderColor = C.border }}
         />
         {error && (
-          <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 12, color: C.orange, background: C.orangeSoft, borderRadius: 8, padding: '9px 12px', margin: 0, width: '100%', boxSizing: 'border-box' }}>
+          <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 12, color: C.orangeText, background: C.orangeSoft, borderRadius: 8, padding: '9px 12px', margin: 0, width: '100%', boxSizing: 'border-box' }}>
             {error}
           </p>
         )}

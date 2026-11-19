@@ -519,7 +519,7 @@ export default function PanelDelAsistente({ abierto, onCerrar, restauranteId, no
               aria-describedby={idContador}
               // Corto, para que entre en una línea en el celular: el aviso entero ya está en el hilo.
               placeholder={bloqueado ? 'Preguntale al mozo' : 'Escribí tu pregunta'}
-              className="border border-[#ECECEE] bg-[#F7F7F8] focus:border-[#E8563A] focus:bg-white focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+              className="border border-[#ECECEE] bg-[#F7F7F8] focus:border-coral focus:bg-white disabled:cursor-not-allowed disabled:opacity-60"
               style={{
                 flex: 1,
                 minWidth: 0,

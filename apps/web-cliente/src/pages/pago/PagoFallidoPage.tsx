@@ -10,13 +10,13 @@ export function PagoFallidoPage() {
       <p className="text-sm text-gray-500">Podés intentarlo nuevamente o elegir otro método de pago.</p>
       <button
         onClick={() => navigate('/pagar')}
-        className="mt-2 px-6 py-3 bg-orange-500 text-white font-semibold rounded-xl text-sm"
+        className="mt-2 px-6 py-3 bg-coral text-white font-semibold rounded-xl text-sm"
       >
         Reintentar
       </button>
       <button
         onClick={() => navigate('/menu')}
-        className="text-sm text-gray-400 underline"
+        className="text-sm text-gray-500 underline"
       >
         Volver al menú
       </button>

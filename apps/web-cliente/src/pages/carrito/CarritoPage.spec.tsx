@@ -308,6 +308,38 @@ describe('CarritoPage', () => {
         expect(useCarritoStore.getState().items).toHaveLength(0)
         expect(screen.getByText('Tu carrito está vacío')).toBeInTheDocument()
       })
+
+      it('"Quitar" se toca como un botón de 44 px de alto (WCAG 2.5.8: medía 18), y los márgenes negativos le devuelven a la tarjeta el lugar de siempre', () => {
+        agregarMilanesaAlCarrito(1000)
+        renderCarrito()
+
+        const quitar = screen.getByRole('button', { name: 'Quitar Milanesa' })
+
+        expect(quitar).toHaveStyle({ minHeight: '44px', padding: '0 8px', margin: '-6px -8px -6px 0' })
+      })
+
+      it('el nombre del plato ("Editar") se toca como un botón de 33 px de alto (medía 21), con los márgenes que compensan el relleno', () => {
+        agregarMilanesaAlCarrito(1000)
+        renderCarrito()
+
+        const nombre = screen.getByRole('button', { name: 'Editar Milanesa' })
+
+        expect(nombre).toHaveStyle({ padding: '6px 0', margin: '-6px 0 -6px 0' })
+      })
+
+      it('con extras o nota debajo, el margen de abajo del nombre compensa solo 3 px de separación', () => {
+        agregarConExtras()
+        renderCarrito()
+
+        expect(screen.getByRole('button', { name: 'Editar Milanesa' })).toHaveStyle({ marginBottom: '-3px' })
+      })
+
+      it('el "−" y el "+" siguen midiendo lo mismo (no entran en este cambio: pasan los 24 px del mínimo)', () => {
+        agregarMilanesaAlCarrito(1000)
+        renderCarrito()
+
+        expect(screen.getByRole('button', { name: 'Sumar Milanesa' })).toHaveStyle({ width: '32px', height: '32px' })
+      })
     })
 
     describe('el plato, sus extras y su nota', () => {

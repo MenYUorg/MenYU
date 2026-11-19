@@ -228,10 +228,10 @@ export function MenuView({ modo, restauranteId }: MenuViewProps) {
 
   if (error || !menu) return (
     <main style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100svh', gap: 12, padding: 24, background: CM.bg }}>
-      <h1 style={{ fontFamily: 'Inter,sans-serif', fontWeight: 400, fontSize: 14, color: CM.orange, textAlign: 'center', margin: 0 }}>No se pudo cargar el menú</h1>
+      <h1 style={{ fontFamily: 'Inter,sans-serif', fontWeight: 400, fontSize: 14, color: CM.orangeText, textAlign: 'center', margin: 0 }}>No se pudo cargar el menú</h1>
       <button
         onClick={() => void fetchMenu(restauranteId)}
-        style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 600, fontSize: 13, color: CM.orange, background: 'none', border: 'none', cursor: 'pointer' }}
+        style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 600, fontSize: 13, color: CM.orangeText, background: 'none', border: 'none', cursor: 'pointer' }}
       >
         Reintentar
       </button>

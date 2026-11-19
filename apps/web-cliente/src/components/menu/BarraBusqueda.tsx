@@ -134,7 +134,7 @@ export function BarraBusqueda({ buscar, onBuscar, clasificaciones, dietasActivas
               paddingLeft: 34, paddingRight: buscar ? 32 : 14, borderRadius: 999,
               border: `1px solid ${CM.border}`, background: CM.bg,
               fontFamily: 'Inter,sans-serif', fontSize: 13, color: CM.text,
-              outline: 'none', transition: 'border-color .15s, background .15s',
+              transition: 'border-color .15s, background .15s',
             }}
             onFocus={(e) => { e.target.style.borderColor = CM.orange; e.target.style.background = 'white' }}
             onBlur={(e) => { e.target.style.borderColor = CM.border; e.target.style.background = CM.bg }}
@@ -148,7 +148,7 @@ export function BarraBusqueda({ buscar, onBuscar, clasificaciones, dietasActivas
               style={{
                 position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
                 background: 'none', border: 'none', cursor: 'pointer',
-                color: '#9CA3AF', fontSize: 16, lineHeight: 1, padding: 0,
+                color: CM.textMuted, fontSize: 16, lineHeight: 1, padding: 0,
               }}
             >
               <span aria-hidden="true">×</span>

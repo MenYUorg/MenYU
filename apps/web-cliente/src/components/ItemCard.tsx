@@ -1,11 +1,12 @@
 import type { MenuPublicoItem } from '@menyu/types'
 import { DescuentoBadge, MenuItemImage, PrecioConDescuento } from '@menyu/ui'
+import { C as TEMA } from '../theme'
 import { formatearPrecio, precioVigenteDe, tieneDescuento } from '../utils/precio'
 
 const C = {
-  orange:    '#E8563A',
-  text:      '#1A1A2E',
-  textSub:   '#6B7280',
+  orange:    TEMA.orange,
+  text:      TEMA.text,
+  textSub:   TEMA.textSub,
   border:    '#ECECEE',
 } as const
 
@@ -30,8 +31,8 @@ export function ItemCard({ item, onPress }: { item: MenuPublicoItem; onPress?: (
       }}
       onMouseEnter={onPress ? (e) => {
         const el = e.currentTarget as HTMLDivElement
-        el.style.borderColor = 'rgba(232,86,58,0.3)'
-        el.style.boxShadow = '0 4px 16px rgba(232,86,58,0.1)'
+        el.style.borderColor = 'rgba(204,74,49,0.3)'
+        el.style.boxShadow = '0 4px 16px rgba(204,74,49,0.1)'
       } : undefined}
       onMouseLeave={onPress ? (e) => {
         const el = e.currentTarget as HTMLDivElement
@@ -77,6 +78,7 @@ export function ItemCard({ item, onPress }: { item: MenuPublicoItem; onPress?: (
           {onPress && (
             <button
               type="button"
+              className="relative after:absolute after:content-[''] after:-inset-2"
               onClick={(e) => { e.stopPropagation(); onPress() }}
               aria-label={`Ver ${item.nombre}`}
               style={{
@@ -84,7 +86,7 @@ export function ItemCard({ item, onPress }: { item: MenuPublicoItem; onPress?: (
                 background: C.orange, color: 'white', border: 'none',
                 fontSize: 18, lineHeight: 1, display: 'flex',
                 alignItems: 'center', justifyContent: 'center',
-                boxShadow: '0 2px 6px rgba(232,86,58,0.35)',
+                boxShadow: '0 2px 6px rgba(204,74,49,0.35)',
                 cursor: 'pointer', flexShrink: 0,
               }}
             ><span aria-hidden="true">+</span></button>

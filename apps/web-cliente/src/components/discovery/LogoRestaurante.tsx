@@ -33,7 +33,7 @@ export function LogoRestaurante({ nombre, logoUrl, tamano = 56 }: LogoRestaurant
         boxSizing: 'border-box',
         background: conLogo ? C.white : C.orangeSoft,
         border: `1px solid ${conLogo ? C.border : C.orangeSoft}`,
-        color: C.orange,
+        color: C.orangeText,
         fontFamily: 'Montserrat, sans-serif',
         fontWeight: 800,
         fontSize: tamano * 0.34,

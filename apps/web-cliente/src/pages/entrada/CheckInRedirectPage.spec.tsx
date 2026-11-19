@@ -4,6 +4,7 @@ import { MemoryRouter, Route, Routes, useNavigationType } from 'react-router-dom
 import { api, ApiError } from '../../services/api'
 import { useSessionStore } from '../../store/sessionStore'
 import { crearSesionAbierta } from '../../test/fixtures'
+import { C } from '../../theme'
 import CheckInRedirectPage from './CheckInRedirectPage'
 
 vi.mock('../../services/api', async (importarOriginal) => ({
@@ -210,7 +211,7 @@ describe('CheckInRedirectPage', () => {
 
       const pin = await screen.findByRole('link', { name: 'Ingresar con el PIN de mi mesa' })
 
-      expect(pin).toHaveStyle({ backgroundColor: 'rgb(232, 86, 58)' })
+      expect(pin).toHaveStyle({ backgroundColor: C.orange })
       // La tarjeta es: franja con el logo y, después, el aviso. Sin subtítulo, la franja queda con solo el logo.
       const franja = screen.getByRole('alert').parentElement?.firstElementChild as HTMLElement
       expect(franja.querySelector('p')).toBeNull()
@@ -248,7 +249,7 @@ describe('CheckInRedirectPage', () => {
       const salida = await screen.findByRole('link', { name: 'Ir al inicio' })
 
       expect(screen.getAllByRole('link', { name: 'Ir al inicio' })).toHaveLength(1)
-      expect(salida).toHaveStyle({ backgroundColor: 'rgb(232, 86, 58)' })
+      expect(salida).toHaveStyle({ backgroundColor: C.orange })
       fireEvent.click(salida)
       expect(screen.getByText('inicio (REPLACE)')).toBeInTheDocument()
     })
@@ -292,7 +293,7 @@ describe('CheckInRedirectPage', () => {
       const reintentar = await screen.findByRole('button', { name: 'Reintentar' })
       const pin = screen.getByRole('link', { name: 'Ingresar con el PIN de mi mesa' })
 
-      expect(reintentar).toHaveStyle({ backgroundColor: 'rgb(232, 86, 58)' })
+      expect(reintentar).toHaveStyle({ backgroundColor: C.orange })
       expect(pin).toHaveStyle({ backgroundColor: 'rgb(255, 255, 255)' })
     })
 

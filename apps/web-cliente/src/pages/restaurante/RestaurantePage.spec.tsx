@@ -6,6 +6,7 @@ import { reiniciarDiscoveryStore, useDiscoveryStore } from '../../store/discover
 import { crearOferta, crearRestaurante } from '../../test/fixtures'
 import { RestaurantePage } from './RestaurantePage'
 import { axe } from '../../test/axe'
+import { C } from '../../theme'
 
 vi.mock('../../services/api', async (importarOriginal) => ({
   ...(await importarOriginal<typeof import('../../services/api')>()),
@@ -112,7 +113,7 @@ describe('RestaurantePage', () => {
       const mesa = await screen.findByRole('link', { name: 'Ingresar a una mesa' })
       const carta = screen.getByRole('link', { name: 'Ver la carta' })
 
-      expect(mesa).toHaveStyle({ backgroundColor: 'rgb(232, 86, 58)' })
+      expect(mesa).toHaveStyle({ backgroundColor: C.orange })
       expect(carta).toHaveStyle({ backgroundColor: 'rgb(255, 255, 255)' })
     })
 
