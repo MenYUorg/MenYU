@@ -34,6 +34,13 @@ describe('PagoExitosoPage', () => {
     expect(useSessionStore.getState().sesionId).toBeNull()
   })
 
+  it('el título es el <h1> de la página', () => {
+    abrir('/pago/exitoso', <PagoExitosoPage />)
+
+    expect(screen.getByRole('heading', { level: 1, name: '¡Gracias por su visita!' })).toBeInTheDocument()
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+  })
+
   it('no tiene violaciones de accesibilidad (axe)', async () => {
     const { container } = abrir('/pago/exitoso', <PagoExitosoPage />)
 
@@ -59,6 +66,13 @@ describe('PagoFallidoPage', () => {
     expect(screen.getByText('destino /menu')).toBeInTheDocument()
   })
 
+  it('el título es el <h1> y el emoji ❌ queda oculto del lector', () => {
+    abrir('/pago/fallido', <PagoFallidoPage />)
+
+    expect(screen.getByRole('heading', { level: 1, name: 'El pago no pudo procesarse' })).toBeInTheDocument()
+    expect(screen.getByText('❌')).toHaveAttribute('aria-hidden', 'true')
+  })
+
   it('no tiene violaciones de accesibilidad (axe)', async () => {
     const { container } = abrir('/pago/fallido', <PagoFallidoPage />)
 
@@ -82,6 +96,13 @@ describe('PagoPendientePage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Volver al menú' }))
 
     expect(screen.getByText('destino /menu')).toBeInTheDocument()
+  })
+
+  it('el título es el <h1> y el emoji ⏳ queda oculto del lector', () => {
+    abrir('/pago/pendiente', <PagoPendientePage />)
+
+    expect(screen.getByRole('heading', { level: 1, name: 'Pago en proceso' })).toBeInTheDocument()
+    expect(screen.getByText('⏳')).toHaveAttribute('aria-hidden', 'true')
   })
 
   it('no tiene violaciones de accesibilidad (axe)', async () => {

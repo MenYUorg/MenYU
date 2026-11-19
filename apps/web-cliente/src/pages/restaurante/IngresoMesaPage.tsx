@@ -23,6 +23,13 @@ const TEXTO_MOTIVO: Record<Exclude<MotivoPin, null>, string> = {
   qr: 'No pudimos abrir tu mesa con el QR. Ingresá el PIN que aparece en tu mesa.',
 }
 
+const ID_ERROR_PIN = 'error-pin'
+
+/** Si el fallo es porque el PIN no sirve (y no porque no hay conexión, hay demasiados intentos o el restaurante no está disponible). */
+function falloPorElPin(fallo: FalloDeEntrada): boolean {
+  return fallo.status !== null && fallo.status !== 429 && fallo.status !== 403
+}
+
 /** El texto del aviso según qué se intentó y por qué falló. */
 function mensajeDeFallo(intento: Intento, fallo: FalloDeEntrada, restaurante: string): string {
   // Sin respuesta del servidor: no es el QR ni el PIN.
@@ -54,6 +61,9 @@ export function IngresoMesaPage() {
   const [motivoPin, setMotivoPin] = useState<MotivoPin>(() => (params.get('pin') === 'qr' ? 'qr' : null))
   const [pin, setPin] = useState('')
   const [error, setError] = useState<string | null>(null)
+  // Si el error viene de lo que se escribió en el campo del PIN, y si es porque el PIN no sirve: el campo queda inválido y
+  // asociado al texto del error (con `aria-invalid` y `aria-describedby`), y el foco vuelve a él.
+  const [errorDelCampo, setErrorDelCampo] = useState<{ pinInvalido: boolean } | null>(null)
   const campoPin = useRef<HTMLInputElement>(null)
   const ultimoIntento = useRef<Intento>('qr')
 
@@ -66,7 +76,14 @@ export function IngresoMesaPage() {
   const nombre = restaurante?.nombre ?? 'este restaurante'
 
   const { entrar, cargando: abriendo, pantalla } = useEntrarAMesa({
-    alFallar: (fallo) => setError(mensajeDeFallo(ultimoIntento.current, fallo, nombre)),
+    alFallar: (fallo) => {
+      setError(mensajeDeFallo(ultimoIntento.current, fallo, nombre))
+      if (ultimoIntento.current === 'pin') {
+        setErrorDelCampo({ pinInvalido: falloPorElPin(fallo) })
+        // Mientras se enviaba, quien tocó el botón lo perdió (se deshabilita): el foco vuelve al campo para corregir.
+        campoPin.current?.focus()
+      }
+    },
   })
 
   if (pantalla) return pantalla
@@ -80,6 +97,7 @@ export function IngresoMesaPage() {
 
   const abrirEscaner = () => {
     setError(null)
+    setErrorDelCampo(null)
     setEscaneando(true)
   }
 
@@ -92,14 +110,18 @@ export function IngresoMesaPage() {
   const alElegirElPin = () => {
     setEscaneando(false)
     setError(null)
+    setErrorDelCampo(null)
     abrirPin('camara')
   }
 
   const ingresarConPin = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
+    setErrorDelCampo(null)
     if (!pin.trim()) {
       setError('Ingresá el PIN de tu mesa.')
+      setErrorDelCampo({ pinInvalido: true })
+      campoPin.current?.focus()
       return
     }
     ultimoIntento.current = 'pin'
@@ -153,7 +175,7 @@ export function IngresoMesaPage() {
 
         {(error || motivoPin) && (
           <div style={{ marginBottom: 20 }}>
-            {error ? <Banner tipo="error">{error}</Banner> : <Banner tipo="info">{TEXTO_MOTIVO[motivoPin as Exclude<MotivoPin, null>]}</Banner>}
+            {error ? <Banner tipo="error" id={ID_ERROR_PIN}>{error}</Banner> : <Banner tipo="info">{TEXTO_MOTIVO[motivoPin as Exclude<MotivoPin, null>]}</Banner>}
           </div>
         )}
 
@@ -187,10 +209,14 @@ export function IngresoMesaPage() {
               placeholder="Ej: 1234"
               autoComplete="off"
               value={pin}
-              disabled={abriendo}
+              // Mientras se envía no se puede cambiar, pero no se deshabilita: un campo deshabilitado pierde el foco.
+              readOnly={abriendo}
+              aria-invalid={errorDelCampo?.pinInvalido ? true : undefined}
+              aria-describedby={error && errorDelCampo ? ID_ERROR_PIN : undefined}
               onChange={(e) => {
                 setPin(e.target.value.replace(/\D/g, ''))
                 setError(null)
+                setErrorDelCampo(null)
               }}
               className="focus:border-[#E8563A]"
               style={{

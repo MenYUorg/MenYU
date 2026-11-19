@@ -23,7 +23,7 @@ function abrir() {
   )
 }
 
-const campo = () => screen.getByPlaceholderText('Ej: Juan')
+const campo = () => screen.getByRole('textbox', { name: 'Tu nombre' })
 const continuar = () => screen.getByRole('button', { name: /Continuar|Ingresando/ })
 
 beforeEach(() => {
@@ -34,13 +34,25 @@ beforeEach(() => {
 })
 
 describe('ElegirNombrePage', () => {
-  it('"Continuar" está apagado hasta que se escribe un nombre', () => {
+  it('"Continuar" está siempre activo: con el campo vacío no registra nada y dice qué falta', () => {
     abrir()
-    expect(continuar()).toBeDisabled()
-
-    fireEvent.change(campo(), { target: { value: 'Ana' } })
-
     expect(continuar()).toBeEnabled()
+    expect(continuar()).not.toHaveAttribute('aria-disabled', 'true')
+
+    fireEvent.click(continuar())
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Escribí tu nombre para continuar.')
+    expect(crearComensal).not.toHaveBeenCalled()
+  })
+
+  it('con solo espacios cuenta como vacío', () => {
+    abrir()
+    fireEvent.change(campo(), { target: { value: '   ' } })
+
+    fireEvent.click(continuar())
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Escribí tu nombre para continuar.')
+    expect(crearComensal).not.toHaveBeenCalled()
   })
 
   it('registra el nombre (sin espacios de más) y sigue al menú', async () => {
@@ -75,6 +87,79 @@ describe('ElegirNombrePage', () => {
     fireEvent.submit(campo().closest('form')!)
 
     await waitFor(() => expect(crearComensal).not.toHaveBeenCalled())
+  })
+
+  describe('el campo y los errores (accesibilidad)', () => {
+    it('"Tu nombre" es la etiqueta del campo (ya no se anuncia por el texto de ejemplo)', () => {
+      abrir()
+
+      expect(campo()).toHaveAccessibleName('Tu nombre')
+      expect(campo()).toHaveAttribute('placeholder', 'Ej: Juan')
+      expect(screen.getByText('Tu nombre')).toHaveAttribute('for', campo().id)
+    })
+
+    it('no toma el foco al entrar: el foco queda para el título', () => {
+      abrir()
+
+      expect(campo()).not.toHaveFocus()
+    })
+
+    it('con el campo vacío, "Continuar" deja el campo inválido, asociado al error, y le devuelve el foco', () => {
+      abrir()
+      continuar().focus()
+
+      fireEvent.click(continuar())
+
+      expect(campo()).toHaveAttribute('aria-invalid', 'true')
+      expect(campo()).toHaveAccessibleDescription('Escribí tu nombre para continuar.')
+      expect(campo()).toHaveFocus()
+    })
+
+    it('al escribir, el error se va y el campo deja de estar inválido', () => {
+      abrir()
+      fireEvent.click(continuar())
+
+      fireEvent.change(campo(), { target: { value: 'A' } })
+
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+      expect(campo()).not.toHaveAttribute('aria-invalid')
+      expect(campo()).not.toHaveAttribute('aria-describedby')
+    })
+
+    it('un error del servidor se anuncia como alerta, no marca el campo como inválido y queda asociado a él', async () => {
+      crearComensal.mockRejectedValue(new Error('Nombre repetido en la mesa'))
+      abrir()
+      fireEvent.change(campo(), { target: { value: 'Ana' } })
+
+      fireEvent.click(continuar())
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('Nombre repetido en la mesa')
+      expect(campo()).not.toHaveAttribute('aria-invalid')
+      expect(campo()).toHaveAccessibleDescription('Nombre repetido en la mesa')
+    })
+
+    it('mientras se envía el botón dice "Ingresando...", queda aria-disabled (no disabled, para no perder el foco) y no envía dos veces', async () => {
+      crearComensal.mockReturnValue(new Promise(() => {}))
+      abrir()
+      fireEvent.change(campo(), { target: { value: 'Ana' } })
+      continuar().focus()
+
+      fireEvent.click(continuar())
+
+      const boton = await screen.findByRole('button', { name: 'Ingresando...' })
+      expect(boton).toHaveAttribute('aria-disabled', 'true')
+      expect(boton).not.toBeDisabled()
+      expect(boton).toHaveFocus()
+      fireEvent.click(boton)
+      expect(crearComensal).toHaveBeenCalledTimes(1)
+    })
+
+    it('con el error de "falta el nombre" no tiene violaciones de accesibilidad (axe)', async () => {
+      const { container } = abrir()
+      fireEvent.click(continuar())
+
+      expect(await axe(container)).toHaveNoViolations()
+    })
   })
 
   describe('estructura de la pantalla (accesibilidad)', () => {

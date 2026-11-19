@@ -5,6 +5,7 @@ import { api, ApiError } from '../../services/api'
 import { reiniciarDiscoveryStore, useDiscoveryStore } from '../../store/discoveryStore'
 import { useSessionStore } from '../../store/sessionStore'
 import { crearRestaurante, crearSesionAbierta } from '../../test/fixtures'
+import { axe } from '../../test/axe'
 import { IngresoMesaPage } from './IngresoMesaPage'
 
 vi.mock('../../services/api', async (importarOriginal) => ({
@@ -278,16 +279,106 @@ describe('IngresoMesaPage', () => {
       expect(screen.queryByText(/PIN incorrecto/)).not.toBeInTheDocument()
     })
 
-    it('mientras abre la mesa deshabilita el campo y el botón', async () => {
+    it('mientras abre la mesa deshabilita los botones, pero el campo no se deshabilita: queda de solo lectura y no pierde el foco', async () => {
       abrir.mockReturnValue(new Promise(() => {}))
       renderPagina()
 
       await cargada()
-      ingresarPin()
+      fireEvent.click(textoDelPin())
+      await waitFor(() => expect(campoPin()).toHaveFocus())
+      escribirPin('4821')
+      fireEvent.submit(campoPin().closest('form')!)
 
       expect(await screen.findByRole('button', { name: 'Ingresando...' })).toBeDisabled()
-      expect(campoPin()).toBeDisabled()
       expect(screen.getByRole('button', { name: 'Escanear QR' })).toBeDisabled()
+      expect(campoPin()).not.toBeDisabled()
+      expect(campoPin()).toHaveAttribute('readonly')
+      expect(campoPin()).toHaveFocus()
+    })
+  })
+
+  describe('el campo del PIN después de un error (accesibilidad)', () => {
+    const abrirConPin = async () => {
+      renderPagina('/restaurante/parrilla/mesa?pin')
+      await screen.findByLabelText('PIN de mesa')
+    }
+
+    it('con un PIN incorrecto el campo queda inválido, asociado al texto del error, y el foco vuelve a él', async () => {
+      abrir.mockRejectedValue(new ApiError('Mesa no encontrada', 404))
+      await abrirConPin()
+      escribirPin('0000')
+
+      fireEvent.click(botonPin())
+
+      const aviso = await screen.findByRole('alert')
+      expect(campoPin()).toHaveAttribute('aria-invalid', 'true')
+      expect(campoPin()).toHaveAttribute('aria-describedby', aviso.id)
+      expect(campoPin()).toHaveAccessibleDescription(/PIN incorrecto o mesa no encontrada/)
+      await waitFor(() => expect(campoPin()).toHaveFocus())
+    })
+
+    it('con el campo vacío también queda inválido y con el foco', async () => {
+      await abrirConPin()
+
+      fireEvent.click(botonPin())
+
+      expect(campoPin()).toHaveAttribute('aria-invalid', 'true')
+      expect(campoPin()).toHaveAccessibleDescription('Ingresá el PIN de tu mesa.')
+      expect(campoPin()).toHaveFocus()
+    })
+
+    it('al escribir de nuevo el error se va y el campo deja de estar inválido', async () => {
+      abrir.mockRejectedValue(new ApiError('Mesa no encontrada', 404))
+      await abrirConPin()
+      escribirPin('0000')
+      fireEvent.click(botonPin())
+      await screen.findByRole('alert')
+
+      escribirPin('00001')
+
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+      expect(campoPin()).not.toHaveAttribute('aria-invalid')
+      expect(campoPin()).not.toHaveAttribute('aria-describedby')
+    })
+
+    it.each([
+      ['un 429 (demasiados intentos)', new ApiError('Demasiados intentos fallidos. Probá de nuevo en 15 minutos.', 429), /Demasiados intentos/],
+      ['un 403 (restaurante dado de baja)', new ApiError('Este restaurante no está disponible', 403), /no está disponible/],
+      ['sin conexión', new TypeError('Failed to fetch'), /No pudimos conectarnos/],
+    ])('con %s el PIN no está mal: el campo no queda inválido, pero el foco vuelve y se lee el motivo', async (_caso, fallo, texto) => {
+      abrir.mockRejectedValue(fallo)
+      await abrirConPin()
+      escribirPin('4821')
+
+      fireEvent.click(botonPin())
+
+      await screen.findByRole('alert')
+      expect(campoPin()).not.toHaveAttribute('aria-invalid')
+      expect(campoPin()).toHaveAccessibleDescription(texto)
+      await waitFor(() => expect(campoPin()).toHaveFocus())
+    })
+
+    it('un error del QR no marca el campo del PIN ni le roba el foco', async () => {
+      abrir.mockRejectedValue(new ApiError('Mesa no encontrada', 404))
+      await abrirConPin()
+      campoPin().blur()
+
+      escanear()
+
+      await screen.findByRole('alert')
+      expect(campoPin()).not.toHaveAttribute('aria-invalid')
+      expect(campoPin()).not.toHaveAttribute('aria-describedby')
+      expect(campoPin()).not.toHaveFocus()
+    })
+
+    it('con un error del PIN no tiene violaciones de accesibilidad (axe)', async () => {
+      abrir.mockRejectedValue(new ApiError('Mesa no encontrada', 404))
+      await abrirConPin()
+      escribirPin('0000')
+      fireEvent.click(botonPin())
+      await screen.findByRole('alert')
+
+      expect(await axe(document.body)).toHaveNoViolations()
     })
   })
 

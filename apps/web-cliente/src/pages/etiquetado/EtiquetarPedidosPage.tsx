@@ -1,5 +1,5 @@
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { EncabezadoPantalla, MarcoPantalla } from '../../components/PantallaComensal'
 import { estadoCargando, estadoError, estadoVacio } from '../../components/estadosPantalla'
 import { useEtiquetado } from '../../hooks/useEtiquetado'
@@ -53,7 +53,9 @@ function ItemCard({
         </span>
       </div>
 
-      {/* Chips de comensales */}
+      {/* Chips de comensales: botones que se prenden y se apagan. `aria-pressed` dice si el comensal ya está etiquetado en
+          este plato (antes solo se veía por el color) y el nombre dice a qué plato se refiere. Mientras se guarda no se
+          deshabilitan (el botón perdería el foco y el lector no diría el estado nuevo): quedan `aria-disabled` y no hacen nada. */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
         {comensales.map((comensal) => {
           const activo   = etiquetadosIds.has(comensal.id)
@@ -61,8 +63,11 @@ function ItemCard({
           return (
             <button
               key={comensal.id}
-              onClick={() => onToggle(comensal)}
-              disabled={cargando}
+              type="button"
+              aria-pressed={activo}
+              aria-label={`${comensal.nombre}, ${item.nombre}`}
+              aria-disabled={cargando}
+              onClick={() => { if (!cargando) onToggle(comensal) }}
               style={{
                 display:      'inline-flex',
                 alignItems:   'center',
@@ -201,6 +206,21 @@ export function EtiquetarPedidosPage() {
   const [confirmandoBorrado, setConfirmandoBorrado] = useState<string | null>(null)
   const [borrandoId, setBorrandoId] = useState<string | null>(null)
 
+  // Al tocar "+ Agregar" aparece el campo del nombre, y el foco va a él (sin `autoFocus`: el foco se mueve porque la persona
+  // lo pidió, no porque la pantalla cargó). Al cerrarlo (agregar o cancelar) vuelve al botón, que se había ido.
+  const campoDelNombre = useRef<HTMLInputElement>(null)
+  const botonAgregar = useRef<HTMLButtonElement>(null)
+  const sePidioElCampo = useRef(false)
+  useEffect(() => {
+    if (agregando) {
+      sePidioElCampo.current = true
+      campoDelNombre.current?.focus()
+    } else if (sePidioElCampo.current) {
+      sePidioElCampo.current = false
+      botonAgregar.current?.focus()
+    }
+  }, [agregando])
+
   async function handleToggle(item: ItemEtiquetado, comensal: Comensal) {
     const key = chipKey(item.pedidoItemId, comensal.id)
     if (enProceso.has(key)) return
@@ -327,7 +347,8 @@ export function EtiquetarPedidosPage() {
             {agregando ? (
               <div style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
                 <input
-                  autoFocus
+                  ref={campoDelNombre}
+                  aria-label="Nombre del comensal"
                   value={nombreNuevo}
                   onChange={(e) => setNombreNuevo(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter') void handleAgregarComensal() }}
@@ -360,6 +381,7 @@ export function EtiquetarPedidosPage() {
               </div>
             ) : (
               <button
+                ref={botonAgregar}
                 onClick={() => setAgregando(true)}
                 style={{
                   display: 'inline-flex', alignItems: 'center', padding: '6px 12px', borderRadius: 999,
@@ -372,7 +394,7 @@ export function EtiquetarPedidosPage() {
             )}
           </div>
           {errorComensales && (
-            <p style={{
+            <p role="alert" style={{
               fontFamily: 'Inter, sans-serif', fontSize: 12, color: '#DC2626',
               background: '#FEF2F2', border: '1px solid #FECACA',
               borderRadius: 10, padding: '8px 10px', margin: '8px 0 0',

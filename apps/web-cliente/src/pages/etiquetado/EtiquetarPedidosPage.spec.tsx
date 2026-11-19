@@ -111,22 +111,108 @@ describe('EtiquetarPedidosPage', () => {
       expect(screen.queryByRole('button', { name: /Armar mensaje/ })).not.toBeInTheDocument()
     })
 
-    it('tocar un chip etiqueta, o desetiqueta si ya estaba; mientras tanto se deshabilita', async () => {
+    it('tocar un chip etiqueta, o desetiqueta si ya estaba; mientras tanto no hace nada', async () => {
       let terminar: () => void = () => {}
       etiquetar.mockReturnValueOnce(new Promise<void>((r) => { terminar = r }))
       abrir()
 
-      fireEvent.click(within(tarjeta('Agua')).getByRole('button', { name: 'Sol' }))
+      fireEvent.click(within(tarjeta('Agua')).getByRole('button', { name: 'Sol, Agua' }))
       expect(etiquetar).toHaveBeenCalledWith('pi-3', 'c-sol')
-      const enCurso = within(tarjeta('Agua')).getByRole('button', { name: '…' })
-      expect(enCurso).toBeDisabled()
+      const enCurso = within(tarjeta('Agua')).getByRole('button', { name: 'Sol, Agua' })
+      expect(enCurso).toHaveTextContent('…')
+      expect(enCurso).toHaveAttribute('aria-disabled', 'true')
       fireEvent.click(enCurso)
       expect(etiquetar).toHaveBeenCalledTimes(1)
       await act(async () => { terminar() })
-      expect(within(tarjeta('Agua')).getByRole('button', { name: 'Sol' })).toBeEnabled()
+      expect(within(tarjeta('Agua')).getByRole('button', { name: 'Sol, Agua' })).toHaveAttribute('aria-disabled', 'false')
 
-      fireEvent.click(within(tarjeta('Milanesa')).getByRole('button', { name: 'Coty' }))
+      fireEvent.click(within(tarjeta('Milanesa')).getByRole('button', { name: 'Coty, Milanesa' }))
       await vi.waitFor(() => expect(desetiquetar).toHaveBeenCalledWith('pi-1', 'c-yo'))
+    })
+  })
+
+  describe('chips y campo del nombre (accesibilidad)', () => {
+    const chip = (plato: string, comensalNombre: string) => within(tarjeta(plato)).getByRole('button', { name: `${comensalNombre}, ${plato}` })
+
+    it('cada chip dice a qué plato se refiere: "Coty, Milanesa", y empieza con el texto que se ve', () => {
+      abrir()
+
+      expect(within(tarjeta('Pizza')).getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual(['Coty, Pizza', 'Sol, Pizza', 'Luis, Pizza'])
+      expect(chip('Pizza', 'Sol')).toHaveTextContent('Sol')
+    })
+
+    it('el chip expone si el comensal está etiquetado (aria-pressed), y no solo con el color', () => {
+      abrir()
+
+      expect(chip('Milanesa', 'Coty')).toHaveAttribute('aria-pressed', 'true')
+      expect(chip('Milanesa', 'Sol')).toHaveAttribute('aria-pressed', 'false')
+      expect(chip('Pizza', 'Coty')).toHaveAttribute('aria-pressed', 'true')
+      expect(chip('Pizza', 'Sol')).toHaveAttribute('aria-pressed', 'true')
+      expect(chip('Pizza', 'Luis')).toHaveAttribute('aria-pressed', 'false')
+    })
+
+    it('al tocarlo conserva el foco (no se deshabilita), para que el lector diga el estado nuevo', async () => {
+      let terminar: () => void = () => {}
+      etiquetar.mockReturnValueOnce(new Promise<void>((r) => { terminar = r }))
+      abrir()
+      const boton = chip('Agua', 'Sol')
+      boton.focus()
+
+      fireEvent.click(boton)
+
+      expect(boton).not.toBeDisabled()
+      expect(boton).toHaveFocus()
+      await act(async () => { terminar() })
+      expect(boton).toHaveFocus()
+    })
+
+    it('"+ Agregar" lleva el foco al campo del nombre (que tiene su nombre accesible), sin autoFocus al cargar', () => {
+      abrir()
+      expect(document.body).toHaveFocus()
+
+      fireEvent.click(screen.getByRole('button', { name: '+ Agregar' }))
+
+      const campo = screen.getByRole('textbox', { name: 'Nombre del comensal' })
+      expect(campo).toHaveFocus()
+      expect(campo).toHaveAttribute('placeholder', 'Nombre')
+    })
+
+    it('al cancelar el foco vuelve a "+ Agregar"', () => {
+      abrir()
+      fireEvent.click(screen.getByRole('button', { name: '+ Agregar' }))
+
+      fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }))
+
+      expect(screen.getByRole('button', { name: '+ Agregar' })).toHaveFocus()
+    })
+
+    it('al agregar el comensal el foco vuelve a "+ Agregar"', async () => {
+      agregarComensal.mockResolvedValue(undefined)
+      abrir()
+      fireEvent.click(screen.getByRole('button', { name: '+ Agregar' }))
+      fireEvent.change(screen.getByRole('textbox', { name: 'Nombre del comensal' }), { target: { value: 'Mica' } })
+
+      fireEvent.click(screen.getByRole('button', { name: 'Agregar' }))
+
+      await vi.waitFor(() => expect(screen.getByRole('button', { name: '+ Agregar' })).toHaveFocus())
+    })
+
+    it('el error de agregar o borrar un comensal se anuncia como alerta', async () => {
+      agregarComensal.mockRejectedValueOnce(new Error('Ya existe Mica'))
+      abrir()
+      fireEvent.click(screen.getByRole('button', { name: '+ Agregar' }))
+      fireEvent.change(screen.getByRole('textbox', { name: 'Nombre del comensal' }), { target: { value: 'Mica' } })
+
+      fireEvent.click(screen.getByRole('button', { name: 'Agregar' }))
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('Ya existe Mica')
+    })
+
+    it('con el campo del nombre abierto no tiene violaciones de accesibilidad (axe)', async () => {
+      const { container } = abrir()
+      fireEvent.click(screen.getByRole('button', { name: '+ Agregar' }))
+
+      expect(await axe(container)).toHaveNoViolations()
     })
   })
 
