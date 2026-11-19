@@ -25,7 +25,7 @@ function DrawerRow({
       style={{
         display: 'flex', alignItems: 'center', gap: 12, width: '100%', textAlign: 'left',
         border: 'none', padding: '11px 14px', borderRadius: 10, cursor: deshabilitada ? 'default' : 'pointer',
-        color: primary ? CM.orange : CM.text,
+        color: primary ? CM.orangeText : CM.text,
         background: primary ? CM.orangeSoft : 'transparent',
         transition: 'background .12s',
         userSelect: 'none',

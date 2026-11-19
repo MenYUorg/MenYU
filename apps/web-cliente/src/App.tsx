@@ -27,6 +27,7 @@ import { usePublicMenuStore } from './store/publicMenuStore'
 import { GraciasCard } from './components/GraciasCard'
 import { Anunciador } from './components/Anunciador'
 import { SeguimientoDeRuta } from './components/SeguimientoDeRuta'
+import { C } from './theme'
 import { anunciar } from './utils/anunciador'
 
 const WS_BASE =
@@ -145,7 +146,7 @@ function SessionGuard({ children }: { children: React.ReactNode }) {
                 padding:    '12px 0',
                 borderRadius: 10,
                 border:     'none',
-                background: '#E8563A',
+                background: C.orange,
                 color:      'white',
                 fontFamily: 'Montserrat,sans-serif',
                 fontWeight: 700,

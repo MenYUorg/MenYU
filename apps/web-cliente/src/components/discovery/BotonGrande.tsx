@@ -36,7 +36,7 @@ export function BotonGrande({ variante = 'primario', icono, to, onClick, disable
     color: disabled ? C.white : primario ? C.white : C.navy,
     border: disabled ? `1.5px solid ${C.gray}` : primario ? 'none' : `1.5px solid ${C.borderInput}`,
   } as const
-  const clases = disabled ? '' : primario ? 'hover:!bg-[#d34a30] transition-colors' : 'hover:!border-[#2D3561] transition-colors'
+  const clases = disabled ? '' : primario ? 'hover:!bg-coral-oscuro transition-colors' : 'hover:!border-navy transition-colors'
   const contenido = (
     <>
       {icono && <Icono nombre={icono} tam={20} grosor={primario ? 2.5 : 2.2} />}

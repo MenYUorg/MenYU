@@ -44,7 +44,7 @@ function Boton({ variante, to, onClick, children }: BotonProps) {
     textAlign: 'center',
     cursor: 'pointer',
   }
-  const clases = principal ? 'hover:!bg-[#d34a30] transition-colors' : 'hover:!border-[#2D3561] transition-colors'
+  const clases = principal ? 'hover:!bg-coral-oscuro transition-colors' : 'hover:!border-navy transition-colors'
   if (to) return <Link to={to} replace className={clases} style={estilo}>{children}</Link>
   return <button type="button" onClick={onClick} className={clases} style={estilo}>{children}</button>
 }

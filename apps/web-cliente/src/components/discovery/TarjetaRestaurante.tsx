@@ -19,7 +19,7 @@ export function TarjetaRestaurante({ restaurante }: { restaurante: DiscoveryRest
   return (
     <Link
       to={`/restaurante/${id}`}
-      className="flex min-h-[80px] min-w-0 items-center gap-3 rounded-xl border bg-white p-3 transition hover:border-[rgba(232,86,58,0.3)] hover:shadow-[0_4px_16px_rgba(232,86,58,0.1)]"
+      className="flex min-h-[80px] min-w-0 items-center gap-3 rounded-xl border bg-white p-3 transition hover:border-[rgba(204,74,49,0.3)] hover:shadow-[0_4px_16px_rgba(204,74,49,0.1)]"
       style={{ borderColor: C.border }}
     >
       <LogoRestaurante nombre={nombre} logoUrl={logoUrl} />
@@ -54,7 +54,7 @@ export function TarjetaRestaurante({ restaurante }: { restaurante: DiscoveryRest
               alignSelf: 'flex-start',
               marginTop: 3,
               background: C.orangeSoft,
-              color: C.orange,
+              color: C.orangeText,
               fontFamily: 'Montserrat, sans-serif',
               fontWeight: 700,
               fontSize: 11,

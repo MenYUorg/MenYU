@@ -22,7 +22,7 @@ export function BotonCarrito() {
         background: CM.orange, color: 'white', border: 'none',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         fontSize: 22, cursor: 'pointer',
-        boxShadow: '0 8px 24px rgba(232,86,58,0.42)',
+        boxShadow: '0 8px 24px rgba(204,74,49,0.42)',
       }}
     >
       <span aria-hidden="true">🛒</span>

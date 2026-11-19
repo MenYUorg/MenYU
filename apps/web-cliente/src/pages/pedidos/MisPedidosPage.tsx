@@ -4,21 +4,22 @@ import { EncabezadoPantalla, MarcoPantalla } from '../../components/PantallaCome
 import { estadoCargando, estadoError, estadoVacio } from '../../components/estadosPantalla'
 import { usePedidosCliente } from '../../hooks/usePedidosCliente'
 import type { PedidoCliente } from '../../hooks/usePedidosCliente'
+import { C as TEMA } from '../../theme'
 import { TEXTO_DEL_ESTADO } from '../../utils/estadoDelPedido'
 
 const C = {
-  orange:     '#E8563A',
-  navy:       '#2D3561',
-  orangeSoft: '#FDE5DF',
-  bg:         '#F7F7F8',
-  text:       '#1A1A2E',
-  gray:       '#9CA3AF',
-  border:     '#E5E7EB',
+  orange:     TEMA.orange,
+  navy:       TEMA.navy,
+  orangeSoft: TEMA.orangeSoft,
+  bg:         TEMA.bg,
+  text:       TEMA.text,
+  gray:       TEMA.gray,
+  border:     TEMA.border,
 }
 
 // El estado se distingue por el texto, no por el color: todos los distintivos son iguales (decisión 2 del plan de accesibilidad).
-const BADGE_FONDO = '#FDE5DF'
-const BADGE_TEXTO = '#B8432C'
+const BADGE_FONDO = TEMA.orangeSoft
+const BADGE_TEXTO = TEMA.orangeText
 
 const PROGRESS: Record<PedidoCliente['estado'], number | null> = {
   pendiente:      25,

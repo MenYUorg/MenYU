@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { axe } from '../test/axe'
+import { C } from '../theme'
 import { GraciasCard } from './GraciasCard'
 
 describe('GraciasCard como pantalla (/pago/exitoso)', () => {
@@ -32,9 +33,9 @@ describe('GraciasCard como pantalla (/pago/exitoso)', () => {
     expect(container.querySelector('svg')!.closest('[aria-hidden="true"]')).not.toBeNull()
     const salir = screen.getByRole('button', { name: 'Salir' })
     fireEvent.mouseEnter(salir)
-    expect(salir).toHaveStyle({ background: '#d34a30' })
+    expect(salir).toHaveStyle({ background: C.orangeHover })
     fireEvent.mouseLeave(salir)
-    expect(salir).toHaveStyle({ background: '#E8563A' })
+    expect(salir).toHaveStyle({ background: C.orange })
   })
 
   it('no tiene violaciones de accesibilidad (axe)', async () => {

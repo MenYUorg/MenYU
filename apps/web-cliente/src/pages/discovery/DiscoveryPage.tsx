@@ -219,7 +219,7 @@ export function DiscoveryPage() {
                   aria-label="Buscar restaurantes o platos"
                   value={texto}
                   onChange={(e) => setTexto(e.target.value)}
-                  className="w-full appearance-none outline-none transition-colors focus:border-[#E8563A]"
+                  className="w-full appearance-none transition-colors focus:border-coral"
                   style={{
                     height: 46,
                     padding: '0 46px 0 42px',
@@ -252,7 +252,7 @@ export function DiscoveryPage() {
                 type="button"
                 onClick={abrirEscaner}
                 disabled={abriendo}
-                className="mx-auto mt-1 flex w-full max-w-[560px] items-center justify-center gap-2 hover:text-[#E8563A]"
+                className="mx-auto mt-1 flex w-full max-w-[560px] items-center justify-center gap-2 hover:text-coral"
                 style={{ minHeight: 44, background: 'none', border: 'none', fontFamily: 'Montserrat, sans-serif', fontWeight: 600, fontSize: 13, color: C.navy, cursor: abriendo ? 'wait' : 'pointer' }}
               >
                 <span style={{ color: C.orange, display: 'flex' }}><Icono nombre="escanear" tam={20} grosor={2.2} /></span>

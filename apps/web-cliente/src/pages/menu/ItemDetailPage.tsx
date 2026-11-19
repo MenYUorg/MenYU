@@ -5,19 +5,21 @@ import { useSessionStore } from '../../store/sessionStore'
 import { useCarritoStore } from '../../store/carritoStore'
 import { DescuentoBadge, MenuItemImage, PrecioConDescuento } from '@menyu/ui'
 import { SelectorDeCantidad } from '../../components/SelectorDeCantidad'
+import { C as TEMA } from '../../theme'
 import { anunciar } from '../../utils/anunciador'
 import { formatearPrecio, precioVigenteDe, tieneDescuento } from '../../utils/precio'
 import type { MenuPublicoItem } from '@menyu/types'
 
 const C = {
-  orange: '#E8563A',
-  orangeHover: '#d34a30',
-  orangeSoft: '#FDE5DF',
-  navy: '#2D3561',
-  text: '#1A1A2E',
-  textSub: '#6B7280',
+  orange: TEMA.orange,
+  orangeHover: TEMA.orangeHover,
+  orangeText: TEMA.orangeText,
+  orangeSoft: TEMA.orangeSoft,
+  navy: TEMA.navy,
+  text: TEMA.text,
+  textSub: TEMA.textSub,
   border: '#ECECEE',
-  bg: '#F7F7F8',
+  bg: TEMA.bg,
 } as const
 
 export function ItemDetailPage() {
@@ -77,7 +79,7 @@ export function ItemDetailPage() {
   if (!loading && error) {
     return (
       <main style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100svh', gap: 16, padding: 24, background: 'white' }}>
-        <h1 style={{ fontFamily: 'Inter,sans-serif', fontWeight: 400, fontSize: 14, color: C.orange, margin: 0 }}>No se pudo cargar el menú</h1>
+        <h1 style={{ fontFamily: 'Inter,sans-serif', fontWeight: 400, fontSize: 14, color: C.orangeText, margin: 0 }}>No se pudo cargar el menú</h1>
         <button onClick={() => navigate('/menu')} style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 600, fontSize: 13, color: C.navy, background: 'none', border: 'none', cursor: 'pointer' }}>
           ← Volver al menú
         </button>
@@ -88,7 +90,7 @@ export function ItemDetailPage() {
   if (!loading && menu && !item) {
     return (
       <main style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100svh', gap: 16, padding: 24, background: 'white' }}>
-        <h1 style={{ fontFamily: 'Inter,sans-serif', fontWeight: 400, fontSize: 14, color: C.orange, margin: 0 }}>Ítem no encontrado</h1>
+        <h1 style={{ fontFamily: 'Inter,sans-serif', fontWeight: 400, fontSize: 14, color: C.orangeText, margin: 0 }}>Ítem no encontrado</h1>
         <button onClick={() => navigate('/menu')} style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 600, fontSize: 13, color: C.navy, background: 'none', border: 'none', cursor: 'pointer' }}>
           ← Volver al menú
         </button>
@@ -296,7 +298,7 @@ export function ItemDetailPage() {
                           {ii.ingrediente?.nombre ?? ii.ingredienteId}
                         </span>
                         {Number(ii.precioExtra) > 0 && (
-                          <span style={{ background: C.orangeSoft, color: C.orange, fontSize: 11, fontWeight: 700, fontFamily: 'Inter,sans-serif', borderRadius: 999, padding: '3px 9px' }}>
+                          <span style={{ background: C.orangeSoft, color: C.orangeText, fontSize: 11, fontWeight: 700, fontFamily: 'Inter,sans-serif', borderRadius: 999, padding: '3px 9px' }}>
                             +{formatearPrecio(Number(ii.precioExtra))}
                           </span>
                         )}
@@ -347,10 +349,9 @@ export function ItemDetailPage() {
                 resize:       'none',
                 background:   '#F7F7F8',
                 color:        '#1A1A2E',
-                outline:      'none',
                 transition:   'border-color 0.15s',
               }}
-              onFocus={(e) => { e.currentTarget.style.borderColor = '#E8563A' }}
+              onFocus={(e) => { e.currentTarget.style.borderColor = C.orange }}
               onBlur={(e)  => { e.currentTarget.style.borderColor = '#E5E7EB' }}
             />
           </div>
@@ -425,7 +426,7 @@ export function ItemDetailPage() {
               borderRadius: 14, padding: '14px 18px', border: 'none',
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 15,
-              boxShadow: '0 8px 22px rgba(232,86,58,0.32)',
+              boxShadow: '0 8px 22px rgba(204,74,49,0.32)',
               cursor: 'pointer', gap: 12, minHeight: 56,
               transition: 'background .15s',
             }}

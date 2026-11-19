@@ -40,9 +40,15 @@ export function EncabezadoPantalla({
           color:      'white',
           fontSize:   22,
           lineHeight: 1,
-          padding:    '2px 8px 2px 0',
           display:    'flex',
           alignItems: 'center',
+          justifyContent: 'flex-start',
+          // Área de toque de 44×44 (no se ve): el relleno de la izquierda y los márgenes negativos la compensan, y la flecha
+          // y el título quedan donde estaban (el botón ocupa 27×26 en el encabezado).
+          minWidth:   44,
+          minHeight:  44,
+          padding:    '0 0 0 8px',
+          margin:     '-9px -9px -9px -8px',
         }}
         aria-label={etiquetaVolver}
       >

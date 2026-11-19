@@ -1,11 +1,12 @@
 import { useNavigate } from 'react-router-dom'
 import { useCuenta } from '../hooks/useCuenta'
 import { useIrAlIngreso } from '../hooks/useIrAlIngreso'
+import { C as TEMA } from '../theme'
 
 const C = {
-  orange: '#E8563A',
-  navy: '#2D3561',
-  textSub: '#6B7280',
+  orange: TEMA.orange,
+  navy: TEMA.navy,
+  textSub: TEMA.textSub,
   border: '#ECECEE',
 } as const
 

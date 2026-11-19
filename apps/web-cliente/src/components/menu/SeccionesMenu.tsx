@@ -17,7 +17,7 @@ function EmptyState({ buscar, hayDietas, onClear }: { buscar: string; hayDietas:
       {(buscar || hayDietas) && (
         <button
           onClick={onClear}
-          style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 600, fontSize: 13, color: CM.orange, background: 'none', border: 'none', cursor: 'pointer' }}
+          style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 600, fontSize: 13, color: CM.orangeText, background: 'none', border: 'none', cursor: 'pointer' }}
         >
           Limpiar filtros
         </button>

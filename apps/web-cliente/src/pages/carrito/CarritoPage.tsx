@@ -4,6 +4,7 @@ import { useCarritoStore } from '../../store/carritoStore'
 import { useSessionStore } from '../../store/sessionStore'
 import { usePublicMenuStore } from '../../store/publicMenuStore'
 import { api } from '../../services/api'
+import { C as TEMA } from '../../theme'
 import { enfocarElTitulo } from '../../utils/enfocarTitulo'
 import { formatearPrecio } from '../../utils/precio'
 import { MenuItemImage } from '@menyu/ui'
@@ -21,12 +22,12 @@ interface PedidoConfirmado {
 }
 
 const C = {
-  orange:      '#E8563A',
-  navy:        '#2D3561',
-  orangeSoft:  '#FDE5DF',
-  bg:          '#F7F7F8',
-  text:        '#1A1A2E',
-  gray:        '#9CA3AF',
+  orange:      TEMA.orange,
+  navy:        TEMA.navy,
+  orangeSoft:  TEMA.orangeSoft,
+  bg:          TEMA.bg,
+  text:        TEMA.text,
+  gray:        TEMA.gray,
   border:      '#F0F0F2',
   errorBg:     '#FEF2F2',
   errorBorder: '#FECACA',
@@ -410,14 +411,15 @@ export function CarritoPage() {
                         display:      'block',
                         background:   'none',
                         border:       'none',
-                        padding:      0,
                         textAlign:    'left',
                         fontFamily:   'Montserrat, sans-serif',
                         fontWeight:   700,
                         fontSize:     14,
                         color:        C.text,
-                        margin:       0,
-                        marginBottom: (modsText || item.nota) ? 3 : 0,
+                        // Área de toque de 33 px de alto (no se ve): los márgenes negativos compensan el relleno.
+                        padding:      '6px 0',
+                        margin:       '-6px 0',
+                        marginBottom: (modsText || item.nota) ? -3 : -6,
                         cursor:       'pointer',
                       }}
                     >
@@ -500,7 +502,12 @@ export function CarritoPage() {
                       fontFamily: 'Inter, sans-serif',
                       fontSize:   12,
                       fontWeight: 500,
-                      color:      '#EF4444',
+                      color:      C.errorText,
+                      // Área de toque de 44 px de alto (no se ve): los márgenes negativos compensan el relleno y el botón
+                      // ocupa en la tarjeta el mismo lugar de siempre.
+                      minHeight:  44,
+                      padding:    '0 8px',
+                      margin:     '-6px -8px -6px 0',
                     }}
                   >
                     Quitar

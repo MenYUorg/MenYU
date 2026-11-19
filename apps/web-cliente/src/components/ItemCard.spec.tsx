@@ -3,6 +3,7 @@ import { crearPlato, crearPlatoEnDescuento } from '../test/fixtures'
 import { ItemCard } from './ItemCard'
 import userEvent from '@testing-library/user-event'
 import { axe } from '../test/axe'
+import { C } from '../theme'
 
 describe('ItemCard', () => {
   describe('con y sin "onPress" (mesa y carta)', () => {
@@ -32,8 +33,8 @@ describe('ItemCard', () => {
       expect(() => fireEvent.click(tarjeta)).not.toThrow()
       fireEvent.mouseEnter(tarjeta)
 
-      expect(tarjeta.style.boxShadow).not.toContain('rgba(232,86,58')
-      expect(tarjeta.style.borderColor).not.toContain('rgba(232, 86, 58')
+      expect(tarjeta.style.boxShadow).not.toContain('rgba(204,74,49')
+      expect(tarjeta.style.borderColor).not.toContain('rgba(204, 74, 49')
     })
 
     it('sin onPress igual muestra el descuento, el precio y la descripción', () => {
@@ -116,7 +117,7 @@ describe('ItemCard', () => {
     it('el precio con descuento se escribe en naranja', () => {
       render(<ItemCard item={enDescuento()} onPress={vi.fn()} />)
 
-      expect(screen.getByText('$ 800')).toHaveStyle({ color: '#E8563A' })
+      expect(screen.getByText('$ 800')).toHaveStyle({ color: C.orange })
     })
   })
 
@@ -169,6 +170,15 @@ describe('ItemCard', () => {
 
       expect(container.firstElementChild).toHaveAttribute('role', 'presentation')
       expect(screen.getAllByRole('button')).toHaveLength(1)
+    })
+
+    it('el "+" se toca como un botón de 44 × 44 px: su ::after invisible lo agranda 8 px de cada lado (mide 28 × 28)', () => {
+      render(<ItemCard item={crearPlato({ nombre: 'Flan' })} onPress={() => {}} />)
+
+      const mas = screen.getByRole('button', { name: 'Ver Flan' })
+
+      expect(mas).toHaveStyle({ width: '28px', height: '28px' })
+      expect(mas).toHaveClass('relative', 'after:absolute', 'after:-inset-2')
     })
 
     it('el botón se activa con el teclado (Enter) y abre el detalle una sola vez', async () => {

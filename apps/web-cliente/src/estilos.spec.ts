@@ -16,6 +16,50 @@ function selectoresQueQuitanElContorno(css: string): string[] {
     .map(([, selector]) => selector.trim())
 }
 
+/** El bloque de declaraciones de la regla cuyo selector es exactamente `selector` (sin comentarios). */
+function declaracionesDe(css: string, seleccion: (selector: string) => boolean): string | undefined {
+  const sinComentarios = css.replace(/\/\*[\s\S]*?\*\//g, '').replace(/@[\w-]+[^{};]*;/g, '')
+  return [...sinComentarios.matchAll(/([^{}]+)\{([^{}]*)\}/g)].find(([, selector]) => seleccion(selector.trim()))?.[2]
+}
+
+describe('index.css: el anillo de foco de los controles (WCAG 2.4.7)', () => {
+  const esLaReglaDelAnillo = (selector: string) => selector.endsWith(':focus-visible') && selector.startsWith(':is(')
+  const declaraciones = declaracionesDe(hojaDeEstilos, esLaReglaDelAnillo)
+
+  it('hay una regla de :focus-visible que dibuja un contorno de 2 px, separado, con un aro blanco entre el control y el contorno', () => {
+    expect(declaraciones).toBeDefined()
+    expect(declaraciones).toMatch(/outline\s*:\s*2px solid theme\('colors\.navy'\)/)
+    expect(declaraciones).toMatch(/outline-offset\s*:\s*2px/)
+    expect(declaraciones).toMatch(/box-shadow\s*:\s*0 0 0 2px #ffffff/i)
+  })
+
+  it('el selector alcanza a los controles (enlace con href, botón, campos, interruptor, casilla, tabindex 0) y no a lo demás', () => {
+    const regla = [...hojaDeEstilos.matchAll(/(:is\([\s\S]*?\)):focus-visible\s*\{/g)][0][1]
+    const crear = (html: string) => {
+      const contenedor = document.createElement('div')
+      contenedor.innerHTML = html
+      document.body.append(contenedor)
+      return contenedor
+    }
+    const contenedor = crear(`
+      <a href="/x" id="enlace">e</a><a id="ancla">a</a><button id="boton">b</button><input id="campo"><textarea id="area"></textarea><select id="lista"></select>
+      <div role="switch" id="interruptor" tabindex="0"></div><div role="checkbox" id="casilla" tabindex="0"></div><div id="foco0" tabindex="0"></div>
+      <div id="contenedor" tabindex="-1"></div><h1 id="titulo" tabindex="-1">t</h1><h2 id="seccion" tabindex="-1">s</h2><p id="parrafo">p</p>
+    `)
+    try {
+      const alcanza = (id: string) => contenedor.querySelector(`#${id}`)!.matches(regla)
+      for (const id of ['enlace', 'boton', 'campo', 'area', 'lista', 'interruptor', 'casilla', 'foco0']) expect(alcanza(id), id).toBe(true)
+      for (const id of ['ancla', 'contenedor', 'titulo', 'seccion', 'parrafo']) expect(alcanza(id), id).toBe(false)
+    } finally {
+      contenedor.remove()
+    }
+  })
+
+  it('va dentro de @layer base, para que una clase de Tailwind pueda pisarlo', () => {
+    expect(hojaDeEstilos).toMatch(/@layer base\s*\{\s*:is\(/)
+  })
+})
+
 describe('index.css: el foco visible', () => {
   it('solo quita el anillo de foco de los <h1> y <h2> que reciben el foco por código (tabindex -1)', () => {
     const selectores = selectoresQueQuitanElContorno(hojaDeEstilos)

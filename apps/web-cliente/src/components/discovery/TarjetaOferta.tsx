@@ -14,7 +14,7 @@ interface TarjetaOfertaProps {
 }
 
 const CLASES = 'flex min-w-0 flex-col overflow-hidden rounded-xl border bg-white transition'
-const CLASES_CON_LINK = ' hover:border-[rgba(232,86,58,0.3)] hover:shadow-[0_4px_16px_rgba(232,86,58,0.1)]'
+const CLASES_CON_LINK = ' hover:border-[rgba(204,74,49,0.3)] hover:shadow-[0_4px_16px_rgba(204,74,49,0.1)]'
 
 /**
  * Tarjeta de una oferta: la del menú (foto con el círculo del porcentaje, precio original tachado y precio con

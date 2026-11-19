@@ -10,12 +10,12 @@ import { C } from '../../theme'
 function ErrorBanner({ id, message }: { id: string; message: string }) {
   return (
     <div id={id} role="alert" style={{
-      background: '#FDE5DF',
+      background: C.orangeSoft,
       border: `1px solid ${C.orange}`,
       borderRadius: 10,
       padding: '10px 14px',
     }}>
-      <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#c0392b', margin: 0 }}>
+      <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: C.error, margin: 0 }}>
         {message}
       </p>
     </div>
@@ -149,7 +149,6 @@ const inputStyle: React.CSSProperties = {
   fontFamily: 'Inter, sans-serif',
   fontSize: 15,
   color: '#1A1A2E',
-  outline: 'none',
   boxSizing: 'border-box',
 }
 

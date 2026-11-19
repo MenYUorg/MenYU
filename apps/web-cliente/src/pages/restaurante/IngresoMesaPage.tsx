@@ -187,7 +187,7 @@ export function IngresoMesaPage() {
             aria-expanded={false}
             aria-controls="panel-pin"
             onClick={() => abrirPin(null)}
-            className="hover:[&>b]:!text-[#E8563A]"
+            className="hover:[&>b]:!text-coral"
             style={{ display: 'block', width: '100%', marginTop: 8, padding: '14px 4px', background: 'none', border: 'none', textAlign: 'center', fontFamily: 'Inter, sans-serif', fontSize: 12.5, lineHeight: 1.4, color: C.textSub, cursor: 'pointer' }}
           >
             ¿Pasó algo con tu cámara? <b style={{ color: C.navy, fontWeight: 600, textDecoration: 'underline', textUnderlineOffset: 2, whiteSpace: 'nowrap' }}>Ingresá el PIN de tu mesa</b>
@@ -218,7 +218,7 @@ export function IngresoMesaPage() {
                 setError(null)
                 setErrorDelCampo(null)
               }}
-              className="focus:border-[#E8563A]"
+              className="focus:border-coral"
               style={{
                 width: '100%',
                 height: 56,
@@ -232,7 +232,6 @@ export function IngresoMesaPage() {
                 letterSpacing: '0.2em',
                 textAlign: 'center',
                 color: abriendo ? C.gray : C.text,
-                outline: 'none',
                 boxSizing: 'border-box',
               }}
             />

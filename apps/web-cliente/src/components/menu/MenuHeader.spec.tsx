@@ -4,6 +4,7 @@ import { useSessionStore } from '../../store/sessionStore'
 import { MenuHeader } from './MenuHeader'
 import userEvent from '@testing-library/user-event'
 import { axe } from '../../test/axe'
+import { C } from '../../theme'
 import { useAnunciadorStore } from '../../utils/anunciador'
 
 vi.mock('../../services/api', () => ({
@@ -159,7 +160,7 @@ describe('MenuHeader', () => {
         expect(pill.getAttribute('style')).toContain('border: 1.5px solid')
       }
       // La mesa sigue naranja y el código con el borde claro.
-      expect(mesa.getAttribute('style')).toContain('background: rgb(232, 86, 58)')
+      expect(mesa).toHaveStyle({ background: C.orange })
       expect(pin.getAttribute('style')).toContain('rgba(255, 255, 255, 0.5)')
     })
 

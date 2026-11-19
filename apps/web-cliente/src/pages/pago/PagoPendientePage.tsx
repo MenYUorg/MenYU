@@ -12,13 +12,13 @@ export function PagoPendientePage() {
       </p>
       <button
         onClick={() => navigate('/pedidos')}
-        className="mt-2 px-6 py-3 bg-orange-500 text-white font-semibold rounded-xl text-sm"
+        className="mt-2 px-6 py-3 bg-coral text-white font-semibold rounded-xl text-sm"
       >
         Ver mis pedidos
       </button>
       <button
         onClick={() => navigate('/menu')}
-        className="text-sm text-gray-400 underline"
+        className="text-sm text-gray-500 underline"
       >
         Volver al menú
       </button>

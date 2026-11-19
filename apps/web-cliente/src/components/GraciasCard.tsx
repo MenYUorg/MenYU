@@ -1,11 +1,6 @@
 import { useId, useRef } from 'react'
 import { useFocoDelDialogo } from '../hooks/useFocoDelDialogo'
-
-const C = {
-  orange: '#E8563A',
-  navy: '#2D3561',
-  textSub: '#6B7280',
-} as const
+import { C } from '../theme'
 
 interface GraciasCardProps {
   subtitulo: string
@@ -79,7 +74,7 @@ export function GraciasCard({ subtitulo, onSalir, comoDialogo = false }: Gracias
       </p>
       <button
         onClick={onSalir}
-        onMouseEnter={e => e.currentTarget.style.background = '#d34a30'}
+        onMouseEnter={e => e.currentTarget.style.background = C.orangeHover}
         onMouseLeave={e => e.currentTarget.style.background = C.orange}
         style={{
           marginTop: 8,

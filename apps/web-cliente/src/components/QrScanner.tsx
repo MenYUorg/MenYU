@@ -69,7 +69,7 @@ function clasificarFalla(error: unknown): Falla {
 const TITULOS = 'Montserrat, sans-serif'
 const TEXTO = 'Inter, sans-serif'
 const BLANCO_SUAVE = 'rgba(255,255,255,0.72)'
-const NARANJA_TENUE = 'rgba(232,86,58,0.18)'
+const NARANJA_TENUE = 'rgba(204,74,49,0.18)'
 
 const estiloFondo: CSSProperties = {
   position: 'fixed',
