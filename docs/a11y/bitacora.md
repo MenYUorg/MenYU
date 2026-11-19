@@ -10,7 +10,7 @@ Registro, etapa por etapa, de lo que se hizo para la accesibilidad del flujo del
 | 2. Formato de precios | Hecha (13/11/2026) y mergeada (PR #468, junto con la 3). Quality gate de SonarCloud: passed |
 | 3. Bloqueantes (menú lateral y filtro de dietas) | Hecha (13/11/2026) y mergeada (PR #468, junto con la 2). Quality gate de SonarCloud: passed |
 | 4. Menú, detalle y discovery | Hecha (13/11/2026) y mergeada (PR #469). Quality gate de SonarCloud: passed. Con el arreglo del buscador del menú (19/11/2026) |
-| 5. Carrito, pedidos, PIN, nombre y pago | Pendiente |
+| 5. Carrito, pedidos, PIN, nombre y pago | Hecha (19/11/2026), a la espera de revisión |
 | 6. Contraste, foco visible y tamaños | Pendiente |
 | 7. Cierre (lint, axe de Coty, celulares C1 a C7) | Pendiente |
 | 8. Asistente de la carta (C8): auditar y después arreglar | Pendiente (agregada el 13/11/2026) |
@@ -381,3 +381,90 @@ Pedido por Margarita al mergear la etapa 4, sobre el hallazgo que había quedado
 - **Tests:** +6 (1115 → 1121) y un archivo más (60 → 61): `utils/coincideConLaBusqueda.spec.ts` (5: vacía, una palabra, varias, otro orden y espacios de más, números) y un caso en `ClienteMenuPage.spec.tsx` que busca "milanesa napo" y comprueba que quedan solo los platos que coinciden. El anuncio de cuántos platos quedan y el texto "No hay platos que coincidan" salen del mismo filtro, así que acompañan solos.
 - **Cobertura de web-cliente:** igual que al cierre de la etapa 4 (93,64 % de líneas, 92,97 % de ramas y 84,95 % de funciones; el helper nuevo, al 100 %). `tsc` y ESLint de los archivos tocados, sin avisos.
 - **No se cambió, y queda como idea:** la búsqueda del menú distingue acentos ("cafe" no encuentra "Café"), a diferencia de la de Discovery, que los ignora. Se dejó igual para no mezclar dos cambios de comportamiento.
+
+---
+
+## Etapa 5: carrito, pedidos, PIN, nombre y pago (19/11/2026)
+
+Estado: hecha, a la espera de revisión. Va sobre la rama `feat/a11y-cliente` con las etapas 1 a 4 ya mergeadas y el arreglo del buscador (la rama sigue unos commits atrás de `origin/main`; web-cliente no cambió en `main`).
+
+### Qué cambió
+
+El detalle de cada punto, con las decisiones, está en [`plan-cliente.md`](plan-cliente.md) (Etapa 5). Resumen por pantalla:
+
+**Carrito** (`CarritoPage.tsx`): la confirmación tiene `<h1>` con el foco y el "✓" oculto; "Quitar {plato}"; los "−" y "+" son el `SelectorDeCantidad` (con `minimo={1}`); los extras dicen "Con Cheddar, 2"; el aviso de precios es una región siempre montada; el nombre del plato es el botón "Editar {plato}".
+
+**Mis pedidos** (`MisPedidosPage.tsx`, `usePedidosCliente.ts`, `utils/estadoDelPedido.ts`): los cinco estados con su texto y el mismo color de distintivo, la barra decorativa, "Pedido ABC123", y cuando cocina cambia un pedido se anuncia "Tu pedido de {plato} está {estado}". La tarjeta de gracias (`GraciasCard`, montada desde `App.tsx`) es un diálogo de alerta con el foco en su título y la pantalla de abajo inerte.
+
+**PIN** (`IngresoMesaPage.tsx`): el campo no se deshabilita al enviar, queda inválido y asociado al error, y recupera el foco. El PIN **sigue detrás del texto chico**, como estaba: se había hecho un botón grande del mismo nivel que "Escanear QR" y se deshizo porque no gustó cómo se veía (decisión de Margarita, 19/11).
+
+**Nombre** (`ElegirNombrePage.tsx`): label asociado, sin `autoFocus`, "Continuar" activo y el error de nombre vacío anunciado.
+
+**Pago** (`PagarPage.tsx`, `PagoFallidoPage.tsx`, `PagoPendientePage.tsx`, `GraciasCard.tsx`): la cuenta es una tabla con encabezados, el "Generador de mensaje" es un diálogo con foco, Esc e inercia, los emojis ocultos y los títulos `<h1>`.
+
+**Etiquetar y dividir** (`EtiquetarPedidosPage.tsx`, `CantidadComensalesPage.tsx`): chips con `aria-pressed` y el plato en el nombre, sin `autoFocus`, y la cantidad de comensales con el nombre completo y el monto por persona anunciado.
+
+**Piezas compartidas:** `hooks/useFocoDelDialogo.ts` (el menú lateral pasó a usarlo, sin cambiar su comportamiento), `utils/estadoDelPedido.ts`, y las props `inerte` (`EncabezadoPantalla`) e `id` (`Banner`).
+
+**Sumado a lo que pedía el plan** (chico, de las mismas pantallas; se puede sacar si no se quiere): `role="alert"` en los errores de "Confirmar pedido", de pagar y de agregar o borrar un comensal; el ✅ del cobro en efectivo oculto y anunciado; la nota del carrito con "Nota para cocina:"; los chips de etiquetar con `aria-disabled` en lugar de `disabled` (con `disabled` pierden el foco y `aria-pressed` no se escucha); el foco a "+ Agregar" y de vuelta; los `<h2>` de "Cuenta de la mesa" y "Total a pagar".
+
+### Tests
+
+102 tests nuevos (1121 → 1223), en 64 archivos (61 → 64):
+
+- **Archivos nuevos:** `hooks/useFocoDelDialogo.spec.tsx` (3), `utils/estadoDelPedido.spec.ts` (9: textos, frase y platos del pedido) y `components/GraciasCard.spec.tsx` (9: como pantalla y como diálogo).
+- **Bloques sumados a specs existentes:** `CarritoPage.spec.tsx` (+16: confirmación con foco, cantidad y "Quitar", extras y nota, el nombre como botón, la región de precios y los errores), `PagarPage.spec.tsx` (+13: la tabla, el diálogo con foco, Esc e inercia, y los avisos), `CantidadComensalesPage.spec.tsx` (+10: nombres, anuncios, límites, Enter y su cancelación), `IngresoMesaPage.spec.tsx` (+8: el campo después del error, con 404, vacío, 429, 403 y sin conexión), `ElegirNombrePage.spec.tsx` (+8), `EtiquetarPedidosPage.spec.tsx` (+8: chips y campo del nombre), `usePedidosCliente.spec.ts` (+6: el anuncio del socket), `App.spec.tsx` (+5: el diálogo de sesión cerrada, con `sesion:cerrada` y `sesion:cobrada`), `MisPedidosPage.spec.tsx` (+4) y `PagoResultadoPages.spec.tsx` (+3).
+- **Se actualizaron:** los tests que esperaban los textos viejos ("Enviado" → "Enviado a cocina", "Anulado" → "Cancelado", el número "#AAAAAA" ahora tiene el "#" oculto), el campo del nombre por rol y nombre (ya no por el `placeholder`), "Restar" y "Sumar" por "Restar comensal" y "Sumar comensal", los tests de "deshabilita el campo" (ahora de solo lectura), los chips ("Sol" → "Sol, Agua", con `aria-disabled`) y los tres del aviso de precios del carrito (la región ya existe sola: hay que esperar el texto, no la región).
+- Cada pantalla tocada tiene su test de axe (el del carrito, el PIN con error, el nombre con error, la cuenta con el diálogo abierto, la tarjeta de gracias como diálogo, el campo de cantidad y los chips con el campo del nombre abierto). Ninguno tiene reglas desactivadas.
+
+### Cobertura
+
+| | Fin de la etapa 4 (con el arreglo del buscador) | Después |
+| --- | --- | --- |
+| web-cliente, archivos / tests | 61 / 1121 | 64 / 1223 |
+| web-cliente, líneas | 93,64 % | 94,61 % |
+| web-cliente, ramas | 92,97 % | 93,81 % |
+| web-cliente, funciones | 84,95 % | 87,11 % |
+| `packages/ui`, web-admin, web-staff | sin tocar | sin tocar (esta etapa no toca `packages/ui`) |
+
+Por archivo (líneas / ramas): `CarritoPage` 100 / 98,3 (de 53,6 % de líneas), `ElegirNombrePage` 100 / 96,6 (de 20,9 %), `PagarPage` 100 / 97,5, `EtiquetarPedidosPage` 100 / 97,3, `IngresoMesaPage` 100 / 100, `CantidadComensalesPage` 100 / 100, `MisPedidosPage` 100 / 100, `GraciasCard` 100 / 100 (ahora con su propio spec), `estadoDelPedido` 100 / 100, `useFocoDelDialogo` 100 / 85,7, `usePedidosCliente` 94,5 / 88 y `App.tsx` 68,5 % (de 58,8 %; lo que falta de `App.tsx` son los manejadores del socket del menú y la conexión, y el modal "Sesión finalizada" que no se muestra nunca: ver el hallazgo 7 del plan).
+
+### Quality gate de SonarCloud
+
+Pendiente: se anota cuando corra el PR.
+
+### Verificación en el navegador
+
+En Edge real (390 px, API simulada, un Vite propio en el puerto 5199):
+
+- **Carrito:** los botones se llaman "Editar Plato 1", "Restar Plato 1", "Sumar Plato 1" y "Quitar Plato 1"; sumar anuncia "Plato 1: 3"; la región de precios existe vacía y `sr-only`. Al confirmar, el foco queda en el `<h1>` "¡Pedido enviado a cocina!", sin anillo, y el "✓" está dentro de un bloque oculto.
+- **PIN:** al abrirlo, el foco va al campo. Con un PIN incorrecto el foco vuelve al campo, que queda `aria-invalid="true"` y con `aria-describedby="error-pin"`, que apunta al texto "PIN incorrecto o mesa no encontrada en…". Esto se midió cuando el PIN todavía era un botón grande; después se volvió al texto chico de siempre, que abre el campo con la misma función, así que el foco, el error y el campo son los mismos.
+- **Nombre:** al cargar, el foco no está en el campo; el campo se encuentra por el nombre "Tu nombre"; "Continuar" con el campo vacío dice "Escribí tu nombre para continuar.", deja el campo inválido y le da el foco.
+- **Pagar:** la tabla tiene los encabezados y las filas ("Plato 1 | 10 | $ 1.000 | $ 10.000", "Subtotal | $ 15.000"). Con Enter sobre "Armar mensaje" el foco entra al diálogo (sin anillo), el encabezado y la cuenta quedan inertes y Tab recorre "Partes iguales", "Por consumo" y "Cancelar" y sale de la página sin tocar nada de atrás. Esc lo cierra, el foco vuelve a "Armar mensaje" y se saca la inercia.
+- **Cantidad:** el botón dice "3 comensales, editar cantidad"; sumar anuncia "3 comensales: cada persona paga $ 2.000"; escribir y Enter anuncia el monto nuevo y devuelve el foco al botón.
+- **Mis pedidos:** "Enviado a cocina", "En preparación", "Listo para servir", "Entregado" y "Cancelado" con el mismo distintivo; las barras de progreso (3, las de los estados que la tienen) están ocultas.
+- No se probó en el navegador la tarjeta de gracias (necesita el evento del socket, que se aborta en la verificación): la cubren los tests de `App.spec.tsx`.
+- En las capturas, el carrito, la cuenta con la tabla, el diálogo y Mis pedidos se ven como antes (la tabla conserva las columnas; el diálogo oscurece el fondo como el modal anterior).
+
+### Problemas y cómo se resolvieron
+
+- **El Enter que confirma la cantidad de comensales volvía a abrir el campo.** Lo encontró la verificación en Edge, no los tests: al devolverle el foco al botón con el número durante el `keydown` de Enter, el navegador le manda también el "keypress" al botón y lo activa. En jsdom no pasa. Se cancela el `keydown` (`preventDefault`) y un test comprueba que el evento se cancela y que las demás teclas no.
+- **Por si el campo dispara `blur` al desaparecer** (algunos navegadores lo hacen al sacar del DOM un elemento con el foco), la bandera de "devolver el foco" solo se enciende al confirmar con Enter y la apaga el efecto al usarla: una segunda confirmación por `blur` ya no puede apagarla antes de tiempo. No se llegó a ver en los navegadores probados; es una precaución.
+- **Los tests del aviso de precios del carrito esperaban `findByRole('status')`.** Con la región siempre montada se resuelve al instante, con el texto todavía vacío (pasaba por la suerte de que la respuesta simulada llega enseguida). Se esperan con `waitFor` sobre el texto.
+- **`CarritoPage.spec.tsx` no reiniciaba el simulado de `orders.create`** entre tests: los nuevos acumulaban llamadas. Se reinicia en el `beforeEach` del bloque nuevo.
+- **`tsc` falló en un test con `.at(-1)`** (el `lib` del proyecto no es ES2022): se cambió por el índice.
+- **Un heredoc de Bash con comillas simples y tildes fue rechazado.** Los scripts que editan los specs (varias líneas con acentos) se escribieron con la herramienta de archivos, y como los specs existentes tienen finales de línea CRLF, los scripts convierten los saltos de línea antes de buscar.
+- **`EBUSY` de OneDrive en la primera corrida con cobertura**, como en las etapas anteriores: se repitió y dio 64 de 64 archivos y 1223 de 1223 tests.
+
+### Pendiente
+
+- **Para decidir** (cosas hechas por criterio propio, explicadas en el plan): "Editar {plato}" como nombre del botón del plato en el carrito; "Escribí tu nombre para continuar."; "Sumar comensal", "Restar comensal" y el anuncio "N comensales: cada persona paga …"; que la tarjeta de gracias no se cierre con Esc; "Tu pedido de {plato} está enviado a cocina" para el primer estado; y los agregados de arriba ("Sumado a lo que pedía el plan").
+- **El modal "Sesión finalizada" de `SessionGuard` nunca se muestra** (código muerto): hallazgo 7 del plan. Hay que decidir si se borra.
+- **Contraste y tamaños** de lo que se tocó (grises, coral, el rojo de "Quitar", "Quitar" de 18 px de alto, "Entendido"): etapa 6 (hallazgo 8 del plan).
+- El separador " · " entre las modificaciones del carrito y entre los platos de Mis pedidos se dejó: hay que ver en el celular si el lector lo dice.
+- "Pedido ABC123" se lee como una palabra o letra por letra según el lector (el código son 6 caracteres de un id): se mide en el celular.
+- El texto de los anuncios nuevos (monto por persona, cambio de estado) se mide en el celular en la etapa 7.
+
+### Recorridos con lector (C1 a C8)
+
+Desde esta etapa: **C3** (un PIN incorrecto se anuncia y el foco vuelve al campo; el PIN sigue detrás del texto chico, que es un botón con nombre: en el celular hay que medir si se encuentra sin ayuda), **C2** (el campo del nombre tiene etiqueta y no roba el foco), **C4 completo** (el carrito lee cada ítem con sus extras en palabras y la confirmación tiene foco y título), **C5** (el cambio de estado de un pedido se anuncia: falta medirlo con un pedido real) y **C7** (la cuenta es una tabla, las opciones de pago son botones con nombre y los resultados de Mercado Pago tienen título; falta el flujo de volver de Mercado Pago, que se prueba en el celular). **C6** ya estaba. Falta medirlos en el celular (etapa 7).

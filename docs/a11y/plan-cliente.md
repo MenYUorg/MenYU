@@ -212,49 +212,56 @@ Las rutas son relativas a `apps/web-cliente/src/` salvo que digan otra cosa.
 - [x] `DiscoveryPage.tsx:138`: "Buscando…" es una región de estado **siempre montada**: un único `<p role="status">` que, sin buscar, está vacío y `sr-only`, y al buscar pasa a mostrar el giro y "Buscando…" (ya no hay dos párrafos distintos según el caso).
 - [x] `components/discovery/TarjetaOferta.tsx:27`: la foto de la oferta es decorativa.
 
-### Etapa 5. Carrito, pedidos, PIN, nombre y pago
+### Etapa 5. Carrito, pedidos, PIN, nombre y pago — hecha (19/11/2026), a la espera de revisión
 
 **Carrito** (`pages/carrito/CarritoPage.tsx`):
 
-- [ ] Líneas 123-133: después de confirmar, el foco va al título "¡Pedido enviado a cocina!", que pasa a `<h1>`, y se oculta el "✓". Hoy el foco cae en el `<body>` y no se anuncia nada.
-- [ ] Línea 516: "Quitar" pasa a "Quitar {plato}" (hoy mide 35×18 px; ver etapa 6).
-- [ ] Líneas 457 y 485: los "−" y "+" usan el componente de cantidad de la etapa 4 (`components/SelectorDeCantidad.tsx`, con `minimo={1}`).
-- [ ] Línea 363: los extras se escriben en palabras ("Con Cheddar, 1"), no "+ Cheddar ×1".
-- [ ] Línea 324: la región de "precios actualizados" queda siempre montada.
-- [ ] Línea 386: el nombre clickeable del plato pasa a ser un botón o enlace.
+- [x] Confirmación: "¡Pedido enviado a cocina!" pasa a `<h1>`, el círculo con el "✓" es decorativo (`aria-hidden`) y **el foco va al título** con `enfocarElTitulo()`, en un efecto cuando `exito` pasa a verdadero (no cambia la ruta, así que no lo hace `SeguimientoDeRuta`). "Pedido #ABC123" se lee "Pedido ABC123": el "#" queda oculto.
+- [x] "Quitar" se llama **"Quitar {plato}"** (`aria-label`, que contiene el texto visible). El tamaño del botón es de la etapa 6.
+- [x] Los "−" y "+" usan **`SelectorDeCantidad`** con `minimo={1}`, con el mismo aspecto de antes (símbolo de 18 px, número de 14). Dicen "Sumar/Restar {plato}", anuncian "{plato}: N" y en 1 no se deshabilitan (`aria-disabled`).
+- [x] Los extras se escriben en palabras: **"Con Cheddar, 2"** (los "Sin Cebolla" ya estaban en palabras). El separador " · " entre modificaciones se dejó.
+- [x] El aviso de precios actualizados es una región `role="status"` **siempre montada** (un `<span>`) dentro de un contenedor que, sin aviso, es `sr-only` (no suma el espacio de la lista) y, con aviso, toma el aspecto de la tarjeta. "Entendido" queda fuera de la región, para que no se lea como parte del aviso.
+- [x] El nombre del plato es un `<button>` con el nombre **"Editar {plato}"** (lleva al detalle para cambiarlo, como antes).
+- [x] Sumado, no estaba en el plan: el error de "Confirmar pedido" tiene `role="alert"` (no se leía), y la nota se lee "Nota para cocina: …" con el 📝 oculto.
 
 **Mis pedidos:**
 
-- [ ] `pages/pedidos/MisPedidosPage.tsx:18-23`: textos y color de la decisión 2.
-- [ ] Línea 110: la barra de progreso es decorativa (`aria-hidden`), porque la etiqueta ya dice el estado.
-- [ ] Línea 71: el número de pedido se lee como "Pedido {código}".
-- [ ] `hooks/usePedidosCliente.ts` (~62-65): cuando llega un cambio de estado por WebSocket, anunciar "Tu pedido de {plato} está {estado}".
-- [ ] `App.tsx:72-86`: la tarjeta de agradecimiento que aparece cuando se cierra la sesión pasa a ser un diálogo de alerta, con el foco en el mensaje. Ojo: `GraciasCard` también se usa en `/pago/exitoso`; el título será `<h1>` en la página y no en el diálogo.
+- [x] `pages/pedidos/MisPedidosPage.tsx`: los textos y el color de la decisión 2, en `utils/estadoDelPedido.ts` (`TEXTO_DEL_ESTADO`): "Enviado a cocina", "En preparación", "Listo para servir", "Entregado" y "Cancelado", todos con el mismo distintivo (fondo `#FDE5DF`, texto `#B8432C`). "Listo" ya no se confunde con "En preparación".
+- [x] La barra de progreso es decorativa (`aria-hidden`).
+- [x] El número se lee "Pedido ABC123": "Pedido " solo para el lector (`sr-only`) y el "#" solo para la vista.
+- [x] `hooks/usePedidosCliente.ts`: cuando llega por el socket un pedido de la sesión que cambió de estado, anuncia **"Tu pedido de {plato} está {estado}"** ("Tu pedido de Hamburguesa doble está listo para servir"; con varios platos, el primero y cuántos más: "Hamburguesa y 2 más"). No anuncia si el estado es el mismo, si es de otra sesión ni si es un pedido que esta pantalla no tenía.
+- [x] `App.tsx` y `components/GraciasCard.tsx`: la tarjeta de agradecimiento que aparece cuando el local cierra o cobra la sesión es un **diálogo de alerta** (`role="alertdialog"`, modal, con nombre y descripción), el foco va a su título y **la pantalla de abajo queda inerte**. `GraciasCard` recibe `comoDialogo`: como diálogo su título es un `<h2>`; en `/pago/exitoso` es el `<h1>` de la página. No se cierra con Esc (la única salida es "Salir": cerrarlo sin salir dejaría al comensal en una mesa que ya no existe).
 
 **PIN** (`pages/restaurante/IngresoMesaPage.tsx`):
 
-- [ ] Línea 189: hoy el campo se deshabilita durante el envío y pierde el foco. No deshabilitarlo, o devolverle el foco cuando vuelve el error.
-- [ ] Línea 200: con error, el campo queda inválido (`aria-invalid`) y asociado al texto del error (`aria-describedby`). Hoy se marca solo con el borde coral.
-- [ ] Líneas 159-170: "Ingresar con PIN" pasa a ser una opción del mismo nivel que "Escanear QR", no un texto escondido.
+- [x] El campo **no se deshabilita** al enviar: pasa a `readOnly` y conserva el foco. Si el envío fue por el botón (que sí se deshabilita), después del error el foco vuelve al campo.
+- [x] Con un error del PIN el campo queda **`aria-invalid`** (solo si el PIN no sirve: con un 429, un 403 o sin conexión no está inválido) y **asociado al texto del error** con `aria-describedby` (el `Banner` de error ahora acepta un `id`). También cuando se toca "Ingresar con PIN" con el campo vacío.
+- [ ] **Descartado (19/11, decisión de Margarita): el PIN sigue como estaba**, detrás del texto chico "¿Pasó algo con tu cámara? Ingresá el PIN de tu mesa" (la decisión D12 de Discovery). Se había hecho como un botón grande del mismo nivel que "Escanear QR" y no gustó cómo se veía, así que se deshizo. Para quien usa lector el texto ya es un botón con nombre, que dice si despliega algo (`aria-expanded`, `aria-controls`) y lleva el foco al campo al abrirlo; lo que cambia es que se ve y se encuentra menos que el QR. Si más adelante se quiere subirle la visibilidad sin cambiar el diseño, hay que consultarlo.
 
 **Nombre** (`pages/entrada/ElegirNombrePage.tsx`):
 
-- [ ] Línea 91: el label "Tu nombre" se asocia al campo, que hoy se anuncia como "Ej: Juan" (el spec nuevo de la etapa 1 busca el campo por su placeholder: ajustarlo).
-- [ ] Línea 95: se saca el `autoFocus` y el foco va al título.
-- [ ] Línea 105: "Continuar" queda activo; si el nombre está vacío, se anuncia el error al tocarlo.
+- [x] "Tu nombre" es el `<label>` del campo (`htmlFor` e `id`); el campo ya no se anuncia por "Ej: Juan" (el texto de ejemplo queda como `placeholder`).
+- [x] Sin `autoFocus`: el foco va al título al llegar desde otra pantalla (`SeguimientoDeRuta`).
+- [x] "Continuar" queda activo. Con el campo vacío (o con solo espacios) anuncia **"Escribí tu nombre para continuar."** como alerta, deja el campo inválido y asociado al error, y le devuelve el foco. Mientras se envía queda `aria-disabled` (no `disabled`, para no perder el foco).
 
 **Pago** (`pages/pago/`):
 
-- [ ] `PagarPage.tsx:309`: la cuenta pasa a ser una tabla real con encabezados, o una lista donde cada ítem se lea entero.
-- [ ] `PagarPage.tsx:251` y `:260`: el fondo clickeable del modal.
-- [ ] `PagoFallidoPage.tsx:8` y `PagoPendientePage.tsx:8`: emojis ❌ y ⏳ ocultos.
-- [ ] `PagoFallidoPage.tsx:9`, `PagoPendientePage.tsx:9` y `components/GraciasCard.tsx`: el título pasa a `<h1>`.
+- [x] `PagarPage.tsx`: la cuenta es una **`<table>` real** con nombre ("Cuenta de la mesa"), encabezados de columna (`ÍTEM`, `CANT.`, `P. UNIT.`, `TOTAL`, con el nombre entero solo para el lector: "Cantidad", "Precio unitario"), el plato como encabezado de fila y el subtotal en el `<tfoot>`. "Cuenta de la mesa" y "Total a pagar" pasaron a `<h2>`.
+- [x] El "Generador de mensaje" es un **diálogo** (`role="dialog"`, modal, con nombre): el foco entra a él al abrirlo y vuelve a "Armar mensaje" al cerrarlo, Esc lo cierra (`useCerrarConEscape`), y el encabezado, la cuenta y las opciones de pago quedan inertes mientras tanto. El fondo tocable (para el mouse y el dedo) es `role="presentation"`.
+- [x] `PagoFallidoPage.tsx` y `PagoPendientePage.tsx`: los emojis ❌ y ⏳ ocultos y el título pasa a `<h1>`. `GraciasCard.tsx`: el título pasa a `<h1>` en `/pago/exitoso` (y `<h2>` como diálogo, ver arriba); el tilde es decorativo.
+- [x] Sumado, no estaba en el plan: el error de pagar tiene `role="alert"`, el ✅ del efectivo queda oculto y se anuncia "El mozo se va a acercar a la mesa a cobrar el total." (los botones que se tocaron desaparecen y el foco se pierde).
 
 **Etiquetar y dividir:**
 
-- [ ] `pages/etiquetado/EtiquetarPedidosPage.tsx:61`: el chip de comensal expone si está presionado (`aria-pressed`) y su nombre incluye el plato ("Marga, Hamburguesa doble").
-- [ ] `EtiquetarPedidosPage.tsx:329`: sacar el `autoFocus`.
-- [ ] `pages/dividir/CantidadComensalesPage.tsx`: el botón con el número dice "Editar cantidad" sin el valor (axe marca `label-content-name-mismatch`), y el monto por persona cambia sin anunciarse.
+- [x] `pages/etiquetado/EtiquetarPedidosPage.tsx`: el chip de comensal expone **`aria-pressed`** y su nombre dice el plato ("Marga, Hamburguesa doble", que empieza con el texto que se ve). Mientras se guarda queda `aria-disabled` en vez de `disabled`: un botón deshabilitado pierde el foco y el lector no diría el estado nuevo.
+- [x] Sin `autoFocus` en el campo del nombre del comensal: "+ Agregar" le lleva el foco (porque la persona lo pidió) y, al agregar o cancelar, el foco vuelve a "+ Agregar" (el botón se había ido). El campo tiene su nombre ("Nombre del comensal") y el error de agregar o borrar es `role="alert"`.
+- [x] `pages/dividir/CantidadComensalesPage.tsx`: el botón con el número se llama **"3 comensales, editar cantidad"** (empieza con el número que se ve), "Sumar comensal" y "Restar comensal" no se deshabilitan en los límites (`aria-disabled`), y al cambiar la cantidad (con los botones o escribiéndola) se anuncia **"3 comensales: cada persona paga $ 2.000"**. El campo para escribir tiene su nombre y, con Enter, el foco vuelve al botón con el número.
+
+**Piezas compartidas** (nuevas o tocadas):
+
+- `hooks/useFocoDelDialogo.ts`: el foco de un diálogo (entra al abrirse y vuelve a lo que lo tenía al cerrarse). Lo usan el menú lateral (que tenía la misma lógica escrita adentro), el "Generador de mensaje" y la tarjeta de gracias.
+- `utils/estadoDelPedido.ts`: los textos de cada estado y la frase del anuncio.
+- `EncabezadoPantalla` acepta `inerte` y `Banner` acepta `id`.
 
 ### Etapa 6. Contraste, foco visible y tamaños
 
@@ -329,6 +336,10 @@ Cosas que aparecieron al trabajar y que el plan no mencionaba. Los dos primeros 
 4. **Zona con scroll de la carta que no se puede enfocar con teclado** (la auditoría sugiere `tabIndex={0}`): no se puede comprobar en jsdom. Para verificarlo en el axe de staging (etapa 7); los navegadores recientes ya hacen enfocables los contenedores con scroll que no tienen nada enfocable adentro.
 
 5. **El buscador del menú no encuentra con más de una palabra** (hallazgo de la etapa 4, previo a ella). `matchesBusqueda` en `MenuView.tsx` compara el texto buscado entero con el comienzo de cada palabra del nombre del plato, así que "plato 1" o "pizza muzz" no coinciden con "Plato 1" ni con "Pizza muzzarella": da "Ningún plato coincide" aunque el plato exista. No es de accesibilidad. Afecta a todos los comensales. **Resuelto (19/11):** el texto se parte en palabras y cada una tiene que ser el comienzo de alguna palabra del nombre, en cualquier orden (`utils/coincideConLaBusqueda.ts`, con sus tests). Queda aparte, sin tocar, que la búsqueda del menú distingue acentos y la de Discovery no.
+
+6. **Resuelto (19/11, en la etapa 5): el Enter que confirma la cantidad de comensales volvía a abrir el campo** (`CantidadComensalesPage`). Al devolverle el foco al botón con el número durante el `keydown` de Enter, el navegador le mandaba también el "keypress" al botón, que se activaba. Se cancela el `keydown` (`preventDefault`). Solo se vio en Edge real: en jsdom no pasa, y el test comprueba que el evento se cancela.
+7. **`SessionGuard` (`App.tsx`) tiene un modal "Sesión finalizada" que nunca se muestra:** `sesionCerrada` empieza en `false` y nada la pone en `true` (solo se llama a `setSesionCerrada(false)`). Es código muerto: lo que se ve cuando el local cierra la sesión es la tarjeta de gracias. No se tocó. Hay que decidir si se borra.
+8. **Ajustes de color y tamaño que quedan para la etapa 6** en las pantallas de esta etapa: el gris `#9CA3AF` de los textos chicos (hora y resumen de Mis pedidos, "P. UNIT." y precios unitarios de la cuenta, "Total" del carrito), el coral `#E8563A` de los precios y de la barra de progreso, el rojo de "Quitar" (`#EF4444`) y el tamaño de los botones "Quitar", "Entendido" y los de las tarjetas.
 
 ## Preguntas abiertas
 
