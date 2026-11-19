@@ -2,7 +2,7 @@ import { useId, useState } from 'react'
 import type { RegistrarMovimientoBody, TipoDeMovimiento, TurnoCajaApi } from '@menyu/types'
 import { api, ApiError } from '../services/api'
 import { MENSAJE_TURNO_CERRADO } from '../utils/conflictosDeCaja'
-import { formatearMonto } from '../utils/formato'
+import { formatearMonto } from '@menyu/ui/caja'
 import { MOTIVO_MAXIMO, parsearMontoDeMovimiento, parsearMotivo } from '../utils/movimiento'
 
 /** El POST no respondió: no se sabe si el movimiento quedó registrado, así que no se reintenta solo. */

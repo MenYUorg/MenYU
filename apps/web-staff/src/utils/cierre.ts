@@ -9,22 +9,7 @@ import type {
   TurnoDetalle,
 } from '@menyu/types'
 import type { SesionActivaItem } from '../services/api'
-import { formatearMonto } from './formato'
-import { ordenarMesas } from './mesas'
-import { leerMonto, MONTO_MAXIMO, type ErrorDeMonto } from '@menyu/ui/caja'
-
-/** Los métodos del arqueo con su etiqueta, en el orden en que los devuelve el backend (METODOS_ARQUEO). */
-export const METODOS_DE_ARQUEO: readonly { metodo: MetodoDeArqueo; etiqueta: string }[] = [
-  { metodo: 'efectivo', etiqueta: 'Efectivo' },
-  { metodo: 'debito', etiqueta: 'Débito' },
-  { metodo: 'credito', etiqueta: 'Crédito' },
-  { metodo: 'transferencia', etiqueta: 'Transferencia' },
-]
-
-/** La etiqueta de cada método del arqueo, para mostrar lo que devuelve el backend. */
-export const ETIQUETA_DEL_METODO = Object.fromEntries(
-  METODOS_DE_ARQUEO.map((m) => [m.metodo, m.etiqueta]),
-) as Record<MetodoDeArqueo, string>
+import { leerMonto, METODOS_DE_ARQUEO, MONTO_MAXIMO, ordenarMesas, type ErrorDeMonto } from '@menyu/ui/caja'
 
 export type MontoDeclarado = { ok: true; valor: number } | { ok: false; mensaje: string }
 
@@ -86,23 +71,6 @@ export function primerCampoConError(cajas: TurnoCajaApi[], errores: PorCajaYMeto
     if (metodo) return { cajaId, metodo: metodo.metodo }
   }
   return null
-}
-
-export type ClaseDeDiferencia = 'sin-diferencia' | 'sobra' | 'falta'
-
-/** Declarado menos esperado, comparado en centavos: positivo sobra, negativo falta. */
-export function clasificarDiferencia(diferencia: number): ClaseDeDiferencia {
-  const centavos = Math.round(diferencia * 100)
-  if (centavos === 0) return 'sin-diferencia'
-  return centavos > 0 ? 'sobra' : 'falta'
-}
-
-/** La diferencia con palabras, no solo con color: "Sin diferencia", "Sobran $X" o "Faltan $X" (X sin signo). */
-export function textoDeDiferencia(diferencia: number): string {
-  const clase = clasificarDiferencia(diferencia)
-  if (clase === 'sin-diferencia') return 'Sin diferencia'
-  const monto = formatearMonto(Math.abs(Math.round(diferencia * 100)) / 100)
-  return clase === 'sobra' ? `Sobran ${monto}` : `Faltan ${monto}`
 }
 
 /** Una mesa con una sesión abierta antes de cerrar (GET /sessions/activas): para avisar, no para bloquear. */
