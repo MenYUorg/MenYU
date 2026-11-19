@@ -1,4 +1,5 @@
-// Lo puro del cobro y de los montos de caja (#358, #359, #360): lo usan web-staff y web-admin.
+// Lo puro de caja y turnos (#358, #359, #360) que comparten web-staff y web-admin: el cobro, los montos, el arqueo, las
+// fechas y el orden de las mesas.
 export { leerMonto, MONTO_MAXIMO, type ErrorDeMonto, type MontoLeido } from './monto'
 export { parsearPropina, PROPINA_MAXIMA, type PropinaLeida } from './propina'
 export { cajaDelCobro, type CajaParaElCobro } from './cajaDelCobro'
