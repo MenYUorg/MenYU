@@ -1,5 +1,5 @@
 import type { AsignacionDelTurno, FilaDeArqueo, MovimientoDeCaja, TipoDeMovimiento } from '@menyu/types'
-import { diferenciasDelArqueo, mesasPorMozo, textoDeMovimientos, totalesDeMovimientos } from './historial'
+import { diferenciasDelArqueo, mensajeDeError, mesasPorMozo, textoDeMovimientos, totalesDeMovimientos } from './historial'
 
 const fila = (metodo: FilaDeArqueo['metodo'], diferencia: number): FilaDeArqueo => ({ metodo, esperado: 1000, declarado: 1000 + diferencia, diferencia })
 
@@ -76,5 +76,15 @@ describe('mesasPorMozo', () => {
 
   it('sin asignaciones no hay grupos', () => {
     expect(mesasPorMozo([])).toEqual([])
+  })
+})
+
+describe('mensajeDeError', () => {
+  it.each([
+    ['un Error con mensaje', new Error('Turno no encontrado'), 'Turno no encontrado'],
+    ['un Error sin mensaje', new Error(''), 'No se pudo'],
+    ['algo que no es un Error', 'se cortó', 'No se pudo'],
+  ])('%s', (_caso, error, mensaje) => {
+    expect(mensajeDeError(error, 'No se pudo')).toBe(mensaje)
   })
 })

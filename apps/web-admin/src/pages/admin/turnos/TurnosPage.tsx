@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { TurnoDelHistorial } from '@menyu/types'
-import { Button, Spinner } from '@menyu/ui'
+import { Button } from '@menyu/ui'
 import { useContextStore } from '../../../store/contextStore'
 import { api } from '../../../services/api'
+import { Cargando } from './Cargando'
+import { ErrorConReintentar } from './ErrorConReintentar'
+import { mensajeDeError } from './historial'
 import { TarjetaDeTurno } from './TarjetaDeTurno'
 
 /** "Cargar más": quieto, pidiendo la página siguiente o con el error de pedirla. */
@@ -12,8 +15,6 @@ type MasTurnos = { estado: 'quieto' } | { estado: 'cargando' } | { estado: 'erro
 type Lectura =
   | { restauranteId: string; estado: 'listo'; turnos: TurnoDelHistorial[]; siguiente: string | null; mas: MasTurnos }
   | { restauranteId: string; estado: 'error'; mensaje: string }
-
-const mensajeDe = (e: unknown, porDefecto: string) => (e instanceof Error && e.message ? e.message : porDefecto)
 
 /**
  * El historial de turnos de caja del restaurante (#360), de solo lectura: del más nuevo al más viejo, de a 30. Se lee
@@ -35,7 +36,7 @@ export function TurnosPage() {
       const pagina = await api.turnos.listar(selectedRestauranteId)
       nueva = { restauranteId: selectedRestauranteId, estado: 'listo', turnos: pagina.items, siguiente: pagina.siguiente, mas: { estado: 'quieto' } }
     } catch (e) {
-      nueva = { restauranteId: selectedRestauranteId, estado: 'error', mensaje: mensajeDe(e, 'No se pudieron leer los turnos') }
+      nueva = { restauranteId: selectedRestauranteId, estado: 'error', mensaje: mensajeDeError(e, 'No se pudieron leer los turnos') }
     }
     if (pedido === ultimaLectura.current) setLectura(nueva)
   }, [selectedRestauranteId])
@@ -59,7 +60,7 @@ export function TurnosPage() {
       const pagina = await api.turnos.listar(restauranteId, cursor)
       conMas({ estado: 'quieto' }, { turnos: pagina.items, siguiente: pagina.siguiente })
     } catch (e) {
-      conMas({ estado: 'error', mensaje: mensajeDe(e, 'No se pudieron leer más turnos') })
+      conMas({ estado: 'error', mensaje: mensajeDeError(e, 'No se pudieron leer más turnos') })
     }
   }
 
@@ -86,7 +87,7 @@ function Historial({ lectura, onReintentar, onCargarMas }: {
   onCargarMas: (cursor: string) => void
 }) {
   if (lectura === null) {
-    return <div role="status" aria-label="Cargando los turnos" className="flex justify-center py-16"><Spinner size="lg" /></div>
+    return <Cargando etiqueta="Cargando los turnos" />
   }
   if (lectura.estado === 'error') return <ErrorConReintentar mensaje={lectura.mensaje} onReintentar={onReintentar} />
   if (lectura.turnos.length === 0) {
@@ -107,14 +108,5 @@ function Historial({ lectura, onReintentar, onCargarMas }: {
         </Button>
       ))}
     </>
-  )
-}
-
-function ErrorConReintentar({ mensaje, onReintentar }: { mensaje: string; onReintentar: () => void }) {
-  return (
-    <div role="alert" className="flex flex-col items-start gap-2 text-sm text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2">
-      <p>{mensaje}</p>
-      <Button variant="secondary" size="sm" onClick={onReintentar}>Reintentar</Button>
-    </div>
   )
 }

@@ -51,3 +51,8 @@ export function mesasPorMozo(asignaciones: readonly AsignacionDelTurno[]): Mesas
     .sort((a, b) => POR_NOMBRE.compare(a.mozoNombre, b.mozoNombre))
     .map((grupo) => ({ ...grupo, mesas: ordenarMesas(grupo.mesas.map((numero) => ({ numero }))).map((m) => m.numero) }))
 }
+
+/** El mensaje de un error de la API para mostrar; si no trae uno, `porDefecto`. */
+export function mensajeDeError(error: unknown, porDefecto: string): string {
+  return error instanceof Error && error.message ? error.message : porDefecto
+}
