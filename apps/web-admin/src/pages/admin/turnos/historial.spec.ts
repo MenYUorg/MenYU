@@ -21,11 +21,12 @@ describe('diferenciasDelArqueo', () => {
 })
 
 describe('textoDeMovimientos', () => {
+  // Sin el texto en el título: vitest lee el "$0" de un monto como una variable del título.
   it.each([
     [{ cantidad: 0, ingresos: 0, egresos: 0 }, 'Sin movimientos'],
     [{ cantidad: 1, ingresos: 0, egresos: 250 }, '1 movimiento: ingresos $0, egresos $250'],
     [{ cantidad: 3, ingresos: 1500.5, egresos: 200 }, '3 movimientos: ingresos $1.500,50, egresos $200'],
-  ])('%o se dice "%s"', (totales, texto) => {
+  ])('con %j', (totales, texto) => {
     expect(textoDeMovimientos(totales)).toBe(texto)
   })
 })
