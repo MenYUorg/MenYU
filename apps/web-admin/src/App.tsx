@@ -7,6 +7,7 @@ import { TablesPage } from './pages/admin/tables/TablesPage'
 import { PagosPage } from './pages/admin/pagos/PagosPage'
 import { CajasPage } from './pages/admin/cajas/CajasPage'
 import { TurnosPage } from './pages/admin/turnos/TurnosPage'
+import { TurnoDetallePage } from './pages/admin/turnos/TurnoDetallePage'
 import { DashboardPage } from './pages/admin/dashboard/DashboardPage'
 import { ReportesPage } from './pages/admin/reportes/ReportesPage'
 import { MozosPage } from './pages/admin/mozos/MozosPage'
@@ -115,6 +116,11 @@ export function App() {
             <Route path="/admin/turnos" element={
               <RoleGuard roles={['OWNER', 'GERENTE']}>
                 <TurnosPage />
+              </RoleGuard>
+            } />
+            <Route path="/admin/turnos/:id" element={
+              <RoleGuard roles={['OWNER', 'GERENTE']}>
+                <TurnoDetallePage />
               </RoleGuard>
             } />
             <Route path="/admin/auditoria" element={
