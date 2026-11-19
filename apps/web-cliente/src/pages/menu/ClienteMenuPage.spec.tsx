@@ -598,6 +598,23 @@ describe('ClienteMenuPage', () => {
       expect(idsDeSecciones(container)).toEqual(['descuentos', 'cat-1'])
     })
 
+    it('con más de una palabra encuentra el plato (antes "milanesa napo" no daba nada)', async () => {
+      const user = userEvent.setup()
+      renderMenu(crearMenu({
+        categorias: [{ id: 'cat-1', nombre: 'Principales', orden: 1, itemsDirectos: [
+          crearPlato({ id: 'mila', nombre: 'Milanesa napolitana' }),
+          crearPlato({ id: 'fuga', nombre: 'Milanesa fugazzeta' }),
+          crearPlato({ id: 'flan', nombre: 'Flan' }),
+        ] }],
+      }))
+
+      await user.type(screen.getByPlaceholderText('Buscar platos...'), 'milanesa napo')
+
+      expect(screen.getByText('Milanesa napolitana')).toBeInTheDocument()
+      expect(screen.queryByText('Milanesa fugazzeta')).not.toBeInTheDocument()
+      expect(screen.queryByText('Flan')).not.toBeInTheDocument()
+    })
+
     it('si nada coincide, muestra el estado vacío', async () => {
       const user = userEvent.setup()
       renderMenu(menuCompleto())
