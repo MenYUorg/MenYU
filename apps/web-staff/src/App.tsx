@@ -5,6 +5,7 @@ import { MozoNotifications } from './components/MozoNotifications'
 import { cerrarSesion } from './services/socket'
 import {
   preferenciaDeLaUrl,
+  puedeVerCaja,
   puedeVerCocina,
   puedeVerMozo,
   useContextoStore,
@@ -19,6 +20,7 @@ const HistorialPage     = lazy(() => import('./pages/mozo/HistorialPage').then((
 const CocinaPage        = lazy(() => import('./pages/cocina/CocinaPage').then((m) => ({ default: m.CocinaPage })))
 const SelectorPage      = lazy(() => import('./pages/selector/SelectorPage').then((m) => ({ default: m.SelectorPage })))
 const PagosMozo         = lazy(() => import('./pages/mozo/PagosMozo').then((m) => ({ default: m.PagosMozo })))
+const CajaPage          = lazy(() => import('./pages/mozo/CajaPage').then((m) => ({ default: m.CajaPage })))
 
 function MozoLayout() {
   return (
@@ -95,6 +97,13 @@ function SoloMozo({ children }: { children: ReactNode }) {
   return <>{children}</>
 }
 
+/** La caja (abrir el turno y reasignar mesas) es de OWNER, GERENTE y JEFE_SALON: el MOZO vuelve a su vista. */
+function SoloCaja({ children }: { children: ReactNode }) {
+  const roles = useRolesActuales()
+  if (!puedeVerCaja(roles)) return <Navigate to="/" replace />
+  return <>{children}</>
+}
+
 /**
  * A dónde entra cada rol. Con una sola vista posible va derecho a ella; con las dos (OWNER y GERENTE), al selector,
  * que también pide el restaurante cuando trabaja en varios.
@@ -120,6 +129,7 @@ export function App() {
               <Route path="/selector" element={<SelectorPage />} />
               <Route path="/cocina" element={<SoloCocina><CocinaPage /></SoloCocina>} />
               <Route path="/mozo/pagos" element={<SoloMozo><PagosMozo /></SoloMozo>} />
+              <Route path="/mozo/caja" element={<SoloCaja><CajaPage /></SoloCaja>} />
 
               {/* Rutas del mozo — MozoLayout monta MozoNotifications una sola vez */}
               <Route element={<SoloMozo><MozoLayout /></SoloMozo>}>

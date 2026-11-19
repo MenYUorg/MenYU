@@ -7,6 +7,9 @@ import {
   NotFoundException,
 } from '@nestjs/common'
 import { JwtService } from '@nestjs/jwt'
+import { Prisma } from '@prisma/client'
+import { MENSAJE_ELEGIR_CAJA, MENSAJE_OPERACION_SIMULTANEA, MENSAJE_SIN_TURNO } from '../caja/conflictos'
+import { MENSAJE_CAJA_NO_ABIERTA } from '../caja/movimientos.service'
 import { LIMITE_CODIGO_SESION, SessionsService } from './sessions.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { MenyuGateway } from '../gateway/menyu.gateway'
@@ -88,8 +91,12 @@ function createTxMock() {
     },
     sesionMesa: { findUnique: jest.fn(), updateMany: jest.fn() },
     mesa: { update: jest.fn() },
+    turnoCaja: { findMany: jest.fn() },
   }
 }
+
+// La única caja abierta del turno abierto (#358), como la lee cajaDelCobro.
+const UNA_CAJA_ABIERTA = { id: 'apertura-1', cajaId: 'caja-1' }
 
 // El restaurante y su marca vienen activos: la baja de uno de los dos se prueba aparte, en "restaurante dado de baja".
 const MESA_ABIERTA = {
@@ -685,6 +692,8 @@ describe('SessionsService', () => {
       tx.sesionMesa.updateMany.mockResolvedValue({ count: 1 })
       // Por defecto no hay efectivo pendiente: se crea una fila nueva.
       tx.pago.findFirst.mockResolvedValue(null)
+      // Por defecto hay un turno abierto con una sola caja (#358): el cobro va ahí.
+      tx.turnoCaja.findMany.mockResolvedValue([UNA_CAJA_ABIERTA])
     })
 
     afterEach(() => {
@@ -1126,6 +1135,170 @@ describe('SessionsService', () => {
         mockPrisma.sesionMesa.findUnique.mockResolvedValue(null)
 
         await expect(service.registrarCobro('no-existe', DTO_BASE, CUENTAS.MOZO)).rejects.toThrow(NotFoundException)
+      })
+    })
+
+    describe('la caja del cobro (#358)', () => {
+      const CAJA_2 = { id: 'apertura-2', cajaId: 'caja-2' }
+      const orden = (fn: jest.Mock) => fn.mock.invocationCallOrder[0]
+      const cobroQueCierra = () => {
+        mockDivision.calcularTotalSesion.mockResolvedValue(1000)
+        tx.pago.findMany
+          .mockResolvedValueOnce([]) // aprobados previos
+          .mockResolvedValueOnce([]) // sin MP pendientes
+          .mockResolvedValueOnce([{ id: 'pago-nuevo', monto: 1000 }])
+        tx.pago.create.mockResolvedValue({ id: 'pago-nuevo' })
+      }
+      const noEscribioNingunPago = () => {
+        expect(tx.pago.create).not.toHaveBeenCalled()
+        expect(tx.pago.update).not.toHaveBeenCalled()
+        expect(tx.pago.updateMany).not.toHaveBeenCalled()
+      }
+
+      it('la caja se lee con el tx, del restaurante de la mesa, y queda en el pago con la propina', async () => {
+        cobroQueCierra()
+
+        await service.registrarCobro('sesion-1', { ...DTO_BASE, propina: 150.5 }, USER_MOZO)
+
+        expect(tx.turnoCaja.findMany).toHaveBeenCalledWith({
+          where: { cerradoEn: null, turno: { restauranteId: MUNDO.REST_1, cerradoEn: null } },
+          select: { id: true, cajaId: true },
+        })
+        expect(tx.pago.create).toHaveBeenCalledWith({
+          data: expect.objectContaining({ monto: 1000, turnoCajaId: 'apertura-1', propina: new Prisma.Decimal('150.5') }),
+        })
+      })
+
+      it('sin turno abierto: 400, y no se escribe ningún pago (ni se cancelan los MP)', async () => {
+        mockDivision.calcularTotalSesion.mockResolvedValue(1000)
+        tx.pago.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([pagoMp('pago-mp1', 300, hace(30))])
+        tx.turnoCaja.findMany.mockResolvedValue([])
+
+        await expect(
+          service.registrarCobro('sesion-1', { ...DTO_BASE, confirmarCancelacionPagosPendientes: true }, USER_MOZO),
+        ).rejects.toThrow(new BadRequestException(MENSAJE_SIN_TURNO))
+
+        noEscribioNingunPago()
+        expect(mockGateway.emitSesionCobrada).not.toHaveBeenCalled()
+      })
+
+      it('sin turno y con un MP reciente sin flag: el 400 del turno va antes que el 409 de confirmar', async () => {
+        mockDivision.calcularTotalSesion.mockResolvedValue(1000)
+        tx.pago.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([pagoMp('pago-mp1', 300, hace(3))])
+        tx.turnoCaja.findMany.mockResolvedValue([])
+
+        await expect(service.registrarCobro('sesion-1', DTO_BASE, USER_MOZO)).rejects.toThrow(new BadRequestException(MENSAJE_SIN_TURNO))
+      })
+
+      it('la caja se lee después del saldo y antes de los MP pendientes y de cualquier escritura', async () => {
+        mockDivision.calcularTotalSesion.mockResolvedValue(1000)
+        tx.pago.findMany
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([pagoMp('pago-mp1', 300, hace(30))])
+          .mockResolvedValueOnce([{ id: 'pago-nuevo', monto: 1000 }])
+        tx.pago.create.mockResolvedValue({ id: 'pago-nuevo' })
+
+        await service.registrarCobro('sesion-1', DTO_BASE, USER_MOZO)
+
+        const lecturaDeLaCaja = orden(tx.turnoCaja.findMany)
+        expect(tx.pago.findMany.mock.invocationCallOrder[0]).toBeLessThan(lecturaDeLaCaja) // los aprobados previos (saldo)
+        expect(lecturaDeLaCaja).toBeLessThan(tx.pago.findMany.mock.invocationCallOrder[1]) // los MP pendientes
+        expect(lecturaDeLaCaja).toBeLessThan(orden(tx.pago.updateMany))
+        expect(lecturaDeLaCaja).toBeLessThan(orden(tx.pago.create))
+      })
+
+      it('"sesión cerrada" y "ya pagada" conservan su prioridad: no se lee la caja', async () => {
+        tx.turnoCaja.findMany.mockResolvedValue([])
+        tx.sesionMesa.findUnique.mockResolvedValueOnce({ estado: 'cerrada' })
+        await expect(service.registrarCobro('sesion-1', DTO_BASE, USER_MOZO)).rejects.toThrow(
+          new BadRequestException('La sesión ya fue cerrada'),
+        )
+
+        mockDivision.calcularTotalSesion.mockResolvedValue(1000)
+        tx.pago.findMany.mockResolvedValueOnce([{ id: 'p', monto: 1000 }])
+        await expect(service.registrarCobro('sesion-1', DTO_BASE, USER_MOZO)).rejects.toThrow(
+          new BadRequestException('Esta sesión ya está completamente pagada'),
+        )
+
+        expect(tx.turnoCaja.findMany).not.toHaveBeenCalled()
+      })
+
+      it('dos cajas abiertas: sin cajaId 400 y no se escribe nada; con cajaId va a la indicada', async () => {
+        tx.turnoCaja.findMany.mockResolvedValue([UNA_CAJA_ABIERTA, CAJA_2])
+        mockDivision.calcularTotalSesion.mockResolvedValue(1000)
+        tx.pago.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([])
+
+        await expect(service.registrarCobro('sesion-1', DTO_BASE, USER_MOZO)).rejects.toThrow(new BadRequestException(MENSAJE_ELEGIR_CAJA))
+        noEscribioNingunPago()
+
+        cobroQueCierra()
+        await service.registrarCobro('sesion-1', { ...DTO_BASE, cajaId: 'caja-2' }, USER_MOZO)
+        expect(tx.pago.create).toHaveBeenCalledWith({ data: expect.objectContaining({ turnoCajaId: 'apertura-2' }) })
+      })
+
+      it('un cajaId que no está abierto en el turno: 400 y no se escribe nada', async () => {
+        mockDivision.calcularTotalSesion.mockResolvedValue(1000)
+        tx.pago.findMany.mockResolvedValueOnce([])
+
+        await expect(service.registrarCobro('sesion-1', { ...DTO_BASE, cajaId: 'caja-ajena' }, USER_MOZO)).rejects.toThrow(
+          new BadRequestException(MENSAJE_CAJA_NO_ABIERTA),
+        )
+        noEscribioNingunPago()
+      })
+
+      it('cajaId: null y propina: null cuentan como ausentes: la única caja y propina 0', async () => {
+        cobroQueCierra()
+
+        await service.registrarCobro('sesion-1', { ...DTO_BASE, cajaId: null, propina: null }, USER_MOZO)
+
+        expect(tx.pago.create).toHaveBeenCalledWith({
+          data: expect.objectContaining({ turnoCajaId: 'apertura-1', propina: new Prisma.Decimal(0) }),
+        })
+      })
+
+      it('el efectivo pendiente reutilizado queda con la caja, la propina y el método del cobro', async () => {
+        mockDivision.calcularTotalSesion.mockResolvedValue(1000)
+        tx.pago.findMany
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([{ id: 'pago-ef', monto: 1000 }])
+        tx.pago.findFirst.mockResolvedValue({ id: 'pago-ef' })
+
+        await service.registrarCobro('sesion-1', { metodoPago: 'debito', propina: 80 }, USER_MOZO)
+
+        expect(tx.pago.create).not.toHaveBeenCalled()
+        expect(tx.pago.update).toHaveBeenCalledWith({
+          where: { id: 'pago-ef' },
+          data: expect.objectContaining({ metodo: 'debito', turnoCajaId: 'apertura-1', propina: new Prisma.Decimal(80) }),
+        })
+      })
+
+      it('mercadopago registrado por el mozo también va a la caja', async () => {
+        cobroQueCierra()
+
+        await service.registrarCobro('sesion-1', { metodoPago: 'mercadopago' }, USER_MOZO)
+
+        expect(tx.pago.create).toHaveBeenCalledWith({
+          data: expect.objectContaining({ metodo: 'mercadopago', turnoCajaId: 'apertura-1' }),
+        })
+      })
+
+      it('un P2034 que sobrevive al reintento: 409 genérico, y no emite', async () => {
+        const p2034 = new Prisma.PrismaClientKnownRequestError('conflicto', { code: 'P2034', clientVersion: 'test' })
+        mockPrisma.$transaction.mockRejectedValue(p2034)
+
+        await expect(service.registrarCobro('sesion-1', DTO_BASE, USER_MOZO)).rejects.toThrow(
+          new ConflictException(MENSAJE_OPERACION_SIMULTANEA),
+        )
+        expect(mockPrisma.$transaction).toHaveBeenCalledTimes(2)
+        expect(mockGateway.emitSesionCobrada).not.toHaveBeenCalled()
+      })
+
+      it('otro error de Prisma pasa tal cual', async () => {
+        const p2002 = new Prisma.PrismaClientKnownRequestError('único', { code: 'P2002', clientVersion: 'test' })
+        mockPrisma.$transaction.mockRejectedValue(p2002)
+
+        await expect(service.registrarCobro('sesion-1', DTO_BASE, USER_MOZO)).rejects.toBe(p2002)
       })
     })
 

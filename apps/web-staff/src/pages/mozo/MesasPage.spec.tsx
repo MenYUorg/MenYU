@@ -3,7 +3,8 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import type { Mesa } from '@menyu/types'
 import { io } from 'socket.io-client'
 import { api, ApiError, type SesionActivaRico, type WaiterCallRico } from '../../services/api'
-import { perfilDePrueba, membresiaDeRestaurante, reiniciarSesionDePrueba } from '../../test/authClient'
+import { useCajasStore } from '../../store/cajasStore'
+import { perfilDeJefeSalon, perfilDePrueba, membresiaDeRestaurante, reiniciarSesionDePrueba } from '../../test/authClient'
 import { montarContexto, reiniciarContexto } from '../../test/contexto'
 import { MesasPage } from './MesasPage'
 
@@ -19,6 +20,7 @@ vi.mock('../../services/api', async (importOriginal) => ({
     mesas: { getAll: vi.fn() },
     sesiones: { getActiva: vi.fn(), cerrar: vi.fn() },
     waiterCalls: { getAll: vi.fn() },
+    cajas: { abiertas: vi.fn() },
   },
 }))
 
@@ -34,6 +36,7 @@ vi.mock('socket.io-client', () => ({ io: vi.fn(() => socket) }))
 const mesasApi = vi.mocked(api.mesas)
 const sesionesApi = vi.mocked(api.sesiones)
 const llamadosApi = vi.mocked(api.waiterCalls)
+const cajasApi = vi.mocked(api.cajas.abiertas)
 
 const mesa = (id: string, numero: string, estado = 'libre') => ({ id, numero, estado, restauranteId: 'rest-1' }) as unknown as Mesa
 
@@ -92,6 +95,8 @@ beforeEach(() => {
   reiniciarContexto()
   montarContexto(ANA)
   vi.clearAllMocks()
+  useCajasStore.setState({ restauranteId: null, cajas: null })
+  cajasApi.mockResolvedValue({ cajas: [] })
   socket.handlers.clear()
   llamadosApi.getAll.mockResolvedValue([])
   sesionesApi.getActiva.mockResolvedValue(sesion('ses-2'))
@@ -314,9 +319,46 @@ describe('MesasPage (mozo)', () => {
     })
 
     it('con ?mesaId abre esa mesa directamente', async () => {
-      await abrirConMesas([LIBRE, OCUPADA], '/mozo/mesas?mesaId=m2')
+      // No usa abrirConMesas: espera la grilla, que con ?mesaId se reemplaza por el detalle apenas llegan las mesas.
+      mesasApi.getAll.mockResolvedValue([LIBRE, OCUPADA])
+      abrir('/mozo/mesas?mesaId=m2')
 
       expect(await screen.findByText('Pedidos de la sesión')).toBeInTheDocument()
+    })
+  })
+
+  describe('aviso de mesas filtradas', () => {
+    const aviso = () => screen.queryByText('Con el turno abierto ves tus mesas y las que no tienen mozo asignado.')
+
+    it('un MOZO con turno abierto lo ve', async () => {
+      cajasApi.mockResolvedValue({ cajas: [{ cajaId: 'caja-1', nombre: 'Caja 1' }] })
+      mesasApi.getAll.mockResolvedValue([LIBRE])
+      abrir()
+
+      expect(await screen.findByText('Con el turno abierto ves tus mesas y las que no tienen mozo asignado.')).toBeInTheDocument()
+    })
+
+    it('sin turno abierto no aparece', async () => {
+      cajasApi.mockResolvedValue({ cajas: [] })
+      mesasApi.getAll.mockResolvedValue([LIBRE])
+      abrir()
+      await vi.waitFor(() => expect(cajasApi).toHaveBeenCalled())
+      await act(async () => {})
+
+      expect(useCajasStore.getState().cajas).toEqual([])
+      expect(aviso()).not.toBeInTheDocument()
+    })
+
+    it('un JEFE_SALON con turno abierto no lo ve', async () => {
+      reiniciarContexto()
+      montarContexto(perfilDeJefeSalon('rest-1'))
+      cajasApi.mockResolvedValue({ cajas: [{ cajaId: 'caja-1', nombre: 'Caja 1' }] })
+      mesasApi.getAll.mockResolvedValue([LIBRE])
+      abrir()
+      await vi.waitFor(() => expect(useCajasStore.getState().cajas).toHaveLength(1))
+      await act(async () => {})
+
+      expect(aviso()).not.toBeInTheDocument()
     })
   })
 })

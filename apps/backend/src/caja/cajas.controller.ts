@@ -3,14 +3,15 @@ import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger'
 import { Personal } from '../auth/decorators/personal.decorator'
 import { RequiereRolEn } from '../auth/decorators/requiere-rol.decorator'
 import { UsuarioActual } from '../auth/decorators/usuario-actual.decorator'
-import { ADMINISTRACION, CAJA } from '../auth/roles-del-personal'
+import { ADMINISTRACION, CAJA, SALON } from '../auth/roles-del-personal'
 import { UsuarioAutenticado } from '../auth/supabase/usuario-autenticado'
 import { CajasService } from './cajas.service'
 import { ActualizarCajaDto } from './dto/actualizar-caja.dto'
 import { CrearCajaDto } from './dto/crear-caja.dto'
 
-// Las cajas las ve el grupo CAJA (OWNER, GERENTE y JEFE_SALON) y las dan de alta y editan OWNER y GERENTE. En PATCH, el
-// service resuelve el restaurante desde la caja y pide el rol.
+// Las cajas las ve el grupo CAJA (OWNER, GERENTE y JEFE_SALON) y las dan de alta y editan OWNER y GERENTE. Las abiertas
+// del turno las ve también el MOZO (el grupo SALON), que cobra. En PATCH, el service resuelve el restaurante desde la
+// caja y pide el rol.
 @ApiTags('cajas')
 @Controller('cajas')
 export class CajasController {
@@ -22,6 +23,14 @@ export class CajasController {
   @ApiResponse({ status: 200 })
   listar(@Query('restauranteId') restauranteId: string) {
     return this.cajas.listar(restauranteId)
+  }
+
+  @Get('abiertas')
+  @RequiereRolEn({ query: 'restauranteId' }, ...SALON)
+  @ApiOperation({ summary: 'Las cajas abiertas del turno abierto, para elegir a cuál cobrar (el salón, también el MOZO)' })
+  @ApiResponse({ status: 200, description: 'El id de cada caja (el cajaId del cobro) y su nombre; vacío sin turno abierto' })
+  abiertas(@Query('restauranteId') restauranteId: string) {
+    return this.cajas.abiertas(restauranteId)
   }
 
   @Post()

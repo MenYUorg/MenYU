@@ -28,6 +28,8 @@ import type {
   DatosDelPlatoParaElAsistente,
   InformacionLocal,
   PreguntaFrecuente,
+  CajasAbiertas,
+  CajaDelRestaurante,
 } from '@menyu/types'
 
 export class ApiError extends Error {
@@ -386,6 +388,21 @@ export const api = {
       req<void>('DELETE', `/mozos/${mozoId}/mesas/${mesaId}`),
     llamadosHoy: (mozoId: string) =>
       req<{ total: number }>('GET', `/mozos/${mozoId}/llamados-hoy`),
+  },
+
+  cajas: {
+    /** Las cajas abiertas del turno abierto (#360), para elegir en cuál se cobra. Vacío = no hay un turno abierto. */
+    abiertas: (restauranteId: string) =>
+      req<CajasAbiertas>('GET', `/cajas/abiertas?restauranteId=${encodeURIComponent(restauranteId)}`),
+    /** Todas las cajas del restaurante, activas e inactivas, por nombre (#360). */
+    listar: (restauranteId: string) =>
+      req<CajaDelRestaurante[]>('GET', `/cajas?restauranteId=${encodeURIComponent(restauranteId)}`),
+    /** Crea una caja. El backend recorta el nombre; 409 si ya hay una con ese nombre en el restaurante. */
+    crear: (restauranteId: string, nombre: string) =>
+      req<CajaDelRestaurante>('POST', '/cajas', { restauranteId, nombre }),
+    /** Renombra, activa o desactiva una caja. Lo que no se pasa no viaja y no cambia. */
+    actualizar: (id: string, cambios: { nombre?: string; activa?: boolean }) =>
+      req<CajaDelRestaurante>('PATCH', `/cajas/${encodeURIComponent(id)}`, cambios),
   },
 
   /** Quién tiene acceso al restaurante y cómo quitárselo. El alta es la invitación (`api.invitaciones.crear`). */

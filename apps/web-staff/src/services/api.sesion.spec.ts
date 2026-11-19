@@ -121,4 +121,96 @@ describe('el cliente de la API usa la sesión de Supabase', () => {
     expect(opciones.method).toBe('PATCH')
     expect(JSON.parse(opciones.body as string)).toEqual({ metodoPago: 'efectivo' })
   })
+
+  it('el cobro manda la caja y la propina cuando las hay (#358)', async () => {
+    await api.sesiones.registrarCobro('sesion-1', { metodoPago: 'debito', cajaId: 'caja-2', propina: 150.5 })
+
+    const [, opciones] = fetchFalso.mock.calls[0] as [string, RequestInit]
+    expect(JSON.parse(opciones.body as string)).toEqual({ metodoPago: 'debito', cajaId: 'caja-2', propina: 150.5 })
+  })
+
+  it('las cajas abiertas se piden por restaurante (#359)', async () => {
+    fetchFalso.mockResolvedValue(respuesta({ cajas: [{ cajaId: 'caja-1', nombre: 'Principal' }] }))
+
+    await expect(api.cajas.abiertas('rest 1')).resolves.toEqual({ cajas: [{ cajaId: 'caja-1', nombre: 'Principal' }] })
+    expect(llamadas()[0]?.url).toBe('/cajas/abiertas?restauranteId=rest%201')
+  })
+
+  describe('el turno de caja (#359)', () => {
+    const pedido = () => {
+      const [url, opciones] = fetchFalso.mock.calls[0] as [string, RequestInit]
+      return { url, metodo: opciones.method ?? 'GET', body: opciones.body === undefined ? undefined : JSON.parse(opciones.body as string) }
+    }
+
+    it('todas las cajas del restaurante se piden por restaurante, con GET', async () => {
+      await api.cajas.todas('rest 1')
+
+      expect(pedido()).toEqual({ url: '/cajas?restauranteId=rest%201', metodo: 'GET', body: undefined })
+    })
+
+    it('el turno actual se pide por restaurante, con GET', async () => {
+      fetchFalso.mockResolvedValue(respuesta({ turno: null }))
+
+      await expect(api.turnos.actual('rest 1')).resolves.toEqual({ turno: null })
+      expect(pedido()).toEqual({ url: '/turnos/actual?restauranteId=rest%201', metodo: 'GET', body: undefined })
+    })
+
+    it('la preparación del turno se pide por restaurante, con GET', async () => {
+      await api.turnos.preparacion('rest 1')
+
+      expect(pedido()).toEqual({ url: '/turnos/preparacion?restauranteId=rest%201', metodo: 'GET', body: undefined })
+    })
+
+    it('abrir el turno es un POST con el body tal cual, fondo 0 y asignaciones vacías incluidos', async () => {
+      const body = {
+        restauranteId: 'rest-1',
+        cajas: [{ cajaId: 'caja-1', fondoInicial: 0 }],
+        asignaciones: [],
+        observaciones: 'Turno noche',
+      }
+
+      await api.turnos.abrir(body)
+
+      expect(pedido()).toEqual({ url: '/turnos', metodo: 'POST', body })
+    })
+
+    it('reasignar las mesas es un PUT con la lista entera', async () => {
+      const asignaciones = [{ mesaId: 'mesa-1', mozoId: 'mozo-1' }]
+
+      await api.turnos.reasignar('turno/1', asignaciones)
+
+      expect(pedido()).toEqual({ url: '/turnos/turno%2F1/asignaciones', metodo: 'PUT', body: { asignaciones } })
+    })
+
+    it('el detalle del turno se pide por su id, con GET', async () => {
+      await api.turnos.detalle('turno/1')
+
+      expect(pedido()).toEqual({ url: '/turnos/turno%2F1', metodo: 'GET', body: undefined })
+    })
+
+    it('registrar un movimiento es un POST al turno con la caja, el tipo, el monto y el motivo', async () => {
+      const body = { cajaId: 'caja-1', tipo: 'EGRESO' as const, monto: 1500.5, motivo: 'Compra de hielo' }
+
+      await api.turnos.registrarMovimiento('turno/1', body)
+
+      expect(pedido()).toEqual({ url: '/turnos/turno%2F1/movimientos', metodo: 'POST', body })
+    })
+
+    it('cerrar el turno es un POST al turno con lo declarado de cada caja y las observaciones', async () => {
+      const body = {
+        cajas: [{ cajaId: 'caja-1', declarado: { efectivo: 1500.5, debito: 0, credito: 0, transferencia: 200 } }],
+        observaciones: 'Faltó cambio',
+      }
+
+      await api.turnos.cerrar('turno/1', body)
+
+      expect(pedido()).toEqual({ url: '/turnos/turno%2F1/cierre', metodo: 'POST', body })
+    })
+
+    it('el resumen del turno se pide por su id, con GET', async () => {
+      await api.turnos.resumen('turno/1')
+
+      expect(pedido()).toEqual({ url: '/turnos/turno%2F1/resumen', metodo: 'GET', body: undefined })
+    })
+  })
 })

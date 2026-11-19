@@ -1,7 +1,11 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { RefreshCw, X } from 'lucide-react'
+import type { CajaAbierta } from '@menyu/types'
 import { api, ApiError } from '../services/api'
 import type { SesionActivaItem } from '../services/api'
+import { useRestauranteId } from '../store/contextoStore'
+import { cajaDelCobro, MENSAJE_OPERACION_SIMULTANEA, MENSAJES_DE_TURNO_CAMBIADO, parsearPropina } from '@menyu/ui/caja'
+import { cajaRecordada, recordarCaja } from '../utils/cajaRecordada'
 
 type MetodoPago = 'efectivo' | 'debito' | 'credito' | 'transferencia' | 'mercadopago'
 
@@ -32,6 +36,10 @@ interface CobroModalProps {
   sesion: SesionActivaItem
   onClose: () => void
   onDone: (mesaNumero: string) => void
+  /** Las cajas abiertas del turno, que lee la pantalla (null: no se pudieron leer, no se bloquea nada). */
+  cajas: CajaAbierta[] | null
+  /** El backend dijo que las cajas cambiaron: la pantalla las vuelve a leer. */
+  onTurnoCambio: () => void
 }
 
 /**
@@ -39,14 +47,25 @@ interface CobroModalProps {
  * (`common/atribucion-del-cobro.ts`, entrega 4.3): un MOZO o JEFE_SALON cobra con su propio `Mozo` y un OWNER o
  * GERENTE queda con su `usuarioId`. Por eso acá no se elige cobrador ni se manda `mozoId` o `cobradoPorNombre`.
  */
-export function CobroModal({ sesion, onClose, onDone }: CobroModalProps) {
+export function CobroModal({ sesion, onClose, onDone, cajas, onTurnoCambio }: CobroModalProps) {
   const [metodo,            setMetodo]            = useState<MetodoPago | null>(null)
   const [referenciaExterna, setReferenciaExterna] = useState('')
   const [loading,           setLoading]           = useState(false)
   const [error,             setError]             = useState<string | null>(null)
   const [advertencia,       setAdvertencia]       = useState<string | null>(null)
 
-  const canConfirm = !!metodo
+  const [propinaTxt,        setPropinaTxt]        = useState('')
+  const [cajaElegida,       setCajaElegida]       = useState<string | null>(null)
+  const restauranteId = useRestauranteId()
+  const idPropina = useId()
+  const idCaja = useId()
+
+  // La caja arranca en la recordada de este restaurante; si la elegida se cierra, cajaDelCobro pide elegir de nuevo.
+  const elegida = cajaElegida ?? (restauranteId ? cajaRecordada(restauranteId, cajas) : null)
+  const caja = cajaDelCobro(cajas, elegida)
+  const propina = parsearPropina(propinaTxt)
+
+  const canConfirm = !!metodo && !caja.sinTurno && !caja.falta && propina.ok
 
   async function cobrarMesa(confirmarCancelacion = false) {
     if (!canConfirm || !metodo) return
@@ -58,11 +77,18 @@ export function CobroModal({ sesion, onClose, onDone }: CobroModalProps) {
         metodoPago: metodo,
         ...(metodo === 'mercadopago' && referenciaExterna.trim() ? { referenciaExterna: referenciaExterna.trim() } : {}),
         ...(confirmarCancelacion ? { confirmarCancelacionPagosPendientes: true } : {}),
+        ...(caja.cajaId ? { cajaId: caja.cajaId } : {}),
+        ...(propina.ok && propina.valor !== undefined ? { propina: propina.valor } : {}),
       })
+      if (restauranteId && caja.mostrarSelector && caja.cajaId) recordarCaja(restauranteId, caja.cajaId)
       onDone(sesion.mesaNumero)
     } catch (e) {
-      if (e instanceof ApiError && e.status === 409) setAdvertencia(e.message)
-      else setError(e instanceof Error ? e.message : 'Error al registrar pago')
+      if (e instanceof ApiError && e.status === 409 && e.message !== MENSAJE_OPERACION_SIMULTANEA) {
+        setAdvertencia(e.message)
+      } else {
+        setError(e instanceof Error ? e.message : 'Error al registrar pago')
+        if (e instanceof ApiError && e.status === 400 && MENSAJES_DE_TURNO_CAMBIADO.includes(e.message)) onTurnoCambio()
+      }
       setLoading(false)
     }
   }
@@ -129,6 +155,83 @@ export function CobroModal({ sesion, onClose, onDone }: CobroModalProps) {
             )
           })}
         </div>
+
+        {caja.sinTurno && (
+          <p role="alert" style={{ fontFamily: 'Inter,sans-serif', fontSize: 12, color: C.red, marginBottom: 14 }}>
+            No hay un turno abierto: no se puede registrar el cobro.
+          </p>
+        )}
+
+        {caja.mostrarSelector && (
+          <div style={{ marginBottom: 20 }}>
+            <p id={idCaja} style={{ fontFamily: 'Inter,sans-serif', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 10 }}>
+              Caja
+            </p>
+            <div role="radiogroup" aria-labelledby={idCaja} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              {(cajas ?? []).map((c) => {
+                const sel = caja.cajaId === c.cajaId
+                return (
+                  <label
+                    key={c.cajaId}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 8,
+                      padding: '10px 14px', borderRadius: 8,
+                      border: `1.5px solid ${sel ? C.orange : C.border}`,
+                      background: sel ? C.orangeBg : C.white,
+                      color: sel ? C.orange : '#374151',
+                      fontFamily: 'Inter,sans-serif', fontSize: 13, fontWeight: sel ? 600 : 400,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name={idCaja}
+                      value={c.cajaId}
+                      checked={sel}
+                      onChange={() => setCajaElegida(c.cajaId)}
+                      style={{ accentColor: C.orange, margin: 0 }}
+                    />
+                    {c.nombre}
+                  </label>
+                )
+              })}
+            </div>
+            {caja.falta && (
+              <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 12, color: C.red, margin: '8px 0 0' }}>
+                Elegí en qué caja se cobra
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Propina (opcional) */}
+        <label
+          htmlFor={idPropina}
+          style={{ display: 'block', fontFamily: 'Inter,sans-serif', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 8 }}
+        >
+          Propina (opcional)
+        </label>
+        <input
+          id={idPropina}
+          type="text"
+          inputMode="decimal"
+          value={propinaTxt}
+          onChange={(e) => { setPropinaTxt(e.target.value); setAdvertencia(null) }}
+          placeholder="Ej. 500"
+          aria-invalid={!propina.ok}
+          aria-describedby={propina.ok ? undefined : `${idPropina}-error`}
+          style={{
+            width: '100%', padding: '10px 12px', borderRadius: 8,
+            border: `1px solid ${propina.ok ? C.border : C.red}`, fontFamily: 'Inter,sans-serif', fontSize: 13,
+            color: '#374151', background: C.white, outline: 'none',
+            boxSizing: 'border-box', marginBottom: propina.ok ? 20 : 6,
+          }}
+        />
+        {!propina.ok && (
+          <p id={`${idPropina}-error`} role="alert" style={{ fontFamily: 'Inter,sans-serif', fontSize: 12, color: C.red, margin: '0 0 20px' }}>
+            {propina.mensaje}
+          </p>
+        )}
 
         {/* ID de transacción — solo MP */}
         {metodo === 'mercadopago' && (

@@ -39,6 +39,7 @@ function renderLayout(ruta = '/admin/menu') {
           <Route path="/admin/menu" element={<div>Contenido del menú</div>} />
           <Route path="/admin/tables" element={<div>Contenido de mesas</div>} />
           <Route path="/admin/marca" element={<div>Contenido de marca</div>} />
+          <Route path="/admin/cajas" element={<div>Contenido de cajas</div>} />
         </Route>
       </Routes>
     </MemoryRouter>,
@@ -227,6 +228,23 @@ describe('AdminLayout', () => {
       expect(screen.queryByRole('link', { name: 'Marca y sucursales' })).not.toBeInTheDocument()
     })
   })
+  describe('Cajas (#360)', () => {
+    it.each(['OWNER', 'GERENTE'] as const)('el %s ve el acceso y lo puede abrir, con el título "Cajas"', async (rol) => {
+      rolActual = rol
+      simularPantalla(ESCRITORIO)
+      const user = userEvent.setup()
+      renderLayout()
+
+      const enlace = screen.getByRole('link', { name: 'Cajas' })
+      expect(enlace).toHaveAttribute('href', '/admin/cajas')
+
+      await user.click(enlace)
+
+      expect(screen.getByText('Contenido de cajas')).toBeInTheDocument()
+      expect(screen.getByRole('heading', { name: 'Cajas' })).toBeInTheDocument()
+    })
+  })
+
   describe('la carga del contexto', () => {
     it('le pasa el perfil y la preferencia que web-auth dejó en la URL', () => {
       simularPantalla(ESCRITORIO)

@@ -5,6 +5,7 @@ import { AdminLayout } from './pages/admin/AdminLayout'
 import { AdminMenuPage } from './pages/admin/menu/AdminMenuPage'
 import { TablesPage } from './pages/admin/tables/TablesPage'
 import { PagosPage } from './pages/admin/pagos/PagosPage'
+import { CajasPage } from './pages/admin/cajas/CajasPage'
 import { DashboardPage } from './pages/admin/dashboard/DashboardPage'
 import { ReportesPage } from './pages/admin/reportes/ReportesPage'
 import { MozosPage } from './pages/admin/mozos/MozosPage'
@@ -101,6 +102,12 @@ export function App() {
             <Route path="/admin/pagos" element={
               <RoleGuard roles={['OWNER', 'GERENTE']}>
                 <PagosPage />
+              </RoleGuard>
+            } />
+            {/* Las cajas del restaurante (#360): las crean y editan OWNER y GERENTE */}
+            <Route path="/admin/cajas" element={
+              <RoleGuard roles={['OWNER', 'GERENTE']}>
+                <CajasPage />
               </RoleGuard>
             } />
             <Route path="/admin/auditoria" element={

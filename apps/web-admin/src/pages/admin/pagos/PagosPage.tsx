@@ -4,8 +4,14 @@ import { Bell, CheckCircle, RefreshCw, X } from 'lucide-react'
 import { authDelSocket } from '@menyu/auth-client'
 import { urlDelSocket } from '@menyu/ui/socket'
 import { io, type Socket } from 'socket.io-client'
+import type { CajaAbierta } from '@menyu/types'
+import { cajaDelCobro, MENSAJE_OPERACION_SIMULTANEA, MENSAJES_DE_TURNO_CAMBIADO, parsearPropina } from '@menyu/ui/caja'
 import { useContextStore, useRolActual } from '../../../store/contextStore'
-import { api, pedirJson } from '../../../services/api'
+import { api, ApiError, pedirJson } from '../../../services/api'
+import { AdvertenciaDePagosPendientes } from './AdvertenciaDePagosPendientes'
+import { AvisoSinTurno } from './AvisoSinTurno'
+import { CampoDePropina } from './CampoDePropina'
+import { SelectorDeCaja } from './SelectorDeCaja'
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 const C = {
@@ -92,16 +98,25 @@ function CobroModal({
   restauranteId,
   onClose,
   onDone,
+  cajas,
+  onTurnoCambio,
 }: {
   sesion: SesionActiva
   restauranteId: string
   onClose: () => void
   onDone: () => void
+  /** Las cajas abiertas del turno, que lee la pantalla (null: no se pudieron leer, no se bloquea nada). */
+  cajas: CajaAbierta[] | null
+  /** El backend dijo que las cajas cambiaron: la pantalla las vuelve a leer. */
+  onTurnoCambio: () => void
 }) {
   const [metodo,  setMetodo]  = useState<MetodoPago | null>(null)
+  const [cajaElegida, setCajaElegida] = useState<string | null>(null)
+  const [propinaTxt,  setPropinaTxt]  = useState('')
   const [mozoId,  setMozoId]  = useState('')
   const [loading, setLoading] = useState(false)
   const [error,   setError]   = useState<string | null>(null)
+  const [advertencia, setAdvertencia] = useState<string | null>(null)
   const [mozos,   setMozos]   = useState<{ id: string; nombre: string }[]>([])
 
   useEffect(() => {
@@ -110,21 +125,38 @@ function CobroModal({
       .catch(() => { /* silencioso — el select queda vacío */ })
   }, [restauranteId])
 
-  const canConfirm = !!metodo
+  // Como en web-staff (#358): cajaId solo con dos o más cajas, y la propina vacía o en 0 no viaja.
+  const caja = cajaDelCobro(cajas, cajaElegida)
+  const propina = parsearPropina(propinaTxt)
+  const canConfirm = !!metodo && !caja.sinTurno && !caja.falta && propina.ok
 
-  async function handleConfirmar() {
+  async function handleConfirmar(confirmarCancelacion = false) {
     if (!canConfirm) return
     setLoading(true)
     setError(null)
+    setAdvertencia(null)
     try {
-      const body = { metodoPago: metodo, mozoId: mozoId || null }
+      const body = {
+        metodoPago: metodo,
+        mozoId: mozoId || null,
+        ...(confirmarCancelacion ? { confirmarCancelacionPagosPendientes: true } : {}),
+        ...(caja.cajaId ? { cajaId: caja.cajaId } : {}),
+        ...(propina.ok && propina.valor !== undefined ? { propina: propina.valor } : {}),
+      }
       await apiFetch(`/sessions/${sesion.id}/cobro`, {
         method: 'PATCH',
         body: JSON.stringify(body),
       })
       onDone()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Error al registrar pago')
+      // Como en web-staff: un 409 que no es el de operación simultánea es la advertencia de pagos de Mercado Pago
+      // pendientes; un 400 de cajas que cambiaron hace releer las cajas.
+      if (e instanceof ApiError && e.status === 409 && e.message !== MENSAJE_OPERACION_SIMULTANEA) {
+        setAdvertencia(e.message)
+      } else {
+        setError(e instanceof Error ? e.message : 'Error al registrar pago')
+        if (e instanceof ApiError && e.status === 400 && MENSAJES_DE_TURNO_CAMBIADO.includes(e.message)) onTurnoCambio()
+      }
       setLoading(false)
     }
   }
@@ -173,7 +205,7 @@ function CobroModal({
             return (
               <button
                 key={key}
-                onClick={() => setMetodo(key)}
+                onClick={() => { setMetodo(key); setAdvertencia(null) }}
                 style={{
                   padding: '10px 14px', borderRadius: 8,
                   border: `1.5px solid ${sel ? C.orange : C.border}`,
@@ -188,6 +220,18 @@ function CobroModal({
             )
           })}
         </div>
+
+        {caja.sinTurno && (
+          <p role="alert" style={{ fontFamily: 'Inter,sans-serif', fontSize: 12, color: '#dc2626', marginBottom: 14 }}>
+            No hay un turno abierto: no se puede registrar el cobro.
+          </p>
+        )}
+
+        {cajas !== null && caja.mostrarSelector && (
+          <SelectorDeCaja cajas={cajas} elegida={caja.cajaId} falta={caja.falta} onElegir={setCajaElegida} />
+        )}
+
+        <CampoDePropina valor={propinaTxt} propina={propina} onChange={(texto) => { setPropinaTxt(texto); setAdvertencia(null) }} />
 
         <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 12, fontWeight: 600, color: C.text, marginBottom: 8 }}>
           Mozo que cobró
@@ -215,6 +259,13 @@ function CobroModal({
           </p>
         )}
 
+        {advertencia ? (
+          <AdvertenciaDePagosPendientes
+            mensaje={advertencia}
+            onCancelar={() => setAdvertencia(null)}
+            onConfirmar={() => void handleConfirmar(true)}
+          />
+        ) : (
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
           <button
             onClick={onClose}
@@ -244,6 +295,7 @@ function CobroModal({
             {loading ? 'Registrando…' : 'Confirmar pago'}
           </button>
         </div>
+        )}
       </div>
     </div>
   )
@@ -394,6 +446,10 @@ export function PagosPage() {
   const [error,          setError]          = useState<string | null>(null)
   const [modalSesion,    setModalSesion]    = useState<SesionActiva | null>(null)
   const [toast,          setToast]          = useState<string | null>(null)
+  // Las cajas abiertas del turno, de un restaurante. Solo las lee el GERENTE, que es quien cobra (#360).
+  const [lecturaDeCajas, setLecturaDeCajas] = useState<{ restauranteId: string; cajas: CajaAbierta[] | null } | null>(null)
+  // La respuesta de una lectura anterior (otro restaurante, un polling que se cruzó) no pisa la más nueva.
+  const ultimaLecturaDeCajas = useRef(0)
 
   const socketRef   = useRef<Socket | null>(null)
   const toastTimer  = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -424,6 +480,24 @@ export function PagosPage() {
     }
   }, [selectedRestauranteId])
 
+  // ── Cajas abiertas (solo GERENTE) ───────────────────────────────────────────
+  // Como en web-staff: un error deja las cajas en null (no se bloquea nada, decide el backend) y no toca las sesiones.
+  const leerCajas = useCallback(async () => {
+    const lectura = ++ultimaLecturaDeCajas.current
+    if (!selectedRestauranteId || !esGerente) return
+    let abiertas: CajaAbierta[] | null
+    try {
+      abiertas = (await api.cajas.abiertas(selectedRestauranteId)).cajas
+    } catch {
+      abiertas = null
+    }
+    if (lectura === ultimaLecturaDeCajas.current) setLecturaDeCajas({ restauranteId: selectedRestauranteId, cajas: abiertas })
+  }, [selectedRestauranteId, esGerente])
+
+  // Las de otro restaurante no valen: hasta que llegue la lectura del elegido, no se saben (null). Solo las lee el
+  // GERENTE, y el aviso y el cobro también son solo suyos.
+  const cajas = lecturaDeCajas?.restauranteId === selectedRestauranteId ? lecturaDeCajas.cajas : null
+
   // ── Fetch pagadas ──────────────────────────────────────────────────────────
   const fetchPagadas = useCallback(async (fechaTab?: TabHistorial) => {
     if (!selectedRestauranteId) return
@@ -443,12 +517,17 @@ export function PagosPage() {
     void fetchPagadas(tab)
   }, [fetchActivas, fetchPagadas, tab, esGerente])
 
+  useEffect(() => { void leerCajas() }, [leerCajas])
+
   // ── Polling 30s ───────────────────────────────────────────────────────────
   useEffect(() => {
     if (!selectedRestauranteId) return
-    const id = setInterval(() => { void fetchActivas() }, 30_000)
+    const id = setInterval(() => {
+      void fetchActivas()
+      void leerCajas()
+    }, 30_000)
     return () => clearInterval(id)
-  }, [selectedRestauranteId, fetchActivas])
+  }, [selectedRestauranteId, fetchActivas, leerCajas])
 
   // ── Mozos para select ──────────────────────────────────────────────────────
 
@@ -536,6 +615,8 @@ export function PagosPage() {
         </p>
       </div>
 
+      {esGerente && cajas !== null && cajas.length === 0 && <AvisoSinTurno />}
+
       {error && (
         <div style={{
           background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8,
@@ -584,7 +665,11 @@ export function PagosPage() {
                 key={s.id}
                 sesion={s}
                 esGerente={esGerente}
-                onRegistrar={() => setModalSesion(s)}
+                onRegistrar={() => {
+                  // Como en web-staff: el cobro arranca con las cajas recién leídas (alguien pudo abrir o cerrar el turno).
+                  void leerCajas()
+                  setModalSesion(s)
+                }}
               />
             ))
           )}
@@ -675,6 +760,8 @@ export function PagosPage() {
           restauranteId={selectedRestauranteId ?? ''}
           onClose={() => setModalSesion(null)}
           onDone={handleCobroDone}
+          cajas={cajas}
+          onTurnoCambio={() => { void leerCajas() }}
         />
       )}
 

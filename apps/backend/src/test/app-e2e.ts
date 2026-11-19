@@ -1,6 +1,6 @@
 import 'reflect-metadata'
 import * as request from 'supertest'
-import { ExecutionContext, ForbiddenException, INestApplication, Logger, UnauthorizedException } from '@nestjs/common'
+import { ExecutionContext, ForbiddenException, INestApplication, Logger, Type, UnauthorizedException } from '@nestjs/common'
 import { Test } from '@nestjs/testing'
 import { AppModule } from '../app.module'
 import { SupabaseAuthGuard } from '../auth/guards/supabase-auth.guard'
@@ -10,7 +10,7 @@ import { pipeDeValidacion } from './app-endpoints'
 /**
  * La app entera (AppModule) contra el Postgres de los e2e, para pedirle cosas por HTTP como el personal.
  *
- * - SupabaseAuthGuard es lo único que se reemplaza: el usuario sale del header `x-test-usuario`, con el id de un
+ * - SupabaseAuthGuard es lo único que se reemplaza (además de los providers de `reemplazos`): el usuario sale del header `x-test-usuario`, con el id de un
  *   `Usuario` real de la base, y se arma igual que el guard real (sin header, 401; sin `Usuario` activo, 403).
  * - MembresiaGuard, AccesoService y los services son los reales, con la base real.
  * - El ValidationPipe es el de main.ts. Sin el prefijo `/api`, como los otros e2e.
@@ -18,7 +18,14 @@ import { pipeDeValidacion } from './app-endpoints'
 export interface AppE2e {
   prisma: PrismaService
   pedir(metodo: 'get' | 'post' | 'patch' | 'put' | 'delete', ruta: string, opciones?: OpcionesE2e): request.Test
+  /** Un provider de la app (p. ej. para espiar un service). */
+  obtener<T>(token: Type<T>): T
   cerrar(): Promise<void>
+}
+
+export interface OpcionesDeLaApp {
+  /** Providers que se reemplazan por un doble, como el MercadoPagoProvider (nada sale a internet). */
+  reemplazos?: { proveedor: Type<unknown>; valor: unknown }[]
 }
 
 export interface OpcionesE2e {
@@ -28,7 +35,7 @@ export interface OpcionesE2e {
   query?: Record<string, string>
 }
 
-export async function crearAppE2e(): Promise<AppE2e> {
+export async function crearAppE2e({ reemplazos = [] }: OpcionesDeLaApp = {}): Promise<AppE2e> {
   // El guard corre después de compilar el módulo: para entonces ya tiene el PrismaService de la app.
   let prismaDelGuard: PrismaService | undefined
 
@@ -49,10 +56,9 @@ export async function crearAppE2e(): Promise<AppE2e> {
     },
   }
 
-  const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
-    .overrideGuard(SupabaseAuthGuard)
-    .useValue(supabaseDeLaBase)
-    .compile()
+  let builder = Test.createTestingModule({ imports: [AppModule] }).overrideGuard(SupabaseAuthGuard).useValue(supabaseDeLaBase)
+  for (const { proveedor, valor } of reemplazos) builder = builder.overrideProvider(proveedor).useValue(valor)
+  const moduleRef = await builder.compile()
   const app: INestApplication = moduleRef.createNestApplication()
   app.useGlobalPipes(pipeDeValidacion())
   // init y no listen: supertest usa el server sin abrir un puerto.
@@ -68,6 +74,7 @@ export async function crearAppE2e(): Promise<AppE2e> {
       if (query) req = req.query(query)
       return body ? req.send(body) : req
     },
+    obtener: (token) => moduleRef.get(token, { strict: false }),
     cerrar: () => app.close(),
   }
 }

@@ -2,6 +2,7 @@ import {
   preferenciaDeLaUrl,
   puedeAtenderLlamados,
   puedeEditarPedidos,
+  puedeVerCaja,
   puedeVerCocina,
   puedeVerMozo,
   restaurantesDelPerfil,
@@ -98,6 +99,21 @@ describe('qué puede cada rol en la interfaz', () => {
     // Atender un llamado necesita el `Mozo` de la cuenta y editar un pedido no es del OWNER (matriz de la 4.3).
     expect(puedeAtenderLlamados(roles)).toBe(atender)
     expect(puedeEditarPedidos(roles)).toBe(editar)
+  })
+
+  it.each([
+    ['COCINA', false],
+    ['MOZO', false],
+    ['JEFE_SALON', true],
+    ['GERENTE', true],
+    ['OWNER', true],
+  ] as const)('la caja (abrir el turno y reasignar mesas): %s %s', (rol, caja) => {
+    expect(puedeVerCaja([rol])).toBe(caja)
+  })
+
+  it('la caja con varios roles: alcanza con uno del grupo, y sin roles no', () => {
+    expect(puedeVerCaja(['MOZO', 'JEFE_SALON'])).toBe(true)
+    expect(puedeVerCaja([])).toBe(false)
   })
 })
 

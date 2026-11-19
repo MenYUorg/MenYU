@@ -25,6 +25,7 @@ vi.mock('./pages/cocina/CocinaPage', () => ({ CocinaPage: () => 'Pantalla de coc
 vi.mock('./pages/mozo/MozoPanel', () => ({ MozoPanel: () => 'Panel del mozo' }))
 vi.mock('./pages/mozo/MesasPage', () => ({ MesasPage: () => 'Pantalla de mesas' }))
 vi.mock('./pages/mozo/PagosMozo', () => ({ PagosMozo: () => 'Pantalla de cobros' }))
+vi.mock('./pages/mozo/CajaPage', () => ({ CajaPage: () => 'Pantalla de caja' }))
 vi.mock('./pages/mozo/TomaPedidosPage', () => ({ TomaPedidosPage: () => 'Pantalla de toma de pedidos' }))
 vi.mock('./pages/mozo/PedidosPage', () => ({ PedidosPage: () => 'Pantalla de pedidos' }))
 vi.mock('./pages/mozo/HistorialPage', () => ({ HistorialPage: () => 'Pantalla de historial' }))
@@ -122,6 +123,30 @@ describe('los guards de cada vista', () => {
 
     abrir('/mozo/pedidos', perfilDeGerente())
     expect(await screen.findByText('Pantalla de pedidos')).toBeInTheDocument()
+  })
+
+  it('el MOZO no entra a la caja: vuelve a su panel', async () => {
+    abrir('/mozo/caja', perfilDeMozo())
+
+    expect(await screen.findByText('Panel del mozo')).toBeInTheDocument()
+    expect(screen.queryByText('Pantalla de caja')).not.toBeInTheDocument()
+  })
+
+  it.each([
+    ['el JEFE_SALON', perfilDeJefeSalon()],
+    ['el GERENTE', perfilDeGerente()],
+    ['el OWNER', perfilDeOwner()],
+  ])('%s entra a la caja', async (_quien, perfil) => {
+    abrir('/mozo/caja', perfil)
+
+    expect(await screen.findByText('Pantalla de caja')).toBeInTheDocument()
+  })
+
+  it('COCINA no entra a la caja', async () => {
+    abrir('/mozo/caja', perfilDeCocina())
+
+    expect(await screen.findByText('Pantalla de cocina')).toBeInTheDocument()
+    expect(screen.queryByText('Pantalla de caja')).not.toBeInTheDocument()
   })
 
   it('sin restaurante elegido, una ruta de mozo lleva al selector', async () => {

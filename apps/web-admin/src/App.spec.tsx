@@ -19,6 +19,7 @@ vi.mock('./pages/admin/AdminLayout', async () => {
   return { AdminLayout: () => createElement(Outlet) }
 })
 vi.mock('./pages/admin/marca/MarcaPage', () => ({ MarcaPage: () => 'Pantalla de marca y sucursales' }))
+vi.mock('./pages/admin/cajas/CajasPage', () => ({ CajasPage: () => 'Pantalla de cajas' }))
 vi.mock('./pages/admin/dashboard/DashboardPage', () => ({ DashboardPage: () => 'Pantalla de dashboard' }))
 vi.mock('./pages/admin/gerente/GerenceMesasPage', () => ({
   GerenceMesasPage: () => 'Pantalla de mesas del gerente',
@@ -66,6 +67,24 @@ describe('rutas del panel de administración', () => {
 
       expect(screen.queryByText('Pantalla de marca y sucursales')).not.toBeInTheDocument()
       expect(screen.getByText('Pantalla de mesas del gerente')).toBeInTheDocument()
+    })
+  })
+
+  describe('/admin/cajas (#360)', () => {
+    it.each([
+      ['el OWNER', OWNER],
+      ['el GERENTE', GERENTE],
+    ])('%s entra', (_rol, perfil) => {
+      abrir('/admin/cajas', perfil)
+
+      expect(screen.getByText('Pantalla de cajas')).toBeInTheDocument()
+    })
+
+    it('una cuenta sin rol en el restaurante (el ROOT) no entra: vuelve a su consola', async () => {
+      abrir('/admin/cajas', ROOT)
+
+      expect(await screen.findByText('Consola de ROOT en /root')).toBeInTheDocument()
+      expect(screen.queryByText('Pantalla de cajas')).not.toBeInTheDocument()
     })
   })
 

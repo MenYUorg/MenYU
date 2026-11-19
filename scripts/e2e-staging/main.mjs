@@ -75,6 +75,8 @@ try {
     publishableKey: env.E2E_SUPABASE_PUBLISHABLE_KEY.trim(),
     mozoEmail: env.E2E_STAGING_MOZO_EMAIL.trim(),
     mozoPassword: env.E2E_STAGING_MOZO_PASSWORD,
+    ownerEmail: env.E2E_STAGING_OWNER_EMAIL.trim(),
+    ownerPassword: env.E2E_STAGING_OWNER_PASSWORD,
     restauranteId: env.E2E_STAGING_RESTAURANTE_ID.trim(),
     itemId: env.E2E_STAGING_ITEM_ID.trim(),
     marcador,

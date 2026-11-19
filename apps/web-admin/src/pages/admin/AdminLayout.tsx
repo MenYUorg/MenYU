@@ -22,6 +22,7 @@ import {
   CreditCard,
   Store,
   MessageCircleQuestion,
+  Wallet,
 } from 'lucide-react'
 
 /* ── nav structure ─────────────────────────────────────────────────────────── */
@@ -59,6 +60,7 @@ const NAV_BY_ROL: Record<RolDeAdmin, NavSection[]> = {
       label: 'CONFIGURACIÓN',
       items: [
         { to: '/admin/marca',     label: 'Marca y sucursales', Icon: Store },
+        { to: '/admin/cajas',     label: 'Cajas',              Icon: Wallet },
         { to: '/admin/asistente', label: 'Asistente',          Icon: MessageCircleQuestion },
       ],
     },
@@ -89,6 +91,7 @@ const NAV_BY_ROL: Record<RolDeAdmin, NavSection[]> = {
     {
       label: 'CONFIGURACIÓN',
       items: [
+        { to: '/admin/cajas',     label: 'Cajas',     Icon: Wallet },
         { to: '/admin/asistente', label: 'Asistente', Icon: MessageCircleQuestion },
       ],
     },
@@ -108,6 +111,7 @@ const SECTION_TITLES: Record<string, string> = {
   '/admin/toma-pedidos':  'Toma de pedidos',
   '/admin/marca':         'Marca y sucursales',
   '/admin/asistente':     'Asistente',
+  '/admin/cajas':         'Cajas',
 }
 
 /* ── marca y restaurante elegido (bloque debajo del logo) ──────────────────── */
