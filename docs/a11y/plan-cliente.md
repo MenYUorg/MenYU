@@ -134,7 +134,7 @@ Las rutas son relativas a `apps/web-cliente/src/` salvo que digan otra cosa.
   - `src/index.css`: sin anillo de foco en los `<h1>` enfocados por código, con un test que exige que sea la única regla que quita el contorno (decisión 16).
   - Etapa 8 (asistente) agregada al plan (decisión 17).
 
-**Cerrada.** El quality gate de SonarCloud pasó (ver la bitácora). Falta el OK de Margarita para empezar la etapa 2.
+**Cerrada.** El quality gate de SonarCloud pasó (ver la bitácora).
 
 ### Etapa 2. Formato de precios — hecha y revisada (13/11/2026)
 
@@ -156,7 +156,7 @@ Las rutas son relativas a `apps/web-cliente/src/` salvo que digan otra cosa.
   - Con los matchers que normalizan los espacios (`getByText`, `toHaveTextContent`) se escribe un espacio común: "$ 1.500". jest-dom y Testing Library convierten el U+00A0 del DOM en un espacio común antes de comparar.
   - Con las comparaciones exactas (`toBe`, `toEqual` sobre el `textContent` de la cuenta de `/pagar`, el monto por persona y el texto del mensaje para el grupo) se escribe el escape `\u00a0`, que se ve en el código ("$\u00a01.500"), no el carácter. El lint (`no-irregular-whitespace`) rechaza el espacio no separable suelto fuera de un string.
 
-### Etapa 3. Bloqueantes — hecha (13/11/2026), a la espera de revisión
+### Etapa 3. Bloqueantes — hecha (13/11/2026) y mergeada (PR #468)
 
 **Menú lateral** (`components/menu/MenuDrawer.tsx`). Hoy "Mis pedidos" y "Etiquetar pedidos" solo se abren desde acá y no se pueden activar con lector.
 
@@ -178,7 +178,7 @@ Las rutas son relativas a `apps/web-cliente/src/` salvo que digan otra cosa.
 - [x] Al aplicar o limpiar (líneas 49 y 55): se anuncia cuántos platos quedan ("12 platos", "1 plato" o "Ningún plato coincide") y el foco vuelve al botón de dietas. `MenuView` calcula `cantidadDePlatos` (los platos de las categorías con la búsqueda y las dietas aplicadas) y `BarraBusqueda` anuncia cuando cambia el conjunto de dietas, sin anunciar al montarse ni al abrir el panel o marcar casillas. El texto sale de `utils/textoDePlatos.ts`, que reusa la búsqueda en la etapa 4.
 - [x] Sumado: Esc cierra el desplegable y devuelve el foco al botón (era un panel que solo se cerraba tocando afuera). El foco queda en el botón al abrirlo (patrón de despliegue: el panel es lo que sigue en el orden de lectura).
 
-### Etapa 4. Menú, detalle y discovery — hecha (13/11/2026), a la espera de revisión
+### Etapa 4. Menú, detalle y discovery — hecha (13/11/2026) y mergeada (PR #469)
 
 **Menú:**
 
@@ -328,7 +328,7 @@ Cosas que aparecieron al trabajar y que el plan no mencionaba. Los dos primeros 
 3. **Título de la pestaña sin restaurante al entrar directo a una pantalla de la mesa** (por ejemplo `/pedidos` recién abierto): dice "Mis pedidos · MenYU" hasta que se carga el menú. Hoy solo `/menu`, `/carrito` y el detalle piden el menú. No es un error de accesibilidad, solo un título menos completo.
 4. **Zona con scroll de la carta que no se puede enfocar con teclado** (la auditoría sugiere `tabIndex={0}`): no se puede comprobar en jsdom. Para verificarlo en el axe de staging (etapa 7); los navegadores recientes ya hacen enfocables los contenedores con scroll que no tienen nada enfocable adentro.
 
-5. **El buscador del menú no encuentra con más de una palabra** (hallazgo de la etapa 4, previo a ella). `matchesBusqueda` en `MenuView.tsx` compara el texto buscado entero con el comienzo de cada palabra del nombre del plato, así que "plato 1" o "pizza muzz" no coinciden con "Plato 1" ni con "Pizza muzzarella": da "Ningún plato coincide" aunque el plato exista. No es de accesibilidad y no se tocó. Afecta a todos los comensales. Hay que decidir si se arregla (por ejemplo, que cada palabra buscada coincida con el comienzo de alguna palabra del nombre) y en qué PR.
+5. **El buscador del menú no encuentra con más de una palabra** (hallazgo de la etapa 4, previo a ella). `matchesBusqueda` en `MenuView.tsx` compara el texto buscado entero con el comienzo de cada palabra del nombre del plato, así que "plato 1" o "pizza muzz" no coinciden con "Plato 1" ni con "Pizza muzzarella": da "Ningún plato coincide" aunque el plato exista. No es de accesibilidad. Afecta a todos los comensales. **Resuelto (19/11):** el texto se parte en palabras y cada una tiene que ser el comienzo de alguna palabra del nombre, en cualquier orden (`utils/coincideConLaBusqueda.ts`, con sus tests). Queda aparte, sin tocar, que la búsqueda del menú distingue acentos y la de Discovery no.
 
 ## Preguntas abiertas
 

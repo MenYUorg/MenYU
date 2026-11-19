@@ -7,9 +7,9 @@ Registro, etapa por etapa, de lo que se hizo para la accesibilidad del flujo del
 | Etapa | Estado |
 | --- | --- |
 | 1. Base compartida | Hecha y revisada (13/11/2026). Quality gate de SonarCloud: passed. Con los ajustes de la revisión (etiqueta de `MensajePage`, foco del `<h1>`) |
-| 2. Formato de precios | Hecha (13/11/2026), a la espera de revisión |
-| 3. Bloqueantes (menú lateral y filtro de dietas) | Hecha (13/11/2026), a la espera de revisión |
-| 4. Menú, detalle y discovery | Hecha (13/11/2026), a la espera de revisión |
+| 2. Formato de precios | Hecha (13/11/2026) y mergeada (PR #468, junto con la 3). Quality gate de SonarCloud: passed |
+| 3. Bloqueantes (menú lateral y filtro de dietas) | Hecha (13/11/2026) y mergeada (PR #468, junto con la 2). Quality gate de SonarCloud: passed |
+| 4. Menú, detalle y discovery | Hecha (13/11/2026) y mergeada (PR #469). Quality gate de SonarCloud: passed. Con el arreglo del buscador del menú (19/11/2026) |
 | 5. Carrito, pedidos, PIN, nombre y pago | Pendiente |
 | 6. Contraste, foco visible y tamaños | Pendiente |
 | 7. Cierre (lint, axe de Coty, celulares C1 a C7) | Pendiente |
@@ -140,7 +140,7 @@ Ninguno completo todavía. Desde esta etapa debería cumplirse el punto 1 de "En
 
 ## Etapa 2: formato de precios (13/11/2026)
 
-Estado: hecha, a la espera de revisión. Va sobre la rama de la etapa 1, con sus ajustes de la revisión todavía sin commitear (el archivo `MensajePage` tiene los dos cambios).
+Estado: hecha, revisada y mergeada (PR #468, junto con la etapa 3).
 
 ### Qué cambió
 
@@ -204,7 +204,7 @@ Desde esta etapa los precios de todos los recorridos tienen formato de importe (
 
 ## Etapa 3: bloqueantes, menú lateral y filtro de dietas (13/11/2026)
 
-Estado: hecha, a la espera de revisión. Va sobre la rama de las etapas anteriores, que siguen sin commitear en el árbol (los ajustes de la etapa 1, la etapa 2 y su ajuste del mensaje).
+Estado: hecha, revisada y mergeada (PR #468, junto con la etapa 2).
 
 ### Qué cambió
 
@@ -291,7 +291,7 @@ Desde esta etapa: **C5 y C7 se pueden empezar** (a "Mis pedidos", "Etiquetar ped
 
 ## Etapa 4: menú, detalle y discovery (13/11/2026)
 
-Estado: hecha, a la espera de revisión. Va sobre la rama con las etapas 1 a 3 ya commiteadas y pusheadas (el Sonar de la 2 y la 3 está cargado arriba).
+Estado: hecha, revisada y mergeada (PR #469). Fue sobre la rama con las etapas 1 a 3 ya mergeadas (el Sonar de la 2 y la 3 está cargado arriba). Después de la revisión se arregló el buscador del menú (sección "Ajuste posterior", al final).
 
 ### Qué cambió
 
@@ -335,7 +335,13 @@ Por archivo (líneas / ramas): los nuevos (`SelectorDeCantidad`, `ChipsSecciones
 
 ### Quality gate de SonarCloud
 
-Pendiente: se anota cuando corra el PR.
+**Passed** (captura del PR #469, "Feat/a11y cliente"; análisis del commit `fdb325a4`):
+
+- Cobertura del código nuevo: **99,26 %** (se pide 80 % o más), sobre 197 líneas nuevas por cubrir. Estimada después del merge: 90,4 %.
+- Duplicación del código nuevo: **0,0 %** (se pide 5 % o menos), sobre 1,8 k líneas nuevas. Estimada después del merge: 2,0 %.
+- Issues nuevos: 0. Issues aceptados: 0. Security hotspots: 0.
+- Líneas de código nuevo: 227.
+- La captura vuelve a mostrar "1 analysis warning" sin decir cuál es (el mismo de la etapa 1 y de la 2 y 3). Las calificaciones no se ven en la captura, pero el gate pasó con todas sus condiciones. Si el aviso importa, falta abrir su detalle en SonarCloud.
 
 ### Verificación en el navegador
 
@@ -357,7 +363,7 @@ En Edge real (390 px, API simulada, un Vite propio en el puerto 5199):
 
 ### Pendiente
 
-- **Hallazgo fuera del plan, previo a esta etapa:** el buscador del menú no encuentra con más de una palabra ("plato 1", "pizza muzz" dan "Ningún plato coincide" aunque el plato exista), porque compara el texto entero con el comienzo de cada palabra del nombre. No se tocó. Está en `plan-cliente.md` ("Hallazgos fuera del plan", el 5).
+- **Hallazgo fuera del plan, previo a esta etapa:** el buscador del menú no encuentra con más de una palabra ("plato 1", "pizza muzz" dan "Ningún plato coincide" aunque el plato exista), porque compara el texto entero con el comienzo de cada palabra del nombre. **Resuelto el 19/11/2026** (ver "Ajuste posterior"). Está en `plan-cliente.md` ("Hallazgos fuera del plan", el 5).
 - **Para decidir** (cosas hechas por criterio propio, explicadas en el plan): el número del botón del carrito pasó a contar unidades (cambio visual chico), el `role="presentation"` de la tarjeta del plato (en vez de hacer que el botón la cubra), el anuncio "Se agregó {plato}" en vez de "{plato} agregada", y el `h2` sumado a la regla que quita el contorno.
 - Los chips no anuncian al lector cuál es la sección activa cuando el desplazamiento la cambia (solo `aria-current`): anunciarlo en cada cambio de sección sería más ruido que ayuda.
 - El detalle del plato sigue usando una paleta propia en lugar del token compartido: es de la etapa 6.
@@ -365,3 +371,13 @@ En Edge real (390 px, API simulada, un Vite propio en el puerto 5199):
 ### Recorridos con lector (C1 a C8)
 
 Desde esta etapa: **C1 completo** (la búsqueda anuncia cuántos resultados hay y las tarjetas tienen nombres claros), **C6** (el botón del mozo anuncia el resultado y no se pierde el foco) y **C4 hasta agregar el plato** (el interruptor de cada ingrediente dice su estado, el botón de cantidad dice la cantidad, al agregar se anuncia). C4 se completa con el carrito en la etapa 5.
+
+### Ajuste posterior: buscador del menú con más de una palabra (19/11/2026)
+
+Pedido por Margarita al mergear la etapa 4, sobre el hallazgo que había quedado abierto. No es de accesibilidad: afecta a todos los comensales, pero en la carta con lector el resultado era peor ("Ningún plato coincide" para un plato que existe).
+
+- **Causa:** `matchesBusqueda` (en `MenuView.tsx`) comparaba el texto escrito entero con el comienzo de cada palabra del nombre. "plato 1" nunca es el comienzo de una sola palabra, así que no coincidía con nada.
+- **Arreglo:** el texto se parte en palabras y **cada una** tiene que ser el comienzo de alguna palabra del nombre, en cualquier orden ("milanesa napo" y "napo milanesa" encuentran "Milanesa napolitana"; "plato 1" encuentra "Plato 1" y también "Plato 10"). Con una sola palabra se comporta igual que antes, y una búsqueda vacía o de solo espacios deja pasar todo. La función pasó a `utils/coincideConLaBusqueda.ts`, sin la parte de la vista.
+- **Tests:** +6 (1115 → 1121) y un archivo más (60 → 61): `utils/coincideConLaBusqueda.spec.ts` (5: vacía, una palabra, varias, otro orden y espacios de más, números) y un caso en `ClienteMenuPage.spec.tsx` que busca "milanesa napo" y comprueba que quedan solo los platos que coinciden. El anuncio de cuántos platos quedan y el texto "No hay platos que coincidan" salen del mismo filtro, así que acompañan solos.
+- **Cobertura de web-cliente:** igual que al cierre de la etapa 4 (93,64 % de líneas, 92,97 % de ramas y 84,95 % de funciones; el helper nuevo, al 100 %). `tsc` y ESLint de los archivos tocados, sin avisos.
+- **No se cambió, y queda como idea:** la búsqueda del menú distingue acentos ("cafe" no encuentra "Café"), a diferencia de la de Discovery, que los ignora. Se dejó igual para no mezclar dos cambios de comportamiento.
