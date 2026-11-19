@@ -1,3 +1,5 @@
+import { CORAL } from './colores'
+
 interface DescuentoBadgeProps {
   /** Porcentaje entero de descuento (1 a 99), ya calculado por el backend. */
   porcentaje: number
@@ -18,7 +20,7 @@ export function DescuentoBadge({ porcentaje, tamano = 38 }: DescuentoBadgeProps)
         width:          tamano,
         height:         tamano,
         borderRadius:   '50%',
-        background:     '#E8563A',
+        background:     CORAL,
         color:          'white',
         display:        'inline-flex',
         alignItems:     'center',
@@ -28,7 +30,7 @@ export function DescuentoBadge({ porcentaje, tamano = 38 }: DescuentoBadgeProps)
         fontSize:       Math.max(9, Math.round(tamano * 0.3)),
         lineHeight:     1,
         letterSpacing:  '-0.02em',
-        boxShadow:      '0 2px 6px rgba(232,86,58,0.35)',
+        boxShadow:      '0 2px 6px rgba(204,74,49,0.35)',
         flexShrink:     0,
         userSelect:     'none',
       }}
