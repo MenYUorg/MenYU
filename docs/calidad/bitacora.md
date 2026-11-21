@@ -21,6 +21,22 @@ Registro de lo que se hizo para poner SonarCloud en el CI de MenYU y tomar la l�
 | Limpieza de los e2e por marcador de corrida (PR #420) | **Borrador** (21/10/2026), rojo `39704886533` y verde `39705620870`. Sin salvedad de base remota desde `e0ddf05` (22/10/2026, verde `39784392541`) |
 | Pruebas de carga con k6 (PR #421) | **Borrador** (22/10/2026), CI en verde (`39709392785`). Sin corridas contra staging |
 | Diseño del E2E contra staging (PR #422) | **Borrador** (22/10/2026), solo documento |
+| Deuda de pagos, PR B: el webhook responde después de procesar, pagos para revisión y la firma en observación (PR #454) | **Mergeado** (05/11/2026 15:39 ART, `0a4c9df`). CI del PR en verde (`42083407587`), gate de Sonar `OK` con 100 % de cobertura nueva, y en `main` el CI `42086389972` y el deploy de staging `42086389508` en verde. Falta el checklist de staging, que decide el PR C |
+| Caja: modelo de cajas, turnos, movimientos y arqueo (#355, PR #460) | **Mergeado** (10/11/2026, `9633939`). Migración `20261110120000_caja_turnos_arqueo`. CI en verde y gate de Sonar `OK` con 100 % de cobertura nueva |
+| Caja #357 A1: grupo `CAJA`, ABM de cajas, apertura de turno y reasignación de mesas (PR #461) | **Mergeado** (10/11/2026, `c393dcc`). CI en verde y gate de Sonar `OK` con 99,6 % de cobertura nueva. Rutas: 127 → 133 |
+| Caja #357 A2: movimientos y cierre con arqueo (PR #462) | **Mergeado** (11/11/2026, `560e81e`). CI en verde y gate de Sonar `OK` con 100 % de cobertura nueva. Rutas: 133 → 135 |
+| Caja #357 B1: resumen, historial y detalle del turno (PR #463) | **Mergeado** (11/11/2026, `3fcb2f0`). CI en verde (run `43090550370`) y gate de Sonar `OK` con 98,8 % de cobertura nueva. Rutas: 135 → 138. El CI y el deploy de staging de `3fcb2f0` estaban en `queued` a las 20:36 UTC: **mirarlos al retomar** |
+| Caja #357 B2: filtro por mozo en `GET /mesas` y `GET /sessions/activas` (cierra #357) | **Mergeado** (14/11/2026, `d5c7450`). Commits `5c87690`, `5023417` y `24e35d3`. CI en verde (run `43456351501`) y gate de Sonar `OK` con 100 % de cobertura nueva. e2e: 9 → 10 suites, 143 → 154 tests. Rutas sin cambios (138) |
+| #358 A: los cobros del personal van a una caja del turno (PR #470) | **Mergeado** (16/11/2026, `7a502d9`). CI `43879611515` y deploy de staging `43879611457` en verde |
+| #358 B: Mercado Pago a la caja del turno (PR #471) | **Mergeado** (16/11/2026, `87a183e`). Unitarios 2806, e2e 183. CI `43917383346` y deploy `43917383644` en verde. #358 sigue abierto: los PR usaron "Refs" y el texto del issue quedó desactualizado (la decisión sobre Mercado Pago se revisó el 16/11/2026: todo pago aprobado va a una caja) |
+| #359 PR 0: `GET /cajas/abiertas` y `GET /turnos/preparacion` (PR #472) | **Mergeado** (16/11/2026, `a52385f`). Unitarios 116 / 2832, e2e 13 / 189, rutas 138 → 140. CI `43935297337` y deploy `43935297488` en verde |
+| #359 PR 1: cobro con caja y propina, y bloqueo sin turno, en web-staff (PR #473) | **Mergeado** (18/11/2026, `9246505`). CI `44308317618` y deploy de staging `44308317372` en verde |
+| #359 PR 2: abrir el turno, verlo y reasignar sus mesas en `/mozo/caja` (PR #474) | **Mergeado** (18/11/2026, `25852b5`). CI `44319757396` y deploy de staging `44319757359` en verde |
+| #359 PR 3: movimientos de caja (ingresos y egresos) en `/mozo/caja` (PR #475) | **Mergeado** (18/11/2026, `0f65830`). CI `44365577904` y deploy de staging `44365578005` en verde |
+| #359 PR 4: cerrar el turno con arqueo ciego, resultado y resumen (PR #476) | **Mergeado** (18/11/2026, `df7e1ab`). CI `44382302485` y deploy de staging `44382302564` en verde. #359 sigue abierto (los PR usaron "Refs") |
+| #360 PR 1: el cobro con caja, propina y advertencia de Mercado Pago en web-admin (PR #477) | **Mergeado** (18/11/2026, `ed08818`). CI `44408917528` y deploy de staging `44408917636` en verde |
+| #360 PR 2: el ABM de cajas en `/admin/cajas` (PR #478) | **Mergeado** (19/11/2026, `7d33e5d`). CI `44522782812` y deploy de staging `44522783206` en verde |
+| #360 PR 3: el historial y el detalle de los turnos de caja en `/admin/turnos` (PR #480) | **Mergeado** (19/11/2026, `ccd6c04`). CI `44541662085` y deploy de staging `44541662270` en verde. #360 sigue abierto (los PR usaron "Refs") |
 
 ## Pendientes
 
@@ -856,3 +872,953 @@ Horas en ART (UTC − 3). Desde esta sesión se abrió y se pusheó el #441, y s
 7. **Limpieza:**
    - la rama `docs/plan-pruebas-v0.2` (local y remota), del PR #432, que se cerró;
    - los worktrees de este bloque.
+
+> El punto 7 se hizo en local el 31/10 (ver la sección siguiente). La rama remota `docs/plan-pruebas-v0.2` sigue en GitHub.
+
+### 31/10/2026: limpieza local de worktrees y ramas
+
+Solo en la máquina local, sobre `../MenYU` en `main` (`6475eb9`, al día con `origin/main`). No se tocaron ramas remotas ni GitHub, no hubo commits ni push, y no se usó `--force`. El único cambio sin commitear, el comentario de la demo en `apps/backend/src/discovery/discovery.module.ts`, quedó igual (`git status --porcelain` idéntico antes y después).
+
+- **`git fetch --prune`:** desaparecieron `origin/feat/auth-fase-5` y `origin/fix/e2e-staging-sin-password-hash`. Ninguna rama local las seguía.
+- **Worktrees:** se quitaron los 19 `../MenYU-*` con `git worktree remove`, sin `--force` y sin fallas. Antes se revisaron los ignorados: el único que importaba era `.env.smoke` de `MenYU-supabase-doc`, que se copió a `../MenYU/.env.smoke` (ignorado por `.env.*`, sha256 idéntico).
+  - Quedaron 10 carpetas vacías (las que tenían `node_modules`), ya sin `.git`: `MenYU-e2e`, `-e2e-guarda`, `-fix-pagado`, `-fix-pagos`, `-huerfanos`, `-integracion`, `-pr383`, `-scrum16`, `-scrum2627` y `-supabase-doc`. Se borran a mano.
+  - No se tocaron `MenYU-f15240a` ni `MenYU-main-12c7bb4`.
+- **Ramas mergeadas en `main`:** 45. 44 con `git branch -d`; `test/backend-cobertura` con `-D`, porque estaba `ahead 2` de su remota, pero era ancestro de `main`.
+- **Ramas no mergeadas:** 5, con `-D`, después de comprobar el contenido:
+  - `docs/bitacora-calidad`, `refactor/historial-sesiones-compartido` y `test/integracion-todo`: `git cherry` sin ningún `+`.
+  - `ci/reducir-deployments`: su commit `34933ba` (solo local) agregaba `deploymentEnabled` (`main: true`, `"**": false`) a los `vercel.json` de web-admin, web-cliente y web-staff; los tres son idénticos en `main`, que además lo tiene en web-auth.
+  - `docs/plan-pruebas-v0.2`: plan v0.2 viejo; sigue en `origin/docs/plan-pruebas-v0.2` (`4812d45`).
+- **Resultado:** queda solo `main`, sin worktrees extra y sin `.lock` en `.git`.
+
+**SHAs para recuperar una rama** (`git branch <nombre> <sha>`, mientras git no limpie los commits sueltos). Sin copia en el remoto: `test/integracion-todo`, `refactor/historial-sesiones-compartido` y el commit `34933ba` de `ci/reducir-deployments`.
+
+| Rama | SHA | Cómo se borró |
+|---|---|---|
+| `ci/reducir-deployments` | `34933ba` | `-D`, no mergeada (commit solo local) |
+| `docs/bitacora-calidad` | `ecad6bc` | `-D`, no mergeada |
+| `docs/plan-pruebas-v0.2` | `4812d45` | `-D`, no mergeada |
+| `refactor/historial-sesiones-compartido` | `f58f069` | `-D`, no mergeada (sin upstream) |
+| `test/integracion-todo` | `2140b07` | `-D`, no mergeada (sin upstream) |
+| `test/backend-cobertura` | `d0dbb79` | `-D`, mergeada |
+| `ci/e2e-backend` | `8e9d31c` | `-d` |
+| `ci/endurecer-deploy-produccion` | `f610ef4` | `-d` |
+| `ci/quality-gate` | `d8c359f` | `-d` |
+| `ci/smoke-production` | `500649c` | `-d` |
+| `ci/smoke-staging` | `ff67aca` | `-d` |
+| `ci/sonarcloud` | `9224daa` | `-d` |
+| `ci/vercel-solo-main` | `60d7508` | `-d` |
+| `docs/bitacora-26-10-tarde` | `5dedb08` | `-d` |
+| `docs/bitacora-ensayo-produccion` | `3fd4724` | `-d` |
+| `docs/bitacora-produccion` | `f707fa3` | `-d` |
+| `docs/e2e-supabase` | `a7afac6` | `-d` |
+| `docs/linea-base-calidad` | `595e318` | `-d` |
+| `docs/mercadopago-contingencia` | `dbbb108` | `-d` |
+| `docs/plan-pruebas-v0.3` | `956a587` | `-d` |
+| `docs/plan-v04-contingencia` | `58a4e06` | `-d` |
+| `docs/rollback-correcciones` | `8524646` | `-d` |
+| `docs/supabase-scrum-44` | `65520ba` | `-d` |
+| `feat/health-sha` | `be07b5f` | `-d` |
+| `feat/k6-carga` | `57e6fa1` | `-d` |
+| `fix/asignar-restaurante-marca` | `086a82b` | `-d` |
+| `fix/e2e-limpieza-por-marcador` | `b9d3dcd` | `-d` |
+| `fix/fuerza-bruta-sesion` | `eefc043` | `-d` |
+| `fix/k6-permisos-resultados` | `beb7bb2` | `-d` |
+| `fix/mp-conexion-cuenta` | `ead7439` | `-d` |
+| `fix/pagos-page-timer-desmontaje` | `3488702` | `-d` |
+| `fix/pedido-pagado-desde-api` | `cbd66b0` | `-d` |
+| `fix/pin-mesa-crypto` | `9aed16c` | `-d` |
+| `fix/reduce-pagos-mp` | `152c106` | `-d` |
+| `fix/sesion-abierta-sin-huerfanos` | `0788dd6` | `-d` |
+| `fix/test-mesaspage-sesion-cerrada-socket` | `dbabc7a` | `-d` |
+| `fix/test-requireauth-otra-pestana` | `d42beed` | `-d` |
+| `fix/web-cliente-qr-y-429` | `a7681c2` | `-d` |
+| `refactor/editar-pedido-compartido` | `f9e025a` | `-d` |
+| `refactor/pantalla-comensal` | `b84a5c9` | `-d` |
+| `test/backend-cobertura-2` | `b75a6b8` | `-d` |
+| `test/caida-de-base-scrum-16` | `ccc493d` | `-d` |
+| `test/casos-limite-scrum-26-27` | `14d6c2a` | `-d` |
+| `test/cobertura-frontend-backend` | `bb45b6f` | `-d` |
+| `test/comando-unico-por-tipo` | `b64933b` | `-d` |
+| `test/e2e-staging-supabase` | `034598a` | `-d` |
+| `test/web-admin-cobertura` | `fb63295` | `-d` |
+| `test/web-cliente-cobertura` | `dec6f02` | `-d` |
+| `test/web-staff-cobertura` | `182deab` | `-d` |
+| `wip/refactor-historial` | `21db047` | `-d` |
+
+**Cierre de 21 issues viejos en GitHub** (`gh issue close`, cuenta `CotyStrumia`; la lista y los motivos los decidió Coty). Antes se verificó con `gh issue view` que los 21 estaban abiertos y que los títulos coincidían. No se tocaron labels, milestones, el Project ni otros issues o PRs.
+
+- **App móvil (Expo), "not planned"** (10): #45, #208, #72, #210, #75, #209, #79, #80, #150 y #212. Comentario: la app móvil se reemplazó por las apps web en Vercel.
+- **Duplicados, "not planned"** (6), con el comentario "Duplicado de #M.": #198 → #128, #199 → #133, #200 → #134, #201 → #136, #202 → #135 y #203 → #137. Los originales #128, #134, #135, #136 y #137 siguen abiertos.
+- **Hechos, "completed"** (5):
+  - #37 (guards por rol): `RequiereRol`, `AccesoService` y `SessionAuthGuard`, con la auth de Supabase en producción (v1.4.0);
+  - #133 (k6, 200 usuarios): humo, stress y soak contra staging, en `docs/calidad/k6.md`;
+  - #138 (E2E v2.0): E2E del backend en el CI y E2E contra el Supabase de staging en cada deploy, en `docs/calidad/e2e-supabase.md`;
+  - #144 (E2E de casos límite): casos límite, caída de la base y E2E de staging;
+  - #151 (smoke en producción): smoke automático después de los deploys.
+- **Resultado:** los 21 cerrados, sin fallas (`stateReason`: 16 `NOT_PLANNED` y 5 `COMPLETED`). Quedan **76 issues abiertos** (eran 97).
+
+### 01/11/2026: DT-08, el gateway de Socket.io autenticado (#449 y #450)
+
+Horas en ART (UTC − 3). Hasta hoy el gateway (`apps/backend/src/gateway/menyu.gateway.ts`) no autenticaba nada:
+- `cors: '*'`;
+- `session:join`, `cocina:join` y `mozo:join` unían a `restaurante-{id}` con el id que mandaba el cliente;
+- todos los eventos iban a esa sala.
+
+Cualquiera recibía los pedidos, llamados y cobros de cualquier local, y los comensales, los eventos del personal. Se resolvió en dos PR, uno por mitad, trabajando por pasos con el ok de Coty en cada uno. Desde esta sesión se pushearon las dos ramas y se abrieron los dos PR; el merge del #449 lo hizo Coty. Los dos cambios sin commitear de la carpeta principal (el comentario de `discovery.module.ts` y la sección del 31/10 de esta bitácora) no entraron en ningún commit.
+
+**#449: los frontends mandan el token al conectar (1/2)**
+- **Rama:** `feat/gateway-auth-frontends`, desde `4f45e4d`.
+- **Commits:**
+  - `5f62dc5`: `authDelSocket` en `@menyu/auth-client`.
+  - `8cdf42b`: web-staff y web-admin.
+  - `acd14fc`: `PagosPage.spec` verifica el token.
+  - `4e729fe`: web-cliente.
+- **Qué cambia:**
+  - **Los 8 sitios que abren un socket mandan `auth`.** El personal usa `authDelSocket`, que lee `tokenDeAcceso()` en cada (re)conexión y llama siempre al callback. El comensal manda el JWT de su sesión de mesa, o `{}`.
+  - **`GerenceMesasPage` y `PagosPage` de web-admin** pasaron de `cocina:join` a `mozo:join`.
+  - **`SessionGuard` de web-cliente** depende de `[restauranteId, jwt]`. Con otra mesa del mismo restaurante cambia el JWT sin que cambie el restaurante, y socket.io reusa el `auth` en cada reconexión.
+  - No cambió ningún evento ni payload.
+- **Tests locales:**
+  - auth-client: 84;
+  - web-staff: 211;
+  - web-admin: 852;
+  - web-cliente: 764;
+  - `pnpm typecheck` 10/10 y `pnpm lint` 9/9.
+- **Entorno local:** hicieron falta `pnpm install --frozen-lockfile`, el build de `@menyu/types` (su `dist` estaba viejo) y `prisma generate`. Los tres escriben solo en `node_modules` o en carpetas ignoradas.
+- **CI:** run `41338684540`, con CI, E2E y SonarCloud en verde. El E2E ya mostraba "Jest did not exit one second after the test run has completed" con solo `sessions.e2e-spec.ts`.
+- **Merge:** 16:21:42, `db47dd9`, por Coty. Después del merge, CI `41341346611` y `Deploy — Staging` `41341346485`, los dos en success.
+
+**#450: el backend exige token para unirse a las salas (2/2)**
+- **Rama:** `feat/gateway-auth-backend`, desde `4f45e4d`. No se rebaseó: no comparte archivos con el #449 y `git merge-tree` no da conflictos.
+- **Commits:**
+  - `46568db`: `AccesoDelSocket`.
+  - `909e400`: salas y ruteo.
+  - `a7a2b67`: revalidación.
+  - `a66e29c`: el fix del token vencido.
+  - `39f065b`: `socket.io-client` como devDependency.
+  - `7949c13`: e2e.
+  - `1610f1f`: docs.
+- **Qué cambia:**
+  - **Cuatro salas, con el nombre armado por el servidor:**
+    - `salon:{restauranteId}`, con `mozo:join` y los roles de `SALON`;
+    - `cocina:{restauranteId}`, con `cocina:join` y los de `TODO_EL_PERSONAL`;
+    - `sesion:{sesionId}`, con `session:join` y el JWT de mesa; la sesión y el restaurante salen del token;
+    - `menu:{restauranteId}`, pública.
+  - **Ruteo por tipo de evento,** en una sola llamada `to([...])`, sin duplicados.
+  - **Un socket del personal está en un restaurante a la vez.**
+  - **Rechazos:** siempre "No autorizado", con el motivo en `Logger.warn` y nunca el token.
+  - **Revalidación periódica** (`WS_REVALIDACION_MS`: 10 min por defecto, entre 1 s y 24 h) con `acceso:revocado`.
+  - **CORS** con `isAllowedOrigin`, y `Logger` en lugar de `console.log`.
+- **El fix del token vencido** (`a66e29c`, lo encontró Coty al revisar el paso 2): el token del handshake queda fijo mientras vive la conexión y el de Supabase vence a la hora. Ahora se exige en el primer join; los siguientes usan el `usuarioId` guardado y solo vuelven a mirar la cuenta activa y el rol (`personalYaAutenticado`). Se sumó también un máximo de 24 h al intervalo, porque `setInterval` con más de 2^31-1 ms se dispara cada 1 ms.
+- **Tests:**
+  - **Unitarios del backend:** 85 suites y 2126 tests (más 3 `*.base.spec.ts` salteadas). Los del gateway son 114, sin handles abiertos.
+  - **e2e nuevo** (`gateway.e2e-spec.ts`): 10 casos con socket.io real y el verificador de Supabase como doble (tokens vencidos con un `Set`, sin sleeps):
+    - cruce entre restaurantes;
+    - roles por sala;
+    - comensal y anónimo;
+    - cambio de restaurante;
+    - revalidación;
+    - `order:new` una sola vez estando en dos salas;
+    - token vencido en una conexión ya autenticada.
+  - **`pnpm test:integracion`** (Postgres 17.6 en Docker): 2 suites, 23 tests en verde. El e2e del gateway con `--detectOpenHandles`: 10/10, sin handles.
+  - **El aviso "Jest did not exit"** aparece también sin este PR (ver el #449): no es del gateway.
+  - **Además:** `pnpm typecheck` 10/10 y `pnpm --filter @menyu/api build` sin errores.
+- **Docs:**
+  - Sección nueva "Gateway de Socket.io autenticado (DT-08)" en `docs/auth/specs/auth.md`, sin marcarla como verificada en staging.
+  - En la misma spec quedaron tachados "Fuera de alcance" y la deuda del `leave` de la 4.6.
+  - `WS_REVALIDACION_MS`, comentada, en `apps/backend/.env.example`.
+  - No se tocaron los documentos históricos de `docs/auth/review/` ni `CLAUDE.md`.
+- **PR:** abierto a las 16:45:10, sin mergear. CI `41343309012` con CI, E2E y SonarCloud en verde.
+
+**Pendiente al retomar** (en este orden)
+1. **Antes de mergear el #450:** confirmar que terminó el deploy de web-staff, web-admin y web-cliente con el #449. Mergear fuera del horario de servicio o avisar al personal que recargue la página: las pestañas abiertas desde antes del #449 no mandan token y se quedan sin tiempo real hasta recargar.
+2. **Después del merge, en staging:** pasar el checklist del cuerpo del #450.
+   - El mozo y la cocina con lo suyo, y el mozo en `/mozo/pedidos`.
+   - El comensal, solo con su sesión.
+   - La carta sin sesión recibe `menu:updated`.
+   - Una conexión de más de una hora cambia de pantalla y sigue recibiendo.
+   - El OWNER cambia de sucursal y deja de recibir la anterior.
+   - Quitarle el rol a un mozo conectado, con `WS_REVALIDACION_MS` bajo.
+   - Los logs no muestran tokens.
+3. **Deuda para v2.0:**
+   - Las pantallas del personal no escuchan `acceso:revocado`: quien pierde el rol deja de recibir eventos sin aviso.
+   - Un mismo socket que hace `session:join` con el JWT de otra sesión no sale de la sala `sesion:` anterior. No pasa con los frontends actuales, que abren otro socket.
+4. **Opcional:**
+   - las notas históricas de la 4.5 y la 4.6 en `docs/auth/specs/auth.md` (`:375`, `:411`) todavía dicen que "el gateway no lee" el token;
+   - `CLAUDE.md` nombra el gateway solo en el árbol de carpetas.
+5. **Siguen vigentes** los pendientes del 26/10 (Jira del #428, la tabla "Estado actual", el código nuevo de Sonar y los umbrales de k6).
+
+### 03 y 04/11/2026: deuda de pagos, PR A (#453): un solo cierre de sesión de mesa
+
+Horas en ART (UTC − 3). El #450 se mergeó el 03/11 a las 14:52:55 (`29ffdb8`), con el CI de `main` en verde (`41688484644`).
+
+**El bug.** El cierre de una sesión (sesión `cerrada` con `cerradaEn` y mesa `libre`) estaba copiado en 5 lugares:
+- `confirmarEfectivo` y el webhook de Mercado Pago;
+- `close`, `cerrarMesaAdmin` y `registrarCobro`.
+
+Ninguno miraba si la sesión seguía activa, y cerrar a mano no cancelaba los pagos pendientes. Un efectivo o un MP pendiente que se aprobaba tarde pisaba `cerradaEn` y liberaba la mesa aunque ya tuviera otra sesión abierta.
+
+**#453**, rama `fix/cierre-de-sesion-unico` desde `29ffdb8`. Se trabajó por pasos, con el ok de Coty en cada uno.
+- **Commits:**
+  - `debd448`: `cerrarSesionDeMesa` (`common/`). Cierra solo una sesión activa, cancela los pendientes y libera la mesa solo si cerró.
+  - `42f2c2d`: `confirmarEfectivo` relee la sesión dentro de la tx (409 "La sesión ya no está activa"). El webhook, si la sesión ya estaba cerrada, deja el pago aprobado sin tocar sesión ni mesa y con un warn.
+  - `d9989f0`: `cerrarMesaAdmin` cancela los pendientes. `registrarCobro` relee la sesión dentro de la tx (400 "La sesión ya fue cerrada").
+  - `87e8614`: se borra `POST /sessions/close`. Solo lo usaba `scripts/staging/fuerza-bruta.mjs`, que ahora avisa en qué mesa dejó la sesión abierta. Salió también de `doc.md`, y la deuda de `docs/auth/specs/auth.md:733` quedó resuelta.
+  - `2c3cec0` y `009342e`: e2e `sessions/cierre-de-sesion.e2e-spec.ts`, con 6 casos y el estado heredado (una sesión vieja cerrada con un efectivo pendiente y la mesa con una sesión nueva).
+- **Mutaciones:**
+  - sacar la relectura de `confirmarEfectivo` hace fallar el caso f, el del pendiente que no cubre el total. El caso c sigue pasando porque el helper es una segunda defensa;
+  - sacar la cancelación del helper hace fallar a, b y e.
+- **Tests:** 2194 unitarios del backend, `test:integracion` 29/29, `pnpm typecheck` 10/10 y el build sin errores. CI del PR en verde, con CI, E2E y SonarCloud.
+- **Hallazgo:** ningún frontend llama a `POST /payments/confirmar-efectivo`. El salón cobra con `PATCH /sessions/:id/cobro`, que reutiliza el efectivo pendiente.
+- **Merge:** 04/11 a las 10:16:59, `7dd96d6`, por Coty.
+- **Después del merge:**
+  - `Deploy — Staging` `41836685195`: en success.
+  - CI `41836685250`: en **failure**, pero no por el código. El E2E y todos los pasos del job principal hasta el build pasaron. Lo que falló fue el paso SonarCloud: "Unexpected HTTP response: 403" al descargar el scanner (`sonar-scanner-cli-8.1.0.6389`) de `binaries.sonarsource.com`, antes de analizar nada.
+  - El quality gate de `main` en SonarCloud seguía en `OK`.
+
+**Pendiente al retomar** (en este orden)
+0. **Volver a correr el CI `41836685250`** (`gh run rerun 41836685250 --failed`), para que `main` tenga el análisis de Sonar del #453.
+1. **Staging del #450:** el checklist del cuerpo del PR, el de la sección del 01/11. Sigue sin hacerse.
+2. **Staging del #453:** el checklist del cuerpo del PR, con las 7 casillas sin marcar:
+   - efectivo pedido por el comensal y cobrado desde `PagosMozo`;
+   - cerrar a mano con un efectivo y con un MP pendiente;
+   - `confirmar-efectivo` por API sobre la mesa cerrada (409);
+   - un `CobroModal` viejo (400);
+   - un MP aprobado cierra la mesa;
+   - `POST /sessions/close` da 404;
+   - `fuerza-bruta.mjs`.
+3. **PR B** (`feat/webhook-mp-confiable`):
+   - el webhook responde después de procesar (DT-11);
+   - `requiereRevision` y `motivoRevision` en `Pago`, con un endpoint de consulta para OWNER y GERENTE;
+   - la firma de MP en modo observación (DT-02).
+
+   Ahí entra el MP aprobado sobre una sesión cerrada que no cubre el total, que el #453 deja aprobado sin aviso.
+4. **PR C:** exigir la firma del webhook, después de ver en los logs del PR B que las notificaciones la traen.
+5. **Siguen vigentes** los puntos 3 y 4 del 01/11 (deuda del gateway para v2.0 y opcionales) y los pendientes del 26/10.
+
+### 04/11/2026: deuda de pagos, PR B (`feat/webhook-mp-confiable`), en curso
+
+Rama desde `7dd96d6` (el merge del #453), sin upstream: el push va con `git push -u origin feat/webhook-mp-confiable` y solo en el último paso. Se trabaja por pasos, con el ok de Coty en cada uno. Todavía no hay PR: el borrador se le muestra a Coty antes de crearlo, y no se mergea desde acá.
+
+**Decisiones cerradas en el paso 0**
+- **D1, cuándo responde el webhook (DT-11):** después de procesar.
+  - **200** si se procesó o si la notificación no es procesable: pago inexistente, `externalReference` que no coincide, método que no es MP, 400 de MP, o `restauranteId` de la URL distinto del restaurante del pago.
+  - **500** si la falla es transitoria (MP 5xx o 429, red, timeout, Prisma, errores desconocidos), y también con el restaurante sin MP conectado, el token vencido o revocado (401/403) y el 404 de MP. MP reintenta unos 4 días. Los dos primeros van con `logger.error` y un mensaje accionable ("reconectar Mercado Pago"), sin el token.
+  - El restaurante se compara (`sesion.mesa.restauranteId` contra el de la URL) **antes** de consultar a MP. Si no coincide, 200 "no procesable" con un warn.
+  - `console.error` pasa a Logger y se saca `@Res`.
+  - Timeout de **4000 ms por intento**, solo en las consultas del webhook (`requestOptions: { timeout }`), sin desactivar los reintentos del SDK. Peor caso: 2 consultas × (4 s + 2 s de espera + 4 s) = 20 s < 22 s. Con los 5000 ms que se habían propuesto daba 24 s.
+- **D2, `requiereRevision` y `motivoRevision`:**
+  - **(a)** MP aprueba un pago ya cancelado: motivo `aprobado-sobre-cancelado`, el pago sigue cancelado y hay que devolver la plata a mano. Guarda `referenciaExterna` solo si estaba vacía, en el mismo update. Es la excepción a "el webhook no toca estados finales": va en un comentario, en la doc y con tests.
+  - **(b)** MP aprueba un pago de una sesión ya cerrada, cubra o no el total: motivo `aprobado-sobre-sesion-cerrada`. Queda aprobado, sin tocar sesión ni mesa y sin emitir. El estado de la sesión se lee siempre que el pago pasa a aprobado; si el helper devuelve `false`, también marca.
+  - Si ya tenía `requiereRevision`, no se pisa el motivo (queda el primero). Se mantienen los `logger.warn` de hoy.
+- **D3, consulta:** `GET /payments/requieren-revision?restauranteId=…`, con `@RequiereRolEn({ query: 'restauranteId' }, ...ADMINISTRACION)`. Solo lectura, `select` explícito, más nuevos primero. Devuelve `{ pagoId, sesionId, mesaNumero, monto (number), metodo, estado, motivo, referenciaExterna, fechaCobro (ISO | null), creadoEn }`. Hay que actualizar la matriz de `docs/auth/specs/auth.md:295` y el "Hoy son 119" de `rutas-por-autenticacion.spec.ts` a 120.
+- **D4, firma (DT-02) en modo observación:**
+  - Se evalúa si hay `MP_WEBHOOK_SECRET` y el header `x-signature`, se loguea y la notificación se procesa igual.
+  - Una línea por notificación, aun sin el secreto: `x-signature` y `x-request-id` sí o no, los nombres de la query (filtrados a `[\w.-]`, hasta 10), `tipo=` y `firma=valida|invalida|no-evaluable|sin-header|sin-secreto`. Va con `log` si es válida y con `warn` si no.
+  - **`tipo=` (cambio del 05/11, pedido por Coty):** el valor de `topic ?? type` (la precedencia del provider), solo si es string, filtrado y recortado; sin ninguno, `sin-tipo`. Es el único valor de la query que entra: no es sensible y hace falta para decidir el PR C (MP manda `payment` y `merchant_order` por pago y puede no firmar todas). La regla anterior, "nunca valores de la query", era demasiado estricta.
+  - Nunca el secreto, el `v1`, los demás valores de la query ni tokens.
+  - Si falta la variable, un `warn` al arrancar, sin tirar la app.
+- **Limitación conocida (va en la doc):** no hay cómo marcar un pago como revisado ni pantalla en el frontend. El endpoint es de solo lectura.
+- **Fuera de alcance:** el job de conciliación, la pantalla en web-admin, exigir la firma (PR C) y el 409 de PagosPage (#360).
+
+**La firma, lo que se confirmó** (en el SDK instalado, `mercadopago@3.2.0`, en el repo sdk-nodejs y en la doc de Webhooks)
+- **El manifest** es `id:<data.id>;request-id:<x-request-id>;ts:<ts>;`, sin los pares que falten. `data.id` sale de la query. Es un HMAC-SHA256 en hexa con la clave secreta de Tus integraciones, y el header tiene la forma `ts=…,v1=…`.
+- **Las notificaciones IPN** (`topic=…&id=…`) no se pueden validar. No está confirmado si las que llegan al `notification_url` de cada preferencia vienen firmadas: lo van a decir los logs del PR B.
+- **Las fuentes no coinciden** en la unidad del `ts` (segundos o milisegundos). Por eso no hay tolerancia en modo observación.
+- **Mayúsculas:** los SDK no pasan `data.id` a minúscula (sdk-nodejs PR #439), aunque la doc dice que sí.
+- **Un caso que tira error:** el validador del SDK compara el largo en caracteres, no en bytes. Un `v1` de 64 caracteres con una `ñ` hace lanzar `RangeError ERR_CRYPTO_TIMING_SAFE_EQUAL_LENGTH`. `evaluarFirmaDelWebhook` lo ataja y lo cuenta como inválida.
+- **Vector fijo:** secreto `your_secret_key_here`, request-id `2066ca19-c6f1-498a-be75-1923005edd06`, ts `1742505638683`.
+  - Sin `data.id` da `8a7b0cc7…`; con `data.id=123456`, `3376cb55…`.
+  - No viene de una fuente oficial: se calculó con crypto y se verificó con el validador del 3.2.0.
+
+**Commits hasta ahora**
+- `923db04` `feat(pagos): requiereRevision y motivoRevision en Pago`: el schema, la migración `20261104120000_pago_requiere_revision` (solo agrega columnas) y `common/motivo-revision.constant.ts`.
+- `8b2809f` `feat(pagos): evaluarFirmaDelWebhook, la firma de Mercado Pago como función pura (DT-02)`. Es `payments/firma-del-webhook.ts`, que envuelve `WebhookSignatureValidator`, con 26 tests. Nunca lanza ni loguea, y con el secreto vacío da `no-evaluable`.
+
+**Paso 3, hecho y sin commitear:** el controller observa la firma sin cambiar la respuesta.
+- **Qué hace:**
+  - la línea de log va al principio del handler, antes del 200, y todo el bloque está protegido;
+  - `dataId` sale de `query['data.id']`;
+  - los ids de la ruta pasan por el mismo filtro y se recortan a 40 caracteres;
+  - el `warn` de arranque va en `onModuleInit`.
+- **Archivos:**
+  - `payments.controller.ts`;
+  - `payments/webhook-firma-endpoint.spec.ts` (nuevo, 10 tests con supertest: válida, inválida, sin header, sin secreto, IPN, que no se filtre nada, los nombres de la query y que no lance);
+  - `MP_WEBHOOK_SECRET` en los dos `.env.example`.
+- **Tests:** 139/139 en `src/payments`, `rutas-por-autenticacion` en verde y `tsc` sin errores.
+- **Commit propuesto, esperando el ok:** `feat(pagos): el webhook loguea la firma de Mercado Pago en modo observación (DT-02)`.
+
+**Pendiente al retomar** (en este orden)
+0. **El ok del paso 3** y su commit, con los cuatro archivos agregados por nombre. Esta bitácora y `discovery.module.ts` no entran en ningún commit.
+1. **Paso 4:**
+   - responder después de procesar, con la clasificación 200/500 de D1;
+   - sacar `@Res` y pasar `console.error` a Logger;
+   - el timeout de 4000 ms en `mercado-pago.provider.ts`;
+   - el chequeo del `restauranteId` antes de consultar a MP.
+2. **Las marcas (a) y (b) de D2 en `procesarWebhookMercadoPago`**, con sus tests.
+3. **El endpoint de D3:** sus specs, el 119 → 120 y `auth.md:295`.
+4. **El e2e del webhook** (`payments/webhook.e2e-spec.ts`). Se puede adaptar `e2e-cierre.sh` del scratchpad.
+5. **La doc:** `Documentacion/MercadoPago.md` y `docs/calidad/MercadoPago.md`, con la limitación conocida.
+6. **La verificación final:**
+   - un grep de que ningún endpoint devuelve un `Pago` entero sin `select` explícito, para que `requiereRevision` y `motivoRevision` no se filtren;
+   - los tests unitarios, `test:integracion`, el typecheck y el build;
+   - el borrador del PR a Coty y el push solo después de su ok.
+7. **Siguen** los pendientes 0 a 2, 4 y 5 de la sección anterior: volver a correr el CI `41836685250`, los checklists de staging del #450 y el #453, el PR C y lo anterior.
+
+### 05/11/2026: PR B (`feat/webhook-mp-confiable`), pasos 3 a 8
+
+Rama sin push y sin PR todavía. Cada paso se mostró a Coty y se commiteó con su ok, con los archivos por nombre. Esta bitácora y `discovery.module.ts` no entran en ningún commit.
+
+**Aparte del PR: el CI `41836685250`.** `gh run rerun 41836685250 --failed` terminó en success (los dos jobs). SonarCloud analizó `7dd96d6` (el merge del #453) y el gate de `main` sigue en `OK`. El pendiente 0 de la sección del 03 y 04/11 quedó resuelto.
+
+**Paso 3, `54770cc`:** el webhook loguea la firma en modo observación (D4), con `tipo=` sumado antes del commit. 10 tests nuevos del endpoint más 3 del tipo (sin tipo, `topic` gana a `type`, y uno raro y largo que llega filtrado y recortado).
+
+**Paso 4, `7d35426`:** el webhook responde después de procesar (D1, DT-11).
+- `clasificarErrorDelWebhook` (`payments/clasificar-error-del-webhook.ts`) es la única regla de 200/500, con un test en tabla de 25 filas. Coty confirmó tres decisiones: el 400 de MP da 200, el chequeo del método va antes de consultar a MP, y los demás 4xx dan 500 (`mp-otro`).
+- Los errores del SDK 3.2.0 son el cuerpo de la respuesta parseado, un objeto plano (no un `Error`) con `status`. Por eso se exige que no sea un `Error`: un `HttpException` de Nest también tiene `status`. El "MP no conectado" es un error propio, `MercadoPagoNoConectadoError`: `getAccessTokenDecrypted` tira un `BadRequest` que si no se confundiría con un 400 de MP.
+- El servicio carga el pago y compara el restaurante y el método **antes** de pedir el token o consultar a MP.
+- El aviso a las pantallas después del commit nunca lanza: si falla, `logger.error` y 200.
+- Timeout de 4000 ms en `payment.get` y `merchantOrder.get` (`TIMEOUT_DE_LAS_CONSULTAS_DEL_WEBHOOK_MS`), sin tocar los reintentos del SDK.
+- Mutación: con el controller sin `await` fallan 15 de los 16 tests del bloque. El que pasa es el del servicio que vuelve sin lanzar, y es lo esperable.
+
+**Paso 5, `1995d49`:** las marcas de revisión (D2).
+- (a) aprobado sobre cancelado: marca y guarda la referencia solo si estaba vacía, en el mismo `update`. Si ya estaba marcado y con referencia, no escribe (ajuste de Coty antes del commit).
+- (b) aprobado sobre una sesión que no está activa: se lee el estado de la sesión dentro de la transacción, justo después de aprobar, y se marca sin calcular totales ni llamar al helper. El helper en `false` también marca.
+- El motivo no se pisa. Mutaciones: pisar el motivo (2 fallan), no leer la sesión (4), pisar la referencia (2) y escribir siempre en (a) (1, el de la repetida).
+
+**Paso 6, `5e5ca2d`:** `GET /payments/requieren-revision?restauranteId=` (D3), `@RequiereRolEn({ query }, ...ADMINISTRACION)`, `select` explícito, hasta 200 (`MAX_PAGOS_PARA_REVISION`) y más nuevos primero.
+- `auth.md:296` con la fila nueva.
+- **El conteo de rutas es 127, no 120:** se comprobó imprimiendo el recorrido. El "119" del comentario ya estaba desactualizado. La matriz de `rutas-por-autenticacion.spec.ts` no lista las rutas con `@RequiereRolEn`: solo cambió el comentario.
+- Sin `restauranteId`, el guard responde 400 "Falta restauranteId en la query".
+
+**Paso 7, `769c1d8`:** `payments/webhook.e2e-spec.ts`, 10 casos contra Postgres por HTTP, con el provider de MP como doble.
+- En "MP no conectado" corre el `getAccessTokenDecrypted` real sobre un restaurante sin token.
+- `pnpm test:integracion`: 38 migraciones desde cero, sin drift y 39/39. Con `--detectOpenHandles`, 10/10 sin handles abiertos.
+- La concurrencia (caso 8) salió estable en 5 corridas. Con un log temporal se vio que hay un P2034 de verdad en cada corrida y lo resuelve el reintento de `runSerializableTransaction`.
+- Mutación: sin el filtro por restaurante, falla solo el caso 7.
+- Hubo que arrancar Docker Desktop, que estaba apagado.
+
+**Paso 8 (doc), sin commitear al escribir esto:**
+- `Documentacion/MercadoPago.md` y su copia en `docs/calidad/`, regenerada: la copia es la cabecera más el original, byte a byte.
+  - `MP_WEBHOOK_SECRET` en la sección 7.
+  - En la sección 13: la tabla de 200/500, los reintentos de MP, los 4000 ms y el peor caso, el emit después del commit, y "Riesgo de doble cobro y pagos para revisión" con la limitación conocida.
+  - La sección 14 nueva: el log del webhook y la firma, con lo que no está confirmado.
+- `docs/calidad/plan-de-pruebas.md`: las dos frases que decían "200 antes de procesar" y "sin reintento".
+- Los históricos (`modulo-pagos.md` ×2 y `modulo-pagos-sesion2.md`): una nota debajo de cada mención que apunta a `MercadoPago.md`, secciones 7 y 14.
+- **Detalle de la doc:** un header de firma mal armado da `no-evaluable`, no `invalida` (`NO_EVALUABLE` en `firma-del-webhook.ts`).
+
+**Paso 8, `16236ef`:** la doc, con cinco ajustes de Coty:
+- la fila de los otros 4xx en la tabla;
+- sin el nombre de la rama: dice "el PR B de la deuda de pagos (05/11/2026)";
+- DT-02 y DT-11 explicados la primera vez que aparecen;
+- la redacción de las IPN;
+- la versión 0.5 de `plan-de-pruebas.md`.
+
+**Paso 9, la verificación final (sin commits):**
+- **Ninguna respuesta serializa un `Pago` entero.** El historial de `sessions.service.ts` trae los pagos con `include`, pero los arma campo por campo. Nada de `packages/` ni de los frontends menciona las columnas nuevas.
+- **Backend:** 2330 tests en verde (94 suites; 36 skipped en 3 suites).
+- **Typecheck y build:** `tsc` sin errores, el build de `@menyu/api` bien y `pnpm typecheck` 10/10.
+- **`test:integracion`:** 39/39, con las 38 migraciones desde cero y sin drift.
+- **Contra `origin/main` (`7dd96d6`):** 8 commits y 25 archivos, sin la bitácora ni `discovery.module.ts`.
+- **Borrador del PR:** lo revisó Coty. Antes de publicarlo pidió que dijera de forma explícita:
+  - la migración aditiva y su rollback (dejar las columnas);
+  - que cambiar `MP_WEBHOOK_SECRET` reinicia el backend;
+  - que no hay cambios de frontend;
+  - el tiempo de respuesta (20 s contra 22);
+  - los números: 8 commits, 25 archivos, 2330 tests y 39/39.
+
+**PR #454, publicado como borrador** (https://github.com/MenYUorg/MenYU/pull/454):
+- **Push:** `git push -u origin feat/webhook-mp-confiable`. La rama sigue a `origin/feat/webhook-mp-confiable`.
+- **Creación:** `gh pr create --draft --base main`, con el cuerpo pasado por `--body-file`: un archivo con solo el cuerpo, sin las líneas "TÍTULO:" y "CUERPO:" del borrador.
+- **Verificación del texto publicado** (`gh pr view 454 --json title,body`):
+  - el título es el del borrador y el cuerpo es idéntico al archivo;
+  - tiene la sección de pagos para revisión (a/b y el endpoint), el último ítem del checklist (la simulación del panel de MP) y "Qué decide el PR C".
+  - No hizo falta ningún `gh pr edit`.
+- **Estado:** sigue como draft. No se marcó como listo ni se mergeó.
+
+**El CI del #454** (run `42083407587`) salió en verde a la primera, sin reruns. El 403 de la descarga del scanner de Sonar no apareció.
+
+| Check | Resultado | Duración |
+|---|---|---|
+| E2E — backend (Postgres efímero) | pass | 53 s |
+| CI — typecheck, lint, test, build | pass | 10 min 51 s |
+| SonarCloud Code Analysis | pass | 3 min 59 s |
+
+Quality gate del PR en `OK`:
+- cobertura del código nuevo **100 %** (umbral 80 %);
+- duplicación 0 % (umbral 5 %);
+- confiabilidad, seguridad y mantenibilidad en A;
+- hotspots revisados 100 %.
+
+**Pendiente al retomar** (en este orden)
+0. **La revisión de Coty del #454** en GitHub. Lo marca como listo y lo mergea ella: desde acá no se hace ni `gh pr ready` ni merge.
+1. **Después del merge:**
+   - mirar el CI de `main` y el `Deploy — Staging`; si Sonar falla con el 403 del scanner, `gh run rerun <id> --failed`;
+   - el checklist de staging del cuerpo del #454:
+     - cargar `MP_WEBHOOK_SECRET` en Railway (eso redespliega el servicio);
+     - confirmar las columnas `requiere_revision` y `motivo_revision`;
+     - un pago real de prueba: leer `tipo=` y `firma=` de `payment` y de `merchant_order`, y verificar **en la base** que el pago quedó aprobado y la sesión cerrada;
+     - MP desconectado da 500 con "hay que reconectar";
+     - `requieren-revision` da `[]` para un OWNER y 403 para un MOZO;
+     - la simulación del panel da 404, que se ve como 500.
+2. **El PR C (exigir la firma), condicional:** solo si `tipo=payment` y `tipo=merchant_order` salen con `firma=valida` en staging.
+3. **Siguen** los checklists de staging del #450 y el #453 y los pendientes anteriores (secciones del 03 y 04/11 y del 01/11).
+
+### 05/11/2026 (tarde): merge del #454 y caja (#355), paso 0
+
+Horas en ART (UTC − 3).
+
+**El #454 está mergeado.** Lo mergeó Coty a las 15:39:44 (`0a4c9df`). Después del merge, en `main`:
+- CI `42086389972`: success;
+- `Deploy — Staging` `42086389508`: success.
+
+**Sigue pendiente el checklist de staging del #454** (ver la sección anterior). Ese checklist es lo que decide el PR C.
+
+**Issue #355, "[S13] Caja: modelo de cajas, turnos, movimientos y arqueo (schema + migración)".** Es el modelo de #357 a #361. El paso 0 fue solo reconocimiento y propuesta: no se tocó ningún archivo del repo. Lo que se validó se hizo en un Postgres descartable, con una copia del schema en el scratchpad de la sesión (`scratchpad/caja/`). El contenedor ya está borrado.
+
+**La rama.**
+- `git fetch`, `git switch main` y `git pull --ff-only`: `main` avanzó 52 commits sin conflicto hasta `0a4c9df`.
+- Rama `feat/caja-schema` desde `0a4c9df`. Sigue la convención del repo, `tipo/descripcion-en-kebab` sin número de issue.
+- Esta bitácora y `discovery.module.ts` viajaron sin commitear y siguen afuera.
+
+**Lo que se encontró.**
+- **Convenciones del schema (Prisma 6.19.3, con `prisma.config.ts`):**
+  - ids `String @id @default(uuid())`, que en la base son `TEXT`;
+  - `@map` en snake_case y `@@map` en singular;
+  - Timestamptz solo en lo nuevo: `@db.Timestamptz(3)` en `HistorialRoot` y `RegistroAsistente`, y `@db.Timestamptz` en `Pago.fechaCobro`;
+  - `onDelete` casi nunca explícito: rige el default de Prisma (Restrict si la FK es obligatoria, SetNull si es opcional). `Cascade` en tablas de unión y del asistente, `SetNull` en `Pago.usuario` y `PedidoEdicion.usuario`.
+- **En el repo no había índices únicos parciales.** Las migraciones `20260722175451_split_pagos_comensales` y `20260906183320_division_pagos_campos` tienen `WHERE` solo en los backfills, y lo mismo pasa con las demás (backfills, triggers y bloques `DO`). Los del #355 son los primeros.
+- **Prisma 6.19.3 ignora los parciales y los CHECK en el drift.** Probado: con un índice parcial creado a mano, `prisma migrate diff --from-url … --to-schema-datamodel … --exit-code` da "No difference detected". `test:integracion` los tolera, y un `migrate dev` futuro no va a querer borrarlos. La contracara es que si alguien los borra, solo se entera el e2e.
+- **El repo ya usa CHECK**, en tres migraciones: `item_menu_precio_descuento_check`, `membresia_ambito_check` y los de `historial_root`. Estos últimos son un `IN (…)` sobre un String: el antecedente para `tipo` y `metodo`.
+- **Las migraciones** se crean con `prisma migrate dev --create-only` y después se edita el SQL, con un comentario de cabecera. Algunas tienen timestamp redondo, puesto a mano.
+- **En la app no hay borrados físicos** de mesas, mozos, usuarios ni restaurantes: `DELETE /mesas/:id` hace `activo: false`. El seed no borra nada.
+- **El DMMF** (`Prisma.dmmf`) expone `dbName`, `uniqueFields`, `relationOnDelete` y `nativeType`, pero no los `@@index` no únicos ni los parciales.
+
+**La propuesta**, validada en la base descartable:
+- **6 modelos nuevos:** `Caja`, `Turno`, `TurnoCaja`, `MovimientoCaja`, `ArqueoMetodo` y `AsignacionTurno`.
+- **En `Pago`:** `turnoCajaId?`, con FK Restrict e índice, y `propina Decimal(10,2) @default(0)`.
+- **Todas las FKs nuevas son Restrict:** el historial financiero no se borra.
+- **A mano en la migración:**
+  - dos índices únicos parciales, `turno_restaurante_id_abierto_key` y `turno_caja_caja_id_abierta_key`, los dos `WHERE "cerrado_en" IS NULL`;
+  - cinco CHECK: el tipo de movimiento, el método del arqueo (sin `mercadopago`), el monto mayor a 0, el fondo inicial mayor o igual a 0 y la propina mayor o igual a 0.
+- **Resultados:**
+  - `prisma validate` bien;
+  - el SQL que genera Prisma más el de a mano se aplicó limpio sobre las 38 migraciones;
+  - el drift contra la copia del schema: "No difference detected";
+  - un pago que ya existía quedó con `propina = 0.00` y `turno_caja_id = NULL`;
+  - cada restricción rechaza lo que tiene que rechazar (un segundo turno abierto, una caja abierta dos veces, los duplicados de los únicos, los CHECK, los borrados con Restrict) y acepta los casos válidos (otro restaurante, después de cerrar).
+- **Las pruebas propuestas:**
+  - `src/prisma/caja-schema.spec.ts`: el contrato con DMMF;
+  - `src/caja/caja-schema.e2e-spec.ts`: contra Postgres, con una verificación en `pg_indexes` y la limpieza en el orden que impone Restrict;
+  - una mutación: sacar un índice parcial tiene que hacer fallar el e2e.
+
+**Riesgos anotados para más adelante:**
+- **#358:** `registrarCobro` acepta `'mercadopago'` como cobro del personal (`METODOS_PAGO_STAFF`). Hay que definir si sin turno abierto también se rechaza, y si puede llevar propina, que no entraría a ninguna caja.
+- **La base no impide mezclar restaurantes** entre caja, turno, mesa y mozo: lo valida el servicio (#357 y #358).
+- **El máximo de 2 aperturas por turno** y el cierre de las cajas junto con el turno van en el servicio.
+
+**Pendiente al retomar** (en este orden)
+0. **Las decisiones de Coty sobre la propuesta del #355:**
+   1. el `tipo` en mayúsculas (`INGRESO`, `EGRESO`, como dice el issue) o en minúsculas;
+   2. los cinco CHECK;
+   3. si `TurnoCaja` es única por (`turnoId`, `cajaId`);
+   4. si el nombre de la caja es único también entre las inactivas;
+   5. si `movimiento_caja` se protege con triggers, como `historial_root`;
+   6. los CHECK de coherencia opcionales (`cerrado_en` con `cerrado_por_usuario_id`, y `diferencia = declarado − esperado`);
+   7. `Timestamptz(3)`;
+   8. si la migración se crea con `migrate dev --create-only` contra la base local (puerto 5433) o con `migrate diff` contra un Postgres descartable;
+   9. dónde van las constantes (`common/caja.constant.ts`) y el e2e (`src/caja/`).
+1. **Con su ok, el paso 1 del #355:** el schema, la migración, las constantes, el spec de contrato, el e2e, la mutación y `test:integracion`.
+2. **El checklist de staging del #454** y, según lo que muestre, el PR C.
+3. **Siguen** los checklists de staging del #450 y el #453 y los pendientes anteriores.
+
+### 10/11/2026: caja #355 (PR #460) y #357 A1 (PR #461) mergeados, y #357 A2 en curso
+
+Un día largo, en pasos chicos con el ok de Coty en cada uno. Cada paso se commiteó con los archivos por nombre, uno por uno; esta bitácora y `discovery.module.ts` no entran en ningún commit. En todas las pruebas contra Postgres se usó un contenedor descartable propio (`postgres:17.6`, puerto 5544x), borrado con `docker rm -f` al terminar.
+
+**#355, el modelo de datos (PR #460, mergeado como `9633939`).**
+- Decisiones de Coty: `tipo` en mayúsculas (`INGRESO`, `EGRESO`) y los métodos en minúsculas; los 5 CHECK más 2 de coherencia (`turno_cierre_check` y `arqueo_metodo_diferencia_check`); `TurnoCaja` única por `(turnoId, cajaId)`; el nombre de la caja único también entre las inactivas; sin triggers en `movimiento_caja`; `Timestamptz(3)`; todas las FKs nuevas con `onDelete: Restrict` explícito (son **13**).
+- `prisma format` **no se corre** sobre `schema.prisma`: el archivo nunca se formateó y reformatea ~120 líneas ajenas.
+- La migración se generó con `migrate diff` contra un Postgres descartable (también como shadow) y se le sumaron a mano los 2 índices parciales y los 7 CHECK.
+- Pruebas: `src/prisma/caja-schema.spec.ts` (contrato con DMMF; `METODOS_ARQUEO` + `mercadopago` = `METODOS_PAGO_STAFF`, para eso se exportó esa constante) y `src/caja/caja-schema.e2e-spec.ts` (catálogo y comportamiento de cada restricción). 69 casos manuales en la base descartable y un pago anterior a la migración que queda con `propina = 0` y `turno_caja_id = NULL`.
+- Antes del push se rebasó sobre `main`: **Workers Builds (Cloudflare) publica en producción cualquier rama que se pushee**, así que `landing/` tiene que quedar idéntico a `main`. El rebase borró `.claude/settings.local.json` (que `main` dejó de versionar); se restauró desde un respaldo y ahora está ignorado.
+
+**Lo que se aprendió de Prisma 6.19.3 con el adapter `pg`** (sirve para todo lo que venga):
+- un único, común o **parcial**, llega como **P2002** con `meta: { modelName, target: [columnas] }`, **sin el nombre del índice**;
+- un **CHECK** llega como `PrismaClientUnknownRequestError` **sin código**: el mensaje trae el `23514` de Postgres y el nombre del CHECK. Por `$executeRaw` es P2010;
+- una FK es **P2003** con `meta.constraint`;
+- en `$queryRaw`, las columnas de tipo `name` (`conname`, `indexname`) no se deserializan (P2010): hay que pasarlas a `::text`.
+
+**#357, el plan: 3 PRs.** A1 (cajas, apertura y reasignación), A2 (movimientos y cierre con arqueo) y B (resumen, historial y el filtro por mozo en `GET /mesas` y `GET /sessions/activas`, que cierra #357). Decisiones vigentes:
+- grupo **`CAJA` = OWNER, GERENTE y JEFE_SALON** (`auth/roles-del-personal.ts`); el ABM de cajas es de OWNER y GERENTE;
+- otro restaurante = **403**, como el resto del repo; lo del body que no es del restaurante = 400;
+- montos como **`number`** en la API y `Prisma.Decimal` adentro;
+- un P2034 que sobrevive al reintento es un **409 genérico** ("Otra operación modificó esto al mismo tiempo; probá de nuevo"); los P2002 conocidos tienen su mensaje (todo en `caja/conflictos.ts`);
+- los mozos sin cuenta no se asignan (400); la segunda caja solo se abre con el turno;
+- la precarga de asignaciones desde `MozoMesa` asigna solo las mesas con **exactamente un** mozo activo con cuenta, y devuelve `avisos` con el motivo de las demás.
+
+**#357 A1 (PR #461, mergeado como `c393dcc`).** Commits `282de63` (ABM de cajas), `cc33625` (apertura), `114bbdd` (e2e) y `9c162bf` (reasignación).
+- Rutas: `GET/POST /cajas`, `PATCH /cajas/:id`, `POST /turnos`, `GET /turnos/actual` y `PUT /turnos/:id/asignaciones`. Cada controller aparte, para no cambiarle las dependencias a los specs existentes.
+- Helpers nuevos de test: `test/caja-en-memoria.ts` (una base en memoria que respeta los `where`: así una mutación que saca un filtro se nota), `test/app-e2e.ts` (AppModule por HTTP, que reemplaza solo `SupabaseAuthGuard` y toma el `Usuario` real por el header `x-test-usuario`; también `contarReintentos`, `mostrarDistribucion` y `contar`) y `test/fixture-de-caja.ts` (datos con marcador de corrida y limpieza en el orden de Restrict). `pipeDeValidacion()` en `test/app-endpoints.ts` es una copia del `ValidationPipe` de `main.ts`, que lo arma inline.
+- Las mutaciones contra la base: sin serializable en `CajasService.actualizar`, la carrera "desactivar mientras se abre" falló 14 de 30; sin serializable en la reasignación, 29 de 30. El borrado de las asignaciones fuera de la transacción dio 0 de 30 en la carrera; lo atrapa un unitario que le pasa a `$transaction` un cliente **distinto** del de afuera y verifica que todo vaya por `tx` (patrón que se repite en todos los services de la caja).
+- En la cobertura del CI, `turbo test:coverage` de todas las apps juntas tiró **timeouts en web-admin** (`invitar-dueno.spec.tsx` y `DuenosPage.spec.tsx`) por carga de la máquina; aislado pasa 860/860, y en el CI del #461 no apareció.
+
+**#357 A2 (rama `feat/caja-cierre-backend`, desde `c393dcc`, sin push).**
+- `67d2dc7`: **`caja/esperado-de-caja.ts`**, la función pura del esperado con `Prisma.Decimal` (cuentan solo los pagos aprobados; `mercadopago` se ignora; cada método suma monto + propina; el efectivo suma el fondo y los ingresos y resta los egresos; puede dar negativo). Y **`POST /turnos/:id/movimientos`** (`MovimientosService`, serializable `'registrarMovimiento'`, 409 con el turno cerrado, 400 si la caja no está abierta en el turno, `usuarioId` de la cuenta).
+- `157ab16`: **`POST /turnos/:id/cierre`** (`CierreService`, serializable `'cerrarTurno'`). El body trae el declarado de los 4 métodos por caja (`DeclaradoDto implements Record<MetodoArqueo, number>`); tienen que venir exactamente las cajas abiertas del turno. Antes de escribir valida que el esperado y la diferencia entren en `Decimal(10,2)` (400, no 500). Escribe 4 filas de `ArqueoMetodo` por caja, cierra las `TurnoCaja` y el turno con el mismo `cerradoEn` y `cerradoPorUsuarioId` de la cuenta, y suma las observaciones como "Cierre: <texto>". **Las mesas abiertas se leen después del commit, por fuera de la transacción** (son un aviso). El P2002 del arqueo se traduce a 409 `MENSAJE_TURNO_CERRADO`.
+- **Paso 3, sin commitear:** el fixture suma `sesion()` y `pago()` (la limpieza borra los pagos antes que `turno_caja` y las sesiones antes que las mesas), y **`caja/cierre.e2e-spec.ts`** con 19 tests en 9 casos (ciclo completo con esperados literales, decimales exactos, turno cerrado inmutable, validaciones contra la base, reapertura, permisos y 3 carreras).
+- **Las carreras del cierre** (4 corridas de 10 rondas, siempre igual): dos cierres a la vez → un 200 y un 409 que sale del **P2002 del único del arqueo**, sin reintentos; movimiento contra cierre → siempre "movimiento 201 / cierre 200" con el cierre reintentado y el movimiento contado; cobro simulado contra cierre → siempre "cobrado", **sin ningún reintento**.
+- **Las mutaciones (30 corridas, `E2E_RONDAS=2`):** el cierre sin serializable rompe la carrera del movimiento 30/30 (el movimiento commiteado queda fuera del arqueo); el movimiento sin serializable, 30/30 (**las dos transacciones tienen que ser serializables**); sin la traducción del P2002 del arqueo, la carrera de dos cierres da 500 en 30/30. El cierre sin serializable no rompe la carrera de dos cierres (0/30: la ataja el único del arqueo) ni la del cobro (0/30, porque no hubo entrelazado). **Sin el chequeo de turno cerrado del cierre no falla ningún e2e**: el P2002 del único del arqueo da el mismo 409 y revierte; ese chequeo lo cubre solo el unitario.
+
+**Tarea corta resuelta:** `E2E_DISTRIBUCION=1` no imprime cuando jest corre **dos o más archivos** juntos (no imprime nada por archivo, ni siquiera los `PASS`); con un solo archivo imprime, con `jest` directo o con `pnpm --filter`. Para ver las distribuciones, correr cada e2e de a uno.
+
+**Números al cerrar el día:** unitarios 107 suites y 2615 tests (36 skipped); `test:e2e` 8 suites y 121 tests; rutas **135** (el comentario del spec dice "Hoy son 135"); en `main`, la base del día era 95 suites y 2344 tests, y 5 suites e2e con 64 tests.
+
+**Pendiente al retomar** (en este orden)
+0. **Dos decisiones de Coty sobre el paso 3 de A2:**
+   1. **El caso 9** (cobro simulado contra cierre): el cobro termina antes de que el cierre empiece a leer, así que la carrera real no se ejercita. Propuesta: que el cobro espere una señal **desde adentro** de su transacción (una promesa que el test resuelve cuando el cierre ya empezó), sin `sleep`. Es la evidencia de que el patrón de #358 (transacción serializable que lee la `TurnoCaja` y después inserta el pago) alcanza.
+   2. **M-D:** si alcanza con que el chequeo de turno cerrado lo cubra el unitario (el único del arqueo es la segunda defensa en la base) o si se anota como límite conocido en el PR.
+1. **Commit del paso 3:** `apps/backend/src/test/fixture-de-caja.ts` y `apps/backend/src/caja/cierre.e2e-spec.ts`.
+2. **Cerrar A2 como se hizo con A1:** chequear que `origin/main` no se movió (si se movió, rebasar antes del primer push por Workers Builds), la verificación completa con los comandos del CI, el borrador del PR en `.git/PR-A2-cuerpo.md` ("Refs #357", parte 2 de 3; las carreras con sus números reales y los 0 de 30 explicados), y recién con el ok de Coty, push y PR en borrador.
+3. **PR B** (cierra #357): el resumen, el historial paginado y el filtro por mozo (es de vista, no de seguridad).
+4. **Para #358, ya decidido o anotado:** el `turnoCajaId` se pone **al aprobar** el pago (también en `confirmarEfectivo`, no solo en `registrarCobro`); `mercadopago` nunca va a una caja; el cobro tiene que ser **serializable** y leer la `TurnoCaja` adentro (M-B lo demuestra). Falta decidir: a qué caja va un cobro con 2 cajas abiertas, y si un cobro sin turno abierto se rechaza.
+5. **Siguen:** el checklist de staging del #454 (decide el PR C), los del #450 y el #453, la pasada combinada de staging antes de #358 y los pendientes anteriores.
+
+### 11/11/2026: #357 A2 (PR #462) y B1 (PR #463) mergeados, y B2 paso 0
+
+Otro día de pasos chicos con el ok de Coty en cada uno. Cada commit con los archivos por nombre, uno por uno; esta bitácora y `discovery.module.ts` siguen fuera de todos los commits. Cada prueba contra Postgres usó un contenedor descartable propio (`postgres:17.6`, nombre y puerto nuevos cada vez: 55470 a 55473), borrado con `docker rm -f` al terminar. Docker Desktop estaba apagado y se levantó a mano.
+
+**#357 A2, cierre del paso 3 (rama `feat/caja-cierre-backend`).**
+- **Caso 9 partido en tres.** El 9a es la carrera libre de siempre. El **9b** fuerza el entrelazado con dos promesas que el test resuelve a mano (sin sleeps): el cobro lee la caja abierta, el cierre termina entero por HTTP y recién ahí el cobro inserta. Resultado, 3 de 3 rondas: el primer intento del cobro falla con P2034 y el reintento lee la caja cerrada y rechaza; 0 pagos y arqueo en `1000.00`. El **9c** es el control negativo, con un cobro que no lee la caja (lee la sesión, porque Postgres toma la foto en la primera consulta, no en el BEGIN).
+- **Lo que cambió lo que sabíamos (9c):** el primer intento del cobro **también** falla con P2034. Pero el reintento ya no choca con nada y, como no mira la caja, inserta el pago en una caja cerrada, afuera del arqueo. En el log de Postgres: 9b, "Canceled on identification as a pivot, during write"; 9c, "Canceled on conflict out to pivot, during read", los dos en el INSERT del pago. **Conclusión para #358: serializable sola no alcanza; lo que hace rechazar al reintento es leer la `TurnoCaja` adentro de la transacción.**
+- **M-A2 (el cierre con una transacción común) rompe el 9b en 10 de 10 corridas:** el cobro queda cobrado sin reintento, después del arqueo.
+- Commit del paso 3: `d22c5c7`, enmendado como **`0892560`** para cambiar un comentario (se sacó la deducción de la FK y quedó solo lo observado). PR **#462** abierto en borrador; CI (`43025825272`) y Sonar en verde (100 % de cobertura nueva). **Mergeado como `560e81e`.**
+
+**#357 B1, las consultas (PR #463, rama `feat/caja-consultas-backend`).** El B original se partió en dos: **B1 (consultas) y B2 (filtro por mozo, que cierra #357)**, así que el plan quedó en 4 PRs. Decisiones de Coty: "por mozo" es quien cobró (`Pago.mozoId`) con un grupo sin mozo al final; el resumen cuenta solo pagos aprobados de las cajas del turno y no incluye esperado ni arqueo; plata y propina siempre separadas.
+- `83bd7e1`: `caja/resumen-de-turno.ts`, la función pura (`porMetodo` con los 4 métodos, `porMozo`, `total`), con `Prisma.Decimal`.
+- `1d708a6`: `esMetodoDeArqueo` pasó a `common/caja.constant.ts`, compartido entre el esperado y el resumen.
+- `8ff1e10`: **`GET /turnos/:id/resumen`** (`CAJA`, con el rol en el service antes de leer pagos). Mercado Pago va como informativo: aprobados del restaurante con `fechaCobro` en la franja **inclusive** (de `abiertoEn` a `cerradoEn`, o a "ahora" si está abierto), con el flag `requiereRevision`, incluidos los que registra el staff.
+- `8c8f203`: **`GET /turnos?restauranteId=&limite=&cursor=`** (historial): `limite` de 1 a 100 (30 por defecto), cursor inclusivo = id del primer turno de la página siguiente (`@IsUUID`; si no es del restaurante, 400), orden `abiertoEn desc, id desc`, arqueo `null` con el turno abierto, y los totales de movimientos con **un solo `groupBy` por página** (sin N+1). Se extrajo `metodosDelArqueoParaLaApi` (`caja/arqueo-para-la-api.ts`), que ahora usa también el cierre.
+- `4f32b7b`: **`GET /turnos/:id`** (detalle), después de `GET /turnos/actual` para no taparlo; trae la lista de movimientos de cada caja y las asignaciones. Se exportaron `MOVIMIENTO_SELECT` y `movimientoParaLaApi`, y se extrajo `asignacionParaLaApi`.
+- `3b69f36`: `caja/consultas.e2e-spec.ts` (20 tests). El fixture suma `turnoCerrado()` y `pago()` acepta `mozoId`, `fechaCobro` y `requiereRevision`.
+- **`test/caja-en-memoria.ts`** ahora respeta los `where` anidados, los rangos de fecha, el `in`, el orden de lista, `take` y `cursor`, y **corta el test si recibe un argumento o un filtro que no conoce**.
+- Mutaciones: la función pura 8 de 8; el resumen 10 de 10; el historial 10 de 10; el detalle 5 de 5; contra Postgres 7 de 7. Dos se detectan solo por los argumentos de la consulta, no por la respuesta (el `groupBy` sin el `in`, y los movimientos sin el filtro de turno). En el e2e, la mutación del filtro de turno del resumen al principio solo la atrapaba el caso 2, por arrastre de datos del caso 1: se sumó al caso 1 un pago en una caja de otro turno.
+- Números: unitarios **112 suites y 2698 tests** (36 skipped); e2e **9 suites y 143 tests**; rutas **135 → 138**. Cobertura de `src/caja`: 100 % de líneas. Lo único sin cubrir en lo nuevo son los dos `?? ''` defensivos del comparador de `resumen.service.ts:101`.
+
+**El 409 del cierre en el CI (PR #463).** El primer run (`43082470775`) falló en los casos 8 y 9a de `cierre.e2e-spec.ts` (de A2, no de B1) con el cierre en 409. Con un solo cierre por ronda, ese 409 solo puede ser el genérico: un P2034 que sobrevive al único reintento de `runSerializableTransaction`. **No se reprodujo en local:** 0 de 300 rondas por caso, con Postgres a `--cpus=0.5`, ni antes ni después del arreglo. El arreglo (`db2ba34`, solo el test): `comoTerminoElCierre` acepta el 409 genérico solo si el turno y sus cajas siguen abiertos y sin arqueo, y después un cierre sin carrera tiene que dar 200 con la cuenta exacta; el caso 7 acepta `[409, 409]` con las mismas condiciones. Tres mutaciones del service lo respaldan (M1 y M2 pasan por la rama nueva; M3, el que commitea y después da 409, hace fallar los tres casos). El segundo run (`43090550370`) quedó en verde. **PR #463 mergeado como `3fcb2f0`.**
+
+**Cosas que conviene recordar:**
+- `turbo test` y `turbo test:coverage` con todas las apps juntas siguen dando timeouts de 5 s por carga (web-admin `invitar-dueno` e `invitar-root`; esta vez también web-cliente `AsistenteDeLaCarta`). Aislados pasan siempre.
+- El e2e sin `--forceExit` avisa "Jest did not exit one second after"; ya pasaba en A1 y termina con exit 0.
+- `sed -i` en los archivos con CRLF los reescribe enteros: para cambios a mano usar Edit o un script que respete el fin de línea.
+- `git rev-parse --short` acepta una sola revisión.
+
+**#357 B2, paso 0 (solo lectura).** Reconocimiento del filtro por mozo en `GET /mesas` y `GET /sessions/activas`. Lo principal:
+- Hoy los dos endpoints usan `@RequiereRolEn(..., SALON)` y **no reciben el usuario**. Sumar `@UsuarioActual()` rompe solo dos asserts de specs de endpoints (`toHaveBeenCalledWith(REST)`), en `sessions-salon-endpoints.spec.ts:44` y `mesas-endpoints.spec.ts:82`.
+- Una cuenta tiene **a lo sumo una membresía por restaurante** (`@@unique([usuarioId, restauranteId])`): "MOZO y JEFE_SALON a la vez" no existe. La única combinación posible es OWNER por la marca más MOZO.
+- El filtro entra en el mismo `findMany` como condición sobre `asignacionesTurno` (mesa sin asignación en un turno abierto, o asignada a su `Mozo`). Sin turno abierto no filtra solo. Costo: 2 consultas de roles para todos (o 0 si `MembresiaGuard` los dejara en el request) y 1 más (`mozoDe`) para el MOZO.
+- Lo afecta en web-staff: `MesasPage`, `TomaPedidosPage` (un mozo no podría tomar pedidos de una mesa de otro) y `PagosMozo` (ni cobrarla). web-admin no cambia.
+- Siguen mostrando mesas ajenas (fuera de B2): `GET /pedidos`, `GET /waiter-calls`, `GET /sessions/pagadas` e `historial`, y `GET /payments/sesiones`. En tiempo real, `order:new` agrega pedidos ajenos en `PedidosPage`.
+- Falta en el fixture un helper que cree una cuenta MOZO con su perfil `Mozo` en la misma cuenta.
+
+**Pendiente al retomar** (en este orden)
+0. **Mirar el CI (`43096423473`) y el Deploy — Staging (`43096423535`) de `3fcb2f0` en `main`**: a las 20:36 UTC seguían en `queued`, sin jobs.
+1. **Las 6 decisiones de Coty para B2** (con mi recomendación):
+   1. ¿Se filtra con OWNER (marca) + MOZO? Recomendado: no; filtrar solo si el único rol es MOZO.
+   2. ¿Una asignación a un mozo dado de baja cuenta como asignada? Recomendado: no, tratarla como mesa sin asignar (si no, nadie con rol MOZO la ve).
+   3. ¿Se acepta que un mozo no pueda tomar pedidos ni cobrar mesas de otro desde web-staff? Recomendado: sí (decisión 6 de #355); el JEFE_SALON ve todo.
+   4. ¿Los roles se vuelven a pedir con `rolesEnRestaurante` o los deja el guard en el request? Recomendado: volver a pedirlos y no tocar `MembresiaGuard`.
+   5. ¿Los endpoints que siguen mostrando mesas ajenas quedan afuera? Recomendado: sí, como límite conocido del PR.
+   6. ¿B2 toca web-staff? Recomendado: no, solo backend.
+2. **B2 en un solo PR (`Closes #357`):** el helper de visibilidad con sus unitarios; los dos endpoints con `@UsuarioActual()` y la visibilidad como parámetro opcional de los services; el e2e con dos mozos (más el helper del fixture); verificación, borrador y, con el ok, push.
+3. **Para #358, ya decidido o anotado:** el cobro tiene que ser serializable y **leer la `TurnoCaja` adentro** (el 9c lo demuestra); el `turnoCajaId` se pone al aprobar (también en `confirmarEfectivo`); `mercadopago` nunca va a una caja. Hay que repetir el 9b contra el cobro real. Falta decidir a qué caja va un cobro con 2 cajas abiertas y si un cobro sin turno abierto se rechaza.
+4. **Siguen:** el checklist de staging del #454 (decide el PR C), los del #450 y el #453, la pasada combinada de staging antes de #358, y los pendientes anteriores.
+
+### 12/11/2026: datos del IPI (latencia de WebSocket, Sonar, axe), PR de accesibilidad y la cola trabada de `main`
+
+Pedido de Coty: tres datos para el informe final, sin cambiar código de producción (salvo el PR de los 4 code smells), con fecha, commit y comando de cada uno.
+
+**1. Latencia de `order:new` (RNF-07, meta < 500 ms).** Script nuevo `scripts/latencia-ws/` (lib pura + tests + `main.mjs`), con la infraestructura del E2E de staging: mismas variables y guardas (`erroresDeDestino`), mesa de `e2e.e2e_preparar` y limpieza con `e2e.e2e_limpiar`. Un socket como el de web-staff (`/ws`, solo websocket, token del mozo de prueba) hace `cocina:join`; los pedidos van de a uno y se emparejan por id; perdido = no llega en 10 s.
+- Corrida del 12/11 18:24 UTC, staging en `560e81e`, script en `7cb11e5`, 100 pedidos: **0 perdidos**; respuesta del POST → evento **p50 −1 ms, p95 0,9 ms, máx 321 ms** (86 de 100 llegan antes que la respuesta: el servidor emite antes de responder); envío → evento p50 435, p95 668, máx 891 (incluye la red local → Railway). Limpieza: 1 mesa, 1 sesión, 100 pedidos y 100 ítems. Reporte: `docs/calidad/mediciones/latencia-ws-2026-11-12.json`.
+- Una corrida anterior (18:23) falló por timeout antes de crear la mesa; `e2e_limpiar` con su marcador dio `mesa_encontrada: false`.
+- **Contraseña de `e2e_staging` cambiada** (no estaba guardada en ningún lado): `ALTER ROLE` en el SQL Editor de staging, URL por el Session pooler `aws-1-us-east-2.pooler.supabase.com` (el `aws-0-sa-east-1` del repo no es el de staging) y secreto `E2E_STAGING_DB_URL_LECTURA` actualizado por Coty a las 18:42 UTC. La URL local está en `privado/.env.latencia`.
+
+**2. SonarCloud** (API, 12/11 16:34 UTC; último análisis de `main` del 11/11 13:48 UTC sobre `560e81e`): gate OK (95,9 % de cobertura nueva); cobertura de líneas global 87,8 %; backend 98,2 %, web-auth 95,7 %, web-staff 92,0 %, web-cliente 86,1 %, web-admin 85,3 %, ui 65,0 %, auth-client 100 %. Del CI `43031652147` (artifacts): 4750 tests unitarios aprobados, 36 omitidos (backend), 0 fallidos; e2e del backend 123/123; cobertura del backend en el artifact 96,05 % (Sonar excluye `*.module.ts`, `main.ts` y `*.dto.ts`).
+
+**3a. PR #464 (`d454eaa`, mergeado como `daec229`, 18:46 UTC):** los 4 code smells (S6853 en la etiqueta de `EditarPedidoModal`; S6848 en `SesionCard`, que pasa a `<button>`, y en los fondos de los dos modales: `role="presentation"`, la ventana es `dialog` con `aria-modal` y `aria-labelledby`, y Escape cierra con `useCerrarConEscape`). Gate OK con 100 % nuevo y 0 issues. En `main` quedan **56 issues de accesibilidad** de Sonar en otros archivos.
+
+**3b. axe** (`scripts/accesibilidad/`, axe-core 4.14, WCAG 2.0 a 2.2 A y AA, Chrome): corrida del 12/11 18:27 UTC sobre `560e81e`, script en `c338d2e`. 30 de 32 pantallas (Pedidos e Historial de web-admin redirigen con el OWNER: hace falta un GERENTE). **31 observaciones sobre 214 elementos**: 1.4.3 contraste (serious) 25/208 y 4.1.2 botón de ícono sin nombre (critical) 6/6 (las 5 pantallas del mozo y Mesas de web-admin). web-auth 0, web-cliente 10, web-admin 10, web-staff 11. Ninguna corregida. Reporte: `docs/calidad/mediciones/axe-2026-11-12.json`. Recorridos para VoiceOver y TalkBack: `docs/calidad/accesibilidad-recorridos-lector.md`.
+
+**E2E de staging, últimos 5 (deploys `43031652217` a `42234276007`):** todos `ok` y sin reintentos; `msApi` promedio: abrir sesión 355, pedido 323, pedido de efectivo 400, confirmar efectivo 650 ms.
+
+**La cola trabada de `main`:** el CI `43096423473` y el deploy `43096423535` de `3fcb2f0` se crearon el 11/11 20:30 UTC, entre dos incidentes de GitHub (Webhooks 20:22–20:26; Actions crítico 20:48–21:21), y quedaron en `queued` con 0 jobs. Cancel ("completed"), force-cancel (409 "not queued yet") y DELETE (403) fallan: quedan ahí hasta un ticket a soporte. No bloquean nada; el merge del #464 disparó runs nuevos.
+
+**Cosas que conviene recordar:**
+- `.env.smoke` tiene URLs viejas de Vercel; para el navegador hay que usar `<app>.staging.menyu-app.com` (la cookie compartida solo anda ahí).
+- En el restaurante E2E quedaron dos mesas viejas: `e2e-40341820981-1` y `-2`.
+- El `!` de Claude Code no tiene terminal interactiva (`read` no anda) y bash se come las `\` de las rutas sin comillas.
+
+**Pendiente al retomar** (en este orden)
+0. Mirar el CI `43283316209` y el deploy de staging `43283316327` de `daec229` (el E2E del deploy es la primera prueba del secreto nuevo).
+1. Mergear el #465 (scripts, reportes y recorridos), que quedó abierto.
+2. Decidir qué hacer con las 31 observaciones de axe y los 56 issues de Sonar; revisar Pedidos e Historial de web-admin con un GERENTE; la prueba con VoiceOver y TalkBack.
+3. Lo pendiente del 11/11: las 6 decisiones de B2 (#357) y lo demás de esa lista.
+
+### 12/11/2026 (tarde): más datos para el informe (issues, versión en producción, CI y accesibilidad)
+
+Pedido de Coty, solo lectura (`gh`, artifacts del CI, API pública de SonarCloud y los reportes ya versionados). No se cambió código ni se corrió ninguna medición.
+
+**Latencia de `order:new`, lo que el reporte no tiene.** Del mismo reporte (`docs/calidad/mediciones/latencia-ws-2026-11-12.json`):
+- **p99**, calculado a partir de las 100 muestras con el mismo percentil del script (rango más cercano): respuesta → evento **299,8 ms**; envío → evento **769,4 ms**.
+- Hay tres valores atípicos en respuesta → evento: el pedido 59 (+299,8), el 62 (+321) y el 86 (−301,7). El resto está entre −20,4 y +5,4 ms. Los 100 POST dieron 201.
+- El JSON no guarda el commit del script (`7cb11e5` sale de esta bitácora) ni el comando. El comando documentado es `node --env-file=<variables> scripts/latencia-ws/main.mjs [--pedidos 100]`; para que el reporte quede en `docs/calidad/mediciones/` hace falta `LATENCIA_REPORTE`, o se movió después. Para el informe, el comando literal lo tiene que confirmar Coty.
+- RNF-07 se cumple con la medida desde la respuesta (p95 0,9 ms). Con la medida desde el envío (p95 668 ms, con la red local → Railway) no: el informe tiene que decir cuál de las dos es la de RNF-07.
+- La limpieza (`mesa_encontrada: true`; 1 mesa, 1 sesión, 1 cliente, 100 pedidos y 100 ítems) es lo que informó `e2e_limpiar`: no se comprobó con otra consulta.
+
+**Issues del plan (estado al 12/11 ~19 UTC).** **Los 21 están abiertos y ningún PR cerró ninguno:** #112, #128, #129, #135, #137, #139, #140, #141, #142, #143, #145, #146, #147, #149, #152, #344, #357, #358, #359, #360 y #361. PRs mergeados que los citan sin cerrarlos:
+- #357: #460 (10/11, schema), #461 (10/11, A1), #462 (11/11, A2) y #463 (11/11, B1, "parte 3 de 4").
+- #358: los mismos #460 a #463 (no tiene un PR propio). #361: el #460. #360: el #453 (04/11) y el #454 (05/11), que son de pagos.
+- La búsqueda de `gh` también devuelve PRs para #112, #135, #141, #143 y #149, pero ninguno los cita: son falsos positivos de la búsqueda de texto.
+
+**Versión en producción: v1.4.0.** Tag del 27/10 19:59 ART (`94fe19f`); "Deploy — Production" del **28/10 17:39 UTC**. En GitHub Releases el último es v1.0.5: de v1.0.6 a v1.4.0 hay solo tags. **No tiene la caja ni el asistente** (ni `src/caja` ni `src/asistente` en el tag); los dos están solo en `main`. Y la caja tampoco está completa en `main`: falta la parte 4 de #357 (B2) y #358 a #361.
+
+**Último CI en verde de `main`: `43283316209` (`daec229`, 12/11 18:46 UTC).** El de `92904e0` (`43284777010`) seguía corriendo; ese commit no toca `apps/` ni `packages/`.
+
+| Paquete | Ejecutados | Aprobados | Omitidos | Fallidos | Cobertura de líneas |
+|---|---|---|---|---|---|
+| backend (unitarios) | 2734 | 2698 | 36 | 0 | 96,16 % (3841/3994) |
+| backend (e2e) | 143 | 143 | 0 | 0 | — |
+| web-cliente | 768 | 768 | 0 | 0 | 86,08 % |
+| web-admin | 860 | 860 | 0 | 0 | 85,26 % |
+| web-staff | 211 | 211 | 0 | 0 | 92,01 % |
+| web-auth | 93 | 93 | 0 | 0 | 95,68 % |
+| auth-client | 84 | 84 | 0 | 0 | 100 % |
+| ui | 44 | 44 | 0 | 0 | 65,72 % |
+| **Total unitarios** | **4794** | **4758** | **36** | **0** | |
+
+- La cobertura sale de los `coverage-summary.json` de los artifacts. La del backend no coincide con Sonar (98,2 %), porque Sonar excluye `*.module.ts`, `main.ts` y `*.dto.ts`.
+- 4758 aprobados contra los 4750 de `560e81e`: son los 8 tests nuevos de `packages/ui` y web-admin del #464.
+- Jest avisó "A worker process has failed to exit gracefully" en los unitarios del backend; no hizo fallar el CI.
+
+**axe: 0 de las 31 observaciones corregidas. No se volvió a correr.** El único cambio de UI después de la corrida es el #464, que no toca ninguna:
+- No cambia ninguna clase de color, así que no corrige ninguna de las 25 de contraste.
+- Los 6 `button-name` son botones de ícono del header (las 5 pantallas del mozo; en Historial es `header > button`) y uno de Mesas de web-admin. El #464 cambió la tarjeta del historial y los modales, no esos botones.
+- Historial de web-admin se salteó con el OWNER, y los modales no se abren en la corrida.
+- Además, faltan las variables para correrlo: `privado/.env.latencia` tiene solo `E2E_STAGING_DB_URL_LECTURA`, y `.env.smoke` tiene las URLs viejas de Vercel.
+
+**SonarCloud: 63 issues abiertos con la etiqueta `accessibility`** en `main` (análisis del 12/11 18:50 UTC, sobre `daec229`):
+- Por regla: S6848 47, S6853 8, S9379 (`autofocus`) 7 y S6852 1.
+- Por app: web-admin 44, web-cliente 10, web-staff 7 y ui 2.
+- Los 4 del #464 figuran como FIXED en ese análisis.
+- **Los 56 de la entrada anterior no cuentan los 7 de S9379** (63 − 7 = 56). Para el informe hay que decidir si se cuentan.
+
+**Lo que se resolvió del pendiente anterior:**
+- El CI `43283316209` y el Deploy — Staging de `daec229` terminaron en verde. El job E2E del deploy no se miró por separado.
+- El #465 se mergeó (`92904e0`), y su Deploy — Staging también terminó en verde: `/health` de staging responde con `92904e0`.
+
+**Pendiente al retomar** (en este orden)
+0. Mirar el CI `43284777010` de `92904e0`, que seguía corriendo.
+1. Decidir qué hacer con las 31 observaciones de axe y los 63 issues de Sonar (o 56 sin `autofocus`); revisar Pedidos e Historial de web-admin con un GERENTE; la prueba con VoiceOver y TalkBack. Para volver a correr axe, juntar las variables en un archivo de `privado/`.
+2. Para el informe: confirmar el comando literal de la latencia y cuál de las dos medidas es la de RNF-07.
+3. Lo pendiente del 11/11: las 6 decisiones de B2 (#357) y lo demás de esa lista.
+
+### 12/11/2026 (noche): #357 B2, pasos 1 y 2 (rama `feat/caja-filtro-por-mozo`)
+
+Pasos chicos con el ok de Coty en cada uno, sin push. Cada commit con los archivos por nombre; esta bitácora y `discovery.module.ts` siguen fuera. Sin Postgres en estos dos pasos: el e2e es el paso 3.
+
+**Las 6 decisiones de B2 (Coty, sobre el paso 0 del 11/11):**
+- Un solo PR, `Closes #357`.
+- Se ve todo si los roles de la cuenta en el restaurante incluyen OWNER, GERENTE o JEFE_SALON. Cualquier otro caso se filtra: MOZO, y también un rol inesperado (falla del lado del filtro). Decide el **rol de la membresía**, nunca `Mozo.esJefeSalon`.
+- "Asignada" = una `AsignacionTurno` de un turno abierto (`cerradoEn` null) cuyo mozo está activo. La de un mozo dado de baja cuenta como mesa sin asignar.
+- Sin turno abierto, o con un turno sin asignaciones, ninguna mesa está asignada: se ve todo.
+- Un MOZO sin perfil activo (`mozoDe` da null) ve solo las mesas sin asignar.
+- Los roles se piden con `AccesoService.rolesEnRestaurante`, sin tocar `MembresiaGuard` ni `AccesoService`; `mozoDe` solo se llama si hay que filtrar.
+
+**La base de la rama.** El pedido decía `3fcb2f0`, pero `origin/main` ya estaba en `92904e0` (se habían mergeado #464 y #465, que no tocan `apps/backend`). La rama salió de `92904e0` y Coty aprobó esa base, sin rebase.
+
+**Paso 1, `5c87690`: `caja/visibilidad-de-mesas.ts`** (funciones planas, sin provider ni módulo).
+- `VisibilidadDeMesas` (`todas` o `del-mozo` con `mozoId` o null), `decidirVisibilidad` (pura), `ASIGNADA` (constante exportada), `dondeMesaVisible` (el fragmento de `Prisma.MesaWhereInput`) y `visibilidadDeMesas` (async: pide los roles y, solo si hay que filtrar, el mozo).
+- Se comprobó con el typecheck, en un archivo temporal ya borrado, que el fragmento se esparce en el `where` de `mesa.findMany` y en el `mesa` de `sesionMesa.findMany`. Para asegurar que `tsc` revisaba ese archivo se le metió un error a propósito. Ninguno de los dos `where` tiene un `OR` propio que se pueda pisar.
+- 25 tests. Mutaciones: las 9 pedidas mueren. Se sumaron dos (M8b, el `OR` con el id fijo `'mozo-1'`, y M10, `decidirVisibilidad` con el id fijo): **M8b sobrevivía** porque los tests usaban un solo id de mozo. Con casos para `mozo-2` mueren las dos.
+
+**Paso 2, `5023417`: el filtro en `GET /mesas` y `GET /sessions/activas`.**
+- Los dos controllers reciben `@UsuarioActual()` y lo pasan como segundo argumento, obligatorio en los services (olvidarlo no puede apagar el filtro sin avisar). Los guards no cambian.
+- En sesiones el fragmento va **dentro de `mesa`**, no al nivel de la sesión.
+- El `@ApiOperation` de `/sessions/activas` y los comentarios dicen que el filtro es **de vista, no de seguridad**.
+- Specs: los de endpoints verifican también la cuenta que llamó. `mesas.service.spec` usa `accesoDeTest()` con `jest.spyOn` para los casos que el mundo de test no tiene (MOZO sin perfil, OWNER + MOZO); `sessions.consultas.spec` suma `rolesEnRestaurante` y `mozoDe` a su doble. `test/caja-en-memoria.ts` no se tocó.
+- 16 tests nuevos (8 por service) y 7 modificados.
+- Mutaciones: las 12 mueren. El fragmento al nivel de la sesión ni compila (`SesionMesaWhereInput` no tiene `asignacionesTurno`); con un cast para que compile, lo mata un test.
+- Docs: `docs/auth/specs/auth.md` (las dos filas de la matriz) y `doc.md` (el resumen y la sección de `GET /api/mesas`). `Documentacion/` no se tocó: son resúmenes históricos.
+- Números: unitarios **113 suites y 2739 tests** (36 skipped). `rutas-por-autenticacion.spec.ts` pasa sin cambios (controla un piso, no compara contra 138 exacto).
+
+**Cosas que conviene recordar:**
+- `ts-jest` compila con chequeo de tipos: una mutación que no tipa muere por el compilador, no por un test. Para saber si un test la mata, hay que repetirla con un cast.
+- El backend no tiene lint (`"lint": "echo ... lint pendiente"`).
+- Un heredoc largo en el Bash de Claude Code se cortó a la mitad sin error claro (solo el aviso "here-document ... delimited by end-of-file"): para scripts largos, escribirlos con Write.
+- Las ediciones de los archivos con CRLF se hicieron con un script de perl que respeta el fin de línea y exige que cada texto a reemplazar aparezca una sola vez.
+
+**Lo que se resolvió del pendiente anterior:** el CI `43284777010` de `92904e0` terminó en verde (19:03 UTC).
+
+**Pendiente al retomar** (en este orden)
+1. **B2, paso 3:** el e2e contra Postgres con dos mozos (falta en el fixture el helper que crea una cuenta MOZO con su `Mozo` en la misma cuenta). Después, verificación, PR en borrador y, con el ok, push.
+2. **Límites conocidos de B2**, para anotar en el PR: siguen mostrando mesas ajenas `GET /pedidos`, `GET /waiter-calls`, `GET /sessions/pagadas` e `historial`, `GET /payments/sesiones` y, en tiempo real, `order:new` en `PedidosPage`. En web-staff un mozo no va a poder tomar pedidos ni cobrar mesas de otro; B2 no toca web-staff.
+3. **Para #358:** lo anotado el 11/11 (cobro serializable que lea la `TurnoCaja` adentro, a qué caja va un cobro con 2 cajas abiertas, cobro sin turno abierto).
+4. **Del informe:** las 31 observaciones de axe y los 63 issues de Sonar (o 56 sin `autofocus`); el comando literal de la latencia y cuál medida es la de RNF-07.
+5. **Siguen:** los checklists de staging del #454, #450 y #453, y la pasada combinada de staging antes de #358.
+
+### 13/11/2026: #357 B2, paso 3 (e2e) y paso 4 (PR #466 en borrador)
+
+Pasos chicos con el ok de Coty en cada uno. Cada commit con los archivos por nombre; esta bitácora y `discovery.module.ts` siguen fuera. Docker Desktop estaba apagado y se levantó a mano.
+
+**B2 completo, en tres commits** (rama `feat/caja-filtro-por-mozo`, desde `92904e0`):
+- **`5c87690`, el helper** `caja/visibilidad-de-mesas.ts`: 25 tests y 11 mutaciones muertas (detalle en la entrada del 12/11, noche).
+- **`5023417`, el cableado** en `GET /mesas` y `GET /sessions/activas`: 16 tests nuevos y 7 modificados, y 12 mutaciones (11 planeadas, de las que una no compila, más su variante con cast). Unitarios: **113 suites y 2739 tests** (36 skipped).
+- **`24e35d3`, el e2e** contra Postgres (`caja/filtro-por-mozo.e2e-spec.ts`, 11 tests, casos a a k) y el helper `personalConPerfil(rol, restauranteId, { nombre?, activo? })` del fixture, que crea en la misma cuenta el `Usuario`, la membresía y el perfil `Mozo`. `limpiar()` no necesitó cambios: ya borraba las asignaciones antes que los mozos, y los mozos antes que las membresías y los usuarios.
+
+**Paso 3, el e2e.**
+- Postgres descartable `menyu-e2e-b2-p3` (`postgres:17.6`, puerto 55474), migraciones desde cero y `docker rm -f` al final. Después de cada corrida, incluidas las que cayeron por timeout, se contaron las filas de todas las tablas: solo quedaba `_prisma_migrations`.
+- Cada test arma su propio mundo (marca, restaurante R, m1 a m5, Ana y Beto como MOZO, un OWNER, un GERENTE, una JEFE_SALON, una caja y sesiones en m1, m3 y m5) y abre el turno por HTTP. Cada caso se mira en los dos endpoints: los ids por conjunto, y el orden contra la lista del GERENTE. Las sesiones llevan `iniciadaEn` distintos, porque `/sessions/activas` ordena por ahí y un empate dejaría el orden librado a Postgres.
+- La baja del mozo (caso h) se hace como en la app: `DELETE /restaurantes/:id/personal/:membresiaId`. El test verifica que el perfil queda `activo: false` y sus 2 asignaciones siguen en el turno.
+- e2e completo: **10 suites y 154 tests** (eran 9 y 143).
+- **Mutaciones del e2e, 10 de 10 muertas**, ninguna por el compilador (casos que fallan): sin el spread en mesas, a c d f g i j; sin el spread en sesiones, ídem; `ASIGNADA` sin `mozo: { activo: true }`, h; `ASIGNADA` sin `turno: { cerradoEn: null }`, d f; la rama `some` sin el turno abierto, f; `none` por `some`, a c d e f g h i j; el `OR` sin la rama `some`, a d f g h; `ROLES_QUE_VEN_TODO` sin JEFE_SALON, b; sin OWNER, b c j; `visibilidadDeMesas` siempre `'todas'`, a c d f g i j. Script en el scratchpad, con copia aparte y `cmp` después de restaurar.
+
+**La desviación del QR en Jest.** La primera corrida dio 4 de 11 rojos por el timeout de 30 s, y una corrida tardó 250 s. Medido: `GET /mesas` tardaba ~5,5 s y `/sessions/activas` u otro endpoint, ~30 ms. La causa es `QRCode.toDataURL`: dentro de Jest cada QR tarda **~1,1 s** (fuera de Jest, de 6 a 25 ms), y `GET /mesas` genera uno por mesa. No es la red (con `127.0.0.1` en lugar de `localhost` daba igual). En el spec, `toDataURL` es un `jest.spyOn` en 10 de los 11 casos; el caso a restaura el real para la última consulta (las 3 mesas de Ana) y exige un PNG, con un timeout de 60 s. El archivo quedó en ~26 s.
+
+**El hallazgo del mozo dado de baja.** La baja desde Personal borra la membresía y deja el `Mozo` en `activo: false`, pero sus asignaciones siguen en el turno abierto. Si "asignada" no mirara si el mozo está activo, esas mesas quedarían invisibles para todos los que tienen rol MOZO hasta que alguien las reasigne. Por eso `ASIGNADA` exige `mozo: { activo: true }`, y el caso h lo prueba (la mutación que lo saca solo la atrapa ese caso).
+
+**Paso 4, el PR #466** (borrador, `Closes #357`).
+- Antes del push: `origin/main` seguía en `92904e0` (sin commits nuevos), salían exactamente los 3 commits y `landing/` no tenía diferencias contra `main`.
+- Cuerpo en `.git/PR-B2-cuerpo.md`, con el formato del #463. Las mutaciones del cableado son 12, no 13: 11 planeadas (M3 no compila) más M3b.
+- CI del PR: run `43456351501` en verde. CI 6m11s; E2E 1m05s, con 10 suites y 154 tests y `filtro-por-mozo.e2e-spec.ts` en PASS (el log no es verbose: los 11 salen de 154 − 143); SonarCloud con el gate OK: cobertura nueva 100 % (23 líneas), duplicación 0,0 %, 0 issues, 0 hotspots y ratings A. **No apareció el check "Workers Builds: menyu"**, que en #463 y #465 sí estaba. Cuerpo completado con Sonar (`gh pr edit --body-file`) y verificado con `gh pr view --json body`.
+
+**Cosas que conviene recordar:**
+- Dentro de Jest, `QRCode.toDataURL` tarda ~1,1 s por QR: un e2e que pida `GET /mesas` con varias mesas pasa el timeout si no lo reemplaza.
+- `export A=x B=$A` en una sola línea deja `B` vacío (se expande antes de asignar). Con `DIRECT_URL` vacío, dotenv no lo pisa con el del `.env` y la guarda de `jest.e2e.config.js` cortó con "DIRECT_URL no apunta a un Postgres local": la guarda funcionó.
+- `jest -t` con `pnpm test:e2e -- …` no filtró; con `pnpm exec jest --config jest.e2e.config.js --runInBand <archivo> -t "<nombre>"`, sí.
+
+**Lo que se resolvió del pendiente anterior:** el paso 3 de B2 (el e2e con dos mozos y el helper del fixture) está en `24e35d3`, y los límites conocidos de B2 quedaron anotados en el cuerpo del PR #466.
+
+**Pendiente al retomar** (en este orden)
+1. **PR #466:** la revisión de Coty (mergear y sacar el borrador lo hace ella). Averiguar por qué no corrió Workers Builds. Al mergear, actualizar la fila de B2 en "Estado actual".
+2. **La pasada combinada por staging antes de #358**, con los checklists del #454 (decide el PR C), #450 y #453.
+3. **Para #358:** el cobro serializable que lea la `TurnoCaja` adentro de la transacción; a qué caja va un cobro con 2 cajas abiertas; qué pasa con un cobro sin turno abierto.
+4. **#359 (web-staff):** lo que B2 deja afuera: avisar en `TomaPedidosPage` y `PagosMozo` por qué un mozo no ve una mesa, y si se filtran `GET /pedidos`, `GET /waiter-calls`, `GET /sessions/pagadas` e `historial`, `GET /payments/sesiones` y `order:new` en `PedidosPage`.
+5. **Del informe:** las 31 observaciones de axe y los 63 issues de Sonar (o 56 sin `autofocus`); el comando literal de la latencia y cuál medida es la de RNF-07.
+
+### 16/11/2026: #358 partes A y B mergeadas (#470 y #471), PR 0 de #359 mergeado (#472) y PR 1 de #359, etapa 1
+
+**Lo que pasó entre el 13 y hoy.** El #466 (#357 B2) se mergeó el 14/11 a las 09:35 ART (`d5c7450`) y cerró #357. Antes, el 13/11 a la noche, se había mergeado el #469 (accesibilidad de web-cliente).
+
+**#358, parte A: los cobros del personal van a una caja del turno (PR #470, mergeado 10:50 ART, `7a502d9`).**
+- `PATCH /sessions/:id/cobro` y `POST /payments/confirmar-efectivo` leen la caja dentro de su transacción serializable, antes de cualquier escritura, y le ponen `turnoCajaId` al pago. Lo hace el helper `caja/caja-del-cobro.ts`. Los mensajes viven en `caja/conflictos.ts`.
+- Los 400 del cobro:
+  - sin turno abierto: "No hay un turno abierto", sin escribir nada;
+  - con 2 cajas y sin `cajaId`: "Hay más de una caja abierta: indicá en cuál se cobra";
+  - con una caja que no está abierta: "La caja no está abierta en este turno".
+- `cajaId` y `propina` son opcionales. La propina va aparte del monto y no cambia el total de la sesión. Un P2034 que sobrevive al reintento sale como el 409 genérico ("Otra operación modificó esto al mismo tiempo; probá de nuevo").
+- El E2E de staging abre el turno en el paso 3b y lo cierra en el 5b.
+- Sin migración y sin rutas nuevas. CI de `main` `43879611515` y deploy de staging `43879611457` en verde.
+
+**#358, parte B: Mercado Pago a la caja del turno (PR #471, mergeado 14:20 ART, `87a183e`).**
+- **La preferencia:** sin turno abierto responde 400 ("El restaurante no está recibiendo pagos por Mercado Pago en este momento").
+- **El webhook:** aprueba en la caja abierta más antigua. Sin turno, aprueba igual pero sin caja y con la marca `aprobado-sin-turno`.
+- **El resumen del turno** muestra los Mercado Pago de sus cajas.
+- **Números:** unitarios 2783 → **2806**, e2e 171 → **183**, y 26 mutaciones muertas.
+- CI `43917383346` y deploy `43917383644` en verde.
+- **#358 sigue abierto:** la parte C son los frontends (#359 web-staff y #360 web-admin).
+
+**#359, PR 0: las lecturas para web-staff (PR #472, mergeado 16:03 ART, `a52385f`).** Solo backend y sin migración (`prisma migrate diff --exit-code` da 0). Hecho en tres etapas, cada una con el ok de Coty.
+- **`GET /cajas/abiertas?restauranteId=`**, del grupo SALON, así que también lo ve el MOZO. Responde `{ cajas: [{ cajaId, nombre }] }`, por nombre y con desempate por id. `cajaId` es el `Caja.id`, el que acepta el cobro. Vacío = no hay turno abierto. No expone fondo, turno ni quién abrió.
+- **`GET /turnos/preparacion?restauranteId=`**, del grupo CAJA. Responde `{ mozos, mesas, precarga }`, para que el JEFE_SALON pueda armar y reasignar el turno: `GET /mozos` es solo de ADMINISTRACION. `precargar` salió de `apertura.service.ts` a `precarga-de-asignaciones.ts`, y la apertura y la preparación usan la misma función.
+- **Números:**
+
+  | | Antes | Después |
+  |---|---|---|
+  | Unitarios (suites / tests) | 114 / 2806 | **116 / 2832** |
+  | e2e (suites / tests) | 12 / 183 | **13 / 189** |
+  | Rutas | 138 | **140** |
+
+  0 CR en los blobs. **21 de 21 mutaciones muertas**, ninguna por el compilador; 7 las mata solo el unitario, y el cuerpo del PR explica por qué.
+- **Decisión de Coty en la etapa 2:** el desempate por id en el orden de los mozos se queda.
+- Cuerpo del PR en `C:\dev\personal\Tesis\PR-359-0-cuerpo.md`. CI `43935297337` y deploy `43935297488` en verde.
+
+**#359, PR 1: el cobro con caja y propina en web-staff (rama `feat/web-staff-cobro-con-caja`, sin push).** Solo frontend, en 3 etapas con reporte en cada una.
+- **La base de la rama.** La rama estaba en `87a183e`. Como no tenía commits propios, se adelantó a `a52385f`, el `main` con el #472.
+- **Partida, sobre ese `main` limpio:**
+  - web-staff: typecheck 0, **14 archivos / 211 tests**;
+  - `@menyu/types`: typecheck 0, sin tests (su `test` es un `echo`).
+- **Etapa 1, terminada:**
+  - **`d05c193`, los tipos:** `CajaAbierta` y `CajasAbiertas` en `packages/types/src/caja.types.ts`, exportados desde `index.ts`.
+  - **`67eab43`, web-staff:**
+    - **La API:** `api.cajas.abiertas(restauranteId)`, y el body de `registrarCobro` suma `cajaId?` y `propina?`.
+    - **`utils/propina.ts`:** `parsearPropina`.
+      - Vacía o 0 no se manda.
+      - Acepta coma o punto, hasta 2 decimales, sin separador de miles y con un tope de 99.999.999,99.
+      - Hay un mensaje distinto para cada error.
+    - **`utils/cajaDelCobro.ts`:** `cajaDelCobro(cajas, elegida)` devuelve `{ sinTurno, mostrarSelector, cajaId?, falta }`.
+      - Con `null` o con una sola caja no se manda `cajaId`.
+      - Con `[]`, `sinTurno`.
+      - Con 2 o más, va la elegida solo si sigue abierta.
+      - En el mismo archivo están `cajaRecordada` y `recordarCaja`, que usan `localStorage` (`menyu-staff-caja-id:<restauranteId>`) con try/catch.
+    - **`store/cajasStore.ts`:**
+      - un error (de red, 403 o 404) deja `null`, y el cobro no se bloquea;
+      - un contador de pedidos hace que una respuesta vieja no pise la nueva;
+      - al cambiar de restaurante, `cajas` vuelve a `null`;
+      - el hook `useCajasAbiertas(restauranteId)` nunca devuelve las cajas de otro restaurante.
+  - **Tests:** web-staff pasó a **17 archivos / 261 tests**, +50:
+
+    | Archivo | Tests |
+    |---|---|
+    | `propina.spec.ts` | 24 |
+    | `cajaDelCobro.spec.ts` | 10 |
+    | `cajasStore.spec.ts` | 14 |
+    | `api.sesion.spec.ts` | 2 |
+
+    Cobertura de los tres archivos nuevos: 100 %. Lint con `--max-warnings 0` limpio y typecheck 0.
+  - **La carpeta:** la lógica pura va en `src/utils/` y no en `src/lib/`, por la convención de web-admin y web-cliente.
+- **Lo que falta:**
+  - **Etapa 2:** el `CobroModal`, con el aviso sin turno, el selector "Caja" (`role="radiogroup"`), la propina y los errores 400 y 409, y `PagosMozo`, con el banner sin turno y "Registrar pago" deshabilitado.
+  - **Etapa 3:** `AvisoDeMesasFiltradas` en `MesasPage`, `TomaPedidosPage` y `PagosMozo`, las mutaciones, los chequeos finales y el cuerpo en `C:\dev\personal\Tesis\PR-359-1-cuerpo.md`.
+
+**Cosas que conviene recordar:**
+- **El typecheck de web-staff resuelve `@menyu/types` contra `dist/`**, que está en el `.gitignore`. En local, después de tocar los tipos, hay que correr `pnpm --filter @menyu/types build`; si no, da TS2305 (no exported member). En el CI lo hace turbo, por `^build`.
+- **Agregar una línea con `printf >>` a un archivo CRLF** deja fines de línea mezclados. Se normalizó con python.
+- **Un heredoc de Bash con backticks** cortó con "unexpected EOF". Los scripts de mutaciones van con Write.
+- **Con el mock de Prisma, `toHaveBeenCalledWith(<proxy>)`** rompe con "b[IteratorSymbol] is not a function". Hay que comparar `mock.calls[0][0]` con `toBe`.
+
+**Lo que se resolvió del pendiente anterior:**
+- El #466 se mergeó: #357 quedó cerrado.
+- Para #358, el cobro serializable que lee la caja adentro, la caja con 2 abiertas y el cobro sin turno quedaron resueltos en el #470.
+- De #359, quedó resuelto saber si hay turno y qué cajas hay sin ser del grupo CAJA (#472).
+
+**Pendiente al retomar** (en este orden)
+1. **PR 1 de #359:** el ok de Coty sobre la etapa 1 y, después, las etapas 2 y 3. Sin push hasta que lo pida.
+2. **Producción no se taggea** hasta tener #359 y #360: sin turno abierto, el comensal no puede pagar con Mercado Pago.
+3. **#359, PRs 2 y 3:** abrir y cerrar el turno desde web-staff, con `GET /turnos/preparacion`. Después, **#360** (web-admin: el selector de caja y la propina).
+4. **Límites de #358 que quedan anotados:**
+   - un pago `aprobado-sin-turno` solo se asigna a una caja por SQL;
+   - el cierre del turno no avisa de los Mercado Pago pendientes.
+5. **Siguen de antes:**
+   - si se filtran por mozo `GET /pedidos`, `GET /waiter-calls`, `GET /sessions/pagadas` e `historial`, `GET /payments/sesiones` y `order:new` en `PedidosPage`;
+   - por qué no corrió Workers Builds en el #466;
+   - la pasada combinada por staging, con los checklists del #454, #450 y #453, más la prueba manual de #358 y #359;
+   - del informe: las 31 observaciones de axe, los issues de Sonar, y el comando de la latencia con cuál medida es la de RNF-07.
+
+### 18/11/2026: #359 completo en `main` (PR 1 a 4: #473 a #476), #360 PR 1 mergeado (#477) y #360 PR 2 terminado, sin push
+
+**Lo que se mergeó hoy** (todo con "Refs #359" o "Refs #360"; los cuerpos de los PR están en `C:\dev\personal\Tesis\PR-*-cuerpo.md`):
+
+| Hora (ART) | PR | Merge | Qué |
+|---|---|---|---|
+| 09:53 | #473 | `9246505` | #359 PR 1: el cobro con caja y propina en web-staff |
+| 11:01 | #474 | `25852b5` | #359 PR 2: abrir el turno, verlo y reasignar sus mesas (`/mozo/caja`) |
+| 15:03 | #475 | `0f65830` | #359 PR 3: movimientos de caja |
+| 16:37 | #476 | `df7e1ab` | #359 PR 4: cierre del turno con arqueo ciego, resultado y resumen |
+| 19:10 | #477 | `ed08818` | #360 PR 1: el cobro de web-admin con caja, propina, aviso sin turno y Mercado Pago pendiente |
+
+**#359 en web-staff, PR por PR.** Todo frontend, sin tocar el backend. Cada PR se hizo en 3 etapas, con informe y el ok de Coty en cada una.
+- **#473, el cobro con caja y propina.** Selector de caja (sin preselección, se recuerda en `localStorage`), propina con `parsearPropina`, aviso sin turno y la advertencia de Mercado Pago pendiente. web-staff terminó en **18 archivos / 315 tests**.
+- **#474, abrir, ver y reasignar el turno.** `/mozo/caja` para OWNER, GERENTE y JEFE_SALON (guard `SoloCaja`). Apertura con cajas (hasta 2) y fondo, mesas por mozo (`AsignacionDeMesas`), observaciones. La reasignación pide la preparación cada vez y arranca desde las asignaciones del turno. web-staff: 18 / 315 → **25 / 446**. 25 mutaciones, todas muertas.
+- **#475, movimientos de caja.** Ingresos y egresos con confirmación (no se editan ni se borran), lista por caja que no parpadea al releer, el foco en cada paso. El error sin respuesta no se reintenta solo. `formatearMonto` pasó a 2 decimales cuando hay centavos. web-staff: 25 / 446 → **27 / 511**. 35 mutaciones, todas muertas.
+- **#476, cierre del turno.** Arqueo ciego (sin esperado ni sumas antes de cerrar), confirmación, mesas abiertas como aviso (no bloquean), el error ambiguo resuelto releyendo el turno (5xx, sin respuesta o un 200 ilegible), el resultado en pantalla con el resumen por método, por mozo y Mercado Pago aparte. `formatearMonto` con negativos (`-$50`). web-staff: 27 / 511 → **31 / 637**. 37 mutaciones, todas muertas.
+- **#359 sigue abierto en GitHub:** los cuatro PR usaron "Refs". Falta la pasada manual en staging.
+
+**#360 PR 1 (#477): el cobro de web-admin.**
+- **La lógica pura del cobro pasó a `@menyu/ui/caja`** (subpath nuevo): `leerMonto`, `MONTO_MAXIMO`, `parsearPropina`, `cajaDelCobro`, `MENSAJE_OPERACION_SIMULTANEA` y `MENSAJES_DE_TURNO_CAMBIADO`. Web-staff la importa de ahí. La caja recordada (`localStorage`) quedó en web-staff, en `utils/cajaRecordada.ts`. Los specs se movieron sin cambiar aserciones.
+- **`PagosPage`** lee las cajas abiertas (solo el GERENTE) al montar, al cambiar de restaurante o de rol, en el polling de 30 s, al abrir el cobro y tras un 400 de cajas que cambiaron. Si falla, queda en `null` (falla abierta). Muestra el aviso sin turno. El cobro elige caja con 2 abiertas, suma propina y maneja la advertencia de Mercado Pago. Componentes nuevos en `pages/admin/pagos/`.
+- **Números:** web-admin 49 / 860 → **49 / 890**; ui 5 / 44 → **9 / 94**; web-staff 31 / 637 → **29 / 590** (staff + ui: 681 → 684). 42 mutaciones: 40 muertas, 1 la atrapa el compilador y 1 equivalente.
+
+**#360 PR 2: el ABM de cajas (rama `feat/web-admin-abm-de-cajas`, 7 commits, HEAD `ad7c389`, sin push ni PR).**
+- **Pantalla Cajas** (`/admin/cajas`, OWNER y GERENTE, con `RoleGuard` y la entrada en Configuración): lista con activas e inactivas, alta, renombrar en la fila, activar y desactivar con confirmación. La caja abierta en el turno no se puede desactivar. Las cajas no se borran.
+- **Archivos** en `pages/admin/cajas/`: `CajasPage`, `FilaDeCaja`, `FormularioDeAlta`, `CampoDeNombre` (el campo con sus botones al lado y el error debajo), `nombre.ts` y `errores.ts`. API: `api.cajas.listar`, `crear` y `actualizar`.
+- **El último commit (`ad7c389`) arregló el layout:** con el error a la vista, los botones bajaban. Hay dos tests que fijan la estructura (jsdom no tiene layout).
+- **Números:** web-admin 49 / 890 → **52 / 943**; ui y web-staff sin cambios. 100 % de líneas y ramas en lo nuevo. 43 mutaciones: 42 muertas y 1 equivalente (la ruta sin `RoleGuard`: `SoloAdministracion` ya filtra y `RolDeAdmin` es solo OWNER y GERENTE). Build de web-admin OK.
+- **Cuerpo del PR** en `C:\dev\personal\Tesis\PR-360-2-cuerpo.md`, listo para revisar.
+
+**Cosas que conviene recordar:**
+- **Nunca `git stash`** (pedido de Coty). Para comparar con `main`: `git show main:ruta` o un `git worktree` (con `pnpm install --frozen-lockfile --offline` y `pnpm --filter @menyu/types build`), y después borrarlo.
+- **Contar los `\r` con node** (bytes 13 de `git cat-file -p` y de `git diff`): `grep $'\r'` dentro de bucles o de `$(...)` en Git Bash dio números falsos más de una vez.
+- **`vi.clearAllMocks()` no vacía las respuestas `mockReturnValueOnce`** que un test no usó, y pasan al siguiente. Los specs nuevos usan `vi.resetAllMocks()`.
+- **Los títulos de `it.each` con `$` en los textos** se rompen en vitest (salen como `undefined`): el texto esperado va solo en la aserción.
+- **Warnings de `act()` que ya estaban:** 122 en `PagosPage.spec` y 343 en todo web-admin. La vara es no sumar ninguno.
+- **Test inestable en `main`:** `CajaPage.spec` "mientras lee las mesas y los mozos muestra que está cargando" se pasa de tiempo con la máquina cargada (por ejemplo, durante las mutaciones). Corrido solo, pasa.
+- **`Input` y `Button` de `@menyu/ui` no aceptan `ref`** en sus tipos: el foco se maneja con `autoFocus`.
+- **`@menyu/ui` no tiene lint ni typecheck** (sus scripts son `echo` y el CI no los corre): se chequea con `tsc --noEmit -p packages/ui`.
+- **`apps/web-admin/.env` cambia una rama de cobertura** de `PagosPage.tsx` (`WS_URL ?? ''`): en un worktree sin `.env` sale cubierta.
+- **Largo de textos:** el backend cuenta con `isLength` de validator, que resta los pares sustitutos. El front cuenta con `.length`, que es igual o más estricto.
+- **En los reemplazos con `String.replace`, un `$'` o un `` $` `` en el texto nuevo se interpreta:** usar `split(a).join(b)`.
+
+**Pendiente al retomar** (en este orden)
+1. **#360 PR 2:** que Coty revise la rama `feat/web-admin-abm-de-cajas` y el cuerpo; push y PR solo cuando lo pida.
+2. **#360 PR 3:** los turnos en web-admin (el historial).
+3. **#361:** los tests de turnos y caja.
+4. **La pasada manual en staging** de todo #359 (cobro, apertura, movimientos y cierre) y de #360, con Mercado Pago real. Después, cerrar #359 (y #358, cuyo frontend era #359 y #360).
+5. **Producción no se taggea** hasta tener #359 y #360 completos.
+6. **Límites anotados en los cuerpos de los PR** (para decidir si se hacen después): sin tiempo real ni polling en caja y cajas; el botón "Registrar pago" de web-admin no se deshabilita sin turno; `PagosPage.tsx` sigue siendo grande (794 líneas); el resultado del cierre se ve una sola vez (el historial llega con #360 PR 3).
+7. **Siguen de antes:**
+   - los límites de #358 (un pago `aprobado-sin-turno` solo se asigna a una caja por SQL; el cierre no avisa de los Mercado Pago pendientes);
+   - si se filtran por mozo `GET /pedidos`, `GET /waiter-calls`, `GET /sessions/pagadas` e `historial`, `GET /payments/sesiones` y `order:new` en `PedidosPage`;
+   - por qué no corrió Workers Builds en el #466;
+   - la pasada combinada por staging con los checklists del #454, #450 y #453;
+   - del informe: las 31 observaciones de axe, los issues de Sonar y el comando de la latencia con cuál medida es la de RNF-07.
+
+### 19/11/2026: #360 PR 2 (#478) y PR 3 (#480) mergeados: el ABM de cajas y el historial de turnos en web-admin
+
+**Lo que se mergeó hoy** (todo con "Refs #360"; los cuerpos están en `C:\dev\personal\Tesis\PR-360-2-cuerpo.md` y `PR-360-3-cuerpo.md`):
+
+| Hora (ART) | PR | Merge | Qué | CI y deploy de staging en `main` |
+|---|---|---|---|---|
+| 09:19 | #478 | `7d33e5d` | #360 PR 2: el ABM de cajas (`/admin/cajas`) | `44522782812` y `44522783206`, en verde |
+| 11:14 | #480 | `ccd6c04` | #360 PR 3: el historial y el detalle de los turnos de caja (`/admin/turnos`) | `44541662085` y `44541662270`, en verde |
+
+Los dos con el gate de Sonar `OK`, 100 % de cobertura nueva y 0 % de duplicación. En el #480 pasaron los 5 checks: CI, e2e, SonarCloud (los dos) y Workers Builds. También entraron hoy #479 y #481 ("Feat/a11y cliente"), que no son de este trabajo (CI y deploy de `6597109` en verde).
+
+**#360 PR 3 (#480): rama `feat/web-admin-turnos-de-caja`, desde `7d33e5d`.** 16 commits (head `89c96c9`), 44 archivos, +1967 −119. Solo frontend, sin tocar el backend. Se hizo en 4 etapas, con informe y el ok de Coty en cada una.
+- **Decisiones (T1 a T7):**
+  - las dos rutas llevan `RoleGuard` OWNER y GERENTE, y la entrada "Turnos de caja" va en Operación, después de "Caja";
+  - todo es de solo lectura, con un botón "Actualizar";
+  - el turno abierto usa arqueo ciego: no muestra arqueo, ni totales, ni resumen, y no se pide `/resumen`;
+  - las fechas van con el año (`dd/mm/aaaa hh:mm`);
+  - las sumas de dinero se hacen en centavos enteros;
+  - hay una sola tabla para todo (`TablaDeDatos`);
+  - specs nuevos sin tests vacíos y con `vi.resetAllMocks()`; los warnings de `act()` se quedan en 343, y los specs de ui importan de `vitest`.
+- **Etapa 1: tipos, ui y API.**
+  - Los tipos del historial van en `@menyu/types`: `PaginaDeTurnos`, `TurnoDelHistorial`, `CajaDelHistorial` y `TotalesDeMovimientos`.
+  - Lo puro de web-staff pasó a `@menyu/ui/caja`: `formato.ts` y `mesas.ts` (con `git mv`) y el nuevo `arqueo.ts`, que tiene la clasificación y el texto de la diferencia y sale de `utils/cierre.ts`. Ninguna aserción cambió, y ui + web-staff suman 684 tests antes y después (94 + 590 → 123 + 561).
+  - En ui se sumó `formatearFechaHoraCompleta`.
+  - La API nueva es `api.turnos.listar(restauranteId, cursor?)`, `detalle(id)` y `resumen(id)`.
+  - El comentario de `@menyu/ui/caja` se corrigió en un commit aparte (`5731492`).
+- **Etapa 2: la lista (`/admin/turnos`).**
+  - Muestra los turnos del más nuevo al más viejo, con "Cargar más" (cursor inclusivo), "Actualizar" y las diferencias del arqueo con palabras, sin color.
+  - Las lecturas viejas se descartan con un contador (`useRef`) y con el estado atado a `restauranteId`.
+  - El código está en `pages/admin/turnos/`, con la lógica pura en `historial.ts`.
+- **Etapa 3: el detalle (`/admin/turnos/:id`).**
+  - Muestra las cajas con su arqueo y sus movimientos, el resumen de cobros (por método, por mozo y Mercado Pago aparte) y las mesas agrupadas por mozo.
+  - Antes de escribirlo, los bloques que se repetían con la lista pasaron a componentes compartidos (`8711f37` y `cf7254c`): el encabezado, las observaciones, la línea "Nombre · Fondo inicial", el aviso sin arqueo, el spinner y el error con "Reintentar". Los 19 tests de `TurnosPage.spec` pasaron sin tocarlos.
+  - El commit del detalle (`5018c77`) se enmendó localmente antes del push: `.at(-1)` no existe en el `lib` de web-admin y se cambió por `.pop()`.
+- **Etapa 4: verificación.**
+  - Cobertura del 100 % de líneas y ramas en lo nuevo.
+  - 96 mutaciones: 95 muertas y 1 equivalente (`formatearMonto` redondea a centavos).
+    - La #6 (la suma en centavos) sobrevivió al principio y la mató un test nuevo (`0b150f7`): 4,35 + 0,01 + 0,01 tienen que dar exactamente 4,37.
+    - En 11 mutaciones hubo que reformularlas porque no compilaban.
+  - El chunk principal de web-admin pasa de 562,37 a 578,08 kB (+15,7 kB). El aviso de Vite de más de 500 kB ya estaba en `main`.
+- **Números:** web-admin pasa de 52 / 943 a **55 / 1018**, ui de 9 / 94 a **12 / 127** y web-staff de 29 / 590 a **27 / 561**. Los warnings de `act()` siguen en 343.
+
+**Cosas que conviene recordar** (además de las del 18/11):
+- **Un `$0` en el título de un `it.each` vitest lo lee como variable**, aunque esté adentro de un objeto. El título quedó `'con %j'` (`89c96c9`).
+- **Para sumar plata en centavos, `Math.round(monto * 100)` en cada término**: `4.35 * 100` no da entero en flotante.
+- **`git worktree remove` falla en Windows con "Filename too long"** (por `node_modules`). Lo que funcionó: `robocopy <vacía> <worktree> /MIR`, después `rmdir` y `git worktree prune`.
+- **No hay `tsc` global:** se corre con `pnpm --filter @menyu/ui exec tsc --noEmit -p .`.
+- **Las mutaciones se corrieron con un arnés propio** (está en el scratchpad de la sesión, no en el repo). Para cada mutación: aplicarla, correr `tsc --noEmit` y vitest con el reporter JSON, restaurar el archivo y comprobarlo con `cmp`. La cobertura de las líneas agregadas sale de cruzar `lcov.info` con `git diff -U0`.
+
+**Pendiente al retomar** (en este orden)
+1. **#361:** los tests de turnos y caja.
+2. **La pasada manual en staging** de todo #359 (cobro, apertura, movimientos y cierre) y de #360 (cobro de web-admin, cajas y turnos), con Mercado Pago real. Después, cerrar #359 y #360 (los dos siguen abiertos porque los PR usaron "Refs"), y también #358.
+3. **Producción no se taggea** hasta tener esa pasada.
+4. **Límites anotados en el cuerpo del #480:**
+   - el historial no se actualiza solo (no hay polling ni tiempo real);
+   - Mercado Pago real sin probar en staging;
+   - el chunk de web-admin.
+   Siguen los del 18/11: el botón "Registrar pago" sin turno y `PagosPage.tsx` grande.
+5. **Siguen de antes:** el punto 7 del pendiente del 18/11.
+6. **Local:** la rama `feat/web-admin-turnos-de-caja` ya está mergeada y se puede borrar. `discovery.module.ts` y `Claude outputs/` siguen con cambios sin commitear que no son de este trabajo.
