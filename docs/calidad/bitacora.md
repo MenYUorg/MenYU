@@ -38,9 +38,9 @@ Registro de lo que se hizo para poner SonarCloud en el CI de MenYU y tomar la l�
 | #360 PR 2: el ABM de cajas en `/admin/cajas` (PR #478) | **Mergeado** (19/11/2026, `7d33e5d`). CI `44522782812` y deploy de staging `44522783206` en verde |
 | #360 PR 3: el historial y el detalle de los turnos de caja en `/admin/turnos` (PR #480) | **Mergeado** (19/11/2026, `ccd6c04`). CI `44541662085` y deploy de staging `44541662270` en verde. #360 sigue abierto (los PR usaron "Refs") |
 | Bitácora del 31/10 al 19/11 y estado actual (PR #482) | **Mergeado** (21/11/2026, `c782d11`). CI `44943791216` en verde |
-| #361: tests de turnos y caja: e2e `ciclo-del-turno` y caso 5b de la propina (PR #483, `test/361-ciclo-del-turno`) | **Abierto** (21/11/2026, head `97f62ec`, "Closes #361"). E2E y Workers Builds en verde. El CI falló dos veces en un test de web-staff ajeno al PR (run `44946830152`): lo arregla el #485. Falta SonarCloud |
-| Checklist de la pasada manual por staging de #359 y #360 con Mercado Pago real (PR #484) | **Abierto** (21/11/2026, head `96fd158`). CI `44950115303` y SonarCloud en verde |
-| Margen para la espera del primer caso de `CajaPage.spec.tsx` (PR #485, `test/web-staff-caja-espera`) | **Abierto** (21/11/2026, head `51b025b`). CI en curso |
+| #361: tests de turnos y caja: e2e `ciclo-del-turno` y caso 5b de la propina (PR #483) | **Mergeado** (23/11/2026, `ee4415b`, cierra #361). Antes del merge se trajo la rama del #485 (`9d2d558`). CI `45247761733` en verde y gate de Sonar `OK`: 0 líneas nuevas para cubrir (solo tests), 0,0 % de duplicación, 0 issues y 0 hotspots. e2e: 13 / 189 → 14 / 194. Deploy de staging `45251271719` en verde |
+| Checklist de la pasada manual por staging de #359 y #360 con Mercado Pago real (PR #484) | **Mergeado** (23/11/2026, `7d1056d`). `docs/calidad/checklist-staging-caja-359-360.md`. Falta correrlo |
+| Margen para la espera del primer caso de `CajaPage.spec.tsx` (PR #485) | **Mergeado** (23/11/2026, `5c21d84`). CI `45249981472` en verde |
 
 ## Pendientes
 
@@ -1967,3 +1967,15 @@ Horas en ART (UTC − 3).
 3. **Borrar el contenedor `menyu-e2e-361`,** con Docker Desktop levantado.
 4. **La pasada manual por staging** con el checklist del #484. Antes, Coty verifica el paso 0.2 (el vendedor de prueba conectado) y, si quiere, el 0.3 (`MP_WEBHOOK_SECRET`). El paso 6.6 se confirma en la pasada. Después, cerrar #358, #359 y #360 y decidir el tag de producción.
 5. **Siguen del 21/11:** los puntos 5 a 7 de su pendiente (la conexión de Mercado Pago sin pantalla, lo de antes y las ramas locales).
+
+**Después, el mismo día: los merges.** Coty mergeó #485 (`5c21d84`), #483 (`ee4415b`) y #484 (`7d1056d`), en ese orden.
+- **#361:** se cerró solo con el #483. En el cuerpo, la propina pasó de "Unit" a "E2E", y quedaron tildadas sus tres casillas sin tildar. No queda ninguna sin tildar.
+- **La tabla de "Estado actual":** quedó al día con los tres merges y los datos de Sonar del #483.
+- **Este PR** quedó atrás de `main`: se le trajo `main` con un merge, sin rebase.
+- **El CI de `main`** para `ee4415b` y `7d1056d` estaba en curso al escribir esto. El deploy de staging de `ee4415b` dio verde.
+
+**Pendiente al retomar** (reemplaza la lista de arriba, en este orden)
+1. **Este PR:** checks y merge.
+2. **Borrar el contenedor `menyu-e2e-361`,** con Docker Desktop levantado.
+3. **La pasada manual por staging** con `docs/calidad/checklist-staging-caja-359-360.md`. Antes, Coty verifica el paso 0.2 (el vendedor de prueba conectado) y, si quiere, el 0.3 (`MP_WEBHOOK_SECRET`). El paso 6.6 se confirma en la pasada. Después, cerrar #358, #359 y #360 y decidir el tag de producción.
+4. **Siguen del 21/11:** los puntos 5 a 7 de su pendiente. Para el 7: las ramas del #483, #484 y #485 ya están mergeadas.
