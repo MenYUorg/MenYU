@@ -1,3 +1,5 @@
+import { randomUUID } from 'crypto'
+import { JwtService } from '@nestjs/jwt'
 import * as cajaDelCobroModulo from './caja-del-cobro'
 import { ESTADO_PAGO_APROBADO, ESTADO_PAGO_CANCELADO, ESTADO_PAGO_PENDIENTE } from '../common/estado-pago.constant'
 import { PrismaService } from '../prisma/prisma.service'
@@ -30,6 +32,7 @@ describe('Cobros al turno contra Postgres (e2e, #358)', () => {
   let api: AppE2e
   let prisma: PrismaService
   let fx: FixtureDeCaja
+  let jwt: JwtService
   let marcaId = ''
   let owner = ''
   let reintentos: ReturnType<typeof contarReintentos>
@@ -58,6 +61,11 @@ describe('Cobros al turno contra Postgres (e2e, #358)', () => {
     api.pedir('post', '/payments/confirmar-efectivo', { usuarioId, body: { pagoId, ...body } })
   const cerrarTurno = (turnoId: string, cajas: { cajaId: string; declarado: ReturnType<typeof declarado> }[]) =>
     api.pedir('post', `/turnos/${turnoId}/cierre`, { usuarioId: owner, body: { cajas } })
+  /** El comensal pide pagar en efectivo, con el token de su mesa: el pago pendiente queda con el saldo de ese momento. */
+  function pedirEfectivo(rest: string, mesa: { id: string }, sesionId: string) {
+    const token = jwt.sign({ sub: randomUUID(), tipo: 'cliente', sesionId, mesaId: mesa.id, restauranteId: rest })
+    return api.pedir('post', '/payments/solicitar-efectivo', { body: { sesionId } }).set('Authorization', `Bearer ${token}`)
+  }
 
   const pagosDe = (sesionId: string) =>
     prisma.pago.findMany({ where: { sesionId }, select: { id: true, estado: true, metodo: true, monto: true, propina: true, turnoCajaId: true } })
@@ -74,6 +82,7 @@ describe('Cobros al turno contra Postgres (e2e, #358)', () => {
   beforeAll(async () => {
     api = await crearAppE2e()
     prisma = api.prisma
+    jwt = api.obtener(JwtService)
     fx = new FixtureDeCaja(prisma, marcadorDeLaCorrida('cobro'))
     marcaId = await fx.marca()
     owner = await fx.usuario('OWNER', { marcaId })
@@ -235,6 +244,36 @@ describe('Cobros al turno contra Postgres (e2e, #358)', () => {
     expect((await cerrarTurno(turnoId, [{ cajaId: caja, declarado: declarado(1200.25, 1150.5) }])).status).toBe(200)
     expect(await esperadoEnBase(aperturas[caja], 'debito')).toBe('1150.50')
     expect(await esperadoEnBase(aperturas[caja], 'efectivo')).toBe('1200.25') // fondo 200 + 1000 + 0,25
+  })
+
+  it('5b. la propina no cubre la sesión: un efectivo pedido antes de otro plato deja saldo, aunque su propina alcance', async () => {
+    const { rest, mozo, mesa, sesion } = await restauranteConMesa()
+    const caja = await fx.caja(rest)
+    await fx.turnoAbierto(rest, owner, [caja])
+
+    // El comensal pide efectivo con el total en 1000, y después pide otro plato de 500: el total pasa a 1500.
+    const pedido = await pedirEfectivo(rest, mesa, sesion)
+    expect(pedido.status).toBe(201)
+    await fx.consumo(sesion, mesa.id, rest, 500)
+
+    // El mozo confirma ese efectivo de 1000 con 600 de propina: 1000 + 600 pasaría los 1500, pero la propina no cuenta.
+    const confirmado = await confirmar(mozo.usuarioId, pedido.body.pagoId, { propina: 600 })
+    expect([confirmado.status, confirmado.body.estado]).toEqual([200, 'activa'])
+    expect(await estadoDeLaSesion(sesion)).toBe('activa')
+
+    // El comensal vuelve a pedir efectivo: el saldo es 500 (1500 − 1000), no −100.
+    const segundo = await pedirEfectivo(rest, mesa, sesion)
+    expect(segundo.status).toBe(201)
+    expect((await prisma.pago.findUniqueOrThrow({ where: { id: segundo.body.pagoId } })).monto.toString()).toBe('500')
+
+    // El mozo cobra la mesa: reutiliza ese efectivo, cobra exactamente 500 y la sesión se cierra.
+    expect((await cobrar(mozo.usuarioId, sesion)).status).toBe(200)
+    const aprobados = (await aprobadosDe(sesion)).map((p) => [p.monto.toString(), p.propina.toString()]).sort()
+    expect(aprobados).toEqual([
+      ['1000', '600'],
+      ['500', '0'],
+    ])
+    expect(await estadoDeLaSesion(sesion)).toBe('cerrada')
   })
 
   it('6. el efectivo pendiente que se reutiliza queda con la caja, el método del cobro y la propina', async () => {
