@@ -39,7 +39,7 @@ Estado al 2026-10-20: los 6 dominios de Vercel responden y apuntan a sus proyect
 3. Si el panel acepta **una sola** URL y la app es la misma para los dos ambientes, solo uno de los dos puede conectar cuentas a la vez (ya pasa hoy). En ese caso, registrar la de producción y cambiar el `BASE_URL` de producción en el mismo momento.
 4. El webhook no se configura en el panel (va en cada preferencia). Si además hay una URL cargada en la sección de Webhooks del panel, actualizarla igual.
 
-**Verificar:** en `admin.staging.menyu-app.com` → Configuración → Pagos → conectar Mercado Pago: tiene que volver a `admin.staging.menyu-app.com/configuracion/pagos?mp=conectado`.
+**Verificar:** web-admin no tiene pantalla para conectar Mercado Pago, así que se hace por API. Con el token de un OWNER o GERENTE del restaurante, `GET <BASE_URL>/payments/mercadopago/oauth/conectar?restauranteId=<id>` devuelve `{ "url": … }`. Esa URL se abre con la sesión de la cuenta de Mercado Pago que se conecta, y se autoriza. El callback redirige a `<FRONTEND_ADMIN_URL>/configuracion/pagos?mp=conectado`, una ruta que web-admin no tiene: la ruta comodín la lleva a `/admin`, sin aviso. La conexión se confirma en la base: `restaurante.mp_user_id` no nulo y `mp_token_expires_at` futuro.
 
 ## 2. Railway: servicio del backend
 
