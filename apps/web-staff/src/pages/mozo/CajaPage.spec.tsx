@@ -154,7 +154,8 @@ describe('CajaPage', () => {
       expect(screen.getByText('PANEL › CAJA')).toBeInTheDocument()
       expect(screen.getByText('Jefe de Salón de Prueba')).toBeInTheDocument()
       expect(screen.getByText('Jefe de salón')).toBeInTheDocument()
-      await screen.findByRole('button', { name: 'Abrir turno' })
+      // Primer caso del archivo: paga el arranque en frío del worker, y en CI tarda entre 1,3 y 3 s.
+      await screen.findByRole('button', { name: 'Abrir turno' }, { timeout: 5000 })
 
       fireEvent.click(screen.getAllByRole('button')[0])
 
