@@ -172,6 +172,7 @@ export class FixtureDeCaja {
     await this.prisma.pago.deleteMany({ where: { OR: [{ sesion: { mesa: deLaCorrida } }, deSusTurnos] } })
     await this.prisma.pedidoItem.deleteMany({ where: { pedido: { mesa: deLaCorrida } } })
     await this.prisma.pedido.deleteMany({ where: { mesa: deLaCorrida } })
+    await this.prisma.llamadoMozo.deleteMany({ where: { sesion: { mesa: deLaCorrida } } })
     await this.prisma.sesionMesa.deleteMany({ where: { mesa: deLaCorrida } })
     await this.prisma.arqueoMetodo.deleteMany({ where: deSusTurnos })
     await this.prisma.movimientoCaja.deleteMany({ where: deSusTurnos })
