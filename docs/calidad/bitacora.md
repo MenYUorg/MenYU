@@ -42,7 +42,7 @@ Registro de lo que se hizo para poner SonarCloud en el CI de MenYU y tomar la l�
 | Checklist de la pasada manual por staging de #359 y #360 con Mercado Pago real (PR #484) | **Mergeado** (23/11/2026, `7d1056d`). `docs/calidad/checklist-staging-caja-359-360.md`. Falta correrlo |
 | Margen para la espera del primer caso de `CajaPage.spec.tsx` (PR #485) | **Mergeado** (23/11/2026, `5c21d84`). CI `45249981472` en verde |
 | Bitácora del 21/11 y 23/11 y la conexión de Mercado Pago por API (PR #486) | **Mergeado** (23/11/2026, `ecc7fe4`) |
-| Pasada manual por staging de #359 y #360 (`checklist-staging-caja-359-360.md`) | **Parcial** (24/11/2026, staging en `ee4415b`). Preparación y secciones A, B, C, D, E, G, H e I según lo esperado, sin hallazgos. **Pendientes: la sección F (Mercado Pago real del comensal) y el 6.5**: el checkout respondió "Una de las partes con la que intentás hacer el pago es de prueba". #358, #359 y #360 siguen abiertos hasta terminar la F |
+| Pasada manual por staging de #359 y #360 (`checklist-staging-caja-359-360.md`) | **Parcial** (24/11/2026, staging en `ee4415b`). Preparación y secciones A, B, C, D, E, G, H e I según lo esperado, sin hallazgos. **Pendientes: la sección F (Mercado Pago real del comensal) y el 6.5**: el checkout respondió "Una de las partes con la que intentás hacer el pago es de prueba". #358, #359 y #360 cerrados el 24/11 (Done en el Project): Mercado Pago real se sigue aparte |
 
 ## Pendientes
 
@@ -2014,10 +2014,13 @@ Horas en ART (UTC − 3). Staging corría `ee4415b`, el merge del #483; después
   1. Reintentar en **incógnito**, sin sesión de Mercado Pago, con el email de la **compradora de prueba**.
   2. Si sigue fallando, la **opción A**: un usuario de prueba "Integrador" y una aplicación de prueba solo para staging, con la vendedora conectada por OAuth a esa aplicación. Implica cambiar `MP_CLIENT_ID` y `MP_CLIENT_SECRET` en Railway staging y registrar ahí el `redirect_uri` de arriba.
 
-**#358, #359 y #360 siguen abiertos** hasta terminar la sección F.
+**Project y issues.** Coty decidió pasar a Done en el Project los issues de caja que faltaban y seguir Mercado Pago real aparte.
+- **#358, #359 y #360** pasaron a Done. El Project tiene activado el flujo automático que cierra el issue al pasar a Done, así que **se cerraron los tres**.
+- **#273** ("[S11] Inicio implementación WCAG") estaba cerrado pero figuraba en Todo: pasó a Done.
+- **#355, #356, #357 y #361** ya estaban cerrados y en Done.
 
 **Pendiente al retomar** (reemplaza la lista del 23/11, en este orden)
-1. **La sección F y el 6.5,** con el plan de arriba. Si pasa, cerrar #358, #359 y #360 y decidir el tag de producción.
+1. **La sección F y el 6.5,** con el plan de arriba, aparte de los issues de caja, que ya están cerrados. Con la F terminada, decidir el tag de producción.
 2. **`docs/auth/VariablesACambiar.md`:** corregir el `BASE_URL` de staging a `https://menyu-backend-staging.up.railway.app/api`. La pantalla "Configuración → Pagos", que no existe, ya se corrigió en el #486.
 3. **La corrida de E2E — staging** después de la pasada: correrla, o anotar la que se haya corrido.
 4. **0.3 y DT-02:** `MP_WEBHOOK_SECRET` y la decisión del PR C.
