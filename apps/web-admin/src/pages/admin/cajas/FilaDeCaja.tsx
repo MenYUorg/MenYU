@@ -1,7 +1,9 @@
 import { useId, useState, type FormEvent } from 'react'
 import type { CajaDelRestaurante } from '@menyu/types'
-import { Badge, Button } from '@menyu/ui'
 import { api } from '../../../services/api'
+import { C, botonPeligro, botonPeligroSolido, botonPrimario, botonSecundario, conEstado, textoAyuda } from '../marca/estilos'
+import { mensajeDeFalla } from '../asistente/estilos'
+import { pastillaMarca, pastillaNeutra } from './estilos'
 import { errorDeCaja } from './errores'
 import { CampoDeNombre } from './CampoDeNombre'
 import { leerNombreDeCaja } from './nombre'
@@ -81,7 +83,7 @@ export function FilaDeCaja({ caja, abierta, onCambio }: FilaDeCajaProps) {
 
   const etiqueta = `«${caja.nombre}»`
   return (
-    <li className="border border-gray-200 rounded-lg bg-white px-4 py-3 flex flex-col gap-2">
+    <li style={{ padding: '16px 0', borderTop: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', gap: 8 }}>
       {modo === 'renombrando' ? (
         <form noValidate onSubmit={guardar}>
           <CampoDeNombre
@@ -89,78 +91,77 @@ export function FilaDeCaja({ caja, abierta, onCambio }: FilaDeCajaProps) {
             autoFocus
             valor={texto}
             error={errorDelNombre}
-            className="py-1 text-sm w-56"
             onChange={(valor) => {
               setTexto(valor)
               setErrorDelNombre(null)
               setError(null)
             }}
           >
-            <Button type="submit" size="sm" loading={enviando}>Guardar</Button>
-            <Button type="button" variant="ghost" size="sm" disabled={enviando} onClick={() => { setError(null); cerrar() }}>
+            <button type="submit" disabled={enviando} style={conEstado(botonPrimario, enviando)}>Guardar</button>
+            <button type="button" disabled={enviando} style={conEstado(botonSecundario, enviando)} onClick={() => { setError(null); cerrar() }}>
               Cancelar
-            </Button>
+            </button>
           </CampoDeNombre>
         </form>
       ) : (
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-gray-800 flex-1">{caja.nombre}</span>
-          {!caja.activa && <Badge>Inactiva</Badge>}
-          {abierta && <Badge variant="info">Abierta en el turno</Badge>}
-          <Button
+        <div className="flex flex-wrap items-center gap-2">
+          <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 600, color: C.text, flex: 1, minWidth: 0 }}>{caja.nombre}</span>
+          {!caja.activa && <span style={pastillaNeutra}>Inactiva</span>}
+          {abierta && <span style={pastillaMarca}>Abierta en el turno</span>}
+          <button
+            type="button"
             autoFocus={volverAlBoton}
-            variant="ghost"
-            size="sm"
+            style={conEstado(botonSecundario, enviando)}
             aria-label={`Renombrar ${etiqueta}`}
             disabled={enviando}
             onClick={abrirEdicion}
           >
             Renombrar
-          </Button>
+          </button>
           {caja.activa ? (
-            <Button
-              variant="ghost"
-              size="sm"
+            <button
+              type="button"
+              style={conEstado(botonPeligro, enviando || abierta || modo === 'confirmando')}
               aria-label={`Desactivar ${etiqueta}`}
               aria-describedby={abierta ? `${id}-abierta` : undefined}
               disabled={enviando || abierta || modo === 'confirmando'}
               onClick={() => { setError(null); setModo('confirmando') }}
             >
               Desactivar
-            </Button>
+            </button>
           ) : (
-            <Button
-              variant="ghost"
-              size="sm"
+            <button
+              type="button"
+              style={conEstado(botonSecundario, enviando)}
               aria-label={`Activar ${etiqueta}`}
-              loading={enviando}
+              disabled={enviando}
               onClick={() => void enviar({ activa: true }, 'No se pudo activar la caja')}
             >
               Activar
-            </Button>
+            </button>
           )}
         </div>
       )}
 
       {abierta && modo !== 'renombrando' && (
-        <p id={`${id}-abierta`} className="text-xs text-gray-500">
+        <p id={`${id}-abierta`} style={textoAyuda}>
           No se puede desactivar con el turno abierto: se cierra desde la app del personal, en Caja
         </p>
       )}
 
       {modo === 'confirmando' && (
-        <div className="flex items-center gap-2 bg-gray-50 rounded-md px-3 py-2">
-          <p className="text-sm text-gray-700 flex-1">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center" style={{ background: C.bg, borderRadius: 10, padding: '12px 14px' }}>
+          <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: C.text, margin: 0, flex: 1 }}>
             ¿Desactivar {etiqueta}? No se va a poder abrir en turnos nuevos. Podés volver a activarla.
           </p>
-          <Button variant="danger" size="sm" loading={enviando} onClick={() => void enviar({ activa: false }, 'No se pudo desactivar la caja')}>
+          <button type="button" disabled={enviando} style={conEstado(botonPeligroSolido, enviando)} onClick={() => void enviar({ activa: false }, 'No se pudo desactivar la caja')}>
             Confirmar
-          </Button>
-          <Button variant="ghost" size="sm" disabled={enviando} onClick={() => { setError(null); setModo('viendo') }}>Cancelar</Button>
+          </button>
+          <button type="button" disabled={enviando} style={conEstado(botonSecundario, enviando)} onClick={() => { setError(null); setModo('viendo') }}>Cancelar</button>
         </div>
       )}
 
-      {error !== null && <p role="alert" className="text-sm text-red-600">{error}</p>}
+      {error !== null && <p role="alert" style={mensajeDeFalla}>{error}</p>}
     </li>
   )
 }

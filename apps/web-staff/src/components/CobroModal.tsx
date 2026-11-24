@@ -6,6 +6,7 @@ import type { SesionActivaItem } from '../services/api'
 import { useRestauranteId } from '../store/contextoStore'
 import { cajaDelCobro, MENSAJE_OPERACION_SIMULTANEA, MENSAJES_DE_TURNO_CAMBIADO, parsearPropina } from '@menyu/ui/caja'
 import { cajaRecordada, recordarCaja } from '../utils/cajaRecordada'
+import { estiloErrorBanda } from './estilosDeCaja'
 
 type MetodoPago = 'efectivo' | 'debito' | 'credito' | 'transferencia' | 'mercadopago'
 
@@ -158,7 +159,7 @@ export function CobroModal({ sesion, onClose, onDone, cajas, onTurnoCambio }: Co
 
         {caja.sinTurno && (
           <p role="alert" style={{ fontFamily: 'Inter,sans-serif', fontSize: 12, color: C.red, marginBottom: 14 }}>
-            No hay un turno abierto: no se puede registrar el cobro.
+            No hay un turno abierto: no se puede registrar el pago.
           </p>
         )}
 
@@ -255,7 +256,7 @@ export function CobroModal({ sesion, onClose, onDone, cajas, onTurnoCambio }: Co
         )}
 
         {error && (
-          <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 12, color: C.red, marginBottom: 14 }}>
+          <p style={{ ...estiloErrorBanda, margin: '0 0 14px' }}>
             {error}
           </p>
         )}

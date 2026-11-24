@@ -1,4 +1,5 @@
 import { useId } from 'react'
+import { tarjeta, textoAyuda } from '../marca/estilos'
 import type { TurnoDetalle } from '@menyu/types'
 import { CajaDelDetalle } from './CajaDelDetalle'
 import { EncabezadoDeTurno } from './EncabezadoDeTurno'
@@ -19,10 +20,10 @@ export function DetalleDelTurno({ turno, resumen, onReintentarResumen }: {
   const titulo = useId()
   const cerrado = turno.cerradoEn !== null
   return (
-    <article aria-labelledby={titulo} className="bg-white border border-gray-200 rounded-lg p-4 flex flex-col gap-4">
+    <article aria-labelledby={titulo} style={{ ...tarjeta, display: 'flex', flexDirection: 'column', gap: 20 }}>
       <EncabezadoDeTurno turno={turno} tituloId={titulo} />
       <ObservacionesDelTurno observaciones={turno.observaciones} />
-      {!cerrado && <p className="text-sm text-gray-500">El arqueo y el resumen de cobros se ven cuando el turno se cierra</p>}
+      {!cerrado && <p style={{ ...textoAyuda, fontSize: 13 }}>El arqueo y el resumen de cobros se ven cuando el turno se cierra</p>}
 
       <Seccion titulo="Cajas">
         {turno.cajas.map((caja) => <CajaDelDetalle key={caja.id} caja={caja} cerrado={cerrado} />)}

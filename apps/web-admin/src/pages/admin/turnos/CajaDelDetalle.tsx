@@ -1,5 +1,6 @@
 import type { CajaDelDetalle as Caja, FilaDeArqueo, MovimientoDeCaja } from '@menyu/types'
 import { ETIQUETA_DEL_METODO, formatearFechaHoraCompleta, formatearMonto, textoDeDiferencia } from '@menyu/ui/caja'
+import { bloqueInterno } from '../cajas/estilos'
 import { NombreYFondo } from './NombreYFondo'
 import { SinArqueo } from './SinArqueo'
 import { TablaDeDatos } from './TablaDeDatos'
@@ -26,7 +27,7 @@ const COLUMNAS_DE_MOVIMIENTOS = [
  */
 export function CajaDelDetalle({ caja, cerrado }: { caja: Caja; cerrado: boolean }) {
   return (
-    <section aria-label={`Caja ${caja.nombre}`} className="border border-gray-100 rounded-md px-3 py-2 text-sm text-gray-700 flex flex-col gap-3">
+    <section aria-label={`Caja ${caja.nombre}`} style={{ ...bloqueInterno, display: 'flex', flexDirection: 'column', gap: 12 }}>
       <NombreYFondo nombre={caja.nombre} fondoInicial={caja.fondoInicial} />
       {cerrado && (caja.arqueo === null ? <SinArqueo /> : <TablaDelArqueo nombre={caja.nombre} arqueo={caja.arqueo} />)}
       <MovimientosDeLaCaja nombre={caja.nombre} movimientos={caja.movimientos} cerrado={cerrado} />

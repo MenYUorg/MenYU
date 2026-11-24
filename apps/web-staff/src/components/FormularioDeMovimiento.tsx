@@ -4,20 +4,12 @@ import { api, ApiError } from '../services/api'
 import { MENSAJE_TURNO_CERRADO } from '../utils/conflictosDeCaja'
 import { formatearMonto } from '@menyu/ui/caja'
 import { MOTIVO_MAXIMO, parsearMontoDeMovimiento, parsearMotivo } from '../utils/movimiento'
+import {
+  C, estiloBotonPrimario, estiloBotonSecundario, estiloCampo, estiloErrorBanda, estiloErrorDeCampo, estiloEtiqueta,
+} from './estilosDeCaja'
 
 /** El POST no respondió: no se sabe si el movimiento quedó registrado, así que no se reintenta solo. */
 export const MENSAJE_SIN_RESPUESTA = 'No se pudo confirmar si el movimiento se registró. Revisá la lista antes de volver a intentar.'
-
-const C = {
-  orange:   '#E8563A',
-  orangeBg: '#FDF0ED',
-  navy:     '#2D3561',
-  white:    '#FFFFFF',
-  border:   '#E6E8EF',
-  textMut:  '#6B7280',
-  green:    '#1F9D57',
-  red:      '#dc2626',
-} as const
 
 const TIPOS: { tipo: TipoDeMovimiento; nombre: string }[] = [
   { tipo: 'INGRESO', nombre: 'Ingreso' },
@@ -167,10 +159,10 @@ function Confirmacion({ confirmacion, onConfirmar, onVolver }: {
         borrar.
       </p>
       <div style={{ display: 'flex', gap: 8 }}>
-        <button type="button" onClick={onConfirmar} disabled={enviando} style={estiloBoton(true, enviando)}>
+        <button type="button" onClick={onConfirmar} disabled={enviando} style={estiloBotonPrimario(enviando)}>
           {enviando ? 'Registrando…' : 'Confirmar'}
         </button>
-        <button type="button" onClick={onVolver} disabled={enviando} style={estiloBoton(false, enviando)}>
+        <button type="button" onClick={onVolver} disabled={enviando} style={estiloBotonSecundario(enviando)}>
           Volver
         </button>
       </div>
@@ -241,7 +233,7 @@ function Formulario({ cajas, campos, errores, error, registrado, enfocarMonto, o
           onChange={(motivo) => onChange({ motivo })}
         />
 
-        {error && <p role="alert" ref={enfocarAlMontar} tabIndex={-1} style={{ ...estiloTexto, color: C.red, outline: 'none' }}>{error}</p>}
+        {error && <p role="alert" ref={enfocarAlMontar} tabIndex={-1} style={{ ...estiloErrorBanda, outline: 'none' }}>{error}</p>}
         {registrado && (
           <p role="status" ref={enfocarAlMontar} tabIndex={-1} style={{ ...estiloTexto, color: C.green, fontWeight: 600, outline: 'none' }}>
             Movimiento registrado
@@ -249,7 +241,7 @@ function Formulario({ cajas, campos, errores, error, registrado, enfocarMonto, o
         )}
 
         <div>
-          <button type="submit" style={estiloBoton(true)}>Registrar movimiento</button>
+          <button type="submit" style={estiloBotonPrimario()}>Registrar movimiento</button>
         </div>
       </fieldset>
     </form>
@@ -266,7 +258,7 @@ function GrupoDeRadios<T extends string>({ id, titulo, opciones, elegida, error,
 }) {
   return (
     <div>
-      <p id={`${id}-titulo`} style={{ ...estiloEtiqueta, marginBottom: 6 }}>{titulo}</p>
+      <p id={`${id}-titulo`} style={estiloEtiqueta}>{titulo}</p>
       <div
         role="radiogroup"
         aria-labelledby={`${id}-titulo`}
@@ -280,9 +272,9 @@ function GrupoDeRadios<T extends string>({ id, titulo, opciones, elegida, error,
             <label
               key={o.valor}
               style={{
-                display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderRadius: 8, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderRadius: 8, cursor: 'pointer',
                 border: `1.5px solid ${marcada ? C.orange : C.border}`, background: marcada ? C.orangeBg : C.white,
-                fontFamily: 'Inter,sans-serif', fontSize: 13, color: C.navy, fontWeight: marcada ? 600 : 400,
+                fontFamily: 'Inter,sans-serif', fontSize: 13, color: marcada ? C.orange : C.textDark, fontWeight: marcada ? 600 : 400,
               }}
             >
               <input
@@ -298,7 +290,7 @@ function GrupoDeRadios<T extends string>({ id, titulo, opciones, elegida, error,
           )
         })}
       </div>
-      {error !== null && <p id={`${id}-error`} role="alert" style={estiloError}>{error}</p>}
+      {error !== null && <p id={`${id}-error`} role="alert" style={estiloErrorDeCampo}>{error}</p>}
     </div>
   )
 }
@@ -315,7 +307,7 @@ function CampoDeTexto({ id, etiqueta, valor, error, inputMode, maxLength, enfoca
 }) {
   return (
     <div>
-      <label htmlFor={id} style={{ ...estiloEtiqueta, display: 'block', marginBottom: 4 }}>{etiqueta}</label>
+      <label htmlFor={id} style={estiloEtiqueta}>{etiqueta}</label>
       <input
         id={id}
         ref={enfocar ? enfocarAlMontar : undefined}
@@ -326,29 +318,16 @@ function CampoDeTexto({ id, etiqueta, valor, error, inputMode, maxLength, enfoca
         onChange={(e) => onChange(e.target.value)}
         aria-invalid={error !== null}
         aria-describedby={error === null ? undefined : `${id}-error`}
-        style={{
-          width: '100%', maxWidth: 360, padding: '8px 10px', borderRadius: 8, boxSizing: 'border-box',
-          border: `1px solid ${error === null ? C.border : C.red}`, fontFamily: 'Inter,sans-serif', fontSize: 13,
-        }}
+        style={estiloCampo(error !== null)}
       />
-      {error !== null && <p id={`${id}-error`} role="alert" style={estiloError}>{error}</p>}
+      {error !== null && <p id={`${id}-error`} role="alert" style={estiloErrorDeCampo}>{error}</p>}
     </div>
   )
 }
 
 const estiloTexto = { fontFamily: 'Inter,sans-serif', fontSize: 13, color: C.navy, margin: 0 } as const
-const estiloEtiqueta = { fontFamily: 'Inter,sans-serif', fontSize: 12, fontWeight: 600, color: C.navy, margin: 0 } as const
-const estiloError = { fontFamily: 'Inter,sans-serif', fontSize: 12, color: C.red, margin: '4px 0 0' } as const
 const estiloCaja = {
   border: `1px solid ${C.border}`, borderRadius: 10, padding: '12px 16px', margin: 0, background: C.white,
   display: 'flex', flexDirection: 'column', gap: 12,
 } as const
 
-const estiloBoton = (principal: boolean, deshabilitado = false) => ({
-  padding: '8px 16px', borderRadius: 8, fontFamily: 'Inter,sans-serif', fontSize: 13, fontWeight: 600,
-  border: principal ? 'none' : `1px solid ${C.border}`,
-  background: principal ? C.orange : C.white,
-  color: principal ? C.white : C.navy,
-  cursor: deshabilitado ? 'not-allowed' : 'pointer',
-  opacity: deshabilitado ? 0.6 : 1,
-})

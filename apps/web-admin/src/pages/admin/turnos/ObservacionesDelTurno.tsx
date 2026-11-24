@@ -2,8 +2,8 @@
 export function ObservacionesDelTurno({ observaciones }: { observaciones: string | null }) {
   if (!observaciones) return null
   return (
-    <p className="text-sm text-gray-700 whitespace-pre-line">
-      <span className="font-medium">Observaciones:</span> {observaciones}
+    <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#374151', margin: 0, whiteSpace: 'pre-line' }}>
+      <span style={{ fontWeight: 600 }}>Observaciones:</span> {observaciones}
     </p>
   )
 }

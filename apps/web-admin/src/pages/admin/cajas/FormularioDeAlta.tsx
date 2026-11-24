@@ -1,6 +1,7 @@
 import { useId, useState, type FormEvent } from 'react'
-import { Button } from '@menyu/ui'
 import { api } from '../../../services/api'
+import { botonPrimario, conEstado } from '../marca/estilos'
+import { mensajeDeFalla } from '../asistente/estilos'
 import { errorDeCaja } from './errores'
 import { CampoDeNombre } from './CampoDeNombre'
 import { leerNombreDeCaja } from './nombre'
@@ -43,22 +44,21 @@ export function FormularioDeAlta({ restauranteId, onCreada }: FormularioDeAltaPr
   }
 
   return (
-    <form noValidate onSubmit={(e) => void crear(e)} className="flex flex-col gap-2 mb-6">
+    <form noValidate onSubmit={(e) => void crear(e)} className="flex flex-col gap-2">
       <CampoDeNombre
         id={id}
         valor={texto}
         error={errorDelNombre}
         placeholder="Ej: Caja principal"
-        className="w-64"
         onChange={(valor) => {
           setTexto(valor)
           setErrorDelNombre(null)
           setError(null)
         }}
       >
-        <Button type="submit" loading={enviando}>Agregar caja</Button>
+        <button type="submit" disabled={enviando} style={conEstado(botonPrimario, enviando)}>Agregar caja</button>
       </CampoDeNombre>
-      {error !== null && <p role="alert" className="text-sm text-red-600">{error}</p>}
+      {error !== null && <p role="alert" style={mensajeDeFalla}>{error}</p>}
     </form>
   )
 }

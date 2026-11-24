@@ -10,6 +10,7 @@ import { FormularioDeApertura } from '../../components/FormularioDeApertura'
 import { TurnoAbierto } from '../../components/TurnoAbierto'
 import { ResultadoDelCierre } from '../../components/ResultadoDelCierre'
 import type { ResultadoDelCierre as Resultado } from '../../utils/cierre'
+import { estiloBotonSecundario, estiloCargandoPagina, estiloErrorBanda } from '../../components/estilosDeCaja'
 
 function getInitials(name: string): string {
   return name.split(' ').slice(0, 2).map((w) => w[0]).join('').toUpperCase()
@@ -122,19 +123,16 @@ export function CajaPage() {
         )}
 
         {estado.tipo === 'cargando' && (
-          <p role="status" style={{ fontFamily: 'Inter,sans-serif', fontSize: 13, color: C.textMut, margin: 0 }}>Cargando el turno…</p>
+          <p role="status" style={estiloCargandoPagina}>Cargando el turno…</p>
         )}
 
         {estado.tipo === 'error' && (
           <div role="alert" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 10 }}>
-            <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 13, color: C.red, margin: 0 }}>{estado.mensaje}</p>
+            <p style={estiloErrorBanda}>{estado.mensaje}</p>
             <button
               type="button"
               onClick={() => void cargarTurno()}
-              style={{
-                padding: '8px 16px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.white,
-                fontFamily: 'Inter,sans-serif', fontSize: 13, color: C.navy, cursor: 'pointer',
-              }}
+              style={estiloBotonSecundario()}
             >
               Reintentar
             </button>

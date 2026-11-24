@@ -17,6 +17,10 @@ import {
 } from '../utils/cierre'
 import { formatearMonto, METODOS_DE_ARQUEO } from '@menyu/ui/caja'
 import { MAXIMO_DE_OBSERVACIONES } from '../utils/observaciones'
+import {
+  estiloAviso, estiloBotonPrimario, estiloBotonSecundario, estiloCampo, estiloCelda, estiloErrorBanda, estiloErrorDeCampo,
+  estiloEtiqueta, estiloTexto, estiloTitulo,
+} from './estilosDeCaja'
 
 const C = {
   orange:   '#E8563A',
@@ -168,14 +172,14 @@ export function CierreDelTurno({ turno, restauranteId, onCerrado, onTurnoCambio 
 
       {paso.paso === 'cerrado' && (
         <div>
-          <button type="button" onClick={() => void revisar()} style={estiloBoton(true)}>Cerrar turno</button>
+          <button type="button" onClick={() => void revisar()} style={estiloBotonPrimario()}>Cerrar turno</button>
         </div>
       )}
 
       {paso.paso === 'revisando' && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <p role="status" style={{ ...estiloTexto, color: C.textMut }}>Revisando las mesas abiertas…</p>
-          <button type="button" onClick={cancelar} style={estiloBoton(false)}>Cancelar</button>
+          <button type="button" onClick={cancelar} style={estiloBotonSecundario()}>Cancelar</button>
         </div>
       )}
 
@@ -201,7 +205,7 @@ export function CierreDelTurno({ turno, restauranteId, onCerrado, onTurnoCambio 
             </fieldset>
           ))}
           <div>
-            <label htmlFor={`${id}-observaciones`} style={{ ...estiloEtiqueta, display: 'block', marginBottom: 4 }}>
+            <label htmlFor={`${id}-observaciones`} style={estiloEtiqueta}>
               Observaciones del cierre (opcional)
             </label>
             <textarea
@@ -210,15 +214,12 @@ export function CierreDelTurno({ turno, restauranteId, onCerrado, onTurnoCambio 
               maxLength={MAXIMO_DE_OBSERVACIONES}
               rows={3}
               onChange={(e) => setObservaciones(e.target.value)}
-              style={{
-                width: '100%', boxSizing: 'border-box', padding: '8px 10px', borderRadius: 8, border: `1px solid ${C.border}`,
-                fontFamily: 'Inter,sans-serif', fontSize: 13, resize: 'vertical',
-              }}
+              style={{ ...estiloCampo(false), maxWidth: 'none', resize: 'vertical' }}
             />
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button type="submit" style={estiloBoton(true)}>Continuar</button>
-            <button type="button" onClick={cancelar} style={estiloBoton(false)}>Cancelar</button>
+            <button type="submit" style={estiloBotonPrimario()}>Continuar</button>
+            <button type="button" onClick={cancelar} style={estiloBotonSecundario()}>Cancelar</button>
           </div>
         </form>
       )}
@@ -266,7 +267,7 @@ function CampoDeMonto({ id, etiqueta, valor, error, onChange }: {
 }) {
   return (
     <div>
-      <label htmlFor={id} style={{ ...estiloEtiqueta, display: 'block', marginBottom: 4 }}>{etiqueta}</label>
+      <label htmlFor={id} style={estiloEtiqueta}>{etiqueta}</label>
       <input
         id={id}
         type="text"
@@ -276,12 +277,9 @@ function CampoDeMonto({ id, etiqueta, valor, error, onChange }: {
         onChange={(e) => onChange(e.target.value)}
         aria-invalid={error !== null}
         aria-describedby={error === null ? undefined : `${id}-error`}
-        style={{
-          width: 180, padding: '8px 10px', borderRadius: 8, boxSizing: 'border-box',
-          border: `1px solid ${error === null ? C.border : C.red}`, fontFamily: 'Inter,sans-serif', fontSize: 13,
-        }}
+        style={estiloCampo(error !== null)}
       />
-      {error !== null && <p id={`${id}-error`} role="alert" style={estiloError}>{error}</p>}
+      {error !== null && <p id={`${id}-error`} role="alert" style={estiloErrorDeCampo}>{error}</p>}
     </div>
   )
 }
@@ -301,7 +299,7 @@ function ConfirmacionDelCierre({ turno, confirmacion, mesasPrevias, onCerrar, on
       {turno.cajas.map((caja, i) => (
         <div key={caja.cajaId} style={estiloCaja}>
           <table style={{ borderCollapse: 'collapse' }}>
-            <caption style={{ ...estiloEtiqueta, textAlign: 'left', marginBottom: 4 }}>Lo declarado en {caja.nombre}</caption>
+            <caption style={{ ...estiloEtiqueta, display: 'table-caption', textAlign: 'left', marginBottom: 4 }}>Lo declarado en {caja.nombre}</caption>
             <tbody>
               {METODOS_DE_ARQUEO.map(({ metodo, etiqueta }) => (
                 <tr key={metodo}>
@@ -317,12 +315,12 @@ function ConfirmacionDelCierre({ turno, confirmacion, mesasPrevias, onCerrar, on
       <p style={{ ...estiloTexto, fontWeight: 600 }}>Vas a cerrar el turno y todas sus cajas. No se puede deshacer.</p>
       {/* Las mesas abiertas se repiten antes de cerrar; la nota de que no se pudo revisar ya se vio en el formulario. */}
       <AvisoDeMesasPrevias mesas={mesasPrevias ?? []} />
-      {error && <p role="alert" style={{ ...estiloTexto, color: C.red }}>{error}</p>}
+      {error && <p role="alert" style={estiloErrorBanda}>{error}</p>}
       <div style={{ display: 'flex', gap: 8 }}>
-        <button type="button" onClick={onCerrar} disabled={enviando} style={estiloBoton(true, enviando)}>
+        <button type="button" onClick={onCerrar} disabled={enviando} style={estiloBotonPrimario(enviando)}>
           {enviando ? 'Cerrando…' : 'Cerrar turno'}
         </button>
-        <button type="button" onClick={onVolver} disabled={enviando} style={estiloBoton(false, enviando)}>
+        <button type="button" onClick={onVolver} disabled={enviando} style={estiloBotonSecundario(enviando)}>
           Volver a corregir
         </button>
       </div>
@@ -334,27 +332,8 @@ const estiloSeccion = {
   background: C.white, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16,
   display: 'flex', flexDirection: 'column', gap: 14,
 } as const
-const estiloTitulo = { fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 14, color: C.navy, margin: 0 } as const
-const estiloTexto = { fontFamily: 'Inter,sans-serif', fontSize: 13, color: C.navy, margin: 0 } as const
-const estiloEtiqueta = { fontFamily: 'Inter,sans-serif', fontSize: 12, fontWeight: 600, color: C.navy, margin: 0 } as const
-const estiloError = { fontFamily: 'Inter,sans-serif', fontSize: 12, color: C.red, margin: '4px 0 0' } as const
-const estiloAviso = {
-  margin: 0, background: C.orangeBg, border: `1px solid ${C.orange}`, borderRadius: 10, padding: '10px 14px',
-  fontFamily: 'Inter,sans-serif', fontSize: 13, color: C.navy,
-} as const
 const estiloCaja = {
   border: `1px solid ${C.border}`, borderRadius: 10, padding: '12px 16px', margin: 0, background: C.white,
   display: 'flex', flexDirection: 'column', gap: 10,
 } as const
-const estiloCelda = (encabezado: boolean) => ({
-  textAlign: 'left' as const, padding: '4px 12px 4px 0', fontFamily: 'Inter,sans-serif', fontSize: 13,
-  fontWeight: encabezado ? 600 : 400, color: C.navy,
-})
-const estiloBoton = (principal: boolean, deshabilitado = false) => ({
-  padding: '8px 16px', borderRadius: 8, fontFamily: 'Inter,sans-serif', fontSize: 13, fontWeight: 600,
-  border: principal ? 'none' : `1px solid ${C.border}`,
-  background: principal ? C.orange : C.white,
-  color: principal ? C.white : C.navy,
-  cursor: deshabilitado ? 'not-allowed' : 'pointer',
-  opacity: deshabilitado ? 0.6 : 1,
-})
+

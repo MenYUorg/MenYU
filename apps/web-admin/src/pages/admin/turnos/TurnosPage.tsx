@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { TurnoDelHistorial } from '@menyu/types'
-import { Button } from '@menyu/ui'
 import { useContextStore } from '../../../store/contextStore'
+import { RefreshCw } from 'lucide-react'
 import { api } from '../../../services/api'
+import { C, botonSecundario, conEstado } from '../marca/estilos'
+import { subtituloPagina, textoCentrado, tituloPagina } from '../cajas/estilos'
 import { Cargando } from './Cargando'
 import { ErrorConReintentar } from './ErrorConReintentar'
 import { mensajeDeError } from './historial'
@@ -71,10 +73,19 @@ export function TurnosPage() {
   // Lo de otro restaurante no vale: hasta que llegue la lectura del elegido, se está cargando.
   const actual = lectura?.restauranteId === selectedRestauranteId ? lectura : null
   return (
-    <div className="max-w-3xl flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm text-gray-500">Del más nuevo al más viejo. Los turnos se abren y se cierran desde la app del personal.</p>
-        <Button variant="secondary" size="sm" onClick={actualizar}>Actualizar</Button>
+    <div className="mx-auto w-full max-w-4xl p-4 md:p-6 flex flex-col gap-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 style={tituloPagina}>Turnos de caja</h1>
+          <p style={subtituloPagina}>Del más nuevo al más viejo. Los turnos se abren y se cierran desde la app del personal.</p>
+        </div>
+        <button
+          type="button"
+          onClick={actualizar}
+          style={{ background: 'white', border: `1px solid ${C.border}`, borderRadius: 6, padding: '5px 10px', display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: C.muted, cursor: 'pointer' }}
+        >
+          <RefreshCw size={12} aria-hidden="true" />Actualizar
+        </button>
       </div>
       <Historial lectura={actual} onReintentar={actualizar} onCargarMas={(cursor) => void cargarMas(selectedRestauranteId, cursor)} />
     </div>
@@ -91,21 +102,26 @@ function Historial({ lectura, onReintentar, onCargarMas }: {
   }
   if (lectura.estado === 'error') return <ErrorConReintentar mensaje={lectura.mensaje} onReintentar={onReintentar} />
   if (lectura.turnos.length === 0) {
-    return <p className="text-sm text-gray-400 text-center py-12">Todavía no hubo turnos. Se abren desde la app del personal, en Caja.</p>
+    return <p style={textoCentrado}>Todavía no hubo turnos. Se abren desde la app del personal, en Caja.</p>
   }
   const { siguiente, mas } = lectura
   return (
     <>
-      <ul aria-label="Turnos de caja" className="flex flex-col gap-3">
+      <ul aria-label="Turnos de caja" style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
         {lectura.turnos.map((turno) => <TarjetaDeTurno key={turno.id} turno={turno} />)}
       </ul>
       {/* Un error al pedir la página siguiente conserva lo ya cargado. */}
       {siguiente !== null && (mas.estado === 'error' ? (
         <ErrorConReintentar mensaje={mas.mensaje} onReintentar={() => onCargarMas(siguiente)} />
       ) : (
-        <Button variant="secondary" className="self-center" disabled={mas.estado === 'cargando'} onClick={() => onCargarMas(siguiente)}>
+        <button
+          type="button"
+          disabled={mas.estado === 'cargando'}
+          style={{ ...conEstado(botonSecundario, mas.estado === 'cargando'), alignSelf: 'center' }}
+          onClick={() => onCargarMas(siguiente)}
+        >
           Cargar más
-        </Button>
+        </button>
       ))}
     </>
   )

@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import { ArrowLeft } from 'lucide-react'
 import type { TurnoDetalle } from '@menyu/types'
 import { useContextStore } from '../../../store/contextStore'
 import { api, ApiError } from '../../../services/api'
+import { volver } from '../cajas/estilos'
 import { Cargando } from './Cargando'
 import { DetalleDelTurno } from './DetalleDelTurno'
 import { AlertaDeError, ErrorConReintentar } from './ErrorConReintentar'
@@ -18,8 +20,8 @@ const LISTA = '/admin/turnos'
 
 function VolverALaLista() {
   return (
-    <Link to={LISTA} className="self-start text-sm font-medium text-indigo-600 hover:underline">
-      <span aria-hidden="true">← </span>Volver a turnos de caja
+    <Link to={LISTA} style={volver}>
+      <ArrowLeft size={14} aria-hidden="true" />Volver a turnos de caja
     </Link>
   )
 }
@@ -85,7 +87,7 @@ export function TurnoDetallePage() {
   // Lo leído de otro turno no vale: hasta que llegue la lectura de este, se está cargando.
   const actual = detalle?.id === id ? detalle : null
   return (
-    <div className="max-w-4xl flex flex-col gap-4">
+    <div className="mx-auto w-full max-w-4xl p-4 md:p-6 flex flex-col gap-4">
       <VolverALaLista />
       {actual === null && <Cargando etiqueta="Cargando el turno" />}
       {actual?.estado === 'error' && (actual.sinAcceso ? (
