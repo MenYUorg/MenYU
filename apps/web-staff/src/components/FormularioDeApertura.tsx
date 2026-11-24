@@ -6,6 +6,10 @@ import { AsignacionDeMesas } from './AsignacionDeMesas'
 import { parsearFondo } from '../utils/fondo'
 import { MAXIMO_DE_OBSERVACIONES } from '../utils/observaciones'
 import { asignacionesAEnviar, asignacionesIniciales, type ValoresDeAsignacion } from '../utils/asignaciones'
+import {
+  estiloBotonPrimario, estiloBotonSecundario, estiloCampo, estiloCargandoPagina, estiloErrorBanda, estiloErrorDeCampo,
+  estiloEtiqueta, estiloTarjeta,
+} from './estilosDeCaja'
 
 /**
  * Los 409 de POST /turnos que dicen que ya hay algo abierto: apps/backend/src/caja/conflictos.ts (MENSAJE_TURNO_ABIERTO
@@ -41,7 +45,6 @@ interface FormularioDeAperturaProps {
 const mensajeDe = (e: unknown, porDefecto: string) => (e instanceof Error && e.message ? e.message : porDefecto)
 
 const estiloTitulo = { fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 14, color: C.navy, margin: 0 } as const
-const estiloError = { fontFamily: 'Inter,sans-serif', fontSize: 12, color: C.red, margin: '4px 0 0' } as const
 
 /**
  * Abrir el turno (#359): las cajas con su fondo inicial, las mesas por mozo y las observaciones. Necesita las dos
@@ -76,14 +79,14 @@ export function FormularioDeApertura({ restauranteId, onAbierto, onTurnoCambio }
   useEffect(() => { void cargar() }, [cargar])
 
   if (lectura.estado === 'cargando') {
-    return <p role="status" style={{ fontFamily: 'Inter,sans-serif', fontSize: 13, color: C.textMut }}>Cargando las cajas y las mesas…</p>
+    return <p role="status" style={estiloCargandoPagina}>Cargando las cajas y las mesas…</p>
   }
 
   if (lectura.estado === 'error') {
     return (
       <div role="alert" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 10 }}>
-        <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 13, color: C.red, margin: 0 }}>{lectura.mensaje}</p>
-        <button type="button" onClick={() => void cargar()} style={estiloBotonSecundario}>Reintentar</button>
+        <p style={estiloErrorBanda}>{lectura.mensaje}</p>
+        <button type="button" onClick={() => void cargar()} style={estiloBotonSecundario()}>Reintentar</button>
       </div>
     )
   }
@@ -141,7 +144,7 @@ export function FormularioDeApertura({ restauranteId, onAbierto, onTurnoCambio }
     <form
       noValidate
       onSubmit={(e) => { e.preventDefault(); void abrir() }}
-      style={{ display: 'flex', flexDirection: 'column', gap: 20 }}
+      style={{ ...estiloTarjeta, display: 'flex', flexDirection: 'column', gap: 20 }}
     >
       <h2 style={{ ...estiloTitulo, fontSize: 16 }}>Abrir turno</h2>
 
@@ -159,9 +162,10 @@ export function FormularioDeApertura({ restauranteId, onAbierto, onTurnoCambio }
               const errorFondo = marcada ? errorDelFondo(caja.id) : null
               return (
                 <div key={caja.id} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: 'Inter,sans-serif', fontSize: 13, color: C.navy }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', cursor: 'pointer', fontFamily: 'Inter,sans-serif', fontSize: 13, color: C.navy }}>
                     <input
                       type="checkbox"
+                      style={{ width: 16, height: 16, accentColor: '#E8563A', cursor: 'pointer' }}
                       checked={marcada}
                       disabled={enviando || (!marcada && marcadas.length >= MAXIMO_DE_CAJAS)}
                       onChange={() => alternar(caja.id)}
@@ -170,7 +174,7 @@ export function FormularioDeApertura({ restauranteId, onAbierto, onTurnoCambio }
                   </label>
                   {marcada && (
                     <div style={{ paddingLeft: 24 }}>
-                      <label htmlFor={idFondo} style={{ display: 'block', fontFamily: 'Inter,sans-serif', fontSize: 12, color: C.textMut, marginBottom: 4 }}>
+                      <label htmlFor={idFondo} style={estiloEtiqueta}>
                         Fondo inicial de {caja.nombre}
                       </label>
                       <input
@@ -183,18 +187,15 @@ export function FormularioDeApertura({ restauranteId, onAbierto, onTurnoCambio }
                         onChange={(e) => setFondos((prev) => ({ ...prev, [caja.id]: e.target.value }))}
                         aria-invalid={errorFondo !== null}
                         aria-describedby={errorFondo === null ? undefined : `${idFondo}-error`}
-                        style={{
-                          width: 180, padding: '8px 10px', borderRadius: 8, boxSizing: 'border-box',
-                          border: `1px solid ${errorFondo === null ? C.border : C.red}`, fontFamily: 'Inter,sans-serif', fontSize: 13,
-                        }}
+                        style={estiloCampo(errorFondo !== null)}
                       />
-                      {errorFondo !== null && <p id={`${idFondo}-error`} role="alert" style={estiloError}>{errorFondo}</p>}
+                      {errorFondo !== null && <p id={`${idFondo}-error`} role="alert" style={estiloErrorDeCampo}>{errorFondo}</p>}
                     </div>
                   )}
                 </div>
               )
             })}
-            {intentado && marcadas.length === 0 && <p role="alert" style={estiloError}>Elegí al menos una caja</p>}
+            {intentado && marcadas.length === 0 && <p role="alert" style={estiloErrorDeCampo}>Elegí al menos una caja</p>}
           </div>
         )}
       </fieldset>
@@ -212,7 +213,7 @@ export function FormularioDeApertura({ restauranteId, onAbierto, onTurnoCambio }
       </section>
 
       <div>
-        <label htmlFor={`${id}-observaciones`} style={{ ...estiloTitulo, display: 'block', marginBottom: 6 }}>
+        <label htmlFor={`${id}-observaciones`} style={estiloEtiqueta}>
           Observaciones (opcional)
         </label>
         <textarea
@@ -222,24 +223,17 @@ export function FormularioDeApertura({ restauranteId, onAbierto, onTurnoCambio }
           disabled={enviando}
           rows={3}
           onChange={(e) => setObservaciones(e.target.value)}
-          style={{
-            width: '100%', boxSizing: 'border-box', padding: '8px 10px', borderRadius: 8, border: `1px solid ${C.border}`,
-            fontFamily: 'Inter,sans-serif', fontSize: 13, resize: 'vertical',
-          }}
+          style={{ ...estiloCampo(false), maxWidth: 'none', resize: 'vertical' }}
         />
       </div>
 
-      {error && <p role="alert" style={{ ...estiloError, fontSize: 13, margin: 0 }}>{error}</p>}
+      {error && <p role="alert" style={estiloErrorBanda}>{error}</p>}
 
       <div>
         <button
           type="submit"
           disabled={sinCajas || enviando}
-          style={{
-            padding: '10px 22px', borderRadius: 10, border: 'none', background: C.orange, color: C.white,
-            fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 14,
-            cursor: sinCajas || enviando ? 'not-allowed' : 'pointer', opacity: sinCajas || enviando ? 0.6 : 1,
-          }}
+          style={estiloBotonPrimario(sinCajas || enviando)}
         >
           {enviando ? 'Abriendo…' : 'Abrir turno'}
         </button>
@@ -247,8 +241,3 @@ export function FormularioDeApertura({ restauranteId, onAbierto, onTurnoCambio }
     </form>
   )
 }
-
-const estiloBotonSecundario = {
-  padding: '8px 16px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.white,
-  fontFamily: 'Inter,sans-serif', fontSize: 13, color: C.navy, cursor: 'pointer',
-} as const

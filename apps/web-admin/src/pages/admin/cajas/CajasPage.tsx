@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import type { CajaDelRestaurante } from '@menyu/types'
-import { Button, Spinner } from '@menyu/ui'
 import { useContextStore } from '../../../store/contextStore'
 import { api } from '../../../services/api'
+import { tarjeta, tituloSeccion, textoAyuda } from '../marca/estilos'
+import { Cargando } from '../turnos/Cargando'
+import { ErrorConReintentar } from '../turnos/ErrorConReintentar'
 import { FilaDeCaja } from './FilaDeCaja'
 import { FormularioDeAlta } from './FormularioDeAlta'
 
@@ -18,6 +20,8 @@ type Lectura =
  */
 export function CajasPage() {
   const { selectedRestauranteId } = useContextStore()
+  const idNueva = useId()
+  const idLista = useId()
   const [lectura, setLectura] = useState<Lectura | null>(null)
   // La respuesta de una lectura anterior (otro restaurante, una operación que se cruzó) no pisa la más nueva.
   const ultimaLectura = useRef(0)
@@ -48,35 +52,36 @@ export function CajasPage() {
   // Lo de otro restaurante no vale: hasta que llegue la lectura del elegido, se está cargando.
   const actual = lectura?.restauranteId === selectedRestauranteId ? lectura : null
   return (
-    <div className="max-w-2xl">
-      <p className="text-sm text-gray-500 mb-4">Un turno puede abrir hasta 2 cajas. Una caja no se borra: se desactiva.</p>
-      <FormularioDeAlta restauranteId={selectedRestauranteId} onCreada={() => void leer()} />
-      <ListaDeCajas lectura={actual} onCambio={() => void leer()} />
+    <div className="mx-auto w-full max-w-3xl p-4 md:p-6 space-y-6">
+      <section aria-labelledby={idNueva} style={tarjeta}>
+        <h3 id={idNueva} style={tituloSeccion}>Nueva caja</h3>
+        <p style={{ ...textoAyuda, margin: '6px 0 16px', lineHeight: 1.5 }}>Un turno puede abrir hasta 2 cajas. Una caja no se borra: se desactiva.</p>
+        <FormularioDeAlta restauranteId={selectedRestauranteId} onCreada={() => void leer()} />
+      </section>
+      <section aria-labelledby={idLista} style={tarjeta}>
+        <h3 id={idLista} style={tituloSeccion}>Cajas</h3>
+        <ListaDeCajas lectura={actual} onCambio={() => void leer()} />
+      </section>
     </div>
   )
 }
 
 function ListaDeCajas({ lectura, onCambio }: { lectura: Lectura | null; onCambio: () => void }) {
   if (lectura === null) {
-    return <div role="status" aria-label="Cargando las cajas" className="flex justify-center py-16"><Spinner size="lg" /></div>
+    return <Cargando etiqueta="Cargando las cajas" />
   }
   if (lectura.estado === 'error') {
-    return (
-      <div role="alert" className="flex flex-col items-start gap-2 text-sm text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2">
-        <p>{lectura.mensaje}</p>
-        <Button variant="secondary" size="sm" onClick={onCambio}>Reintentar</Button>
-      </div>
-    )
+    return <ErrorConReintentar mensaje={lectura.mensaje} onReintentar={onCambio} />
   }
   if (lectura.cajas.length === 0) {
     return (
-      <p className="text-sm text-gray-400 text-center py-12">
+      <p style={{ ...textoAyuda, fontSize: 14, padding: '16px 0', lineHeight: 1.5 }}>
         Todavía no hay cajas. Creá la primera para poder abrir un turno desde la app del personal.
       </p>
     )
   }
   return (
-    <ul aria-label="Cajas del restaurante" className="flex flex-col gap-3">
+    <ul aria-label="Cajas del restaurante" style={{ listStyle: 'none', margin: '12px 0 0', padding: 0 }}>
       {lectura.cajas.map((caja) => (
         <FilaDeCaja key={caja.id} caja={caja} abierta={lectura.abiertas?.includes(caja.id) ?? false} onCambio={onCambio} />
       ))}

@@ -3,6 +3,7 @@ import type { ArqueoDeCaja } from '@menyu/types'
 import { clasificarDiferencia, ETIQUETA_DEL_METODO, formatearFechaHora, formatearMonto, textoDeDiferencia } from '@menyu/ui/caja'
 import type { ResultadoDelCierre as Resultado } from '../utils/cierre'
 import { ResumenDelTurno } from './ResumenDelTurno'
+import { estiloAviso, estiloBotonPrimario, estiloCelda, estiloTexto, estiloTitulo } from './estilosDeCaja'
 
 const C = {
   orange:   '#E8563A',
@@ -53,10 +54,7 @@ export function ResultadoDelCierre({ resultado, onNuevoTurno }: ResultadoDelCier
         <button
           type="button"
           onClick={onNuevoTurno}
-          style={{
-            padding: '10px 22px', borderRadius: 10, border: 'none', background: C.orange, color: C.white,
-            fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 14, cursor: 'pointer',
-          }}
+          style={estiloBotonPrimario()}
         >
           Abrir un turno nuevo
         </button>
@@ -108,15 +106,3 @@ function TablaDeArqueo({ arqueo }: { arqueo: ArqueoDeCaja }) {
   )
 }
 
-const estiloTitulo = { fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 14, color: C.navy, margin: 0 } as const
-const estiloTexto = { fontFamily: 'Inter,sans-serif', fontSize: 13, color: C.navy, margin: 0 } as const
-const estiloAviso = {
-  margin: 0, background: C.orangeBg, border: `1px solid ${C.orange}`, borderRadius: 10, padding: '10px 14px',
-  fontFamily: 'Inter,sans-serif', fontSize: 13, color: C.navy,
-} as const
-const estiloCelda = (encabezado: boolean) => ({
-  textAlign: 'left' as const, padding: '6px 8px', borderBottom: `1px solid ${C.border}`,
-  fontFamily: encabezado ? 'Montserrat,sans-serif' : 'Inter,sans-serif',
-  fontWeight: encabezado ? 700 : 400, fontSize: encabezado ? 12 : 13,
-  color: encabezado ? C.textMut : C.navy,
-})

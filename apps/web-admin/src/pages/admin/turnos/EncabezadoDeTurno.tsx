@@ -1,6 +1,7 @@
 import type { TurnoDelHistorial } from '@menyu/types'
-import { Badge } from '@menyu/ui'
 import { formatearFechaHoraCompleta } from '@menyu/ui/caja'
+import { C, tituloSeccion } from '../marca/estilos'
+import { pastillaExito, pastillaNeutra } from '../cajas/estilos'
 
 type DatosDelEncabezado = Pick<TurnoDelHistorial, 'abiertoEn' | 'abiertoPor' | 'cerradoEn' | 'cerradoPor'>
 
@@ -12,17 +13,17 @@ export function EncabezadoDeTurno({ turno, tituloId }: { turno: DatosDelEncabeza
   const apertura = formatearFechaHoraCompleta(turno.abiertoEn)
   return (
     <header className="flex flex-wrap items-start justify-between gap-2">
-      <div className="flex flex-col gap-0.5 text-sm text-gray-600">
-        <h2 id={tituloId} className="text-base font-semibold text-gray-900">Turno del {apertura}</h2>
-        <p>Abierto el {apertura} por {turno.abiertoPor.nombre}</p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 2, fontFamily: 'Inter, sans-serif', fontSize: 13, color: C.sub }}>
+        <h2 id={tituloId} style={tituloSeccion}>Turno del {apertura}</h2>
+        <p style={{ margin: 0 }}>Abierto el {apertura} por {turno.abiertoPor.nombre}</p>
         {turno.cerradoEn !== null && (
-          <p>
+          <p style={{ margin: 0 }}>
             Cerrado el {formatearFechaHoraCompleta(turno.cerradoEn)}
             {turno.cerradoPor && ` por ${turno.cerradoPor.nombre}`}
           </p>
         )}
       </div>
-      {turno.cerradoEn === null ? <Badge variant="success">Abierto</Badge> : <Badge>Cerrado</Badge>}
+      {turno.cerradoEn === null ? <span style={pastillaExito}>Abierto</span> : <span style={pastillaNeutra}>Cerrado</span>}
     </header>
   )
 }

@@ -8,6 +8,10 @@ import type { ResultadoDelCierre } from '../utils/cierre'
 import { formatearFechaHora, formatearMonto, ordenarMesas } from '@menyu/ui/caja'
 import { MENSAJE_TURNO_CERRADO } from '../utils/conflictosDeCaja'
 import {
+  estiloBotonContorno, estiloBotonPrimario, estiloBotonSecundario, estiloCelda, estiloErrorBanda, estiloTarjeta, estiloTexto,
+  estiloTitulo,
+} from './estilosDeCaja'
+import {
   asignacionesAEnviar,
   asignacionesIniciales,
   asignacionesQueNoSiguen,
@@ -45,17 +49,6 @@ interface TurnoAbiertoProps {
 }
 
 const mensajeDe = (e: unknown, porDefecto: string) => (e instanceof Error && e.message ? e.message : porDefecto)
-
-const estiloTitulo = { fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 14, color: C.navy, margin: 0 } as const
-const estiloTexto = { fontFamily: 'Inter,sans-serif', fontSize: 13, color: C.navy, margin: 0 } as const
-const estiloBoton = (principal: boolean, deshabilitado = false) => ({
-  padding: '8px 16px', borderRadius: 8, fontFamily: 'Inter,sans-serif', fontSize: 13, fontWeight: 600,
-  border: principal ? 'none' : `1px solid ${C.border}`,
-  background: principal ? C.orange : C.white,
-  color: principal ? C.white : C.navy,
-  cursor: deshabilitado ? 'not-allowed' : 'pointer',
-  opacity: deshabilitado ? 0.6 : 1,
-})
 
 /**
  * El turno abierto del restaurante (#359): desde cuándo y quién lo abrió, sus cajas con el fondo, las observaciones y
@@ -101,14 +94,12 @@ export function TurnoAbierto({ turno, restauranteId, onReasignado, onTurnoCambio
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <section
         aria-label="Turno abierto"
-        style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}
+        style={{ ...estiloTarjeta, display: 'flex', flexDirection: 'column', gap: 10 }}
       >
-        <span style={{
-          alignSelf: 'flex-start', background: C.greenBg, color: C.green, borderRadius: 20, padding: '3px 10px',
-          fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 12,
-        }}>
-          Turno abierto
-        </span>
+        <div style={{ alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: 6, background: '#E4F6EC', padding: '6px 13px', borderRadius: 999 }}>
+          <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#1F9D57' }} />
+          <span style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 12, color: '#1F9D57' }}>Turno abierto</span>
+        </div>
         <p style={{ ...estiloTexto, color: C.textMut }}>
           Desde {formatearFechaHora(turno.abiertoEn)} · abrió {turno.abiertoPor.nombre}
         </p>
@@ -128,12 +119,12 @@ export function TurnoAbierto({ turno, restauranteId, onReasignado, onTurnoCambio
 
       <section
         aria-labelledby="mesas-por-mozo"
-        style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}
+        style={{ ...estiloTarjeta, display: 'flex', flexDirection: 'column', gap: 10 }}
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
           <h2 id="mesas-por-mozo" style={estiloTitulo}>Mesas por mozo</h2>
           {(reasignacion.estado === 'cerrada' || reasignacion.estado === 'error') && (
-            <button type="button" onClick={() => void abrirEditor()} style={estiloBoton(false)}>Reasignar mesas</button>
+            <button type="button" onClick={() => void abrirEditor()} style={estiloBotonContorno}>Reasignar mesas</button>
           )}
         </div>
 
@@ -142,7 +133,7 @@ export function TurnoAbierto({ turno, restauranteId, onReasignado, onTurnoCambio
         )}
 
         {reasignacion.estado === 'error' && (
-          <p role="alert" style={{ ...estiloTexto, color: C.red }}>{reasignacion.mensaje}</p>
+          <p role="alert" style={estiloErrorBanda}>{reasignacion.mensaje}</p>
         )}
 
         {reasignacion.estado === 'editando' ? (
@@ -218,12 +209,12 @@ function EditorDeReasignacion({
         onChange={onChange}
         deshabilitado={guardando}
       />
-      {error && <p role="alert" style={{ ...estiloTexto, color: C.red }}>{error}</p>}
+      {error && <p role="alert" style={estiloErrorBanda}>{error}</p>}
       <div style={{ display: 'flex', gap: 8 }}>
-        <button type="button" onClick={onGuardar} disabled={guardando} style={estiloBoton(true, guardando)}>
+        <button type="button" onClick={onGuardar} disabled={guardando} style={estiloBotonPrimario(guardando)}>
           {guardando ? 'Guardando…' : 'Guardar'}
         </button>
-        <button type="button" onClick={onCancelar} disabled={guardando} style={estiloBoton(false, guardando)}>
+        <button type="button" onClick={onCancelar} disabled={guardando} style={estiloBotonSecundario(guardando)}>
           Cancelar
         </button>
       </div>
@@ -231,9 +222,3 @@ function EditorDeReasignacion({
   )
 }
 
-const estiloCelda = (encabezado: boolean) => ({
-  textAlign: 'left' as const, padding: '6px 8px', borderBottom: `1px solid ${C.border}`,
-  fontFamily: encabezado ? 'Montserrat,sans-serif' : 'Inter,sans-serif',
-  fontWeight: encabezado ? 700 : 400, fontSize: encabezado ? 12 : 13,
-  color: encabezado ? C.textMut : C.navy,
-})

@@ -78,7 +78,7 @@ export function AsignacionDeMesas({ mesas, mozos, valores, onChange, avisos = []
                   disabled={deshabilitado}
                   onChange={(e) => onChange({ ...valores, [mesa.id]: e.target.value })}
                   style={{
-                    flex: 1, padding: '7px 10px', borderRadius: 8, border: `1px solid ${C.border}`,
+                    flex: 1, padding: '10px 12px', borderRadius: 10, border: `1px solid ${C.border}`,
                     fontFamily: 'Inter,sans-serif', fontSize: 13, color: C.navy, background: C.white,
                   }}
                 >

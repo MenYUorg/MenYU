@@ -3,6 +3,7 @@ import type { MovimientoDeCaja, TurnoCajaApi, TurnoDeCaja, TurnoDetalle } from '
 import { api } from '../services/api'
 import { FormularioDeMovimiento } from './FormularioDeMovimiento'
 import { formatearFechaHora, formatearMonto } from '@menyu/ui/caja'
+import { estiloBotonSecundario, estiloErrorBanda, estiloTexto, estiloTitulo } from './estilosDeCaja'
 
 const C = {
   navy:    '#2D3561',
@@ -23,8 +24,6 @@ interface MovimientosDelTurnoProps {
   /** El turno se cerró mientras se registraba: la pantalla vuelve a leer el turno actual y muestra `mensaje`. */
   onTurnoCambio: (mensaje: string) => void
 }
-
-const estiloTexto = { fontFamily: 'Inter,sans-serif', fontSize: 13, color: C.navy, margin: 0 } as const
 
 /**
  * Los ingresos y egresos de efectivo de las cajas del turno abierto (#359): la lista y el formulario para registrar uno.
@@ -60,7 +59,7 @@ export function MovimientosDelTurno({ turno, onTurnoCambio }: MovimientosDelTurn
       aria-labelledby={`${id}-titulo`}
       style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16, display: 'flex', flexDirection: 'column', gap: 14 }}
     >
-      <h2 id={`${id}-titulo`} style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 14, color: C.navy, margin: 0 }}>
+      <h2 id={`${id}-titulo`} style={estiloTitulo}>
         Movimientos de caja
       </h2>
       <ListaDeMovimientos lista={lista} cajas={turno.cajas} onReintentar={() => void leer()} />
@@ -82,14 +81,11 @@ function ListaDeMovimientos({ lista, cajas, onReintentar }: { lista: Lista; caja
   if (lista.estado === 'error') {
     return (
       <div role="alert" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}>
-        <p style={{ ...estiloTexto, color: C.red }}>{lista.mensaje}</p>
+        <p style={estiloErrorBanda}>{lista.mensaje}</p>
         <button
           type="button"
           onClick={onReintentar}
-          style={{
-            padding: '8px 16px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.white,
-            fontFamily: 'Inter,sans-serif', fontSize: 13, color: C.navy, cursor: 'pointer',
-          }}
+          style={estiloBotonSecundario()}
         >
           Reintentar
         </button>
@@ -130,7 +126,7 @@ function ListaDeMovimientos({ lista, cajas, onReintentar }: { lista: Lista; caja
 function FilaDeMovimiento({ movimiento: m }: { movimiento: MovimientoDeCaja }) {
   const ingreso = m.tipo === 'INGRESO'
   return (
-    <li style={{ ...estiloTexto, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 12px' }}>
+    <li style={{ ...estiloTexto, border: `1px solid ${C.border}`, borderRadius: 10, padding: '10px 14px', background: C.white }}>
       <span style={{ color: C.textMut }}>{formatearFechaHora(m.createdAt)}</span>
       {' · '}
       <strong style={{ color: ingreso ? C.green : C.red }}>{ingreso ? 'Ingreso' : 'Egreso'}</strong>

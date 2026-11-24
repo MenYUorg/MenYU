@@ -2,6 +2,7 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import type { FilaDeResumen, PagoMercadoPago, ResumenDeTurno } from '@menyu/types'
 import { api } from '../services/api'
 import { ETIQUETA_DEL_METODO, formatearFechaHora, formatearMonto } from '@menyu/ui/caja'
+import { estiloBotonSecundario, estiloCelda, estiloErrorBanda, estiloTexto, estiloTitulo } from './estilosDeCaja'
 
 const C = {
   navy:    '#2D3561',
@@ -50,14 +51,11 @@ export function ResumenDelTurno({ turnoId }: { turnoId: string }) {
       )}
       {lectura.estado === 'error' && (
         <div role="alert" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}>
-          <p style={{ ...estiloTexto, color: C.red }}>{lectura.mensaje}</p>
+          <p style={estiloErrorBanda}>{lectura.mensaje}</p>
           <button
             type="button"
             onClick={() => void leer()}
-            style={{
-              padding: '8px 16px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.white,
-              fontFamily: 'Inter,sans-serif', fontSize: 13, color: C.navy, cursor: 'pointer',
-            }}
+            style={estiloBotonSecundario()}
           >
             Reintentar
           </button>
@@ -159,11 +157,3 @@ function FilaDeCobros({ nombre, fila }: { nombre: string; fila: FilaDeResumen })
   )
 }
 
-const estiloTitulo = { fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 14, color: C.navy, margin: 0 } as const
-const estiloTexto = { fontFamily: 'Inter,sans-serif', fontSize: 13, color: C.navy, margin: 0 } as const
-const estiloCelda = (encabezado: boolean) => ({
-  textAlign: 'left' as const, padding: '6px 8px', borderBottom: `1px solid ${C.border}`,
-  fontFamily: encabezado ? 'Montserrat,sans-serif' : 'Inter,sans-serif',
-  fontWeight: encabezado ? 700 : 400, fontSize: encabezado ? 12 : 13,
-  color: encabezado ? C.textMut : C.navy,
-})
