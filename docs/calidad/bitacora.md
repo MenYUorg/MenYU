@@ -41,6 +41,8 @@ Registro de lo que se hizo para poner SonarCloud en el CI de MenYU y tomar la l�
 | #361: tests de turnos y caja: e2e `ciclo-del-turno` y caso 5b de la propina (PR #483) | **Mergeado** (23/11/2026, `ee4415b`, cierra #361). Antes del merge se trajo la rama del #485 (`9d2d558`). CI `45247761733` en verde y gate de Sonar `OK`: 0 líneas nuevas para cubrir (solo tests), 0,0 % de duplicación, 0 issues y 0 hotspots. e2e: 13 / 189 → 14 / 194. Deploy de staging `45251271719` en verde |
 | Checklist de la pasada manual por staging de #359 y #360 con Mercado Pago real (PR #484) | **Mergeado** (23/11/2026, `7d1056d`). `docs/calidad/checklist-staging-caja-359-360.md`. Falta correrlo |
 | Margen para la espera del primer caso de `CajaPage.spec.tsx` (PR #485) | **Mergeado** (23/11/2026, `5c21d84`). CI `45249981472` en verde |
+| Bitácora del 21/11 y 23/11 y la conexión de Mercado Pago por API (PR #486) | **Mergeado** (23/11/2026, `ecc7fe4`) |
+| Pasada manual por staging de #359 y #360 (`checklist-staging-caja-359-360.md`) | **Parcial** (24/11/2026, staging en `ee4415b`). Preparación y secciones A, B, C, D, E, G, H e I según lo esperado, sin hallazgos. **Pendientes: la sección F (Mercado Pago real del comensal) y el 6.5**: el checkout respondió "Una de las partes con la que intentás hacer el pago es de prueba". #358, #359 y #360 cerrados el 24/11 (Done en el Project): Mercado Pago real se sigue aparte |
 
 ## Pendientes
 
@@ -1979,3 +1981,47 @@ Horas en ART (UTC − 3).
 2. **Borrar el contenedor `menyu-e2e-361`,** con Docker Desktop levantado.
 3. **La pasada manual por staging** con `docs/calidad/checklist-staging-caja-359-360.md`. Antes, Coty verifica el paso 0.2 (el vendedor de prueba conectado) y, si quiere, el 0.3 (`MP_WEBHOOK_SECRET`). El paso 6.6 se confirma en la pasada. Después, cerrar #358, #359 y #360 y decidir el tag de producción.
 4. **Siguen del 21/11:** los puntos 5 a 7 de su pendiente. Para el 7: las ramas del #483, #484 y #485 ya están mergeadas.
+
+### 24/11/2026: la pasada manual por staging de #359 y #360, menos Mercado Pago real
+
+Horas en ART (UTC − 3). Staging corría `ee4415b`, el merge del #483; después solo entró documentación. La pasada la hizo Coty con `docs/calidad/checklist-staging-caja-359-360.md`, en "Restaurante Pruebas Auth" (`901c507f-dd63-43be-a006-10d8964521bf`).
+
+**Preparación.**
+- **0.2, Mercado Pago:** conectado por OAuth con la **vendedora de prueba**.
+  - Primero se conectó por error la compradora. Se volvió a conectar con la vendedora, y la reconexión **reemplaza** la cuenta anterior.
+  - La URL salió de `GET /api/payments/mercadopago/oauth/conectar` con el token de `caja-owner`, usando `~/staging-caja.sh`. Hubo que pasarla al portapapeles con `clip`, porque copiarla de la terminal cortaba el `state`.
+  - **El `redirect_uri` real de staging es `https://menyu-backend-staging.up.railway.app/api/payments/mercadopago/oauth/callback`.** No es el de `docs/auth/VariablesACambiar.md`, que da `https://api.staging.menyu-app.com/api` como `BASE_URL` de staging.
+- **0.3, `MP_WEBHOOK_SECRET`: omitido.** Para obtener la clave hay que configurar una URL de webhook en el panel de Mercado Pago, y eso agregaría notificaciones duplicadas durante la prueba. Queda para DT-02.
+
+**Secciones A, B, C, D, E, G, H e I: todo según lo esperado, sin hallazgos.**
+- **1.4:** se vio por primera vez en staging el 400 "El restaurante no está recibiendo pagos por Mercado Pago en este momento".
+- **G:** se cerró el turno de dos cajas con montos declarados distintos a propósito.
+  - Las diferencias dieron bien.
+  - El esperado guardado coincidió en las 8 filas con el calculado por SQL a partir de los pagos y los movimientos.
+- **E2E — staging, corrido a mano después de la pasada: sin dato.** No hay ninguna corrida de `e2e-staging.yml` del 24/11: la última es la `43879019906`, del 16/11.
+
+**Sección F (Mercado Pago real del comensal) y 6.5: pendientes.**
+- **Lo que pasó:** el checkout respondió "Una de las partes con la que intentás hacer el pago es de prueba", en `.../payment/redirect/.../fatal/?preference-id=3442517448-...`. El pago se había hecho como invitada, con un email real.
+- **Lo que se encontró en el código y la documentación:**
+  - **La preferencia no manda `payer`.** `mercado-pago.provider.ts:42-62` manda solo `items`, `external_reference`, `notification_url`, `back_urls` y `auto_return`. No manda `marketplace`, `marketplace_fee`, `collector_id` ni datos del integrador. El cobrador lo define el access token de OAuth, emitido por la aplicación `MP_CLIENT_ID`.
+  - **El canje del OAuth no manda `test_token`** (`mercado-pago-oauth.service.ts:42-52`).
+  - **El único pago aprobado de punta a punta** fue el del 13/7, en local contra la base de staging (`Documentacion/modulo-pagos-sesion4.md:23-25`). **Usó el token de un vendedor de prueba puesto a mano en `mpAccessToken`, sin OAuth.**
+  - **El intento con OAuth real** dio el error 2034 "Invalid users involved" (`Documentacion/modulo-pagos-sesion3.md:144-146`).
+  - **Las cuentas de prueba:** el vendedor `3428536456` y el comprador `3428536462` son de la app `8480749303914870`, no de la aplicación de MenYU, `7614597750511204`, que es de una cuenta real (`modulo-pagos-sesion3.md:170-176`).
+  - **No hay registro** de un pago aprobado con OAuth a la aplicación real.
+  - **La documentación de Mercado Pago** no dice textualmente que la aplicación tenga que ser de una cuenta de prueba. Sí define una cuenta de prueba "Integrador" para el modelo marketplace ([cuentas de prueba](https://www.mercadopago.com.ar/developers/es/docs/checkout-pro-preferences/test-accounts)) y pide comprar en incógnito, sin sesión iniciada en Mercado Pago ([compra de prueba](https://www.mercadopago.com.ar/developers/es/docs/checkout-pro-orders/integration-test/test-purchase-with-card)). Hay fuentes no oficiales que atribuyen este error a mezclar cuentas reales y de prueba.
+- **Plan:**
+  1. Reintentar en **incógnito**, sin sesión de Mercado Pago, con el email de la **compradora de prueba**.
+  2. Si sigue fallando, la **opción A**: un usuario de prueba "Integrador" y una aplicación de prueba solo para staging, con la vendedora conectada por OAuth a esa aplicación. Implica cambiar `MP_CLIENT_ID` y `MP_CLIENT_SECRET` en Railway staging y registrar ahí el `redirect_uri` de arriba.
+
+**Project y issues.** Coty decidió pasar a Done en el Project los issues de caja que faltaban y seguir Mercado Pago real aparte.
+- **#358, #359 y #360** pasaron a Done. El Project tiene activado el flujo automático que cierra el issue al pasar a Done, así que **se cerraron los tres**.
+- **#273** ("[S11] Inicio implementación WCAG") estaba cerrado pero figuraba en Todo: pasó a Done.
+- **#355, #356, #357 y #361** ya estaban cerrados y en Done.
+
+**Pendiente al retomar** (reemplaza la lista del 23/11, en este orden)
+1. **La sección F y el 6.5,** con el plan de arriba, aparte de los issues de caja, que ya están cerrados. Con la F terminada, decidir el tag de producción.
+2. **`docs/auth/VariablesACambiar.md`:** corregir el `BASE_URL` de staging a `https://menyu-backend-staging.up.railway.app/api`. La pantalla "Configuración → Pagos", que no existe, ya se corrigió en el #486.
+3. **La corrida de E2E — staging** después de la pasada: correrla, o anotar la que se haya corrido.
+4. **0.3 y DT-02:** `MP_WEBHOOK_SECRET` y la decisión del PR C.
+5. **Siguen del 21/11:** los puntos 5 a 7 de su pendiente.
