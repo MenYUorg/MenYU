@@ -37,6 +37,10 @@ Registro de lo que se hizo para poner SonarCloud en el CI de MenYU y tomar la l�
 | #360 PR 1: el cobro con caja, propina y advertencia de Mercado Pago en web-admin (PR #477) | **Mergeado** (18/11/2026, `ed08818`). CI `44408917528` y deploy de staging `44408917636` en verde |
 | #360 PR 2: el ABM de cajas en `/admin/cajas` (PR #478) | **Mergeado** (19/11/2026, `7d33e5d`). CI `44522782812` y deploy de staging `44522783206` en verde |
 | #360 PR 3: el historial y el detalle de los turnos de caja en `/admin/turnos` (PR #480) | **Mergeado** (19/11/2026, `ccd6c04`). CI `44541662085` y deploy de staging `44541662270` en verde. #360 sigue abierto (los PR usaron "Refs") |
+| Bitácora del 31/10 al 19/11 y estado actual (PR #482) | **Mergeado** (21/11/2026, `c782d11`). CI `44943791216` en verde |
+| #361: tests de turnos y caja: e2e `ciclo-del-turno` y caso 5b de la propina (PR #483) | **Mergeado** (23/11/2026, `ee4415b`, cierra #361). Antes del merge se trajo la rama del #485 (`9d2d558`). CI `45247761733` en verde y gate de Sonar `OK`: 0 líneas nuevas para cubrir (solo tests), 0,0 % de duplicación, 0 issues y 0 hotspots. e2e: 13 / 189 → 14 / 194. Deploy de staging `45251271719` en verde |
+| Checklist de la pasada manual por staging de #359 y #360 con Mercado Pago real (PR #484) | **Mergeado** (23/11/2026, `7d1056d`). `docs/calidad/checklist-staging-caja-359-360.md`. Falta correrlo |
+| Margen para la espera del primer caso de `CajaPage.spec.tsx` (PR #485) | **Mergeado** (23/11/2026, `5c21d84`). CI `45249981472` en verde |
 
 ## Pendientes
 
@@ -1822,3 +1826,156 @@ Los dos con el gate de Sonar `OK`, 100 % de cobertura nueva y 0 % de duplicació
    Siguen los del 18/11: el botón "Registrar pago" sin turno y `PagosPage.tsx` grande.
 5. **Siguen de antes:** el punto 7 del pendiente del 18/11.
 6. **Local:** la rama `feat/web-admin-turnos-de-caja` ya está mergeada y se puede borrar. `discovery.module.ts` y `Claude outputs/` siguen con cambios sin commitear que no son de este trabajo.
+
+### 21/11/2026: la bitácora al día (#482), #358 y #361 corregidos, #361 en PR (#483), el checklist de staging (#484) y la espera de `CajaPage` (#485)
+
+Horas en ART (UTC − 3).
+
+**Sincronización del repo.**
+- `main` no había avanzado desde el 19/11: seguía en `6597109`, el merge del #481.
+- La bitácora tenía 960 líneas sin commitear, todas las entradas del 31/10 al 19/11. Antes de commitear se revisaron:
+  - se buscaron claves, tokens, JWT y emails;
+  - el único valor con forma de secreto es `your_secret_key_here`, el vector de `payments/firma-del-webhook.spec.ts:7`.
+- Se completó la tabla de "Estado actual" con datos de `gh` y se mergeó en el **#482** (16:58, `c782d11`).
+- Se descartó el comentario sin commitear de `discovery.module.ts`. El diff sigue en `privado/respuesta-prompt-26.md`.
+- Se borraron con `git branch -d` las 20 ramas locales ya mergeadas. Las de GitHub quedan.
+
+**#358 y #361, corregidos en GitHub.** El texto de los dos decía que Mercado Pago no va a ninguna caja, y la decisión se revisó el 16/11 (PR #471).
+- **#358:** las 9 tareas quedaron tildadas. La 9 se reemplazó por tres:
+  - el Mercado Pago que registra el personal va a la caja que elige quien cobra;
+  - el del comensal por webhook va a la caja abierta con `Caja.createdAt` más antigua; sin turno, la preferencia da 400 y el webhook aprueba sin caja con `aprobado-sin-turno`;
+  - Mercado Pago no entra en el arqueo.
+
+  Se agregaron los límites conocidos. Sigue abierto: se cierra después de la pasada por staging.
+- **#361:** se reescribió con los criterios que ya cubrían los tests de #355 a #360, tildados. Quedaron tres sin tildar, para este PR:
+  - la propina;
+  - la mesa que pasa al turno siguiente;
+  - el ciclo completo.
+
+  Tiene una sección "Límites conocidos" con 4 puntos: los dos de #358, el botón "Registrar pago" de web-admin sin turno y el 500 si falla la lectura de mesas después del cierre.
+- **Decisiones de Coty:**
+  - la atribución y el otro restaurante alcanzan con los unitarios;
+  - el botón de web-admin y el 500 del cierre quedan como límites conocidos, sin cambiar código.
+
+**#361: PR #483 (`test/361-ciclo-del-turno`), abierto, "Closes #361".** Solo tests del backend, en tres commits:
+- **`f4ed3a1`:** `FixtureDeCaja.limpiar()` borra los `llamado_mozo` de la corrida. `solicitar-efectivo` crea uno, y su FK impedía borrar la sesión.
+- **`e901fe4`:** el caso **5b** de `cobro-al-turno.e2e-spec.ts`, "la propina no cubre la sesión".
+  1. El comensal pide efectivo con la mesa en 1000 y después pide otro plato de 500.
+  2. El mozo confirma ese efectivo con 600 de propina: la sesión sigue activa.
+  3. El segundo pedido de efectivo es por 500, y el cobro final cobra exactamente 500 y la cierra.
+
+  El caso pasa por `confirmar-efectivo`, que hoy **no llama ninguna pantalla**: solo la API y el E2E de staging (`scripts/e2e-staging/flujo.mjs`).
+- **`97f62ec`:** el nuevo `caja/ciclo-del-turno.e2e-spec.ts`, con 4 casos y los esperados calculados a mano:
+  1. Los cobros van a la caja indicada, y el Mercado Pago del webhook a la **más antigua**. Salón va primera en la lista y Barra es la de `createdAt` más viejo.
+  2. El resumen por método, por mozo y de Mercado Pago.
+  3. El cierre con el esperado de cada caja y el aviso de la mesa abierta.
+  4. La mesa abierta se cobra en el turno siguiente.
+- **Mutaciones**, sobre copia, con restauración y comparación del archivo:
+  - **5b:** muere con el saldo de `registrarCobro` (`sessions.service.ts:649`), con `saldoPendienteSesion` (`payments.service.ts:427`) y con el `totalCubierto` de `confirmarEfectivo` (`payments.service.ts:314`).
+  - **El `totalCubierto` de `registrarCobro` (`sessions.service.ts:719`) es equivalente:** `registrarCobro` cobra siempre el saldo que calcula en la misma transacción, así que `totalCubierto >= totalSesion` siempre da verdadero.
+  - **El `totalCubierto` del webhook (`payments.service.ts:574`) queda sin cubrir:** haría falta una sesión con dos pagos parciales desfasados, uno de ellos con propina.
+  - **`ciclo-del-turno`:** las 7 mutaciones mueren. Son: el webhook con otro criterio (`createdAt desc` y sin orden), Mercado Pago sumado al esperado, el esperado sin propina, el resumen por quien cobra y no por a quién se atribuye, y el cobro del turno 2 sin caja o en la del turno 1.
+- **Números**, medidos en `main` y en la rama, con un Postgres descartable nuevo para cada corrida:
+  - e2e del backend: 13 / 189 → **14 / 194**;
+  - unitarios (backend 116 / 2832, ui 151, auth-client 84, web-admin 1018, web-staff 561, web-cliente 1270, web-auth 93) y typecheck (10/10): sin cambios.
+- **CI:** E2E y Workers Builds en verde. El job del CI falló dos veces (ver el #485), así que SonarCloud todavía no corrió.
+
+**El test de web-staff que falló en el CI del #483: no era inestable al azar.**
+- **El caso:** "CajaPage › el encabezado › muestra la caja con quién está y vuelve al panel" falló en el paso Coverage del run `44946830152`. El intento 1 tardó 2469 ms y el 2, 2240 ms, los dos con `Unable to find role="button" and name "Abrir turno"`.
+- **El diagnóstico:** es una espera de **1000 ms al límite desde el 18/11.**
+  - Es el `findByRole` del primer caso del archivo, con el límite por defecto de Testing Library: no hay `asyncUtilTimeout` configurado.
+  - Ese caso paga el arranque en frío del worker. En las corridas verdes del 18 al 21/11 tardó entre **1,3 y 3,0 s** (el peor, 2972 ms, en el run `44408917528`).
+  - La duración total no predice el fallo: pasó con 2972 ms y falló con 2240 ms.
+  - En local, solo, tarda unos 115 ms.
+  - El CI no tiene caché remota de turbo: las corridas verdes ejecutaron el spec de verdad.
+- **El arreglo, PR #485 (`test/web-staff-caja-espera`, `51b025b`):** `{ timeout: 5000 }` en ese `findByRole`, con un comentario. El margen real lo pone el `testTimeout` de Vitest, que web-staff no define: 5000 ms por default para el caso entero. En local pasa 66/66, normal y con cobertura.
+- **Cómo sigue:** se mergea primero el #485, después se trae `main` a la rama del #483 con un merge, sin rebase.
+
+**Checklist de staging: PR #484 (`docs/calidad/checklist-staging-caja-359-360.md`).** La pasada manual en el navegador de #359 y #360, con un pago real de Mercado Pago con cuentas de prueba. CI y SonarCloud en verde. Al armarlo salió esto:
+- **Staging corre `6597109`.** `c782d11` solo agrega `bitacora.md`, que no se despliega.
+- **`MP_ENV` ya no existe en el código.**
+  - El entorno lo decide el access token del vendedor: `MercadoPagoConfig({ accessToken })` en `mercado-pago.provider.ts:21-22`, con `init_point` siempre (`:66`) y los hosts de producción en el OAuth (`mercado-pago-oauth.service.ts:36` y `:42`).
+  - Una cuenta vendedora de prueba conectada hace pagos de prueba.
+- **No se pudo verificar sin secrets:**
+  - si "Restaurante Pruebas Auth" tiene Mercado Pago conectado;
+  - si `MP_WEBHOOK_SECRET` está en Railway staging. El CLI de Railway no está instalado.
+
+  El checklist dice dónde mirar cada cosa.
+- **El caso del efectivo pedido antes de otro plato no se reproduce desde las pantallas.**
+  - web-staff y web-admin cobran con `PATCH /sessions/:id/cobro`, que cobra el saldo actual.
+  - El modal muestra "Total a cobrar: {totalAcumulado}", la suma de los pedidos sin restar lo pagado.
+  - En su lugar, el checklist prueba un **Mercado Pago pagado antes de otro plato**. El paso 6.6 queda marcado "a confirmar: sale de leer el código": se paga 1000 de 1500, el modal mostraría $1.500 y se cobrarían $500.
+
+**Cosas que conviene recordar:**
+- **Los e2e del backend se corren en local** con un Postgres descartable en Docker, en el puerto 5434, y las variables del CI:
+  - `pnpm test:e2e <archivo> -t <caso>`, **sin** `--`: con `--`, jest toma `-t` y el nombre del caso como patrones de archivo;
+  - Docker Desktop tiene que estar levantado.
+- **Para medir "antes y después" se corre la suite en `main` y en la rama.** No se deduce el "antes" restando los tests nuevos.
+- **Las mutaciones sobre archivos con CRLF:** el reemplazo tiene que convertir los `\n` del texto a `\r\n`, o no encuentra el texto.
+- **Un caso que llama a `solicitar-efectivo` crea un `llamado_mozo`:** cualquier fixture que borre sesiones tiene que borrarlo antes.
+
+**Pendiente al retomar** (en este orden)
+1. **El #485:** CI en verde y merge. Después, merge de `main` a la rama del #483, sin rebase ni force-push, y los checks del #483, con los datos de SonarCloud: cobertura en código nuevo, duplicación, issues y hotspots.
+2. **Con el #483 en verde:** borrar el contenedor `menyu-e2e-361`. Después del merge:
+   - en #361, pasar el criterio de la propina de "Unit" a "E2E" y tildar las tres casillas que faltan;
+   - confirmar que el issue se cerró solo;
+   - agregar a la tabla los datos de Sonar del #483.
+3. **El #484:** revisión y merge.
+4. **La pasada manual por staging** con el checklist del #484. Antes, verificar Mercado Pago:
+   - el vendedor de prueba conectado, con la consulta del paso 0.2, o conectarlo por API;
+   - `MP_WEBHOOK_SECRET` en Railway, opcional.
+
+   Después de la pasada, cerrar #358, #359 y #360 y decidir el tag de producción según los hallazgos.
+5. **Límite conocido nuevo: la conexión de Mercado Pago.** web-admin no tiene pantalla para conectarlo. Se conecta por API (`GET /payments/mercadopago/oauth/conectar`), y el callback redirige a `/configuracion/pagos`, una ruta que no existe: la ruta comodín de web-admin la manda a `/admin`, sin aviso. Nunca existió esa pantalla: `git log -S` no la encuentra en web-admin ni en web-staff. Los restaurantes se conectaron a mano por el endpoint (`Documentacion/modulo-pagos-sesion3.md:125-133`). `docs/auth/VariablesACambiar.md:42` decía lo contrario, y se corrigió en este PR.
+6. **Siguen de antes:**
+   - el punto 7 del pendiente del 18/11;
+   - los límites del #480;
+   - la pasada combinada por staging con los checklists del #454, #450 y #453.
+7. **Local:**
+   - las ramas del #483, #484 y #485 están abiertas;
+   - las 20 ramas mergeadas siguen en GitHub;
+   - `Claude outputs/` sigue sin trackear.
+
+### 23/11/2026: el #483 en verde con el arreglo del #485, y este PR (la bitácora del 21/11 y `VariablesACambiar.md`)
+
+**Estado al empezar.** `main` seguía en `c782d11`, y #483, #484 y #485 estaban abiertos. El #485 tenía los checks en verde; el #483 seguía con el job del CI fallado del 21/11.
+
+**#483: merge del arreglo del #485.** Coty pidió dejar el #483 en verde para mergear los dos en orden.
+- **El merge:** se trajo `test/web-staff-caja-espera` a `test/361-ciclo-del-turno` con un merge, no con `main`, porque el #485 todavía no estaba mergeado. No hubo rebase ni force-push.
+  - Commit `9d2d558`.
+  - Contra la rama anterior, solo cambia la línea de `CajaPage.spec.tsx`.
+  - Se hizo en un worktree aparte, porque la copia local tenía cambios sin commitear en otra rama.
+- **Orden de merge:** primero #485, después #483. Así, cuando entre el #483, `51b025b` ya está en `main` y el diff del PR sigue mostrando solo los tests.
+- **Checks** (run `45247761733`): CI (9m13s), E2E, SonarCloud y Workers Builds, todos en verde.
+- **SonarCloud del #483:** quality gate OK.
+  - 0 líneas nuevas para cubrir: el PR solo agrega tests, así que no hay porcentaje de cobertura;
+  - duplicación 0,0 %;
+  - 0 issues;
+  - 0 hotspots (100 % revisado).
+- **El contenedor `menyu-e2e-361` no se borró:** Docker Desktop no estaba levantado.
+
+**Este PR.** Commitea la entrada del 21/11 y la corrección de `docs/auth/VariablesACambiar.md:42`, que estaban sin commitear en `docs/bitacora-21-11`.
+- La corrección explica que Mercado Pago se conecta por API y que el callback cae en la ruta comodín de web-admin.
+- El punto 5 del pendiente del 21/11 dice que se corrigió "en este PR". Ese PR es este, no el #484.
+
+**Pendiente al retomar** (en este orden)
+1. **Merges de Coty:** #485, después #483 y este PR. El #484 no depende de los otros: queda la revisión.
+2. **Después del merge del #483:**
+   - en #361, pasar el criterio de la propina de "Unit" a "E2E" y tildar las tres casillas que faltan;
+   - confirmar que el issue se cerró solo;
+   - agregar a la tabla los datos de Sonar de arriba.
+3. **Borrar el contenedor `menyu-e2e-361`,** con Docker Desktop levantado.
+4. **La pasada manual por staging** con el checklist del #484. Antes, Coty verifica el paso 0.2 (el vendedor de prueba conectado) y, si quiere, el 0.3 (`MP_WEBHOOK_SECRET`). El paso 6.6 se confirma en la pasada. Después, cerrar #358, #359 y #360 y decidir el tag de producción.
+5. **Siguen del 21/11:** los puntos 5 a 7 de su pendiente (la conexión de Mercado Pago sin pantalla, lo de antes y las ramas locales).
+
+**Después, el mismo día: los merges.** Coty mergeó #485 (`5c21d84`), #483 (`ee4415b`) y #484 (`7d1056d`), en ese orden.
+- **#361:** se cerró solo con el #483. En el cuerpo, la propina pasó de "Unit" a "E2E", y quedaron tildadas sus tres casillas sin tildar. No queda ninguna sin tildar.
+- **La tabla de "Estado actual":** quedó al día con los tres merges y los datos de Sonar del #483.
+- **Este PR** quedó atrás de `main`: se le trajo `main` con un merge, sin rebase.
+- **El CI de `main`** para `ee4415b` y `7d1056d` estaba en curso al escribir esto. El deploy de staging de `ee4415b` dio verde.
+
+**Pendiente al retomar** (reemplaza la lista de arriba, en este orden)
+1. **Este PR:** checks y merge.
+2. **Borrar el contenedor `menyu-e2e-361`,** con Docker Desktop levantado.
+3. **La pasada manual por staging** con `docs/calidad/checklist-staging-caja-359-360.md`. Antes, Coty verifica el paso 0.2 (el vendedor de prueba conectado) y, si quiere, el 0.3 (`MP_WEBHOOK_SECRET`). El paso 6.6 se confirma en la pasada. Después, cerrar #358, #359 y #360 y decidir el tag de producción.
+4. **Siguen del 21/11:** los puntos 5 a 7 de su pendiente. Para el 7: las ramas del #483, #484 y #485 ya están mergeadas.
