@@ -7,6 +7,7 @@ import type {
   CajasAbiertas,
   CerrarTurnoBody,
   CierreDeTurno,
+  Comanda,
   EstadoPedido,
   Mesa,
   MovimientoRegistrado,
@@ -290,6 +291,12 @@ export const api = {
     /** Lo cobrado en las cajas del turno por método y por mozo, y Mercado Pago aparte (que no entra al arqueo). */
     resumen: (turnoId: string) =>
       authFetch<ResumenDeTurno>(`/turnos/${encodeURIComponent(turnoId)}/resumen`),
+  },
+
+  comandas: {
+    /** Las comandas del restaurante (cocina, barra...), activas y no: la cocina filtra por las activas. */
+    listar: (restauranteId: string) =>
+      authFetch<Comanda[]>(`/comandas?restauranteId=${encodeURIComponent(restauranteId)}`),
   },
 
   mesas: {

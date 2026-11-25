@@ -6,7 +6,13 @@ import type { PedidoRico } from '../../services/api'
 import { useContextoStore, useRestauranteId } from '../../store/contextoStore'
 import * as socketService from '../../services/socket'
 import { cerrarSesion } from '../../services/socket'
-import type { Pedido } from '@menyu/types'
+import type { Comanda, Pedido } from '@menyu/types'
+import { comandaRecordada, recordarComanda } from '../../utils/comandaRecordada'
+import {
+  hayQueConfirmar, idsActivos, itemsParaImprimir, ocultosVigentes, partirItems, pestaniaVigente, textoDeConfirmacion,
+  tieneAlgoVisible,
+} from '../../utils/comandasDeCocina'
+import type { Pestania } from '../../utils/comandasDeCocina'
 import { imprimirPedido, conectarImpresora, impresoraConectada } from '../../services/impresora'
 
 // ── Palette & WS ──────────────────────────────────────────────────────────────
@@ -98,18 +104,27 @@ function playSound(type: 'nuevo' | 'editado' | 'anulado') {
 
 // ── PedidoCard ────────────────────────────────────────────────────────────────
 function PedidoCard({
-  pedido, onAvanzar, loading,
+  pedido, onAvanzar, loading, pestania, activas, comandas,
 }: {
   pedido:    PedidoRico
   onAvanzar: (id: string, estado: EstadoPedido) => void
   loading:   boolean
+  pestania:  Pestania
+  activas:   string[]
+  comandas:  Comanda[]
 }) {
+  const { visibles, ocultos } = partirItems(pedido.items, pestania, activas)
+  const ocultosN = ocultosVigentes(ocultos)
+  // La tarjeta se remonta al cambiar de pestania (key en el padre): la confirmación pendiente se descarta sola.
+  const [pidiendoConfirmar, setPidiendoConfirmar] = useState(false)
+  const confirmando = pidiendoConfirmar && hayQueConfirmar(ocultos)
+  const textoConfirmar = textoDeConfirmacion(ocultos, comandas)
   const estado    = pedido.estado as string
   const siguiente = ESTADO_NEXT[estado] ?? null
   const colores   = ESTADO_COLORS[estado] ?? ESTADO_COLORS.en_preparacion
   const minutos   = minDesde(pedido.createdAt)
   const urgente   = minutos >= 20
-  const hasEdits  = pedido.items.some((i) => i.cantidadEditada !== null)
+  const hasEdits  = visibles.some((i) => i.cantidadEditada !== null)
   const isAnulado = pedido.estado === 'anulado'
 
   const badgeLabel  = isAnulado ? 'Anulado'
@@ -149,7 +164,7 @@ function PedidoCard({
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        {pedido.items.map((item) => {
+        {visibles.map((item) => {
           const cantOrig    = item.cantidad
           const cantEdit    = cantActual(item)
           const cantQuitada = cantOrig - cantEdit
@@ -190,11 +205,52 @@ function PedidoCard({
             </div>
           )
         })}
+        {ocultosN > 0 && (
+          <div style={{ fontSize: 12, color: C.textMuted, fontStyle: 'italic' }}>
+            +{ocultosN} de otras comandas
+          </div>
+        )}
       </div>
 
-      {!isAnulado && siguiente && BOTON_LABEL[estado] && (
+      {!isAnulado && siguiente && BOTON_LABEL[estado] && confirmando && textoConfirmar && (
+        <div
+          role="group"
+          aria-label="Confirmar que el pedido está listo"
+          style={{ marginTop: 4, display: 'flex', flexDirection: 'column', gap: 8 }}
+        >
+          <div aria-live="polite" style={{ fontSize: 12, color: C.amber, background: C.amberBg, borderRadius: 7, padding: '6px 10px', fontWeight: 600 }}>
+            {textoConfirmar}
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              onClick={() => { setPidiendoConfirmar(false); onAvanzar(pedido.id, siguiente) }}
+              disabled={loading}
+              style={{
+                flex: 1, background: loading ? '#d1d5db' : C.navy, color: C.white, border: 'none', borderRadius: 7,
+                padding: '8px 12px', fontSize: 12, fontWeight: 600, cursor: loading ? 'not-allowed' : 'pointer',
+                fontFamily: 'Montserrat,sans-serif',
+              }}
+            >
+              Confirmar
+            </button>
+            <button
+              onClick={() => setPidiendoConfirmar(false)}
+              disabled={loading}
+              style={{
+                flex: 1, background: C.white, color: C.navy, border: `1px solid ${C.border}`, borderRadius: 7,
+                padding: '8px 12px', fontSize: 12, fontWeight: 600, cursor: loading ? 'not-allowed' : 'pointer',
+                fontFamily: 'Montserrat,sans-serif',
+              }}
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {!isAnulado && siguiente && BOTON_LABEL[estado] && !(confirmando && textoConfirmar) && (
         <button
-          onClick={() => onAvanzar(pedido.id, siguiente)}
+          onClick={() => (hayQueConfirmar(ocultos) ? setPidiendoConfirmar(true) : onAvanzar(pedido.id, siguiente))}
           disabled={loading}
           style={{
             marginTop: 4, background: loading ? '#d1d5db' : C.navy, color: C.white,
@@ -224,8 +280,14 @@ export function CocinaPage() {
   const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set())
   const [error,      setError]      = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
+  const [comandas,   setComandas]   = useState<Comanda[]>([])
+  const [eleccion,   setEleccion]   = useState<string | null>(() => (restauranteId ? comandaRecordada(restauranteId) : null))
   const [conectada,  setConectada]  = useState<boolean>(impresoraConectada())
   const anuladosTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+  // Lo que el socket y las respuestas tardías leen sin volver a suscribirse; se sincronizan en efectos.
+  const restauranteIdRef = useRef(restauranteId)
+  const pestaniaRef = useRef<Pestania>(null)
+  const activasRef = useRef<string[]>([])
 
   const fetchAll = useCallback(async () => {
     if (!restauranteId) return
@@ -236,12 +298,23 @@ export function CocinaPage() {
         api.pedidos.getByRestaurante(restauranteId, { estado: 'en_preparacion' }),
         api.pedidos.getByRestaurante(restauranteId, { estado: 'listo' }),
       ])
+      if (restauranteIdRef.current !== restauranteId) return   // respuesta de un restaurante anterior
       setPedidos([...enPrep, ...listos])
     } catch {
-      setError('No se pudieron cargar los pedidos.')
+      if (restauranteIdRef.current === restauranteId) setError('No se pudieron cargar los pedidos.')
     } finally {
       setRefreshing(false)
     }
+  }, [restauranteId])
+
+  // Ante un fallo se conserva la última lista buena; si nunca cargó queda vacía (sin pestañas: se ve todo).
+  const fetchComandas = useCallback(async () => {
+    if (!restauranteId) return
+    try {
+      const lista = await api.comandas.listar(restauranteId)
+      if (restauranteIdRef.current !== restauranteId) return   // respuesta de un restaurante anterior
+      setComandas(lista)
+    } catch { /* sin comandas no hay filtro; no es un error de pedidos */ }
   }, [restauranteId])
 
   const handleConectar = useCallback(async () => {
@@ -253,7 +326,18 @@ export function CocinaPage() {
     }
   }, [])
 
+  useEffect(() => { restauranteIdRef.current = restauranteId }, [restauranteId])
+
   useEffect(() => { void fetchAll() }, [fetchAll])
+
+  useEffect(() => {
+    setComandas([])
+    void fetchComandas()
+  }, [fetchComandas])
+
+  useEffect(() => {
+    setEleccion(restauranteId ? comandaRecordada(restauranteId) : null)
+  }, [restauranteId])
 
   useEffect(() => {
     if (!restauranteId) return
@@ -263,8 +347,13 @@ export function CocinaPage() {
     const unsubNuevo = socketService.onPedidoNuevo((pedido: Pedido) => {
       const rico = pedido as unknown as PedidoRico
       if (!ESTADOS_COCINA.includes(rico.estado as EstadoPedido)) return
-      playSound('nuevo')
-      imprimirPedido(rico).catch(console.error)
+      if (tieneAlgoVisible(rico.items, pestaniaRef.current, activasRef.current)) {
+        playSound('nuevo')
+        const paraImprimir = pestaniaRef.current === null
+          ? rico
+          : { ...rico, items: itemsParaImprimir(rico.items, pestaniaRef.current, activasRef.current) }
+        imprimirPedido(paraImprimir).catch(console.error)
+      }
       setPedidos((prev) => prev.some((p) => p.id === rico.id) ? prev : [rico, ...prev])
     })
 
@@ -275,7 +364,8 @@ export function CocinaPage() {
         if (!ESTADOS_COCINA.includes(estado as EstadoPedido)) return prev.filter((p) => p.id !== rico.id)
         const idx = prev.findIndex((p) => p.id === rico.id)
         if (idx === -1) {
-          playSound('nuevo')   // mozo avanzó pendiente → en_preparacion
+          // mozo avanzó pendiente → en_preparacion
+          if (tieneAlgoVisible(rico.items, pestaniaRef.current, activasRef.current)) playSound('nuevo')
           return [rico, ...prev]
         }
         const next = [...prev]; next[idx] = rico; return next
@@ -285,7 +375,7 @@ export function CocinaPage() {
     const unsubEditado = socketService.onPedidoEditado((pedido: Pedido) => {
       const rico = pedido as unknown as PedidoRico
       if (rico.estado === 'anulado') {
-        playSound('anulado')
+        if (tieneAlgoVisible(rico.items, pestaniaRef.current, activasRef.current)) playSound('anulado')
         setPedidos((prev) => prev.filter((p) => p.id !== rico.id))
         setAnulados((prev) => new Map(prev).set(rico.id, rico))
         const existing = anuladosTimers.current.get(rico.id)
@@ -297,7 +387,7 @@ export function CocinaPage() {
         anuladosTimers.current.set(rico.id, timer)
         return
       }
-      playSound('editado')
+      if (tieneAlgoVisible(rico.items, pestaniaRef.current, activasRef.current)) playSound('editado')
       setPedidos((prev) => {
         const idx = prev.findIndex((p) => p.id === rico.id)
         if (idx === -1) return prev
@@ -333,17 +423,35 @@ export function CocinaPage() {
     }
   }, [pedidos])
 
+  // La pestaña se deriva en cada render: si la guardada se desactivó o no existe, vuelve a "Todas" sin tocar localStorage.
+  const pestania = pestaniaVigente(eleccion, comandas)
+  const activas = idsActivos(comandas)
+  const comandasActivas = comandas
+    .filter((c) => c.activa)
+    .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
+  useEffect(() => {
+    pestaniaRef.current = pestania
+    activasRef.current = activas
+  })
+  const visible = (p: PedidoRico) => tieneAlgoVisible(p.items, pestania, activas)
+
+  const elegir = (id: string | null) => {
+    setEleccion(id)
+    if (restauranteId) recordarComanda(restauranteId, id)
+  }
+
   const byEstado = (estado: EstadoPedido) => {
     const activos = pedidos
-      .filter((p) => p.estado === estado)
+      .filter((p) => p.estado === estado && visible(p))
       .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
     if (estado !== 'en_preparacion') return activos
     const anuladosList = Array.from(anulados.values())
+      .filter(visible)
       .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
     return [...activos, ...anuladosList]
   }
 
-  const totalActivos = pedidos.filter((p) => p.estado === 'en_preparacion').length
+  const totalActivos = pedidos.filter((p) => p.estado === 'en_preparacion' && visible(p)).length
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
@@ -374,7 +482,7 @@ export function CocinaPage() {
             </button>
           )}
           <button
-            onClick={() => void fetchAll()}
+            onClick={() => { void fetchAll(); void fetchComandas() }}
             disabled={refreshing}
             style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: 6, padding: '5px 10px', cursor: refreshing ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'white', opacity: refreshing ? 0.7 : 1 }}
           >
@@ -399,6 +507,33 @@ export function CocinaPage() {
         </div>
       </header>
 
+      {comandasActivas.length > 0 && (
+        <div
+          role="group"
+          aria-label="Filtrar por comanda"
+          style={{ display: 'flex', flexWrap: 'wrap', gap: 8, padding: '10px 16px 0', flexShrink: 0 }}
+        >
+          {[{ id: null, nombre: 'Todas' }, ...comandasActivas].map((c) => {
+            const seleccionada = c.id === pestania
+            return (
+              <button
+                key={c.id ?? 'todas'}
+                aria-pressed={seleccionada}
+                onClick={() => elegir(c.id)}
+                style={{
+                  background: seleccionada ? C.navy : C.white, color: seleccionada ? C.white : C.navy,
+                  border: `1px solid ${seleccionada ? C.navy : C.border}`, borderRadius: 999,
+                  padding: '6px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                  fontFamily: 'Montserrat,sans-serif',
+                }}
+              >
+                {c.nombre}
+              </button>
+            )
+          })}
+        </div>
+      )}
+
       {error && (
         <div style={{ background: C.redBg, color: C.red, padding: '10px 20px', fontSize: 13 }}>{error}</div>
       )}
@@ -422,10 +557,13 @@ export function CocinaPage() {
                 ) : (
                   items.map((p) => (
                     <PedidoCard
-                      key={p.id}
+                      key={`${p.id}|${pestania ?? ''}`}
                       pedido={p}
                       onAvanzar={handleAvanzar}
                       loading={loadingIds.has(p.id)}
+                      pestania={pestania}
+                      activas={activas}
+                      comandas={comandas}
                     />
                   ))
                 )}
