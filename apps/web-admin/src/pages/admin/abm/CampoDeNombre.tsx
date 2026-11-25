@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import { campo, etiquetaCampo, mensajeDeFalla } from '../asistente/estilos'
 
 interface CampoDeNombreProps {
@@ -12,7 +12,8 @@ interface CampoDeNombreProps {
   error: string | null
   onChange: (valor: string) => void
   placeholder?: string
-  autoFocus?: boolean
+  /** Lleva el foco al campo cuando se monta (al abrir "Renombrar"; el alta no lo pide). */
+  enfocarAlMontar?: boolean
   /** Las acciones al lado del campo (los botones), en la misma fila. */
   children: ReactNode
 }
@@ -21,7 +22,12 @@ interface CampoDeNombreProps {
  * El nombre de un ítem del ABM, en el alta y al renombrar, con su error asociado al campo. Es dueño de la fila: el campo
  * y las acciones van juntos y el error va debajo, así los botones no se mueven cuando aparece.
  */
-export function CampoDeNombre({ id, etiqueta, maximo, valor, error, onChange, placeholder, autoFocus, children }: CampoDeNombreProps) {
+export function CampoDeNombre({ id, etiqueta, maximo, valor, error, onChange, placeholder, enfocarAlMontar, children }: CampoDeNombreProps) {
+  const inputRef = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    if (enfocarAlMontar) inputRef.current?.focus()
+  }, [enfocarAlMontar])
+
   return (
     <div className="flex flex-col gap-1">
       <div className="flex flex-wrap items-end gap-2">
@@ -34,7 +40,7 @@ export function CampoDeNombre({ id, etiqueta, maximo, valor, error, onChange, pl
             value={valor}
             maxLength={maximo}
             placeholder={placeholder}
-            autoFocus={autoFocus}
+            ref={inputRef}
             onChange={(e) => onChange(e.target.value)}
             aria-invalid={error !== null}
             aria-describedby={error === null ? undefined : `${id}-error`}
