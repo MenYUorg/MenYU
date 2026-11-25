@@ -43,6 +43,7 @@ Registro de lo que se hizo para poner SonarCloud en el CI de MenYU y tomar la l�
 | Margen para la espera del primer caso de `CajaPage.spec.tsx` (PR #485) | **Mergeado** (23/11/2026, `5c21d84`). CI `45249981472` en verde |
 | Bitácora del 21/11 y 23/11 y la conexión de Mercado Pago por API (PR #486) | **Mergeado** (23/11/2026, `ecc7fe4`) |
 | Pasada manual por staging de #359 y #360 (`checklist-staging-caja-359-360.md`) | **Parcial** (24/11/2026, staging en `ee4415b`). Preparación y secciones A, B, C, D, E, G, H e I según lo esperado, sin hallazgos. **Pendientes: la sección F (Mercado Pago real del comensal) y el 6.5**: el checkout respondió "Una de las partes con la que intentás hacer el pago es de prueba". #358, #359 y #360 cerrados el 24/11 (Done en el Project): Mercado Pago real se sigue aparte |
+| Estilo de las pantallas de caja en web-staff y web-admin (PR #488, `style/caja-ux`) | **Mergeado** (24/11/2026 18:47 ART, `db15dd7`). Solo estilos de los archivos de caja. CI del PR en verde y gate de Sonar `OK` (100 % de cobertura nueva, 0,0 % de duplicación). Deploy de staging `45494576260` en verde |
 
 ## Pendientes
 
@@ -2025,3 +2026,46 @@ Horas en ART (UTC − 3). Staging corría `ee4415b`, el merge del #483; después
 3. **La corrida de E2E — staging** después de la pasada: correrla, o anotar la que se haya corrido.
 4. **0.3 y DT-02:** `MP_WEBHOOK_SECRET` y la decisión del PR C.
 5. **Siguen del 21/11:** los puntos 5 a 7 de su pendiente.
+
+### 24/11/2026 (noche): las pantallas de caja con el estilo del resto de cada app (#488)
+
+**El pedido de Coty:** adaptar la UX de caja de todos los módulos al estilo del resto de cada app. Las pantallas de caja se adaptan al resto, nunca al revés.
+
+**Cómo se hizo:**
+- Dos relevamientos de solo lectura, uno por app. Cada uno comparó las pantallas de caja con las que no son de caja.
+- Dos implementadores en paralelo, cada uno limitado a los archivos de caja de su app.
+- No cambió ninguna otra pantalla, ni `packages/ui`, ni los tests, ni la lógica.
+
+**Lo que se encontró en los relevamientos:**
+- **Ninguna de las dos apps usa el preset de Tailwind de `@menyu/ui`.** Los `tailwind.config.js` de web-staff y web-admin no lo cargan, y sus valores (navy `#242C58`, coral `#ED6A4F`) no son los de las apps.
+- **El estilo real son estilos inline** con navy `#2D3561`, naranja `#E8563A`, Montserrat para los títulos e Inter para el texto. En web-admin, la paleta compartida está en `pages/admin/marca/estilos.ts` y `asistente/estilos.ts`.
+- **En web-admin, Cajas y Turnos eran las únicas pantallas en uso con los componentes de `@menyu/ui`** (`Button`, `Input`, `Spinner`, `Badge`), que son índigo y gris. Las otras que los importan son las pestañas `CategoriasTab`, `ClasificacionesTab`, `IngredientesTab` e `ItemsTab`, que nadie importa: `AdminMenuPage.tsx` tiene su propio `CategoriasTabContent`.
+- **El `main` del Shell de web-admin no tiene padding:** cada página pone el suyo, y Cajas y Turnos quedaban pegadas al borde.
+- **En web-staff, las pantallas de caja ya seguían el patrón inline.** Los desvíos eran de detalle.
+
+**web-admin:**
+- **`/admin/cajas`** se parece a Marca y Asistente: tarjetas "Nueva caja" y "Cajas" (`h3` con `tituloSeccion`), botones de `marca/estilos.ts`, `etiquetaCampo` y `campo`, y pastillas.
+- **`/admin/turnos`** se parece a Mesas y Pedidos: título de página, el botón "Actualizar" de Pedidos y el link "Ver detalle" en navy.
+- **El detalle de un turno** tiene el "Volver" de Personal y la tipografía de la app en las tablas.
+- **Carga y error:** "Cargando…" en texto y el banner de Auditoría.
+- **Archivo nuevo:** `cajas/estilos.ts`, solo con lo que no estaba en `marca/estilos.ts`.
+- **El cobro con caja en Pagos** no se tocó: ya seguía el modal.
+
+**web-staff** (archivo nuevo `components/estilosDeCaja.ts`):
+- **Botones:** Montserrat 700, gris `#d1d5db` al deshabilitarse y el alto de los de Mesas y Toma de pedidos.
+- **Errores:** en banda roja.
+- **Campos, etiquetas y el checkbox naranja.**
+- **El badge "Turno abierto":** igual al "Abierto" del panel del mozo.
+- **La carga de la página.**
+- **Único cambio de texto:** en el cobro, "no se puede registrar el pago" (antes "el cobro").
+
+**Verificación:**
+- **Tests** en local, iguales a los de `main`: web-staff 561 de 561 y web-admin 1018 de 1018.
+- **Typecheck y lint** de las dos apps: limpios.
+- **CI del PR en verde,** con el gate de Sonar `OK`: 100 % de cobertura nueva y 0,0 % de duplicación.
+- **Coty lo revisó en el navegador** antes de mergear.
+- El push y la creación del PR los hizo Coty: el clasificador de permisos de Claude Code bloqueó los dos comandos.
+
+**Merge:** 24/11 a las 18:47 ART (`db15dd7`). El deploy de staging `45494576260` dio verde. El CI de `main` estaba en curso al escribir esto.
+
+**Pendiente al retomar:** el mismo de la entrada anterior del 24/11.
