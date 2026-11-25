@@ -16,6 +16,7 @@ import {
   BarChart2,
   ChevronDown,
   ClipboardList,
+  ChefHat,
   History,
   ShoppingBag,
   Shield as ShieldIcon,
@@ -43,6 +44,7 @@ const NAV_BY_ROL: Record<RolDeAdmin, NavSection[]> = {
       label: 'CATÁLOGO',
       items: [
         { to: '/admin/menu', label: 'Menú', Icon: UtensilsCrossed },
+        { to: '/admin/comandas', label: 'Comandas', Icon: ChefHat },
       ],
     },
     {
@@ -83,6 +85,7 @@ const NAV_BY_ROL: Record<RolDeAdmin, NavSection[]> = {
       label: 'CATÁLOGO',
       items: [
         { to: '/admin/menu', label: 'Menú', Icon: UtensilsCrossed },
+        { to: '/admin/comandas', label: 'Comandas', Icon: ChefHat },
       ],
     },
     {
@@ -115,6 +118,7 @@ const SECTION_TITLES: Record<string, string> = {
   '/admin/marca':         'Marca y sucursales',
   '/admin/asistente':     'Asistente',
   '/admin/cajas':         'Cajas',
+  '/admin/comandas':      'Comandas',
   // También el detalle (/admin/turnos/:id): el título se busca por prefijo.
   '/admin/turnos':        'Turnos de caja',
 }

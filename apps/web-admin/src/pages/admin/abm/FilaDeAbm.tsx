@@ -1,31 +1,32 @@
 import { useId, useState, type FormEvent } from 'react'
-import type { CajaDelRestaurante } from '@menyu/types'
-import { api } from '../../../services/api'
 import { C, botonPeligro, botonPeligroSolido, botonPrimario, botonSecundario, conEstado, textoAyuda } from '../marca/estilos'
 import { mensajeDeFalla } from '../asistente/estilos'
-import { pastillaMarca, pastillaNeutra } from './estilos'
-import { errorDeCaja } from './errores'
+import { pastillaMarca, pastillaNeutra } from '../cajas/estilos'
+import { errorDeAbm } from './errores'
 import { CampoDeNombre } from './CampoDeNombre'
-import { leerNombreDeCaja } from './nombre'
+import { leerNombre } from './nombre'
+import type { Bloqueo, ConfigDeAbm, ItemDelAbm } from './tipos'
 
-interface FilaDeCajaProps {
-  caja: CajaDelRestaurante
-  /** Está abierta en el turno, según la última lectura (false también si no se pudo saber). */
-  abierta: boolean
-  /** Hay que volver a leer la lista: se cambió algo, o la lista quedó vieja (404 o caja abierta). */
+interface FilaDeAbmProps {
+  config: ConfigDeAbm
+  item: ItemDelAbm
+  /** Por qué no se puede desactivar ahora, según la última lectura (null si se puede, o si no se pudo saber). */
+  bloqueo: Bloqueo | null
+  actualizar: (id: string, cambios: { nombre?: string; activa?: boolean }) => Promise<unknown>
+  /** Hay que volver a leer la lista: se cambió algo, o la lista quedó vieja (404 o conflicto). */
   onCambio: () => void
 }
 
 type Modo = 'viendo' | 'renombrando' | 'confirmando'
 
 /**
- * Una caja del restaurante (#360): renombrarla en la fila, activarla o desactivarla (con confirmación). No se borra.
- * Abierta en el turno no se puede desactivar: se cierra desde la app del personal.
+ * Un ítem del ABM: renombrarlo en la fila, activarlo o desactivarlo (con confirmación). No se borra. Con un bloqueo no
+ * se puede desactivar.
  */
-export function FilaDeCaja({ caja, abierta, onCambio }: FilaDeCajaProps) {
+export function FilaDeAbm({ config, item, bloqueo, actualizar, onCambio }: FilaDeAbmProps) {
   const id = useId()
   const [modo, setModo] = useState<Modo>('viendo')
-  const [texto, setTexto] = useState(caja.nombre)
+  const [texto, setTexto] = useState(item.nombre)
   const [errorDelNombre, setErrorDelNombre] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [enviando, setEnviando] = useState(false)
@@ -33,7 +34,7 @@ export function FilaDeCaja({ caja, abierta, onCambio }: FilaDeCajaProps) {
   const [volverAlBoton, setVolverAlBoton] = useState(false)
 
   function abrirEdicion() {
-    setTexto(caja.nombre)
+    setTexto(item.nombre)
     setErrorDelNombre(null)
     setError(null)
     setModo('renombrando')
@@ -49,12 +50,12 @@ export function FilaDeCaja({ caja, abierta, onCambio }: FilaDeCajaProps) {
     setError(null)
     setEnviando(true)
     try {
-      await api.cajas.actualizar(caja.id, cambios)
+      await actualizar(item.id, cambios)
       if (cambios.nombre !== undefined) cerrar()
       else setModo('viendo')
       onCambio()
     } catch (err) {
-      const problema = errorDeCaja(err, porDefecto)
+      const problema = errorDeAbm(err, porDefecto, config)
       if (problema.delNombre) setErrorDelNombre(problema.mensaje)
       else setError(problema.mensaje)
       if (problema.releer) {
@@ -68,26 +69,29 @@ export function FilaDeCaja({ caja, abierta, onCambio }: FilaDeCajaProps) {
 
   function guardar(e: FormEvent) {
     e.preventDefault()
-    const nombre = leerNombreDeCaja(texto)
+    const nombre = leerNombre(texto, config.maximoDelNombre, config.mensajeNombreVacio)
     if (!nombre.ok) {
       setErrorDelNombre(nombre.mensaje)
       return
     }
     // Sin cambios no se llama a la API.
-    if (nombre.valor === caja.nombre) {
+    if (nombre.valor === item.nombre) {
       cerrar()
       return
     }
-    void enviar({ nombre: nombre.valor }, 'No se pudo renombrar la caja')
+    void enviar({ nombre: nombre.valor }, config.errorAlRenombrar)
   }
 
-  const etiqueta = `«${caja.nombre}»`
+  const etiqueta = `«${item.nombre}»`
+  const bloqueado = bloqueo !== null
   return (
     <li style={{ padding: '16px 0', borderTop: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', gap: 8 }}>
       {modo === 'renombrando' ? (
         <form noValidate onSubmit={guardar}>
           <CampoDeNombre
             id={id}
+            etiqueta={config.etiquetaDelCampo}
+            maximo={config.maximoDelNombre}
             autoFocus
             valor={texto}
             error={errorDelNombre}
@@ -105,9 +109,9 @@ export function FilaDeCaja({ caja, abierta, onCambio }: FilaDeCajaProps) {
         </form>
       ) : (
         <div className="flex flex-wrap items-center gap-2">
-          <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 600, color: C.text, flex: 1, minWidth: 0 }}>{caja.nombre}</span>
-          {!caja.activa && <span style={pastillaNeutra}>Inactiva</span>}
-          {abierta && <span style={pastillaMarca}>Abierta en el turno</span>}
+          <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 600, color: C.text, flex: 1, minWidth: 0 }}>{item.nombre}</span>
+          {!item.activa && <span style={pastillaNeutra}>Inactiva</span>}
+          {bloqueo && <span style={pastillaMarca}>{bloqueo.pastilla}</span>}
           <button
             type="button"
             autoFocus={volverAlBoton}
@@ -118,13 +122,13 @@ export function FilaDeCaja({ caja, abierta, onCambio }: FilaDeCajaProps) {
           >
             Renombrar
           </button>
-          {caja.activa ? (
+          {item.activa ? (
             <button
               type="button"
-              style={conEstado(botonPeligro, enviando || abierta || modo === 'confirmando')}
+              style={conEstado(botonPeligro, enviando || bloqueado || modo === 'confirmando')}
               aria-label={`Desactivar ${etiqueta}`}
-              aria-describedby={abierta ? `${id}-abierta` : undefined}
-              disabled={enviando || abierta || modo === 'confirmando'}
+              aria-describedby={bloqueado ? `${id}-bloqueo` : undefined}
+              disabled={enviando || bloqueado || modo === 'confirmando'}
               onClick={() => { setError(null); setModo('confirmando') }}
             >
               Desactivar
@@ -135,7 +139,7 @@ export function FilaDeCaja({ caja, abierta, onCambio }: FilaDeCajaProps) {
               style={conEstado(botonSecundario, enviando)}
               aria-label={`Activar ${etiqueta}`}
               disabled={enviando}
-              onClick={() => void enviar({ activa: true }, 'No se pudo activar la caja')}
+              onClick={() => void enviar({ activa: true }, config.errorAlActivar)}
             >
               Activar
             </button>
@@ -143,18 +147,18 @@ export function FilaDeCaja({ caja, abierta, onCambio }: FilaDeCajaProps) {
         </div>
       )}
 
-      {abierta && modo !== 'renombrando' && (
-        <p id={`${id}-abierta`} style={textoAyuda}>
-          No se puede desactivar con el turno abierto: se cierra desde la app del personal, en Caja
+      {bloqueo && modo !== 'renombrando' && (
+        <p id={`${id}-bloqueo`} style={textoAyuda}>
+          {bloqueo.ayuda}
         </p>
       )}
 
       {modo === 'confirmando' && (
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center" style={{ background: C.bg, borderRadius: 10, padding: '12px 14px' }}>
           <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: C.text, margin: 0, flex: 1 }}>
-            ¿Desactivar {etiqueta}? No se va a poder abrir en turnos nuevos. Podés volver a activarla.
+            {config.textoDeConfirmacion(etiqueta)}
           </p>
-          <button type="button" disabled={enviando} style={conEstado(botonPeligroSolido, enviando)} onClick={() => void enviar({ activa: false }, 'No se pudo desactivar la caja')}>
+          <button type="button" disabled={enviando} style={conEstado(botonPeligroSolido, enviando)} onClick={() => void enviar({ activa: false }, config.errorAlDesactivar)}>
             Confirmar
           </button>
           <button type="button" disabled={enviando} style={conEstado(botonSecundario, enviando)} onClick={() => { setError(null); setModo('viendo') }}>Cancelar</button>

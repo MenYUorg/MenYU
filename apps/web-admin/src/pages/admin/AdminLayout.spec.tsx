@@ -40,6 +40,7 @@ function renderLayout(ruta = '/admin/menu') {
           <Route path="/admin/tables" element={<div>Contenido de mesas</div>} />
           <Route path="/admin/marca" element={<div>Contenido de marca</div>} />
           <Route path="/admin/cajas" element={<div>Contenido de cajas</div>} />
+          <Route path="/admin/comandas" element={<div>Contenido de comandas</div>} />
           <Route path="/admin/turnos" element={<div>Contenido de turnos de caja</div>} />
           <Route path="/admin/turnos/:id" element={<div>Contenido del detalle de un turno</div>} />
         </Route>
@@ -244,6 +245,25 @@ describe('AdminLayout', () => {
 
       expect(screen.getByText('Contenido de cajas')).toBeInTheDocument()
       expect(screen.getByRole('heading', { name: 'Cajas' })).toBeInTheDocument()
+    })
+  })
+
+  describe('Comandas (#344)', () => {
+    it.each(['OWNER', 'GERENTE'] as const)('el %s ve el acceso en CATÁLOGO, debajo de Menú, y lo puede abrir, con el título "Comandas"', async (rol) => {
+      rolActual = rol
+      simularPantalla(ESCRITORIO)
+      const user = userEvent.setup()
+      renderLayout()
+
+      const enlace = screen.getByRole('link', { name: 'Comandas' })
+      expect(enlace).toHaveAttribute('href', '/admin/comandas')
+      const enlaces = screen.getAllByRole('link').map((l) => l.textContent)
+      expect(enlaces.indexOf('Comandas')).toBe(enlaces.indexOf('Menú') + 1)
+
+      await user.click(enlace)
+
+      expect(screen.getByText('Contenido de comandas')).toBeInTheDocument()
+      expect(screen.getByRole('heading', { name: 'Comandas' })).toBeInTheDocument()
     })
   })
 

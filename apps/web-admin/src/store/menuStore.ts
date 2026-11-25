@@ -1,11 +1,15 @@
 import { create } from 'zustand'
 import { api } from '../services/api'
-import type { ItemMenu, CategoriaMenu, Ingrediente, ClasificacionDieta, UpdateItemDescuentoRequest } from '@menyu/types'
+import type { ItemMenu, CategoriaMenu, Comanda, Ingrediente, ClasificacionDieta, UpdateItemDescuentoRequest } from '@menyu/types'
 import type { CreateItemInput, UpdateItemInput } from '../services/api'
 
 interface MenuStore {
   items: ItemMenu[]
   categorias: CategoriaMenu[]
+  /** Las comandas del restaurante elegido; null = todavía no cargaron o no se pudieron cargar. */
+  comandas: Comanda[] | null
+  /** Distingue "todavía está cargando" de "falló": con `comandas` en null los dos se ven igual. */
+  comandasEstado: 'cargando' | 'ok' | 'error'
   ingredientes: Ingrediente[]
   clasificaciones: ClasificacionDieta[]
   loading: boolean
@@ -13,6 +17,7 @@ interface MenuStore {
 
   fetchItems: (restauranteId: string) => Promise<void>
   fetchCategorias: (restauranteId: string) => Promise<void>
+  fetchComandas: (restauranteId: string) => Promise<void>
   fetchIngredientes: (restauranteId: string) => Promise<void>
   fetchClasificaciones: (restauranteId: string) => Promise<void>
 
@@ -39,9 +44,14 @@ interface MenuStore {
   clearError: () => void
 }
 
+/** Número del último `fetchComandas`: solo el pedido más nuevo puede escribir su resultado. */
+let ultimoPedidoDeComandas = 0
+
 export const useMenuStore = create<MenuStore>()((set) => ({
   items: [],
   categorias: [],
+  comandas: null,
+  comandasEstado: 'cargando',
   ingredientes: [],
   clasificaciones: [],
   loading: false,
@@ -59,6 +69,20 @@ export const useMenuStore = create<MenuStore>()((set) => ({
     try { set({ categorias: await api.categorias.list(restauranteId) }) }
     catch (e) { set({ error: e instanceof Error ? e.message : 'Error al cargar categorías' }) }
     finally { set({ loading: false }) }
+  },
+
+  // Es un dato accesorio del formulario del plato: si falla no rompe la pantalla ni toca `error`; deja null.
+  // Arranca en null para que la lista del restaurante anterior no quede mientras llega la nueva.
+  fetchComandas: async (restauranteId) => {
+    const pedido = ++ultimoPedidoDeComandas
+    set({ comandas: null, comandasEstado: 'cargando' })
+    try {
+      const lista = await api.comandas.listar(restauranteId)
+      // La respuesta (de éxito o de error) de un pedido anterior no pisa la de uno más nuevo.
+      if (pedido === ultimoPedidoDeComandas) set({ comandas: lista, comandasEstado: 'ok' })
+    } catch {
+      if (pedido === ultimoPedidoDeComandas) set({ comandas: null, comandasEstado: 'error' })
+    }
   },
 
   fetchIngredientes: async (restauranteId) => {

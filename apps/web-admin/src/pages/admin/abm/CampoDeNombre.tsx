@@ -1,10 +1,12 @@
 import type { ReactNode } from 'react'
 import { campo, etiquetaCampo, mensajeDeFalla } from '../asistente/estilos'
-import { MAXIMO_NOMBRE_DE_CAJA } from './nombre'
 
 interface CampoDeNombreProps {
   /** La base de los ids del campo y de su error (un `useId` de quien lo usa). */
   id: string
+  /** La etiqueta del campo ("Nombre de la caja"). */
+  etiqueta: string
+  maximo: number
   valor: string
   /** El error del nombre, junto al campo; null si no hay. */
   error: string | null
@@ -16,21 +18,21 @@ interface CampoDeNombreProps {
 }
 
 /**
- * El nombre de una caja (#360), en el alta y al renombrar: hasta 60 caracteres, con su error asociado al campo. Es dueño
- * de la fila: el campo y las acciones van juntos y el error va debajo, así los botones no se mueven cuando aparece.
+ * El nombre de un ítem del ABM, en el alta y al renombrar, con su error asociado al campo. Es dueño de la fila: el campo
+ * y las acciones van juntos y el error va debajo, así los botones no se mueven cuando aparece.
  */
-export function CampoDeNombre({ id, valor, error, onChange, placeholder, autoFocus, children }: CampoDeNombreProps) {
+export function CampoDeNombre({ id, etiqueta, maximo, valor, error, onChange, placeholder, autoFocus, children }: CampoDeNombreProps) {
   return (
     <div className="flex flex-col gap-1">
       <div className="flex flex-wrap items-end gap-2">
         <div style={{ flex: 1, minWidth: 0, maxWidth: 360 }}>
-          <label htmlFor={`${id}-nombre`} style={etiquetaCampo}>Nombre de la caja</label>
+          <label htmlFor={`${id}-nombre`} style={etiquetaCampo}>{etiqueta}</label>
           <input
             id={`${id}-nombre`}
             type="text"
             style={campo}
             value={valor}
-            maxLength={MAXIMO_NOMBRE_DE_CAJA}
+            maxLength={maximo}
             placeholder={placeholder}
             autoFocus={autoFocus}
             onChange={(e) => onChange(e.target.value)}

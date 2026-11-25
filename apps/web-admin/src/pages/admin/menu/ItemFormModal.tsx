@@ -47,7 +47,7 @@ interface IngredienteLocal {
 export function ItemFormModal({ open, onClose, item, canDelete }: Props) {
   const { selectedRestauranteId } = useContextStore()
   const {
-    categorias, clasificaciones,
+    categorias, comandas, comandasEstado, clasificaciones,
     ingredientes: ingredientesStore,
     createItem, updateItem, deleteItem,
     uploadItemImage, deleteItemImage,
@@ -55,6 +55,22 @@ export function ItemFormModal({ open, onClose, item, canDelete }: Props) {
   } = useMenuStore()
 
   const isEdit = item !== null
+
+  /* ── comanda: activas por nombre + la actual del plato aunque esté inactiva o no venga en la lista ── */
+  // Los specs que mockean la tienda pueden no traer `comandasEstado`: ahí manda si hay lista.
+  const estadoComandas: 'cargando' | 'ok' | 'error' = comandasEstado ?? (Array.isArray(comandas) ? 'ok' : 'error')
+  const cargandoComandas = estadoComandas === 'cargando'
+  const comandasCargadas = estadoComandas === 'ok'
+  const comandaOriginal  = item?.comandaId ?? ''
+  const restauranteDelPlato = item?.restauranteId ?? selectedRestauranteId
+  const comandasDelLocal = (comandas ?? []).filter((c) => c.restauranteId === restauranteDelPlato)
+  const opcionesComanda: { id: string; texto: string }[] = comandasDelLocal
+    .filter((c) => c.activa || c.id === comandaOriginal)
+    .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
+    .map((c) => ({ id: c.id, texto: c.activa ? c.nombre : `${c.nombre} (inactiva)` }))
+  if (!cargandoComandas && comandaOriginal && !comandasDelLocal.some((c) => c.id === comandaOriginal)) {
+    opcionesComanda.push({ id: comandaOriginal, texto: 'Comanda no disponible' })
+  }
   const idCampo       = useId()
   const fileInputRef  = useRef<HTMLInputElement>(null)
   const ingSearchRef  = useRef<HTMLDivElement>(null)
@@ -63,6 +79,7 @@ export function ItemFormModal({ open, onClose, item, canDelete }: Props) {
   const [nombre, setNombre]           = useState('')
   const [descripcion, setDescripcion] = useState('')
   const [categoriaId, setCategoriaId] = useState('')
+  const [comandaId, setComandaId]     = useState('')   // '' = sin comanda
   const [precio, setPrecio]           = useState('')
 
   /* ── image state ── */
@@ -100,6 +117,7 @@ export function ItemFormModal({ open, onClose, item, canDelete }: Props) {
       setNombre(item.nombre)
       setDescripcion(item.descripcion ?? '')
       setCategoriaId(item.categoriaId ?? '')
+      setComandaId(item.comandaId ?? '')
       setPrecio(String(item.precioBase))
       setPreviewUrl(item.imagenUrl ?? null)
       setSelectedClasificaciones(
@@ -112,6 +130,7 @@ export function ItemFormModal({ open, onClose, item, canDelete }: Props) {
       setNombre('')
       setDescripcion('')
       setCategoriaId(categorias[0]?.id ?? '')
+      setComandaId('')
       setPrecio('')
       setPreviewUrl(null)
       setSelectedClasificaciones([])
@@ -376,6 +395,8 @@ export function ItemFormModal({ open, onClose, item, canDelete }: Props) {
           nombre:      trimmedNombre,
           descripcion: descripcion.trim() || undefined,
           categoriaId: categoriaId || null,
+          // Solo si cambió: así una comanda hoy inactiva (o que no vino del servidor) se conserva al editar otros campos.
+          ...(comandaId !== comandaOriginal ? { comandaId: comandaId || null } : {}),
           precioBase:  precioNum,
           // Van todos, con null en los vacíos: así vaciar un campo lo borra.
           ...datosParaGuardar(datosAsistente),
@@ -387,6 +408,7 @@ export function ItemFormModal({ open, onClose, item, canDelete }: Props) {
           nombre:        trimmedNombre,
           descripcion:   descripcion.trim() || undefined,
           categoriaId:   categoriaId || undefined,
+          comandaId:     comandaId || undefined,
           precioBase:    precioNum,
           disponible:    true,
         })
@@ -603,6 +625,40 @@ export function ItemFormModal({ open, onClose, item, canDelete }: Props) {
               <select id={`${idCampo}-categoria`} value={categoriaId} onChange={(e) => setCategoriaId(e.target.value)} style={inputSt}>
                 {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
               </select>
+            )}
+          </div>
+
+          {/* 4b. Comanda */}
+          <div>
+            <label htmlFor={`${idCampo}-comanda`} style={labelSt}>Comanda</label>
+            {comandasCargadas && opcionesComanda.length === 0 ? (
+              <p style={{ margin: 0, fontSize: 13, color: '#9ca3af' }}>
+                No hay comandas. Creá una desde Comandas.
+              </p>
+            ) : (
+              <>
+                <select
+                  id={`${idCampo}-comanda`}
+                  value={cargandoComandas ? '' : comandaId}
+                  onChange={(e) => setComandaId(e.target.value)}
+                  disabled={!comandasCargadas}
+                  style={inputSt}
+                >
+                  {cargandoComandas ? (
+                    <option value="">Cargando comandas…</option>
+                  ) : (
+                    <>
+                      <option value="">Sin comanda</option>
+                      {opcionesComanda.map((o) => <option key={o.id} value={o.id}>{o.texto}</option>)}
+                    </>
+                  )}
+                </select>
+                {estadoComandas === 'error' && (
+                  <p style={{ margin: '4px 0 0', fontSize: 13, color: '#9ca3af' }}>
+                    No se pudieron cargar las comandas.
+                  </p>
+                )}
+              </>
             )}
           </div>
 
