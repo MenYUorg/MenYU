@@ -81,7 +81,11 @@ Con `caja-owner` o `caja-gerente` en web-staff: el selector, "Cocina". **La coci
   - Volver a Barra, "Listo" y "Confirmar": el pedido avanza entero.
 - [ ] **D7 "Listo" sin confirmación.** En **Cocina**, el pedido de la mesa 2 (solo Cocina): "Listo" avanza directo, sin aviso.
 - [ ] **D8 Se recuerda la pestaña.** Elegir "Barra" y recargar la página: sigue en "Barra".
-- [ ] **D9 Pedido del mozo e impresión.** Con `caja-jefe`, en web-staff, "Toma de pedidos", en la **mesa 1** (sesión abierta): tomar un pedido con "Plato de prueba" y "Plato de prueba 500". Entra directo a "En preparación": en la cocina, en "Barra", aparece solo la bebida con "+1 de otras comandas" y suena. **Impresión (solo si hay impresora configurada):** en "Barra" imprime solo la bebida; en "Todas", el pedido completo. La cocina imprime únicamente los pedidos que **nacen** en "En preparación" (los del mozo): los del comensal no se imprimen al pasarlos a "En preparación". Sin impresora, marcar "no aplica" en la parte de impresión.
+- [ ] **D9 Pedido del mozo.** Con `caja-jefe`, en web-staff, "Toma de pedidos", en la **mesa 1** (sesión abierta): tomar un pedido con "Plato de prueba" y "Plato de prueba 500". Entra directo a "En preparación": en la cocina, en "Barra", aparece solo la bebida con "+1 de otras comandas" y suena.
+- [ ] **D10 Impresión (solo si hay impresora; si no, "no aplica").** Hay **dos pantallas** que imprimen, cada una en el navegador donde se apretó "Conectar impresora" (WebUSB: se conecta por pestaña y se pierde al recargar):
+  - **Pedidos** (`/mozo/pedidos`) imprime **cada pedido nuevo, completo y sin filtro**, en el momento en que se crea, sea cual sea su estado: el del comensal (todavía Pendiente) y el del mozo. Es el comportamiento de siempre y **no pasa por las pestañas de comanda**. Con una impresora conectada ahí: el pedido de D2 salió impreso con los dos platos al crearse, **no** al pasarlo a "En preparación".
+  - **Cocina** imprime solo los pedidos que **nacen** en "En preparación" (los del mozo, como el de D9), y ahí sí con el filtro: en "Barra" imprime solo la bebida; en "Todas", el pedido completo. Los del comensal no los imprime: llegan Pendientes (la cocina los ignora) y, al pasarlos a "En preparación", no se imprime nada.
+  - Con una impresora conectada en cada pantalla, el pedido de D9 sale en las dos (en Pedidos completo y en Cocina filtrado).
 
 ## E. La comanda queda guardada en el pedido (#492)
 
@@ -118,6 +122,7 @@ Con `caja-owner` o `caja-gerente` en web-staff: el selector, "Cocina". **La coci
 
 - **Un plato con una comanda inactiva** ("Barra (inactiva)" en el selector): no se puede llegar desde la app, porque el backend no deja desactivar una comanda con platos asignados. Lo cubren los tests del PR 3.
 - **El error de largo máximo del nombre** (A4): el campo no deja escribir más de 40 caracteres. Lo cubren los tests.
+- **Impresión por comanda de los pedidos del comensal:** la pantalla Pedidos, que es la que imprime esos pedidos al crearse, los saca completos; el filtro por comanda solo existe en la impresión de Cocina, que no imprime los pedidos del comensal. Es el comportamiento de hoy y no cambió con #344 (D10); es una decisión pendiente, no un fallo de esta pasada.
 - **"Listo" por comanda:** quedó fuera del alcance; el "Listo" sigue siendo por pedido (límite conocido).
 - **Las pestañas no se actualizan solas** cuando se crea o desactiva una comanda: hace falta "Actualizar" o recargar (límite conocido).
 
