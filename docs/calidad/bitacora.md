@@ -2069,3 +2069,63 @@ Horas en ART (UTC − 3). Staging corría `ee4415b`, el merge del #483; después
 **Merge:** 24/11 a las 18:47 ART (`db15dd7`). El deploy de staging `45494576260` dio verde. El CI de `main` estaba en curso al escribir esto.
 
 **Pendiente al retomar:** el mismo de la entrada anterior del 24/11.
+
+### 25/11/2026: #344, las comandas en el backend (PR 1 #491 y PR 2 #492)
+
+**El pedido de Coty:** clasificar los platos por comanda (por ejemplo Cocina y Barra), que cada ítem del pedido llegue a cocina con la suya y que la cocina filtre por pestañas. El issue #344 ("[S14] Posibilidad de clasificar producto segun comanda") estaba vacío, solo con el título: el alcance salió del mensaje de Coty. Se hizo primero el diseño (`arquitecto`, solo lectura) y Coty lo aprobó con cuatro cambios, antes de abrir ramas.
+
+**Cuatro PR chicos** (el #344 se cierra con el último; todos dicen "Refs #344"):
+
+| PR | Qué | Estado |
+|---|---|---|
+| #491 | Backend: CRUD de comandas y `comandaId` nullable en los ítems | Mergeado el 25/11 a las 14:09 ART (`e38d288`) |
+| #492 | Backend: la comanda en `pedido_item` | Mergeado el 25/11 a las 14:49 ART (`a8bd0fb`) |
+| PR 3 | web-admin: pantalla `/admin/comandas` y selector en el formulario del plato | Sin empezar |
+| PR 4 | Cocina en web-staff: pestañas por comanda | En curso, rama `feat/cocina-por-comanda` (sin PR abierto al escribir esto) |
+
+**Decisiones de Coty** (sobre el diseño):
+- La comanda se guarda **en `pedido_item` al crear el pedido** (solo el id), como el precio: cambiar la comanda de un plato después no mueve los pedidos ya creados.
+- `GET /comandas` lo puede leer todo el personal (la cocina arma las pestañas con él); crear y modificar, solo OWNER y GERENTE.
+- Desactivar una comanda con platos asignados da **409**.
+- La pantalla de comandas va en la sección CATÁLOGO de web-admin, aparte de "Gestionar catálogo".
+- El nombre es único por restaurante, sensible a mayúsculas como las cajas, con trim al crear y renombrar.
+- Impresión en una pestaña filtrada: solo los ítems de esa comanda. "Listo" sigue siendo por pedido y, en una pestaña filtrada, pide confirmación si el pedido tiene ítems de otras comandas.
+- Sobre la duplicación del PR 3 (generalizar los componentes de `cajas/` o copiarlos): se decide al llegar.
+
+**PR 1, #491** (migración `20261125103231_comanda_activa_y_nombre_unico`):
+- `Comanda` gana `activa` y `@@unique([restauranteId, nombre])`. Módulo `src/comandas/`: `GET /comandas?restauranteId=`, `POST /comandas` y `PATCH /comandas/:id` (`{nombre?, activa?}`); no hay DELETE.
+- En `items.service.ts`: 400 al asignar una comanda desactivada (dejarle al plato la misma al editarlo, aunque esté desactivada, no falla) y `PATCH /items/:id` acepta `comandaId: null`.
+- 6 mutaciones de control, todas detectadas por unitarios y e2e. Conteos: backend unitarias 2832 → 2895 y backend integración 194 → 207; el resto, igual.
+- **El CI falló dos veces con el mismo test**, no con el código del PR: `ItemFormModal.spec.tsx` de web-admin ("lo crea con imagen, dietas e ingredientes y se cierra") dio `Test timed out in 5000ms` en los runs `45655884483` y `45658507749`. En el CI ese caso tarda entre 2,8 y 3,8 s, y el archivo entero entre 23 y 33 s contra 1,6 s en local. Se le dio margen (`20_000`) en un commit aparte del mismo PR (`cf15689`), como se había hecho con `CajaPage`. Puede haber otros casos largos de web-admin con el mismo riesgo.
+- Alguien integró `main` en la rama del PR desde GitHub mientras se trabajaba: el push fue rechazado (no fast-forward) y se resolvió con merge, nunca con rebase ni force-push.
+
+**PR 2, #492** (migración `20261125140933_pedido_item_comanda`: columna `comanda_id` nullable con FK `ON DELETE SET NULL`):
+- Se guarda en los tres caminos que crean pedidos: `POST /orders` (web-cliente), `POST /pedidos` y `POST /pedidos/staff`. Los ítems de antes quedan en `null`, que la cocina muestra en todas las pestañas.
+- **Hallazgo:** `confirmar` y `crearStaff` (`pedidos.service.ts`) no crean el `pedido_item` desde `dbItem`: arman primero un array intermedio, `itemsData`, y el create lee de ahí. Si `comandaId` no pasa por ese array (tipo, `push` y create), queda `undefined` y se guarda `null` **sin error**. Por eso el tipo de `itemsData` lo exige y el e2e `comanda-del-pedido.e2e-spec.ts` (13 casos) cubre los tres caminos, no uno.
+- Los eventos de socket y `GET /pedidos` llevan `comandaId` sin cambiar de forma: todas las consultas usan `items: { include }`, sin `select` sobre `pedido_item`.
+- 7 mutaciones de control, todas detectadas. La de que las lecturas lean la comanda del plato en vez de la del `pedido_item` la detecta solo el e2e: no hay unitario propio de lectura. Las dos de `itemsData` no compilan tal cual (el tipo ya las ataja).
+- Conteos: backend unitarias 2895 → 2898 y backend integración 207 → 220; el resto, igual. Gate de Sonar `OK`, 1,5 % de duplicación y 0 violaciones nuevas.
+
+**Consultas previas a la migración 1, en staging** (solo lectura): 6 comandas, 0 nombres repetidos y 60 platos con comanda. Las 6 son "Barra" y "Cocina" de los restaurantes de demostración r-001, r-002 y r-003; "Restaurante Pruebas Auth" no tiene. Con el 409, esas comandas no se pueden desactivar mientras tengan platos asignados, y el PR 4 va a mostrar pestañas en esos restaurantes apenas se despliegue.
+
+**Antes de taggear a producción (paso obligatorio):** correr en producción, de solo lectura, y anotar el resultado acá:
+```sql
+SELECT count(*) FROM comanda;
+SELECT restaurante_id, nombre, count(*) FROM comanda GROUP BY 1, 2 HAVING count(*) > 1;  -- tiene que dar 0 filas
+SELECT count(*) FROM item_menu WHERE comanda_id IS NOT NULL;
+```
+Si la segunda devuelve filas, la migración del #491 falla: hay que renombrar esas comandas antes de desplegar.
+
+**Deuda anotada:** `comandas.service.ts` importa `esUnicoViolado` y `traducirOperacionSimultanea` de `../caja/conflictos`. Moverlos a `common/` es un refactor aparte.
+
+**Cosas que conviene recordar:**
+- Para los e2e sueltos: Postgres descartable en el 5434 (`postgres:17.6`, `test`/`test`, base `menyu_test` y una `sombra` para el drift). `pnpm test:integracion` levanta y borra el suyo en el mismo puerto: hay que bajar antes el que esté usando el 5434.
+- El chequeo de drift contra Postgres real: `prisma migrate diff --from-migrations prisma/migrations --to-schema-datamodel prisma/schema.prisma --shadow-database-url postgresql://test:test@localhost:5434/sombra --exit-code`.
+- `pnpm turbo test` con todos los paquetes en paralelo da timeouts de 5 s por carga de CPU: para medir, un paquete por vez.
+- Un subagente no pudo borrar un worktree temporal (el clasificador de permisos bloqueó el comando): se borró desde la sesión principal.
+
+**Pendiente al retomar** (en este orden):
+1. **PR 4 (cocina por comanda):** seguir la rama `feat/cocina-por-comanda`. Hecho el paso 1 (utilidades puras con sus specs); sigue el paso 2 (pestañas y filtro en `CocinaPage`), el 3 (sonido, impresión y confirmación de "Listo") y el 4 (mutaciones, suite completa y PR).
+2. **PR 3 (web-admin):** pantalla `/admin/comandas` y selector de comanda; decidir ahí lo de la duplicación con `cajas/`. Sin él nadie puede asignar ni cambiar comandas desde la app. El #344 se cierra con el último PR.
+3. **Antes del tag de producción:** las tres consultas de arriba, con su resultado anotado.
+4. **Lo del 24/11, que sigue:** la sección F y el 6.5 (después, decidir el tag de producción); el `BASE_URL` de staging en `docs/auth/VariablesACambiar.md`; la corrida de E2E — staging; 0.3 y DT-02 (`MP_WEBHOOK_SECRET` y el PR C); y los puntos 5 a 7 del pendiente del 21/11.
