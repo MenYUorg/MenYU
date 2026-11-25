@@ -2129,3 +2129,75 @@ Si la segunda devuelve filas, la migración del #491 falla: hay que renombrar es
 2. **PR 3 (web-admin):** pantalla `/admin/comandas` y selector de comanda; decidir ahí lo de la duplicación con `cajas/`. Sin él nadie puede asignar ni cambiar comandas desde la app. El #344 se cierra con el último PR.
 3. **Antes del tag de producción:** las tres consultas de arriba, con su resultado anotado.
 4. **Lo del 24/11, que sigue:** la sección F y el 6.5 (después, decidir el tag de producción); el `BASE_URL` de staging en `docs/auth/VariablesACambiar.md`; la corrida de E2E — staging; 0.3 y DT-02 (`MP_WEBHOOK_SECRET` y el PR C); y los puntos 5 a 7 del pendiente del 21/11.
+
+### 25/11/2026 (tarde): #344 cerrado, con la cocina por comanda (PR 4 #494) y la gestión de comandas en web-admin (PR 3 #495)
+
+**Cierre:** el #494 se mergeó el 25/11 a las 15:33 ART (`6f78527`) y el #495 a las 16:24 ART (`4f066a1`). El #344 se cerró solo a las 16:24 ART, por el "Closes #344" del #495. Los cuatro PR pasaron el CI y el gate de Sonar. La entrada de la mañana tiene los PR 1 y 2.
+
+| PR | Qué | Mergeado (ART) |
+|---|---|---|
+| #491 | Backend: CRUD de comandas | 14:09 (`e38d288`) |
+| #492 | Backend: la comanda en `pedido_item` | 14:49 (`a8bd0fb`) |
+| #494 | Cocina en web-staff: pestañas por comanda | 15:33 (`6f78527`) |
+| #495 | web-admin: pantalla `/admin/comandas` y selector de comanda | 16:24 (`4f066a1`) |
+
+**PR 4, #494: la cocina por comanda en web-staff**
+- **Pestañas:** "Todas" más una por comanda activa (`GET /comandas`), como botones con `aria-pressed` dentro de un grupo "Filtrar por comanda" (no `role="tablist"`, para no tener que implementar el patrón completo de teclado). Sin comandas activas no hay pestañas; si la petición falla, se ve todo, sin banner de error. La pestaña se recuerda por dispositivo y restaurante (`menyu-staff-comanda:<restauranteId>`); si la guardada ya no está activa, vuelve a "Todas" al renderizar.
+- **Regla de visibilidad**, una función pura con sus tests (`utils/comandasDeCocina.ts`): un ítem se ve si la pestaña es "Todas", si coincide su comanda, si no tiene comanda o si su comanda no está entre las activas. Nunca queda un plato sin pantalla.
+- **La tarjeta** muestra solo los ítems visibles y "+N de otras comandas" (N cuenta líneas no eliminadas); el badge "Editado" se calcula sobre los visibles; los conteos del header y de las columnas cuentan lo visible.
+- **Sonido e impresión:** un pedido sin ítems visibles en la pestaña actual no se lista, no suena y no se imprime. La regla se evalúa sobre el pedido ya recibido, o sea después de una edición (un pedido solo de Cocina que suma un ítem de Barra suena "editado" en Barra). En una pestaña filtrada se imprime una copia con solo los ítems visibles; en "Todas", el pedido completo.
+- **"Listo" sigue siendo por pedido.** En una pestaña filtrada, si arrastra ítems de otras comandas, pide confirmación en la tarjeta ("Vas a marcar listo todo el pedido, incluidos N ítems de Cocina"); sin ítems ocultos vigentes avanza directo. El efecto del socket sigue suscribiéndose una sola vez por restaurante: la pestaña y las comandas se leen por `ref`.
+- **"Todas" se comporta como antes del PR**, también con un pedido sin ítems. Al revisar el paso 3 se vio que `tieneAlgoVisible` daba `false` con la lista vacía y ese pedido desaparecía de "Todas"; se corrigió para que con "Todas" dé siempre `true`, con su test de los tres efectos (se lista, suena e imprime).
+- **Arreglo aparte, fuera del alcance de #344:** una respuesta tardía de `GET /pedidos` de un restaurante anterior (en el éxito y en el error) podía pisar los pedidos del actual o mostrar un banner de error ajeno. `fetchAll` ahora descarta la respuesta si el restaurante cambió, con sus dos tests de promesas diferidas. Está descrito en el PR como arreglo aparte.
+- **Tests:** web-staff pasa de 27 archivos y 561 tests a 29 y 633 (+72). El resto de las suites, sin cambios.
+- **Sonar:** gate `OK`; cobertura en código nuevo 98,5 % (204 líneas a cubrir, 1 sin cubrir); duplicación 0,0 %; 0 violaciones y 0 hotspots.
+
+**Mutaciones de control del PR 4: 20, con 19 detectadas y 1 equivalente** (sobre copia, restauradas byte a byte con `cmp`):
+
+| Grupo | Mutaciones | Resultado |
+|---|---|---|
+| Visibilidad (`comandasDeCocina.ts`) | M1 sacar `comandaId === null`; M2 sacar "no está entre las activas"; M3 `pestaniaVigente` acepta una inactiva; M4 `ocultosVigentes` cuenta las eliminadas; M6 "Todas" con un pedido vacío da `false` | M2, M3, M4 y M6 detectadas (6, 2, 6 y 2 tests). **M1, equivalente**: `null` nunca está entre las activas, así que sin esa condición el resultado es el mismo; solo la ataja `tsc` |
+| Clave recordada | M5 sin `restauranteId` en la clave | Detectada (3) |
+| Sonido e impresión | M7 `order:new` suena e imprime sin la condición; M8 imprime siempre el pedido completo; M9, M10 y M11 suenan sin condición en `updated`, `anulado` y `editado`; M12 evalúa "editado" sobre el pedido anterior a la edición | Las 6 detectadas; M12 la ataja el test del pedido solo de Cocina que suma un ítem de Barra |
+| Confirmación y badge | M13 sin confirmación; M14 confirmación sin ítems ocultos; M15 "Editado" sobre todos los ítems | Las 3 detectadas (5, 2 y 1) |
+| Guardas de respuesta vieja | M16 comandas; M17 y M18 `fetchAll` en el éxito y en el error | Las 3 detectadas (2, 1 y 1) |
+| Filtro y "+N" | M19 sin filtro; M20 "+N" con la cantidad de ocultos | Las 2 detectadas (8 y 1) |
+
+**PR 3, #495: la gestión de comandas en web-admin**
+- **Pantalla `/admin/comandas`** (CATÁLOGO, debajo de "Menú", OWNER y GERENTE, con el ícono `ChefHat`, porque `ClipboardList` ya lo usa "Pedidos" del GERENTE): listar, crear, renombrar, activar y desactivar. El 409 de nombre repetido va junto al campo; el de platos asignados se muestra en la fila, relee y cierra la confirmación. El nombre admite hasta 40 caracteres y se recorta.
+- **Selector de comanda en `ItemFormModal`**, debajo de Categoría: "Sin comanda" y las activas. Al editar, `comandaId` se manda solo si cambió. Un plato con una comanda hoy inactiva la muestra como "Barra (inactiva)" y la conserva al guardar sin cambios; una comanda que ya no viene del backend se muestra como "Comanda no disponible". La lista tiene **tres estados** (`menuStore.comandasEstado`): cargando ("Cargando comandas…", sin aviso de error), error ("No se pudieron cargar las comandas.") y ok; en cargando y en error el select va deshabilitado y no se manda `comandaId`. `fetchComandas` descarta la respuesta de una llamada anterior (cambio de restaurante), con tests de promesas diferidas.
+- **El ABM de cajas se generalizó** en `pages/admin/abm/` (opción A): la pantalla, la fila, el alta, el campo del nombre, la lectura del nombre y la clasificación de errores, parametrizados por una configuración (`cajas/config.ts` y `comandas/config.ts`, esta última sin bloqueo). `cajas/errores.ts` y `cajas/nombre.ts` quedan como envoltorios con las mismas exportaciones; para que tomen la configuración sin un import circular, las constantes y `CONFIG_DE_CAJAS` viven en `cajas/config.ts`.
+- **Comparación del DOM de cajas, 36 estados:** como la UX de cajas se rehízo hace poco, antes de tocar nada se capturó en `main` el `innerHTML` y el foco de cada estado de la pantalla con un spec temporal (los `useId` normalizados), y se comparó después de generalizar. Son 30 de la lista armada de antemano (con sus variantes) más 6 que se sumaron al leer el código (409 de caja abierta, error general y 61 caracteres al renombrar, cancelar la confirmación, alta con texto sin enviar y foco tras guardar sin cambios): carga, error con y sin mensaje, vacío, lista, caja abierta, abiertas ilegibles, cada error del alta, cada error al renombrar, activar, desactivar con confirmación, errores de fila y 4 de foco. La captura del código viejo, corrida dos veces, salió idéntica. **Resultado: idéntico en 35 de 36.** La única diferencia es el estado de la caja abierta: el id del texto de ayuda pasó de `…-abierta` a `…-bloqueo`, igual en el `id` del `<p>` y en el `aria-describedby` del botón; no cambia lo que se ve ni el comportamiento, y Coty la aceptó expresamente. `CajasPage.spec.tsx`, `errores.spec.ts` y `nombre.spec.ts` no se tocaron.
+- **Tests:** web-admin pasa de 55 archivos y 1018 tests a 57 y 1090 (+72). El resto, sin cambios.
+- **Sonar:** gate `OK`; cobertura en código nuevo 99,5 % (472 líneas a cubrir, 3 sin cubrir, los métodos de `api.comandas` en `services/api.ts`); duplicación 0,0 % sobre 1.649 líneas nuevas. **Una violación nueva:** `S9379` (MAJOR, code smell) por el `autoFocus` de `abm/FilaDeAbm.tsx:117`, que ya tenía `FilaDeCaja` y que devuelve el foco al botón "Renombrar" al salir de la edición; el spec de cajas verifica ese foco. No se cambió, y el gate pasó.
+
+**Mutaciones de control del PR 3: 29, con 26 detectadas y 3 equivalentes:**
+
+| Grupo | Resultado |
+|---|---|
+| ABM común, A1 a A9: sacar el trim, ignorar el máximo, el 409 de nombre repetido como error general, el 409 de platos junto al campo, no releer tras el 409 de platos, sacar el guard de lectura vieja, desactivar sin confirmación, 404 sin releer, bloqueo de cajas siempre `null` | Las 9 detectadas |
+| Selector y store, S1 a S12: mandar siempre `comandaId`, ofrecer las inactivas, ocultar la inactiva actual, `undefined` en vez de `null`, forzar el envío con la lista sin cargar, habilitar el select sin lista, sacar el filtro por restaurante, el aviso de error durante la carga, "Comanda no disponible" durante la carga, sacar la guarda del store (entera, solo éxito y solo error), el alta sin `comandaId`, sacar "Comanda no disponible" | 14 detectadas y 2 equivalentes: **S8b** (sacar solo el guard del push: en cargando el select dibuja una única opción, así que "Comanda no disponible" nunca se ve) y **S12** (`value={comandaId}` en cargando: con una única opción de value `""` el resultado es el mismo) |
+| Ruta y menú, R1 a R4 | 3 detectadas (la entrada del menú de cada rol y el título) y 1 equivalente: **R1**, sacar el `RoleGuard` de `/admin/comandas` |
+
+**Deudas anotadas** (también en la descripción del #495):
+- `abm/` importa `../cajas/estilos` (las pastillas), igual que ya hacía Turnos. Mover `estilos.ts` a un lugar neutro es un cambio aparte.
+- **El reconocimiento del 409 depende del texto exacto del mensaje del backend** (platos asignados, caja abierta y nombre repetido): si cambia la redacción, el frontend deja de releer o de mostrar el error junto al campo sin que ningún test lo detecte, porque los tests comparan contra una copia del mismo texto. La solución es un código de error en la respuesta.
+- El `RoleGuard` de `/admin/comandas` (como el de `/admin/cajas`) es redundante hoy con `SoloAdministracion`, porque `RolDeAdmin` es solo OWNER o GERENTE. Importaría si se suma un tercer rol.
+- El `S9379` de Sonar por el `autoFocus` (arriba): queda decidir si se marca en SonarCloud como falso positivo o se reemplaza por un `ref`.
+
+**Qué se ve al desplegar:** las 6 comandas de staging ("Barra" y "Cocina" de r-001, r-002 y r-003) tienen platos asignados (60), así que la cocina muestra pestañas apenas se despliegue. Los pedidos creados antes del #492 tienen `comandaId` en `null` y se ven en todas las pestañas. "Listo" sigue siendo por pedido y las pestañas no se actualizan solas ante un cambio de comandas (límites aceptados en el diseño).
+
+**Cosas que conviene recordar:**
+- **Para cuidar la UX de una pantalla antes de refactorizarla:** capturar el `innerHTML` y el foco de cada estado con un spec temporal en `main`, normalizar los ids de `useId` por orden de aparición, correrlo dos veces para ver que sea determinista y compararlo después. El spec se borra al terminar y los JSON quedan en el scratchpad.
+- La API pública de SonarCloud responde sin token para un PR: `https://sonarcloud.io/api/qualitygates/project_status?projectKey=MenYUorg_MenYU&pullRequest=<N>`, más `api/measures/component` y `api/issues/search` con `pullRequest`. `jscpd` no está disponible sin instalar, así que la duplicación solo se ve en Sonar después del CI.
+- Para mutar un archivo en CRLF, `sed -i` lo pasa a LF: usar un script de Node que preserve CRLF, trabajar sobre una copia respaldada y verificar con `cmp`.
+- Los tests de los frontends se corren de a un paquete, nunca con `turbo test` en paralelo.
+
+**Pendiente al retomar** (en este orden):
+1. **Prueba manual de comandas en staging** (r-001, r-002 y r-003), con Coty:
+   - En web-admin, `/admin/comandas`: crear, renombrar, el 409 de nombre repetido, desactivar una comanda con platos (409 con el N) y una sin platos.
+   - En el formulario del plato: asignar una comanda, "Sin comanda" y un plato con una comanda inactiva.
+   - En la cocina de web-staff: un pedido con ítems de Cocina y de Barra, las pestañas, el "+N de otras comandas", "Listo" con confirmación, el sonido, la impresión y que la pestaña se recuerde. Un pedido anterior al #492 se tiene que ver en todas.
+2. **Antes del tag de producción (paso obligatorio):** las tres consultas de solo lectura de la entrada de la mañana (comandas existentes, nombres repetidos por restaurante, platos con comanda), con su resultado anotado. Las migraciones del #344 son `20261125103231` y `20261125140933`; si la de nombres repetidos devuelve filas, hay que renombrarlas antes de desplegar.
+3. **Las deudas del #344:** el código de error en las respuestas 409 (backend y frontend), mover `cajas/estilos.ts` a un lugar neutro y decidir lo del `autoFocus` en Sonar.
+4. **Lo del 24/11, que sigue:** la sección F y el 6.5 (después, decidir el tag de producción); el `BASE_URL` de staging en `docs/auth/VariablesACambiar.md`; la corrida de E2E — staging; 0.3 y DT-02 (`MP_WEBHOOK_SECRET` y el PR C); y los puntos 5 a 7 del pendiente del 21/11.
