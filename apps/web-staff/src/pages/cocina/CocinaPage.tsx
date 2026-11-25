@@ -13,7 +13,8 @@ import {
   tieneAlgoVisible,
 } from '../../utils/comandasDeCocina'
 import type { Pestania } from '../../utils/comandasDeCocina'
-import { imprimirPedido, conectarImpresora, impresoraConectada } from '../../services/impresora'
+import { imprimirPedido, conectarImpresora, impresoraConectada, testPrint } from '../../services/impresora'
+import { marcarEntrada, sembrarEntradas } from '../../utils/entradasACocina'
 
 // ── Palette & WS ──────────────────────────────────────────────────────────────
 const C = {
@@ -288,6 +289,8 @@ export function CocinaPage() {
   const restauranteIdRef = useRef(restauranteId)
   const pestaniaRef = useRef<Pestania>(null)
   const activasRef = useRef<string[]>([])
+  // Pedidos que ya entraron a cocina en esta pantalla: decide fuera de React la primera entrada (sonido e impresion).
+  const yaEntraron = useRef<Set<string>>(new Set())
 
   const fetchAll = useCallback(async () => {
     if (!restauranteId) return
@@ -299,6 +302,7 @@ export function CocinaPage() {
         api.pedidos.getByRestaurante(restauranteId, { estado: 'listo' }),
       ])
       if (restauranteIdRef.current !== restauranteId) return   // respuesta de un restaurante anterior
+      sembrarEntradas(yaEntraron.current, [...enPrep, ...listos].map((p) => p.id))
       setPedidos([...enPrep, ...listos])
     } catch {
       if (restauranteIdRef.current === restauranteId) setError('No se pudieron cargar los pedidos.')
@@ -328,6 +332,22 @@ export function CocinaPage() {
 
   useEffect(() => { restauranteIdRef.current = restauranteId }, [restauranteId])
 
+  // Antes de los efectos de carga y de socket: al cambiar de restaurante arranca un registro vacio.
+  useEffect(() => { yaEntraron.current.clear() }, [restauranteId])
+
+  // Un pedido entra a cocina UNA vez por pantalla: suena e imprime (solo los items de la pestania de este dispositivo)
+  // la primera vez. Solo usa refs: puede llamarse desde el socket sin volver a suscribirse.
+  const alEntrarACocina = useCallback((pedido: PedidoRico) => {
+    if (!marcarEntrada(yaEntraron.current, pedido.id)) return
+    if (!tieneAlgoVisible(pedido.items, pestaniaRef.current, activasRef.current)) return
+    playSound('nuevo')
+    if (pedido.estado !== 'en_preparacion') return
+    const paraImprimir = pestaniaRef.current === null
+      ? pedido
+      : { ...pedido, items: itemsParaImprimir(pedido.items, pestaniaRef.current, activasRef.current) }
+    imprimirPedido(paraImprimir).catch(console.error)
+  }, [])
+
   useEffect(() => { void fetchAll() }, [fetchAll])
 
   useEffect(() => {
@@ -347,27 +367,21 @@ export function CocinaPage() {
     const unsubNuevo = socketService.onPedidoNuevo((pedido: Pedido) => {
       const rico = pedido as unknown as PedidoRico
       if (!ESTADOS_COCINA.includes(rico.estado as EstadoPedido)) return
-      if (tieneAlgoVisible(rico.items, pestaniaRef.current, activasRef.current)) {
-        playSound('nuevo')
-        const paraImprimir = pestaniaRef.current === null
-          ? rico
-          : { ...rico, items: itemsParaImprimir(rico.items, pestaniaRef.current, activasRef.current) }
-        imprimirPedido(paraImprimir).catch(console.error)
-      }
+      alEntrarACocina(rico)
       setPedidos((prev) => prev.some((p) => p.id === rico.id) ? prev : [rico, ...prev])
     })
 
     const unsubActualizado = socketService.onPedidoActualizado((pedido: Pedido) => {
       const rico = pedido as unknown as PedidoRico
+      if (!ESTADOS_COCINA.includes(rico.estado as EstadoPedido)) {
+        setPedidos((prev) => prev.filter((p) => p.id !== rico.id))
+        return
+      }
+      // mozo avanzó pendiente → en_preparacion (sin efectos dentro del updater: StrictMode lo corre dos veces)
+      alEntrarACocina(rico)
       setPedidos((prev) => {
-        const estado = rico.estado as string
-        if (!ESTADOS_COCINA.includes(estado as EstadoPedido)) return prev.filter((p) => p.id !== rico.id)
         const idx = prev.findIndex((p) => p.id === rico.id)
-        if (idx === -1) {
-          // mozo avanzó pendiente → en_preparacion
-          if (tieneAlgoVisible(rico.items, pestaniaRef.current, activasRef.current)) playSound('nuevo')
-          return [rico, ...prev]
-        }
+        if (idx === -1) return [rico, ...prev]
         const next = [...prev]; next[idx] = rico; return next
       })
     })
@@ -402,7 +416,7 @@ export function CocinaPage() {
       unsubEditado()
       timers.forEach((t) => clearTimeout(t))
     }
-  }, [restauranteId])
+  }, [restauranteId, alEntrarACocina])
 
   const handleAvanzar = useCallback(async (id: string, nuevoEstado: EstadoPedido) => {
     setLoadingIds((prev) => new Set(prev).add(id))
@@ -469,10 +483,18 @@ export function CocinaPage() {
         )}
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
           {conectada ? (
-            <span style={{ fontSize: 11, color: '#86efac', display: 'flex', alignItems: 'center', gap: 4 }}>
-              <span style={{ width: 6, height: 6, background: '#4ade80', borderRadius: '50%', display: 'inline-block' }} />
-              Impresora
-            </span>
+            <>
+              <span style={{ fontSize: 11, color: '#86efac', display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span style={{ width: 6, height: 6, background: '#4ade80', borderRadius: '50%', display: 'inline-block' }} />
+                Impresora
+              </span>
+              <button
+                onClick={() => void testPrint().catch(console.error)}
+                style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 6, padding: '4px 8px', cursor: 'pointer', fontSize: 11, color: 'rgba(255,255,255,0.6)', fontFamily: 'Montserrat,sans-serif' }}
+              >
+                Test
+              </button>
+            </>
           ) : (
             <button
               onClick={() => void handleConectar()}
