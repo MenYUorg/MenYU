@@ -178,6 +178,7 @@ describe('ItemFormModal', () => {
       expect(onClose).not.toHaveBeenCalled()
     })
 
+    // Es el flujo más largo del archivo (imagen, dieta y dos ingredientes): con la cobertura activa en CI pasa los 5 s por defecto.
     it('lo crea con imagen, dietas e ingredientes y se cierra', async () => {
       abrir()
 
@@ -213,7 +214,7 @@ describe('ItemFormModal', () => {
       expect(itemsApi.addIngrediente).toHaveBeenCalledWith('nuevo-1', expect.objectContaining({ ingredienteId: 'ing-queso', esOriginal: true, esRemovible: true, esAgregable: false }))
       expect(itemsApi.addIngrediente).toHaveBeenCalledWith('nuevo-1', expect.objectContaining({ ingredienteId: 'ing-huevo', esOriginal: false, esAgregable: true, precioExtra: 350, cantidadMax: 3 }))
       expect(onClose).toHaveBeenCalled()
-    })
+    }, 20_000)
 
     it('un ingrediente sin marcar como removible ni agregable no deja crear', async () => {
       abrir()
