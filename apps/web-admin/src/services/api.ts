@@ -30,6 +30,7 @@ import type {
   PreguntaFrecuente,
   CajasAbiertas,
   CajaDelRestaurante,
+  Comanda,
   PaginaDeTurnos,
   ResumenDeTurno,
   TurnoDetalle,
@@ -109,6 +110,7 @@ export interface CreateItemInput {
   precioBase: number
   descripcion?: string
   categoriaId?: string
+  comandaId?: string
   disponible?: boolean
 }
 
@@ -118,6 +120,8 @@ export interface UpdateItemInput extends Partial<DatosDelPlatoParaElAsistente> {
   precioBase?: number
   descripcion?: string
   categoriaId?: string | null
+  /** null saca la comanda del plato; si no viene, no cambia. */
+  comandaId?: string | null
   disponible?: boolean
   esRecomendado?: boolean
 }
@@ -406,6 +410,18 @@ export const api = {
     /** Renombra, activa o desactiva una caja. Lo que no se pasa no viaja y no cambia. */
     actualizar: (id: string, cambios: { nombre?: string; activa?: boolean }) =>
       req<CajaDelRestaurante>('PATCH', `/cajas/${encodeURIComponent(id)}`, cambios),
+  },
+
+  comandas: {
+    /** Todas las comandas del restaurante, activas e inactivas, por nombre (#344). */
+    listar: (restauranteId: string) =>
+      req<Comanda[]>('GET', `/comandas?restauranteId=${encodeURIComponent(restauranteId)}`),
+    /** Crea una comanda. El backend recorta el nombre; 409 si ya hay una con ese nombre en el restaurante. */
+    crear: (restauranteId: string, nombre: string) =>
+      req<Comanda>('POST', '/comandas', { restauranteId, nombre }),
+    /** Renombra, activa o desactiva una comanda. Lo que no se pasa no viaja y no cambia; 409 al desactivar con platos asignados. */
+    actualizar: (id: string, cambios: { nombre?: string; activa?: boolean }) =>
+      req<Comanda>('PATCH', `/comandas/${encodeURIComponent(id)}`, cambios),
   },
 
   /** El historial de turnos de caja (#360), de solo lectura. */

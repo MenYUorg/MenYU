@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
-import type { ItemMenu } from '@menyu/types'
+import type { Comanda, ItemMenu } from '@menyu/types'
 import { api } from '../../../services/api'
 import { ItemFormModal } from './ItemFormModal'
 
@@ -8,7 +8,16 @@ vi.mock('../../../store/contextStore', () => ({
   useContextStore: () => ({ selectedRestauranteId: restauranteActual }),
 }))
 
+const COMANDAS: Comanda[] = [
+  { id: 'com-parrilla', restauranteId: 'rest-1', nombre: 'Parrilla', activa: true },
+  { id: 'com-cocina', restauranteId: 'rest-1', nombre: 'Cocina', activa: true },
+  { id: 'com-barra', restauranteId: 'rest-1', nombre: 'Barra', activa: false },
+  { id: 'com-otro', restauranteId: 'rest-2', nombre: 'Heladería', activa: true },
+]
+
 const tienda = {
+  comandas: COMANDAS as Comanda[] | null,
+  comandasEstado: 'ok' as 'cargando' | 'ok' | 'error' | undefined,
   categorias: [{ id: 'cat-1', nombre: 'Principales' }, { id: 'cat-2', nombre: 'Postres' }] as { id: string; nombre: string }[],
   clasificaciones: [{ id: 'cl-veg', nombre: 'Vegetariano' }, { id: 'cl-tacc', nombre: 'Sin TACC' }] as { id: string; nombre: string }[],
   ingredientes: [
@@ -89,6 +98,8 @@ const guardar = (texto: 'Crear plato' | 'Guardar cambios' | 'Guardar datos del a
 
 beforeEach(() => {
   vi.clearAllMocks()
+  tienda.comandas = COMANDAS
+  tienda.comandasEstado = 'ok'
   restauranteActual = 'rest-1'
   vi.stubGlobal('URL', Object.assign(URL, { createObjectURL: vi.fn(() => 'blob:preview') }))
   tienda.createItem.mockResolvedValue({ id: 'nuevo-1' })
@@ -541,6 +552,306 @@ describe('ItemFormModal', () => {
       expect(tienda.createItem).toHaveBeenCalledTimes(1)
       expect(tienda.updateItem).toHaveBeenCalledTimes(2)
       expect(onClose).toHaveBeenCalled()
+    })
+  })
+})
+
+describe('ItemFormModal — comanda', () => {
+  const comanda = () => screen.getByRole('combobox', { name: 'Comanda' }) as HTMLSelectElement
+  const opciones = () => Array.from(comanda().options).map((o) => o.textContent)
+  const elegir = (valor: string) => fireEvent.change(comanda(), { target: { value: valor } })
+  const payloadDeEdicion = () => tienda.updateItem.mock.calls[0][1] as Record<string, unknown>
+  const conComanda = (comandaId: string) => ({ ...MILANESA, comandaId }) as ItemMenu
+
+  it('el selector va debajo de Categoría, con "Sin comanda" y solo las activas del restaurante, por nombre', () => {
+    abrir()
+
+    expect(categoria().compareDocumentPosition(comanda()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(opciones()).toEqual(['Sin comanda', 'Cocina', 'Parrilla'])
+    expect(comanda()).toHaveValue('')
+    expect(comanda()).toBeEnabled()
+  })
+
+  describe('alta', () => {
+    it('elegir una comanda la manda en createItem', async () => {
+      abrir()
+
+      escribir(nombre(), 'Pizza')
+      escribir(precio(), '100')
+      elegir('com-cocina')
+      await guardar('Crear plato')
+
+      expect(tienda.createItem).toHaveBeenCalledWith(expect.objectContaining({ comandaId: 'com-cocina' }))
+    })
+
+    it('sin elegir no manda comandaId', async () => {
+      abrir()
+
+      escribir(nombre(), 'Pizza')
+      escribir(precio(), '100')
+      await guardar('Crear plato')
+
+      expect(tienda.createItem.mock.calls[0][0].comandaId).toBeUndefined()
+    })
+  })
+
+  describe('edición de un plato sin comanda', () => {
+    it('sin tocar la comanda, updateItem no lleva comandaId', async () => {
+      abrir(MILANESA)
+
+      escribir(nombre(), 'Milanesa napo')
+      await guardar('Guardar cambios')
+
+      expect(payloadDeEdicion()).not.toHaveProperty('comandaId')
+    })
+
+    it('cambiar a una activa manda su id', async () => {
+      abrir(MILANESA)
+
+      elegir('com-parrilla')
+      await guardar('Guardar cambios')
+
+      expect(payloadDeEdicion()).toHaveProperty('comandaId', 'com-parrilla')
+    })
+
+    it('las inactivas no se ofrecen para asignar a otro plato', () => {
+      abrir(MILANESA)
+
+      expect(opciones()).toEqual(['Sin comanda', 'Cocina', 'Parrilla'])
+      expect(screen.queryByText(/Barra/)).not.toBeInTheDocument()
+    })
+  })
+
+  describe('edición de un plato con comanda activa', () => {
+    it('la muestra elegida; "Sin comanda" manda null', async () => {
+      abrir(conComanda('com-cocina'))
+
+      expect(comanda()).toHaveValue('com-cocina')
+      elegir('')
+      await guardar('Guardar cambios')
+
+      expect(payloadDeEdicion()).toHaveProperty('comandaId', null)
+    })
+
+    it('elegir otra y volver a la original no manda comandaId', async () => {
+      abrir(conComanda('com-cocina'))
+
+      elegir('com-parrilla')
+      elegir('com-cocina')
+      await guardar('Guardar cambios')
+
+      expect(payloadDeEdicion()).not.toHaveProperty('comandaId')
+    })
+  })
+
+  describe('plato con una comanda hoy inactiva', () => {
+    it('la muestra seleccionada con " (inactiva)" y se conserva al guardar sin cambios', async () => {
+      abrir(conComanda('com-barra'))
+
+      expect(comanda()).toHaveValue('com-barra')
+      expect(opciones()).toEqual(['Sin comanda', 'Barra (inactiva)', 'Cocina', 'Parrilla'])
+      escribir(nombre(), 'Milanesa napo')
+      await guardar('Guardar cambios')
+
+      expect(payloadDeEdicion()).not.toHaveProperty('comandaId')
+    })
+
+    it('elegir otra activa manda la nueva', async () => {
+      abrir(conComanda('com-barra'))
+
+      elegir('com-parrilla')
+      await guardar('Guardar cambios')
+
+      expect(payloadDeEdicion()).toHaveProperty('comandaId', 'com-parrilla')
+    })
+
+    it('"Sin comanda" manda null; elegir otra y volver a la inactiva no manda nada', async () => {
+      const { unmount } = abrir(conComanda('com-barra'))
+      elegir('')
+      await guardar('Guardar cambios')
+      expect(payloadDeEdicion()).toHaveProperty('comandaId', null)
+      unmount()
+      tienda.updateItem.mockClear()
+
+      abrir(conComanda('com-barra'))
+      elegir('com-cocina')
+      elegir('com-barra')
+      await guardar('Guardar cambios')
+      expect(payloadDeEdicion()).not.toHaveProperty('comandaId')
+    })
+
+    it('la inactiva no aparece en el alta ni en un plato que tiene otra comanda', () => {
+      const { unmount } = abrir()
+      expect(screen.queryByText(/inactiva/)).not.toBeInTheDocument()
+      unmount()
+
+      abrir(conComanda('com-cocina'))
+      expect(screen.queryByText(/inactiva/)).not.toBeInTheDocument()
+    })
+  })
+
+  describe('plato con una comanda que no está en la lista', () => {
+    it('la muestra como "Comanda no disponible" y se conserva al guardar sin cambios', async () => {
+      abrir(conComanda('com-fantasma'))
+
+      expect(comanda()).toHaveValue('com-fantasma')
+      expect(opciones()).toContain('Comanda no disponible')
+      escribir(nombre(), 'Milanesa napo')
+      await guardar('Guardar cambios')
+
+      expect(payloadDeEdicion()).not.toHaveProperty('comandaId')
+    })
+
+    it('al elegir otra se puede volver a ella sin que cuente como cambio', async () => {
+      abrir(conComanda('com-fantasma'))
+
+      elegir('com-cocina')
+      elegir('com-fantasma')
+      await guardar('Guardar cambios')
+
+      expect(payloadDeEdicion()).not.toHaveProperty('comandaId')
+    })
+
+    it('el alta no la ofrece', () => {
+      abrir()
+
+      expect(screen.queryByText('Comanda no disponible')).not.toBeInTheDocument()
+    })
+  })
+
+  describe('comandas cargando', () => {
+    beforeEach(() => {
+      tienda.comandas = null
+      tienda.comandasEstado = 'cargando'
+    })
+
+    it('el selector va deshabilitado con una sola opción "Cargando comandas…" y sin avisos', () => {
+      abrir(MILANESA)
+
+      expect(comanda()).toBeDisabled()
+      expect(comanda()).toHaveValue('')
+      expect(opciones()).toEqual(['Cargando comandas…'])
+      expect(screen.queryByText('No se pudieron cargar las comandas.')).not.toBeInTheDocument()
+      expect(screen.queryByText('No hay comandas. Creá una desde Comandas.')).not.toBeInTheDocument()
+      expect(screen.queryByText('Comanda no disponible')).not.toBeInTheDocument()
+    })
+
+    it('con un plato que tiene comanda no dice "Comanda no disponible" ni muestra aviso de error', () => {
+      abrir(conComanda('com-cocina'))
+
+      expect(comanda()).toBeDisabled()
+      expect(comanda()).toHaveValue('')
+      expect(opciones()).toEqual(['Cargando comandas…'])
+      expect(screen.queryByText('Comanda no disponible')).not.toBeInTheDocument()
+      expect(screen.queryByText('No se pudieron cargar las comandas.')).not.toBeInTheDocument()
+    })
+
+    it.each([
+      ['sin comanda', MILANESA],
+      ['con comanda', conComanda('com-cocina')],
+    ])('(%s) editar otros campos no manda comandaId', async (_, plato) => {
+      abrir(plato)
+
+      escribir(nombre(), 'Milanesa napo')
+      await guardar('Guardar cambios')
+
+      expect(payloadDeEdicion()).not.toHaveProperty('comandaId')
+    })
+
+    it('al pasar a "ok" aparece el selector habilitado con las opciones y la comanda del plato', async () => {
+      const plato = conComanda('com-cocina')
+      const { rerender } = abrir(plato)
+      expect(comanda()).toBeDisabled()
+
+      tienda.comandas = COMANDAS
+      tienda.comandasEstado = 'ok'
+      rerender(<ItemFormModal open item={plato} onClose={onClose} canDelete />)
+
+      expect(comanda()).toBeEnabled()
+      expect(opciones()).toEqual(['Sin comanda', 'Cocina', 'Parrilla'])
+      expect(comanda()).toHaveValue('com-cocina')
+      expect(screen.queryByText('Cargando comandas…')).not.toBeInTheDocument()
+      escribir(nombre(), 'Milanesa napo')
+      await guardar('Guardar cambios')
+      expect(payloadDeEdicion()).not.toHaveProperty('comandaId')
+    })
+
+    it('al pasar a "error" muestra el aviso y sigue deshabilitado', () => {
+      const { rerender } = abrir(MILANESA)
+
+      tienda.comandasEstado = 'error'
+      rerender(<ItemFormModal open item={MILANESA} onClose={onClose} canDelete />)
+
+      expect(comanda()).toBeDisabled()
+      expect(screen.getByText('No se pudieron cargar las comandas.')).toBeInTheDocument()
+    })
+  })
+
+  describe('lista de comandas con error al cargar', () => {
+    it.each([
+      ['estado "error" y lista null', 'error', null],
+      ['sin estado ni lista', undefined, undefined],
+    ])('(%s) el selector queda deshabilitado con el aviso y editar otros campos no manda comandaId', async (_, estado, valor) => {
+      tienda.comandas = valor as unknown as null
+      tienda.comandasEstado = estado as 'error' | undefined
+      abrir(MILANESA)
+
+      expect(comanda()).toBeDisabled()
+      expect(opciones()).toEqual(['Sin comanda'])
+      expect(screen.getByText('No se pudieron cargar las comandas.')).toBeInTheDocument()
+      escribir(nombre(), 'Milanesa napo')
+      await guardar('Guardar cambios')
+
+      expect(payloadDeEdicion()).not.toHaveProperty('comandaId')
+    })
+
+    it('con un plato que tiene comanda tampoco la toca (queda como "Comanda no disponible")', async () => {
+      tienda.comandas = null
+      tienda.comandasEstado = 'error'
+      abrir(conComanda('com-cocina'))
+
+      expect(comanda()).toBeDisabled()
+      expect(comanda()).toHaveValue('com-cocina')
+      expect(opciones()).toEqual(['Sin comanda', 'Comanda no disponible'])
+      expect(screen.getByText('No se pudieron cargar las comandas.')).toBeInTheDocument()
+      escribir(nombre(), 'Milanesa napo')
+      await guardar('Guardar cambios')
+
+      expect(payloadDeEdicion()).not.toHaveProperty('comandaId')
+    })
+
+    it('sin estado pero con lista se toma como "ok"', () => {
+      tienda.comandasEstado = undefined
+      abrir(MILANESA)
+
+      expect(comanda()).toBeEnabled()
+      expect(opciones()).toEqual(['Sin comanda', 'Cocina', 'Parrilla'])
+    })
+  })
+
+  describe('lista cargada sin comandas', () => {
+    it('con un plato sin comanda avisa y no muestra el selector', () => {
+      tienda.comandas = []
+      abrir(MILANESA)
+
+      expect(screen.getByText('No hay comandas. Creá una desde Comandas.')).toBeInTheDocument()
+      expect(screen.queryByRole('combobox', { name: 'Comanda' })).not.toBeInTheDocument()
+    })
+
+    it('con solo inactivas y un plato sin comanda también avisa', () => {
+      tienda.comandas = COMANDAS.filter((c) => !c.activa)
+      abrir()
+
+      expect(screen.getByText('No hay comandas. Creá una desde Comandas.')).toBeInTheDocument()
+      expect(screen.queryByRole('combobox', { name: 'Comanda' })).not.toBeInTheDocument()
+    })
+
+    it('con un plato que tiene comanda sí muestra el selector con esa opción', () => {
+      tienda.comandas = COMANDAS.filter((c) => !c.activa)
+      abrir(conComanda('com-barra'))
+
+      expect(screen.queryByText('No hay comandas. Creá una desde Comandas.')).not.toBeInTheDocument()
+      expect(opciones()).toEqual(['Sin comanda', 'Barra (inactiva)'])
     })
   })
 })

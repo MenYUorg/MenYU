@@ -22,6 +22,7 @@ vi.mock('../../../services/api', () => ({
       quitarDescuento: vi.fn(),
     },
     categorias: { list: vi.fn() },
+    comandas: { listar: vi.fn() },
     ingredientes: { list: vi.fn() },
     clasificaciones: { list: vi.fn() },
   },
@@ -85,9 +86,10 @@ describe('AdminMenuPage — descuentos', () => {
         disconnect() {}
       },
     )
-    useMenuStore.setState({ items: [], categorias: [], ingredientes: [], clasificaciones: [], loading: false, error: null })
+    useMenuStore.setState({ items: [], categorias: [], comandas: null, ingredientes: [], clasificaciones: [], loading: false, error: null })
     vi.mocked(api.items.list).mockResolvedValue([MILANESA, BIFE, PROVOLETA])
     vi.mocked(api.categorias.list).mockResolvedValue([{ id: 'cat-1', restauranteId: 'rest-1', nombre: 'Principales', orden: 1 }])
+    vi.mocked(api.comandas.listar).mockResolvedValue([{ id: 'com-1', restauranteId: 'rest-1', nombre: 'Cocina', activa: true }])
     vi.mocked(api.ingredientes.list).mockResolvedValue([])
     vi.mocked(api.clasificaciones.list).mockResolvedValue([])
   })
@@ -115,6 +117,15 @@ describe('AdminMenuPage — descuentos', () => {
       await renderPagina()
 
       expect(screen.queryByRole('button', { name: /Descuento de/ })).not.toBeInTheDocument()
+    })
+  })
+
+  describe('al elegir el restaurante', () => {
+    it('pide también las comandas, para el selector del formulario del plato', async () => {
+      await renderPagina()
+
+      expect(api.comandas.listar).toHaveBeenCalledWith('rest-1')
+      expect(useMenuStore.getState().comandas).toEqual([{ id: 'com-1', restauranteId: 'rest-1', nombre: 'Cocina', activa: true }])
     })
   })
 

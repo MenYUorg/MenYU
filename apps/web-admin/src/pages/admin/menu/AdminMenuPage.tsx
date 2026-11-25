@@ -902,7 +902,7 @@ export function AdminMenuPage() {
   const { selectedRestauranteId } = useContextStore()
   const {
     items, categorias, loading,
-    fetchItems, fetchCategorias, fetchIngredientes, fetchClasificaciones,
+    fetchItems, fetchCategorias, fetchComandas, fetchIngredientes, fetchClasificaciones,
     updateItem, setDescuento, quitarDescuento, error, clearError,
   } = useMenuStore()
 
@@ -922,6 +922,7 @@ export function AdminMenuPage() {
     if (selectedRestauranteId) {
       fetchItems(selectedRestauranteId).catch(() => undefined)
       fetchCategorias(selectedRestauranteId).catch(() => undefined)
+      fetchComandas(selectedRestauranteId).catch(() => undefined)
       fetchIngredientes(selectedRestauranteId).catch(() => undefined)
       fetchClasificaciones(selectedRestauranteId).catch(() => undefined)
     }

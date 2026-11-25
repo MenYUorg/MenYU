@@ -6,6 +6,7 @@ import { AdminMenuPage } from './pages/admin/menu/AdminMenuPage'
 import { TablesPage } from './pages/admin/tables/TablesPage'
 import { PagosPage } from './pages/admin/pagos/PagosPage'
 import { CajasPage } from './pages/admin/cajas/CajasPage'
+import { ComandasPage } from './pages/admin/comandas/ComandasPage'
 import { TurnosPage } from './pages/admin/turnos/TurnosPage'
 import { TurnoDetallePage } from './pages/admin/turnos/TurnoDetallePage'
 import { DashboardPage } from './pages/admin/dashboard/DashboardPage'
@@ -110,6 +111,12 @@ export function App() {
             <Route path="/admin/cajas" element={
               <RoleGuard roles={['OWNER', 'GERENTE']}>
                 <CajasPage />
+              </RoleGuard>
+            } />
+            {/* Las comandas del restaurante (#344): las crean y editan OWNER y GERENTE */}
+            <Route path="/admin/comandas" element={
+              <RoleGuard roles={['OWNER', 'GERENTE']}>
+                <ComandasPage />
               </RoleGuard>
             } />
             {/* El historial de turnos de caja (#360), de solo lectura: OWNER y GERENTE */}

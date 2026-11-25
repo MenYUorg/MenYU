@@ -20,6 +20,7 @@ vi.mock('./pages/admin/AdminLayout', async () => {
 })
 vi.mock('./pages/admin/marca/MarcaPage', () => ({ MarcaPage: () => 'Pantalla de marca y sucursales' }))
 vi.mock('./pages/admin/cajas/CajasPage', () => ({ CajasPage: () => 'Pantalla de cajas' }))
+vi.mock('./pages/admin/comandas/ComandasPage', () => ({ ComandasPage: () => 'Pantalla de comandas' }))
 vi.mock('./pages/admin/turnos/TurnosPage', () => ({ TurnosPage: () => 'Pantalla de turnos de caja' }))
 vi.mock('./pages/admin/turnos/TurnoDetallePage', () => ({ TurnoDetallePage: () => 'Pantalla del detalle de un turno' }))
 vi.mock('./pages/admin/dashboard/DashboardPage', () => ({ DashboardPage: () => 'Pantalla de dashboard' }))
@@ -87,6 +88,24 @@ describe('rutas del panel de administración', () => {
 
       expect(await screen.findByText('Consola de ROOT en /root')).toBeInTheDocument()
       expect(screen.queryByText('Pantalla de cajas')).not.toBeInTheDocument()
+    })
+  })
+
+  describe('/admin/comandas (#344)', () => {
+    it.each([
+      ['el OWNER', OWNER],
+      ['el GERENTE', GERENTE],
+    ])('%s entra', (_rol, perfil) => {
+      abrir('/admin/comandas', perfil)
+
+      expect(screen.getByText('Pantalla de comandas')).toBeInTheDocument()
+    })
+
+    it('una cuenta sin rol en el restaurante (el ROOT) no entra: vuelve a su consola', async () => {
+      abrir('/admin/comandas', ROOT)
+
+      expect(await screen.findByText('Consola de ROOT en /root')).toBeInTheDocument()
+      expect(screen.queryByText('Pantalla de comandas')).not.toBeInTheDocument()
     })
   })
 
