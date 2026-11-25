@@ -1,6 +1,6 @@
 # Pasada manual por staging: comandas (#344)
 
-Se corre **una vez**, en el navegador, con `main` en el merge del #495 (`4f066a1`) o posterior. Prueba de punta a punta lo que entregaron los cuatro PR de #344: el backend de comandas (#491), la comanda guardada en cada ítem del pedido (#492), la cocina filtrada por comanda en web-staff (#494) y la gestión de comandas y el selector del plato en web-admin (#495).
+Se corre **una vez**, en el navegador, con `main` en el merge del #499 (`4e0a80c`) o posterior. Prueba de punta a punta lo que entregaron los PR de #344: el backend de comandas (#491), la comanda guardada en cada ítem del pedido (#492), la cocina filtrada por comanda en web-staff (#494) la gestión de comandas y el selector del plato en web-admin (#495) y el ajuste de la impresión, una sola vez al entrar a cocina (#499).
 
 **Dónde:** "Restaurante Pruebas Auth" (`901c507f-dd63-43be-a006-10d8964521bf`). La sección F usa además un restaurante de demostración (`r-001`), solo para mirar. **No usar "Restaurante E2E". Nunca producción.**
 
@@ -22,7 +22,7 @@ Cada cuenta en un perfil o navegador distinto: las ventanas de incógnito compar
 
 ## 0. Preparación
 
-- [ ] **0.1 Deploy.** `https://api.staging.menyu-app.com/health` (o `https://menyu-backend-staging.up.railway.app/health`) responde con `db: "ok"` y un `sha` que es el del merge del #495 (`4f066a1`) o uno posterior. Ojo: `/health` está **fuera** del prefijo `/api` (`apps/backend/src/main.ts`): con `/api/health` da 404.
+- [ ] **0.1 Deploy.** `https://api.staging.menyu-app.com/health` (o `https://menyu-backend-staging.up.railway.app/health`) responde con `db: "ok"` y un `sha` que es el del merge del #499 (`4e0a80c`) o uno posterior. Ojo: `/health` está **fuera** del prefijo `/api` (`apps/backend/src/main.ts`): con `/api/health` da 404.
 - [ ] **0.2 Sin comandas en el restaurante.**
   ```sql
   SELECT nombre, activa FROM comanda
@@ -68,7 +68,7 @@ Cada cuenta en un perfil o navegador distinto: las ventanas de incógnito compar
 
 ## D. Cocina filtrada por comanda (#494)
 
-Con `caja-owner` o `caja-gerente` en web-staff: el selector, "Cocina". **La cocina solo muestra pedidos "En preparación" y "Listo"**: un pedido del comensal entra como **Pendiente** y no aparece en ella hasta que un mozo lo pasa a "En preparación" (web-staff, Pedidos, con `caja-jefe`). Un pedido tomado por el mozo con "Toma de pedidos" entra directo a "En preparación" (D9).
+Con `caja-owner` o `caja-gerente` en web-staff: el selector, "Cocina". **La cocina solo muestra pedidos "En preparación" y "Listo"**: un pedido del comensal entra como **Pendiente** y no aparece en ella hasta que un mozo lo pasa a "En preparación" (web-staff, Pedidos, con `caja-jefe`). Un pedido tomado por el mozo con "Toma de pedidos" entra directo a "En preparación" (D9). Si hay impresora, conectarla en esta pantalla (botón "Conectar impresora" de la cabecera) antes de D2: ver D10.
 
 - [ ] **D1 Pestañas.** Arriba aparecen los botones **"Todas"**, **"Barra"** y **"Cocina"**. "Parrilla" no aparece (está inactiva). Si no aparecen, tocar "Actualizar".
 - [ ] **D2 Pedido mixto en "Todas".** Desde el comensal, en la **mesa 1**, pedir "Plato de prueba" y "Plato de prueba 500" en el mismo pedido. La cocina todavía no lo muestra (está Pendiente). Con `caja-jefe`, en web-staff, Pedidos, tocar **"En preparación"** en ese pedido. En la cocina, pestaña "Todas", aparece completo y **suena**. *(El navegador solo deja sonar si la página ya recibió algún clic: tocar "Todas" antes alcanza.)*
@@ -82,10 +82,12 @@ Con `caja-owner` o `caja-gerente` en web-staff: el selector, "Cocina". **La coci
 - [ ] **D7 "Listo" sin confirmación.** En **Cocina**, el pedido de la mesa 2 (solo Cocina): "Listo" avanza directo, sin aviso.
 - [ ] **D8 Se recuerda la pestaña.** Elegir "Barra" y recargar la página: sigue en "Barra".
 - [ ] **D9 Pedido del mozo.** Con `caja-jefe`, en web-staff, "Toma de pedidos", en la **mesa 1** (sesión abierta): tomar un pedido con "Plato de prueba" y "Plato de prueba 500". Entra directo a "En preparación": en la cocina, en "Barra", aparece solo la bebida con "+1 de otras comandas" y suena.
-- [ ] **D10 Impresión (solo si hay impresora; si no, "no aplica").** Hay **dos pantallas** que imprimen, cada una en el navegador donde se apretó "Conectar impresora" (WebUSB: se conecta por pestaña y se pierde al recargar):
-  - **Pedidos** (`/mozo/pedidos`) imprime **cada pedido nuevo, completo y sin filtro**, en el momento en que se crea, sea cual sea su estado: el del comensal (todavía Pendiente) y el del mozo. Es el comportamiento de siempre y **no pasa por las pestañas de comanda**. Con una impresora conectada ahí: el pedido de D2 salió impreso con los dos platos al crearse, **no** al pasarlo a "En preparación".
-  - **Cocina** imprime solo los pedidos que **nacen** en "En preparación" (los del mozo, como el de D9), y ahí sí con el filtro: en "Barra" imprime solo la bebida; en "Todas", el pedido completo. Los del comensal no los imprime: llegan Pendientes (la cocina los ignora) y, al pasarlos a "En preparación", no se imprime nada.
-  - Con una impresora conectada en cada pantalla, el pedido de D9 sale en las dos (en Pedidos completo y en Cocina filtrado).
+- [ ] **D10 Impresión (solo si hay impresora; si no, "no aplica").** Desde el #499 imprime **solo la pantalla Cocina**, **una vez por pedido**, cuando el pedido **entra a cocina**, y solo los ítems de la pestaña en la que está ese dispositivo. La impresora se conecta con "Conectar impresora" de la cabecera de Cocina (WebUSB: por pestaña, y se pierde al recargar: **volver a conectarla después de D8**); el botón "Test" imprime una prueba.
+  - **La pantalla Pedidos del mozo ya no tiene impresora**: sin "Conectar impresora", sin "Test" y sin imprimir.
+  - **Pedido del comensal (D2 y D5):** el ticket sale cuando `caja-jefe` lo pasa a "En preparación", **no** cuando el comensal lo crea. Con la pantalla en "Todas" sale el pedido completo (D2); en "Barra", solo "Plato de prueba 500"; en "Cocina", solo "Plato de prueba". En D5 (mesa 2, solo "Plato de prueba") en "Barra" no sale nada.
+  - **Pedido del mozo (D9):** el ticket sale apenas lo toma, una sola vez, con los ítems de la pestaña.
+  - **Una sola vez:** "Listo" (D6 y D7) no reimprime, ni tampoco recargar la pantalla; un pedido sin ítems en la pestaña no imprime.
+  - **Una estación por pestaña:** con una impresora en "Barra" y otra en "Cocina", cada una saca su parte; un dispositivo en "Todas" saca el pedido completo (no dejar una impresora en "Todas" si otras estaciones ya imprimen sus partes). Los ítems **sin comanda** salen en todas las estaciones.
 
 ## E. La comanda queda guardada en el pedido (#492)
 
@@ -122,7 +124,7 @@ Con `caja-owner` o `caja-gerente` en web-staff: el selector, "Cocina". **La coci
 
 - **Un plato con una comanda inactiva** ("Barra (inactiva)" en el selector): no se puede llegar desde la app, porque el backend no deja desactivar una comanda con platos asignados. Lo cubren los tests del PR 3.
 - **El error de largo máximo del nombre** (A4): el campo no deja escribir más de 40 caracteres. Lo cubren los tests.
-- **Impresión por comanda de los pedidos del comensal:** la pantalla Pedidos, que es la que imprime esos pedidos al crearse, los saca completos; el filtro por comanda solo existe en la impresión de Cocina, que no imprime los pedidos del comensal. Es el comportamiento de hoy y no cambió con #344 (D10); es una decisión pendiente, no un fallo de esta pasada.
+- **Impresión sin cola ni reimpresión:** si la pantalla Cocina estaba cerrada o la impresora desconectada cuando el pedido entró a cocina, ese ticket no sale. Y un pedido que entra en el mismo instante en que la pantalla carga puede no imprimirse (límite conocido del #499).
 - **"Listo" por comanda:** quedó fuera del alcance; el "Listo" sigue siendo por pedido (límite conocido).
 - **Las pestañas no se actualizan solas** cuando se crea o desactiva una comanda: hace falta "Actualizar" o recargar (límite conocido).
 
