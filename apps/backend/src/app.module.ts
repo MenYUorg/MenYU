@@ -28,6 +28,7 @@ import { DiscoveryModule } from './discovery/discovery.module'
 import { HealthModule } from './health/health.module'
 import { RootModule } from './root/root.module'
 import { CajaModule } from './caja/caja.module'
+import { ComandasModule } from './comandas/comandas.module'
 
 @Module({
   imports: [
@@ -60,6 +61,7 @@ import { CajaModule } from './caja/caja.module'
     HealthModule,
     RootModule,
     CajaModule,
+    ComandasModule,
   ],
 })
 export class AppModule {}

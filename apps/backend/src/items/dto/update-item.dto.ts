@@ -49,7 +49,7 @@ export class UpdateItemDto {
   @ApiPropertyOptional({ example: 'uuid-de-la-comanda' })
   @IsOptional()
   @IsUUID()
-  comandaId?: string
+  comandaId?: string | null
 
   @ApiPropertyOptional({ example: false })
   @IsOptional()

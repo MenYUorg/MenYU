@@ -389,7 +389,7 @@ describe('ItemsService — descuentos', () => {
 
     it('con la categoría y la comanda del restaurante se crea', async () => {
       mockPrisma.categoriaMenu.findUnique.mockResolvedValue({ restauranteId: REST })
-      mockPrisma.comanda.findUnique.mockResolvedValue({ restauranteId: REST })
+      mockPrisma.comanda.findUnique.mockResolvedValue({ restauranteId: REST, activa: true })
 
       await service.create({ ...NUEVO, categoriaId: 'cat-1', comandaId: 'com-1' })
 
@@ -402,6 +402,51 @@ describe('ItemsService — descuentos', () => {
 
       expect(mockPrisma.categoriaMenu.findUnique).not.toHaveBeenCalled()
       expect(mockPrisma.itemMenu.update).toHaveBeenCalled()
+    })
+
+    // Una comanda desactivada no se asigna (#344), pero el ítem que ya la tiene la conserva al editarse
+    describe('la comanda desactivada', () => {
+      const INACTIVA = { restauranteId: REST, activa: false }
+
+      it('no se asigna en el alta: 400 y el ítem no se crea', async () => {
+        mockPrisma.comanda.findUnique.mockResolvedValue(INACTIVA)
+
+        await expect(service.create({ ...NUEVO, comandaId: 'com-vieja' })).rejects.toThrow(
+          new BadRequestException('La comanda está desactivada'),
+        )
+        expect(mockPrisma.itemMenu.create).not.toHaveBeenCalled()
+      })
+
+      it('no se asigna en la edición si es otra que la del ítem: 400 y no se toca', async () => {
+        mockPrisma.itemMenu.findUnique.mockResolvedValue({ ...ITEM, comandaId: 'com-actual' })
+        mockPrisma.comanda.findUnique.mockResolvedValue(INACTIVA)
+
+        await expect(service.update('item-1', { comandaId: 'com-vieja' }, OWNER)).rejects.toThrow(
+          new BadRequestException('La comanda está desactivada'),
+        )
+        expect(mockPrisma.itemMenu.update).not.toHaveBeenCalled()
+      })
+
+      it('reenviar la misma comanda que ya tiene el ítem no falla, aunque esté desactivada', async () => {
+        mockPrisma.itemMenu.findUnique.mockResolvedValue({ ...ITEM, comandaId: 'com-vieja' })
+        mockPrisma.comanda.findUnique.mockResolvedValue(INACTIVA)
+
+        await service.update('item-1', { comandaId: 'com-vieja', nombre: 'Milanesa napolitana' }, OWNER)
+
+        expect(mockPrisma.itemMenu.update).toHaveBeenCalledWith(
+          expect.objectContaining({ data: expect.objectContaining({ comandaId: 'com-vieja' }) }),
+        )
+      })
+
+      it('sacarle la comanda (null) llega a Prisma como null y no consulta la comanda', async () => {
+        mockPrisma.itemMenu.findUnique.mockResolvedValue({ ...ITEM, comandaId: 'com-vieja' })
+
+        await service.update('item-1', { comandaId: null }, OWNER)
+
+        expect(mockPrisma.comanda.findUnique).not.toHaveBeenCalled()
+        const { data } = mockPrisma.itemMenu.update.mock.calls[0][0]
+        expect(data.comandaId).toBeNull()
+      })
     })
   })
 
