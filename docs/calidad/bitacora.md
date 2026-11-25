@@ -2207,3 +2207,39 @@ Si la segunda devuelve filas, la migración del #491 falla: hay que renombrar es
 2. **Antes del tag de producción (paso obligatorio):** las tres consultas de solo lectura de la entrada de la mañana (comandas existentes, nombres repetidos por restaurante, platos con comanda), con su resultado anotado. Las migraciones del #344 son `20261125103231` y `20261125140933`; si la de nombres repetidos devuelve filas, hay que renombrarlas antes de desplegar.
 3. **Las deudas del #344:** el código de error en las respuestas 409 (backend y frontend), mover `cajas/estilos.ts` a un lugar neutro y decidir lo del `autoFocus` en Sonar.
 4. **Lo del 24/11, que sigue:** la sección F y el 6.5 (después, decidir el tag de producción); el `BASE_URL` de staging en `docs/auth/VariablesACambiar.md`; la corrida de E2E — staging; 0.3 y DT-02 (`MP_WEBHOOK_SECRET` y el PR C); y los puntos 5 a 7 del pendiente del 21/11.
+
+### 25/11/2026 (noche): la impresión en Cocina (#499) mergeada, el foco del ABM sin `autoFocus` (#501) abierto, y qué falta para seguir
+
+**Estado al escribir esto** (horas en ART): el #344 está cerrado (16:24) y no queda trabajo suyo sin commitear. Lo que entró y lo que sigue abierto:
+
+| PR | Qué | Estado |
+|---|---|---|
+| #499 | La impresión: una sola vez, al entrar a cocina, en la pantalla Cocina | Mergeado a las 18:15 (`4e0a80c`) |
+| #500 | El checklist y la bitácora describen esa impresión | Mergeado a las 19:01 (`3c32ebc`) |
+| #501 | El foco del ABM con `ref` y efecto, sin `autoFocus` (S9379) | **Abierto**, con el CI y el gate de Sonar en verde |
+
+El comentario de cierre quedó en el #344 (18:16, sin reabrirlo), con los links al #499, #497 y #498.
+
+**#501, el `autoFocus` del ABM:**
+- **Ya existía antes del #495:** `FilaDeCaja.tsx` tenía `autoFocus={volverAlBoton}` desde el 18/11 (#360, `d353b1f`), y Sonar tiene abiertas desde esa fecha **dos** violaciones del ABM, no una: `FilaDeAbm.tsx:117` (el foco que vuelve a "Renombrar") y `CampoDeNombre.tsx:37` (el foco al abrir la edición). La entrada de la tarde nombraba solo la primera.
+- **Qué cambia:** `FilaDeAbm` enfoca "Renombrar" con un `ref` y un efecto que solo actúa al pasar de renombrar a ver (con `volverAlBoton` activo), como lo hacía el `autoFocus` al montarse el botón; abrir o cancelar la confirmación no mueve el foco. `CampoDeNombre` cambia la prop `autoFocus` por `enfocarAlMontar`, con `ref` y efecto. En `abm/` ya no queda ningún `autoFocus`.
+- **Mismo comportamiento, medido:** un spec temporal registró dónde queda el foco en 8 escenarios (abrir "Renombrar", "Cancelar", guardar, guardar sin cambios, el camino de `releer` con y sin edición previa, abrir la confirmación y el alta), en cajas y en comandas, antes y después: idéntico byte a byte.
+- **Tests:** `abm/foco.spec.tsx` (6 tests) cubre tres casos que ningún test cubría: la confirmación no mueve el foco, el cierre por `releer` no vuelve a "Renombrar" y el alta no se enfoca al montar. De 5 mutaciones, 5 las detectan los tests reales; antes, 3 solo las atajaba el spec temporal. web-admin pasa de 57 archivos y 1090 tests a 58 y 1096. No se tocó ningún spec existente.
+- **Sonar del PR:** gate `OK`, cobertura nueva 100 % (16 líneas), duplicación 0,0 %, **0 violaciones de cualquier regla**; la `S9379` ya no aparece en el análisis del PR.
+- **Sonar en `main`:** siguen 7 `S9379` abiertas hasta que se mergee el #501 y Sonar reanalice. Las dos del ABM se cierran; **quedan 5 de otros archivos** (`AdminMenuPage.tsx`, tres; `ItemFormModal.tsx`; `TablesPage.tsx`), que no son de este trabajo y se resolverían con el mismo método.
+
+**Cosas que conviene recordar:**
+- **Una tarea en segundo plano sin entrada se cuelga y puede llenar el disco.** Un `python -` sin script quedó en un REPL que escribió un traceback en bucle: su archivo de salida llegó a **5,4 GB** en la carpeta temporal de la sesión (ya borrado); y un `cat > archivo` sin entrada quedó esperando para siempre. No lanzar intérpretes ni `cat` sin entrada. Los agentes pueden dejar tareas propias corriendo ("stopped with background work of its own still running"): se ven en `tasks\*.output` los archivos sin la marca `[exited with code`, y se cierran con `TaskStop`.
+- **Los avisos de `act()` de un spec se cuentan por test:** `NO_COLOR=1 npx vitest run <spec> > log 2>&1` (en ese orden, y sin color, porque los códigos ANSI rompen la cabecera `stderr |` de cada test) y agrupar las apariciones de "not wrapped in act" por esa cabecera.
+- **Al pushear a la rama de un PR**, la remota puede tener un merge de `main` hecho desde GitHub ("Update branch"): se resuelve con `git fetch` y `git merge`, nunca con rebase ni force-push.
+- **Los PR de docs se arman en un `git worktree`** desde `origin/main`, para no pisar los archivos de la rama en la que se está trabajando, con `git add` solo del archivo que corresponde.
+- El clasificador de permisos de Claude Code bloquea que un agente escriba logs fuera del repo y del scratchpad: hay que dárselos dentro del scratchpad.
+
+**Pendiente al retomar** (reemplaza la lista de la tarde, en este orden):
+1. **Mergear el #501** (Coty). Después, comprobar en Sonar que en `main` las dos `S9379` del ABM quedan cerradas (tienen que quedar 5, las de otros archivos) y sacar el `autoFocus` de las deudas.
+2. **Prueba manual de comandas en staging**, con Coty y con `main` en el #499 o posterior: `docs/calidad/checklist-staging-comandas.md`, que ya describe la impresión nueva (D10). Antes de empezar hay que confirmar en staging lo que no se pudo verificar desde el repo: los nombres y precios de "Plato de prueba" y "Plato de prueba 500", que exista la mesa 2, y una cuenta de cocina (con `caja-owner` o `caja-gerente` alcanza; `cocina.pruebas-auth@menyu-app.com` está documentada pero no figura en `.env.usuarios-staging`). F1 usa una cuenta de cocina de `r-001`: si no hay, "no aplica". La conexión WebUSB de la impresora se pierde al recargar: reconectarla después de D8.
+3. **Antes del tag de producción (paso obligatorio):** las tres consultas de solo lectura de la entrada de la mañana del 25/11 (comandas existentes, nombres repetidos por restaurante, platos con comanda), con su resultado anotado. Las migraciones del #344 son `20261125103231` y `20261125140933`; si la de nombres repetidos devuelve filas, hay que renombrarlas antes de desplegar.
+4. **Manual de usuario (#137):** incorporar la nota de impresión (arriba, en "Impresión, ajustada en el #499"): impresora en el dispositivo de cocina, una estación por pestaña, ticket al entrar a cocina, sin cola ni reimpresión.
+5. **Deudas del #344:** el código de error en las respuestas 409 (backend y frontend), que hoy el frontend reconoce por el texto exacto del mensaje; mover `cajas/estilos.ts` a un lugar neutro (`abm/` lo importa); y el `RoleGuard` de `/admin/comandas`, redundante hoy (importaría si se suma un tercer rol). Opcional: las otras 5 `S9379`.
+6. **Los 186 avisos de `act()` del spec de `CocinaPage`**, que ya estaban en `main`: los helpers `abrir` y `abrirCon` montan fuera de `act`. Los tests del #499 usan `abrirEnAct`, que no los emite; pasar los demás a ese esquema es una mejora aparte, sin urgencia.
+7. **Lo del 24/11, que sigue:** la sección F y el 6.5 (después, decidir el tag de producción); el `BASE_URL` de staging en `docs/auth/VariablesACambiar.md`; la corrida de E2E — staging; 0.3 y DT-02 (`MP_WEBHOOK_SECRET` y el PR C); y los puntos 5 a 7 del pendiente del 21/11.
