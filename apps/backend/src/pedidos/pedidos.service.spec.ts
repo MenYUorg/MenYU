@@ -314,4 +314,54 @@ describe('PedidosService', () => {
       })
     })
   })
+
+  // El ítem del pedido guarda la comanda que tenía su plato al pedirse: cada ítem lleva la suya.
+  describe('comanda del plato en el ítem del pedido', () => {
+    const PLATOS: Record<string, object> = {
+      'item-con-comanda': { id: 'item-con-comanda', restauranteId: 'rest-1', precioBase: new Prisma.Decimal('1500.00'), precioDescuento: null, comandaId: 'comanda-1' },
+      'item-sin-comanda': { id: 'item-sin-comanda', restauranteId: 'rest-1', precioBase: new Prisma.Decimal('800.00'), precioDescuento: null, comandaId: null },
+    }
+    const dto = {
+      sesionId: 'ses-1',
+      mesaId: 'mesa-1',
+      items: [
+        { itemId: 'item-con-comanda', cantidad: 1 },
+        { itemId: 'item-sin-comanda', cantidad: 1 },
+      ],
+    }
+    let tx: any
+
+    beforeEach(() => {
+      tx = {
+        sesionMesa: { findUnique: jest.fn().mockResolvedValue({ id: 'ses-1', estado: 'activa' }) },
+        itemMenu: { findFirst: jest.fn(({ where }: any) => Promise.resolve(PLATOS[where.id])) },
+        itemIngrediente: { findUnique: jest.fn() },
+        pedido: { create: jest.fn().mockResolvedValue({ id: 'ped-1', mesa: { numero: '5' }, items: [] }) },
+      }
+      mockPrisma.$transaction.mockImplementation((fn: any) => fn(tx))
+    })
+
+    const creados = (): any[] => tx.pedido.create.mock.calls[0][0].data.items.create
+
+    it('confirmar (comensal): cada ítem guarda la comanda de su plato', async () => {
+      mockJwt.verify.mockReturnValue({ sub: 'cli-1', tipo: 'cliente', sesionId: 'ses-1', mesaId: 'mesa-1', restauranteId: 'rest-1' })
+
+      await service.confirmar('Bearer token', dto)
+
+      expect(creados()).toHaveLength(2)
+      expect(creados()[0]).toEqual(expect.objectContaining({ itemId: 'item-con-comanda', comandaId: 'comanda-1' }))
+      expect(creados()[1]).toEqual(expect.objectContaining({ itemId: 'item-sin-comanda', comandaId: null }))
+    })
+
+    it('crearStaff (el salón): cada ítem guarda la comanda de su plato', async () => {
+      mockPrisma.sesionMesa.findUnique.mockResolvedValue({ id: 'ses-1', mesaId: 'mesa-1', estado: 'activa' })
+      mockPrisma.mesa.findUnique.mockResolvedValue({ id: 'mesa-1', restauranteId: REST })
+
+      await service.crearStaff(dto, CUENTAS.MOZO)
+
+      expect(creados()).toHaveLength(2)
+      expect(creados()[0]).toEqual(expect.objectContaining({ itemId: 'item-con-comanda', comandaId: 'comanda-1' }))
+      expect(creados()[1]).toEqual(expect.objectContaining({ itemId: 'item-sin-comanda', comandaId: null }))
+    })
+  })
 })

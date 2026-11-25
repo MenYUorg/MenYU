@@ -16,6 +16,7 @@ export interface PedidoItem {
   cantidad: number
   precioUnitario: number
   notas: string | null
+  comandaId?: string | null
   mods?: PedidoItemMod[]
 }
 

@@ -64,6 +64,7 @@ export class OrdersService {
                 clienteId,
                 cantidad: item.cantidad,
                 precioUnitario,
+                comandaId: dbItem.comandaId,
                 notas: item.nota ?? null,
                 mods: {
                   create: item.modificaciones.map((mod) => ({

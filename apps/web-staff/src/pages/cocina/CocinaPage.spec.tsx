@@ -75,8 +75,8 @@ function pedido(id: string, estado: string, extra: Partial<PedidoRico> = {}): Pe
     mesa: { numero: id.slice(-1) },
     pagado: false,
     items: [
-      { id: `${id}-1`, itemId: 'a', cantidad: 2, cantidadEditada: null, precioUnitario: 1000, notas: 'bien cocida', item: { nombre: 'Milanesa' }, mods: [mod('QUITAR', 'Cebolla'), mod('AGREGAR', 'Queso', 2), mod('AGREGAR', 'Huevo'), mod('QUITAR')] },
-      { id: `${id}-2`, itemId: 'b', cantidad: 1, cantidadEditada: null, precioUnitario: 500, notas: '  ', item: { nombre: 'Agua' }, mods: [] },
+      { id: `${id}-1`, itemId: 'a', cantidad: 2, cantidadEditada: null, precioUnitario: 1000, notas: 'bien cocida', comandaId: null, item: { nombre: 'Milanesa' }, mods: [mod('QUITAR', 'Cebolla'), mod('AGREGAR', 'Queso', 2), mod('AGREGAR', 'Huevo'), mod('QUITAR')] },
+      { id: `${id}-2`, itemId: 'b', cantidad: 1, cantidadEditada: null, precioUnitario: 500, notas: '  ', comandaId: null, item: { nombre: 'Agua' }, mods: [] },
     ],
     ...extra,
   }
@@ -86,8 +86,8 @@ const EN_PREP = pedido('prep-1', 'en_preparacion')
 const EDITADO = pedido('edit-2', 'en_preparacion', {
   createdAt: hace(25),
   items: [
-    { id: 'e1', itemId: 'a', cantidad: 3, cantidadEditada: 1, precioUnitario: 500, notas: null, item: { nombre: 'Empanada' }, mods: [] },
-    { id: 'e2', itemId: 'b', cantidad: 1, cantidadEditada: 0, precioUnitario: 800, notas: 'fría', item: { nombre: 'Gaseosa' }, mods: [mod('AGREGAR', 'Limón')] },
+    { id: 'e1', itemId: 'a', cantidad: 3, cantidadEditada: 1, precioUnitario: 500, notas: null, comandaId: null, item: { nombre: 'Empanada' }, mods: [] },
+    { id: 'e2', itemId: 'b', cantidad: 1, cantidadEditada: 0, precioUnitario: 800, notas: 'fría', comandaId: null, item: { nombre: 'Gaseosa' }, mods: [mod('AGREGAR', 'Limón')] },
   ],
 })
 const LISTO = pedido('listo-3', 'listo')

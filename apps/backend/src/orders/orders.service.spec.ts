@@ -397,6 +397,31 @@ describe('OrdersService', () => {
     })
   })
 
+  // ── create — comanda del plato ────────────────────────────────────────────
+
+  describe('create — comanda del plato', () => {
+    it('cada ítem del pedido guarda la comanda de SU plato: el que tiene comanda la lleva y el que no, null', async () => {
+      mockJwt.verify.mockReturnValue(VALID_PAYLOAD)
+      mockPrisma.sesionMesa.findUnique.mockResolvedValue(SESION_ACTIVA)
+      mockPrisma.itemMenu.findMany.mockResolvedValue([
+        { ...ITEM_SIMPLE, id: 'item-con-comanda', comandaId: 'comanda-1' },
+        { ...ITEM_SIMPLE, id: 'item-sin-comanda', comandaId: null },
+      ])
+
+      await service.create('Bearer valid.token', {
+        items: [
+          { itemMenuId: 'item-con-comanda', cantidad: 1, modificaciones: [] },
+          { itemMenuId: 'item-sin-comanda', cantidad: 1, modificaciones: [] },
+        ],
+      })
+
+      const creados = mockPrisma.pedido.create.mock.calls[0][0].data.items.create
+      expect(creados).toHaveLength(2)
+      expect(creados[0]).toEqual(expect.objectContaining({ itemId: 'item-con-comanda', comandaId: 'comanda-1' }))
+      expect(creados[1]).toEqual(expect.objectContaining({ itemId: 'item-sin-comanda', comandaId: null }))
+    })
+  })
+
   // ── findBySesion ──────────────────────────────────────────────────────────
 
   describe('findBySesion', () => {
