@@ -86,7 +86,7 @@ export class ItemsService {
   async update(id: string, dto: UpdateItemDto, usuario: UsuarioAutenticado) {
     const item = await this.getOrThrow(id)
     await this.acceso.exigirRol(usuario.id, item.restauranteId, ADMINISTRACION)
-    await this.assertRelacionesDelRestaurante(item.restauranteId, dto)
+    await this.assertRelacionesDelRestaurante(item.restauranteId, dto, item.comandaId)
 
     if (dto.nombre && dto.nombre !== item.nombre) {
       await this.assertNombreUnico(item.restauranteId, dto.nombre, id)
@@ -283,18 +283,22 @@ export class ItemsService {
   /**
    * La categoría y la comanda tienen que ser del restaurante del ítem: el permiso es sobre ese restaurante, y la carta
    * pública de otro mostraría el ítem si quedara en una de sus categorías (los ids de las categorías son públicos).
+   * Una comanda desactivada no se puede asignar; `comandaActualId` es la que ya tiene el ítem al editarlo (en el alta,
+   * ninguna): dejarle la misma, aunque esté desactivada, no es una asignación y no falla.
    */
   private async assertRelacionesDelRestaurante(
     restauranteId: string,
     dto: { categoriaId?: string | null; comandaId?: string | null },
+    comandaActualId?: string | null,
   ) {
     if (dto.categoriaId) {
       const categoria = await this.prisma.categoriaMenu.findUnique({ where: { id: dto.categoriaId }, select: { restauranteId: true } })
       if (categoria?.restauranteId !== restauranteId) throw new BadRequestException('La categoría no es de este restaurante')
     }
     if (dto.comandaId) {
-      const comanda = await this.prisma.comanda.findUnique({ where: { id: dto.comandaId }, select: { restauranteId: true } })
+      const comanda = await this.prisma.comanda.findUnique({ where: { id: dto.comandaId }, select: { restauranteId: true, activa: true } })
       if (comanda?.restauranteId !== restauranteId) throw new BadRequestException('La comanda no es de este restaurante')
+      if (!comanda.activa && dto.comandaId !== comandaActualId) throw new BadRequestException('La comanda está desactivada')
     }
   }
 

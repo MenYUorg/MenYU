@@ -247,13 +247,15 @@ model LlamadoMozo {
 // ─────────────────────────────────────────────
 
 model Comanda {
-  id            String @id @default(uuid())
-  restauranteId String @map("restaurante_id")
+  id            String  @id @default(uuid())
+  restauranteId String  @map("restaurante_id")
   nombre        String
+  activa        Boolean @default(true)
 
   restaurante Restaurante @relation(fields: [restauranteId], references: [id])
   items       ItemMenu[]
 
+  @@unique([restauranteId, nombre])
   @@map("comanda")
 }
 

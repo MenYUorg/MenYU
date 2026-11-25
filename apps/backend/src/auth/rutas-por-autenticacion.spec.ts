@@ -103,6 +103,8 @@ const CON_PERMISO_EN_EL_SERVICE = [
   'PATCH /waiter-calls/:id/atender',
   // La caja, con el restaurante de la caja o del turno.
   'PATCH /cajas/:id',
+  // Las comandas, con el restaurante de la comanda.
+  'PATCH /comandas/:id',
   'PUT /turnos/:id/asignaciones',
   'POST /turnos/:id/movimientos',
   'POST /turnos/:id/cierre',

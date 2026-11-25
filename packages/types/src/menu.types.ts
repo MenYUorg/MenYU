@@ -31,6 +31,7 @@ export interface Comanda {
   id: string
   restauranteId: string
   nombre: string
+  activa: boolean
 }
 
 export interface CategoriaMenu {
