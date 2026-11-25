@@ -1,4 +1,4 @@
-import { useId, useState, type FormEvent } from 'react'
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { C, botonPeligro, botonPeligroSolido, botonPrimario, botonSecundario, conEstado, textoAyuda } from '../marca/estilos'
 import { mensajeDeFalla } from '../asistente/estilos'
 import { pastillaMarca, pastillaNeutra } from '../cajas/estilos'
@@ -30,8 +30,15 @@ export function FilaDeAbm({ config, item, bloqueo, actualizar, onCambio }: FilaD
   const [errorDelNombre, setErrorDelNombre] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [enviando, setEnviando] = useState(false)
-  // Al salir de la edición el foco vuelve al botón "Renombrar" de esta fila (autoFocus actúa cuando se vuelve a montar).
+  // Al salir de la edición el foco vuelve al botón "Renombrar" de esta fila (el efecto de abajo, solo al pasar de renombrar a ver).
   const [volverAlBoton, setVolverAlBoton] = useState(false)
+  const botonRenombrar = useRef<HTMLButtonElement>(null)
+  const modoAnterior = useRef<Modo>(modo)
+
+  useEffect(() => {
+    if (modoAnterior.current === 'renombrando' && modo === 'viendo' && volverAlBoton) botonRenombrar.current?.focus()
+    modoAnterior.current = modo
+  }, [modo, volverAlBoton])
 
   function abrirEdicion() {
     setTexto(item.nombre)
@@ -92,7 +99,7 @@ export function FilaDeAbm({ config, item, bloqueo, actualizar, onCambio }: FilaD
             id={id}
             etiqueta={config.etiquetaDelCampo}
             maximo={config.maximoDelNombre}
-            autoFocus
+            enfocarAlMontar
             valor={texto}
             error={errorDelNombre}
             onChange={(valor) => {
@@ -114,7 +121,7 @@ export function FilaDeAbm({ config, item, bloqueo, actualizar, onCambio }: FilaD
           {bloqueo && <span style={pastillaMarca}>{bloqueo.pastilla}</span>}
           <button
             type="button"
-            autoFocus={volverAlBoton}
+            ref={botonRenombrar}
             style={conEstado(botonSecundario, enviando)}
             aria-label={`Renombrar ${etiqueta}`}
             disabled={enviando}
