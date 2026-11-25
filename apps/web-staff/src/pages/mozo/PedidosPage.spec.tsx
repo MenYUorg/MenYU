@@ -18,10 +18,8 @@ vi.mock('../../services/api', () => ({
   api: { pedidos: { getByRestaurante: vi.fn(), cambiarEstado: vi.fn(), editarItem: vi.fn() } },
 }))
 vi.mock('../../services/impresora', () => ({
-  conectarImpresora: vi.fn(),
   impresoraConectada: vi.fn(() => conectada),
   imprimirPedido: vi.fn(() => Promise.resolve()),
-  testPrint: vi.fn(() => Promise.resolve()),
 }))
 
 /** Socket falso: guarda los handlers para poder "recibir" eventos del servidor. */
@@ -182,37 +180,6 @@ describe('PedidosPage (mozo)', () => {
     })
   })
 
-  describe('impresora', () => {
-    it('"Conectar impresora" la conecta y muestra el estado con el botón de prueba', async () => {
-      impresoraMock.conectarImpresora.mockResolvedValue()
-      await abrirCon()
-
-      await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Conectar impresora' })) })
-      expect(screen.getByText('Impresora')).toBeInTheDocument()
-      fireEvent.click(screen.getByRole('button', { name: 'Test' }))
-      expect(impresoraMock.testPrint).toHaveBeenCalled()
-    })
-
-    it('si no se puede conectar lo registra y sigue ofreciendo conectar', async () => {
-      const error = vi.spyOn(console, 'error').mockImplementation(() => {})
-      impresoraMock.conectarImpresora.mockRejectedValue(new Error('sin bluetooth'))
-      await abrirCon()
-
-      await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Conectar impresora' })) })
-
-      expect(error).toHaveBeenCalledWith('No se pudo conectar la impresora.')
-      expect(screen.getByRole('button', { name: 'Conectar impresora' })).toBeInTheDocument()
-      error.mockRestore()
-    })
-
-    it('si ya estaba conectada arranca mostrando el estado', async () => {
-      conectada = true
-      await abrirCon()
-
-      expect(screen.getByRole('button', { name: 'Test' })).toBeInTheDocument()
-    })
-  })
-
   describe('tiempo real', () => {
     it('se conecta con el token, entra a la sala y se desconecta al salir', async () => {
       pedidosApi.getByRestaurante.mockResolvedValue([] as never)
@@ -226,14 +193,13 @@ describe('PedidosPage (mozo)', () => {
       expect(socket.disconnect).toHaveBeenCalled()
     })
 
-    it('un pedido nuevo se imprime y aparece una vez; uno actualizado cambia de columna o se va', async () => {
+    it('un pedido nuevo aparece una vez; uno actualizado cambia de columna o se va', async () => {
       await abrirCon([PENDIENTE], [], [])
       const nuevo = pedido('nuevo-4', 'pendiente')
 
       recibir('order:new', nuevo)
       recibir('order:new', nuevo)
       expect(screen.getAllByText('Mesa 4')).toHaveLength(1)
-      expect(impresoraMock.imprimirPedido).toHaveBeenCalledWith(nuevo)
 
       recibir('order:updated', { ...nuevo, estado: 'listo' })
       expect(within(tarjeta('4')).getByText('Listo')).toBeInTheDocument()
@@ -241,6 +207,27 @@ describe('PedidosPage (mozo)', () => {
       expect(screen.getByText('Mesa 5')).toBeInTheDocument()
       recibir('order:updated', { ...nuevo, estado: 'entregado' })
       expect(screen.queryByText('Mesa 4')).not.toBeInTheDocument()
+    })
+  })
+
+  describe('sin impresora (se imprime en Cocina)', () => {
+    it.each(['pendiente', 'en_preparacion'] as const)('un order:new %s no imprime y el pedido se agrega a la lista', async (estado) => {
+      await abrirCon([PENDIENTE], [], [])
+      const nuevo = pedido('nuevo-7', estado)
+
+      recibir('order:new', nuevo)
+
+      expect(screen.getAllByText('Mesa 7')).toHaveLength(1)
+      expect(impresoraMock.imprimirPedido).not.toHaveBeenCalled()
+    })
+
+    it.each([false, true])('no hay botón "Conectar impresora" ni "Test" ni indicador "Impresora" (impresoraConectada: %s)', async (estaConectada) => {
+      conectada = estaConectada
+      await abrirCon()
+
+      expect(screen.queryByRole('button', { name: 'Conectar impresora' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Test' })).not.toBeInTheDocument()
+      expect(screen.queryByText('Impresora')).not.toBeInTheDocument()
     })
   })
 

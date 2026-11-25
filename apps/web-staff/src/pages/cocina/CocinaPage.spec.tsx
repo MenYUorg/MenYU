@@ -1,3 +1,4 @@
+import { StrictMode } from 'react'
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import type { Pedido } from '@menyu/types'
@@ -19,6 +20,7 @@ vi.mock('../../services/impresora', () => ({
   conectarImpresora: vi.fn(),
   impresoraConectada: vi.fn(() => conectada),
   imprimirPedido: vi.fn(() => Promise.resolve()),
+  testPrint: vi.fn(() => Promise.resolve()),
 }))
 
 const oyentes: { nuevo?: (p: Pedido) => void; actualizado?: (p: Pedido) => void; editado?: (p: Pedido) => void } = {}
@@ -243,6 +245,25 @@ describe('CocinaPage', () => {
 
       expect(screen.getByText('Impresora')).toBeInTheDocument()
     })
+
+    it('conectada muestra "Test", que imprime la prueba; sin conectar no aparece', async () => {
+      // Montaje dentro de act asincrono (abrir queda igual para los tests viejos): las cargas resuelven dentro de act.
+      const montar = async () => {
+        pedidosApi.getByRestaurante.mockResolvedValue([] as never)
+        let vista!: ReturnType<typeof render>
+        await act(async () => { vista = render(conRouter()) })
+        await screen.findByRole('button', { name: /Actualizar/ })
+        return vista
+      }
+      const { unmount } = await montar()
+      expect(screen.queryByRole('button', { name: 'Test' })).not.toBeInTheDocument()
+      unmount()
+
+      conectada = true
+      await montar()
+      await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Test' })) })
+      expect(impresoraMock.testPrint).toHaveBeenCalledTimes(1)
+    })
   })
 
   describe('tiempo real', () => {
@@ -266,8 +287,9 @@ describe('CocinaPage', () => {
 
       expect(screen.getAllByText('Mesa 4')).toHaveLength(1)
       expect(screen.queryByText('Mesa 5')).not.toBeInTheDocument()
-      expect(impresoraMock.imprimirPedido).toHaveBeenCalledTimes(2)
-      expect(tonos.slice(0, 2)).toEqual([523, 659])
+      // el segundo order:new del mismo pedido ya no suena ni imprime: se imprime una sola vez al entrar
+      expect(impresoraMock.imprimirPedido).toHaveBeenCalledTimes(1)
+      expect(tonos).toEqual([523, 659])
     })
 
     it('sin AudioContext no suena pero igual muestra el pedido', async () => {
@@ -811,6 +833,151 @@ describe('CocinaPage: pestañas por comanda', () => {
         expect(tonos).toHaveLength(0)
         expect(impresoraMock.imprimirPedido).not.toHaveBeenCalled()
       })
+    })
+  })
+
+  describe('imprimir al entrar a cocina', () => {
+    // Variante de abrirCon solo para estos tests: monta DENTRO de un act asincrono para que las cargas del montaje
+    // (fetchAll/fetchComandas) resuelvan dentro de act y no avisen. abrirCon queda igual para los tests viejos.
+    async function abrirEnAct(comandas: (typeof COCINA)[], enPrep = [SOLO_COCINA, MIXTO], listos = [SOLO_BARRA]) {
+      comandasApi.listar.mockResolvedValue(comandas)
+      pedidosApi.getByRestaurante.mockImplementation((_r: string, f?: { estado?: string }) =>
+        Promise.resolve(f?.estado === 'en_preparacion' ? enPrep : listos) as never,
+      )
+      await act(async () => { render(conRouter()) })
+      await screen.findByRole('button', { name: /Actualizar/ })
+    }
+    const ped = (id: string, items: PedidoRico['items'], estado = 'en_preparacion') => pedido(id, estado, { items })
+    const impresos = () => impresoraMock.imprimirPedido.mock.calls.map((c) => c[0] as PedidoRico)
+    const idsImpresos = () => impresos().map((p) => p.items.map((i) => i.id))
+    const MEZCLADO = () => ped('en-6', [linea('p1', 'Milanesa', 'c-coc'), linea('p2', 'Cerveza', 'c-bar'), linea('p3', 'Agua', null)])
+
+    it('el del comensal llega pendiente (ni se lista, ni suena, ni imprime) y al pasar a preparación entra una vez', async () => {
+      await abrirEnAct([COCINA, BARRA], [], [])
+      const pendiente = ped('cm-6', [linea('q1', 'Milanesa', 'c-coc')], 'pendiente')
+
+      recibir('nuevo', pendiente)
+      expect(screen.queryByText('Mesa 6')).not.toBeInTheDocument()
+      expect(tonos).toHaveLength(0)
+      expect(impresoraMock.imprimirPedido).not.toHaveBeenCalled()
+
+      const enPrep = { ...pendiente, estado: 'en_preparacion' }
+      recibir('actualizado', enPrep)
+      expect(screen.getByText('Mesa 6')).toBeInTheDocument()
+      expect(tonos).toEqual([523, 659])
+      expect(impresoraMock.imprimirPedido).toHaveBeenCalledTimes(1)
+      expect(impresoraMock.imprimirPedido.mock.calls[0][0]).toBe(enPrep)
+    })
+
+    it('un pedido mixto que entra: la pantalla en Barra imprime solo la bebida y lo sin comanda', async () => {
+      localStorage.setItem(CLAVE, 'c-bar')
+      await abrirEnAct([COCINA, BARRA], [], [])
+
+      recibir('actualizado', MEZCLADO())
+
+      expect(idsImpresos()).toEqual([['p2', 'p3']])
+      expect(impresos()[0].id).toBe('en-6')
+    })
+
+    it('el mismo pedido mixto en otro dispositivo, con la pestaña Cocina, imprime solo el plato y lo sin comanda', async () => {
+      localStorage.setItem(CLAVE, 'c-coc')
+      await abrirEnAct([COCINA, BARRA], [], [])
+
+      recibir('actualizado', MEZCLADO())
+
+      expect(idsImpresos()).toEqual([['p1', 'p3']])
+    })
+
+    it('el mismo pedido mixto en "Todas" imprime el pedido completo', async () => {
+      await abrirEnAct([COCINA, BARRA], [], [])
+      const mezclado = MEZCLADO()
+
+      recibir('actualizado', mezclado)
+
+      expect(impresoraMock.imprimirPedido.mock.calls[0][0]).toBe(mezclado)
+    })
+
+    it('un order:updated repetido, seguido o dentro del mismo act, imprime y suena una sola vez', async () => {
+      await abrirEnAct([COCINA, BARRA], [], [])
+      const p = ped('rp-6', [linea('r1', 'Milanesa', 'c-coc')])
+
+      recibir('actualizado', p)
+      recibir('actualizado', { ...p })
+      act(() => { oyentes.actualizado!(como(p)); oyentes.actualizado!(como(p)) })
+
+      expect(impresoraMock.imprimirPedido).toHaveBeenCalledTimes(1)
+      expect(tonos).toEqual([523, 659])
+    })
+
+    it('dos order:updated dentro del mismo act de un pedido nuevo imprimen una sola vez', async () => {
+      await abrirEnAct([COCINA, BARRA], [], [])
+      const p = ped('rp-7', [linea('r2', 'Milanesa', 'c-coc')])
+
+      act(() => { oyentes.actualizado!(como(p)); oyentes.actualizado!(como(p)) })
+
+      expect(impresoraMock.imprimirPedido).toHaveBeenCalledTimes(1)
+      expect(tonos).toEqual([523, 659])
+    })
+
+    it('uno que fetchAll ya cargó y pasa a listo ni imprime ni suena', async () => {
+      await abrirEnAct([COCINA, BARRA], [SOLO_COCINA], [])
+
+      recibir('actualizado', { ...SOLO_COCINA, estado: 'listo' })
+
+      expect(within(tarjeta('1')).getByText('Listo')).toBeInTheDocument()
+      expect(impresoraMock.imprimirPedido).not.toHaveBeenCalled()
+      expect(tonos).toHaveLength(0)
+    })
+
+    it('order:new en preparación (toma del mozo) imprime una vez; ni el updated a listo ni un order:new repetido reimprimen', async () => {
+      await abrirEnAct([COCINA, BARRA], [], [])
+      const p = ped('tm-6', [linea('s1', 'Milanesa', 'c-coc')])
+
+      recibir('nuevo', p)
+      recibir('actualizado', { ...p, estado: 'listo' })
+      recibir('nuevo', p)
+
+      expect(impresoraMock.imprimirPedido).toHaveBeenCalledTimes(1)
+      expect(tonos).toEqual([523, 659])
+    })
+
+    it('si entra directo en listo suena pero no imprime', async () => {
+      await abrirEnAct([COCINA, BARRA], [], [])
+
+      recibir('actualizado', ped('dl-6', [linea('t1', 'Milanesa', 'c-coc')], 'listo'))
+
+      expect(screen.getByText('Mesa 6')).toBeInTheDocument()
+      expect(tonos).toEqual([523, 659])
+      expect(impresoraMock.imprimirPedido).not.toHaveBeenCalled()
+    })
+
+    it('sin ítems visibles en la pestaña no suena ni imprime, y al cambiar a la pestaña con ítems tampoco imprime', async () => {
+      await abrirEnAct([COCINA, BARRA], [], [])
+      elegir('Barra')
+
+      recibir('nuevo', ped('sv-6', [linea('u1', 'Milanesa', 'c-coc')]))
+      recibir('actualizado', ped('sv-7', [linea('u2', 'Milanesa', 'c-coc')]))
+      expect(tonos).toHaveLength(0)
+      expect(impresoraMock.imprimirPedido).not.toHaveBeenCalled()
+
+      elegir('Cocina')
+      expect(screen.getByText('Mesa 6')).toBeInTheDocument()
+      recibir('actualizado', ped('sv-6', [linea('u1', 'Milanesa', 'c-coc')]))
+      expect(tonos).toHaveLength(0)
+      expect(impresoraMock.imprimirPedido).not.toHaveBeenCalled()
+    })
+
+    it('con StrictMode (updaters y efectos doble) un pedido que entra por order:updated imprime y suena una sola vez', async () => {
+      pedidosApi.getByRestaurante.mockResolvedValue([] as never)
+      comandasApi.listar.mockResolvedValue([COCINA, BARRA])
+      await act(async () => { render(<StrictMode>{conRouter()}</StrictMode>) })
+      await vi.waitFor(() => expect(screen.getByRole('button', { name: /Actualizar/ })).toBeEnabled())
+
+      recibir('actualizado', ped('sm-6', [linea('v1', 'Milanesa', 'c-coc')]))
+
+      expect(screen.getByText('Mesa 6')).toBeInTheDocument()
+      expect(impresoraMock.imprimirPedido).toHaveBeenCalledTimes(1)
+      expect(tonos).toEqual([523, 659])
     })
   })
 
