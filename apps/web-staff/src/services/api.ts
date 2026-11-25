@@ -106,6 +106,7 @@ export interface ItemPedidoRico {
   cantidadEditada: number | null
   precioUnitario: number
   notas: string | null
+  comandaId: string | null
   item: { nombre: string }
   mods: ModRico[]
 }

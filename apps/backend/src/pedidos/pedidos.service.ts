@@ -46,6 +46,7 @@ export class PedidosService {
         clienteId: string
         cantidad: number
         precioUnitario: number
+        comandaId: string | null
         notas: string | null
         mods: Array<{ itemIngredienteId: string; accion: string; cantidad: number }>
       }> = []
@@ -100,6 +101,7 @@ export class PedidosService {
           clienteId,
           cantidad: itemDto.cantidad,
           precioUnitario,
+          comandaId: dbItem.comandaId,
           notas: itemDto.notas ?? null,
           mods: modsData,
         })
@@ -117,6 +119,7 @@ export class PedidosService {
               clienteId: item.clienteId,
               cantidad: item.cantidad,
               precioUnitario: item.precioUnitario,
+              comandaId: item.comandaId,
               notas: item.notas,
               mods: {
                 create: item.mods,
@@ -166,6 +169,7 @@ export class PedidosService {
         clienteId: null
         cantidad: number
         precioUnitario: number
+        comandaId: string | null
         notas: string | null
         mods: Array<{ itemIngredienteId: string; accion: string; cantidad: number }>
       }> = []
@@ -202,6 +206,7 @@ export class PedidosService {
           clienteId: null,
           cantidad: itemDto.cantidad,
           precioUnitario,
+          comandaId: dbItem.comandaId,
           notas: itemDto.notas ?? null,
           mods: modsData,
         })
@@ -218,6 +223,7 @@ export class PedidosService {
               clienteId: item.clienteId,
               cantidad: item.cantidad,
               precioUnitario: item.precioUnitario,
+              comandaId: item.comandaId,
               notas: item.notas,
               mods: { create: item.mods },
             })),

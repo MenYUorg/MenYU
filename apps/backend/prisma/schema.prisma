@@ -254,6 +254,7 @@ model Comanda {
 
   restaurante Restaurante @relation(fields: [restauranteId], references: [id])
   items       ItemMenu[]
+  pedidoItems PedidoItem[]
 
   @@unique([restauranteId, nombre])
   @@map("comanda")
@@ -434,10 +435,12 @@ model PedidoItem {
   cantidadEditada Int?     @map("cantidad_editada")
   precioUnitario  Decimal  @map("precio_unitario") @db.Decimal(10, 2)
   notas           String?
+  comandaId       String?  @map("comanda_id")
 
   pedido  Pedido          @relation(fields: [pedidoId], references: [id])
   item    ItemMenu        @relation(fields: [itemId], references: [id])
   cliente Cliente?        @relation(fields: [clienteId], references: [id])
+  comanda Comanda?        @relation(fields: [comandaId], references: [id], onDelete: SetNull)
   mods    PedidoItemMod[]
   asignaciones ItemComensal[]
 
