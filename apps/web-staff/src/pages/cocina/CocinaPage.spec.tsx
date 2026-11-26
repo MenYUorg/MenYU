@@ -790,14 +790,14 @@ describe('CocinaPage: pestañas por comanda', () => {
         expect(nuevo.items).toHaveLength(4)
       })
 
-      it('en "Todas" imprime el pedido completo, el mismo objeto', async () => {
+      it('en "Todas" imprime el pedido completo', async () => {
         await abrirCon([COCINA, BARRA, VIEJA], [], [])
         const nuevo = MEZCLA()
 
         recibir('nuevo', nuevo)
 
         expect(impresoraMock.imprimirPedido).toHaveBeenCalledTimes(1)
-        expect(impresoraMock.imprimirPedido.mock.calls[0][0]).toBe(nuevo)
+        expect(impresoraMock.imprimirPedido.mock.calls[0][0]).toEqual(nuevo)
       })
 
       it('sin ítems visibles no imprime', async () => {
@@ -811,16 +811,14 @@ describe('CocinaPage: pestañas por comanda', () => {
     })
 
     describe('pedido sin ítems', () => {
-      it('en "Todas" se lista, suena "nuevo" y se imprime tal cual', async () => {
+      it('en "Todas" se lista y suena "nuevo", pero no se imprime: no hay ítems para el ticket', async () => {
         await abrirCon([COCINA, BARRA], [], [])
-        const vacio = ped('vz-5', [])
 
-        recibir('nuevo', vacio)
+        recibir('nuevo', ped('vz-5', []))
 
         expect(screen.getByText('Mesa 5')).toBeInTheDocument()
         expect(tonos).toEqual([523, 659])
-        expect(impresoraMock.imprimirPedido).toHaveBeenCalledTimes(1)
-        expect(impresoraMock.imprimirPedido.mock.calls[0][0]).toBe(vacio)
+        expect(impresoraMock.imprimirPedido).not.toHaveBeenCalled()
       })
 
       it('en una pestaña filtrada no se lista, no suena ni se imprime', async () => {
@@ -866,7 +864,7 @@ describe('CocinaPage: pestañas por comanda', () => {
       expect(screen.getByText('Mesa 6')).toBeInTheDocument()
       expect(tonos).toEqual([523, 659])
       expect(impresoraMock.imprimirPedido).toHaveBeenCalledTimes(1)
-      expect(impresoraMock.imprimirPedido.mock.calls[0][0]).toBe(enPrep)
+      expect(impresoraMock.imprimirPedido.mock.calls[0][0]).toEqual(enPrep)
     })
 
     it('un pedido mixto que entra: la pantalla en Barra imprime solo la bebida y lo sin comanda', async () => {
@@ -894,7 +892,29 @@ describe('CocinaPage: pestañas por comanda', () => {
 
       recibir('actualizado', mezclado)
 
-      expect(impresoraMock.imprimirPedido.mock.calls[0][0]).toBe(mezclado)
+      expect(impresoraMock.imprimirPedido.mock.calls[0][0]).toEqual(mezclado)
+    })
+
+    it('al entrar, en "Todas", no imprime las líneas eliminadas (cantidad vigente 0)', async () => {
+      const conQuitada = () => ped('en-7', [
+        linea('q1', 'Milanesa', 'c-coc'), linea('q2', 'Flan', 'c-coc', { cantidadEditada: 0 }), linea('q3', 'Cerveza', 'c-bar'),
+      ])
+      await abrirEnAct([COCINA, BARRA], [], [])
+
+      recibir('actualizado', conQuitada())
+
+      expect(idsImpresos()).toEqual([['q1', 'q3']])
+    })
+
+    it('si al omitir las líneas eliminadas no queda ninguna, el pedido entra (se lista y suena) pero no imprime', async () => {
+      localStorage.setItem(CLAVE, 'c-bar')
+      await abrirEnAct([COCINA, BARRA], [], [])
+
+      recibir('actualizado', ped('en-8', [linea('r1', 'Cerveza', 'c-bar', { cantidadEditada: 0 }), linea('r2', 'Milanesa', 'c-coc')]))
+
+      expect(screen.getByText('Mesa 8')).toBeInTheDocument()
+      expect(tonos).toEqual([523, 659])
+      expect(impresoraMock.imprimirPedido).not.toHaveBeenCalled()
     })
 
     it('un order:updated repetido, seguido o dentro del mismo act, imprime y suena una sola vez', async () => {
@@ -978,6 +998,193 @@ describe('CocinaPage: pestañas por comanda', () => {
       expect(screen.getByText('Mesa 6')).toBeInTheDocument()
       expect(impresoraMock.imprimirPedido).toHaveBeenCalledTimes(1)
       expect(tonos).toEqual([523, 659])
+    })
+
+    describe('reimprimir', () => {
+      const botonDe = (mesa: string) => within(tarjeta(mesa)).getByRole('button', { name: `Reimprimir pedido de la mesa ${mesa}` })
+      const botones = () => screen.queryAllByRole('button', { name: /^Reimprimir pedido/ })
+      const clic = (b: HTMLElement) => act(async () => { fireEvent.click(b) })
+
+      it('en Barra reimprime solo la bebida y lo sin comanda', async () => {
+        conectada = true
+        localStorage.setItem(CLAVE, 'c-bar')
+        await abrirEnAct([COCINA, BARRA], [MEZCLADO()], [])
+
+        await clic(botonDe('6'))
+
+        expect(idsImpresos()).toEqual([['p2', 'p3']])
+      })
+
+      it('con la pestaña Cocina reimprime solo el plato y lo sin comanda', async () => {
+        conectada = true
+        localStorage.setItem(CLAVE, 'c-coc')
+        await abrirEnAct([COCINA, BARRA], [MEZCLADO()], [])
+
+        await clic(botonDe('6'))
+
+        expect(idsImpresos()).toEqual([['p1', 'p3']])
+      })
+
+      it('en "Todas" reimprime el pedido completo', async () => {
+        conectada = true
+        const mezclado = MEZCLADO()
+        await abrirEnAct([COCINA, BARRA], [mezclado], [])
+
+        await clic(botonDe('6'))
+
+        expect(impresos()).toEqual([mezclado])
+      })
+
+      it('no reimprime las líneas eliminadas de un pedido editado', async () => {
+        conectada = true
+        const editado = ped('ed-4', [
+          linea('q1', 'Milanesa', 'c-coc'), linea('q2', 'Flan', 'c-coc', { cantidadEditada: 0 }), linea('q3', 'Cerveza', 'c-bar'),
+        ])
+        await abrirEnAct([COCINA, BARRA], [editado], [])
+
+        await clic(botonDe('4'))
+
+        expect(idsImpresos()).toEqual([['q1', 'q3']])
+      })
+
+      it('si en la pestaña todas las líneas visibles están eliminadas, el pedido se ve pero no hay botón', async () => {
+        conectada = true
+        localStorage.setItem(CLAVE, 'c-bar')
+        const quitada = ped('qu-3', [linea('r1', 'Cerveza', 'c-bar', { cantidadEditada: 0 }), linea('r2', 'Milanesa', 'c-coc')])
+        await abrirEnAct([COCINA, BARRA], [quitada], [])
+
+        expect(screen.getByText('Mesa 3')).toBeInTheDocument()
+        expect(botones()).toHaveLength(0)
+      })
+
+      it('el botón nombra la mesa y no aparece en la columna "Listo"', async () => {
+        conectada = true
+        const listo = ped('li-7', [linea('l1', 'Gin', 'c-bar')], 'listo')
+        await abrirEnAct([COCINA, BARRA], [MEZCLADO()], [listo])
+
+        expect(botones().map((b) => b.getAttribute('aria-label'))).toEqual(['Reimprimir pedido de la mesa 6'])
+        expect(screen.getByText('Mesa 7')).toBeInTheDocument()
+        expect(within(tarjeta('7')).queryByRole('button', { name: /Reimprimir/ })).not.toBeInTheDocument()
+      })
+
+      it('un pedido sin ítems visibles en la pestaña no se ve y no tiene botón', async () => {
+        conectada = true
+        localStorage.setItem(CLAVE, 'c-bar')
+        await abrirEnAct([COCINA, BARRA], [ped('so-1', [linea('s1', 'Milanesa', 'c-coc')])], [])
+
+        expect(screen.queryByText('Mesa 1')).not.toBeInTheDocument()
+        expect(botones()).toHaveLength(0)
+      })
+
+      it('un pedido anulado, tachado en preparación, no tiene botón', async () => {
+        conectada = true
+        const mezclado = MEZCLADO()
+        await abrirEnAct([COCINA, BARRA], [mezclado], [])
+        expect(botones()).toHaveLength(1)
+
+        recibir('editado', { ...mezclado, estado: 'anulado' })
+
+        expect(within(tarjeta('6')).getByText('Anulado')).toBeInTheDocument()
+        expect(botones()).toHaveLength(0)
+      })
+
+      it('sin impresora conectada el botón queda aria-disabled, explica por qué y no imprime', async () => {
+        await abrirEnAct([COCINA, BARRA], [MEZCLADO()], [])
+        const boton = botonDe('6')
+
+        expect(boton).toHaveAttribute('aria-disabled', 'true')
+        expect(boton).not.toBeDisabled()
+        expect(boton).toHaveAccessibleDescription('Conectá la impresora para reimprimir')
+        // el texto va por aria-describedby y no solo por el title, que no lo leen todos los lectores
+        expect(document.getElementById(boton.getAttribute('aria-describedby') ?? '')).toHaveTextContent('Conectá la impresora para reimprimir')
+        await clic(boton)
+
+        expect(impresoraMock.imprimirPedido).not.toHaveBeenCalled()
+      })
+
+      it('al conectar la impresora el botón se habilita y deja de explicar', async () => {
+        await abrirEnAct([COCINA, BARRA], [MEZCLADO()], [])
+        await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Conectar impresora' })) })
+
+        expect(botonDe('6')).toHaveAttribute('aria-disabled', 'false')
+        expect(botonDe('6')).not.toHaveAccessibleDescription()
+        await clic(botonDe('6'))
+        expect(impresoraMock.imprimirPedido).toHaveBeenCalledTimes(1)
+      })
+
+      it('se puede reimprimir las veces que haga falta, sin sonar ni cambiar el estado del pedido', async () => {
+        conectada = true
+        await abrirEnAct([COCINA, BARRA], [MEZCLADO()], [])
+
+        await clic(botonDe('6'))
+        await clic(botonDe('6'))
+        await clic(botonDe('6'))
+
+        expect(idsImpresos()).toEqual([['p1', 'p2', 'p3'], ['p1', 'p2', 'p3'], ['p1', 'p2', 'p3']])
+        expect(tonos).toHaveLength(0)
+        expect(pedidosApi.cambiarEstado).not.toHaveBeenCalled()
+        expect(within(tarjeta('6')).getByText('En preparación')).toBeInTheDocument()
+      })
+
+      it('no altera el registro de entradas: un order:updated del mismo pedido no imprime ni suena, y uno nuevo sí', async () => {
+        conectada = true
+        const mezclado = MEZCLADO()
+        await abrirEnAct([COCINA, BARRA], [mezclado], [])
+        await clic(botonDe('6'))
+        expect(impresoraMock.imprimirPedido).toHaveBeenCalledTimes(1)
+
+        recibir('actualizado', mezclado)
+        expect(impresoraMock.imprimirPedido).toHaveBeenCalledTimes(1)
+        expect(tonos).toHaveLength(0)
+
+        recibir('actualizado', ped('nu-5', [linea('n1', 'Milanesa', 'c-coc')]))
+        expect(impresoraMock.imprimirPedido).toHaveBeenCalledTimes(2)
+        expect(tonos).toEqual([523, 659])
+      })
+
+      it('reimprimir un pedido no hace que otro que entra después imprima de más: entra una vez', async () => {
+        conectada = true
+        await abrirEnAct([COCINA, BARRA], [MEZCLADO()], [])
+        await clic(botonDe('6'))
+
+        const nuevo = ped('nu-5', [linea('n1', 'Milanesa', 'c-coc')])
+        recibir('actualizado', nuevo)
+        recibir('actualizado', nuevo)
+
+        expect(idsImpresos()).toEqual([['p1', 'p2', 'p3'], ['n1']])
+      })
+
+      it('mientras imprime no admite otro clic; al terminar se puede volver a reimprimir', async () => {
+        conectada = true
+        let terminar!: () => void
+        impresoraMock.imprimirPedido.mockImplementationOnce(() => new Promise<void>((resolver) => { terminar = resolver }))
+        await abrirEnAct([COCINA, BARRA], [MEZCLADO()], [])
+
+        await clic(botonDe('6'))
+        await clic(botonDe('6'))
+        expect(impresoraMock.imprimirPedido).toHaveBeenCalledTimes(1)
+        expect(botonDe('6')).toHaveAttribute('aria-disabled', 'true')
+
+        await act(async () => { terminar() })
+        expect(botonDe('6')).toHaveAttribute('aria-disabled', 'false')
+        await clic(botonDe('6'))
+        expect(impresoraMock.imprimirPedido).toHaveBeenCalledTimes(2)
+      })
+
+      it('si falla la impresión avisa en la tarjeta, sigue usable y el aviso se limpia al reintentar', async () => {
+        conectada = true
+        impresoraMock.imprimirPedido.mockRejectedValueOnce(new Error('USB desconectado'))
+        await abrirEnAct([COCINA, BARRA], [MEZCLADO(), ped('ot-2', [linea('o1', 'Milanesa', 'c-coc')])], [])
+
+        await clic(botonDe('6'))
+
+        expect(within(tarjeta('6')).getByRole('alert')).toHaveTextContent('No se pudo imprimir. Revisá la impresora.')
+        expect(screen.getAllByRole('alert')).toHaveLength(1)
+        expect(botonDe('6')).toHaveAttribute('aria-disabled', 'false')
+        await clic(botonDe('6'))
+        expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+        expect(impresoraMock.imprimirPedido).toHaveBeenCalledTimes(2)
+      })
     })
   })
 

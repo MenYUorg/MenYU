@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { AlertTriangle, ChefHat, ChevronRight, Clock, LogOut, RefreshCw } from 'lucide-react'
+import { AlertTriangle, ChefHat, ChevronRight, Clock, LogOut, Printer, RefreshCw } from 'lucide-react'
 import { api } from '../../services/api'
 import type { PedidoRico } from '../../services/api'
 import { useContextoStore, useRestauranteId } from '../../store/contextoStore'
@@ -9,7 +9,7 @@ import { cerrarSesion } from '../../services/socket'
 import type { Comanda, Pedido } from '@menyu/types'
 import { comandaRecordada, recordarComanda } from '../../utils/comandaRecordada'
 import {
-  hayQueConfirmar, idsActivos, itemsParaImprimir, ocultosVigentes, partirItems, pestaniaVigente, textoDeConfirmacion,
+  hayQueConfirmar, idsActivos, ocultosVigentes, partirItems, pedidoParaImprimir, pestaniaVigente, textoDeConfirmacion,
   tieneAlgoVisible,
 } from '../../utils/comandasDeCocina'
 import type { Pestania } from '../../utils/comandasDeCocina'
@@ -104,8 +104,15 @@ function playSound(type: 'nuevo' | 'editado' | 'anulado') {
 }
 
 // ── PedidoCard ────────────────────────────────────────────────────────────────
+const TEXTO_SIN_IMPRESORA = 'Conectá la impresora para reimprimir'
+const TEXTO_ERROR_IMPRESION = 'No se pudo imprimir. Revisá la impresora.'
+const SOLO_PARA_LECTORES = {
+  position: 'absolute', width: 1, height: 1, margin: -1, padding: 0, overflow: 'hidden',
+  clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap', border: 0,
+} as const
+
 function PedidoCard({
-  pedido, onAvanzar, loading, pestania, activas, comandas,
+  pedido, onAvanzar, loading, pestania, activas, comandas, impresoraLista,
 }: {
   pedido:    PedidoRico
   onAvanzar: (id: string, estado: EstadoPedido) => void
@@ -113,11 +120,15 @@ function PedidoCard({
   pestania:  Pestania
   activas:   string[]
   comandas:  Comanda[]
+  impresoraLista: boolean
 }) {
   const { visibles, ocultos } = partirItems(pedido.items, pestania, activas)
   const ocultosN = ocultosVigentes(ocultos)
   // La tarjeta se remonta al cambiar de pestania (key en el padre): la confirmación pendiente se descarta sola.
   const [pidiendoConfirmar, setPidiendoConfirmar] = useState(false)
+  const [imprimiendo, setImprimiendo] = useState(false)
+  const [errorDeImpresion, setErrorDeImpresion] = useState(false)
+  const idSinImpresora = useId()
   const confirmando = pidiendoConfirmar && hayQueConfirmar(ocultos)
   const textoConfirmar = textoDeConfirmacion(ocultos, comandas)
   const estado    = pedido.estado as string
@@ -127,6 +138,20 @@ function PedidoCard({
   const urgente   = minutos >= 20
   const hasEdits  = visibles.some((i) => i.cantidadEditada !== null)
   const isAnulado = pedido.estado === 'anulado'
+  // Reimprimir es una acción explícita: no pasa por el registro de entradas ni suena. Lo que sale es lo que se ve en la pestaña.
+  const paraReimprimir = estado === 'en_preparacion' ? pedidoParaImprimir(pedido, pestania, activas) : null
+  const reimprimir = async () => {
+    if (!paraReimprimir || !impresoraLista || imprimiendo) return
+    setErrorDeImpresion(false)
+    setImprimiendo(true)
+    try {
+      await imprimirPedido(paraReimprimir)
+    } catch {
+      setErrorDeImpresion(true)
+    } finally {
+      setImprimiendo(false)
+    }
+  }
 
   const badgeLabel  = isAnulado ? 'Anulado'
                     : hasEdits  ? `${ESTADO_LABEL[estado] ?? estado} · Editado`
@@ -155,14 +180,45 @@ function PedidoCard({
             {urgente && <AlertTriangle size={12} color={C.red} />}
           </div>
         </div>
-        <span style={{
-          background: badgeBg, color: badgeColor, border: `1px solid ${badgeBorder}`,
-          borderRadius: 6, padding: '3px 8px', fontSize: 11, fontWeight: 600,
-          whiteSpace: 'nowrap', flexShrink: 0,
-        }}>
-          {badgeLabel}
-        </span>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, flexShrink: 0 }}>
+          <span style={{
+            background: badgeBg, color: badgeColor, border: `1px solid ${badgeBorder}`,
+            borderRadius: 6, padding: '3px 8px', fontSize: 11, fontWeight: 600,
+            whiteSpace: 'nowrap',
+          }}>
+            {badgeLabel}
+          </span>
+          {paraReimprimir && (
+            <>
+              <button
+                type="button"
+                className="cocina-reimprimir"
+                aria-label={`Reimprimir pedido de la mesa ${pedido.mesa.numero}`}
+                aria-disabled={!impresoraLista || imprimiendo}
+                aria-describedby={impresoraLista ? undefined : idSinImpresora}
+                title={impresoraLista ? undefined : TEXTO_SIN_IMPRESORA}
+                onClick={() => void reimprimir()}
+                style={{
+                  background: C.white, color: C.navy, border: `1px solid ${C.border}`, borderRadius: 6,
+                  padding: '4px 8px', display: 'flex', alignItems: 'center', cursor: impresoraLista ? 'pointer' : 'not-allowed',
+                  opacity: impresoraLista && !imprimiendo ? 1 : 0.5,
+                }}
+              >
+                {imprimiendo
+                  ? <RefreshCw size={14} aria-hidden="true" style={{ animation: 'spin 1s linear infinite' }} />
+                  : <Printer size={14} aria-hidden="true" />}
+              </button>
+              {!impresoraLista && <span id={idSinImpresora} style={SOLO_PARA_LECTORES}>{TEXTO_SIN_IMPRESORA}</span>}
+            </>
+          )}
+        </div>
       </div>
+
+      {errorDeImpresion && (
+        <div role="alert" style={{ fontSize: 12, color: C.red, background: C.redBg, borderRadius: 7, padding: '6px 10px', fontWeight: 600 }}>
+          {TEXTO_ERROR_IMPRESION}
+        </div>
+      )}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         {visibles.map((item) => {
@@ -336,16 +392,15 @@ export function CocinaPage() {
   useEffect(() => { yaEntraron.current.clear() }, [restauranteId])
 
   // Un pedido entra a cocina UNA vez por pantalla: suena e imprime (solo los items de la pestania de este dispositivo)
-  // la primera vez. Solo usa refs: puede llamarse desde el socket sin volver a suscribirse.
+  // la primera vez (sin las líneas eliminadas; si no queda ninguna, no imprime). Solo usa refs: puede llamarse desde el
+  // socket sin volver a suscribirse.
   const alEntrarACocina = useCallback((pedido: PedidoRico) => {
     if (!marcarEntrada(yaEntraron.current, pedido.id)) return
     if (!tieneAlgoVisible(pedido.items, pestaniaRef.current, activasRef.current)) return
     playSound('nuevo')
     if (pedido.estado !== 'en_preparacion') return
-    const paraImprimir = pestaniaRef.current === null
-      ? pedido
-      : { ...pedido, items: itemsParaImprimir(pedido.items, pestaniaRef.current, activasRef.current) }
-    imprimirPedido(paraImprimir).catch(console.error)
+    const paraImprimir = pedidoParaImprimir(pedido, pestaniaRef.current, activasRef.current)
+    if (paraImprimir) imprimirPedido(paraImprimir).catch(console.error)
   }, [])
 
   useEffect(() => { void fetchAll() }, [fetchAll])
@@ -586,6 +641,7 @@ export function CocinaPage() {
                       pestania={pestania}
                       activas={activas}
                       comandas={comandas}
+                      impresoraLista={conectada}
                     />
                   ))
                 )}
@@ -595,7 +651,8 @@ export function CocinaPage() {
         })}
       </div>
 
-      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .cocina-reimprimir:focus-visible { outline: 2px solid ${C.navy}; outline-offset: 2px; }`}</style>
     </div>
   )
 }
