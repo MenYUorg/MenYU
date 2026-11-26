@@ -44,6 +44,10 @@ Registro de lo que se hizo para poner SonarCloud en el CI de MenYU y tomar la l�
 | Bitácora del 21/11 y 23/11 y la conexión de Mercado Pago por API (PR #486) | **Mergeado** (23/11/2026, `ecc7fe4`) |
 | Pasada manual por staging de #359 y #360 (`checklist-staging-caja-359-360.md`) | **Parcial** (24/11/2026, staging en `ee4415b`). Preparación y secciones A, B, C, D, E, G, H e I según lo esperado, sin hallazgos. **Pendientes: la sección F (Mercado Pago real del comensal) y el 6.5**: el checkout respondió "Una de las partes con la que intentás hacer el pago es de prueba". #358, #359 y #360 cerrados el 24/11 (Done en el Project): Mercado Pago real se sigue aparte |
 | Estilo de las pantallas de caja en web-staff y web-admin (PR #488, `style/caja-ux`) | **Mergeado** (24/11/2026 18:47 ART, `db15dd7`). Solo estilos de los archivos de caja. CI del PR en verde y gate de Sonar `OK` (100 % de cobertura nueva, 0,0 % de duplicación). Deploy de staging `45494576260` en verde |
+| La impresión en Cocina, una sola vez al entrar a cocina (PR #499) y su documentación (PR #500) | **Mergeados** (25/11/2026 18:15 y 19:01 ART, `4e0a80c` y `3c32ebc`) |
+| El foco del ABM con `ref` y efecto, sin `autoFocus` (PR #501, S9379) | **Mergeado** (25/11/2026 20:25 ART, `1de4722`). Gate de Sonar `OK`, 0 violaciones. Faltaba comprobar en `main` que las dos `S9379` del ABM se cierran (quedan 5 de otros archivos) |
+| Bitácora del 25/11 (noche) (PR #502) | **Mergeado** (25/11/2026 20:34 ART, `b559be0`) |
+| Pasada manual por staging de las comandas (#344, `checklist-staging-comandas.md`) | **Hecha** (26/11/2026). Secciones A, B, C, D y E según lo esperado, **sin hallazgos**; F no aplica (sin cuenta de cocina de `r-001`); G con las sesiones cerradas. Detalle en la entrada del 26/11 |
 
 ## Pendientes
 
@@ -2243,3 +2247,42 @@ El comentario de cierre quedó en el #344 (18:16, sin reabrirlo), con los links 
 5. **Deudas del #344:** el código de error en las respuestas 409 (backend y frontend), que hoy el frontend reconoce por el texto exacto del mensaje; mover `cajas/estilos.ts` a un lugar neutro (`abm/` lo importa); y el `RoleGuard` de `/admin/comandas`, redundante hoy (importaría si se suma un tercer rol). Opcional: las otras 5 `S9379`.
 6. **Los 186 avisos de `act()` del spec de `CocinaPage`**, que ya estaban en `main`: los helpers `abrir` y `abrirCon` montan fuera de `act`. Los tests del #499 usan `abrirEnAct`, que no los emite; pasar los demás a ese esquema es una mejora aparte, sin urgencia.
 7. **Lo del 24/11, que sigue:** la sección F y el 6.5 (después, decidir el tag de producción); el `BASE_URL` de staging en `docs/auth/VariablesACambiar.md`; la corrida de E2E — staging; 0.3 y DT-02 (`MP_WEBHOOK_SECRET` y el PR C); y los puntos 5 a 7 del pendiente del 21/11.
+
+
+### 26/11/2026: la pasada manual de comandas en staging, sin hallazgos, y los próximos cambios decididos
+
+**La pasada manual** de `docs/calidad/checklist-staging-comandas.md` (#344), con Coty, en staging.
+
+| Sección | Resultado |
+|---|---|
+| A, B, C, D y E | Según lo esperado, **sin hallazgos** |
+| C1 | Se probó en singular (Barra, 1 plato) y en plural (Cocina, 2 platos) |
+| D9 (impresión) | Ok: Test, impresión filtrada en la pestaña Barra (solo la bebida) y el pedido completo en Todas |
+| E2 | Ok: al cambiar la comanda del plato, los pedidos ya hechos conservaron la suya |
+| F | No aplica: no hay cuenta de cocina de `r-001` |
+| G | Sesiones cerradas. Cocina y Barra quedan activas con sus platos para la demo, y Parrilla inactiva |
+
+**Nota para el manual de usuario (#137): la impresora térmica con WebUSB en Windows.**
+- Para que funcione hay que reemplazar el driver `usbprint` de la impresora por **WinUSB** con **Zadig 2.9** (Options → List All Devices). En esta computadora el dispositivo es "USB Printer Port", USB ID `0483:070B`.
+- Si por error se reemplaza otro dispositivo (pasó con la webcam), se revierte desde el Administrador de dispositivos, eligiendo "Dispositivo de vídeo USB".
+- Se suma a la nota de impresión que ya estaba pendiente para el manual (punto 4 del pendiente del 25/11 noche).
+
+**Decisión: no se cambian los permisos.** A Cocina entran COCINA, OWNER y GERENTE, y la impresora se conecta solo desde Cocina.
+
+**Próximos cambios decididos, sin implementar todavía:**
+1. **Reimprimir:** un botón en cada pedido "En preparación", en todas las pestañas, que imprime lo visible en esa pestaña.
+2. **"Listo" por comanda:**
+   - la barra marca solo sus ítems (el pedido sigue en preparación);
+   - la cocina cierra todo (el pedido entero pasa a Listo);
+   - en la pestaña Todas, "Listo" marca el pedido completo;
+   - el mozo ve en el kanban un aviso del tipo "Barra: listo";
+   - se saca la confirmación de "Listo".
+   - **Falta definir** cómo se cierra un pedido de solo bebidas.
+
+**Pendiente al retomar** (reemplaza la lista del 25/11 noche, en este orden):
+1. **Definir y diseñar los dos cambios de arriba** (reimprimir y "Listo" por comanda), empezando por cómo se cierra un pedido de solo bebidas. Hoy el "Listo" sigue siendo por pedido, con la confirmación.
+2. **Antes del tag de producción (paso obligatorio):** las tres consultas de solo lectura de la entrada de la mañana del 25/11 (comandas existentes, nombres repetidos por restaurante, platos con comanda), con su resultado anotado. Las migraciones del #344 son `20261125103231` y `20261125140933`; si la de nombres repetidos devuelve filas, hay que renombrarlas antes de desplegar.
+3. **Manual de usuario (#137):** la nota de impresión (impresora en el dispositivo de cocina, una estación por pestaña, ticket al entrar a cocina, sin cola ni reimpresión; esto último cambia con el botón de reimprimir) y la de Zadig/WinUSB de arriba.
+4. **Comprobar en Sonar que en `main` las dos `S9379` del ABM quedaron cerradas** (tienen que quedar 5, las de otros archivos) y sacar el `autoFocus` de las deudas.
+5. **Deudas del #344:** el código de error en las respuestas 409 (backend y frontend); mover `cajas/estilos.ts` a un lugar neutro; el `RoleGuard` de `/admin/comandas`, redundante hoy. Opcional: las otras 5 `S9379` y los 186 avisos de `act()` del spec de `CocinaPage`.
+6. **Lo del 24/11, que sigue:** la sección F y el 6.5 (después, decidir el tag de producción); el `BASE_URL` de staging en `docs/auth/VariablesACambiar.md`; la corrida de E2E — staging; 0.3 y DT-02 (`MP_WEBHOOK_SECRET` y el PR C); y los puntos 5 a 7 del pendiente del 21/11.
