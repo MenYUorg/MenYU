@@ -5,6 +5,7 @@ import {
   itemVisible,
   ocultosVigentes,
   partirItems,
+  pedidoParaImprimir,
   pestaniaVigente,
   textoDeConfirmacion,
   tieneAlgoVisible,
@@ -177,5 +178,56 @@ describe('textoDeConfirmacion', () => {
     const copia = structuredClone(ocultos)
     textoDeConfirmacion(ocultos, COMANDAS)
     expect(ocultos).toEqual(copia)
+  })
+})
+
+describe('pedidoParaImprimir', () => {
+  const linea = (id: string, comandaId: string | null, cantidad = 1, cantidadEditada: number | null = null) => ({
+    id, ...item(comandaId, cantidad, cantidadEditada),
+  })
+  const pedido = (items: ReturnType<typeof linea>[]) => ({ id: 'p-1', mesa: 3, items })
+  const ids = (p: { items: { id: string }[] } | null) => p?.items.map((i) => i.id)
+  const MIXTO = () => [linea('plato', 'c-cocina'), linea('bebida', 'c-barra'), linea('agua', null)]
+
+  it('en "Todas" es el pedido completo', () => {
+    expect(ids(pedidoParaImprimir(pedido(MIXTO()), null, ACTIVAS))).toEqual(['plato', 'bebida', 'agua'])
+  })
+
+  it('en una pestaña filtrada deja solo los ítems de esa comanda y los sin comanda', () => {
+    expect(ids(pedidoParaImprimir(pedido(MIXTO()), 'c-barra', ACTIVAS))).toEqual(['bebida', 'agua'])
+    expect(ids(pedidoParaImprimir(pedido(MIXTO()), 'c-cocina', ACTIVAS))).toEqual(['plato', 'agua'])
+  })
+
+  it('un ítem de una comanda inactiva sale en todas las pestañas (la misma regla que la pantalla)', () => {
+    const items = [linea('plato', 'c-cocina'), linea('viejo', 'c-vieja')]
+    expect(ids(pedidoParaImprimir(pedido(items), 'c-cocina', ACTIVAS))).toEqual(['plato', 'viejo'])
+    expect(ids(pedidoParaImprimir(pedido(items), 'c-barra', ACTIVAS))).toEqual(['viejo'])
+  })
+
+  it('omite las líneas con cantidad vigente 0, tanto la eliminada como la original en 0, en "Todas" y en una pestaña', () => {
+    const items = [linea('plato', 'c-cocina', 2), linea('quitada', 'c-cocina', 3, 0), linea('bebida', 'c-barra', 0, 2)]
+    expect(ids(pedidoParaImprimir(pedido(items), null, ACTIVAS))).toEqual(['plato', 'bebida'])
+    expect(ids(pedidoParaImprimir(pedido(items), 'c-cocina', ACTIVAS))).toEqual(['plato'])
+  })
+
+  it('una línea editada a otra cantidad sigue saliendo', () => {
+    expect(ids(pedidoParaImprimir(pedido([linea('plato', 'c-cocina', 3, 1)]), 'c-cocina', ACTIVAS))).toEqual(['plato'])
+  })
+
+  it('si no queda ninguna línea no hay nada que imprimir: null', () => {
+    expect(pedidoParaImprimir(pedido([linea('quitada', 'c-barra', 1, 0)]), 'c-barra', ACTIVAS)).toBeNull()
+    expect(pedidoParaImprimir(pedido([linea('plato', 'c-cocina')]), 'c-barra', ACTIVAS)).toBeNull()
+    expect(pedidoParaImprimir(pedido([]), null, ACTIVAS)).toBeNull()
+  })
+
+  it('conserva el resto del pedido y no muta el original', () => {
+    const original = pedido([linea('plato', 'c-cocina'), linea('quitada', 'c-cocina', 1, 0)])
+    const copia = structuredClone(original)
+
+    const salida = pedidoParaImprimir(original, null, ACTIVAS)
+
+    expect(salida).toMatchObject({ id: 'p-1', mesa: 3 })
+    expect(salida).not.toBe(original)
+    expect(original).toEqual(copia)
   })
 })

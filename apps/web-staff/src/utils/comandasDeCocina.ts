@@ -106,3 +106,17 @@ export function itemsParaImprimir<T extends ItemConComanda>(
 ): T[] {
   return partirItems(items, pestania, activas).visibles
 }
+
+/**
+ * El pedido tal como sale en el ticket de la pestania: las líneas que se ven (`itemsParaImprimir`), sin las que tienen
+ * cantidad vigente 0 (eliminadas en una edición: no hay nada que preparar). Si no queda ninguna línea no hay nada que
+ * imprimir y devuelve `null`. Sin mutar el pedido.
+ */
+export function pedidoParaImprimir<I extends ItemConComanda, P extends { items: I[] }>(
+  pedido: P,
+  pestania: Pestania,
+  activas: Activas,
+): P | null {
+  const items = itemsParaImprimir(pedido.items, pestania, activas).filter((item) => cantidadVigente(item) > 0)
+  return items.length === 0 ? null : { ...pedido, items }
+}
