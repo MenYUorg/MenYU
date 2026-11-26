@@ -108,6 +108,8 @@ export interface ItemPedidoRico {
   precioUnitario: number
   notas: string | null
   comandaId: string | null
+  // Cuándo se marcó listo el ítem (null = pendiente): lo marca su comanda, o todo el pedido al cerrarse (#344)
+  listoEn: string | null
   item: { nombre: string }
   mods: ModRico[]
 }

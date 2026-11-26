@@ -12,6 +12,7 @@ import { PedidosService } from './pedidos.service'
 const prisma = {
   pedido: { findUnique: jest.fn(), findMany: jest.fn(), update: jest.fn() },
   pedidoEdicion: { findMany: jest.fn() },
+  comanda: { findMany: jest.fn() },
   sesionMesa: { findUnique: jest.fn() },
   mesa: { findUnique: jest.fn(), findMany: jest.fn() },
   $transaction: jest.fn(),
@@ -40,8 +41,9 @@ function crearTx() {
     sesionMesa: { findUnique: jest.fn().mockResolvedValue({ id: 'ses-1', estado: 'activa' }) },
     itemMenu: { findFirst: jest.fn().mockResolvedValue(ITEM) },
     itemIngrediente: { findUnique: jest.fn().mockResolvedValue(ingrediente()) },
-    pedido: { create: jest.fn().mockResolvedValue({ id: 'ped-1' }), update: jest.fn() },
-    pedidoItem: { update: jest.fn() },
+    pedido: { create: jest.fn().mockResolvedValue({ id: 'ped-1' }), update: jest.fn(), findUniqueOrThrow: jest.fn().mockResolvedValue({ estado: 'pendiente', items: [] }) },
+    pedidoItem: { update: jest.fn(), updateMany: jest.fn() },
+    $queryRaw: jest.fn(),
     pedidoEdicion: { create: jest.fn() },
   }
 }
@@ -249,7 +251,6 @@ describe('PedidosService: validaciones, estado y ediciones', () => {
 
     it.each([
       ['pendiente', 'en_preparacion'],
-      ['en_preparacion', 'listo'],
       ['listo', 'entregado'],
     ])('de %s pasa a %s, lo guarda y lo avisa al restaurante', async (desde, hacia) => {
       // Arrange
@@ -277,6 +278,183 @@ describe('PedidosService: validaciones, estado y ediciones', () => {
       )
       expect(prisma.pedido.update).not.toHaveBeenCalled()
       expect(gateway.emitOrderUpdated).not.toHaveBeenCalled()
+    })
+
+    describe('"Listo" por comanda (#344)', () => {
+      const ahora = new Date('2026-11-26T15:00:00Z')
+      const linea = (id: string, comandaId: string | null, extra: object = {}) => ({
+        id, comandaId, cantidad: 1, cantidadEditada: null, listoEn: null, ...extra,
+      })
+      const COMANDAS = [
+        { id: 'c-cocina', nombre: 'Cocina', activa: true },
+        { id: 'c-barra', nombre: 'Barra', activa: true },
+      ]
+      const MIXTO = () => [linea('plato', 'c-cocina'), linea('cerveza', 'c-barra'), linea('gin', 'c-barra')]
+      const SOLO_BEBIDAS = () => [linea('cerveza', 'c-barra'), linea('gin', 'c-barra')]
+      const RICO = { id: 'ped-1', estado: 'en_preparacion', mesa: { numero: '4' }, items: [] }
+
+      // Lo que ve la transacción: primero el pedido bloqueado (estado e ítems), después el pedido rico para responder.
+      function preparar(estado: string, items: object[], estadoAntes = 'en_preparacion') {
+        prisma.pedido.findUnique.mockResolvedValue({ id: 'ped-1', estado: estadoAntes, mesa: { restauranteId: REST } })
+        prisma.comanda.findMany.mockResolvedValue(COMANDAS)
+        tx.pedido.findUniqueOrThrow.mockResolvedValueOnce({ estado, items }).mockResolvedValueOnce(RICO)
+      }
+      const marcados = () => tx.pedidoItem.updateMany.mock.calls.map((c) => (c[0] as { where: { id: { in: string[] } } }).where.id.in)
+
+      beforeEach(() => jest.useFakeTimers().setSystemTime(ahora))
+      afterEach(() => jest.useRealTimers())
+
+      it('sin comanda (la pestaña "Todas" o el mozo) marca todo lo pendiente, cierra el pedido y lo avisa una vez', async () => {
+        preparar('en_preparacion', MIXTO())
+
+        const res = await service.actualizarEstado('ped-1', { estado: 'listo' }, CUENTAS.COCINA)
+
+        expect(marcados()).toEqual([['plato', 'cerveza', 'gin']])
+        expect(tx.pedidoItem.updateMany).toHaveBeenCalledWith({ where: { id: { in: ['plato', 'cerveza', 'gin'] } }, data: { listoEn: ahora } })
+        expect(tx.pedido.update).toHaveBeenCalledWith({ where: { id: 'ped-1' }, data: { estado: 'listo' } })
+        expect(res).toBe(RICO)
+        expect(gateway.emitOrderUpdated).toHaveBeenCalledTimes(1)
+        expect(gateway.emitOrderUpdated).toHaveBeenCalledWith(REST, RICO)
+      })
+
+      it('bloquea la fila del pedido antes de leerla', async () => {
+        preparar('en_preparacion', MIXTO())
+
+        await service.actualizarEstado('ped-1', { estado: 'listo' }, CUENTAS.COCINA)
+
+        expect(prisma.$transaction).toHaveBeenCalledTimes(1)
+        expect(tx.$queryRaw).toHaveBeenCalledTimes(1)
+        expect(tx.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(tx.pedido.findUniqueOrThrow.mock.invocationCallOrder[0])
+        expect(tx.$queryRaw.mock.calls[0][0].join('?')).toMatch(/FOR UPDATE/)
+        expect(tx.$queryRaw.mock.calls[0].slice(1)).toEqual(['ped-1'])
+      })
+
+      it('lee las comandas del restaurante del pedido', async () => {
+        preparar('en_preparacion', MIXTO())
+
+        await service.actualizarEstado('ped-1', { estado: 'listo', comandaId: 'c-barra' }, CUENTAS.COCINA)
+
+        expect(prisma.comanda.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { restauranteId: REST } }))
+      })
+
+      it('una comanda que no es el cocina marca solo lo suyo: el pedido sigue en preparación y se avisa', async () => {
+        preparar('en_preparacion', MIXTO())
+
+        const res = await service.actualizarEstado('ped-1', { estado: 'listo', comandaId: 'c-barra' }, CUENTAS.COCINA)
+
+        expect(marcados()).toEqual([['cerveza', 'gin']])
+        expect(tx.pedido.update).not.toHaveBeenCalled()
+        expect(res).toBe(RICO)
+        expect(gateway.emitOrderUpdated).toHaveBeenCalledWith(REST, RICO)
+      })
+
+      it('la cocina marca antes que la barra: cierra el pedido entero, con lo de la barra', async () => {
+        preparar('en_preparacion', MIXTO())
+
+        await service.actualizarEstado('ped-1', { estado: 'listo', comandaId: 'c-cocina' }, CUENTAS.COCINA)
+
+        expect(marcados()).toEqual([['plato', 'cerveza', 'gin']])
+        expect(tx.pedido.update).toHaveBeenCalledWith({ where: { id: 'ped-1' }, data: { estado: 'listo' } })
+      })
+
+      it('sin ítems de cocina, la primera comanda que marca cierra el pedido', async () => {
+        preparar('en_preparacion', SOLO_BEBIDAS())
+
+        await service.actualizarEstado('ped-1', { estado: 'listo', comandaId: 'c-barra' }, CUENTAS.COCINA)
+
+        expect(marcados()).toEqual([['cerveza', 'gin']])
+        expect(tx.pedido.update).toHaveBeenCalledWith({ where: { id: 'ped-1' }, data: { estado: 'listo' } })
+      })
+
+      it('una comanda sin nada pendiente (un segundo clic) no cambia nada ni avisa, y no es un error', async () => {
+        preparar('en_preparacion', [linea('plato', 'c-cocina'), linea('cerveza', 'c-barra', { listoEn: ahora })])
+
+        const res = await service.actualizarEstado('ped-1', { estado: 'listo', comandaId: 'c-barra' }, CUENTAS.COCINA)
+
+        expect(tx.pedidoItem.updateMany).not.toHaveBeenCalled()
+        expect(tx.pedido.update).not.toHaveBeenCalled()
+        expect(gateway.emitOrderUpdated).not.toHaveBeenCalled()
+        expect(res).toBe(RICO)
+      })
+
+      it.each(['listo', 'entregado'])('con una comanda, un pedido que ya está %s (otra estación se adelantó) no es un error ni cambia nada', async (estado) => {
+        preparar(estado, MIXTO(), estado)
+
+        const res = await service.actualizarEstado('ped-1', { estado: 'listo', comandaId: 'c-barra' }, CUENTAS.COCINA)
+
+        expect(tx.pedidoItem.updateMany).not.toHaveBeenCalled()
+        expect(tx.pedido.update).not.toHaveBeenCalled()
+        expect(gateway.emitOrderUpdated).not.toHaveBeenCalled()
+        expect(res).toBe(RICO)
+      })
+
+      it('sin comanda, un pedido que ya está listo sigue siendo una transición inválida', async () => {
+        prisma.pedido.findUnique.mockResolvedValue({ id: 'ped-1', estado: 'listo', mesa: { restauranteId: REST } })
+
+        await expect(service.actualizarEstado('ped-1', { estado: 'listo' }, CUENTAS.COCINA)).rejects.toThrow(
+          new BadRequestException('Transición inválida: listo → listo'),
+        )
+        expect(prisma.$transaction).not.toHaveBeenCalled()
+      })
+
+      it.each(['pendiente', 'anulado'])('con una comanda, un pedido %s es una transición inválida', async (estado) => {
+        prisma.pedido.findUnique.mockResolvedValue({ id: 'ped-1', estado, mesa: { restauranteId: REST } })
+
+        await expect(service.actualizarEstado('ped-1', { estado: 'listo', comandaId: 'c-barra' }, CUENTAS.COCINA)).rejects.toThrow(
+          new BadRequestException(`Transición inválida: ${estado} → listo`),
+        )
+        expect(prisma.$transaction).not.toHaveBeenCalled()
+      })
+
+      it('si entre la lectura y el bloqueo otra operación anuló el pedido, no marca nada', async () => {
+        preparar('anulado', MIXTO())
+
+        await expect(service.actualizarEstado('ped-1', { estado: 'listo', comandaId: 'c-barra' }, CUENTAS.COCINA)).rejects.toThrow(
+          new BadRequestException('Transición inválida: anulado → listo'),
+        )
+        expect(tx.pedidoItem.updateMany).not.toHaveBeenCalled()
+        expect(gateway.emitOrderUpdated).not.toHaveBeenCalled()
+      })
+
+      it('si entre la lectura y el bloqueo otra estación cerró el pedido, marcar todo (sin comanda) es una transición inválida', async () => {
+        preparar('listo', MIXTO())
+
+        await expect(service.actualizarEstado('ped-1', { estado: 'listo' }, CUENTAS.COCINA)).rejects.toThrow(
+          new BadRequestException('Transición inválida: listo → listo'),
+        )
+        expect(tx.pedidoItem.updateMany).not.toHaveBeenCalled()
+        expect(gateway.emitOrderUpdated).not.toHaveBeenCalled()
+      })
+
+      it('una comanda de otro restaurante responde 400 y no abre la transacción', async () => {
+        prisma.pedido.findUnique.mockResolvedValue({ id: 'ped-1', estado: 'en_preparacion', mesa: { restauranteId: REST } })
+        prisma.comanda.findMany.mockResolvedValue(COMANDAS)
+
+        await expect(service.actualizarEstado('ped-1', { estado: 'listo', comandaId: 'c-ajena' }, CUENTAS.COCINA)).rejects.toThrow(
+          new BadRequestException('La comanda no es de este restaurante'),
+        )
+        expect(prisma.$transaction).not.toHaveBeenCalled()
+      })
+
+      it('la comanda solo se indica con "listo"', async () => {
+        prisma.pedido.findUnique.mockResolvedValue({ id: 'ped-1', estado: 'pendiente', mesa: { restauranteId: REST } })
+
+        await expect(service.actualizarEstado('ped-1', { estado: 'en_preparacion', comandaId: 'c-barra' }, CUENTAS.COCINA)).rejects.toThrow(
+          new BadRequestException('La comanda solo se indica al marcar el pedido como listo'),
+        )
+        expect(prisma.pedido.update).not.toHaveBeenCalled()
+      })
+
+      it.each([
+        ['ROOT (no es un bypass)', CUENTAS.ROOT],
+        ['el OWNER de otra marca', CUENTAS.OWNER_B],
+        ['un Usuario sin membresías', CUENTAS.SIN_MEMBRESIAS],
+      ])('%s recibe 403 al marcar listo y no se abre la transacción', async (_caso, cuenta) => {
+        prisma.pedido.findUnique.mockResolvedValue({ id: 'ped-1', estado: 'en_preparacion', mesa: { restauranteId: REST } })
+
+        await expect(service.actualizarEstado('ped-1', { estado: 'listo', comandaId: 'c-barra' }, cuenta)).rejects.toThrow(ForbiddenException)
+        expect(prisma.$transaction).not.toHaveBeenCalled()
+      })
     })
   })
 
@@ -413,6 +591,96 @@ describe('PedidosService: validaciones, estado y ediciones', () => {
       await service.editarPedido('ped-1', edicion([{ pedidoItemId: 'pi-1', cantidadNueva: 0 }]), MOZO)
 
       expect(tx.pedido.update).not.toHaveBeenCalled()
+    })
+
+    describe('cierre automático de un pedido en preparación al que no le queda nada pendiente (#344)', () => {
+      const ahora = new Date('2026-11-26T15:00:00Z')
+      const linea = (id: string, comandaId: string | null, extra: object = {}) => ({
+        id, comandaId, cantidad: 1, cantidadEditada: null, listoEn: null, ...extra,
+      })
+      const EN_PREPARACION = () => pedido({ estado: 'en_preparacion' })
+      const editar = () => service.editarPedido('ped-1', edicion([{ pedidoItemId: 'pi-1', cantidadNueva: 0 }]), MOZO)
+      // Lo que ve la transacción después de editar: el estado bloqueado y las líneas ya con la edición aplicada.
+      const despuesDeEditar = (estado: string, items: object[]) =>
+        tx.pedido.findUniqueOrThrow.mockResolvedValue({ estado, items })
+
+      beforeEach(() => {
+        prisma.pedido.findUnique.mockResolvedValueOnce(EN_PREPARACION()).mockResolvedValueOnce({ id: 'ped-1', ediciones: [] })
+      })
+
+      it('si eliminar lo único que faltaba deja todo lo vigente listo, el pedido pasa a listo y se avisa como actualizado', async () => {
+        despuesDeEditar('en_preparacion', [
+          linea('pi-1', 'c-cocina', { cantidadEditada: 0 }),
+          linea('pi-2', 'c-barra', { listoEn: ahora }),
+        ])
+
+        const resultado = await editar()
+
+        expect(tx.pedido.update).toHaveBeenCalledTimes(1)
+        expect(tx.pedido.update).toHaveBeenCalledWith({ where: { id: 'ped-1' }, data: { estado: 'listo' } })
+        expect(gateway.emitOrderEdited).toHaveBeenCalledWith(REST, resultado)
+        expect(gateway.emitOrderUpdated).toHaveBeenCalledTimes(1)
+        expect(gateway.emitOrderUpdated).toHaveBeenCalledWith(REST, resultado)
+      })
+
+      it('si queda algo vigente pendiente, el pedido sigue en preparación y no se avisa como actualizado', async () => {
+        despuesDeEditar('en_preparacion', [
+          linea('pi-1', 'c-cocina', { cantidadEditada: 0 }),
+          linea('pi-2', 'c-barra', { listoEn: ahora }),
+          linea('pi-3', 'c-barra'),
+        ])
+
+        await editar()
+
+        expect(tx.pedido.update).not.toHaveBeenCalled()
+        expect(gateway.emitOrderUpdated).not.toHaveBeenCalled()
+        expect(gateway.emitOrderEdited).toHaveBeenCalledTimes(1)
+      })
+
+      it.each(['pendiente', 'listo', 'entregado'])('un pedido %s no se cierra (ni se reabre) por la edición', async (estado) => {
+        despuesDeEditar(estado, [linea('pi-1', 'c-cocina', { cantidadEditada: 0 }), linea('pi-2', 'c-barra', { listoEn: ahora })])
+
+        await editar()
+
+        expect(tx.pedido.update).not.toHaveBeenCalled()
+        expect(gateway.emitOrderUpdated).not.toHaveBeenCalled()
+      })
+
+      it('usa el estado leído con el pedido bloqueado, no el de antes de la transacción', async () => {
+        // Antes del bloqueo estaba en preparación; con el bloqueo ya lo había cerrado otra estación.
+        despuesDeEditar('listo', [linea('pi-1', 'c-cocina', { cantidadEditada: 0 }), linea('pi-2', 'c-barra', { listoEn: ahora })])
+
+        await editar()
+
+        expect(tx.pedido.update).not.toHaveBeenCalled()
+      })
+
+      it('si la edición anula el pedido no lo cierra: queda anulado', async () => {
+        despuesDeEditar('en_preparacion', [])
+
+        await service.editarPedido(
+          'ped-1',
+          edicion([{ pedidoItemId: 'pi-1', cantidadNueva: 0 }, { pedidoItemId: 'pi-2', cantidadNueva: 0 }]),
+          MOZO,
+        )
+
+        expect(tx.pedido.update).toHaveBeenCalledTimes(1)
+        expect(tx.pedido.update).toHaveBeenCalledWith({ where: { id: 'ped-1' }, data: { estado: 'anulado' } })
+        expect(tx.pedido.findUniqueOrThrow).not.toHaveBeenCalled()
+        expect(gateway.emitOrderUpdated).not.toHaveBeenCalled()
+      })
+
+      it('bloquea la fila del pedido antes de editar los ítems y lee el cierre después de editarlos', async () => {
+        despuesDeEditar('en_preparacion', [linea('pi-2', 'c-barra')])
+
+        await editar()
+
+        expect(tx.$queryRaw).toHaveBeenCalledTimes(1)
+        expect(tx.$queryRaw.mock.calls[0][0].join('?')).toMatch(/FOR UPDATE/)
+        expect(tx.$queryRaw.mock.calls[0].slice(1)).toEqual(['ped-1'])
+        expect(tx.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(tx.pedidoItem.update.mock.invocationCallOrder[0])
+        expect(tx.pedidoItem.update.mock.invocationCallOrder[0]).toBeLessThan(tx.pedido.findUniqueOrThrow.mock.invocationCallOrder[0])
+      })
     })
 
     it('si el pedido desaparece después de editar responde 404 y no avisa', async () => {
