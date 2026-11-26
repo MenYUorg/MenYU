@@ -12,7 +12,7 @@ Registro, etapa por etapa, de lo que se hizo para la accesibilidad del flujo del
 | 4. Menú, detalle y discovery | Hecha (13/11/2026) y mergeada (PR #469). Quality gate de SonarCloud: passed. Con el arreglo del buscador del menú (19/11/2026) |
 | 5. Carrito, pedidos, PIN, nombre y pago | Hecha (19/11/2026) y en el PR #479. Quality gate de SonarCloud: passed. El PIN se dejó como estaba (decisión de Margarita) |
 | 6. Contraste, foco visible y tamaños | Hecha en web-cliente y `packages/ui` (19/11/2026), a la espera de revisión. Admin y staff: propuesta de un PR aparte |
-| 7. Cierre (lint, axe de Coty, celulares C1 a C7) | Pendiente |
+| 7. Cierre (lint, axe de Coty, celulares C1 a C7) | En curso (26/11/2026): lint y axe sobre staging hechos (web-cliente y Discovery sin violaciones); faltan los celulares |
 | 8. Asistente de la carta (C8): auditar y después arreglar | Pendiente (agregada el 13/11/2026) |
 
 Rama `feat/a11y-cliente`, desde `origin/main` en `92904e0`.
@@ -544,3 +544,74 @@ En Edge real (390 px, API simulada, un Vite propio en el puerto 5199), con las p
 ### Recorridos con lector (C1 a C8)
 
 Esta etapa no cambia lo que dice un lector, pero cambia lo que ve quien usa baja visión o teclado: **todos los recorridos con teclado** (C1 a C7) muestran dónde está el foco, y los textos que antes no llegaban a 4,5:1 (precios, estados, cuenta, hora de los pedidos) se leen sin esfuerzo. Los recorridos con lector no se vuelven a medir por esto. Falta C8 (etapa 8) y los celulares (etapa 7).
+
+---
+
+## Etapa 7: cierre (26/11/2026)
+
+Estado: **en curso.** Hecho: el lint de accesibilidad y el axe sobre staging (sin la fase de mesa). Falta: la prueba con los dos celulares (la hacen ustedes) y cerrar la auditoría, que espera a la etapa 8. La rama `feat/a11y-cliente` se llevó a `origin/main` (72 commits de adelanto de otras personas, sin conflictos) antes de empezar.
+
+**Alcance (decisión de Margarita, 26/11/2026):** los requisitos de accesibilidad cubren **web-cliente y Discovery únicamente**. web-admin y web-staff quedan fuera: lo que el axe encontró ahí se anota, no se arregla (decisión 18 del plan).
+
+### Qué cambió
+
+- **Lint de accesibilidad.** `eslint-plugin-jsx-a11y` `^6.10.2` (la única dependencia nueva de la etapa: de desarrollo y solo en web-cliente; el lockfile suma 87 paquetes) con `jsxA11y.flatConfigs.recommended` en `eslint.config.js`, sobre todo el código `ts` y `tsx`. El CI ya corre el lint con `--max-warnings 0`.
+- **Qué marcó: 3 infracciones en 2 archivos, nada más.**
+  - `PagarPage.tsx` (dos reglas sobre el mismo elemento): el diálogo del mensaje tenía un `onClick={(e) => e.stopPropagation()}` para que tocar adentro no cerrara el fondo. Ahora el fondo cierra solo si el toque es en él mismo (`e.target === e.currentTarget`) y el diálogo no tiene manejador. Es una mejora de verdad, con un test.
+  - `PanelDelAsistente.tsx`: el diálogo del asistente maneja Esc (lo cierra) y Tab (no sale de él), que es el patrón de un diálogo modal; la regla no distingue un diálogo de un `<div>`. Queda con un `eslint-disable-next-line` con su motivo escrito: **es la única excepción del lint, y la etapa 8 la revisa** junto con el resto del asistente. El comportamiento no cambió.
+- **Los hallazgos del lint de la auditoría** (el nombre clickeable del carrito, el fondo del modal de pago y los `autoFocus`) ya estaban resueltos en las etapas 5 y 6: por eso el lint, al activarse, solo encontró lo de arriba.
+- **Un spec que cuida el lint** (`src/utils/eslintAccesibilidad.spec.ts`, 6 tests): corre ESLint sobre código de ejemplo y comprueba que la configuración ataja un `<div onClick>`, una imagen sin `alt`, un `autoFocus`, un diálogo con clic, un enlace vacío y un `aria-*` inexistente, y que deja pasar un botón, una imagen con texto alternativo y un campo con su etiqueta. Si alguien saca el plugin, un test falla, en lugar de que el lint quede "en verde" porque ya no mira nada.
+- **Auditoría.** Se sumó el "Seguimiento" a `docs/a11y/auditoria-general.md` (qué hallazgo se resolvió en qué etapa) y se tildó el "Plan de arreglos".
+
+### El axe de Coty sobre staging
+
+`scripts/accesibilidad/main.mjs`, axe-core 4.14.1, WCAG 2.0 a 2.2 niveles A y AA, contra `*.staging.menyu-app.com` (la API en el SHA `5fa7793`, que incluye la etapa 6). 24 pantallas revisadas y 7 sin revisar. Se corrió desde la máquina de Margarita con Chrome, con las variables en un archivo que git ignora (`scripts/accesibilidad/.env.axe`).
+
+| App | Pantallas revisadas | Violaciones |
+| --- | --- | --- |
+| web-auth (ingresar, crear cuenta, olvidé la contraseña, privacidad) | 4 | **0** |
+| **web-cliente** (Discovery, ficha del restaurante, carta, ingreso por PIN) | 4 | **0** |
+| web-admin | 9 | 10 observaciones (fuera del alcance) |
+| web-staff | 7 | 11 observaciones (fuera del alcance) |
+
+- **web-cliente y Discovery: 0 violaciones** en las cuatro pantallas públicas, con las reglas de contraste incluidas. Confirma contra el sitio real lo que ya se había medido en Edge con la API simulada. En la carta, axe dejó **1 comprobación manual** ("incompleta") que no pudo decidir solo.
+- **Sin revisar: la fase de mesa** (menú, detalle, carrito, Mis pedidos y Pagar): el script necesita `E2E_STAGING_DB_URL_LECTURA`, la conexión de la base de staging con el usuario `e2e_staging`, que crea una mesa temporal y la borra. No tenemos esa contraseña (GitHub no deja leer los secrets; la cargó Coty). **No bloquea la etapa**: esas cinco pantallas se midieron con axe en Edge real contra la API simulada (71 fallas de contraste antes de la etapa 6 y 0 después) y todas tienen su test de axe con las demás reglas. Se suma cuando haya conexión: es volver a correr el script.
+- **Fuera del alcance, anotado:** en web-admin y web-staff el axe encontró el contraste del coral y el gris de antes (**15 observaciones, 181 elementos**, 31 de ellos en el Dashboard de admin) y **6 botones sin nombre** (nivel crítico: uno en las Mesas de admin y cinco en las pantallas del mozo de staff: mesas, pedidos, toma de pedidos, pagos e historial; parecen botones de solo ícono). Dos pantallas de admin (Pedidos e Historial de sesiones) redirigieron al dashboard con la cuenta de prueba: no se revisaron.
+- El reporte completo quedó en `resultados/axe-2026-11-26T14-21-40-800Z.json` (en la raíz del repo, sin seguir por git: no se sube).
+
+### Tests y cobertura
+
+7 tests nuevos (1270 → 1277, 66 → 67 archivos): `eslintAccesibilidad.spec.ts` (6) y uno en `PagarPage.spec.tsx` (tocar el diálogo mismo no lo cierra; solo cierra el toque en el fondo).
+
+| | Fin de la etapa 6 | Después |
+| --- | --- | --- |
+| web-cliente, archivos / tests | 66 / 1270 | 67 / 1277 |
+| web-cliente, líneas | 94,62 % | 94,62 % |
+| web-cliente, ramas | 93,81 % | 93,81 % |
+| web-cliente, funciones | 87,11 % | 87,08 % |
+
+`pnpm typecheck` del monorepo (10 de 10), el lint y el build de web-cliente en verde; el lint de web-admin y web-staff no cambió.
+
+### Quality gate de SonarCloud
+
+Pendiente: se anota cuando corra el PR.
+
+### Problemas y cómo se resolvieron
+
+- **El `gh` no está instalado** en esta máquina: el estado del PR #481 (checks y Sonar) se leyó de la API pública de GitHub y de SonarCloud (solo lectura). Pasó el quality gate con 96,8 % de cobertura del código nuevo y 0,0 % de duplicación, y quedó **un issue menor** (`S7773`, `parseInt` en `packages/ui/src/contraste.ts:5`).
+- **El cliente de Prisma quedó viejo** después de traer `main` (una tabla nueva de comandas): el typecheck de `@menyu/api` fallaba. Se regeneró con `prisma generate`. La base local no estaba levantada, así que **al arrancarla hay que correr `prisma migrate deploy`**: llegó una migración nueva.
+- **Un `Assertion failed` de Node al final del script de axe** (un error conocido de libuv en Windows al cerrar el proceso): el reporte ya estaba guardado.
+- **`resultados/`, donde el script deja el reporte, no está en el `.gitignore`** y aparece como archivo sin seguir. No hay que hacer `git add .`.
+- **No se pudo correr la fase de mesa** (ver arriba): falta la conexión a la base de staging.
+
+### Pendiente
+
+- **Prueba con los dos celulares** (VoiceOver en iPhone con Safari y TalkBack en Android con Chrome), con los recorridos C1 a C7 y los resultados en la tabla de registro de `docs/calidad/accesibilidad-recorridos-lector.md`. Es lo más lento de la etapa porque la hacen personas. Para abrir una mesa en staging no hace falta la base: la mesa de prueba se abre desde el panel de admin, con su QR o su PIN. C8 va en la etapa 8.
+- **Qué mirar en el celular** (preguntas de las etapas anteriores que solo se responden ahí): cómo se lee "Pedido ABC123"; si el separador " · " entre las modificaciones del carrito y entre los platos de Mis pedidos se dice; si se entienden los anuncios nuevos ("N comensales: cada persona paga …", "Tu pedido de … está …", "Se agregó … al carrito"); desde dónde empieza a leer cada lector al llegar a una pantalla (el foco va al título); y si el PIN, que sigue detrás de un texto chico, se encuentra sin ayuda.
+- **La fase de mesa del axe**, opcional, cuando haya conexión a la base de staging.
+- **Cerrar `auditoria-general.md`**, cuando esté hecha la etapa 8.
+- **El issue menor de Sonar** (`parseInt` → `Number.parseInt`), de una palabra.
+
+### Recorridos con lector (C1 a C8)
+
+Esta etapa no cambia lo que dice un lector. **C1 a C7 pasan a estar listos para probar en el celular**; falta C8 (etapa 8).

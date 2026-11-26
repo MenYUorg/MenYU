@@ -22,6 +22,45 @@ web-admin y web-staff no se pudieron renderizar porque piden sesión de Supabase
 | packages/ui | 6 | (dentro de las otras) | — |
 | web-auth | 0 | 3 | sin violaciones |
 
+## Seguimiento: qué se resolvió y en qué etapa
+
+*Actualizado el 26/11/2026, al llegar a la etapa 7 de `docs/a11y/plan-cliente.md`. El detalle de cada fila (con archivo y línea) está en la etapa que dice la tabla y en `docs/a11y/bitacora.md`.*
+
+**Alcance (decisión del 26/11/2026):** los requisitos de accesibilidad cubren **web-cliente y Discovery**. Lo de web-admin, web-staff, web-auth y los componentes de `packages/ui` que solo usan admin y staff queda fuera: no se arregla, y lo que apareció se anota al final de esta sección.
+
+| Hallazgo de la auditoría (web-cliente y Discovery) | Etapa | Estado |
+| --- | --- | --- |
+| Estructura de página: `<main>`, `<h1>`, título de pestaña por pantalla y el foco al cambiar de pantalla ("Problemas que se repiten") | 1 | Resuelto |
+| El `<textarea>` del mensaje a dividir sin etiqueta | 1 | Resuelto |
+| Precios con formato `$9000.00` (se leen mal) | 2 | Resuelto |
+| El menú lateral recibe foco estando cerrado (1) | 3 | Resuelto |
+| Opciones del menú lateral y chips del filtro de dietas que no son botones (3), y el filtro de dietas, que no era usable con lector | 3 | Resuelto |
+| Modales sin `role="dialog"`, Esc ni foco: menú lateral y filtro de dietas (modales) | 3 | Resuelto |
+| Buscador del menú sin nombre; búsqueda, filtros y mozo sin anuncio; "×" del buscador sin nombre | 4 | Resuelto |
+| La tarjeta del plato (`<div onClick>`; el control es el botón "+", que ahora se llama "Ver {plato}") y las fotos decorativas | 4 | Resuelto |
+| Detalle del plato: interruptores de ingredientes, "Sumar" y "Restar" sin nombre, nota para cocina sin etiqueta, "Volver" sin nombre | 4 | Resuelto |
+| **Discovery:** los resultados de la búsqueda cambian sin anuncio ni cantidad; "Buscando…" aparece junto con el texto; la foto de la oferta repite el nombre | 4 | Resuelto |
+| **Discovery:** logo, "Ingresar" y "Registrarme" no llegaban a 44 px de alto | — | Ya tenían un área de toque de 44 px (`AppHeader`) |
+| **Ficha del restaurante:** no tenía hallazgos propios | — | Sin hallazgos |
+| Carrito: la confirmación no se anuncia ni tiene foco; "Quitar" sin nombre; "−" y "+" sin nombre; extras con símbolos; el nombre del plato clickeable (3) | 5 | Resuelto |
+| Mis pedidos: "listo" igual a "en preparación"; la barra sin rol; el número de pedido; el cambio de estado por WebSocket sin anuncio | 5 | Resuelto |
+| Tarjeta de agradecimiento al cerrar la sesión: sin foco ni rol de diálogo | 5 | Resuelto |
+| Ingreso por PIN: el campo se deshabilita y pierde el foco; el error no queda asociado al campo | 5 | Resuelto |
+| Ingreso por PIN: ofrecer "Ingresar con PIN" como opción del mismo nivel que "Escanear QR" | 5 | **Descartado** (decisión de Margarita, 19/11/2026: el PIN sigue como estaba) |
+| Elegir nombre: label sin asociar ("Labels sin asociar"), `autoFocus` y "Continuar" atenuado sin decir por qué | 5 | Resuelto |
+| Pagar: la cuenta no era una tabla; fondo del modal clickeable sin teclado; emojis y títulos de los resultados de pago | 5 | Resuelto |
+| Etiquetar: los chips marcaban "etiquetado" solo con el color; `autoFocus`. Dividir: el botón con el número sin valor y el monto sin anunciar | 5 | Resuelto |
+| Contraste: el coral `#E8563A` y el gris `#9CA3AF` en todas las pantallas de web-cliente, y en `DescuentoBadge` y `PrecioConDescuento` de `packages/ui` | 6 | Resuelto: axe en Edge, 71 fallas antes y 0 después; 0 en staging |
+| Foco visible: `outline: 'none'` en los campos de web-cliente (2) | 6 | Resuelto |
+| Tamaños táctiles (2.5.8): "Quitar" (35 × 18 px) y los demás botones chicos | 6 | Resuelto el mínimo de 24 px; algunos quedan debajo de 44 |
+| Zona con scroll de la carta que no se podía enfocar con teclado | 7 | axe sobre staging no marcó nada en la carta (0 violaciones) |
+| Que no vuelva a pasar: `eslint-plugin-jsx-a11y` con `--max-warnings 0` | 7 | Resuelto |
+| Asistente de la carta (C8): botón, diálogo, la respuesta que llega de a poco, errores | 8 | **Pendiente** |
+| Prueba con VoiceOver y TalkBack (C1 a C7) y todo lo marcado "verificar en dispositivo" | 7 | **Pendiente** (la hacen ustedes) |
+| axe sobre staging de las pantallas con mesa (menú, detalle, carrito, Mis pedidos y Pagar) | 7 | **Pendiente, opcional** (falta la conexión a la base de staging) |
+
+**Fuera del alcance** (no se arreglan; el axe de staging del 26/11 los volvió a encontrar): en **web-admin** (9 pantallas revisadas) y **web-staff** (7), el contraste del coral y el gris de antes (15 observaciones, 181 elementos) y **6 botones sin nombre** (nivel crítico: uno en las Mesas de admin y cinco en las pantallas del mozo de staff). Dos pantallas de admin (Pedidos e Historial de sesiones) no se pudieron revisar con la cuenta de prueba. También quedan el `Modal` compartido de `packages/ui`, los modales hechos a mano de admin y staff, los labels de los formularios de admin, el `outline: 'none'` de admin y staff, los botones de reordenar categorías y el coral `#ED6A4F` del preset de web-auth.
+
 ## Problemas que bloquean el uso con teclado
 
 Estos son los que impiden o dificultan usar la app sin mouse, que es lo que más se nota en una prueba manual.
@@ -124,18 +163,18 @@ Lo más eficiente es arreglar el `Modal` de `packages/ui` (o pasar a `<dialog>` 
 
 Ordenado por impacto sobre el trabajo que lleva. Los primeros cuatro resuelven la mayor parte de lo que encontró axe y casi todo lo que se nota con teclado.
 
-- [ ] Oscurecer el coral de fondos con texto blanco (`#E8563A` → `#C2412A`) y pasar los textos en gray-400 a gray-500.
-- [ ] Agregar `inert` al panel de `MenuDrawer` cuando está cerrado.
-- [ ] Arreglar el `Modal` de `packages/ui`: `role="dialog"`, `aria-modal`, `aria-labelledby`, Esc, foco atrapado y `aria-label="Cerrar"`.
-- [ ] Poner `aria-label` a los 43 botones de solo ícono, empezando por los de web-cliente.
-- [ ] Cambiar los `<div onClick>` de acciones reales por `<button>` (tabla de la sección de teclado).
-- [ ] Reemplazar `outline: 'none'` inline por una clase con `focus-visible:ring`, como ya hace web-auth.
-- [ ] Asociar los 9 labels con `htmlFor` y ponerle `aria-label` al buscador.
-- [ ] Agregar `<main>` y `<h1>` en las pantallas de web-cliente.
-- [ ] Migrar los modales hechos a mano al `Modal` compartido.
-- [ ] Botones de subir y bajar para reordenar categorías sin arrastrar.
+- [x] Oscurecer el coral de fondos con texto blanco (`#E8563A` → `#C2412A`) y pasar los textos en gray-400 a gray-500. — **web-cliente y `packages/ui`: etapa 6** (con `#CC4A31`, decisión 9, en lugar de `#C2412A`). Admin y staff: fuera del alcance.
+- [x] Agregar `inert` al panel de `MenuDrawer` cuando está cerrado. — **etapa 3**.
+- [ ] Arreglar el `Modal` de `packages/ui`: `role="dialog"`, `aria-modal`, `aria-labelledby`, Esc, foco atrapado y `aria-label="Cerrar"`. — fuera del alcance (lo usan admin y staff).
+- [x] Poner `aria-label` a los 43 botones de solo ícono, empezando por los de web-cliente. — **web-cliente: etapas 4 y 5.** Admin y staff: fuera del alcance.
+- [x] Cambiar los `<div onClick>` de acciones reales por `<button>` (tabla de la sección de teclado). — **web-cliente: etapas 3, 4 y 5.** Admin y staff: fuera del alcance.
+- [x] Reemplazar `outline: 'none'` inline por una clase con `focus-visible:ring`, como ya hace web-auth. — **web-cliente: etapa 6** (un anillo global de `:focus-visible`). Admin y staff: fuera del alcance.
+- [x] Asociar los 9 labels con `htmlFor` y ponerle `aria-label` al buscador. — **web-cliente: etapas 4 y 5** (nombre, nota para cocina y buscador). El resto es de admin y `packages/ui`: fuera del alcance.
+- [x] Agregar `<main>` y `<h1>` en las pantallas de web-cliente. — **etapa 1**.
+- [ ] Migrar los modales hechos a mano al `Modal` compartido. — fuera del alcance (admin y staff).
+- [ ] Botones de subir y bajar para reordenar categorías sin arrastrar. — fuera del alcance (admin).
 
-**Para que no vuelva a pasar**, conviene sumar `eslint-plugin-jsx-a11y` a la config de ESLint de las apps (`...jsxA11y.flatConfigs.recommended.rules`). Como el lint corre con `--max-warnings 0`, va a fallar con los hallazgos de este informe; conviene activarlo primero en web-auth (que ya pasa) y web-cliente, y sumar web-admin y web-staff a medida que se arreglan.
+**Para que no vuelva a pasar** *(hecho en web-cliente en la etapa 7: `eslint-plugin-jsx-a11y` con `--max-warnings 0`; web-admin y web-staff, fuera del alcance)*, conviene sumar `eslint-plugin-jsx-a11y` a la config de ESLint de las apps (`...jsxA11y.flatConfigs.recommended.rules`). Como el lint corre con `--max-warnings 0`, va a fallar con los hallazgos de este informe; conviene activarlo primero en web-auth (que ya pasa) y web-cliente, y sumar web-admin y web-staff a medida que se arreglan.
 
 **Para repetir la verificación**: correr axe DevTools o Lighthouse en Chrome sobre cada pantalla con datos reales, sobre todo web-admin y web-staff, que acá no se pudieron renderizar. Y hacer una pasada manual: recorrer cada flujo solo con teclado (Tab, Enter, Esc) y una vez con VoiceOver en el celular sobre web-cliente, que es la app que usa el comensal.
 

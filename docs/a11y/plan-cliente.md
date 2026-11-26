@@ -75,6 +75,7 @@ Decididas el 13/11/2026, al revisar la etapa 1:
 15. **Etiqueta del mensaje de `MensajePage`:** el título visible ("Mensaje para el grupo") pasa a ser un `<label>` asociado al `<textarea>`, no un `aria-label` (WCAG 2.5.3: el nombre accesible tiene que contener el texto visible). **No se dejan violaciones excluidas a propósito en los tests nuevos:** la única regla desactivada es `color-contrast`, en el helper, y la cubre el test de contraste de la etapa 6.
 16. **Anillo de foco del `<h1>`:** se quita solo en los títulos que reciben el foco por código (`h1[tabindex='-1']:focus`), con un estilo acotado a ese caso. Botones, enlaces y campos mantienen el foco visible.
 17. **Asistente de la carta (C8):** entra como etapa 8, con una auditoría primero y los arreglos después.
+18. **Alcance (26/11/2026):** los requisitos de accesibilidad cubren **web-cliente y Discovery únicamente**. web-admin y web-staff (también su contraste) y lo que solo usan ellos de `packages/ui` quedan fuera: los hallazgos del axe sobre esas apps se anotan en la bitácora y no se arreglan. Reemplaza lo que decía la decisión 8 para admin y staff (solo el contraste) y la propuesta de un PR aparte de la etapa 6.
 
 ## Línea base
 
@@ -281,18 +282,16 @@ Las rutas son relativas a `apps/web-cliente/src/` salvo que digan otra cosa.
 
 - [x] `DescuentoBadge.tsx` (fondo y sombra) y `PrecioConDescuento.tsx` (el precio con descuento y el tachado) usan `CORAL` y `GRIS_TEXTO`, con specs nuevos (`DescuentoBadge.spec.tsx`, `PrecioConDescuento.spec.tsx`: de 0 % a 100 % de cobertura). Se suman `colores.ts` y `contraste.ts` (con los suyos) y salen de `@menyu/ui`. Las suites de web-admin (943 tests) y web-staff (590) pasan sin cambios.
 
-**Admin y staff** (propuesta, **no se tocó**):
+**Admin y staff** — **fuera del alcance** (decisión 18, 26/11/2026). No se tocó y no se va a tocar en este trabajo. La medición que se había hecho para la propuesta queda como referencia: el coral o el gris de antes aparece en 105 líneas de 23 archivos de web-admin y en 52 líneas de 20 archivos de web-staff (más 22 de `packages/ui`), y los tests ya cubrían el 83 % de las de admin y el 100 % de las de staff. El axe de staging del 26/11 las volvió a encontrar (ver la bitácora, etapa 7). Mientras tanto admin y staff usan el coral nuevo solo en los distintivos y precios con descuento de `packages/ui`.
 
-- [ ] El coral o el gris de antes aparece en **105 líneas de 23 archivos de web-admin**, en **52 líneas de 20 archivos de web-staff** y en 22 líneas más de `packages/ui` (`HistorialSesiones`, `EditarPedidoModal` y `ItemMenuFila`, que usan los dos). Los tests ya cubren esas líneas: **83 % en web-admin** (87 de 105; el punto flojo es `AdminMenuPage.tsx`, con 7 de 22), **100 % en web-staff** y 21 de 22 en `packages/ui`. Es decir, Sonar pasaría el 80 % en un PR que solo reemplaza los literales por `CORAL`, `CORAL_OSCURO` y `GRIS_TEXTO` (con los mismos tests).
-- [ ] **Propuesta: un PR aparte** ("contraste de admin y staff"), porque son ~180 líneas en ~45 archivos de dos apps que revisa otra persona, y no cambia nada de lo del comensal. Mientras tanto, admin y staff usan el coral nuevo solo en los distintivos y precios con descuento de `packages/ui`; el resto sigue con el de antes.
-- [ ] Hay que decidir si el PR aparte se hace en esta etapa o después.
+### Etapa 7. Cierre — en curso (26/11/2026): lint y axe sobre staging hechos; faltan los celulares y cerrar la auditoría
 
-### Etapa 7. Cierre
+**Alcance (decisión de Margarita, 26/11/2026):** los requisitos de accesibilidad cubren **web-cliente y Discovery únicamente**. web-admin y web-staff quedan fuera: sus hallazgos se anotan, no se arreglan (decisión 18).
 
-- [ ] `eslint-plugin-jsx-a11y` (configuración `recommended`) en el `eslint.config.js` de web-cliente, con todo en verde. El lint corre con `--max-warnings 0`.
-- [ ] Correr el axe de Coty sobre staging y anotar el resultado en la bitácora.
-- [ ] Prueba con los dos celulares siguiendo los recorridos C1 a C7, con los resultados en la tabla de registro de `docs/calidad/accesibilidad-recorridos-lector.md`. **C8 no va acá:** se prueba en la etapa 8.
-- [ ] Marcar en `docs/a11y/auditoria-general.md` qué hallazgo se resolvió en qué etapa, y cerrar este documento (cuando también esté hecha la etapa 8).
+- [x] **`eslint-plugin-jsx-a11y`** (`^6.10.2`, solo de desarrollo y solo en web-cliente) con la configuración `recommended` en `eslint.config.js`, y el lint en verde con `--max-warnings 0`. Marcó **3 infracciones** en 2 archivos: el diálogo del mensaje de `PagarPage` (un `onClick` para frenar el toque: ahora el fondo cierra solo si el toque es en el fondo mismo, `e.target === e.currentTarget`) y el diálogo del asistente (`PanelDelAsistente`: su manejo de Esc y de Tab es el patrón de un diálogo modal, y la regla no distingue un diálogo de un `<div>`; queda con un `eslint-disable-next-line` justificado, que **revisa la etapa 8**). Nuevo `src/utils/eslintAccesibilidad.spec.ts` (6 tests): corre el lint sobre código de ejemplo y comprueba que ataja un `<div onClick>`, una imagen sin `alt`, un `autoFocus`, un diálogo con clic, un enlace vacío y un `aria-*` inexistente, así que sacar el plugin de la configuración rompe un test en lugar de dejar el lint "en verde porque ya no mira nada".
+- [x] **El axe de Coty sobre staging** (`scripts/accesibilidad/main.mjs`, axe-core 4.14.1, WCAG 2.0 a 2.2 A y AA, staging en el SHA `5fa7793`). Resultado en la bitácora: **web-cliente (Discovery, ficha, carta e ingreso por PIN) y web-auth, 0 violaciones en las 8 pantallas.** La **fase de mesa** (menú, detalle, carrito, Mis pedidos y Pagar) **no corrió**: necesita la conexión a la base de staging (`E2E_STAGING_DB_URL_LECTURA`, de la que no tenemos la contraseña). Esas cinco pantallas se midieron con axe en Edge real contra la API simulada (0 fallas de contraste, y el resto de las reglas, en los tests de cada pantalla). Es opcional: se suma cuando haya conexión.
+- [ ] **Prueba con los dos celulares**, siguiendo los recorridos C1 a C7, con los resultados en la tabla de registro de `docs/calidad/accesibilidad-recorridos-lector.md`. La hacen ustedes. **C8 no va acá:** se prueba en la etapa 8.
+- [x] **Marcar en `docs/a11y/auditoria-general.md`** qué hallazgo se resolvió en qué etapa: hecho en la sección "Seguimiento" y en el "Plan de arreglos" de ese documento. **El documento se cierra cuando también esté hecha la etapa 8.**
 
 ### Etapa 8. Asistente de la carta (C8)
 
@@ -344,6 +343,8 @@ Cosas que aparecieron al trabajar y que el plan no mencionaba. Los dos primeros 
 8. **Resuelto (19/11, en la etapa 6): ajustes de color y tamaño de las pantallas de la etapa 5**, que habían quedado para esta etapa: el gris `#9CA3AF` de los textos chicos (hora y resumen de Mis pedidos, "P. UNIT." y precios unitarios de la cuenta, "Total" del carrito), el coral `#E8563A` de los precios y de la barra de progreso, el rojo de "Quitar" (`#EF4444`) y el tamaño de los botones "Quitar", "Entendido" y los de las tarjetas.
 
 9. **Los bordes de los campos de web-cliente no llegan al 3:1 de WCAG 1.4.11** (`#DDDDE0` sobre blanco da 1,4:1; el 3,2:1 que cuenta la auditoría es el `#8A8FA5` del preset de web-auth). Sale del trabajo de la etapa 6, que no lo tocó: oscurecer los bordes cambia cómo se ve cada campo (nombre, PIN, buscadores, nota del plato). Hay que decidir si se hace, y con qué color.
+
+10. **El axe de staging encontró 6 botones sin nombre (nivel crítico) y contraste en web-admin y web-staff** (26/11, etapa 7): uno en las Mesas de admin y cinco en las pantallas del mozo de staff (mesas, pedidos, toma de pedidos, pagos e historial), más 15 observaciones de contraste (181 elementos). **Fuera del alcance** (decisión 18): se anotan, no se arreglan.
 
 ## Preguntas abiertas
 
