@@ -22,8 +22,9 @@ const mockGateway = { emitOrderEdited: jest.fn(), emitOrderNew: jest.fn() }
 function createTxMock() {
   return {
     pedidoItem: { update: jest.fn() },
-    pedido: { update: jest.fn() },
+    pedido: { update: jest.fn(), findUniqueOrThrow: jest.fn().mockResolvedValue({ estado: 'pendiente', items: [] }) },
     pedidoEdicion: { create: jest.fn() },
+    $queryRaw: jest.fn(),
   }
 }
 

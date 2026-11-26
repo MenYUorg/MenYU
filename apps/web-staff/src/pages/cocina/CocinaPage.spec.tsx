@@ -81,8 +81,8 @@ function pedido(id: string, estado: string, extra: Partial<PedidoRico> = {}): Pe
     mesa: { numero: id.slice(-1) },
     pagado: false,
     items: [
-      { id: `${id}-1`, itemId: 'a', cantidad: 2, cantidadEditada: null, precioUnitario: 1000, notas: 'bien cocida', comandaId: null, item: { nombre: 'Milanesa' }, mods: [mod('QUITAR', 'Cebolla'), mod('AGREGAR', 'Queso', 2), mod('AGREGAR', 'Huevo'), mod('QUITAR')] },
-      { id: `${id}-2`, itemId: 'b', cantidad: 1, cantidadEditada: null, precioUnitario: 500, notas: '  ', comandaId: null, item: { nombre: 'Agua' }, mods: [] },
+      { id: `${id}-1`, itemId: 'a', cantidad: 2, cantidadEditada: null, precioUnitario: 1000, notas: 'bien cocida', comandaId: null, listoEn: null, item: { nombre: 'Milanesa' }, mods: [mod('QUITAR', 'Cebolla'), mod('AGREGAR', 'Queso', 2), mod('AGREGAR', 'Huevo'), mod('QUITAR')] },
+      { id: `${id}-2`, itemId: 'b', cantidad: 1, cantidadEditada: null, precioUnitario: 500, notas: '  ', comandaId: null, listoEn: null, item: { nombre: 'Agua' }, mods: [] },
     ],
     ...extra,
   }
@@ -92,8 +92,8 @@ const EN_PREP = pedido('prep-1', 'en_preparacion')
 const EDITADO = pedido('edit-2', 'en_preparacion', {
   createdAt: hace(25),
   items: [
-    { id: 'e1', itemId: 'a', cantidad: 3, cantidadEditada: 1, precioUnitario: 500, notas: null, comandaId: null, item: { nombre: 'Empanada' }, mods: [] },
-    { id: 'e2', itemId: 'b', cantidad: 1, cantidadEditada: 0, precioUnitario: 800, notas: 'fría', comandaId: null, item: { nombre: 'Gaseosa' }, mods: [mod('AGREGAR', 'Limón')] },
+    { id: 'e1', itemId: 'a', cantidad: 3, cantidadEditada: 1, precioUnitario: 500, notas: null, comandaId: null, listoEn: null, item: { nombre: 'Empanada' }, mods: [] },
+    { id: 'e2', itemId: 'b', cantidad: 1, cantidadEditada: 0, precioUnitario: 800, notas: 'fría', comandaId: null, listoEn: null, item: { nombre: 'Gaseosa' }, mods: [mod('AGREGAR', 'Limón')] },
   ],
 })
 const LISTO = pedido('listo-3', 'listo')
@@ -947,6 +947,25 @@ describe('CocinaPage: pestañas por comanda', () => {
       expect(within(tarjeta('1')).getByText('Listo')).toBeInTheDocument()
       expect(impresoraMock.imprimirPedido).not.toHaveBeenCalled()
       expect(tonos).toHaveLength(0)
+    })
+
+    it('el order:updated que acompaña a una edición que cierra el pedido (#344) no suena ni reimprime', async () => {
+      await abrirEnAct([COCINA, BARRA], [SOLO_COCINA], [])
+      // Se eliminó lo que faltaba y lo demás ya estaba marcado: la edición lo cierra.
+      const cerrado = {
+        ...SOLO_COCINA,
+        estado: 'listo',
+        items: [linea('a1', 'Milanesa', 'c-coc', { listoEn: '2026-11-26T15:00:00Z' }), linea('a2', 'Flan', 'c-coc', { cantidadEditada: 0 })],
+      }
+      recibir('editado', cerrado)
+      const tonosDeLaEdicion = tonos.length
+
+      recibir('actualizado', cerrado)
+      recibir('actualizado', { ...cerrado })
+
+      expect(within(tarjeta('1')).getByText('Listo · Editado')).toBeInTheDocument()
+      expect(tonos).toHaveLength(tonosDeLaEdicion)
+      expect(impresoraMock.imprimirPedido).not.toHaveBeenCalled()
     })
 
     it('order:new en preparación (toma del mozo) imprime una vez; ni el updated a listo ni un order:new repetido reimprimen', async () => {

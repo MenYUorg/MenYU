@@ -1,5 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
 import { JwtService } from '@nestjs/jwt'
+import { Prisma } from '@prisma/client'
 import { exigirSuSesion, verificarSesionDeMesa } from '../auth/guards/session-auth.guard'
 import { ADMINISTRACION, SALON, TODO_EL_PERSONAL } from '../auth/roles-del-personal'
 import { AccesoService } from '../auth/supabase/acceso.service'
@@ -11,6 +12,24 @@ import { UpdateEstadoPedidoDto } from './dto/update-estado-pedido.dto'
 import { EditPedidoDto } from './dto/edit-pedido.dto'
 import { precioVigente } from '../items/descuento.util'
 import { EDITOR_INCLUDE, EdicionConEditor, editorDe } from './editor-de-la-edicion'
+import { decidirListo, nadaPendiente } from './decidir-listo'
+
+// El pedido con lo que muestran la cocina y el salón: la mesa, el nombre de cada plato y sus modificaciones.
+const PEDIDO_RICO_INCLUDE = {
+  mesa: { select: { numero: true } },
+  items: {
+    include: {
+      item: { select: { nombre: true } },
+      mods: {
+        include: {
+          itemIngrediente: {
+            include: { ingrediente: { select: { nombre: true } } },
+          },
+        },
+      },
+    },
+  },
+} satisfies Prisma.PedidoInclude
 
 @Injectable()
 export class PedidosService {
@@ -297,37 +316,81 @@ export class PedidosService {
       en_preparacion: 'listo',
       listo: 'entregado',
     }
-    if (TRANSICIONES[pedido.estado] !== dto.estado) {
+    // Con una comanda, "listo" también vale sobre un pedido que ya cerró (otra estación se adelantó): no es un error.
+    const yaCerrado = pedido.estado === 'listo' || pedido.estado === 'entregado'
+    const valida = dto.estado === 'listo'
+      ? pedido.estado === 'en_preparacion' || (dto.comandaId !== undefined && yaCerrado)
+      : TRANSICIONES[pedido.estado] === dto.estado
+    if (!valida) {
       throw new BadRequestException(
         `Transición inválida: ${pedido.estado} → ${dto.estado}`,
       )
     }
 
-    // c. Actualizar estado
+    if (dto.comandaId !== undefined && dto.estado !== 'listo') {
+      throw new BadRequestException('La comanda solo se indica al marcar el pedido como listo')
+    }
+
+    // c. Pasar a listo es la marca de las comandas (o de todo el pedido): tiene su propia transacción
+    if (dto.estado === 'listo') return this.marcarListo(pedido.id, pedido.mesa.restauranteId, dto.comandaId ?? null)
+
+    // d. Actualizar estado
     const actualizado = await this.prisma.pedido.update({
       where: { id },
       data: { estado: dto.estado },
-      include: {
-        mesa: { select: { numero: true } },
-        items: {
-          include: {
-            item: { select: { nombre: true } },
-            mods: {
-              include: {
-                itemIngrediente: {
-                  include: { ingrediente: { select: { nombre: true } } },
-                },
-              },
-            },
-          },
-        },
-      },
+      include: PEDIDO_RICO_INCLUDE,
     })
 
-    // d. Emitir a cocina/mozo
+    // e. Emitir a cocina/mozo
     this.gateway.emitOrderUpdated(pedido.mesa.restauranteId, actualizado)
 
     return actualizado
+  }
+
+  /**
+   * "Listo" de un pedido en preparación, de todo el pedido (`comandaId` null) o de una comanda: marca los ítems y,
+   * según `decidirListo`, cierra el pedido. Todo en una transacción que arranca bloqueando la fila del pedido, así dos
+   * estaciones que marcan a la vez se turnan (la segunda ve lo de la primera) y una anulación o una edición no se cruzan.
+   *
+   * Con `comandaId`, un pedido que ya está listo o entregado, o una comanda sin nada pendiente, no es un error (un
+   * segundo clic, o la barra marcando justo después de que la cocina cerró): devuelve el pedido tal cual y no emite.
+   */
+  private async marcarListo(id: string, restauranteId: string, comandaId: string | null) {
+    const comandas = await this.prisma.comanda.findMany({
+      where: { restauranteId },
+      select: { id: true, nombre: true, activa: true },
+    })
+    if (comandaId !== null && !comandas.some((c) => c.id === comandaId)) {
+      throw new BadRequestException('La comanda no es de este restaurante')
+    }
+
+    const { pedido, cambio } = await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "pedido" WHERE id = ${id} FOR UPDATE`
+      const actual = await tx.pedido.findUniqueOrThrow({
+        where: { id },
+        select: {
+          estado: true,
+          items: { select: { id: true, comandaId: true, cantidad: true, cantidadEditada: true, listoEn: true } },
+        },
+      })
+
+      const yaCerrado = actual.estado === 'listo' || actual.estado === 'entregado'
+      if (actual.estado !== 'en_preparacion' && !(comandaId !== null && yaCerrado)) {
+        throw new BadRequestException(`Transición inválida: ${actual.estado} → listo`)
+      }
+
+      const { marcar, cerrar } = yaCerrado ? { marcar: [], cerrar: false } : decidirListo(actual.items, comandas, comandaId)
+      if (marcar.length > 0) {
+        await tx.pedidoItem.updateMany({ where: { id: { in: marcar } }, data: { listoEn: new Date() } })
+      }
+      if (cerrar) await tx.pedido.update({ where: { id }, data: { estado: 'listo' } })
+
+      const pedido = await tx.pedido.findUniqueOrThrow({ where: { id }, include: PEDIDO_RICO_INCLUDE })
+      return { pedido, cambio: marcar.length > 0 || cerrar }
+    })
+
+    if (cambio) this.gateway.emitOrderUpdated(restauranteId, pedido)
+    return pedido
   }
 
   /**
@@ -383,8 +446,10 @@ export class PedidosService {
       }
     }
 
-    // 6. Ejecutar en transaction
-    await this.prisma.$transaction(async (tx) => {
+    // 6. Ejecutar en transaction. Toma el mismo bloqueo que "Listo" (`marcarListo`): si una comanda marca a la vez, una de
+    // las dos operaciones ve el resultado de la otra y el cierre del pedido no se pierde.
+    const cerrado = await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "pedido" WHERE id = ${id} FOR UPDATE`
       for (const ed of dto.ediciones) {
         await tx.pedidoItem.update({
           where: { id: ed.pedidoItemId },
@@ -399,6 +464,7 @@ export class PedidosService {
       if (todosAnulados) {
         await tx.pedido.update({ where: { id }, data: { estado: 'anulado' } })
       }
+      const sinPendientes = !todosAnulados && (await this.cerrarSiNoQuedaPendiente(tx, id))
 
       await tx.pedidoEdicion.create({
         data: {
@@ -420,11 +486,32 @@ export class PedidosService {
           },
         },
       })
+      return sinPendientes
     })
 
     const resultado = await this.getPedidoConEdiciones(id)
     this.gateway.emitOrderEdited(pedido.mesa.restauranteId, resultado)
+    // El cierre también llega como `order:updated`, que es lo que escuchan el salón y el comensal para el estado.
+    if (cerrado) this.gateway.emitOrderUpdated(pedido.mesa.restauranteId, resultado)
     return resultado
+  }
+
+  /**
+   * Un pedido en preparación al que la edición le deja todo lo vigente listo (por ejemplo, se eliminó lo único que
+   * faltaba) pasa a "listo": sin esto nadie tendría un "Listo" que tocar. Dentro de la transacción de la edición, con
+   * el pedido ya bloqueado. Devuelve si lo cerró.
+   */
+  private async cerrarSiNoQuedaPendiente(tx: Prisma.TransactionClient, id: string): Promise<boolean> {
+    const actual = await tx.pedido.findUniqueOrThrow({
+      where: { id },
+      select: {
+        estado: true,
+        items: { select: { id: true, comandaId: true, cantidad: true, cantidadEditada: true, listoEn: true } },
+      },
+    })
+    if (actual.estado !== 'en_preparacion' || !nadaPendiente(actual.items)) return false
+    await tx.pedido.update({ where: { id }, data: { estado: 'listo' } })
+    return true
   }
 
   /** Solo el OWNER, lo exige la ruta (`@RequiereRolEn`). */
