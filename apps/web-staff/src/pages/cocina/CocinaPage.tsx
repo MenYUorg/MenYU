@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { AlertTriangle, ChefHat, ChevronRight, Clock, LogOut, Printer, RefreshCw } from 'lucide-react'
+import { AlertTriangle, Check, ChefHat, ChevronRight, Clock, LogOut, Printer, RefreshCw } from 'lucide-react'
 import { api } from '../../services/api'
 import type { PedidoRico } from '../../services/api'
 import { useContextoStore, useRestauranteId } from '../../store/contextoStore'
@@ -9,10 +9,10 @@ import { cerrarSesion } from '../../services/socket'
 import type { Comanda, Pedido } from '@menyu/types'
 import { comandaRecordada, recordarComanda } from '../../utils/comandaRecordada'
 import {
-  hayQueConfirmar, idsActivos, ocultosVigentes, partirItems, pedidoParaImprimir, pestaniaVigente, textoDeConfirmacion,
-  tieneAlgoVisible,
+  columnaDelPedido, idsActivos, itemsPropios, ocultosVigentes, partirItems, pedidoParaImprimir, pestaniaVigente,
+  puedeMarcarListo, tieneAlgoVisible,
 } from '../../utils/comandasDeCocina'
-import type { Pestania } from '../../utils/comandasDeCocina'
+import type { ColumnaDeCocina, Pestania } from '../../utils/comandasDeCocina'
 import { imprimirPedido, conectarImpresora, impresoraConectada, testPrint } from '../../services/impresora'
 import { marcarEntrada, sembrarEntradas } from '../../utils/entradasACocina'
 
@@ -22,8 +22,6 @@ const C = {
   orange:    '#E8563A',
   green:     '#16a34a',
   greenBg:   '#dcfce7',
-  amber:     '#d97706',
-  amberBg:   '#fef3c7',
   blue:      '#2563eb',
   blueBg:    '#dbeafe',
   border:    '#e5e7eb',
@@ -43,15 +41,6 @@ const ESTADOS_COCINA: EstadoPedido[] = ['en_preparacion', 'listo']
 const ESTADO_LABEL: Record<string, string> = {
   en_preparacion: 'En preparación',
   listo:          'Listo',
-}
-
-const ESTADO_NEXT: Record<string, EstadoPedido | null> = {
-  en_preparacion: 'listo',
-  listo:          null,
-}
-
-const BOTON_LABEL: Record<string, string> = {
-  en_preparacion: 'Listo',
 }
 
 const ESTADO_COLORS: Record<string, { bg: string; text: string; border: string }> = {
@@ -112,34 +101,34 @@ const SOLO_PARA_LECTORES = {
 } as const
 
 function PedidoCard({
-  pedido, onAvanzar, loading, pestania, activas, comandas, impresoraLista,
+  pedido, columna, conBoton, onListo, loading, pestania, activas, impresoraLista,
 }: {
   pedido:    PedidoRico
-  onAvanzar: (id: string, estado: EstadoPedido) => void
+  /** La columna en la que está la tarjeta en esta pestania (no siempre es la del estado del pedido). */
+  columna:   ColumnaDeCocina
+  /** Si la pestania tiene un "Listo" que tocar en este pedido. */
+  conBoton:  boolean
+  onListo:   (id: string, pestania: Pestania) => void
   loading:   boolean
   pestania:  Pestania
   activas:   string[]
-  comandas:  Comanda[]
   impresoraLista: boolean
 }) {
   const { visibles, ocultos } = partirItems(pedido.items, pestania, activas)
   const ocultosN = ocultosVigentes(ocultos)
-  // La tarjeta se remonta al cambiar de pestania (key en el padre): la confirmación pendiente se descarta sola.
-  const [pidiendoConfirmar, setPidiendoConfirmar] = useState(false)
   const [imprimiendo, setImprimiendo] = useState(false)
   const [errorDeImpresion, setErrorDeImpresion] = useState(false)
   const idSinImpresora = useId()
-  const confirmando = pidiendoConfirmar && hayQueConfirmar(ocultos)
-  const textoConfirmar = textoDeConfirmacion(ocultos, comandas)
-  const estado    = pedido.estado as string
-  const siguiente = ESTADO_NEXT[estado] ?? null
-  const colores   = ESTADO_COLORS[estado] ?? ESTADO_COLORS.en_preparacion
+  const colores   = ESTADO_COLORS[columna]
   const minutos   = minDesde(pedido.createdAt)
   const urgente   = minutos >= 20
   const hasEdits  = visibles.some((i) => i.cantidadEditada !== null)
   const isAnulado = pedido.estado === 'anulado'
+  // Las líneas ya marcadas "Listo" se señalan mientras el pedido sigue en preparación; en uno listo estarían todas.
+  const marcasVisibles = pedido.estado === 'en_preparacion'
   // Reimprimir es una acción explícita: no pasa por el registro de entradas ni suena. Lo que sale es lo que se ve en la pestaña.
-  const paraReimprimir = estado === 'en_preparacion' ? pedidoParaImprimir(pedido, pestania, activas) : null
+  // Solo en la columna "En preparación" de la pestania (un anulado también está ahí, pero no se reimprime).
+  const paraReimprimir = columna === 'en_preparacion' && !isAnulado ? pedidoParaImprimir(pedido, pestania, activas) : null
   const reimprimir = async () => {
     if (!paraReimprimir || !impresoraLista || imprimiendo) return
     setErrorDeImpresion(false)
@@ -154,8 +143,8 @@ function PedidoCard({
   }
 
   const badgeLabel  = isAnulado ? 'Anulado'
-                    : hasEdits  ? `${ESTADO_LABEL[estado] ?? estado} · Editado`
-                    :              ESTADO_LABEL[estado] ?? estado
+                    : hasEdits  ? `${ESTADO_LABEL[columna]} · Editado`
+                    :              ESTADO_LABEL[columna]
   const badgeBg     = isAnulado ? '#fef2f2' : hasEdits ? '#FDE5DF' : colores.bg
   const badgeColor  = isAnulado ? '#dc2626' : hasEdits ? '#E8563A' : colores.text
   const badgeBorder = isAnulado ? '#fecaca' : hasEdits ? '#fca5a5' : colores.border
@@ -225,6 +214,12 @@ function PedidoCard({
           const cantOrig    = item.cantidad
           const cantEdit    = cantActual(item)
           const cantQuitada = cantOrig - cantEdit
+          const marca = marcasVisibles && item.listoEn !== null && (
+            <span style={{ marginLeft: 8, display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 11, fontWeight: 600, color: C.green }}>
+              <Check size={12} aria-hidden="true" />
+              Listo
+            </span>
+          )
           return (
             <div key={item.id} style={{ fontSize: 13 }}>
               {isAnulado || cantEdit === 0 ? (
@@ -234,6 +229,7 @@ function PedidoCard({
               ) : cantQuitada > 0 ? (
                 <>
                   <span style={{ fontWeight: 600, color: '#374151' }}>{cantEdit}× {item.item.nombre}</span>
+                  {marca}
                   <div>
                     <span style={{ fontSize: 12, color: C.red, textDecoration: 'line-through' }}>
                       {cantQuitada}× {item.item.nombre}
@@ -241,7 +237,10 @@ function PedidoCard({
                   </div>
                 </>
               ) : (
-                <span style={{ fontWeight: 600, color: '#374151' }}>{cantOrig}× {item.item.nombre}</span>
+                <>
+                  <span style={{ fontWeight: 600, color: '#374151' }}>{cantOrig}× {item.item.nombre}</span>
+                  {marca}
+                </>
               )}
               {!isAnulado && cantEdit > 0 && item.mods.length > 0 && (
                 <div style={{ paddingLeft: 12, marginTop: 2 }}>
@@ -269,45 +268,9 @@ function PedidoCard({
         )}
       </div>
 
-      {!isAnulado && siguiente && BOTON_LABEL[estado] && confirmando && textoConfirmar && (
-        <div
-          role="group"
-          aria-label="Confirmar que el pedido está listo"
-          style={{ marginTop: 4, display: 'flex', flexDirection: 'column', gap: 8 }}
-        >
-          <div aria-live="polite" style={{ fontSize: 12, color: C.amber, background: C.amberBg, borderRadius: 7, padding: '6px 10px', fontWeight: 600 }}>
-            {textoConfirmar}
-          </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button
-              onClick={() => { setPidiendoConfirmar(false); onAvanzar(pedido.id, siguiente) }}
-              disabled={loading}
-              style={{
-                flex: 1, background: loading ? '#d1d5db' : C.navy, color: C.white, border: 'none', borderRadius: 7,
-                padding: '8px 12px', fontSize: 12, fontWeight: 600, cursor: loading ? 'not-allowed' : 'pointer',
-                fontFamily: 'Montserrat,sans-serif',
-              }}
-            >
-              Confirmar
-            </button>
-            <button
-              onClick={() => setPidiendoConfirmar(false)}
-              disabled={loading}
-              style={{
-                flex: 1, background: C.white, color: C.navy, border: `1px solid ${C.border}`, borderRadius: 7,
-                padding: '8px 12px', fontSize: 12, fontWeight: 600, cursor: loading ? 'not-allowed' : 'pointer',
-                fontFamily: 'Montserrat,sans-serif',
-              }}
-            >
-              Cancelar
-            </button>
-          </div>
-        </div>
-      )}
-
-      {!isAnulado && siguiente && BOTON_LABEL[estado] && !(confirmando && textoConfirmar) && (
+      {!isAnulado && conBoton && (
         <button
-          onClick={() => (hayQueConfirmar(ocultos) ? setPidiendoConfirmar(true) : onAvanzar(pedido.id, siguiente))}
+          onClick={() => onListo(pedido.id, pestania)}
           disabled={loading}
           style={{
             marginTop: 4, background: loading ? '#d1d5db' : C.navy, color: C.white,
@@ -319,7 +282,7 @@ function PedidoCard({
           {loading
             ? <RefreshCw size={12} style={{ animation: 'spin 1s linear infinite' }} />
             : <ChevronRight size={12} />}
-          {BOTON_LABEL[estado]}
+          Listo
         </button>
       )}
     </div>
@@ -473,12 +436,22 @@ export function CocinaPage() {
     }
   }, [restauranteId, alEntrarACocina])
 
-  const handleAvanzar = useCallback(async (id: string, nuevoEstado: EstadoPedido) => {
+  // "Listo" de la pestania: en "Todas" cierra el pedido; en una comanda marca lo pendiente de esa comanda y el backend
+  // decide si además lo cierra. Se marca de entrada (la tarjeta pasa a "Listo" en la pestania) y se vuelve atrás si falla.
+  const handleListo = useCallback(async (id: string, pestaniaDelClic: Pestania) => {
     setLoadingIds((prev) => new Set(prev).add(id))
     const prev = pedidos.find((p) => p.id === id)
-    setPedidos((all) => all.map((p) => p.id === id ? { ...p, estado: nuevoEstado } : p))
+    const ahora = new Date().toISOString()
+    setPedidos((all) => all.map((p) => {
+      if (p.id !== id) return p
+      if (pestaniaDelClic === null) return { ...p, estado: 'listo' }
+      const propios = new Set(itemsPropios(p.items, pestaniaDelClic, comandas).map((i) => i.id))
+      return { ...p, items: p.items.map((i) => (propios.has(i.id) && i.listoEn === null ? { ...i, listoEn: ahora } : i)) }
+    }))
     try {
-      const updated = await api.pedidos.cambiarEstado(id, nuevoEstado)
+      const updated = pestaniaDelClic === null
+        ? await api.pedidos.cambiarEstado(id, 'listo')
+        : await api.pedidos.cambiarEstado(id, 'listo', pestaniaDelClic)
       const estado  = updated.estado as string
       if (!ESTADOS_COCINA.includes(estado as EstadoPedido)) {
         setPedidos((all) => all.filter((p) => p.id !== id))
@@ -490,7 +463,7 @@ export function CocinaPage() {
     } finally {
       setLoadingIds((prev) => { const n = new Set(prev); n.delete(id); return n })
     }
-  }, [pedidos])
+  }, [pedidos, comandas])
 
   // La pestaña se deriva en cada render: si la guardada se desactivó o no existe, vuelve a "Todas" sin tocar localStorage.
   const pestania = pestaniaVigente(eleccion, comandas)
@@ -503,6 +476,7 @@ export function CocinaPage() {
     activasRef.current = activas
   })
   const visible = (p: PedidoRico) => tieneAlgoVisible(p.items, pestania, activas)
+  const columnaDe = (p: PedidoRico) => columnaDelPedido(p, pestania, comandas)
 
   const elegir = (id: string | null) => {
     setEleccion(id)
@@ -511,7 +485,7 @@ export function CocinaPage() {
 
   const byEstado = (estado: EstadoPedido) => {
     const activos = pedidos
-      .filter((p) => p.estado === estado && visible(p))
+      .filter((p) => columnaDe(p) === estado && visible(p))
       .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
     if (estado !== 'en_preparacion') return activos
     const anuladosList = Array.from(anulados.values())
@@ -520,7 +494,7 @@ export function CocinaPage() {
     return [...activos, ...anuladosList]
   }
 
-  const totalActivos = pedidos.filter((p) => p.estado === 'en_preparacion' && visible(p)).length
+  const totalActivos = pedidos.filter((p) => columnaDe(p) === 'en_preparacion' && visible(p)).length
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
@@ -621,7 +595,7 @@ export function CocinaPage() {
           const items   = byEstado(estado)
           const colores = ESTADO_COLORS[estado]
           return (
-            <div key={estado} style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: C.bgLight, borderRadius: 12, border: `1px solid ${C.border}` }}>
+            <div key={estado} role="region" aria-label={ESTADO_LABEL[estado]} style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: C.bgLight, borderRadius: 12, border: `1px solid ${C.border}` }}>
               <div style={{ flexShrink: 0, padding: '12px 16px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: C.white }}>
                 <span style={{ fontFamily: 'Montserrat,sans-serif', fontWeight: 700, fontSize: 14, color: C.navy }}>{ESTADO_LABEL[estado]}</span>
                 <span style={{ background: colores.bg, color: colores.text, borderRadius: 20, padding: '2px 8px', fontSize: 12, fontWeight: 700 }}>
@@ -636,11 +610,12 @@ export function CocinaPage() {
                     <PedidoCard
                       key={`${p.id}|${pestania ?? ''}`}
                       pedido={p}
-                      onAvanzar={handleAvanzar}
+                      columna={columnaDe(p)}
+                      conBoton={puedeMarcarListo(p, pestania, comandas)}
+                      onListo={handleListo}
                       loading={loadingIds.has(p.id)}
                       pestania={pestania}
                       activas={activas}
-                      comandas={comandas}
                       impresoraLista={conectada}
                     />
                   ))

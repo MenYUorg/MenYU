@@ -379,7 +379,7 @@ describe('CocinaPage: pestañas por comanda', () => {
   const CLAVE = 'menyu-staff-comanda:rest-1'
 
   const linea = (id: string, nombre: string, comandaId: string | null, extra: Partial<PedidoRico['items'][number]> = {}) =>
-    ({ id, itemId: id, cantidad: 1, cantidadEditada: null, precioUnitario: 100, notas: null, comandaId, item: { nombre }, mods: [], ...extra }) as PedidoRico['items'][number]
+    ({ id, itemId: id, cantidad: 1, cantidadEditada: null, precioUnitario: 100, notas: null, comandaId, listoEn: null, item: { nombre }, mods: [], ...extra }) as PedidoRico['items'][number]
 
   const SOLO_COCINA = pedido('coc-1', 'en_preparacion', { items: [linea('a1', 'Milanesa', 'c-coc')] })
   // Mesa 2: lo de Barra (Cerveza) y lo sin comanda (Agua) se ve; Milanesa y Papas (vigentes) cuentan como ocultos y Flan (eliminado) no.
@@ -1207,108 +1207,295 @@ describe('CocinaPage: pestañas por comanda', () => {
     })
   })
 
-  describe('confirmación de "Listo"', () => {
-    const TEXTO_2_COCINA = 'Vas a marcar listo todo el pedido, incluidos 2 ítems de Cocina'
+  describe('"Listo" por pestaña (#344)', () => {
+    const AHORA = '2026-11-26T15:00:00.000Z'
     const listo = (mesa: string) => within(tarjeta(mesa)).getByRole('button', { name: 'Listo' })
+    const sinListo = (mesa: string) => within(tarjeta(mesa)).queryByRole('button', { name: 'Listo' })
+    const columna = (nombre: 'En preparación' | 'Listo') => screen.getByRole('region', { name: nombre })
+    /** La línea del pedido que dice ese texto (su nombre y, si está marcada, la marca "Listo"). */
+    const linea_ = (texto: string) => screen.getByText(texto).closest('div') as HTMLElement
+    const marcar = (p: PedidoRico, ...ids: string[]): PedidoRico => ({
+      ...p,
+      items: p.items.map((i) => (ids.includes(i.id) ? { ...i, listoEn: AHORA } : i)),
+    })
+    // Mesa 2 con la bebida de Barra ya marcada: a Barra no le queda nada; a Cocina, lo suyo y lo sin comanda.
+    const BARRA_MARCO = () => marcar(MIXTO, 'b1')
+    const deferido = <T,>() => {
+      let resolver!: (v: T) => void
+      const promesa = new Promise<T>((r) => { resolver = r })
+      return { promesa, resolver }
+    }
 
     beforeEach(() => {
-      pedidosApi.cambiarEstado.mockImplementation(((id: string, estado: string) =>
-        Promise.resolve({ ...MIXTO, id, estado })) as never)
+      pedidosApi.cambiarEstado.mockImplementation(((id: string) => Promise.resolve({ ...MIXTO, id, estado: 'listo' })) as never)
     })
 
-    it('con ítems ocultos pide confirmar: muestra el texto y no avanza', async () => {
-      await abrirCon([COCINA, BARRA])
-      elegir('Barra')
+    describe('el botón', () => {
+      it('en "Todas" marca el pedido entero: sin comandaId y sin confirmación', async () => {
+        await abrirCon([COCINA, BARRA])
 
-      fireEvent.click(listo('2'))
+        fireEvent.click(listo('2'))
 
-      expect(within(tarjeta('2')).getByText(TEXTO_2_COCINA)).toBeInTheDocument()
-      expect(within(tarjeta('2')).getByRole('group', { name: /Confirmar/ })).toBeInTheDocument()
-      expect(within(tarjeta('2')).queryByRole('button', { name: 'Listo' })).not.toBeInTheDocument()
-      expect(pedidosApi.cambiarEstado).not.toHaveBeenCalled()
-    })
-
-    it('"Confirmar" avanza el pedido a listo', async () => {
-      await abrirCon([COCINA, BARRA])
-      elegir('Barra')
-      fireEvent.click(listo('2'))
-
-      fireEvent.click(within(tarjeta('2')).getByRole('button', { name: 'Confirmar' }))
-
-      await vi.waitFor(() => expect(pedidosApi.cambiarEstado).toHaveBeenCalledWith('mix-2', 'listo'))
-      expect(pedidosApi.cambiarEstado).toHaveBeenCalledTimes(1)
-    })
-
-    it('"Cancelar" vuelve al botón "Listo" sin avanzar', async () => {
-      await abrirCon([COCINA, BARRA])
-      elegir('Barra')
-      fireEvent.click(listo('2'))
-
-      fireEvent.click(within(tarjeta('2')).getByRole('button', { name: 'Cancelar' }))
-
-      expect(listo('2')).toBeInTheDocument()
-      expect(screen.queryByText(TEXTO_2_COCINA)).not.toBeInTheDocument()
-      expect(pedidosApi.cambiarEstado).not.toHaveBeenCalled()
-    })
-
-    it('en "Todas" avanza directo', async () => {
-      await abrirCon([COCINA, BARRA])
-
-      fireEvent.click(listo('2'))
-
-      await vi.waitFor(() => expect(pedidosApi.cambiarEstado).toHaveBeenCalledWith('mix-2', 'listo'))
-      expect(screen.queryByText(/Vas a marcar listo/)).not.toBeInTheDocument()
-    })
-
-    it('un pedido solo de la comanda elegida avanza directo', async () => {
-      await abrirCon([COCINA, BARRA])
-      elegir('Cocina')
-
-      fireEvent.click(listo('1'))
-
-      await vi.waitFor(() => expect(pedidosApi.cambiarEstado).toHaveBeenCalledWith('coc-1', 'listo'))
-      expect(screen.queryByText(/Vas a marcar listo/)).not.toBeInTheDocument()
-    })
-
-    it('si los ocultos están todos eliminados avanza directo', async () => {
-      const soloEliminada = pedido('eli-4', 'en_preparacion', {
-        items: [linea('d1', 'Cerveza', 'c-bar'), linea('d2', 'Flan', 'c-coc', { cantidadEditada: 0 })],
+        await vi.waitFor(() => expect(pedidosApi.cambiarEstado).toHaveBeenCalledWith('mix-2', 'listo'))
+        expect(pedidosApi.cambiarEstado).toHaveBeenCalledTimes(1)
+        expect(screen.queryByText(/Vas a marcar listo/)).not.toBeInTheDocument()
       })
-      await abrirCon([COCINA, BARRA], [soloEliminada], [])
-      elegir('Barra')
 
-      fireEvent.click(listo('4'))
+      it('en Barra manda la comanda de Barra, sin confirmación aunque el pedido tenga ítems de otras comandas', async () => {
+        await abrirCon([COCINA, BARRA])
+        elegir('Barra')
 
-      await vi.waitFor(() => expect(pedidosApi.cambiarEstado).toHaveBeenCalledWith('eli-4', 'listo'))
-      expect(screen.queryByText(/Vas a marcar listo/)).not.toBeInTheDocument()
-    })
+        fireEvent.click(listo('2'))
 
-    it('cambiar de pestaña con la confirmación abierta la descarta', async () => {
-      await abrirCon([COCINA, BARRA])
-      elegir('Barra')
-      fireEvent.click(listo('2'))
-      expect(screen.getByText(TEXTO_2_COCINA)).toBeInTheDocument()
-
-      elegir('Cocina')
-
-      expect(screen.queryByText(/Vas a marcar listo/)).not.toBeInTheDocument()
-      expect(listo('2')).toBeInTheDocument()
-      elegir('Barra')
-      expect(screen.queryByText(/Vas a marcar listo/)).not.toBeInTheDocument()
-      expect(pedidosApi.cambiarEstado).not.toHaveBeenCalled()
-    })
-
-    it('con ocultos de dos comandas nombra las dos', async () => {
-      const POSTRES = { id: 'c-pos', restauranteId: 'rest-1', nombre: 'Postres', activa: true }
-      const tres = pedido('tre-5', 'en_preparacion', {
-        items: [linea('l1', 'Flan', 'c-pos'), linea('l2', 'Cerveza', 'c-bar'), linea('l3', 'Milanesa', 'c-coc')],
+        await vi.waitFor(() => expect(pedidosApi.cambiarEstado).toHaveBeenCalledWith('mix-2', 'listo', 'c-bar'))
+        expect(screen.queryByRole('group', { name: /Confirmar/ })).not.toBeInTheDocument()
+        expect(screen.queryByText(/Vas a marcar listo/)).not.toBeInTheDocument()
       })
-      await abrirCon([COCINA, BARRA, POSTRES], [tres], [])
-      elegir('Postres')
 
-      fireEvent.click(listo('5'))
+      it('en la pestaña Cocina manda la comanda de Cocina', async () => {
+        await abrirCon([COCINA, BARRA])
+        elegir('Cocina')
 
-      expect(within(tarjeta('5')).getByText('Vas a marcar listo todo el pedido, incluidos 2 ítems de Barra y Cocina')).toBeInTheDocument()
+        fireEvent.click(listo('2'))
+
+        await vi.waitFor(() => expect(pedidosApi.cambiarEstado).toHaveBeenCalledWith('mix-2', 'listo', 'c-coc'))
+      })
+
+      it('una pestaña que solo ve líneas ajenas (una sin comanda) muestra el pedido en preparación sin botón "Listo"; reimprimir sigue a la columna', async () => {
+        conectada = true
+        const ajeno = pedido('aje-9', 'en_preparacion', { items: [linea('x1', 'Agua', null), linea('x2', 'Milanesa', 'c-coc')] })
+        await abrirCon([COCINA, BARRA], [ajeno], [])
+        elegir('Barra')
+
+        expect(within(columna('En preparación')).getByText('Mesa 9')).toBeInTheDocument()
+        expect(sinListo('9')).not.toBeInTheDocument()
+        expect(within(tarjeta('9')).getByRole('button', { name: 'Reimprimir pedido de la mesa 9' })).toBeInTheDocument()
+      })
+
+      it('un pedido anulado en una pestaña filtrada se ve, sin botón "Listo" y sin reimprimir', async () => {
+        conectada = true
+        await abrirCon([COCINA, BARRA], [MIXTO], [])
+        elegir('Barra')
+        expect(listo('2')).toBeInTheDocument()
+
+        recibir('editado', { ...MIXTO, estado: 'anulado' })
+
+        expect(within(columna('En preparación')).getByText('Mesa 2')).toBeInTheDocument()
+        expect(within(tarjeta('2')).getByText('Anulado')).toBeInTheDocument()
+        expect(sinListo('2')).not.toBeInTheDocument()
+        expect(screen.queryByRole('button', { name: /^Reimprimir pedido/ })).not.toBeInTheDocument()
+      })
+    })
+
+    describe('la columna según la pestaña', () => {
+      it('con lo de Barra ya marcado: en Barra va a "Listo"; en Cocina y en "Todas" sigue en preparación, con botón', async () => {
+        await abrirCon([COCINA, BARRA], [BARRA_MARCO()], [])
+
+        expect(within(columna('En preparación')).getByText('Mesa 2')).toBeInTheDocument()
+        elegir('Barra')
+        expect(within(columna('Listo')).getByText('Mesa 2')).toBeInTheDocument()
+        expect(within(columna('En preparación')).queryByText('Mesa 2')).not.toBeInTheDocument()
+        expect(sinListo('2')).not.toBeInTheDocument()
+        elegir('Cocina')
+        expect(within(columna('En preparación')).getByText('Mesa 2')).toBeInTheDocument()
+        expect(listo('2')).toBeInTheDocument()
+      })
+
+      it('las líneas eliminadas no cuentan como pendientes', async () => {
+        const conEliminada = pedido('eli-4', 'en_preparacion', {
+          items: [
+            linea('d1', 'Cerveza', 'c-bar', { listoEn: AHORA }),
+            linea('d2', 'Gin', 'c-bar', { cantidadEditada: 0 }),
+            linea('d3', 'Milanesa', 'c-coc'),
+          ],
+        })
+        await abrirCon([COCINA, BARRA], [conEliminada], [])
+        elegir('Barra')
+
+        expect(within(columna('Listo')).getByText('Mesa 4')).toBeInTheDocument()
+      })
+
+      it('sin nada marcado, en las dos pestañas sigue en preparación', async () => {
+        await abrirCon([COCINA, BARRA])
+        elegir('Barra')
+        expect(within(columna('En preparación')).getByText('Mesa 2')).toBeInTheDocument()
+        elegir('Cocina')
+        expect(within(columna('En preparación')).getByText('Mesa 2')).toBeInTheDocument()
+      })
+
+      it('el contador del encabezado cuenta los pedidos que están en preparación en la pestaña', async () => {
+        await abrirCon([COCINA, BARRA], [SOLO_COCINA, BARRA_MARCO()], [])
+        expect(within(screen.getByRole('banner')).getByText('2')).toBeInTheDocument()
+
+        elegir('Barra')
+
+        expect(within(columna('En preparación')).getByText('Sin pedidos')).toBeInTheDocument()
+        expect(within(screen.getByRole('banner')).queryByText(/^\d+$/)).not.toBeInTheDocument()
+      })
+
+      it('un pedido ya listo está en "Listo" en todas las pestañas', async () => {
+        await abrirCon([COCINA, BARRA])
+
+        for (const nombre of ['Todas', 'Barra', 'Cocina']) {
+          elegir(nombre)
+          if (nombre !== 'Cocina') expect(within(columna('Listo')).getByText('Mesa 3')).toBeInTheDocument()
+        }
+      })
+    })
+
+    describe('al tocar "Listo" en una pestaña', () => {
+      it('la tarjeta pasa a "Listo" de inmediato, sin esperar al servidor, y en "Todas" sigue en preparación con la línea marcada', async () => {
+        const respuesta = deferido<PedidoRico>()
+        pedidosApi.cambiarEstado.mockReturnValue(respuesta.promesa as never)
+        await abrirCon([COCINA, BARRA])
+        elegir('Barra')
+
+        fireEvent.click(listo('2'))
+
+        expect(within(columna('Listo')).getByText('Mesa 2')).toBeInTheDocument()
+        await act(async () => respuesta.resolver(BARRA_MARCO()))
+        expect(within(columna('Listo')).getByText('Mesa 2')).toBeInTheDocument()
+        elegir('Todas')
+        expect(within(columna('En preparación')).getByText('Mesa 2')).toBeInTheDocument()
+        expect(within(linea_('1× Cerveza')).getByText('Listo')).toBeInTheDocument()
+        expect(within(linea_('1× Agua')).queryByText('Listo')).not.toBeInTheDocument()
+      })
+
+      it('marca de entrada solo lo de la pestaña: mientras espera, lo de Cocina sigue pendiente y en preparación', async () => {
+        const respuesta = deferido<PedidoRico>()
+        pedidosApi.cambiarEstado.mockReturnValue(respuesta.promesa as never)
+        await abrirCon([COCINA, BARRA])
+        elegir('Barra')
+
+        fireEvent.click(listo('2'))
+        elegir('Cocina')
+
+        expect(within(columna('En preparación')).getByText('Mesa 2')).toBeInTheDocument()
+        expect(listo('2')).toBeInTheDocument()
+        expect(within(within(tarjeta('2')).getByText('1× Milanesa').closest('div') as HTMLElement).queryByText('Listo')).not.toBeInTheDocument()
+        elegir('Todas')
+        expect(within(linea_('1× Cerveza')).getByText('Listo')).toBeInTheDocument()
+        expect(within(linea_('1× Agua')).queryByText('Listo')).not.toBeInTheDocument()
+        await act(async () => respuesta.resolver(BARRA_MARCO()))
+      })
+
+      it('en "Todas" la tarjeta pasa a "Listo" de inmediato, sin esperar al servidor', async () => {
+        const respuesta = deferido<PedidoRico>()
+        pedidosApi.cambiarEstado.mockReturnValue(respuesta.promesa as never)
+        await abrirCon([COCINA, BARRA])
+
+        fireEvent.click(listo('2'))
+
+        expect(within(columna('Listo')).getByText('Mesa 2')).toBeInTheDocument()
+        expect(within(columna('En preparación')).queryByText('Mesa 2')).not.toBeInTheDocument()
+        await act(async () => respuesta.resolver({ ...MIXTO, estado: 'listo' }))
+      })
+
+      it('si el servidor cierra el pedido (la cocina), queda en "Listo" en todas las pestañas', async () => {
+        await abrirCon([COCINA, BARRA])
+        elegir('Cocina')
+
+        fireEvent.click(listo('2'))
+
+        await vi.waitFor(() => expect(within(columna('Listo')).getByText('Mesa 2')).toBeInTheDocument())
+        elegir('Todas')
+        expect(within(columna('Listo')).getByText('Mesa 2')).toBeInTheDocument()
+        elegir('Barra')
+        expect(within(columna('Listo')).getByText('Mesa 2')).toBeInTheDocument()
+      })
+
+      it('si falla vuelve a "En preparación" con el botón habilitado y sin marcas', async () => {
+        pedidosApi.cambiarEstado.mockRejectedValue(new Error('caído'))
+        await abrirCon([COCINA, BARRA])
+        elegir('Barra')
+
+        fireEvent.click(listo('2'))
+
+        await vi.waitFor(() => expect(listo('2')).toBeEnabled())
+        expect(within(columna('En preparación')).getByText('Mesa 2')).toBeInTheDocument()
+        elegir('Todas')
+        expect(within(linea_('1× Cerveza')).queryByText('Listo')).not.toBeInTheDocument()
+      })
+    })
+
+    describe('la marca "Listo" por línea', () => {
+      it('sale en las líneas marcadas y en ninguna otra, mientras el pedido sigue en preparación', async () => {
+        await abrirCon([COCINA, BARRA], [BARRA_MARCO()], [])
+
+        expect(within(linea_('1× Cerveza')).getByText('Listo')).toBeInTheDocument()
+        expect(within(linea_('1× Agua')).queryByText('Listo')).not.toBeInTheDocument()
+        expect(within(linea_('1× Milanesa')).queryByText('Listo')).not.toBeInTheDocument()
+      })
+
+      it('es texto, con el ícono oculto a los lectores de pantalla', async () => {
+        await abrirCon([COCINA, BARRA], [BARRA_MARCO()], [])
+
+        const marca = within(linea_('1× Cerveza')).getByText('Listo')
+        expect(marca.querySelector('svg')).toHaveAttribute('aria-hidden', 'true')
+      })
+
+      it('no sale en un pedido que ya está listo', async () => {
+        const listoConMarca = marcar(SOLO_BARRA, 'c1')
+        await abrirCon([COCINA, BARRA], [], [listoConMarca])
+
+        expect(within(linea_('1× Gin')).queryByText('Listo')).not.toBeInTheDocument()
+      })
+
+      it('no sale en una línea eliminada', async () => {
+        const conEliminada = pedido('eli-4', 'en_preparacion', {
+          items: [linea('d1', 'Cerveza', 'c-bar', { listoEn: AHORA }), linea('d2', 'Gin', 'c-bar', { listoEn: AHORA, cantidadEditada: 0 })],
+        })
+        await abrirCon([COCINA, BARRA], [conEliminada], [])
+
+        expect(within(linea_('1× Cerveza')).getByText('Listo')).toBeInTheDocument()
+        expect(within(linea_('1× Gin')).queryByText('Listo')).not.toBeInTheDocument()
+      })
+    })
+
+    describe('en tiempo real', () => {
+      it('un order:updated con la barra marcada mueve la tarjeta de columna sin sonar ni imprimir', async () => {
+        conectada = true
+        await abrirCon([COCINA, BARRA])
+        elegir('Barra')
+        expect(within(columna('En preparación')).getByText('Mesa 2')).toBeInTheDocument()
+
+        recibir('actualizado', BARRA_MARCO())
+
+        expect(within(columna('Listo')).getByText('Mesa 2')).toBeInTheDocument()
+        expect(tonos).toHaveLength(0)
+        expect(impresoraMock.imprimirPedido).not.toHaveBeenCalled()
+      })
+    })
+
+    describe('reimprimir según la columna de la pestaña', () => {
+      const reimprimir = (mesa: string) => within(tarjeta(mesa)).queryByRole('button', { name: `Reimprimir pedido de la mesa ${mesa}` })
+
+      it('no se ofrece en una tarjeta que está en "Listo" de la pestaña aunque el pedido siga en preparación; en las demás pestañas sí', async () => {
+        conectada = true
+        await abrirCon([COCINA, BARRA], [BARRA_MARCO()], [])
+
+        elegir('Barra')
+        expect(within(columna('Listo')).getByText('Mesa 2')).toBeInTheDocument()
+        expect(reimprimir('2')).not.toBeInTheDocument()
+        elegir('Cocina')
+        expect(reimprimir('2')).toBeInTheDocument()
+        elegir('Todas')
+        expect(reimprimir('2')).toBeInTheDocument()
+      })
+
+      it('al marcar "Listo" en la pestaña, la tarjeta pierde el botón de reimprimir', async () => {
+        conectada = true
+        const respuesta = deferido<PedidoRico>()
+        pedidosApi.cambiarEstado.mockReturnValue(respuesta.promesa as never)
+        await abrirCon([COCINA, BARRA])
+        elegir('Barra')
+        expect(reimprimir('2')).toBeInTheDocument()
+
+        fireEvent.click(listo('2'))
+
+        expect(reimprimir('2')).not.toBeInTheDocument()
+        await act(async () => respuesta.resolver(BARRA_MARCO()))
+      })
     })
   })
 })
