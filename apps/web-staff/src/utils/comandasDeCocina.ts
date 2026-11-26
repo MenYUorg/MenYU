@@ -78,6 +78,9 @@ export type ItemConListo = ItemConComanda & { listoEn?: string | null }
 
 const yaMarcado = (item: ItemConListo) => (item.listoEn ?? null) !== null
 
+/** Una comanda terminó lo suyo cuando tiene alguna línea propia y todas están marcadas. */
+const terminaron = (propios: readonly ItemConListo[]) => propios.length > 0 && propios.every(yaMarcado)
+
 /** Es "de cocina" lo que no tiene comanda, o su comanda es la de cocina o no está entre las activas. */
 function esDeCocina(item: ItemConComanda, comandas: readonly ComandaDeCocina[]): boolean {
   if (item.comandaId === null) return true
@@ -120,8 +123,7 @@ export function columnaDelPedido(
 ): ColumnaDeCocina {
   if (pedido.estado === 'listo') return 'listo'
   if (pedido.estado !== 'en_preparacion' || pestania === null) return 'en_preparacion'
-  const propios = itemsPropios(pedido.items, pestania, comandas)
-  return propios.length > 0 && propios.every(yaMarcado) ? 'listo' : 'en_preparacion'
+  return terminaron(itemsPropios(pedido.items, pestania, comandas)) ? 'listo' : 'en_preparacion'
 }
 
 /**
@@ -136,6 +138,23 @@ export function puedeMarcarListo(
 ): boolean {
   if (columnaDelPedido(pedido, pestania, comandas) !== 'en_preparacion' || pedido.estado !== 'en_preparacion') return false
   return pestania === null || itemsPropios(pedido.items, pestania, comandas).some((item) => !yaMarcado(item))
+}
+
+/**
+ * Las comandas que ya terminaron lo suyo en un pedido en preparación, para avisárselo al salón ("Barra: listo"): activas,
+ * con alguna línea vigente y todas marcadas (`listoEn`). Dejan de estar en cuanto tengan algo pendiente. La comanda de
+ * cocina no cuenta (cuando termina, cierra el pedido entero) ni las inactivas (sus líneas son "de cocina"). Un pedido que no
+ * está en preparación no tiene ninguna. Van ordenadas por nombre, como las pestañas.
+ */
+export function comandasListas(
+  pedido: { estado: string; items: readonly ItemConListo[] },
+  comandas: readonly ComandaDeCocina[] | undefined | null,
+): ComandaDeCocina[] {
+  if (pedido.estado !== 'en_preparacion') return []
+  const lista = comandas ?? []
+  return lista
+    .filter((c) => c.activa && !esComandaDeCocina(c.nombre) && terminaron(itemsPropios(pedido.items, c.id, lista)))
+    .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
 }
 
 /** Las líneas que salen en la comanda impresa: las mismas que se ven en la pestania. */

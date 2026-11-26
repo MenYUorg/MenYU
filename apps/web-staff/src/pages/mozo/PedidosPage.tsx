@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { io, type Socket } from 'socket.io-client'
-import { AlertTriangle, ChevronRight, ClipboardList, Clock, RefreshCw } from 'lucide-react'
+import { AlertTriangle, Check, ChevronRight, ClipboardList, Clock, RefreshCw } from 'lucide-react'
 import { authDelSocket, usePerfil } from '@menyu/auth-client'
 import { APARIENCIA_PEDIDOS, EditarPedidoModal, type AparienciaEditarPedido, type ItemEditable } from '@menyu/ui/editar-pedido'
 import { urlDelSocket } from '@menyu/ui/socket'
@@ -9,6 +9,9 @@ import { api } from '../../services/api'
 import type { PedidoRico } from '../../services/api'
 import { puedeEditarPedidos, useNombreDelRol, useRestauranteId, useRolesActuales } from '../../store/contextoStore'
 import { PageHeader } from '../../components/PageHeader'
+import { useComandas } from '../../hooks/useComandas'
+import { comandasListas } from '../../utils/comandasDeCocina'
+import type { ComandaDeCocina } from '../../utils/comandasDeCocina'
 
 function getInitials(name?: string): string {
   if (!name) return '?'
@@ -85,11 +88,13 @@ function shortId(id: string): string {
 
 // ── PedidoCard ────────────────────────────────────────────────────────────────
 function PedidoCard({
-  pedido, onAvanzar, onEntregar, onEditar, loading, puedeEditar,
+  pedido, onAvanzar, onEntregar, onEditar, loading, puedeEditar, listas,
 }: {
   pedido: PedidoRico; onAvanzar: (id: string, estado: EstadoPedido) => void
   onEntregar: (id: string) => void; onEditar: (p: PedidoRico) => void; loading: boolean
   puedeEditar: boolean
+  /** Las comandas que ya terminaron lo suyo en este pedido (solo si está en preparación): "Barra: listo". */
+  listas: ComandaDeCocina[]
 }) {
   const estado    = pedido.estado as EstadoPedido
   const siguiente = ESTADO_NEXT[estado]
@@ -122,6 +127,18 @@ function PedidoCard({
           {badgeLabel}
         </span>
       </div>
+
+      {/* Sin aria-live ni sonido: es información de la tarjeta, no un aviso que interrumpa. */}
+      {listas.length > 0 && (
+        <ul aria-label="Comandas listas" style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {listas.map((c) => (
+            <li key={c.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: C.greenBg, color: C.green, border: '1px solid #bbf7d0', borderRadius: 6, padding: '3px 8px', fontSize: 11, fontWeight: 600 }}>
+              <Check size={12} aria-hidden="true" />
+              {c.nombre}: listo
+            </li>
+          ))}
+        </ul>
+      )}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         {pedido.items.map((item) => {
@@ -206,6 +223,8 @@ export function PedidosPage() {
   const [error,         setError]         = useState<string | null>(null)
   const [editingPedido, setEditingPedido] = useState<PedidoRico | null>(null)
   const socketRef = useRef<Socket | null>(null)
+  // Los nombres de los avisos "X: listo". Sin lista (o ante un fallo, la última buena) no hay avisos.
+  const { comandas, recargar: recargarComandas } = useComandas(restauranteId)
 
   const fetchAll = useCallback(async () => {
     if (!restauranteId) return
@@ -297,7 +316,7 @@ export function PedidosPage() {
         title="Pedidos"
         icon={<ClipboardList size={18} />}
         onBack={() => navigate('/mozo')}
-        onRefresh={() => void fetchAll()}
+        onRefresh={() => { void fetchAll(); void recargarComandas() }}
         userName={nombreMozo}
         userRole={rolMostrado}
         userInitials={getInitials(nombreMozo)}
@@ -330,6 +349,7 @@ export function PedidosPage() {
                       onAvanzar={handleAvanzar} onEntregar={handleEntregar}
                       onEditar={setEditingPedido} loading={loadingIds.has(p.id)}
                       puedeEditar={puedeEditar}
+                      listas={comandasListas(p, comandas)}
                     />
                   ))
                 )}
