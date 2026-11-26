@@ -2,6 +2,7 @@ import js from '@eslint/js'
 import globals from 'globals'
 import reactHooks from 'eslint-plugin-react-hooks'
 import reactRefresh from 'eslint-plugin-react-refresh'
+import jsxA11y from 'eslint-plugin-jsx-a11y'
 import tseslint from 'typescript-eslint'
 
 // La carga diferida de supabase-js (CLAUDE.md): con un solo import de valor de estos paquetes, en cualquier archivo,
@@ -15,6 +16,9 @@ const IMPORT_DINAMICO =
 
 export default tseslint.config(
   { ignores: ['dist', 'coverage'] },
+  // Accesibilidad (WCAG 2.2, etapa 7 de docs/a11y/plan-cliente.md): la configuración `recommended` de jsx-a11y en todo el código
+  // del comensal. El lint corre con --max-warnings 0, así que cualquier infracción nueva falla el CI.
+  { ...jsxA11y.flatConfigs.recommended, files: ['**/*.{ts,tsx}'] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ['**/*.{ts,tsx}'],

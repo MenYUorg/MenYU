@@ -268,11 +268,13 @@ export function PagarPage() {
     cursor: 'pointer',
   }
 
-  // El fondo se puede tocar para cerrar (con el mouse o el dedo); para teclado y lector, el cierre es Esc o "Cancelar".
+  // El fondo se puede tocar para cerrar (con el mouse o el dedo); para teclado y lector, el cierre es Esc o "Cancelar". Solo
+  // cierra el toque en el fondo mismo (`e.target === e.currentTarget`): el diálogo de adentro no necesita su propio `onClick`
+  // para frenar el toque, y así no es un elemento no interactivo con un manejador (jsx-a11y).
   const modal = modalMensajeAbierto && (
     <div
       role="presentation"
-      onClick={() => setModalMensajeAbierto(false)}
+      onClick={(e) => { if (e.target === e.currentTarget) setModalMensajeAbierto(false) }}
       style={{
         position: 'fixed', inset: 0, zIndex: 1000,
         background: 'rgba(45, 53, 97, 0.85)',
@@ -286,7 +288,6 @@ export function PagarPage() {
         aria-modal="true"
         aria-labelledby={idDelTituloDelDialogo}
         tabIndex={-1}
-        onClick={(e) => e.stopPropagation()}
         style={{
           background: 'white', borderRadius: 16, padding: 24,
           width: 320, maxWidth: '90vw', display: 'flex', flexDirection: 'column', gap: 10,

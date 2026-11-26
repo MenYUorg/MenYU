@@ -311,6 +311,17 @@ describe('PagarPage', () => {
       expect(armar).toHaveFocus()
     })
 
+    it('tocar adentro del diálogo (en el diálogo mismo, no en un botón) no lo cierra: solo cierra el toque en el fondo', async () => {
+      await abrirElDialogo()
+      const dialogo = screen.getByRole('dialog', { name: 'Generador de mensaje' })
+
+      fireEvent.click(dialogo)
+
+      expect(screen.getByRole('dialog', { name: 'Generador de mensaje' })).toBeInTheDocument()
+      fireEvent.click(dialogo.parentElement!)
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    })
+
     it('Esc sin el diálogo abierto no hace nada', async () => {
       await abrir()
       await screen.findByRole('table', { name: 'Cuenta de la mesa' })

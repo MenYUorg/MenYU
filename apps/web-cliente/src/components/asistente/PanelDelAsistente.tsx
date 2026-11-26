@@ -286,6 +286,10 @@ export default function PanelDelAsistente({ abierto, onCerrar, restauranteId, no
         }}
       />
 
+      {/* El manejo de teclado de un diálogo modal (Esc lo cierra y Tab no sale de él) es el patrón de WAI-ARIA, no un control con
+          un clic sin teclado: la regla de jsx-a11y no distingue un diálogo de un <div> cualquiera. Es lo que la etapa 8 del plan
+          de accesibilidad revisa del asistente (hoy no usa `useCerrarConEscape`); hasta entonces queda como estaba. */}
+      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- diálogo modal: Esc y trampa del Tab */}
       <div
         ref={dialogoRef}
         role="dialog"
