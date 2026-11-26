@@ -66,36 +66,76 @@ export function ocultosVigentes(ocultos: readonly ItemConComanda[]): number {
   return ocultos.filter((item) => cantidadVigente(item) > 0).length
 }
 
-/** Si marcar listo el pedido arrastra ítems de otras comandas, hay que confirmarlo. */
-export function hayQueConfirmar(ocultos: readonly ItemConComanda[]): boolean {
-  return ocultosVigentes(ocultos) > 0
+/**
+ * La comanda de cocina se reconoce por su nombre, sin mayúsculas ni espacios al principio y al final: es la misma regla
+ * que aplica el backend al marcar "Listo" (`esComandaDeCocina` de `decidir-listo.ts`). Si un restaurante la llama de otra
+ * forma, no hay comanda de cocina.
+ */
+export const esComandaDeCocina = (nombre: string): boolean => nombre.trim().toLowerCase() === 'cocina'
+
+/** Una línea con la marca de "Listo" que le puso su comanda (`listoEn`); `null` es pendiente. */
+export type ItemConListo = ItemConComanda & { listoEn?: string | null }
+
+const yaMarcado = (item: ItemConListo) => (item.listoEn ?? null) !== null
+
+/** Es "de cocina" lo que no tiene comanda, o su comanda es la de cocina o no está entre las activas. */
+function esDeCocina(item: ItemConComanda, comandas: readonly ComandaDeCocina[]): boolean {
+  if (item.comandaId === null) return true
+  const comanda = comandas.find((c) => c.id === item.comandaId)
+  return !comanda?.activa || esComandaDeCocina(comanda.nombre)
 }
 
-const unirNombres = (nombres: string[]) =>
-  nombres.length <= 1 ? (nombres[0] ?? '') : `${nombres.slice(0, -1).join(', ')} y ${nombres[nombres.length - 1]}`
+/**
+ * Las líneas vigentes que le tocan a la pestania, o sea las que marca su "Listo". En "Todas" son todas. En una comanda
+ * son las suyas; en la comanda de cocina, además las "de cocina" (sin comanda, o de una comanda inactiva o desconocida),
+ * que se ven en todas las pestanias pero solo las cierra la cocina. Las eliminadas (cantidad vigente 0) no cuentan.
+ */
+export function itemsPropios<T extends ItemConComanda>(
+  items: readonly T[],
+  pestania: Pestania,
+  comandas: readonly ComandaDeCocina[] | undefined | null,
+): T[] {
+  const vigentes = items.filter((item) => cantidadVigente(item) > 0)
+  if (pestania === null) return vigentes
+  const lista = comandas ?? []
+  const esLaDeCocina = lista.some((c) => c.id === pestania && esComandaDeCocina(c.nombre))
+  return vigentes.filter((item) => item.comandaId === pestania || (esLaDeCocina && esDeCocina(item, lista)))
+}
+
+export type ColumnaDeCocina = 'en_preparacion' | 'listo'
 
 /**
- * El texto de la confirmación al marcar listo todo el pedido, o `null` si no hay ocultos vigentes. Los nombres de las
- * comandas no se repiten y van por orden alfabético; si alguna no se encuentra, se omite.
+ * En qué columna va el pedido en la pestania. "Todas" y un pedido ya `listo` siguen su estado. En una comanda, mientras el
+ * pedido sigue en preparación, va a "Listo" cuando todas sus líneas propias ya están marcadas (y tiene alguna); si no,
+ * a "En preparación".
+ *
+ * Todo lo que no es `listo` ni `en_preparacion` también devuelve "En preparación". Es el caso de un pedido anulado: la
+ * pantalla lo sigue mostrando tachado en esa columna durante unos minutos (comportamiento anterior a este cambio). Que
+ * no tenga botón "Listo" no lo decide esta función sino `puedeMarcarListo`, que lo excluye por su estado.
  */
-export function textoDeConfirmacion(
-  ocultos: readonly ItemConComanda[],
-  comandas: ComandaDeCocina[] | undefined | null,
-): string | null {
-  const vigentes = ocultos.filter((item) => cantidadVigente(item) > 0)
-  if (vigentes.length === 0) return null
+export function columnaDelPedido(
+  pedido: { estado: string; items: readonly ItemConListo[] },
+  pestania: Pestania,
+  comandas: readonly ComandaDeCocina[] | undefined | null,
+): ColumnaDeCocina {
+  if (pedido.estado === 'listo') return 'listo'
+  if (pedido.estado !== 'en_preparacion' || pestania === null) return 'en_preparacion'
+  const propios = itemsPropios(pedido.items, pestania, comandas)
+  return propios.length > 0 && propios.every(yaMarcado) ? 'listo' : 'en_preparacion'
+}
 
-  const nombres = new Set<string>()
-  for (const item of vigentes) {
-    const nombre = (comandas ?? []).find((c) => c.id === item.comandaId)?.nombre
-    if (nombre) nombres.add(nombre)
-  }
-  const ordenados = [...nombres].sort((a, b) => a.localeCompare(b, 'es'))
-
-  const n = vigentes.length
-  const items = n === 1 ? '1 ítem' : `${n} ítems`
-  const de = ordenados.length > 0 ? ` de ${unirNombres(ordenados)}` : ''
-  return `Vas a marcar listo todo el pedido, incluidos ${items}${de}`
+/**
+ * Si la pestania tiene un "Listo" que tocar: el pedido está en su columna "En preparación" y, en una comanda, tiene alguna
+ * línea propia pendiente. En "Todas" siempre que esté en preparación. Si la pestania solo ve líneas ajenas (por ejemplo, una
+ * sin comanda desde Barra) no hay botón: lo cierra la cocina o "Todas".
+ */
+export function puedeMarcarListo(
+  pedido: { estado: string; items: readonly ItemConListo[] },
+  pestania: Pestania,
+  comandas: readonly ComandaDeCocina[] | undefined | null,
+): boolean {
+  if (columnaDelPedido(pedido, pestania, comandas) !== 'en_preparacion' || pedido.estado !== 'en_preparacion') return false
+  return pestania === null || itemsPropios(pedido.items, pestania, comandas).some((item) => !yaMarcado(item))
 }
 
 /** Las líneas que salen en la comanda impresa: las mismas que se ven en la pestania. */

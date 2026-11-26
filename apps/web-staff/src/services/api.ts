@@ -313,10 +313,11 @@ export const api = {
       return authFetch<PedidoRico[]>(`/pedidos?${params.toString()}`)
     },
 
-    cambiarEstado: (id: string, estado: string) =>
+    // `comandaId` solo con "listo": marca lo pendiente de esa comanda (el backend decide si además cierra el pedido).
+    cambiarEstado: (id: string, estado: string, comandaId?: string) =>
       authFetch<PedidoRico>(`/pedidos/${id}/estado`, {
         method: 'PATCH',
-        body: JSON.stringify({ estado }),
+        body: JSON.stringify(comandaId === undefined ? { estado } : { estado, comandaId }),
       }),
 
     crear: (body: CrearPedidoBody) =>
