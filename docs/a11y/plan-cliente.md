@@ -76,6 +76,7 @@ Decididas el 13/11/2026, al revisar la etapa 1:
 16. **Anillo de foco del `<h1>`:** se quita solo en los títulos que reciben el foco por código (`h1[tabindex='-1']:focus`), con un estilo acotado a ese caso. Botones, enlaces y campos mantienen el foco visible.
 17. **Asistente de la carta (C8):** entra como etapa 8, con una auditoría primero y los arreglos después.
 18. **Alcance (26/11/2026):** los requisitos de accesibilidad cubren **web-cliente y Discovery únicamente**. web-admin y web-staff (también su contraste) y lo que solo usan ellos de `packages/ui` quedan fuera: los hallazgos del axe sobre esas apps se anotan en la bitácora y no se arreglan. Reemplaza lo que decía la decisión 8 para admin y staff (solo el contraste) y la propuesta de un PR aparte de la etapa 6.
+19. **Texto de ejemplo (`placeholder`) de los campos (27/11/2026, decisión de Margarita):** pasa del gris de fábrica de Tailwind (`#9CA3AF`, 2,5:1) al gris de texto de la app, `#6B7280` (4,8:1 sobre blanco y 4,5:1 sobre el gris de la carta), con una sola regla en `index.css` para todos los campos. Es el único cambio de la etapa 8 que modifica algo que se ve en todas las pantallas con un campo; los demás arreglos del asistente casi no se ven (solo un botón "Cerrar" en la hoja de carga). Antes y después: `docs/a11y/antes-y-despues/`.
 
 ## Línea base
 
@@ -293,24 +294,30 @@ Las rutas son relativas a `apps/web-cliente/src/` salvo que digan otra cosa.
 - [ ] **Prueba con los dos celulares**, siguiendo los recorridos C1 a C7, con los resultados en la tabla de registro de `docs/calidad/accesibilidad-recorridos-lector.md`. La hacen ustedes. **C8 no va acá:** se prueba en la etapa 8.
 - [x] **Marcar en `docs/a11y/auditoria-general.md`** qué hallazgo se resolvió en qué etapa: hecho en la sección "Seguimiento" y en el "Plan de arreglos" de ese documento. **El documento se cierra cuando también esté hecha la etapa 8.**
 
-### Etapa 8. Asistente de la carta (C8)
+### Etapa 8. Asistente de la carta (C8) — hecha (27/11/2026); falta la prueba de C8 en los celulares
+
+**Estado:** la **auditoría** se hizo el 26/11 y se frenó para que Margarita revisara los hallazgos (A1 a A12, más el del texto de ejemplo de los campos), que están en la cuarta parte de `docs/a11y/auditoria-general.md`. El 27/11 Margarita pidió arreglarlos todos y oscurecer el texto de ejemplo (decisión 19): **los 12 hallazgos y el del texto de ejemplo están arreglados**, con sus tests y medidos en Edge. Lo que cada arreglo hizo está en "Qué se arregló", al final de esa cuarta parte, y el detalle de la etapa en la bitácora. **Falta la prueba de C8 en los dos celulares** (la hacen ustedes), que es lo único que no se puede medir en una computadora: cómo lee cada lector la respuesta anunciada una sola vez.
 
 El asistente no se auditó, así que la etapa tiene dos partes: **primero auditar, después arreglar**. Va después del cierre de la etapa 7 y tiene su propio punto de control.
 
 **Auditoría.** Mismos criterios que en el resto del plan: axe, teclado y árbol de accesibilidad en viewport de celular (390 px), con el stream de respuestas simulado. Se escribe la transcripción de cómo lo leería un lector y se anotan los hallazgos con archivo:línea, criterio WCAG y gravedad en `docs/a11y/auditoria-general.md`. **Se frena y se muestran los hallazgos antes de arreglar nada.** Qué mirar:
 
-- [ ] **Botón que abre el asistente** (`components/asistente/BotonDelAsistente.tsx`): tiene que tener nombre y decir si el panel está abierto.
-- [ ] **Panel** (`PanelDelAsistente.tsx`, `role="dialog"` en la línea 291): al abrir, el foco entra; Esc cierra (con `useCerrarConEscape`); al cerrar, el foco vuelve al botón; el fondo queda inerte.
-- [ ] **Respuesta que llega de a poco** (`role="log"` en la línea 394): es lo más importante de C8. Un `role="log"` anuncia cada cambio, así que la respuesta se puede leer en pedazos, repetida o nunca. Tiene que leerse **entera una sola vez, al terminar**. Mientras llega, se anuncia algo como "El asistente está respondiendo".
-- [ ] **Campo de la pregunta y botón de enviar:** label, nombre del botón, y que se pueda enviar con Enter.
-- [ ] **Errores y límites** (`avisos.ts`): tienen que anunciarse.
-- [ ] **Contraste y tamaños:** ya los cubre la etapa 6; se verifican acá.
+- [x] **Botón que abre el asistente** (`components/asistente/BotonDelAsistente.tsx`): tiene que tener nombre y decir si el panel está abierto. — Ya estaba bien; ahora, además, queda inerte con el chat abierto (A6).
+- [x] **Panel** (`PanelDelAsistente.tsx`, `role="dialog"` en la línea 291): al abrir, el foco entra; Esc cierra (con `useCerrarConEscape`); al cerrar, el foco vuelve al botón; el fondo queda inerte. — Esc, el fondo inerte y el foco que no se pierde: A4, A5, A6. La hoja de carga y la de error: A7 y A8.
+- [x] **Respuesta que llega de a poco** (`role="log"` en la línea 394): es lo más importante de C8. Un `role="log"` anuncia cada cambio, así que la respuesta se puede leer en pedazos, repetida o nunca. Tiene que leerse **entera una sola vez, al terminar**. Mientras llega, se anuncia algo como "El asistente está respondiendo". — A1 (de 22 cambios anunciables a 2 anuncios), A2 y A3.
+- [x] **Campo de la pregunta y botón de enviar:** label, nombre del botón, y que se pueda enviar con Enter. — Ya estaban; A9, A11 y A12 los mejoran.
+- [x] **Errores y límites** (`avisos.ts`): tienen que anunciarse. — Ya se anunciaban (`role="alert"`); A4 evita que el foco se pierda.
+- [x] **Contraste y tamaños:** ya los cubre la etapa 6; se verifican acá. — Se verificaron: faltaba el texto de ejemplo de los campos (A10, decisión 19).
 
 **Arreglos.** Lo que salga de la auditoría, con tests en `AsistenteDeLaCarta.spec.tsx` (anuncios, foco y lectura de la respuesta completa) y un chequeo de axe del panel abierto. Se respeta la regla de `CLAUDE.md`: el panel, su store y el lector del stream se cargan con `React.lazy` y no se importan de forma estática desde la carta.
 
+- [x] **Arreglos** hechos el 27/11/2026, con tests en `AsistenteDeLaCarta.spec.tsx` (anuncios, foco y lectura de la respuesta completa), en `BotonDelAsistente.carga.spec.tsx` y `BotonDelAsistente.error.spec.tsx` (las hojas de carga y de error), en `formatoDelTexto.spec.ts`, en `ClienteMenuPage.spec.tsx` (el fondo inerte en la carta real) y en `estilos.spec.ts` (el texto de ejemplo), y un axe del chat abierto. El panel, su store y el lector del stream siguen cargándose con `React.lazy` (el nuevo `formatoDelTexto.ts` lo importa solo el panel).
+
 **Celulares.** Se prueba C8 con los dos teléfonos y se carga el resultado en la tabla de registro de `docs/calidad/accesibilidad-recorridos-lector.md`. La prueba de la etapa 7 no incluye C8.
 
-Verificación previa de las líneas (13/11): `PanelDelAsistente.tsx:291` es `role="dialog"` (con `aria-modal="true"` y `inert={!visible}`, líneas 292 y 295) y `:394` es `role="log"`; hay un `role="status"` en la 572 y un manejo de foco propio en las ~312-315. `BotonDelAsistente.tsx` ya carga el panel con `lazy` (línea 107). El panel no usa `useCerrarConEscape`. Todo eso es lectura del código, no auditoría: lo que cuenta es lo que se mida en la etapa.
+- [ ] **Prueba de C8 con los dos celulares**, con los resultados en la tabla de registro. La hacen ustedes.
+
+Verificación previa de las líneas (13/11, anterior a los arreglos: el código cambió): `PanelDelAsistente.tsx:291` es `role="dialog"` (con `aria-modal="true"` y `inert={!visible}`, líneas 292 y 295) y `:394` es `role="log"`; hay un `role="status"` en la 572 y un manejo de foco propio en las ~312-315. `BotonDelAsistente.tsx` ya carga el panel con `lazy` (línea 107). El panel no usa `useCerrarConEscape`. Todo eso es lectura del código, no auditoría: lo que cuenta es lo que se mida en la etapa.
 
 ## Recorridos con lector (C1 a C8) por etapa
 

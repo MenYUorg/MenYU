@@ -13,7 +13,7 @@ Registro, etapa por etapa, de lo que se hizo para la accesibilidad del flujo del
 | 5. Carrito, pedidos, PIN, nombre y pago | Hecha (19/11/2026) y en el PR #479. Quality gate de SonarCloud: passed. El PIN se dejó como estaba (decisión de Margarita) |
 | 6. Contraste, foco visible y tamaños | Hecha en web-cliente y `packages/ui` (19/11/2026), a la espera de revisión. Admin y staff: propuesta de un PR aparte |
 | 7. Cierre (lint, axe de Coty, celulares C1 a C7) | En curso (26/11/2026): lint y axe sobre staging hechos (web-cliente y Discovery sin violaciones); faltan los celulares |
-| 8. Asistente de la carta (C8): auditar y después arreglar | Pendiente (agregada el 13/11/2026) |
+| 8. Asistente de la carta (C8): auditar y después arreglar | Hecha en web-cliente (26 y 27/11/2026), a la espera de revisión: auditado el 26/11 y los 12 hallazgos más el texto de ejemplo de los campos arreglados el 27/11. Falta la prueba de C8 en los celulares |
 
 Rama `feat/a11y-cliente`, desde `origin/main` en `92904e0`.
 
@@ -615,3 +615,76 @@ Pendiente: se anota cuando corra el PR.
 ### Recorridos con lector (C1 a C8)
 
 Esta etapa no cambia lo que dice un lector. **C1 a C7 pasan a estar listos para probar en el celular**; falta C8 (etapa 8).
+
+---
+
+## Etapa 8: asistente de la carta (26 y 27/11/2026)
+
+Estado: **hecha en web-cliente, a la espera de revisión; falta la prueba de C8 en los dos celulares.** El 26/11 se **auditó** el asistente y se frenó para que Margarita revisara los hallazgos (cuarta parte de `docs/a11y/auditoria-general.md`: 12 hallazgos, A1 a A12, y uno más de todo web-cliente, el texto de ejemplo de los campos). El 27/11 pidió arreglarlos todos y oscurecer el texto de ejemplo (decisión 19 del plan), y se hizo. La auditoría tiene el método, la transcripción de lo que leería un lector y cada hallazgo con archivo, criterio WCAG y gravedad; esta entrada cuenta lo que cambió. El detalle de cada arreglo está en "Qué se arregló", al final de esa cuarta parte.
+
+### Qué cambió
+
+- **A1, la respuesta que llega de a poco (lo único que bloqueaba C8).** El hilo sigue siendo un `role="log"` pero con `aria-live="off"`: ya no anuncia lo que se le suma. La respuesta que va llegando se ve, con `aria-hidden`. Una región `role="status"` dentro del diálogo dice "El asistente está respondiendo…" y, cuando termina, "El asistente respondió: …" con el texto entero, una sola vez. Va dentro del diálogo porque `aria-modal` deja afuera lo de fuera (el anunciador global no llegaría). Si falla no anuncia nada: ya sale la alerta. **Medido en Edge con la misma pregunta de la auditoría: de 22 cambios anunciables a 2 anuncios.**
+- **A2 a A5.** Un texto solo para el lector antes de cada burbuja ("Vos preguntaste:", "El asistente respondió:", "El asistente dice:"); las viñetas son un `<ul>` (`formatoDelTexto.ts`, nuevo); el foco pasa al campo (compu) o a la conversación (celular) cuando desaparece el botón que lo tenía, y el campo queda de solo lectura, no deshabilitado, al llegar al tope; Esc cierra desde cualquier lado con `useCerrarConEscape`.
+- **A6, el fondo inerte.** `AsistenteDeLaCarta` avisa su apertura (`onAbiertoChange`) y `MenuView` deja `inert` el encabezado y el `<main>` (que incluye el botón del asistente). El chat y sus dos hojas se dibujan en el `<body>` con un portal, para no quedar dentro de lo inerte. Al cerrar, el foco vuelve al botón.
+- **A7 y A8, las hojas.** "Abriendo el asistente…" y "No pudimos abrir el asistente" son diálogos como el chat: el foco entra, Esc las cierra y el fondo queda inerte. La de carga suma un botón "Cerrar" y un `role="status"` (**lo único nuevo que se ve**).
+- **A9, A11 y A12.** La conversación tiene `tabIndex={0}` (con el anillo de foco hacia adentro); el contador "12/500" es solo visual y el lector se entera al cruzar 50, 20 y 10 caracteres restantes y al llegar a 500; "Enviar pregunta" no se deshabilita, queda `aria-disabled` y, sin texto, avisa qué falta y lleva el foco al campo.
+- **A10, el texto de ejemplo de los campos.** Una regla `input::placeholder, textarea::placeholder` en `index.css` con el gris de texto `#6B7280` (4,8:1 sobre blanco y 4,5:1 sobre el gris de la carta), en lugar del gris de fábrica de Tailwind (`#9CA3AF`, 2,5:1). Es global: alcanza a todos los campos (los 7 medidos en la auditoría y el código de tres cifras de `SesionSeguraModals`).
+- **El lint.** El `eslint-disable` que la etapa 7 dejó en el diálogo del asistente **se sacó** (el Tab que no sale del panel ahora es un escucha del documento). Queda **uno nuevo**, justificado, en la conversación: `jsx-a11y/no-noninteractive-tabindex`, porque una zona con scroll tiene que poder enfocarse con el teclado. Sigue siendo la única excepción del lint.
+- **Un parámetro solo para tests.** `AsistenteDeLaCarta` acepta `cargarElChat` (cómo se baja el chat, por defecto el `import()` de siempre). Vitest no aplicaba un `vi.mock` a un `import()` que llegaba desde otro módulo, y así se pueden simular el chat que tarda y el que no baja.
+- **El `React.lazy` sigue como pide `CLAUDE.md`:** el panel, su store y el lector del stream se cargan aparte, y `formatoDelTexto.ts` lo importa solo el panel. `CLAUDE.md` suma una nota sobre cómo quedó cableado el chat.
+- **Qué se ve distinto:** el texto de ejemplo de todos los campos (más oscuro), el botón "Cerrar" de la hoja de carga y el anillo de foco de la conversación. Las viñetas son las del navegador, con sangría francesa (las líneas que se parten quedan alineadas con el texto). Lo demás no se ve en una captura. Comparación en `docs/a11y/antes-y-despues/`.
+
+### Verificación en el navegador
+
+Edge a 390 px, con el asistente falso de la auditoría (SSE por pedazos, con demoras), con teclado y con el dedo:
+
+- **Regiones vivas, medidas en el DOM y en el árbol de accesibilidad de Chrome:** el hilo ya no es una región viva (`live` vacío); la región de estado (`polite`, atómica) recibe 2 anuncios distintos por respuesta; la alerta de un error sigue siendo `assertive` aunque esté dentro del hilo.
+- **Foco:** al abrir, va al campo (teclado) o al panel (dedo); después de tocar una sugerencia o "Reintentar", al campo o a la conversación; al llegar al tope, el campo conserva el foco; con el foco perdido en el `<body>`, Esc cierra y el foco vuelve a "Asistente"; en las dos hojas, el foco entra y Esc cierra.
+- **Fondo:** con el chat o sus hojas abiertos, el encabezado, el `<main>` y el botón del asistente quedan inertes; al cerrar, vuelven.
+- **axe (WCAG 2.0 a 2.2 A y AA, con contraste): 0 violaciones** en el chat abierto, con una conversación (con lista y negritas), con un error, bloqueado, con una respuesta larga con scroll, mientras baja y cuando no baja. Las "incompletas" son el contraste sobre el fondo semitransparente de la carta, como en la auditoría.
+- **Contraste del texto de ejemplo:** 4,83:1 en el campo del asistente y 4,52:1 en el buscador del menú.
+- **Anillo de foco de la conversación:** se vio recortado al principio (la regla global se dibuja hacia afuera y la zona llega al borde del panel); ahora se dibuja hacia adentro.
+- **Lo que se vio en la captura y se corrigió:** entre un párrafo y su lista se perdía la línea en blanco (un salto al final de un bloque no ocupa lugar); ahora queda como margen.
+
+### Tests y cobertura
+
+43 tests nuevos (1277 → 1320, 67 → 70 archivos):
+
+- `AsistenteDeLaCarta.spec.tsx` (+22, de 4 a 26): la respuesta que llega de a poco (el hilo no anuncia, el texto parcial queda oculto y se dice entera una vez; el aviso de un error no repite la respuesta de antes; quién habla; la lista y el anuncio como oraciones), el foco (sugerencia en celular y en compu, "Reintentar", Esc con el foco en el `<body>`, el Tab que no sale, el aviso a la carta al abrir, cerrar y desmontar, el chat en el `<body>`), el campo y el botón (la zona con scroll enfocable, el contador y sus umbrales, "Enviar pregunta" con `aria-disabled`, Enter con el campo vacío, el botón mientras responde) y axe sobre el chat abierto, con una lista y con un error. Se actualizaron los tres que dependían de `aria-busy` y de `disabled`.
+- `BotonDelAsistente.carga.spec.tsx` (4) y `BotonDelAsistente.error.spec.tsx` (2): las hojas de carga y de error (foco, estado o alerta, "Cerrar", Esc, el fondo, volver a intentar).
+- `formatoDelTexto.spec.ts` (9): las listas, las negritas, las líneas en blanco y el texto plano que se anuncia.
+- `ClienteMenuPage.spec.tsx` (+2): con el chat abierto, el encabezado, el `<main>` y el botón quedan inertes y el chat no; Esc los devuelve y el foco vuelve al botón.
+- `estilos.spec.ts` (+4): la regla del texto de ejemplo (el color es `GRIS_TEXTO` de `@menyu/ui`, va en `@layer base`, y llega a 4,5:1 sobre blanco y sobre el gris de la carta).
+
+| | Fin de la etapa 7 | Después |
+| --- | --- | --- |
+| web-cliente, archivos / tests | 67 / 1277 | 70 / 1320 |
+| web-cliente, líneas | 94,62 % | 95,76 % |
+| web-cliente, ramas | 93,81 % | 94,76 % |
+| web-cliente, funciones | 87,08 % | 88,84 % |
+
+Por archivo, líneas / ramas: `BotonDelAsistente.tsx` 100 % / 96,96 %, `PanelDelAsistente.tsx` 96,4 % / 91,27 %, `formatoDelTexto.ts` 100 % / 100 %. El lint de web-cliente (`--max-warnings 0`) y `tsc --noEmit` pasan. `packages/ui`, web-admin y web-staff no se tocaron.
+
+### Quality gate de SonarCloud
+
+Pendiente: se anota cuando corra el PR.
+
+### Problemas y cómo se resolvieron
+
+- **`vi.mock` no se aplicaba a un `import()` dinámico** que llega desde otro módulo (el del chat, desde `BotonDelAsistente`): el chat real se bajaba igual. Se resolvió con el parámetro `cargarElChat`, que además deja los tests más cortos.
+- **Una clase de Tailwind no pisaba el anillo de foco global.** `index.css` decía que sí ("va en `base` para que una clase pueda pisarlo"), pero la regla (`:is(…[tabindex]:not(…)):focus-visible`) tiene más especificidad que `focus-visible:…`. Para el anillo de la conversación hace falta `!`. Se corrigió el comentario de `index.css` y el nombre de su test, para que no engañen.
+- **`findByRole('dialog')` encuentra primero la hoja de carga**, que después se reemplaza por la de error o por el chat: los tests esperan la alerta (o el texto del chat) y recién ahí toman el diálogo.
+- **Git Bash convierte `VITE_API_URL=/api` en una ruta de Windows** al levantar Vite para mirar el chat en Edge: la carta no cargaba. Se levantó desde PowerShell (o con `MSYS_NO_PATHCONV=1`).
+- **La cobertura se cortó con el `EBUSY` de OneDrive** (el de siempre): se repitió con menos procesos.
+
+### Pendiente
+
+- **C8 en los dos celulares** (VoiceOver con Safari y TalkBack con Chrome), con el resultado en la tabla de `docs/calidad/accesibilidad-recorridos-lector.md`. Es lo único que no se puede medir en una computadora.
+- **Qué mirar en el celular:** cómo lee cada lector la respuesta anunciada una sola vez (si la dice entera, si la corta al tocar algo, si se repite al volver a ella); si "El asistente está respondiendo…" se oye antes de que llegue el texto; si se oye el aviso de "Escribí tu pregunta para enviarla."; desde dónde empieza a leer al abrir el chat con el dedo (el foco va al panel); si el aviso de caracteres restantes se escucha sin molestar; y si la alerta de un error dentro de la conversación se dice una sola vez.
+- **Cerrar `auditoria-general.md`,** cuando estén los resultados de los celulares (C1 a C8).
+- **Sonar** y los commits (los hace Margarita).
+
+### Recorridos con lector (C1 a C8)
+
+**C8 pasa a estar listo para probar en el celular.** Debería andar: el botón se anuncia como un botón que abre un diálogo; al abrirlo se oye "Asistente, diálogo"; la respuesta se oye una sola vez, entera, al terminar; el foco no se pierde al tocar una sugerencia ni al reintentar; Esc (o "Cerrar") cierra y el foco vuelve al botón.
