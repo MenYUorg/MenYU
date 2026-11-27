@@ -1,5 +1,6 @@
 import {
   columnaDelPedido,
+  comandasListas,
   esComandaDeCocina,
   idsActivos,
   itemsParaImprimir,
@@ -272,6 +273,94 @@ describe('columnaDelPedido y puedeMarcarListo', () => {
       const p = { estado: 'en_preparacion', items: [item('c-barra')] }
       expect(columnaDelPedido(p, 'c-barra', COMANDAS)).toBe('en_preparacion')
     })
+  })
+})
+
+describe('comandasListas', () => {
+  const AHORA = '2026-11-26T15:00:00.000Z'
+  const linea = (comandaId: string | null, listoEn: string | null = null, cantidad = 1, cantidadEditada: number | null = null) => ({
+    ...item(comandaId, cantidad, cantidadEditada), listoEn,
+  })
+  const pedido = (items: ReturnType<typeof linea>[], estado = 'en_preparacion') => ({ estado, items })
+  const nombres = (p: ReturnType<typeof pedido>, comandas: ComandaDeCocina[] = COMANDAS) =>
+    comandasListas(p, comandas).map((c) => c.nombre)
+
+  it('una comanda con todas sus líneas marcadas está lista, aunque la cocina siga pendiente', () => {
+    expect(nombres(pedido([linea('c-cocina'), linea('c-barra', AHORA), linea('c-barra', AHORA)]))).toEqual(['Barra'])
+  })
+
+  it('con alguna línea pendiente, o sin nada marcado, todavía no', () => {
+    expect(nombres(pedido([linea('c-barra', AHORA), linea('c-barra')]))).toEqual([])
+    expect(nombres(pedido([linea('c-barra'), linea('c-cocina')]))).toEqual([])
+  })
+
+  it('una comanda sin líneas en el pedido no está lista', () => {
+    expect(nombres(pedido([linea('c-cocina', AHORA)]))).toEqual([])
+  })
+
+  it('la comanda de cocina nunca genera aviso, aunque lo suyo esté marcado', () => {
+    expect(nombres(pedido([linea('c-cocina', AHORA), linea('c-barra', AHORA)]))).toEqual(['Barra'])
+  })
+
+  it('la de cocina se reconoce por el nombre, sin mayúsculas ni espacios, aunque tenga otro id', () => {
+    const comandas = [{ id: 'k', nombre: '  COCINA ', activa: true }, BARRA]
+    expect(nombres(pedido([linea('k', AHORA), linea('c-barra', AHORA)]), comandas)).toEqual(['Barra'])
+  })
+
+  it('una comanda con otro nombre parecido ("Cocina Central") sí avisa', () => {
+    const comandas = [{ id: 'c-central', nombre: 'Cocina Central', activa: true }]
+    expect(nombres(pedido([linea('c-central', AHORA)]), comandas)).toEqual(['Cocina Central'])
+  })
+
+  it('con dos comandas listas devuelve las dos, ordenadas por nombre y no por el orden del pedido', () => {
+    const p = pedido([linea('c-postres', AHORA), linea('c-barra', AHORA), linea('c-cocina')])
+    expect(nombres(p)).toEqual(['Barra', 'Postres'])
+  })
+
+  it('una línea eliminada no cuenta: ni bloquea una comanda ni alcanza para marcarla lista', () => {
+    expect(nombres(pedido([linea('c-barra', AHORA), linea('c-barra', null, 2, 0)]))).toEqual(['Barra'])
+    expect(nombres(pedido([linea('c-barra', AHORA, 1, 0)]))).toEqual([])
+    expect(nombres(pedido([linea('c-barra', null, 1, 0), linea('c-cocina')]))).toEqual([])
+  })
+
+  it('una línea editada a otra cantidad sigue contando', () => {
+    expect(nombres(pedido([linea('c-barra', null, 3, 1)]))).toEqual([])
+    expect(nombres(pedido([linea('c-barra', AHORA, 3, 1)]))).toEqual(['Barra'])
+  })
+
+  it('una comanda inactiva no avisa: sus líneas son "de cocina"', () => {
+    expect(nombres(pedido([linea('c-vieja', AHORA), linea('c-cocina')]))).toEqual([])
+  })
+
+  it('las líneas sin comanda no le dan aviso a nadie', () => {
+    expect(nombres(pedido([linea(null, AHORA), linea('c-cocina')]))).toEqual([])
+  })
+
+  it.each(['pendiente', 'listo', 'entregado', 'anulado'])('un pedido %s no tiene avisos', (estado) => {
+    expect(nombres(pedido([linea('c-barra', AHORA)], estado))).toEqual([])
+  })
+
+  it('sin la lista de comandas no hay avisos', () => {
+    const p = pedido([linea('c-barra', AHORA)])
+    expect(comandasListas(p, undefined)).toEqual([])
+    expect(comandasListas(p, null)).toEqual([])
+    expect(comandasListas(p, [])).toEqual([])
+  })
+
+  it('una línea sin el dato listoEn cuenta como pendiente', () => {
+    expect(comandasListas({ estado: 'en_preparacion', items: [item('c-barra')] }, COMANDAS)).toEqual([])
+  })
+
+  it('no muta lo que recibe', () => {
+    const p = pedido([linea('c-postres', AHORA), linea('c-barra', AHORA)])
+    const copiaPedido = structuredClone(p)
+    const comandas = [POSTRES, BARRA, COCINA]
+    const copiaComandas = structuredClone(comandas)
+
+    comandasListas(p, comandas)
+
+    expect(p).toEqual(copiaPedido)
+    expect(comandas).toEqual(copiaComandas)
   })
 })
 
