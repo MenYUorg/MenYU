@@ -6,7 +6,8 @@ import type { PedidoRico } from '../../services/api'
 import { useContextoStore, useRestauranteId } from '../../store/contextoStore'
 import * as socketService from '../../services/socket'
 import { cerrarSesion } from '../../services/socket'
-import type { Comanda, Pedido } from '@menyu/types'
+import type { Pedido } from '@menyu/types'
+import { useComandas } from '../../hooks/useComandas'
 import { comandaRecordada, recordarComanda } from '../../utils/comandaRecordada'
 import {
   columnaDelPedido, idsActivos, itemsPropios, ocultosVigentes, partirItems, pedidoParaImprimir, pestaniaVigente,
@@ -300,7 +301,6 @@ export function CocinaPage() {
   const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set())
   const [error,      setError]      = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
-  const [comandas,   setComandas]   = useState<Comanda[]>([])
   const [eleccion,   setEleccion]   = useState<string | null>(() => (restauranteId ? comandaRecordada(restauranteId) : null))
   const [conectada,  setConectada]  = useState<boolean>(impresoraConectada())
   const anuladosTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
@@ -328,16 +328,6 @@ export function CocinaPage() {
     } finally {
       setRefreshing(false)
     }
-  }, [restauranteId])
-
-  // Ante un fallo se conserva la última lista buena; si nunca cargó queda vacía (sin pestañas: se ve todo).
-  const fetchComandas = useCallback(async () => {
-    if (!restauranteId) return
-    try {
-      const lista = await api.comandas.listar(restauranteId)
-      if (restauranteIdRef.current !== restauranteId) return   // respuesta de un restaurante anterior
-      setComandas(lista)
-    } catch { /* sin comandas no hay filtro; no es un error de pedidos */ }
   }, [restauranteId])
 
   const handleConectar = useCallback(async () => {
@@ -368,10 +358,8 @@ export function CocinaPage() {
 
   useEffect(() => { void fetchAll() }, [fetchAll])
 
-  useEffect(() => {
-    setComandas([])
-    void fetchComandas()
-  }, [fetchComandas])
+  // Sin lista (o ante un fallo, la última buena) no hay pestañas: se ve todo.
+  const { comandas, recargar: recargarComandas } = useComandas(restauranteId)
 
   useEffect(() => {
     setEleccion(restauranteId ? comandaRecordada(restauranteId) : null)
@@ -533,7 +521,7 @@ export function CocinaPage() {
             </button>
           )}
           <button
-            onClick={() => { void fetchAll(); void fetchComandas() }}
+            onClick={() => { void fetchAll(); void recargarComandas() }}
             disabled={refreshing}
             style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: 6, padding: '5px 10px', cursor: refreshing ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'white', opacity: refreshing ? 0.7 : 1 }}
           >
