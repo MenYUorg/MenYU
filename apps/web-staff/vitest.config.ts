@@ -8,6 +8,13 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 export default mergeConfig(
   viteConfig,
   defineConfig({
+    resolve: {
+      // El paquete solo declara la condición "browser" en sus exports, que Vitest (Node) no resuelve: se usa su
+      // compilación ESM por la ruta (es el mismo encoder que va al navegador).
+      alias: {
+        'thermal-printer-encoder': path.resolve(__dirname, 'node_modules/thermal-printer-encoder/dist/thermal-printer-encoder.esm.js'),
+      },
+    },
     test: {
       environment: 'jsdom',
       globals: true,

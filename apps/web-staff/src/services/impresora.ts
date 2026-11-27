@@ -3,6 +3,8 @@
 import ThermalPrinterEncoder from 'thermal-printer-encoder'
 import type { PedidoRico } from './api'
 
+export const MARCA_LISTO = '[LISTO]'
+
 let device: USBDevice | null = null
 let endpointNumber = 1 // fallback; se descubre en conectar()
 
@@ -56,7 +58,10 @@ export async function imprimirPedido(pedido: PedidoRico): Promise<void> {
 
   for (const item of pedido.items) {
     const cant = item.cantidadEditada ?? item.cantidad
-    enc = enc.bold(true).line(`${cant}x ${item.item.nombre}`).bold(false)
+    // Una línea ya lista (la marcó su comanda) sale marcada, para que al reimprimir se vea qué se entregó. En ASCII: un
+    // "✓" no existe en las páginas de códigos de la impresora y saldría como "?".
+    const marca = item.listoEn ? `${MARCA_LISTO} ` : ''
+    enc = enc.bold(true).line(`${marca}${cant}x ${item.item.nombre}`).bold(false)
 
     for (const mod of item.mods) {
       const nombre = mod.itemIngrediente?.ingrediente?.nombre ?? ''
