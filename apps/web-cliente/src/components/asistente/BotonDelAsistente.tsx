@@ -1,5 +1,6 @@
 import { Component, lazy, Suspense, useEffect, useRef, useState, type ComponentType, type ReactNode } from 'react'
-import { Spinner } from '@menyu/ui'
+import { createPortal } from 'react-dom'
+import { Spinner, useCerrarConEscape } from '@menyu/ui'
 import { Icono } from '../discovery/Icono'
 import { CM } from '../menu/paleta'
 import { entrarAlRestaurante } from './conversacion'
@@ -8,18 +9,32 @@ import { entrarAlRestaurante } from './conversacion'
 // stream) es otro chunk: se baja la primera vez que se abre, así la carta no carga nada de más.
 
 type PropsDelPanel = { abierto: boolean; onCerrar: () => void; restauranteId: string; nombreRestaurante: string }
-const cargarPanel = () => import('./PanelDelAsistente')
+/** Cómo se baja el chat. */
+type CargadorDelChat = () => Promise<{ default: ComponentType<PropsDelPanel> }>
+const cargarPanel: CargadorDelChat = () => import('./PanelDelAsistente')
 
-/** Una hoja chica, abajo, mientras baja el chat o si no se pudo bajar. */
+/**
+ * Una hoja chica, abajo, mientras baja el chat o si no se pudo bajar. Es un diálogo modal como el chat: el foco entra a la
+ * hoja, Esc la cierra y el fondo queda inerte (eso último lo hace `MenuView`, con `onAbiertoChange`). Quien la usa pone su
+ * botón de cerrar. Al cerrarse, el foco vuelve al botón "Asistente" (lo hace `AsistenteDeLaCarta`).
+ */
 function HojaChica({ children, onCerrar }: { children: ReactNode; onCerrar: () => void }) {
+  const hojaRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    hojaRef.current?.focus({ preventScroll: true })
+  }, [])
+  useCerrarConEscape(onCerrar)
+
   return (
     <>
       <div aria-hidden="true" onClick={onCerrar} style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(45,53,97,0.45)' }} />
       <div
+        ref={hojaRef}
         role="dialog"
         aria-modal="true"
         aria-label="Asistente"
-        className="fixed inset-x-0 bottom-0 mx-auto w-full max-w-[480px] rounded-t-[20px] bg-white sm:inset-x-auto sm:bottom-4 sm:right-4 sm:mx-0 sm:w-[400px] sm:rounded-[20px]"
+        tabIndex={-1}
+        className="fixed inset-x-0 bottom-0 mx-auto w-full max-w-[480px] rounded-t-[20px] bg-white outline-none sm:inset-x-auto sm:bottom-4 sm:right-4 sm:mx-0 sm:w-[400px] sm:rounded-[20px]"
         style={{ zIndex: 61, padding: '28px 20px 24px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, textAlign: 'center' }}
       >
         {children}
@@ -28,10 +43,8 @@ function HojaChica({ children, onCerrar }: { children: ReactNode; onCerrar: () =
   )
 }
 
-/**
- * Si el chunk del chat no baja (sin conexión, o un deploy nuevo que lo cambió de nombre), o el chat falla al dibujarse, se
- * avisa ahí y nada más: la carta y el pedido siguen como estaban.
- */
+/** Si el chunk del chat no baja (sin conexión, o un deploy nuevo que lo cambió de nombre), o el chat falla al dibujarse, se
+ * avisa ahí y nada más: la carta y el pedido siguen como estaban. */
 class LimiteDelChat extends Component<{ children: ReactNode; onCerrar: () => void }, { fallo: boolean }> {
   state = { fallo: false }
 
@@ -79,6 +92,13 @@ interface AsistenteDeLaCartaProps {
   habilitado: boolean
   /** En la mesa, con el botón del carrito a la vista: el del asistente va a su izquierda, para no taparlo. */
   conCarrito: boolean
+  /**
+   * Avisa cuando el chat (o la hoja que lo precede) se abre o se cierra. La carta lo usa para dejar inerte lo que queda de
+   * fondo: el encabezado, el contenido y este mismo botón. El chat va en el `<body>` (un portal), no dentro de lo inerte.
+   */
+  onAbiertoChange?: (abierto: boolean) => void
+  /** Cómo se baja el chat. Solo lo cambian los tests, para simular que tarda o que no baja. */
+  cargarElChat?: CargadorDelChat
 }
 
 /**
@@ -86,7 +106,7 @@ interface AsistenteDeLaCartaProps {
  * el restaurante tiene el asistente prendido. Al entrar a la carta de un restaurante se borran las conversaciones de los
  * demás, tenga o no el asistente: una conversación por restaurante, que arranca de cero al cambiar.
  */
-export function AsistenteDeLaCarta({ restauranteId, nombreRestaurante, habilitado, conCarrito }: AsistenteDeLaCartaProps) {
+export function AsistenteDeLaCarta({ restauranteId, nombreRestaurante, habilitado, conCarrito, onAbiertoChange, cargarElChat = cargarPanel }: AsistenteDeLaCartaProps) {
   const [abierto, setAbierto] = useState(false)
   // El chat se baja y se monta la primera vez que se abre; después queda montado aunque se cierre. Va envuelto en un
   // objeto: un componente suelto en el estado se confundiría con una función de actualización.
@@ -97,20 +117,36 @@ export function AsistenteDeLaCarta({ restauranteId, nombreRestaurante, habilitad
     entrarAlRestaurante(restauranteId)
   }, [restauranteId])
 
+  // Si esta carta se va con el chat abierto, el fondo no puede quedar inerte. Con una referencia al último `onAbiertoChange`
+  // para que el aviso salga solo al desmontar, aunque quien nos use pase una función nueva en cada render.
+  const avisarApertura = useRef(onAbiertoChange)
+  avisarApertura.current = onAbiertoChange
+  useEffect(() => () => avisarApertura.current?.(false), [])
+
+  // Al cerrar, el foco vuelve al botón. Va en un efecto y no en `cerrar`: con el fondo inerte el botón no puede recibirlo
+  // hasta que la carta se renderiza de nuevo, ya sin la inercia.
+  const estuvoAbierto = useRef(false)
+  useEffect(() => {
+    if (estuvoAbierto.current && !abierto) botonRef.current?.focus({ preventScroll: true })
+    estuvoAbierto.current = abierto
+  }, [abierto])
+
   if (!habilitado) return null
+
+  const cambiarApertura = (nuevo: boolean) => {
+    setAbierto(nuevo)
+    avisarApertura.current?.(nuevo)
+  }
 
   // Se empieza a bajar apenas se apoya el dedo, antes del click. Si falla, el click lo vuelve a intentar.
   const precargar = () => {
-    cargarPanel().catch(() => undefined)
+    cargarElChat().catch(() => undefined)
   }
   const abrir = () => {
-    setChat((actual) => actual ?? { Panel: lazy(cargarPanel) })
-    setAbierto(true)
+    setChat((actual) => actual ?? { Panel: lazy(cargarElChat) })
+    cambiarApertura(true)
   }
-  const cerrar = () => {
-    setAbierto(false)
-    botonRef.current?.focus({ preventScroll: true })
-  }
+  const cerrar = () => cambiarApertura(false)
   // Si no se pudo bajar, el próximo toque lo intenta de nuevo con un lazy nuevo (el anterior queda con el error).
   const cerrarTrasElFallo = () => {
     setChat(null)
@@ -153,22 +189,44 @@ export function AsistenteDeLaCarta({ restauranteId, nombreRestaurante, habilitad
         Asistente
       </button>
 
-      {chat && (
-        <LimiteDelChat onCerrar={cerrarTrasElFallo}>
-          <Suspense
-            fallback={
-              abierto ? (
-                <HojaChica onCerrar={cerrar}>
-                  <Spinner size="md" />
-                  <p style={{ margin: 0, fontFamily: 'Inter,sans-serif', fontSize: 14, color: CM.textSub }}>Abriendo el asistente…</p>
-                </HojaChica>
-              ) : null
-            }
-          >
-            <chat.Panel abierto={abierto} onCerrar={cerrar} restauranteId={restauranteId} nombreRestaurante={nombreRestaurante} />
-          </Suspense>
-        </LimiteDelChat>
-      )}
+      {chat &&
+        createPortal(
+          <LimiteDelChat onCerrar={cerrarTrasElFallo}>
+            <Suspense
+              fallback={
+                abierto ? (
+                  <HojaChica onCerrar={cerrar}>
+                    <Spinner size="md" />
+                    <p role="status" style={{ margin: 0, fontFamily: 'Inter,sans-serif', fontSize: 14, color: CM.textSub }}>
+                      Abriendo el asistente…
+                    </p>
+                    <button
+                      type="button"
+                      onClick={cerrar}
+                      style={{
+                        minHeight: 44,
+                        padding: '0 20px',
+                        borderRadius: 10,
+                        border: `1px solid ${CM.border}`,
+                        background: 'white',
+                        color: CM.navy,
+                        fontFamily: 'Montserrat,sans-serif',
+                        fontWeight: 700,
+                        fontSize: 14,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Cerrar
+                    </button>
+                  </HojaChica>
+                ) : null
+              }
+            >
+              <chat.Panel abierto={abierto} onCerrar={cerrar} restauranteId={restauranteId} nombreRestaurante={nombreRestaurante} />
+            </Suspense>
+          </LimiteDelChat>,
+          document.body,
+        )}
     </>
   )
 }
