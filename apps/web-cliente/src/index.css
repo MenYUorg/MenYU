@@ -6,7 +6,9 @@
  * Foco visible (WCAG 2.4.7). Todo control (enlace, botón, campo, interruptor y lo que se le pone `tabindex` positivo o 0)
  * muestra un anillo cuando se lo alcanza con el teclado: azul marino, separado 2 px, con un aro blanco entre el control y
  * el anillo, para que se vea igual sobre un fondo claro, sobre el azul de los encabezados y sobre una foto. Va en `base`
- * para que una clase de Tailwind lo pueda pisar, y los estilos en línea lo pisan siempre: por eso los campos ya no tienen
+ * (antes de las utilidades de Tailwind), pero ojo: tiene más especificidad que una clase (la de un `:is` es la de su argumento
+ * más específico, `[tabindex]:not(…)`), así que una clase como `focus-visible:outline-offset-2` NO lo pisa: hace falta `!` (como
+ * en la conversación del asistente). Los estilos en línea sí lo pisan siempre: por eso los campos ya no tienen
  * `outline: 'none'` en línea (antes el buscador del menú no mostraba nada al recibir el foco).
  *
  * No toca a los elementos con `tabindex="-1"` (los títulos y los contenedores de los diálogos a los que se lleva el foco por
@@ -17,6 +19,21 @@
     outline: 2px solid theme('colors.navy');
     outline-offset: 2px;
     box-shadow: 0 0 0 2px #ffffff;
+  }
+}
+
+/*
+ * El texto de ejemplo de los campos (el `placeholder`: "Buscar platos...", "Ej: Juan", "Escribí tu pregunta") es texto y
+ * WCAG 1.4.3 le pide 4,5:1. El gris de fábrica de Tailwind da 2,5:1; este es el gris de los textos chicos de la app
+ * (`GRIS_TEXTO` de @menyu/ui, 4,8:1 sobre blanco y 4,5:1 sobre el gris de la página), así que hay un solo gris para todo. axe
+ * no mide los `placeholder`: `estilos.spec.ts` comprueba el color y que llegue a 4,5:1 sobre cada fondo donde hay un campo.
+ * Va en `base`, después del preflight de Tailwind (que escribe el gris de antes con el mismo selector).
+ */
+@layer base {
+  input::placeholder,
+  textarea::placeholder {
+    color: #6b7280;
+    opacity: 1;
   }
 }
 
