@@ -262,7 +262,11 @@ describe('Mercado Pago a la caja contra Postgres (e2e, #358)', () => {
 
   it('6. el resumen trae los de las cajas del turno (aunque se cobraran fuera de su franja) y los sin caja de la franja', async () => {
     const { rest, sesion } = await restauranteConMesa()
-    const [barra, salon, deAntes] = [await cajaCon(rest, 'Barra'), await cajaCon(rest, 'Salón'), await cajaCon(rest, 'De antes')]
+    // Barra es la más antigua (la del webhook): con `createdAt` explícito, porque dos cajas creadas seguidas pueden caer en el mismo
+    // milisegundo y entonces desempata el `id`, que es un UUID al azar.
+    const barra = await cajaCon(rest, 'Barra', { createdAt: new Date('2020-01-01T00:00:00Z') })
+    const salon = await cajaCon(rest, 'Salón', { createdAt: new Date('2020-01-02T00:00:00Z') })
+    const deAntes = await cajaCon(rest, 'De antes')
     const anterior = await fx.turno(rest, owner, { cerrado: true, cajas: [{ cajaId: deAntes, cerrada: true }] })
     const { turnoId, aperturas } = await fx.turnoAbierto(rest, owner, [barra, salon])
     const { abiertoEn } = await prisma.turno.findUniqueOrThrow({ where: { id: turnoId } })
