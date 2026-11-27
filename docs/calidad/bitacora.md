@@ -48,6 +48,12 @@ Registro de lo que se hizo para poner SonarCloud en el CI de MenYU y tomar la l�
 | El foco del ABM con `ref` y efecto, sin `autoFocus` (PR #501, S9379) | **Mergeado** (25/11/2026 20:25 ART, `1de4722`). Gate de Sonar `OK`, 0 violaciones. En `main` las dos `S9379` del ABM se cerraron; quedan 5 de otros archivos (comprobado el 26/11) |
 | Bitácora del 25/11 (noche) (PR #502) | **Mergeado** (25/11/2026 20:34 ART, `b559be0`) |
 | Pasada manual por staging de las comandas (#344, `checklist-staging-comandas.md`) | **Hecha** (26/11/2026). Secciones A, B, C, D y E según lo esperado, **sin hallazgos**; F no aplica (sin cuenta de cocina de `r-001`); G con las sesiones cerradas. Detalle en la entrada del 26/11 |
+| Bitácora del 26/11 (la pasada manual de comandas) (PR #503) | **Mergeado** (26/11/2026, `b69df01`) |
+| #344: el botón de reimprimir en Cocina (PR #504) | **Mergeado** (26/11/2026, `5fa7793`). web-staff 656 → 680 tests, 15 mutaciones detectadas, gate de Sonar `OK` |
+| #344, "Listo" por comanda, PR A: backend, migración `20261126112048_pedido_item_listo_en` y regla de cierre (PR #505) | **Mergeado** (26/11/2026, `d851db3`). Unitarios 2934 → 3001 (118 → 119 suites), e2e 220 → 244 (16 → 17 suites), 28 mutaciones detectadas. CI y gate de Sonar `OK` (0 issues, 100 % de cobertura nueva) |
+| #344, "Listo" por comanda, PR B: la pantalla Cocina (PR #506) | **Mergeado** (26/11/2026, `8e4b053`). web-staff 681 → 718 tests, 30 mutaciones detectadas. CI y gate de Sonar `OK` |
+| #344, "Listo" por comanda, PR C: los avisos "Barra: listo" en el kanban del mozo (PR #507) | **Abierto**, sin mergear (26/11/2026, commit `419d365`). web-staff 718 → 763 tests, `typecheck` 10 de 10, `eslint` limpio, 19 mutaciones detectadas. **El CI estaba en `pending` al escribir esto** (run `45882340121`): mirarlo al retomar, junto con el gate de Sonar |
+| Bitácora del 26/11 (noche) (este PR) | **Abierto** |
 
 ## Pendientes
 
@@ -2286,3 +2292,58 @@ El comentario de cierre quedó en el #344 (18:16, sin reabrirlo), con los links 
 4. **`S9379` (`autoFocus`) en `main`: comprobado el 26/11** (análisis de `main` del 25/11 23:33 UTC, con el #501): las dos del ABM quedaron cerradas y **quedan 5 abiertas**, todas en web-admin: `AdminMenuPage.tsx` (líneas 139, 341 y 508), `ItemFormModal.tsx:832` y `TablesPage.tsx:491`. Resolverlas con el mismo método del #501 (`ref` y efecto) es opcional.
 5. **Deudas del #344:** el código de error en las respuestas 409 (backend y frontend); mover `cajas/estilos.ts` a un lugar neutro; el `RoleGuard` de `/admin/comandas`, redundante hoy. Opcional: las otras 5 `S9379` y los 186 avisos de `act()` del spec de `CocinaPage`.
 6. **Lo del 24/11, que sigue:** la sección F y el 6.5 (después, decidir el tag de producción); el `BASE_URL` de staging en `docs/auth/VariablesACambiar.md`; la corrida de E2E — staging; 0.3 y DT-02 (`MP_WEBHOOK_SECRET` y el PR C); y los puntos 5 a 7 del pendiente del 21/11.
+
+
+### 26/11/2026 (noche): #344, "Listo" por comanda terminado en tres PR (#505, #506 y #507), y la reimpresión (#504)
+
+**Estado al escribir esto** (se corta acá para seguir mañana): los PR #504, #505 y #506 están mergeados; el **#507 (PR C) está abierto**, con el commit `419d365`, y su CI estaba en `pending`. No hay trabajo sin commitear. Los cuatro cambios salieron de lo decidido en la entrada de la mañana (reimprimir y "Listo" por comanda), con el diseño aprobado paso a paso.
+
+| PR | Qué | Estado |
+|---|---|---|
+| #504 | El botón de reimprimir en cada tarjeta "En preparación" de Cocina | Mergeado (`5fa7793`) |
+| #505 | **PR A**: `pedido_item.listo_en`, `PATCH /pedidos/:id/estado` con `comandaId`, la regla de cierre, el bloqueo `FOR UPDATE` y el cierre al editar | Mergeado (`d851db3`) |
+| #506 | **PR B**: la pantalla Cocina con el botón "Listo" por pestaña | Mergeado (`8e4b053`) |
+| #507 | **PR C**: los chips "Barra: listo" en el kanban de Pedidos del mozo | **Abierto**, CI pendiente |
+
+**La regla de "Listo" por comanda** (la implementa `decidirListo` en el backend y la espeja `comandasDeCocina.ts` en web-staff):
+- Cada ítem guarda cuándo se marcó listo (`pedido_item.listo_en`, `TIMESTAMPTZ(3)`, nullable). Solo cuentan las líneas vigentes (`cantidadEditada ?? cantidad` mayor que 0) y pendientes.
+- **Sin `comandaId`** ("Todas" o el mozo): marca todo lo pendiente y cierra el pedido, como antes.
+- **La comanda "Cocina"** (nombre sin mayúsculas ni espacios al borde): marca todo y cierra el pedido, aunque las otras no hayan marcado.
+- **Otra comanda:** marca solo lo suyo. Cierra el pedido únicamente si no tiene líneas vigentes "de cocina" (sin comanda, o de una comanda inactiva); si las tiene, solo la cocina o "Todas" lo cierran. Esto resuelve lo que había quedado **sin definir**: **un pedido de solo bebidas lo cierra la barra**.
+- Un segundo clic, o una comanda que llega cuando otra ya cerró el pedido, responde 200 sin cambios ni avisos. `comandaId` con otro estado, vacío o de otro restaurante: 400.
+- **Concurrencia:** `marcarListo` y `editarPedido` toman `SELECT … FOR UPDATE` sobre la fila del pedido. Si una edición deja el pedido en preparación sin nada pendiente, lo pasa a `listo` en la misma transacción y se emiten `order:edited` y `order:updated`.
+- **Cocina (PR B):** el botón "Listo" es de la pestaña y no hay confirmación (se sacó la del #494). La columna depende de la pestaña (la tarjeta pasa a "Listo" cuando todas las líneas propias están marcadas), las líneas marcadas muestran "Listo", el marcado es optimista con vuelta atrás y **reimprimir sigue a la columna de la pestaña**, no a `pedido.estado`. Una pestaña sin líneas propias pendientes no tiene botón "Listo" (reimprimir sí).
+- **Kanban del mozo (PR C):** chip "X: listo" por cada comanda activa, que no es la de cocina, con todas sus líneas vigentes marcadas, solo en "En preparación", sin sonido ni `aria-live`. Los nombres salen de `GET /comandas` con `useComandas`, el hook nuevo que ahora comparten Cocina y el kanban.
+
+**Lo que dejó cada PR en números** (contra la línea base de `main` de ese momento):
+
+| | Antes | Después |
+|---|---|---|
+| Backend unitarios (PR A) | 2934 tests, 118 suites (+3 saltadas) | 3001 tests, 119 suites |
+| Backend e2e (PR A) | 220 tests, 16 suites | 244 tests, 17 suites |
+| web-staff (PR B) | 681 tests, 30 archivos | 718 tests, 31 archivos |
+| web-staff (PR C) | 718 tests, 31 archivos | 763 tests, 32 archivos |
+| `pnpm typecheck` | 10 de 10 | 10 de 10 |
+
+El "antes" de los unitarios del PR A se calculó restando (no fue una corrida de `main`). En el PR A hubo un conteo mío mal expresado ("2934 (+36 saltados)", cuando 2934 ya incluye los saltados: 2898 pasan y 36 saltados) y en el PR C dije +17 donde eran +18 (un `it.each` de 4 estados): los dos se corrigieron en el momento.
+
+**Lo que se aprendió en el camino:**
+- **e2e con `Promise.all`:** supertest abre y cierra un puerto por pedido; con dos pedidos superpuestos el primero en terminar le cerraba el servidor al otro (`read ECONNRESET`, intermitente). El spec del PR A deja el servidor HTTP escuchando durante todo el spec (`HttpAdapterHost`). Los otros e2e que usan `Promise.all` tienen en teoría la misma fragilidad; no se tocaron.
+- **Carreras que dependen del orden de llegada:** la edición hace más consultas antes del bloqueo que un "Listo", así que sin demora siempre llegaba segunda. El e2e retrasa la barra unos milisegundos por ronda para cubrir los dos órdenes.
+- **Mutaciones:** 28 en el PR A, 15 en #504, 30 en el PR B y 19 en el PR C, todas detectadas con `sha1` idéntico. En el PR B sobrevivieron dos (el marcado optimista no tenía test) y se agregaron los tests. Sacar el `FOR UPDATE` lo detectan los e2e, no los unitarios.
+- **Un `beforeEach(() => mock.mockReset())` devuelve el mock y vitest lo toma como función de limpieza:** la llama al terminar cada test y su rechazo queda sin capturar. Hay que escribirlo con llaves.
+- **Los helpers de los specs de web-staff armaban ítems sin `listoEn`** (`undefined`, y el backend manda `null`): ahora lo traen.
+
+**Se vio y no se resolvió:**
+- **web-staff, un test intermitente:** en una corrida completa previa al commit del PR A falló 1 test de 681 y no se llegó a ver cuál. Después hubo 6 corridas completas y 6 del spec de Cocina en verde, y el CI pasó. No se reprodujo; si reaparece, anotar el nombre del test.
+- **`editarPedido` no revalida el estado dentro de la transacción** (comportamiento anterior): si una edición que anula el pedido llega justo después de un "Listo", el pedido queda `anulado`, igual que en ese orden secuencial.
+
+**Pendiente al retomar** (reemplaza la lista de la entrada de la mañana del 26/11, en este orden):
+1. **Mirar el #507:** el CI (`45882340121`) y el gate de Sonar. Si está en verde, queda para que Coty lo mergee (no se mergea desde acá).
+2. **El kanban del mozo no escucha `order:edited`** (tampoco actualiza las cantidades editadas de las tarjetas). Consecuencia visible: si una edición deja a una comanda sin pendientes sin cerrar el pedido, el chip "X: listo" **aparece al recargar**, no al instante. Una edición solo puede quitar cantidades, así que un chip nunca queda "pegado". Arreglarlo es un handler más en `PedidosPage.tsx`, pero cambia el comportamiento actual de esa pantalla: decidirlo aparte. Está anotado también en la descripción del #507.
+3. **Pasada manual por staging de "Listo" por comanda**, cuando estén los tres PR en `main` y desplegados: Barra marca (queda en preparación y el mozo ve "Barra: listo"), Cocina cierra, pedido de solo bebidas, "Todas", una edición que deja todo listo, y el botón de reimprimir según la pestaña. Conviene sumarla a `docs/calidad/checklist-staging-comandas.md`, que todavía describe el "Listo" por pedido con confirmación.
+4. **Antes del tag de producción (paso obligatorio):** las tres consultas de solo lectura de la entrada de la mañana del 25/11 (comandas existentes, nombres repetidos por restaurante, platos con comanda), con su resultado anotado. Las migraciones del #344 son `20261125103231` y `20261125140933`, y ahora también **`20261126112048_pedido_item_listo_en`** (aditiva y sin backfill, no requiere consulta previa).
+5. **Manual de usuario (#137):** la nota de impresión (impresora en el dispositivo de cocina, una estación por pestaña, ticket al entrar a cocina, **botón de reimprimir** por tarjeta en "En preparación", que imprime lo de la pestaña y avisa si falla; límite: el cable USB suelto después de conectar no se detecta), la de Zadig/WinUSB del 26/11, y cómo funciona ahora "Listo": por pestaña, sin confirmación, con los chips en el kanban del mozo y la regla de la comanda "Cocina" por nombre.
+6. **Límite conocido a decidir:** la comanda de cocina se reconoce por su nombre ("Cocina", sin mayúsculas ni espacios). Si un restaurante la llama de otra forma, no hay comanda de cocina y las líneas sin comanda las cierra "Todas". Evaluar si hace falta un campo explícito en `comanda` o si alcanza con documentarlo en el manual.
+7. **`S9379` (`autoFocus`) en `main`:** siguen las 5 abiertas de web-admin (`AdminMenuPage.tsx` líneas 139, 341 y 508, `ItemFormModal.tsx:832` y `TablesPage.tsx:491`); resolverlas con el método del #501 es opcional.
+8. **Deudas del #344 y lo del 24/11, que sigue:** el código de error en las respuestas 409; mover `cajas/estilos.ts` a un lugar neutro; el `RoleGuard` de `/admin/comandas`; los 186 avisos de `act()` del spec de `CocinaPage` (opcional); la sección F y el 6.5 de la pasada de caja; el `BASE_URL` de staging en `docs/auth/VariablesACambiar.md`; la corrida de E2E — staging; 0.3 y DT-02 (`MP_WEBHOOK_SECRET` y el PR C de pagos); y los puntos 5 a 7 del pendiente del 21/11.
