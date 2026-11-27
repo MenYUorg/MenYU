@@ -51,7 +51,8 @@ function renderAsistente() {
 /** Abre el chat y espera el input (el panel se baja aparte y sube en el cuadro siguiente). */
 async function abrirElChat() {
   await userEvent.click(screen.getByRole('button', { name: 'Asistente' }))
-  return screen.findByRole('textbox', { name: 'Tu pregunta' })
+  // 5 s y no el 1 s por defecto: el primer test paga la carga en frío del chunk perezoso y en CI el archivo llegó a tardar 39,7 s.
+  return screen.findByRole('textbox', { name: 'Tu pregunta' }, { timeout: 5000 })
 }
 
 /** El texto de la región que le dice al lector qué pasa con la respuesta: la única región viva del chat con ese texto. */
@@ -63,6 +64,11 @@ const conPunteroFino = () => vi.stubGlobal('matchMedia', (consulta: string) => (
 const cuerpoEnviado = (llamada = 0) => JSON.parse(fetchFalso.mock.calls[llamada]?.[1]?.body as string) as unknown
 
 describe('AsistenteDeLaCarta', () => {
+  // El panel es un chunk perezoso: se baja antes de los casos para que el primero no pague la carga en frío (ver `abrirElChat`).
+  beforeAll(async () => {
+    await import('./PanelDelAsistente')
+  })
+
   beforeEach(() => {
     fetchFalso.mockReset()
     vi.stubGlobal('fetch', fetchFalso)
