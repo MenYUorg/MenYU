@@ -125,6 +125,27 @@ describe('endpoints de pedidos', () => {
       expect(pedidos.actualizarEstado).toHaveBeenCalledWith('pedido-1', { estado: 'listo' }, CUENTAS.COCINA)
     })
 
+    it('PATCH /pedidos/:id/estado deja pasar la comanda con la que se marca listo', async () => {
+      // Arrange
+      pedidos.actualizarEstado.mockResolvedValue({ id: 'pedido-1', estado: 'en_preparacion' })
+
+      // Act
+      const res = await api.pedir('patch', '/pedidos/pedido-1/estado', { cuenta: CUENTAS.COCINA, body: { estado: 'listo', comandaId: 'comanda-1' } })
+
+      // Assert
+      expect(res.status).toBe(200)
+      expect(pedidos.actualizarEstado).toHaveBeenCalledWith('pedido-1', { estado: 'listo', comandaId: 'comanda-1' }, CUENTAS.COCINA)
+    })
+
+    it.each([[''], [42], [null]])('PATCH /pedidos/:id/estado con comandaId %p responde 400', async (comandaId) => {
+      // Act
+      const res = await api.pedir('patch', '/pedidos/pedido-1/estado', { cuenta: CUENTAS.COCINA, body: { estado: 'listo', comandaId } })
+
+      // Assert
+      expect(res.status).toBe(400)
+      expect(pedidos.actualizarEstado).not.toHaveBeenCalled()
+    })
+
     it('PATCH /pedidos/:id/estado con un estado fuera de la lista responde 400', async () => {
       // Act
       const res = await api.pedir('patch', '/pedidos/pedido-1/estado', { cuenta: CUENTAS.MOZO, body: { estado: 'cancelado' } })

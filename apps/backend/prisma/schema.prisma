@@ -436,6 +436,8 @@ model PedidoItem {
   precioUnitario  Decimal  @map("precio_unitario") @db.Decimal(10, 2)
   notas           String?
   comandaId       String?  @map("comanda_id")
+  // Cuándo se marcó listo este ítem (null = pendiente). Lo marca la comanda del ítem, o todo el pedido al cerrarse.
+  listoEn         DateTime? @map("listo_en") @db.Timestamptz(3)
 
   pedido  Pedido          @relation(fields: [pedidoId], references: [id])
   item    ItemMenu        @relation(fields: [itemId], references: [id])

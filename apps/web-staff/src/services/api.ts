@@ -108,6 +108,8 @@ export interface ItemPedidoRico {
   precioUnitario: number
   notas: string | null
   comandaId: string | null
+  // Cuándo se marcó listo el ítem (null = pendiente): lo marca su comanda, o todo el pedido al cerrarse (#344)
+  listoEn: string | null
   item: { nombre: string }
   mods: ModRico[]
 }
@@ -311,10 +313,11 @@ export const api = {
       return authFetch<PedidoRico[]>(`/pedidos?${params.toString()}`)
     },
 
-    cambiarEstado: (id: string, estado: string) =>
+    // `comandaId` solo con "listo": marca lo pendiente de esa comanda (el backend decide si además cierra el pedido).
+    cambiarEstado: (id: string, estado: string, comandaId?: string) =>
       authFetch<PedidoRico>(`/pedidos/${id}/estado`, {
         method: 'PATCH',
-        body: JSON.stringify({ estado }),
+        body: JSON.stringify(comandaId === undefined ? { estado } : { estado, comandaId }),
       }),
 
     crear: (body: CrearPedidoBody) =>

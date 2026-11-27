@@ -5,6 +5,7 @@ import { api, type PedidoRico } from '../../services/api'
 import * as impresora from '../../services/impresora'
 import { membresiaDeRestaurante, perfilDeOwner, perfilDePrueba, reiniciarSesionDePrueba } from '../../test/authClient'
 import { montarContexto, reiniciarContexto } from '../../test/contexto'
+import { useContextoStore } from '../../store/contextoStore'
 import { PedidosPage } from './PedidosPage'
 
 const perfilCon = (rol: 'MOZO' | 'JEFE_SALON' | 'GERENTE') =>
@@ -15,7 +16,7 @@ let conectada = false
 vi.mock('@menyu/auth-client', async () => (await import('../../test/authClient')).moduloSimulado())
 vi.mock('@menyu/ui', () => ({ LogoMenYuOscuro: () => <span>MenYU</span> }))
 vi.mock('../../services/api', () => ({
-  api: { pedidos: { getByRestaurante: vi.fn(), cambiarEstado: vi.fn(), editarItem: vi.fn() } },
+  api: { pedidos: { getByRestaurante: vi.fn(), cambiarEstado: vi.fn(), editarItem: vi.fn() }, comandas: { listar: vi.fn() } },
 }))
 vi.mock('../../services/impresora', () => ({
   impresoraConectada: vi.fn(() => conectada),
@@ -32,6 +33,7 @@ const socket = {
 vi.mock('socket.io-client', () => ({ io: vi.fn(() => socket) }))
 
 const pedidosApi = vi.mocked(api.pedidos)
+const comandasApi = vi.mocked(api.comandas)
 const impresoraMock = vi.mocked(impresora)
 
 const hace = (minutos: number) => new Date(Date.now() - minutos * 60000).toISOString()
@@ -49,8 +51,8 @@ function pedido(id: string, estado: string, extra: Partial<PedidoRico> = {}): Pe
     mesa: { numero: id.slice(-1) },
     pagado: false,
     items: [
-      { id: `${id}-1`, itemId: 'it-1', cantidad: 2, cantidadEditada: null, precioUnitario: 1000, notas: 'bien cocida', comandaId: null, item: { nombre: 'Milanesa' }, mods: [mod('QUITAR', 'Cebolla'), mod('AGREGAR', 'Queso', 2), mod('AGREGAR', 'Huevo'), mod('QUITAR')] },
-      { id: `${id}-2`, itemId: 'it-2', cantidad: 1, cantidadEditada: null, precioUnitario: 500, notas: null, comandaId: null, item: { nombre: 'Agua' }, mods: [] },
+      { id: `${id}-1`, itemId: 'it-1', cantidad: 2, cantidadEditada: null, precioUnitario: 1000, notas: 'bien cocida', comandaId: null, listoEn: null, item: { nombre: 'Milanesa' }, mods: [mod('QUITAR', 'Cebolla'), mod('AGREGAR', 'Queso', 2), mod('AGREGAR', 'Huevo'), mod('QUITAR')] },
+      { id: `${id}-2`, itemId: 'it-2', cantidad: 1, cantidadEditada: null, precioUnitario: 500, notas: null, comandaId: null, listoEn: null, item: { nombre: 'Agua' }, mods: [] },
     ],
     ...extra,
   }
@@ -60,8 +62,8 @@ const PENDIENTE = pedido('pendiente-1', 'pendiente')
 const EN_PREP = pedido('enprep-2', 'en_preparacion', {
   createdAt: hace(25),
   items: [
-    { id: 'ep-1', itemId: 'it-3', cantidad: 3, cantidadEditada: 1, precioUnitario: 500, notas: null, comandaId: null, item: { nombre: 'Empanada' }, mods: [] },
-    { id: 'ep-2', itemId: 'it-4', cantidad: 1, cantidadEditada: 0, precioUnitario: 800, notas: 'fría', comandaId: null, item: { nombre: 'Gaseosa' }, mods: [mod('AGREGAR', 'Limón')] },
+    { id: 'ep-1', itemId: 'it-3', cantidad: 3, cantidadEditada: 1, precioUnitario: 500, notas: null, comandaId: null, listoEn: null, item: { nombre: 'Empanada' }, mods: [] },
+    { id: 'ep-2', itemId: 'it-4', cantidad: 1, cantidadEditada: 0, precioUnitario: 800, notas: 'fría', comandaId: null, listoEn: null, item: { nombre: 'Gaseosa' }, mods: [mod('AGREGAR', 'Limón')] },
   ],
 })
 const LISTO = pedido('listo-3', 'listo')
@@ -95,6 +97,8 @@ beforeEach(() => {
   montarContexto(perfilCon('MOZO'))
   conectada = false
   vi.clearAllMocks()
+  comandasApi.listar.mockReset()
+  comandasApi.listar.mockResolvedValue([])
   socket.handlers.clear()
 })
 
@@ -337,6 +341,198 @@ describe('PedidosPage (mozo)', () => {
       fireEvent.click(within(tarjeta('2')).getByRole('button', { name: 'Editar pedido' }))
       fireEvent.click(modalEdicion())
       expect(screen.queryByText(/^Editar pedido #/)).not.toBeInTheDocument()
+    })
+  })
+})
+
+describe('PedidosPage (mozo): avisos "Barra: listo" por comanda (#344)', () => {
+  const AHORA = '2026-11-26T15:00:00.000Z'
+  const comanda = (id: string, nombre: string, activa = true) => ({ id, restauranteId: 'rest-1', nombre, activa })
+  const COCINA = comanda('c-coc', 'Cocina')
+  const BARRA = comanda('c-bar', 'Barra')
+  const POSTRES = comanda('c-pos', 'Postres')
+  const VIEJA = comanda('c-vie', 'Antigua', false)
+
+  const linea = (id: string, nombre: string, comandaId: string | null, extra: Partial<PedidoRico['items'][number]> = {}) =>
+    ({ id, itemId: id, cantidad: 1, cantidadEditada: null, precioUnitario: 100, notas: null, comandaId, listoEn: null, item: { nombre }, mods: [], ...extra }) as PedidoRico['items'][number]
+  const marcada = (id: string, nombre: string, comandaId: string | null) => linea(id, nombre, comandaId, { listoEn: AHORA })
+  const enPrep = (id: string, items: PedidoRico['items']) => pedido(id, 'en_preparacion', { items })
+  // Mesa 4: la barra ya terminó (cerveza y gin marcadas); la cocina, no.
+  const BARRA_LISTA = () => enPrep('mesa-4', [linea('a1', 'Milanesa', 'c-coc'), marcada('a2', 'Cerveza', 'c-bar'), marcada('a3', 'Gin', 'c-bar')])
+
+  async function abrirConComandas(comandas: ReturnType<typeof comanda>[], pedidosEnPrep: PedidoRico[], otros: { pendientes?: PedidoRico[]; listos?: PedidoRico[] } = {}) {
+    comandasApi.listar.mockResolvedValue(comandas)
+    await abrirCon(otros.pendientes ?? [], pedidosEnPrep, otros.listos ?? [])
+    await act(async () => {})
+  }
+
+  const chips = (mesa: string) => within(tarjeta(mesa)).queryAllByRole('listitem').map((li) => li.textContent)
+
+  describe('qué avisa', () => {
+    it('una comanda con todas sus líneas marcadas muestra su chip, aunque la cocina siga pendiente', async () => {
+      await abrirConComandas([COCINA, BARRA], [BARRA_LISTA()])
+
+      expect(within(tarjeta('4')).getByText('Barra: listo')).toBeInTheDocument()
+      expect(chips('4')).toEqual(['Barra: listo'])
+    })
+
+    it('con una línea de esa comanda todavía pendiente no hay chip', async () => {
+      await abrirConComandas([COCINA, BARRA], [enPrep('mesa-4', [marcada('a1', 'Cerveza', 'c-bar'), linea('a2', 'Gin', 'c-bar')])])
+
+      expect(chips('4')).toEqual([])
+    })
+
+    it('sin nada marcado no hay chips', async () => {
+      await abrirConComandas([COCINA, BARRA], [enPrep('mesa-4', [linea('a1', 'Milanesa', 'c-coc'), linea('a2', 'Cerveza', 'c-bar')])])
+
+      expect(screen.queryByRole('list', { name: 'Comandas listas' })).not.toBeInTheDocument()
+    })
+
+    it('la comanda de cocina no genera chip, aunque todo lo suyo esté marcado', async () => {
+      await abrirConComandas([COCINA, BARRA], [enPrep('mesa-4', [marcada('a1', 'Milanesa', 'c-coc'), linea('a2', 'Cerveza', 'c-bar')])])
+
+      expect(chips('4')).toEqual([])
+      expect(screen.queryByText('Cocina: listo')).not.toBeInTheDocument()
+    })
+
+    it('la de cocina se reconoce por el nombre sin mayúsculas ni espacios, también con otro id', async () => {
+      const cocinaConOtroNombre = comanda('c-k', '  COCINA ')
+      await abrirConComandas([cocinaConOtroNombre, BARRA], [enPrep('mesa-4', [marcada('a1', 'Milanesa', 'c-k'), marcada('a2', 'Cerveza', 'c-bar')])])
+
+      expect(chips('4')).toEqual(['Barra: listo'])
+    })
+
+    it('con dos comandas listas muestra los dos chips, ordenados por nombre', async () => {
+      await abrirConComandas([COCINA, POSTRES, BARRA], [enPrep('mesa-4', [marcada('a1', 'Flan', 'c-pos'), marcada('a2', 'Cerveza', 'c-bar'), linea('a3', 'Milanesa', 'c-coc')])])
+
+      expect(chips('4')).toEqual(['Barra: listo', 'Postres: listo'])
+    })
+
+    it('una comanda inactiva no genera chip', async () => {
+      await abrirConComandas([COCINA, BARRA, VIEJA], [enPrep('mesa-4', [marcada('a1', 'Viejo', 'c-vie'), linea('a2', 'Milanesa', 'c-coc')])])
+
+      expect(chips('4')).toEqual([])
+    })
+
+    it('las líneas eliminadas no cuentan: no bloquean la comanda ni alcanzan para avisarla', async () => {
+      await abrirConComandas([COCINA, BARRA], [
+        enPrep('mesa-4', [marcada('a1', 'Cerveza', 'c-bar'), linea('a2', 'Gin', 'c-bar', { cantidadEditada: 0 })]),
+        enPrep('mesa-5', [marcada('b1', 'Cerveza', 'c-bar'), linea('b2', 'Milanesa', 'c-coc')].map((i) => (i.id === 'b1' ? { ...i, cantidadEditada: 0 } : i))),
+      ])
+
+      expect(chips('4')).toEqual(['Barra: listo'])
+      expect(chips('5')).toEqual([])
+    })
+
+    it('solo en las tarjetas "En preparación": ni pendientes ni listos muestran chips', async () => {
+      const marcadas = (id: string, estado: string) => pedido(id, estado, { items: [marcada(`${id}-1`, 'Cerveza', 'c-bar')] })
+      await abrirConComandas([COCINA, BARRA], [BARRA_LISTA()], { pendientes: [marcadas('pen-5', 'pendiente')], listos: [marcadas('lis-6', 'listo')] })
+
+      expect(chips('4')).toEqual(['Barra: listo'])
+      expect(chips('5')).toEqual([])
+      expect(chips('6')).toEqual([])
+    })
+  })
+
+  describe('la lista de comandas', () => {
+    it('sin comandas no hay chips', async () => {
+      await abrirConComandas([], [BARRA_LISTA()])
+
+      expect(within(tarjeta('4')).getByText(/Cerveza/)).toBeInTheDocument()
+      expect(screen.queryByRole('list', { name: 'Comandas listas' })).not.toBeInTheDocument()
+    })
+
+    it('si GET /comandas falla no hay chips y el tablero se ve igual', async () => {
+      comandasApi.listar.mockRejectedValue(new Error('caído'))
+      await abrirCon([], [BARRA_LISTA()], [])
+      await act(async () => {})
+
+      expect(screen.getByText('Mesa 4')).toBeInTheDocument()
+      expect(screen.queryByRole('list', { name: 'Comandas listas' })).not.toBeInTheDocument()
+      expect(screen.queryByText(/No se pudieron cargar/)).not.toBeInTheDocument()
+    })
+
+    it('pide las comandas del restaurante del contexto', async () => {
+      await abrirConComandas([BARRA], [BARRA_LISTA()])
+
+      expect(comandasApi.listar).toHaveBeenCalledWith('rest-1')
+    })
+
+    it('"Actualizar" vuelve a pedir las comandas', async () => {
+      await abrirConComandas([], [BARRA_LISTA()])
+      expect(chips('4')).toEqual([])
+      comandasApi.listar.mockResolvedValue([COCINA, BARRA])
+
+      await act(async () => { fireEvent.click(document.querySelector('header .lucide-refresh-cw')!.closest('button')!) })
+
+      expect(comandasApi.listar).toHaveBeenCalledTimes(2)
+      expect(chips('4')).toEqual(['Barra: listo'])
+    })
+
+    it('si "Actualizar" no puede traerlas, conserva la última lista buena', async () => {
+      await abrirConComandas([COCINA, BARRA], [BARRA_LISTA()])
+      comandasApi.listar.mockRejectedValue(new Error('caído'))
+
+      await act(async () => { fireEvent.click(document.querySelector('header .lucide-refresh-cw')!.closest('button')!) })
+
+      expect(chips('4')).toEqual(['Barra: listo'])
+    })
+
+    it('la respuesta de un restaurante anterior no pisa la lista del actual', async () => {
+      reiniciarContexto()
+      montarContexto(perfilDePrueba({
+        nombre: 'Ana Pérez',
+        membresias: [membresiaDeRestaurante('MOZO', 'rest-1'), membresiaDeRestaurante('MOZO', 'rest-2')],
+      }), 'rest-1')
+      let resolverVieja!: (v: ReturnType<typeof comanda>[]) => void
+      const vieja = new Promise<ReturnType<typeof comanda>[]>((ok) => { resolverVieja = ok })
+      comandasApi.listar.mockImplementation(((r: string) => (r === 'rest-1' ? vieja : Promise.resolve([COCINA, BARRA]))) as never)
+      const ambas = enPrep('mesa-4', [linea('a1', 'Milanesa', 'c-coc'), marcada('a2', 'Cerveza', 'c-bar'), marcada('a3', 'Flan', 'c-pos')])
+      await abrirCon([], [ambas], [])
+
+      act(() => { useContextoStore.setState({ restauranteId: 'rest-2' }) })
+      await vi.waitFor(() => expect(chips('4')).toEqual(['Barra: listo']))
+      await act(async () => resolverVieja([COCINA, POSTRES]))
+
+      expect(chips('4')).toEqual(['Barra: listo'])
+    })
+  })
+
+  describe('en tiempo real', () => {
+    it('un order:updated con la barra marcada hace aparecer el chip y otro con algo pendiente lo hace desaparecer', async () => {
+      const antes = enPrep('mesa-4', [linea('a1', 'Milanesa', 'c-coc'), linea('a2', 'Cerveza', 'c-bar')])
+      await abrirConComandas([COCINA, BARRA], [antes])
+      expect(chips('4')).toEqual([])
+
+      recibir('order:updated', { ...antes, items: [antes.items[0], { ...antes.items[1], listoEn: AHORA }] })
+      expect(chips('4')).toEqual(['Barra: listo'])
+
+      recibir('order:updated', { ...antes, items: [...antes.items.slice(0, 1), { ...antes.items[1], listoEn: AHORA }, linea('a3', 'Gin', 'c-bar')] })
+      expect(chips('4')).toEqual([])
+    })
+
+    it('al cerrarse el pedido (listo) el chip se va con la tarjeta de "En preparación"', async () => {
+      const lista = BARRA_LISTA()
+      await abrirConComandas([COCINA, BARRA], [lista])
+      expect(chips('4')).toEqual(['Barra: listo'])
+
+      recibir('order:updated', { ...lista, estado: 'listo' })
+
+      expect(chips('4')).toEqual([])
+    })
+
+    it('no suena ni usa aria-live: el chip es información de la tarjeta, no un aviso', async () => {
+      const audio = vi.fn()
+      vi.stubGlobal('AudioContext', audio)
+      const antes = enPrep('mesa-4', [linea('a1', 'Milanesa', 'c-coc'), linea('a2', 'Cerveza', 'c-bar')])
+      await abrirConComandas([COCINA, BARRA], [antes])
+
+      recibir('order:updated', { ...antes, items: [antes.items[0], { ...antes.items[1], listoEn: AHORA }] })
+
+      expect(chips('4')).toEqual(['Barra: listo'])
+      expect(audio).not.toHaveBeenCalled()
+      expect(tarjeta('4').querySelector('[aria-live], [role="status"], [role="alert"]')).toBeNull()
+      vi.unstubAllGlobals()
     })
   })
 })

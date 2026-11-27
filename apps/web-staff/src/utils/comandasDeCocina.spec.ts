@@ -1,13 +1,16 @@
 import {
-  hayQueConfirmar,
+  columnaDelPedido,
+  comandasListas,
+  esComandaDeCocina,
   idsActivos,
   itemsParaImprimir,
+  itemsPropios,
   itemVisible,
   ocultosVigentes,
   partirItems,
   pedidoParaImprimir,
   pestaniaVigente,
-  textoDeConfirmacion,
+  puedeMarcarListo,
   tieneAlgoVisible,
   type ComandaDeCocina,
   type ItemConComanda,
@@ -127,57 +130,237 @@ describe('ocultosVigentes', () => {
   })
 })
 
-describe('hayQueConfirmar', () => {
-  it('solo si queda algún oculto vigente', () => {
-    expect(hayQueConfirmar([item('c-cocina')])).toBe(true)
-    expect(hayQueConfirmar([item('c-cocina', 1, 0)])).toBe(false)
-    expect(hayQueConfirmar([])).toBe(false)
+describe('esComandaDeCocina', () => {
+  it.each(['cocina', 'Cocina', 'COCINA', '  Cocina  ', '\tcocina\n'])('"%s" es la de cocina', (nombre) => {
+    expect(esComandaDeCocina(nombre)).toBe(true)
+  })
+
+  it.each(['Cocina Central', 'Cocina fría', 'Co cina', 'Barra', ''])('"%s" no lo es', (nombre) => {
+    expect(esComandaDeCocina(nombre)).toBe(false)
   })
 })
 
-describe('textoDeConfirmacion', () => {
-  const PREFIJO = 'Vas a marcar listo todo el pedido, incluidos'
+describe('itemsPropios', () => {
+  const linea = (id: string, comandaId: string | null, cantidad = 1, cantidadEditada: number | null = null) => ({
+    id, ...item(comandaId, cantidad, cantidadEditada),
+  })
+  const ids = (lista: { id: string }[]) => lista.map((i) => i.id)
+  const MIXTO = () => [linea('plato', 'c-cocina'), linea('bebida', 'c-barra'), linea('agua', null), linea('viejo', 'c-vieja'), linea('flan', 'c-postres')]
 
-  it('en singular con un ítem de una comanda', () => {
-    expect(textoDeConfirmacion([item('c-cocina')], COMANDAS)).toBe(`${PREFIJO} 1 ítem de Cocina`)
+  it('en "Todas" son todas las vigentes', () => {
+    expect(ids(itemsPropios(MIXTO(), null, COMANDAS))).toEqual(['plato', 'bebida', 'agua', 'viejo', 'flan'])
   })
 
-  it('en plural, sin repetir la comanda', () => {
-    expect(textoDeConfirmacion([item('c-cocina'), item('c-cocina', 3)], COMANDAS)).toBe(`${PREFIJO} 2 ítems de Cocina`)
+  it('en una comanda son solo las suyas, sin las sin comanda ni las de cocina', () => {
+    expect(ids(itemsPropios(MIXTO(), 'c-barra', COMANDAS))).toEqual(['bebida'])
+    expect(ids(itemsPropios(MIXTO(), 'c-postres', COMANDAS))).toEqual(['flan'])
   })
 
-  it('con dos comandas las une con "y", ordenadas por nombre', () => {
-    expect(textoDeConfirmacion([item('c-cocina'), item('c-barra')], COMANDAS)).toBe(
-      `${PREFIJO} 2 ítems de Barra y Cocina`,
-    )
+  it('en la comanda de cocina suma las sin comanda y las de una comanda inactiva', () => {
+    expect(ids(itemsPropios(MIXTO(), 'c-cocina', COMANDAS))).toEqual(['plato', 'agua', 'viejo'])
   })
 
-  it('con tres comandas usa comas y "y" antes de la última', () => {
-    expect(textoDeConfirmacion([item('c-postres'), item('c-cocina'), item('c-barra')], COMANDAS)).toBe(
-      `${PREFIJO} 3 ítems de Barra, Cocina y Postres`,
-    )
+  it('una comanda desconocida cuenta como inactiva: es de cocina', () => {
+    expect(ids(itemsPropios([linea('raro', 'c-borrada'), linea('bebida', 'c-barra')], 'c-cocina', COMANDAS))).toEqual(['raro'])
   })
 
-  it('ignora las líneas eliminadas, también para los nombres', () => {
-    expect(textoDeConfirmacion([item('c-cocina'), item('c-barra', 1, 0)], COMANDAS)).toBe(`${PREFIJO} 1 ítem de Cocina`)
+  it('la comanda de cocina se reconoce por el nombre, sin mayúsculas ni espacios, aunque tenga otro id', () => {
+    const comandas = [{ id: 'k', nombre: '  COCINA ', activa: true }, BARRA]
+    expect(ids(itemsPropios([linea('plato', 'k'), linea('agua', null), linea('bebida', 'c-barra')], 'k', comandas))).toEqual(['plato', 'agua'])
   })
 
-  it('sin ocultos vigentes no hace falta confirmar', () => {
-    expect(textoDeConfirmacion([], COMANDAS)).toBeNull()
-    expect(textoDeConfirmacion([item('c-cocina', 1, 0)], COMANDAS)).toBeNull()
+  it('si no hay una comanda llamada cocina, ninguna pestaña se queda con las sin comanda', () => {
+    const comandas = [{ id: 'c-central', nombre: 'Cocina Central', activa: true }, BARRA]
+    expect(ids(itemsPropios([linea('plato', 'c-central'), linea('agua', null)], 'c-central', comandas))).toEqual(['plato'])
+    expect(ids(itemsPropios([linea('bebida', 'c-barra'), linea('agua', null)], 'c-barra', comandas))).toEqual(['bebida'])
   })
 
-  it('si no encuentra el nombre de la comanda, lo omite sin romper', () => {
-    expect(textoDeConfirmacion([item('c-borrada')], COMANDAS)).toBe(`${PREFIJO} 1 ítem`)
-    expect(textoDeConfirmacion([item('c-borrada'), item('c-barra')], COMANDAS)).toBe(`${PREFIJO} 2 ítems de Barra`)
-    expect(textoDeConfirmacion([item('c-barra')], undefined)).toBe(`${PREFIJO} 1 ítem`)
+  it('sin la lista de comandas, una pestaña solo tiene lo suyo', () => {
+    expect(ids(itemsPropios([linea('bebida', 'c-barra'), linea('agua', null)], 'c-barra', undefined))).toEqual(['bebida'])
+    expect(ids(itemsPropios([linea('bebida', 'c-barra')], 'c-barra', null))).toEqual(['bebida'])
   })
 
-  it('no muta los argumentos', () => {
-    const ocultos = [item('c-postres'), item('c-barra')]
-    const copia = structuredClone(ocultos)
-    textoDeConfirmacion(ocultos, COMANDAS)
-    expect(ocultos).toEqual(copia)
+  it('no cuenta las líneas eliminadas, pero sí las editadas a otra cantidad', () => {
+    const items = [linea('quitada', 'c-barra', 2, 0), linea('menos', 'c-barra', 3, 1), linea('cero', 'c-barra', 0)]
+    expect(ids(itemsPropios(items, 'c-barra', COMANDAS))).toEqual(['menos'])
+    expect(ids(itemsPropios(items, null, COMANDAS))).toEqual(['menos'])
+  })
+
+  it('no muta lo que recibe', () => {
+    const items = MIXTO()
+    const copia = structuredClone(items)
+    itemsPropios(items, 'c-cocina', COMANDAS)
+    expect(items).toEqual(copia)
+  })
+})
+
+describe('columnaDelPedido y puedeMarcarListo', () => {
+  const AHORA = '2026-11-26T15:00:00.000Z'
+  const linea = (comandaId: string | null, listoEn: string | null = null, cantidad = 1, cantidadEditada: number | null = null) => ({
+    ...item(comandaId, cantidad, cantidadEditada), listoEn,
+  })
+  const pedido = (estado: string, items: ReturnType<typeof linea>[]) => ({ estado, items })
+  const columna = (p: ReturnType<typeof pedido>, pestania: string | null) => columnaDelPedido(p, pestania, COMANDAS)
+  const puede = (p: ReturnType<typeof pedido>, pestania: string | null) => puedeMarcarListo(p, pestania, COMANDAS)
+  // La barra ya marcó; la cocina no.
+  const BARRA_MARCO = () => pedido('en_preparacion', [linea('c-cocina'), linea('c-barra', AHORA), linea('c-barra', AHORA)])
+
+  describe('en "Todas"', () => {
+    it('sigue el estado del pedido, aunque todo esté marcado', () => {
+      expect(columna(BARRA_MARCO(), null)).toBe('en_preparacion')
+      expect(columna(pedido('en_preparacion', [linea('c-barra', AHORA)]), null)).toBe('en_preparacion')
+      expect(columna(pedido('listo', [linea('c-barra', AHORA)]), null)).toBe('listo')
+    })
+
+    it('el botón está mientras el pedido esté en preparación', () => {
+      expect(puede(BARRA_MARCO(), null)).toBe(true)
+      expect(puede(pedido('listo', [linea('c-barra', AHORA)]), null)).toBe(false)
+    })
+  })
+
+  describe('en una comanda', () => {
+    it('va a "Listo" cuando todas sus líneas propias están marcadas, y sigue en preparación en las demás pestañas', () => {
+      expect(columna(BARRA_MARCO(), 'c-barra')).toBe('listo')
+      expect(columna(BARRA_MARCO(), 'c-cocina')).toBe('en_preparacion')
+      expect(columna(BARRA_MARCO(), null)).toBe('en_preparacion')
+    })
+
+    it('con alguna línea propia pendiente sigue en preparación y tiene botón', () => {
+      const p = pedido('en_preparacion', [linea('c-barra', AHORA), linea('c-barra')])
+      expect(columna(p, 'c-barra')).toBe('en_preparacion')
+      expect(puede(p, 'c-barra')).toBe(true)
+    })
+
+    it('una línea propia eliminada no cuenta como pendiente', () => {
+      const p = pedido('en_preparacion', [linea('c-cocina'), linea('c-barra', AHORA), linea('c-barra', null, 2, 0)])
+      expect(columna(p, 'c-barra')).toBe('listo')
+    })
+
+    it('una pestaña sin líneas propias no va a "Listo" ni tiene botón (solo ve líneas ajenas)', () => {
+      const p = pedido('en_preparacion', [linea(null), linea('c-cocina')])
+      expect(columna(p, 'c-barra')).toBe('en_preparacion')
+      expect(puede(p, 'c-barra')).toBe(false)
+    })
+
+    it('si sus líneas propias están todas eliminadas tampoco va a "Listo"', () => {
+      const p = pedido('en_preparacion', [linea('c-barra', null, 1, 0), linea(null)])
+      expect(columna(p, 'c-barra')).toBe('en_preparacion')
+      expect(puede(p, 'c-barra')).toBe(false)
+    })
+
+    it('la cocina solo termina cuando también marcó lo sin comanda y lo de una comanda inactiva', () => {
+      const p = pedido('en_preparacion', [linea('c-cocina', AHORA), linea(null), linea('c-vieja', AHORA)])
+      expect(columna(p, 'c-cocina')).toBe('en_preparacion')
+      expect(puede(p, 'c-cocina')).toBe(true)
+      const todo = pedido('en_preparacion', [linea('c-cocina', AHORA), linea(null, AHORA), linea('c-vieja', AHORA)])
+      expect(columna(todo, 'c-cocina')).toBe('listo')
+      expect(puede(todo, 'c-cocina')).toBe(false)
+    })
+
+    it('un pedido ya listo va a "Listo" en cualquier pestaña, aunque tenga líneas sin marca', () => {
+      const p = pedido('listo', [linea('c-barra'), linea('c-cocina')])
+      expect(columna(p, 'c-barra')).toBe('listo')
+      expect(columna(p, 'c-cocina')).toBe('listo')
+      expect(puede(p, 'c-barra')).toBe(false)
+    })
+
+    it('un pedido que no es de cocina (anulado, entregado) no tiene botón', () => {
+      expect(puede(pedido('anulado', [linea('c-barra')]), 'c-barra')).toBe(false)
+      expect(puede(pedido('entregado', [linea('c-barra')]), null)).toBe(false)
+    })
+
+    it('una línea sin el dato listoEn cuenta como pendiente', () => {
+      const p = { estado: 'en_preparacion', items: [item('c-barra')] }
+      expect(columnaDelPedido(p, 'c-barra', COMANDAS)).toBe('en_preparacion')
+    })
+  })
+})
+
+describe('comandasListas', () => {
+  const AHORA = '2026-11-26T15:00:00.000Z'
+  const linea = (comandaId: string | null, listoEn: string | null = null, cantidad = 1, cantidadEditada: number | null = null) => ({
+    ...item(comandaId, cantidad, cantidadEditada), listoEn,
+  })
+  const pedido = (items: ReturnType<typeof linea>[], estado = 'en_preparacion') => ({ estado, items })
+  const nombres = (p: ReturnType<typeof pedido>, comandas: ComandaDeCocina[] = COMANDAS) =>
+    comandasListas(p, comandas).map((c) => c.nombre)
+
+  it('una comanda con todas sus líneas marcadas está lista, aunque la cocina siga pendiente', () => {
+    expect(nombres(pedido([linea('c-cocina'), linea('c-barra', AHORA), linea('c-barra', AHORA)]))).toEqual(['Barra'])
+  })
+
+  it('con alguna línea pendiente, o sin nada marcado, todavía no', () => {
+    expect(nombres(pedido([linea('c-barra', AHORA), linea('c-barra')]))).toEqual([])
+    expect(nombres(pedido([linea('c-barra'), linea('c-cocina')]))).toEqual([])
+  })
+
+  it('una comanda sin líneas en el pedido no está lista', () => {
+    expect(nombres(pedido([linea('c-cocina', AHORA)]))).toEqual([])
+  })
+
+  it('la comanda de cocina nunca genera aviso, aunque lo suyo esté marcado', () => {
+    expect(nombres(pedido([linea('c-cocina', AHORA), linea('c-barra', AHORA)]))).toEqual(['Barra'])
+  })
+
+  it('la de cocina se reconoce por el nombre, sin mayúsculas ni espacios, aunque tenga otro id', () => {
+    const comandas = [{ id: 'k', nombre: '  COCINA ', activa: true }, BARRA]
+    expect(nombres(pedido([linea('k', AHORA), linea('c-barra', AHORA)]), comandas)).toEqual(['Barra'])
+  })
+
+  it('una comanda con otro nombre parecido ("Cocina Central") sí avisa', () => {
+    const comandas = [{ id: 'c-central', nombre: 'Cocina Central', activa: true }]
+    expect(nombres(pedido([linea('c-central', AHORA)]), comandas)).toEqual(['Cocina Central'])
+  })
+
+  it('con dos comandas listas devuelve las dos, ordenadas por nombre y no por el orden del pedido', () => {
+    const p = pedido([linea('c-postres', AHORA), linea('c-barra', AHORA), linea('c-cocina')])
+    expect(nombres(p)).toEqual(['Barra', 'Postres'])
+  })
+
+  it('una línea eliminada no cuenta: ni bloquea una comanda ni alcanza para marcarla lista', () => {
+    expect(nombres(pedido([linea('c-barra', AHORA), linea('c-barra', null, 2, 0)]))).toEqual(['Barra'])
+    expect(nombres(pedido([linea('c-barra', AHORA, 1, 0)]))).toEqual([])
+    expect(nombres(pedido([linea('c-barra', null, 1, 0), linea('c-cocina')]))).toEqual([])
+  })
+
+  it('una línea editada a otra cantidad sigue contando', () => {
+    expect(nombres(pedido([linea('c-barra', null, 3, 1)]))).toEqual([])
+    expect(nombres(pedido([linea('c-barra', AHORA, 3, 1)]))).toEqual(['Barra'])
+  })
+
+  it('una comanda inactiva no avisa: sus líneas son "de cocina"', () => {
+    expect(nombres(pedido([linea('c-vieja', AHORA), linea('c-cocina')]))).toEqual([])
+  })
+
+  it('las líneas sin comanda no le dan aviso a nadie', () => {
+    expect(nombres(pedido([linea(null, AHORA), linea('c-cocina')]))).toEqual([])
+  })
+
+  it.each(['pendiente', 'listo', 'entregado', 'anulado'])('un pedido %s no tiene avisos', (estado) => {
+    expect(nombres(pedido([linea('c-barra', AHORA)], estado))).toEqual([])
+  })
+
+  it('sin la lista de comandas no hay avisos', () => {
+    const p = pedido([linea('c-barra', AHORA)])
+    expect(comandasListas(p, undefined)).toEqual([])
+    expect(comandasListas(p, null)).toEqual([])
+    expect(comandasListas(p, [])).toEqual([])
+  })
+
+  it('una línea sin el dato listoEn cuenta como pendiente', () => {
+    expect(comandasListas({ estado: 'en_preparacion', items: [item('c-barra')] }, COMANDAS)).toEqual([])
+  })
+
+  it('no muta lo que recibe', () => {
+    const p = pedido([linea('c-postres', AHORA), linea('c-barra', AHORA)])
+    const copiaPedido = structuredClone(p)
+    const comandas = [POSTRES, BARRA, COCINA]
+    const copiaComandas = structuredClone(comandas)
+
+    comandasListas(p, comandas)
+
+    expect(p).toEqual(copiaPedido)
+    expect(comandas).toEqual(copiaComandas)
   })
 })
 
