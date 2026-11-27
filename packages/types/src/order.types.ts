@@ -17,6 +17,8 @@ export interface PedidoItem {
   precioUnitario: number
   notas: string | null
   comandaId?: string | null
+  /** Cuándo se marcó listo el ítem (null = pendiente), ISO 8601. Lo marca su comanda, o todo el pedido al cerrarse. */
+  listoEn?: string | null
   mods?: PedidoItemMod[]
 }
 
