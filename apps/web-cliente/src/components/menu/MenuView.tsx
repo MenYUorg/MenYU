@@ -58,6 +58,8 @@ export function MenuView({ modo, restauranteId }: MenuViewProps) {
 
   // UI state
   const [drawerOpen, setDrawerOpen] = useState(false)
+  // El chat del asistente es un diálogo, como el menú lateral: mientras está abierto, lo de atrás queda inerte.
+  const [asistenteAbierto, setAsistenteAbierto] = useState(false)
   const [buscar, setBuscar] = useState('')
   const [categoriaActiva, setCategoriaActiva] = useState<string>('')
   const [activeDiets, setActiveDiets] = useState<Set<string>>(new Set())
@@ -267,18 +269,20 @@ export function MenuView({ modo, restauranteId }: MenuViewProps) {
         onCerrarSesion={cerrarSesion}
       />
 
-      {/* Con el menú lateral abierto (un diálogo), el encabezado y el contenido quedan inertes: sin foco ni lectura. */}
+      {/* Con el menú lateral o el chat del asistente abiertos (diálogos), el encabezado y el contenido quedan inertes: sin foco
+          ni lectura. El chat se dibuja en el <body> (un portal), así que no queda dentro de lo inerte. */}
       <MenuHeader
         nombre={menu.restaurante.nombre}
         logoUrl={menu.restaurante.logoUrl}
         modo={modo}
         onAbrirMenu={() => setDrawerOpen(true)}
         menuAbierto={drawerOpen}
-        inerte={drawerOpen}
+        inerte={drawerOpen || asistenteAbierto}
       />
 
-      {/* Todo lo que no es el encabezado ni el menú lateral: el buscador, las secciones y los botones flotantes. */}
-      <main inert={drawerOpen} style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+      {/* Todo lo que no es el encabezado ni el menú lateral: el buscador, las secciones y los botones flotantes (el del
+          asistente también: con su chat abierto no se lo toca). */}
+      <main inert={drawerOpen || asistenteAbierto} style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
       <BarraBusqueda
         buscar={buscar}
         onBuscar={setBuscar}
@@ -314,6 +318,7 @@ export function MenuView({ modo, restauranteId }: MenuViewProps) {
         nombreRestaurante={menu.restaurante.nombre}
         habilitado={conAsistente}
         conCarrito={modo === 'mesa' && hayCarrito}
+        onAbiertoChange={setAsistenteAbierto}
       />
       </main>
     </div>

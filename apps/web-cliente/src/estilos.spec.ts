@@ -1,6 +1,8 @@
 import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { GRIS_TEXTO, razonDeContraste } from '@menyu/ui'
+import { C } from './theme'
 
 // Se lee del disco: Vitest no procesa los .css (un `?raw` devolvería el texto vacío). Sin `new URL(…, import.meta.url)`:
 // Vite reescribe ese patrón como la URL de un asset.
@@ -55,8 +57,30 @@ describe('index.css: el anillo de foco de los controles (WCAG 2.4.7)', () => {
     }
   })
 
-  it('va dentro de @layer base, para que una clase de Tailwind pueda pisarlo', () => {
+  it('va dentro de @layer base (Tailwind la pone antes de sus utilidades; una clase igual no la pisa sin `!`: tiene más especificidad)', () => {
     expect(hojaDeEstilos).toMatch(/@layer base\s*\{\s*:is\(/)
+  })
+})
+
+describe('index.css: el texto de ejemplo de los campos (WCAG 1.4.3)', () => {
+  const declaraciones = declaracionesDe(hojaDeEstilos, (selector) => selector.replace(/\s+/g, ' ') === 'input::placeholder, textarea::placeholder')
+  const color = declaraciones?.match(/color\s*:\s*(#[0-9a-f]{6})/i)?.[1]
+
+  it('hay una regla para los campos de una línea y los de varias, y va en @layer base', () => {
+    expect(declaraciones).toBeDefined()
+    expect(hojaDeEstilos).toMatch(/@layer base\s*\{\s*input::placeholder/)
+    expect(declaraciones).toMatch(/opacity\s*:\s*1\b/)
+  })
+
+  it('es el gris de los textos chicos de la app: un solo gris, y no el de fábrica de Tailwind', () => {
+    expect(color?.toUpperCase()).toBe(GRIS_TEXTO)
+  })
+
+  it.each([
+    ['blanco (el campo de nombre, de PIN y el de una pregunta con el foco)', C.white],
+    ['el gris de la página (el buscador del menú y el campo de la pregunta al asistente)', C.bg],
+  ])('llega a 4,5:1 sobre %s', (_donde, fondo) => {
+    expect(razonDeContraste(GRIS_TEXTO, fondo)).toBeGreaterThanOrEqual(4.5)
   })
 })
 

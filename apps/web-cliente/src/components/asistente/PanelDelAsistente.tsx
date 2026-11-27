@@ -1,4 +1,5 @@
-import { Fragment, useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { useCerrarConEscape } from '@menyu/ui'
 import { Icono } from '../discovery/Icono'
 import { CM } from '../menu/paleta'
 import {
@@ -8,15 +9,26 @@ import {
   preguntasHechas,
   useAsistenteStore,
 } from './asistenteStore'
+import { bloquesDelTexto, lineasEnBlancoAlFinal, partesConNegrita, textoPlano } from './formatoDelTexto'
 
 // El chat del asistente de la carta (docs/asistente/specs/asistente.md, Fase 6). Se carga aparte (React.lazy, desde
 // BotonDelAsistente): quien no abre el chat no lo baja. En el celular es una hoja que sube desde abajo y deja ver la carta
 // arriba; en una pantalla ancha, un panel abajo a la derecha.
+//
+// Accesibilidad (etapa 8 de docs/a11y/plan-cliente.md): la conversación NO es una región viva. La respuesta llega de a
+// pedazos y un lector la leería a cada uno (repetida o cortada); en su lugar hay una región `status` aparte que dice "El
+// asistente está respondiendo…" y, cuando terminó, la respuesta entera una sola vez. Mientras llega, el texto parcial se ve
+// pero queda oculto para el lector (`aria-hidden`).
 
 /** Para arrancar: se mandan con un toque. Sirven en cualquier restaurante (recomendados, etiquetas, información del local). */
 const SUGERENCIAS = ['¿Qué me recomendás?', '¿Tienen opciones vegetarianas?', '¿Qué formas de pago aceptan?']
 
 const AVISO_AL_PIE = 'Respuestas generadas con IA a partir de los datos del local. Ante dudas, consultá al mozo.'
+
+const ANUNCIO_RESPONDIENDO = 'El asistente está respondiendo…'
+const AVISO_SIN_TEXTO = 'Escribí tu pregunta para enviarla.'
+/** Cuánto queda el anuncio en la región antes de vaciarla: un texto viejo no tiene que quedar al recorrer el diálogo. */
+const MS_DEL_ANUNCIO = 20_000
 
 /** El input crece con el texto hasta unas cuatro líneas; después scrollea. */
 const ALTO_MAXIMO_DEL_INPUT = 120
@@ -47,19 +59,47 @@ function useTeclado(): { tapado: number; altoVisible: number } | null {
   return teclado
 }
 
-/** Negritas con `**` y viñetas con "* " o "- " al principio de la línea, como suele escribir el modelo. Nada de HTML. */
+/** Qué se avisa al lector cuando quedan pocos caracteres: solo al cruzar cada umbral, no con cada letra. */
+function avisoDeCaracteres(restantes: number): string {
+  if (restantes <= 0) return `Llegaste al límite de ${MAX_CARACTERES_PREGUNTA} caracteres.`
+  if (restantes <= 10) return 'Quedan 10 caracteres o menos.'
+  if (restantes <= 20) return 'Quedan 20 caracteres o menos.'
+  if (restantes <= 50) return 'Quedan 50 caracteres o menos.'
+  return ''
+}
+
+function ConNegritas({ texto }: { texto: string }) {
+  return <>{partesConNegrita(texto).map((parte, i) => (i % 2 === 1 ? <strong key={i}>{parte}</strong> : parte))}</>
+}
+
+const LISTA: CSSProperties = { margin: 0, paddingLeft: 18, listStyle: 'disc' }
+/** El alto de una línea de una burbuja, en `em` (el `lineHeight` de `TEXTO_DE_BURBUJA`). */
+const INTERLINEADO = 1.45
+
+/** Negritas con `**` y viñetas con "* " o "- " al principio de la línea (una lista de verdad), como suele escribir el modelo. */
 function ConFormato({ texto }: { texto: string }) {
+  const bloques = bloquesDelTexto(texto)
   return (
     <>
-      {texto.split('\n').map((linea, i) => {
-        const vineta = /^\s*[*-]\s+/.exec(linea)
-        const contenido = vineta ? linea.slice(vineta[0].length) : linea
+      {bloques.map((bloque, i) => {
+        if (bloque.tipo === 'lista') {
+          return (
+            <ul key={i} style={LISTA}>
+              {bloque.items.map((item, j) => (
+                <li key={j}>
+                  <ConNegritas texto={item} />
+                </li>
+              ))}
+            </ul>
+          )
+        }
+        // Una línea en blanco justo antes de una lista no se dibujaría (un salto al final de un bloque no ocupa lugar): se la
+        // deja como margen, para que el espacio entre el párrafo y las viñetas sea el de siempre.
+        const vacias = i < bloques.length - 1 ? lineasEnBlancoAlFinal(bloque.lineas) : 0
         return (
-          <Fragment key={i}>
-            {i > 0 && '\n'}
-            {vineta && '• '}
-            {contenido.split(/\*\*(.+?)\*\*/g).map((parte, j) => (j % 2 === 1 ? <strong key={j}>{parte}</strong> : parte))}
-          </Fragment>
+          <div key={i} style={vacias ? { marginBottom: `${vacias * INTERLINEADO}em` } : undefined}>
+            <ConNegritas texto={bloque.lineas.slice(0, bloque.lineas.length - vacias).join('\n')} />
+          </div>
         )
       })}
     </>
@@ -70,7 +110,7 @@ const TEXTO_DE_BURBUJA: CSSProperties = {
   margin: 0,
   fontFamily: 'Inter,sans-serif',
   fontSize: 15,
-  lineHeight: 1.45,
+  lineHeight: INTERLINEADO,
   whiteSpace: 'pre-wrap',
   overflowWrap: 'anywhere',
 }
@@ -88,14 +128,25 @@ function Pregunta({ texto }: { texto: string }) {
         color: 'white',
       }}
     >
+      {/* Quién habla se distingue por el color y el lado; para el lector, por este texto. */}
+      <span className="sr-only">Vos preguntaste: </span>
       {texto}
     </p>
   )
 }
 
-function Respuesta({ children }: { children: ReactNode }) {
+interface RespuestaProps {
+  children: ReactNode
+  /** Quién habla, solo para el lector. `null` si el contenido ya lo dice ("El asistente está escribiendo…"). */
+  quien?: string | null
+  /** La respuesta que todavía está llegando: se ve, pero el lector no la lee hasta que termina (se anuncia entera una vez). */
+  enProgreso?: boolean
+}
+
+function Respuesta({ children, quien = 'El asistente respondió', enProgreso = false }: RespuestaProps) {
   return (
     <div
+      aria-hidden={enProgreso || undefined}
       style={{
         ...TEXTO_DE_BURBUJA,
         alignSelf: 'flex-start',
@@ -107,6 +158,7 @@ function Respuesta({ children }: { children: ReactNode }) {
         color: CM.text,
       }}
     >
+      {quien && <span className="sr-only">{quien}: </span>}
       {children}
     </div>
   )
@@ -114,7 +166,7 @@ function Respuesta({ children }: { children: ReactNode }) {
 
 function Escribiendo() {
   return (
-    <Respuesta>
+    <Respuesta quien={null}>
       <span className="sr-only">El asistente está escribiendo…</span>
       <span aria-hidden="true" style={{ display: 'inline-flex', gap: 4, padding: '6px 0' }}>
         {[0, 1, 2].map((i) => (
@@ -212,9 +264,15 @@ export default function PanelDelAsistente({ abierto, onCerrar, restauranteId, no
   }, [])
   const visible = abierto && montado
 
+  // Esc cierra el panel desde donde esté el foco (también si se perdió y quedó en el <body>). El hook escucha siempre: solo se
+  // actúa si el panel está abierto.
+  useCerrarConEscape(() => {
+    if (visible) onCerrar()
+  })
+
   const [texto, setTexto] = useState('')
+  const [avisoDelCampo, setAvisoDelCampo] = useState('')
   const idTitulo = useId()
-  const idContador = useId()
   const dialogoRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const hiloRef = useRef<HTMLDivElement>(null)
@@ -227,14 +285,77 @@ export default function PanelDelAsistente({ abierto, onCerrar, restauranteId, no
   const bloqueado = !!fallido?.aviso.bloquea || llegoAlTope
   const ocupado = !!enCurso
   const puedeEnviar = !bloqueado && !ocupado && texto.trim() !== ''
+  const respondiendo = !!enCurso
+
+  // El anuncio para el lector: "respondiendo…" al empezar y, al terminar, la respuesta entera una sola vez. Es una región
+  // viva DENTRO del diálogo (`aria-modal` deja afuera lo que hay en el resto de la página, así que no sirve el anunciador
+  // global). Un error no se anuncia acá: ya sale como `alert` en el hilo.
+  const [anuncio, setAnuncio] = useState({ texto: '', numero: 0 })
+  const intercambio = useRef({ respondiendo: false, mensajesAlEmpezar: 0 })
+  useEffect(() => {
+    const estado = intercambio.current
+    if (respondiendo === estado.respondiendo) return
+    estado.respondiendo = respondiendo
+    if (respondiendo) {
+      estado.mensajesAlEmpezar = mensajes.length
+      setAnuncio((actual) => ({ texto: ANUNCIO_RESPONDIENDO, numero: actual.numero + 1 }))
+      return
+    }
+    const ultimo = mensajes[mensajes.length - 1]
+    const llegoLaRespuesta = mensajes.length > estado.mensajesAlEmpezar && ultimo?.rol === 'asistente'
+    setAnuncio((actual) => ({
+      texto: llegoLaRespuesta ? `El asistente respondió: ${textoPlano(ultimo.contenido)}` : '',
+      numero: actual.numero + 1,
+    }))
+  }, [respondiendo, mensajes])
+  useEffect(() => {
+    if (!anuncio.texto) return
+    const espera = setTimeout(() => setAnuncio((actual) => ({ ...actual, texto: '' })), MS_DEL_ANUNCIO)
+    return () => clearTimeout(espera)
+  }, [anuncio])
 
   // Al abrir: en una compu, directo al input; en el celular, al panel (enfocar el input abriría el teclado y taparía todo).
   useEffect(() => {
     if (!visible) return
     const input = inputRef.current
     const punteroFino = window.matchMedia?.('(pointer: fine)').matches ?? false
-    const destino = punteroFino && input && !input.disabled ? input : dialogoRef.current
+    const destino = punteroFino && input && !input.readOnly ? input : dialogoRef.current
     destino?.focus({ preventScroll: true })
+  }, [visible])
+
+  // Un botón que desaparece con el foco puesto (una sugerencia, "Reintentar") lo deja caer al <body>: antes de que se vaya, el
+  // foco pasa al campo (en una compu) o a la conversación, donde llega la respuesta (en el celular, para no abrir el teclado).
+  const llevarElFoco = () => {
+    const input = inputRef.current
+    const punteroFino = window.matchMedia?.('(pointer: fine)').matches ?? false
+    const destino = punteroFino && input && !input.readOnly ? input : hiloRef.current
+    destino?.focus({ preventScroll: true })
+  }
+
+  // El foco no sale del panel mientras está abierto (la carta de atrás está tapada). Va en el documento y no en el diálogo: un
+  // <div> con un manejador de teclado no es un control para jsx-a11y, y Esc ya lo resuelve `useCerrarConEscape`.
+  useEffect(() => {
+    if (!visible) return
+    const alTeclear = (e: KeyboardEvent) => {
+      const dialogo = dialogoRef.current
+      if (e.key !== 'Tab' || e.defaultPrevented || !dialogo) return
+      const enfocables = Array.from(
+        dialogo.querySelectorAll<HTMLElement>('button:not([disabled]), textarea:not([disabled]), [tabindex="0"]'),
+      )
+      const primero = enfocables[0]
+      const ultimo = enfocables[enfocables.length - 1]
+      if (!primero || !ultimo) return
+      const activo = document.activeElement
+      if (e.shiftKey && (activo === primero || activo === dialogo)) {
+        e.preventDefault()
+        ultimo.focus()
+      } else if (!e.shiftKey && activo === ultimo) {
+        e.preventDefault()
+        primero.focus()
+      }
+    }
+    document.addEventListener('keydown', alTeclear)
+    return () => document.removeEventListener('keydown', alTeclear)
   }, [visible])
 
   // Un mensaje nuevo (o abrir el panel) lleva al final del hilo.
@@ -263,12 +384,28 @@ export default function PanelDelAsistente({ abierto, onCerrar, restauranteId, no
   const enviar = async (pregunta: string, { desdeElInput }: { desdeElInput: boolean }) => {
     if (bloqueado || ocupado || !pregunta.trim()) return
     if (desdeElInput) setTexto('')
+    setAvisoDelCampo('')
     const resultado = await preguntar(pregunta)
     // Para reescribirla (muy larga, sin respuesta…), salvo que ya se haya empezado a escribir otra.
     if (resultado === 'devolver' || resultado === 'ignorada') setTexto((actual) => actual || pregunta)
   }
 
+  /**
+   * Lo que hacen Enter y el botón. El botón no se deshabilita (perdería el foco y el lector lo daría por inexistente): sin
+   * texto queda `aria-disabled` y, si se lo toca, avisa qué falta y lleva el foco al campo.
+   */
+  const enviarLoEscrito = () => {
+    if (bloqueado || ocupado) return
+    if (!texto.trim()) {
+      setAvisoDelCampo(AVISO_SIN_TEXTO)
+      inputRef.current?.focus()
+      return
+    }
+    void enviar(texto, { desdeElInput: true })
+  }
+
   const alturaDelPanel = teclado ? `${teclado.altoVisible - 12}px` : 'min(88dvh, 760px)'
+  const quedanPocas = !bloqueado && restantes > 0 && restantes <= 3
 
   return (
     <>
@@ -294,28 +431,6 @@ export default function PanelDelAsistente({ abierto, onCerrar, restauranteId, no
         aria-hidden={visible ? undefined : true}
         inert={!visible}
         tabIndex={-1}
-        onKeyDown={(e) => {
-          if (e.key === 'Escape') {
-            e.stopPropagation()
-            onCerrar()
-          } else if (e.key === 'Tab') {
-            // El foco no sale del panel mientras está abierto: la carta de atrás está tapada.
-            const enfocables = Array.from(
-              dialogoRef.current?.querySelectorAll<HTMLElement>('button:not([disabled]), textarea:not([disabled])') ?? [],
-            )
-            const primero = enfocables[0]
-            const ultimo = enfocables[enfocables.length - 1]
-            if (!primero || !ultimo) return
-            const activo = document.activeElement
-            if (e.shiftKey && (activo === primero || activo === dialogoRef.current)) {
-              e.preventDefault()
-              ultimo.focus()
-            } else if (!e.shiftKey && activo === ultimo) {
-              e.preventDefault()
-              primero.focus()
-            }
-          }
-        }}
         className={[
           'fixed inset-x-0 bottom-0 mx-auto flex w-full max-w-[480px] flex-col overflow-hidden rounded-t-[20px] bg-white outline-none',
           'h-[var(--alto-del-panel)] transition-transform duration-300 ease-out motion-reduce:transition-none',
@@ -388,16 +503,29 @@ export default function PanelDelAsistente({ abierto, onCerrar, restauranteId, no
           </button>
         </div>
 
-        {/* La conversación */}
+        {/* Lo único que el lector oye de la respuesta mientras llega: que está respondiendo y, al terminar, el texto entero.
+            `key` para que dos anuncios iguales seguidos vuelvan a leerse. Va antes del hilo: si junto con la respuesta llega
+            un aviso (el tope de preguntas), se lee primero la respuesta. */}
+        <div role="status" aria-atomic="true" className="sr-only">
+          <span key={anuncio.numero}>{anuncio.texto}</span>
+        </div>
+
+        {/* La conversación. Es un registro (se recorre con el lector) pero NO anuncia lo que se le suma (`aria-live="off"`): de
+            eso se encarga la región de arriba. Tiene scroll, así que se alcanza con el teclado (WCAG 2.1.1). */}
         <div
           ref={hiloRef}
           role="log"
           aria-label="Conversación con el asistente"
-          aria-busy={ocupado}
+          aria-live="off"
+          // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- una zona con scroll tiene que poder enfocarse con el teclado
+          tabIndex={0}
           onScroll={() => {
             const hilo = hiloRef.current
             if (hilo) pegadoAbajo.current = hilo.scrollHeight - hilo.scrollTop - hilo.clientHeight < 48
           }}
+          // El anillo de foco, hacia adentro: la zona llega al borde del panel, que recorta uno que se dibuje hacia afuera. Con `!`
+          // porque la regla global de index.css (`:is(…[tabindex]…):focus-visible`) tiene más especificidad que una clase.
+          className="focus-visible:![box-shadow:inset_0_0_0_2px_#ffffff] focus-visible:![outline-offset:-4px]"
           style={{
             flex: 1,
             overflowY: 'auto',
@@ -409,7 +537,7 @@ export default function PanelDelAsistente({ abierto, onCerrar, restauranteId, no
             gap: 10,
           }}
         >
-          <Respuesta>
+          <Respuesta quien="El asistente dice">
             Hola, soy el asistente de {nombreRestaurante}. Te respondo sobre la carta y el local: si un plato pica, para
             cuántos alcanza, qué opciones vegetarianas hay, los horarios o las formas de pago.
             {'\n\n'}Solo respondo preguntas: no tomo pedidos ni llamo al mozo.
@@ -421,7 +549,10 @@ export default function PanelDelAsistente({ abierto, onCerrar, restauranteId, no
                 <button
                   key={sugerencia}
                   type="button"
-                  onClick={() => void enviar(sugerencia, { desdeElInput: false })}
+                  onClick={() => {
+                    llevarElFoco()
+                    void enviar(sugerencia, { desdeElInput: false })
+                  }}
                   style={{
                     minHeight: 40,
                     padding: '0 14px',
@@ -455,7 +586,7 @@ export default function PanelDelAsistente({ abierto, onCerrar, restauranteId, no
             <>
               <Pregunta texto={enCurso.pregunta} />
               {enCurso.respuesta ? (
-                <Respuesta>
+                <Respuesta enProgreso>
                   <ConFormato texto={enCurso.respuesta} />
                 </Respuesta>
               ) : (
@@ -475,7 +606,14 @@ export default function PanelDelAsistente({ abierto, onCerrar, restauranteId, no
               <AvisoDelHilo
                 rol="alert"
                 texto={fallido.aviso.texto}
-                onReintentar={fallido.aviso.reintentable ? () => void reintentar() : undefined}
+                onReintentar={
+                  fallido.aviso.reintentable
+                    ? () => {
+                        llevarElFoco()
+                        void reintentar()
+                      }
+                    : undefined
+                }
               />
             </>
           )}
@@ -492,7 +630,7 @@ export default function PanelDelAsistente({ abierto, onCerrar, restauranteId, no
         <form
           onSubmit={(e) => {
             e.preventDefault()
-            void enviar(texto, { desdeElInput: true })
+            enviarLoEscrito()
           }}
           style={{ flexShrink: 0, background: 'white', borderTop: `1px solid ${CM.border}`, padding: '10px 12px 0' }}
         >
@@ -500,26 +638,32 @@ export default function PanelDelAsistente({ abierto, onCerrar, restauranteId, no
             <label className="sr-only" htmlFor={`${idTitulo}-pregunta`}>
               Tu pregunta
             </label>
+            {/* Al llegar al tope el campo no se deshabilita (con el foco adentro lo perdería): queda de solo lectura. */}
             <textarea
               ref={inputRef}
               id={`${idTitulo}-pregunta`}
               value={texto}
-              onChange={(e) => setTexto(e.target.value)}
+              onChange={(e) => {
+                setTexto(e.target.value)
+                setAvisoDelCampo('')
+              }}
               onKeyDown={(e) => {
                 // Enter manda; Mayús + Enter baja de línea.
                 if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
                   e.preventDefault()
-                  void enviar(texto, { desdeElInput: true })
+                  enviarLoEscrito()
                 }
               }}
               rows={1}
               maxLength={MAX_CARACTERES_PREGUNTA}
               enterKeyHint="send"
-              disabled={bloqueado}
-              aria-describedby={idContador}
+              readOnly={bloqueado}
               // Corto, para que entre en una línea en el celular: el aviso entero ya está en el hilo.
               placeholder={bloqueado ? 'Preguntale al mozo' : 'Escribí tu pregunta'}
-              className="border border-[#ECECEE] bg-[#F7F7F8] focus:border-coral focus:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+              className={[
+                'border border-[#ECECEE] bg-[#F7F7F8] focus:border-coral focus:bg-white',
+                bloqueado ? 'cursor-not-allowed opacity-60' : '',
+              ].join(' ')}
               style={{
                 flex: 1,
                 minWidth: 0,
@@ -537,8 +681,8 @@ export default function PanelDelAsistente({ abierto, onCerrar, restauranteId, no
             <button
               type="submit"
               aria-label="Enviar pregunta"
-              disabled={!puedeEnviar}
-              className="transition-opacity disabled:cursor-default disabled:opacity-40"
+              aria-disabled={!puedeEnviar}
+              className="transition-opacity aria-disabled:cursor-default aria-disabled:opacity-40"
               style={{
                 width: 44,
                 height: 44,
@@ -570,13 +714,15 @@ export default function PanelDelAsistente({ abierto, onCerrar, restauranteId, no
             }}
           >
             <span role="status">
-              {!bloqueado && restantes > 0 && restantes <= 3
-                ? `Te ${restantes === 1 ? 'queda 1 pregunta' : `quedan ${restantes} preguntas`} en esta conversación.`
-                : ''}
+              {avisoDelCampo || (quedanPocas ? `Te ${restantes === 1 ? 'queda 1 pregunta' : `quedan ${restantes} preguntas`} en esta conversación.` : '')}
             </span>
-            <span id={idContador} style={{ flexShrink: 0, color: texto.length >= MAX_CARACTERES_PREGUNTA - 50 ? CM.orange : CM.textMuted }}>
-              <span className="sr-only">Caracteres: </span>
+            {/* El contador es para la vista: el lector no lo repite cada vez que el campo recibe el foco. Lo que sí oye es el
+                aviso de abajo, cuando quedan pocos caracteres. */}
+            <span aria-hidden="true" style={{ flexShrink: 0, color: texto.length >= MAX_CARACTERES_PREGUNTA - 50 ? CM.orange : CM.textMuted }}>
               {texto.length}/{MAX_CARACTERES_PREGUNTA}
+            </span>
+            <span role="status" className="sr-only">
+              {avisoDeCaracteres(MAX_CARACTERES_PREGUNTA - texto.length)}
             </span>
           </div>
 

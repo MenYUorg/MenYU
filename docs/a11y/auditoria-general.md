@@ -22,6 +22,46 @@ web-admin y web-staff no se pudieron renderizar porque piden sesión de Supabase
 | packages/ui | 6 | (dentro de las otras) | — |
 | web-auth | 0 | 3 | sin violaciones |
 
+## Seguimiento: qué se resolvió y en qué etapa
+
+*Actualizado el 27/11/2026, al hacer los arreglos de la etapa 8 de `docs/a11y/plan-cliente.md`. El detalle de cada fila (con archivo y línea) está en la etapa que dice la tabla y en `docs/a11y/bitacora.md`.*
+
+**Alcance (decisión del 26/11/2026):** los requisitos de accesibilidad cubren **web-cliente y Discovery**. Lo de web-admin, web-staff, web-auth y los componentes de `packages/ui` que solo usan admin y staff queda fuera: no se arregla, y lo que apareció se anota al final de esta sección.
+
+| Hallazgo de la auditoría (web-cliente y Discovery) | Etapa | Estado |
+| --- | --- | --- |
+| Estructura de página: `<main>`, `<h1>`, título de pestaña por pantalla y el foco al cambiar de pantalla ("Problemas que se repiten") | 1 | Resuelto |
+| El `<textarea>` del mensaje a dividir sin etiqueta | 1 | Resuelto |
+| Precios con formato `$9000.00` (se leen mal) | 2 | Resuelto |
+| El menú lateral recibe foco estando cerrado (1) | 3 | Resuelto |
+| Opciones del menú lateral y chips del filtro de dietas que no son botones (3), y el filtro de dietas, que no era usable con lector | 3 | Resuelto |
+| Modales sin `role="dialog"`, Esc ni foco: menú lateral y filtro de dietas (modales) | 3 | Resuelto |
+| Buscador del menú sin nombre; búsqueda, filtros y mozo sin anuncio; "×" del buscador sin nombre | 4 | Resuelto |
+| La tarjeta del plato (`<div onClick>`; el control es el botón "+", que ahora se llama "Ver {plato}") y las fotos decorativas | 4 | Resuelto |
+| Detalle del plato: interruptores de ingredientes, "Sumar" y "Restar" sin nombre, nota para cocina sin etiqueta, "Volver" sin nombre | 4 | Resuelto |
+| **Discovery:** los resultados de la búsqueda cambian sin anuncio ni cantidad; "Buscando…" aparece junto con el texto; la foto de la oferta repite el nombre | 4 | Resuelto |
+| **Discovery:** logo, "Ingresar" y "Registrarme" no llegaban a 44 px de alto | — | Ya tenían un área de toque de 44 px (`AppHeader`) |
+| **Ficha del restaurante:** no tenía hallazgos propios | — | Sin hallazgos |
+| Carrito: la confirmación no se anuncia ni tiene foco; "Quitar" sin nombre; "−" y "+" sin nombre; extras con símbolos; el nombre del plato clickeable (3) | 5 | Resuelto |
+| Mis pedidos: "listo" igual a "en preparación"; la barra sin rol; el número de pedido; el cambio de estado por WebSocket sin anuncio | 5 | Resuelto |
+| Tarjeta de agradecimiento al cerrar la sesión: sin foco ni rol de diálogo | 5 | Resuelto |
+| Ingreso por PIN: el campo se deshabilita y pierde el foco; el error no queda asociado al campo | 5 | Resuelto |
+| Ingreso por PIN: ofrecer "Ingresar con PIN" como opción del mismo nivel que "Escanear QR" | 5 | **Descartado** (decisión de Margarita, 19/11/2026: el PIN sigue como estaba) |
+| Elegir nombre: label sin asociar ("Labels sin asociar"), `autoFocus` y "Continuar" atenuado sin decir por qué | 5 | Resuelto |
+| Pagar: la cuenta no era una tabla; fondo del modal clickeable sin teclado; emojis y títulos de los resultados de pago | 5 | Resuelto |
+| Etiquetar: los chips marcaban "etiquetado" solo con el color; `autoFocus`. Dividir: el botón con el número sin valor y el monto sin anunciar | 5 | Resuelto |
+| Contraste: el coral `#E8563A` y el gris `#9CA3AF` en todas las pantallas de web-cliente, y en `DescuentoBadge` y `PrecioConDescuento` de `packages/ui` | 6 | Resuelto: axe en Edge, 71 fallas antes y 0 después; 0 en staging |
+| Foco visible: `outline: 'none'` en los campos de web-cliente (2) | 6 | Resuelto |
+| Tamaños táctiles (2.5.8): "Quitar" (35 × 18 px) y los demás botones chicos | 6 | Resuelto el mínimo de 24 px; algunos quedan debajo de 44 |
+| Zona con scroll de la carta que no se podía enfocar con teclado | 7 | axe sobre staging no marcó nada en la carta (0 violaciones) |
+| Que no vuelva a pasar: `eslint-plugin-jsx-a11y` con `--max-warnings 0` | 7 | Resuelto |
+| Asistente de la carta (C8): botón, diálogo, la respuesta que llega de a poco, errores | 8 | Auditado el 26/11 (cuarta parte de este documento: 12 hallazgos, A1 a A12). **Resuelto el 27/11** (A1 a A12; lo que cada arreglo hizo está en "Qué se arregló", al final de la cuarta parte). Falta la prueba de C8 en el celular |
+| Texto de ejemplo (`placeholder`) de todos los campos de web-cliente en `#9CA3AF` (2,4 a 2,5:1); axe no lo mide, por eso la etapa 6 no lo vio | 8 | **Resuelto el 27/11** (decisión de Margarita): una regla en `index.css` con el gris de texto `#6B7280` (4,8:1 sobre blanco y 4,5:1 sobre el gris de la carta) |
+| Prueba con VoiceOver y TalkBack (C1 a C8) y todo lo marcado "verificar en dispositivo" | 7 y 8 | **Pendiente** (la hacen ustedes) |
+| axe sobre staging de las pantallas con mesa (menú, detalle, carrito, Mis pedidos y Pagar) | 7 | **Pendiente, opcional** (falta la conexión a la base de staging) |
+
+**Fuera del alcance** (no se arreglan; el axe de staging del 26/11 los volvió a encontrar): en **web-admin** (9 pantallas revisadas) y **web-staff** (7), el contraste del coral y el gris de antes (15 observaciones, 181 elementos) y **6 botones sin nombre** (nivel crítico: uno en las Mesas de admin y cinco en las pantallas del mozo de staff). Dos pantallas de admin (Pedidos e Historial de sesiones) no se pudieron revisar con la cuenta de prueba. También quedan el `Modal` compartido de `packages/ui`, los modales hechos a mano de admin y staff, los labels de los formularios de admin, el `outline: 'none'` de admin y staff, los botones de reordenar categorías y el coral `#ED6A4F` del preset de web-auth.
+
 ## Problemas que bloquean el uso con teclado
 
 Estos son los que impiden o dificultan usar la app sin mouse, que es lo que más se nota en una prueba manual.
@@ -124,18 +164,20 @@ Lo más eficiente es arreglar el `Modal` de `packages/ui` (o pasar a `<dialog>` 
 
 Ordenado por impacto sobre el trabajo que lleva. Los primeros cuatro resuelven la mayor parte de lo que encontró axe y casi todo lo que se nota con teclado.
 
-- [ ] Oscurecer el coral de fondos con texto blanco (`#E8563A` → `#C2412A`) y pasar los textos en gray-400 a gray-500.
-- [ ] Agregar `inert` al panel de `MenuDrawer` cuando está cerrado.
-- [ ] Arreglar el `Modal` de `packages/ui`: `role="dialog"`, `aria-modal`, `aria-labelledby`, Esc, foco atrapado y `aria-label="Cerrar"`.
-- [ ] Poner `aria-label` a los 43 botones de solo ícono, empezando por los de web-cliente.
-- [ ] Cambiar los `<div onClick>` de acciones reales por `<button>` (tabla de la sección de teclado).
-- [ ] Reemplazar `outline: 'none'` inline por una clase con `focus-visible:ring`, como ya hace web-auth.
-- [ ] Asociar los 9 labels con `htmlFor` y ponerle `aria-label` al buscador.
-- [ ] Agregar `<main>` y `<h1>` en las pantallas de web-cliente.
-- [ ] Migrar los modales hechos a mano al `Modal` compartido.
-- [ ] Botones de subir y bajar para reordenar categorías sin arrastrar.
+- [x] Oscurecer el coral de fondos con texto blanco (`#E8563A` → `#C2412A`) y pasar los textos en gray-400 a gray-500. — **web-cliente y `packages/ui`: etapa 6** (con `#CC4A31`, decisión 9, en lugar de `#C2412A`). Admin y staff: fuera del alcance.
+- [x] Agregar `inert` al panel de `MenuDrawer` cuando está cerrado. — **etapa 3**.
+- [ ] Arreglar el `Modal` de `packages/ui`: `role="dialog"`, `aria-modal`, `aria-labelledby`, Esc, foco atrapado y `aria-label="Cerrar"`. — fuera del alcance (lo usan admin y staff).
+- [x] Poner `aria-label` a los 43 botones de solo ícono, empezando por los de web-cliente. — **web-cliente: etapas 4 y 5.** Admin y staff: fuera del alcance.
+- [x] Cambiar los `<div onClick>` de acciones reales por `<button>` (tabla de la sección de teclado). — **web-cliente: etapas 3, 4 y 5.** Admin y staff: fuera del alcance.
+- [x] Reemplazar `outline: 'none'` inline por una clase con `focus-visible:ring`, como ya hace web-auth. — **web-cliente: etapa 6** (un anillo global de `:focus-visible`). Admin y staff: fuera del alcance.
+- [x] Asociar los 9 labels con `htmlFor` y ponerle `aria-label` al buscador. — **web-cliente: etapas 4 y 5** (nombre, nota para cocina y buscador). El resto es de admin y `packages/ui`: fuera del alcance.
+- [x] Agregar `<main>` y `<h1>` en las pantallas de web-cliente. — **etapa 1**.
+- [ ] Migrar los modales hechos a mano al `Modal` compartido. — fuera del alcance (admin y staff).
+- [ ] Botones de subir y bajar para reordenar categorías sin arrastrar. — fuera del alcance (admin).
+- [x] Asistente de la carta: la respuesta que llega de a poco, quién habla, las listas, el foco, Esc, el fondo inerte, la hoja de carga y la de error, la zona con scroll, el contador y el botón de enviar (A1 a A12). — **etapa 8**.
+- [x] Texto de ejemplo (`placeholder`) de los campos con 4,5:1 de contraste. — **etapa 8** (una regla en `index.css`).
 
-**Para que no vuelva a pasar**, conviene sumar `eslint-plugin-jsx-a11y` a la config de ESLint de las apps (`...jsxA11y.flatConfigs.recommended.rules`). Como el lint corre con `--max-warnings 0`, va a fallar con los hallazgos de este informe; conviene activarlo primero en web-auth (que ya pasa) y web-cliente, y sumar web-admin y web-staff a medida que se arreglan.
+**Para que no vuelva a pasar** *(hecho en web-cliente en la etapa 7: `eslint-plugin-jsx-a11y` con `--max-warnings 0`; web-admin y web-staff, fuera del alcance)*, conviene sumar `eslint-plugin-jsx-a11y` a la config de ESLint de las apps (`...jsxA11y.flatConfigs.recommended.rules`). Como el lint corre con `--max-warnings 0`, va a fallar con los hallazgos de este informe; conviene activarlo primero en web-auth (que ya pasa) y web-cliente, y sumar web-admin y web-staff a medida que se arreglan.
 
 **Para repetir la verificación**: correr axe DevTools o Lighthouse en Chrome sobre cada pantalla con datos reales, sobre todo web-admin y web-staff, que acá no se pudieron renderizar. Y hacer una pasada manual: recorrer cada flujo solo con teclado (Tab, Enter, Esc) y una vez con VoiceOver en el celular sobre web-cliente, que es la app que usa el comensal.
 
@@ -607,3 +649,91 @@ El coral ya está decidido (propuesta mínima, 13/11), así que la etapa 6 se pu
 - `docs/a11y/auditoria-general.md`: el informe, con cada hallazgo marcado como resuelto en la etapa que lo arregla.
 
 **Rama y PR.** `feat/a11y-cliente`, con el PR abierto como borrador desde la etapa 1 para ver el quality gate en cada push, como se hizo en la migración de auth.
+
+# Cuarta parte: el asistente de la carta (C8)
+
+*Auditoría del 26/11/2026 (etapa 8 de `docs/a11y/plan-cliente.md`), hecha sobre `main` en `5fa7793` más lo de las etapas 6 y 7. Se auditó primero y no se arregló nada hasta que Margarita revisó los hallazgos; **el 27/11/2026 se arreglaron los 12** (A1 a A12) y el del texto de ejemplo de los campos. Lo que cada arreglo hizo está en "Qué se arregló", al final de esta parte. Los números de línea de los hallazgos son los de la auditoría: el código cambió.*
+
+Método: Edge en viewport de celular (390 px), con un asistente falso que emite el stream de verdad (SSE por pedazos, con demoras, como el real) detrás del proxy de Vite. Se probó con teclado y con el dedo (puntero grueso), se registró cada cambio dentro de las regiones vivas (`role="log"`, `status`, `alert`, `aria-live`) con un `MutationObserver`, se tomó el árbol de accesibilidad de cada estado y se corrió axe (WCAG 2.0 a 2.2, A y AA, con contraste) en cada uno. Lo que depende de cómo pronuncia VoiceOver o TalkBack está marcado *verificar en dispositivo*. Los archivos son relativos a `apps/web-cliente/src/components/asistente/`.
+
+**Resumen.** Lo básico está bien resuelto: el botón tiene nombre y dice si el panel está abierto, el panel es un diálogo con nombre, el foco entra y vuelve, Tab no se escapa, hay etiqueta en el campo, Enter envía, los errores se anuncian y axe no marca nada, salvo una zona con scroll. **Lo que falla es lo que el plan ya sospechaba, la respuesta que llega de a poco**, y varios lugares donde **el foco se pierde**. Además apareció un hallazgo que no es del asistente y sí de todo web-cliente: **el texto de ejemplo de los campos no tiene contraste**.
+
+## Lo que ya está bien
+
+- **El botón** (`BotonDelAsistente.tsx:122-154`) se llama "Asistente" (el texto que se ve), tiene `aria-haspopup="dialog"` y `aria-expanded`, y mide 129 × 48 px.
+- **El panel** (`PanelDelAsistente.tsx:293-337`) es `role="dialog"` con `aria-modal="true"` y se llama "Asistente" por su encabezado `<h2>`. Cerrado queda `inert` y `aria-hidden`.
+- **Al abrir, el foco entra:** con teclado y mouse va al campo de la pregunta; con el dedo (puntero grueso) va al panel, para no abrir el teclado del celular encima de todo (líneas 232-238). Al cerrar vuelve al botón "Asistente".
+- **Tab no se escapa** (probado: 9 Tab seguidos y 3 Mayús+Tab recorren solo el botón de cerrar, las tres sugerencias y el campo). **Esc cierra** cuando el foco está adentro.
+- **El campo** tiene su etiqueta "Tu pregunta" (solo para el lector), el botón de enviar se llama "Enviar pregunta" y mide 44 × 44 px, Enter envía y Mayús + Enter baja de línea. Las sugerencias miden 40 px de alto.
+- **Los errores** (límite por IP, el modelo que no responde, respuesta cortada, tope de la mesa) salen como `role="alert"` con un texto propio y qué hacer (`avisos.ts`).
+- **Movimiento reducido:** los puntos de "escribiendo" no se animan y el panel no hace transición. **A 320 px de ancho** el panel no desborda. El anillo de foco de la etapa 6 se ve en el campo.
+- **axe: 0 violaciones** en el panel abierto, con una conversación, con un error, bloqueado y cargando, salvo el hallazgo A9. Las "incompletas" (contraste sobre el fondo semitransparente del menú de atrás) las muestra axe en la carta, no en el panel.
+
+## Transcripción de lo que leería un lector
+
+Armada del árbol de accesibilidad, deslizando de a un elemento (con teclado, el foco empieza en el campo).
+
+1. "Asistente, botón, tiene un diálogo, contraído" (en la carta).
+2. Al activarlo: "Asistente, diálogo" → "Asistente, encabezado nivel 2" · "Lupulus Casa Matriz" · "Cerrar el asistente, botón".
+3. "Conversación con el asistente, registro" → "Hola, soy el asistente de Lupulus Casa Matriz. Te respondo sobre la carta y el local… Solo respondo preguntas: no tomo pedidos ni llamo al mozo." · "¿Qué me recomendás?, botón" · "¿Tienen opciones vegetarianas?, botón" · "¿Qué formas de pago aceptan?, botón".
+4. "Tu pregunta, campo de texto" (descrito por "Caracteres: 0/500") · "Enviar pregunta, botón, atenuado" · "Respuestas generadas con IA a partir de los datos del local. Ante dudas, consultá al mozo."
+
+Después de preguntar "qué me recomendás" (3,2 s de respuesta, 5 pedazos): el registro anuncia, en este orden, **22 cambios**: la pregunta ("que me recomendas"), "El asistente está escribiendo…", y después, en cada pedazo, el texto de la respuesta que va creciendo ("Te recomiendo", "Te recomiendo la Milanesa napolitana", "… : viene con jamón, queso y salsa,", etc.). Al terminar no hay ningún anuncio. Al fallar: "alerta: La respuesta se cortó. Probá de nuevo. Reintentar, botón".
+
+## Hallazgos
+
+| ID | Archivo:línea | Problema | WCAG | Gravedad | Arreglo sugerido |
+| --- | --- | --- | --- | --- | --- |
+| **A1** | `PanelDelAsistente.tsx:396-415` y `:458-469` (la respuesta que llega) | **La respuesta se escribe dentro del `role="log"` mientras llega.** Un `log` anuncia cada cambio: en una respuesta de 3 s hubo 22 (18 inserciones, 2 cambios de texto y 2 de `aria-busy`), así que el lector puede leerla en pedazos, repetida o cortada (VoiceOver suele releer el párrafo entero en cada cambio; TalkBack, solo lo nuevo). `aria-busy` no lo evita de forma confiable. No se anuncia que está respondiendo (solo el texto "escribiendo…" del puntito, que desaparece al llegar el primer texto) ni que terminó. *Verificar en dispositivo.* | 4.1.3 | **bloquea** (C8) | Que la respuesta parcial no se lea (`aria-hidden` mientras llega), una región `role="status"` que diga "El asistente está respondiendo…" y, al terminar, el texto completo **una sola vez** |
+| **A2** | `PanelDelAsistente.tsx:78-113` | **No se distingue quién habla.** La pregunta es un `<p>` y la respuesta un `<div>`, sin "Vos:" ni "El asistente:": se distinguen solo por el color y el lado. | 1.3.1, 1.4.1 | dificulta | Un texto solo para el lector antes de cada burbuja ("Vos preguntaste:", "El asistente respondió:") |
+| **A3** | `PanelDelAsistente.tsx:51-67` (`ConFormato`) | Las viñetas son un "• " escrito en un texto con saltos de línea (`white-space: pre-wrap`): para el lector es un solo párrafo corrido, sin lista. | 1.3.1 | menor | Una lista de verdad (`<ul>` y `<li>`) para las líneas con viñeta |
+| **A4** | `:424-446` (sugerencias), `:479-483` (Reintentar) y `:522` (campo deshabilitado) | **El foco se pierde.** Al activar una sugerencia o "Reintentar" con el teclado, el botón desaparece con el foco puesto y el foco cae al `<body>`. Lo mismo al llegar al tope de la mesa: el campo se deshabilita con el foco adentro. (Chrome retoma desde el lugar donde estaba; Safari y los lectores no lo garantizan.) | 2.4.3 | dificulta | Llevar el foco al campo, o a la respuesta, cuando el botón desaparece; en el tope, a un lugar que tenga sentido (el aviso o "Cerrar") |
+| **A5** | `:301-322` | **Esc no cierra el panel cuando el foco se perdió** (probado con el foco en el `<body>` después de A4): el manejador está en el diálogo y no en el documento. El plan pide `useCerrarConEscape`. | 2.1.1 | dificulta | `useCerrarConEscape` (de `@menyu/ui`), como el menú lateral y el diálogo de pago; con eso se saca también el `eslint-disable` de la etapa 7 |
+| **A6** | `:293-300` y `MenuView.tsx` | Con el panel abierto, **el fondo no queda inerte**: el encabezado y el contenido de la carta siguen activos. Hoy lo cubren `aria-modal` (Chrome oculta lo de atrás del árbol) y la trampa del Tab, pero depende de que el lector respete `aria-modal`. | 2.4.3 | menor | `inert` en el encabezado y el contenido mientras el panel está abierto, como con el menú lateral |
+| **A7** | `BotonDelAsistente.tsx:14-29` y `:158-166` ("Abriendo el asistente…") | **Mientras baja el chat**, la hoja es un diálogo modal **sin botón de cerrar**, sin foco (queda en el botón de atrás), que **no se cierra con Esc** y con el fondo activo. Con una conexión lenta quien usa teclado o lector queda frente a un diálogo que no puede cerrar. El texto tampoco está en una región de estado. | 2.1.1, 2.4.3, 4.1.3 | dificulta (solo con red lenta) | El mismo manejo del panel (foco, Esc, `inert`), un "Cerrar" y un `role="status"` |
+| **A8** | `BotonDelAsistente.tsx:35-73` ("No pudimos abrir el asistente") | Si el chat no baja, el aviso **sí se anuncia** (`role="alert"`) y tiene "Cerrar", pero el foco queda en el botón de atrás, Esc no la cierra y el fondo sigue activo. | 2.4.3, 2.1.1 | menor | Igual que A7 |
+| **A9** | `PanelDelAsistente.tsx:396-415` | Con una respuesta larga la conversación tiene scroll y **no es enfocable con teclado** (`div[role=log]` sin `tabIndex`): axe lo marca (`scrollable-region-focusable`, serio). Edge y Chrome la hacen enfocable solos (probado: recibe el foco con Mayús + Tab); Safari no lo garantiza. | 2.1.1 | dificulta | `tabIndex={0}` en el registro (ya tiene nombre) |
+| **A10** | `:507-540` (texto de ejemplo del campo) | **El texto de ejemplo ("Escribí tu pregunta") es gris `#9CA3AF` y da 2,5:1** (2,4:1 sobre el gris de la carta). No es del asistente: **lo tienen los 7 campos de web-cliente**, incluido el buscador de Discovery (ver "Hallazgo nuevo" abajo). | 1.4.3 | dificulta | El mismo gris de texto de las otras etapas (`#6B7280`, 4,8:1) para el texto de ejemplo |
+| **A11** | `:564-585` (contador) | El campo está descrito por "Caracteres: 0/500": el lector lo repite **cada vez que el campo recibe el foco**, aunque no importe. Y cerca del límite (desde 450) solo cambia de color: no se anuncia. | 1.4.1, 4.1.3 | menor | Anunciar solo cuando quedan pocos ("Quedan 20 caracteres") y sacarlo de la descripción |
+| **A12** | `:541-561` (botón de enviar) | El botón está `disabled` mientras no hay texto: sale del orden de Tab y para el lector aparece atenuado, sin que se sepa que existe. Enviar con Enter funciona. | 3.3.2 | informativo | `aria-disabled` y un aviso al tocarlo sin texto, como en el nombre de la mesa |
+
+**Dudas que solo responde el celular** (verificar con VoiceOver y TalkBack en la etapa 7): cómo lee cada uno la respuesta del asistente (A1); si el `role="alert"` dentro del `role="log"` se anuncia dos veces (un error se dice como alerta y también como una adición al registro); desde dónde empieza a leer cada uno al abrir el panel con el dedo (el foco va al panel); y si el lector se entera de que la persona sigue escribiendo en un campo cuyo "Enviar" está atenuado (A12).
+
+## Hallazgo nuevo, de todo web-cliente (no del asistente): el texto de ejemplo no tiene contraste
+
+Lo mostró una captura del panel. El texto de ejemplo (`placeholder`) de **todos** los campos de web-cliente es `#9CA3AF` (el gris de Tailwind, de su hoja base): **2,5:1 sobre blanco y 2,4:1 sobre el gris de la carta**, y WCAG 1.4.3 lo cuenta como texto. axe **no lo mide** (no revisa los `placeholder`), por eso no apareció en la etapa 6, que dio 0 fallas de contraste. Se midió en Edge con el color computado de cada campo:
+
+| Pantalla | Campo | Contraste |
+| --- | --- | --- |
+| Discovery (`/`) | "Buscar restaurantes o platos" | 2,54:1 |
+| Ingreso por PIN | "Ej: 1234" | 2,54:1 |
+| Elegir nombre | "Ej: Juan" | 2,54:1 |
+| Menú | "Buscar platos..." | 2,37:1 |
+| Asistente | "Escribí tu pregunta" | 2,54:1 |
+| Detalle del plato | "(opcional)" (nota para cocina) | 2,37:1 |
+| Etiquetar | "Nombre" | 2,54:1 |
+
+Arreglo: una regla en `index.css` (`input::placeholder, textarea::placeholder`) con el gris de texto `#6B7280` (4,8:1 sobre blanco y 4,5:1 sobre el gris de la carta), y un test. **Cambia cómo se ve el texto de ejemplo de todos los campos** (más oscuro, más cerca de un texto escrito). **Decidido por Margarita el 27/11/2026: se aplica** (comparación en `docs/a11y/antes-y-despues/`). Como la regla es global, alcanza también a un octavo campo que no estaba en la tabla (el código de tres cifras, `placeholder="000"`, de `SesionSeguraModals`).
+
+## Qué se arregló (27/11/2026)
+
+Cada hallazgo, con lo que se hizo. Los tests están en `components/asistente/AsistenteDeLaCarta.spec.tsx` (los de cada hallazgo, más axe sobre el chat abierto con una conversación con lista y con un error), `BotonDelAsistente.carga.spec.tsx` (A7), `BotonDelAsistente.error.spec.tsx` (A8), `formatoDelTexto.spec.ts`, `pages/menu/ClienteMenuPage.spec.tsx` (A6 en la carta real) y `estilos.spec.ts` (A10). Medido además en Edge (390 px) con el mismo asistente falso de la auditoría.
+
+| ID | Qué se hizo |
+| --- | --- |
+| **A1** | El hilo sigue siendo un `role="log"` (se recorre con el lector) pero con `aria-live="off"`: no anuncia nada por sí solo. La respuesta que va llegando se ve y queda con `aria-hidden`. Una región `role="status"` **dentro del diálogo** (`aria-modal` deja afuera lo de fuera, así que no sirve el anunciador global) dice "El asistente está respondiendo…" al empezar y, cuando termina, "El asistente respondió: …" con el texto entero, sin las marcas de formato, **una sola vez**. Si falla no dice nada: ya sale la alerta (sigue siendo `assertive`, medido en el árbol de accesibilidad de Chrome). Medido en Edge, con la misma pregunta: de **22 cambios** anunciables en el hilo a **2 anuncios** (en la región de estado). **Falta confirmar en VoiceOver y TalkBack** que lo leen una vez y completo |
+| **A2** | Un texto solo para el lector antes de cada burbuja: "Vos preguntaste:", "El asistente respondió:" y, en el saludo, "El asistente dice:" |
+| **A3** | Las viñetas son un `<ul>` con sus `<li>` (`bloquesDelTexto`, en `formatoDelTexto.ts`). Se ve igual salvo que las líneas que se parten quedan alineadas con el texto, no debajo de la viñeta. El renglón en blanco entre un párrafo y su lista se conserva (un salto al final de un bloque no se dibuja: queda como margen) |
+| **A4** | Al tocar una sugerencia o "Reintentar" (botones que desaparecen) el foco pasa al campo en una compu y a la conversación en el celular (enfocar el campo abriría el teclado). Al llegar al tope, el campo ya no se deshabilita: queda de solo lectura y conserva el foco |
+| **A5** | Esc se escucha en el documento (`useCerrarConEscape`): cierra aunque el foco esté en el `<body>`. El Tab que no sale del panel pasó a un escucha del documento, así que **el `eslint-disable` de la etapa 7 se sacó** |
+| **A6** | Con el chat abierto, el encabezado, el contenido y el botón del asistente quedan `inert` (`MenuView` recibe `onAbiertoChange`). El chat se dibuja en el `<body>` (un portal) para no quedar dentro de lo inerte. Al cerrar, el foco vuelve al botón "Asistente" |
+| **A7** | La hoja de "Abriendo el asistente…" es un diálogo como el chat: el foco entra, "Abriendo el asistente…" es un `role="status"`, Esc la cierra, tiene un botón "Cerrar" (**el único agregado que se ve**) y el fondo queda inerte |
+| **A8** | La hoja de "No pudimos abrir el asistente" tiene el foco, Esc la cierra y el fondo queda inerte; el próximo toque vuelve a intentar bajar el chat |
+| **A9** | `tabIndex={0}` en la conversación. El anillo de foco se dibuja hacia adentro (la zona llega al borde del panel y uno de afuera quedaba recortado). Lleva un `eslint-disable` justificado (`jsx-a11y/no-noninteractive-tabindex`): **es la única excepción del lint** |
+| **A10** | Una regla en `index.css` para todos los campos (ver "Hallazgo nuevo"). Medido en Edge: 4,83:1 en el campo del asistente y 4,52:1 en el buscador del menú |
+| **A11** | El contador "12/500" es solo para la vista (`aria-hidden`) y ya no está en la descripción del campo. El lector se entera solo al cruzar 50, 20 y 10 caracteres restantes y al llegar a 500 |
+| **A12** | "Enviar pregunta" no se deshabilita: queda `aria-disabled` (atenuado y en el orden de Tab). Sin texto, tocarlo o apretar Enter dice "Escribí tu pregunta para enviarla." y lleva el foco al campo. Mientras el asistente responde, tampoco manda otra pregunta |
+
+**Verificación en Edge**, con el asistente falso: axe sin violaciones en el chat abierto, con una conversación, con un error, bloqueado, con una respuesta larga con scroll, mientras baja y cuando no baja (las "incompletas" son el contraste sobre el fondo semitransparente de la carta, como en la auditoría). El foco, el fondo inerte y Esc se midieron en cada estado, con teclado y con el dedo.
+
+**Sigue abierto** (solo lo responde el celular, etapa 8, C8): cómo lee cada lector la respuesta anunciada (A1); si el lector anuncia el aviso de "Escribí tu pregunta para enviarla"; desde dónde empieza a leer al abrir el chat con el dedo (el foco va al panel); y que el aviso de los caracteres restantes se escucha sin ser molesto.

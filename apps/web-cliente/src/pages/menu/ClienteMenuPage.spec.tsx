@@ -643,6 +643,40 @@ describe('ClienteMenuPage', () => {
     })
   })
 
+  describe('chat del asistente (accesibilidad)', () => {
+    const conAsistente = () => {
+      const menu = menuCompleto()
+      return { ...menu, restaurante: { ...menu.restaurante, asistenteHabilitado: true } }
+    }
+
+    it('abierto: el encabezado, el contenido y el botón del asistente quedan inertes, y el chat (en el <body>) no', async () => {
+      const usuario = userEvent.setup()
+      renderMenu(conAsistente())
+      expect(screen.getByRole('main')).not.toHaveAttribute('inert')
+
+      await usuario.click(screen.getByRole('button', { name: 'Asistente' }))
+
+      const dialogo = await screen.findByRole('dialog', { name: 'Asistente' })
+      expect(screen.getByRole('banner')).toHaveAttribute('inert')
+      expect(screen.getByRole('main')).toHaveAttribute('inert')
+      expect(screen.getByRole('main')).toContainElement(screen.getByRole('button', { name: 'Asistente', hidden: true }))
+      expect(dialogo.closest('[inert]')).toBeNull()
+    })
+
+    it('Esc lo cierra: vuelve la pantalla, se saca la inercia y el foco vuelve al botón "Asistente"', async () => {
+      const usuario = userEvent.setup()
+      renderMenu(conAsistente())
+      await usuario.click(screen.getByRole('button', { name: 'Asistente' }))
+      await screen.findByRole('dialog', { name: 'Asistente' })
+
+      await usuario.keyboard('{Escape}')
+
+      expect(screen.getByRole('banner')).not.toHaveAttribute('inert')
+      expect(screen.getByRole('main')).not.toHaveAttribute('inert')
+      expect(screen.getByRole('button', { name: 'Asistente' })).toHaveFocus()
+    })
+  })
+
   describe('menú lateral y filtro de dietas (accesibilidad)', () => {
     const abrirElMenu = () => fireEvent.click(screen.getByRole('button', { name: 'Abrir el menú' }))
     const dialogo = () => screen.getByRole('dialog', { hidden: true })
